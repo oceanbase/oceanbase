@@ -297,23 +297,22 @@ int ObMViewSchedJobUtils::disable_mlog_purge_job(
   return ret;
 }
 
-int ObMViewSchedJobUtils::calc_date_expression_from_str(
+int ObMViewSchedJobUtils::calc_date_expr_from_str(
     sql::ObSQLSessionInfo &session,
     ObIAllocator &allocator,
     const uint64_t tenant_id,
     const ObString &interval_str,
-    ObObj &date_obj)
+    int64_t &timestamp)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObSchemaChecker schema_checker;
+  CK (OB_NOT_NULL(GCTX.schema_service_));
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  OZ (schema_checker.init(schema_guard));
   SMART_VAR(ObResolverParams, resolver_ctx){
     const ParseNode *expr_node = nullptr;
-    ObRawExpr *const_expr = nullptr;
-    ParamStore params_array;
     ObRawExprFactory expr_factory(allocator);
-    ObSchemaChecker schema_checker;
-    ObSchemaGetterGuard schema_guard;
-    OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-    schema_checker.init(schema_guard);
     resolver_ctx.allocator_  = &allocator;
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = &session;
@@ -325,44 +324,26 @@ int ObMViewSchedJobUtils::calc_date_expression_from_str(
                                                                 allocator,
                                                                 expr_node))) {
       LOG_WARN("failed to parse default expr from str", KR(ret), K(interval_str));
-    } else if (OB_FAIL(sql::ObResolverUtils::resolve_const_expr(resolver_ctx,
-                                                                *expr_node,
-                                                                const_expr,
-                                                                nullptr))) {
-      LOG_WARN("fail to resolve const expr", KR(ret));
-    } else if (OB_FAIL(sql::ObSQLUtils::calc_const_expr(&session,
-        *const_expr, date_obj, allocator, params_array))) {
-      LOG_WARN("fail to calc const expr", KR(ret));
+    } else if (OB_ISNULL(expr_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr node is null", KR(ret));
+    } else if (OB_FAIL(resolve_date_expr_to_timestamp(resolver_ctx,
+                                                      session,
+                                                      *expr_node,
+                                                      allocator,
+                                                      timestamp))) {
+      LOG_WARN("failed to resolve data expr to timestamp", KR(ret));
     } else {
-      LOG_INFO("dbms_sched_table_operator calc_date_expression_from_str end",
-          KR(ret), K(interval_str), K(date_obj));
+      LOG_INFO("mview_sched_job_utils calc_date_expr_from_str end",
+          KR(ret), K(tenant_id), K(interval_str), K(timestamp));
     }
-  }
-  return ret;
-}
-
-int ObMViewSchedJobUtils::convert_session_date_to_utc(
-    ObSQLSessionInfo *session_info,
-    const ObObj &in_obj,
-    ObObj &out_obj)
-{
-  int ret = OB_SUCCESS;
-  int64_t date_utc_ts = 0;
-  ObTime ob_time;
-  ObTimeConvertCtx time_cvrt_ctx(TZ_INFO(session_info), true);
-  OZ (ObTimeConverter::datetime_to_ob_time(in_obj.get_datetime(),
-      TZ_INFO(session_info), ob_time));
-  OZ (ObTimeConverter::ob_time_to_utc(ObTimestampTZType, time_cvrt_ctx, ob_time));
-  OZ (ObTimeConverter::ob_time_to_datetime(ob_time, time_cvrt_ctx, date_utc_ts));
-  if (OB_SUCC(ret)) {
-    out_obj.set_timestamp(date_utc_ts);
   }
   return ret;
 }
 
 int ObMViewSchedJobUtils::calc_date_expression(
     ObDBMSSchedJobInfo &job_info,
-    int64_t &next_date_utc_ts)
+    int64_t &next_date_ts)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = job_info.get_tenant_id();
@@ -384,44 +365,66 @@ int ObMViewSchedJobUtils::calc_date_expression(
           THIS_WORKER.set_compatibility_mode(Worker::CompatMode::ORACLE);
         }
 
-        ObObj next_time_obj;
-        ObObj current_time_obj;
-        const char *current_time_expr_str = is_oracle_tenant ? "current_date" : "sysdate()";
-        ObString current_time_expr(current_time_expr_str);
+        int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+        int64_t next_time = 0;
         ObArenaAllocator tmp_allocator("MVSchedTmp");
-        if (OB_FAIL(calc_date_expression_from_str(session, tmp_allocator,
-            tenant_id, job_info.get_interval(), next_time_obj))) {
+        if (OB_FAIL(calc_date_expr_from_str(session, tmp_allocator,
+            tenant_id, job_info.get_interval(), next_time))) {
           LOG_WARN("failed to calc date expression from str", KR(ret),
               K(tenant_id), K(job_info.get_interval()));
-        } else if (OB_FAIL(calc_date_expression_from_str(session, tmp_allocator,
-            tenant_id, current_time_expr, current_time_obj))) {
-          LOG_WARN("failed to calc date expression from str", KR(ret),
-              K(tenant_id), K(current_time_expr));
+        } else if (next_time <= current_time) {
+          ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+          LOG_WARN("the parameter next date must evaluate to a time in the future",
+              KR(ret), K(current_time), K(next_time));
+          LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
         } else {
-          int64_t next_time = next_time_obj.get_timestamp();
-          const int64_t current_time = current_time_obj.get_timestamp();
-          if (next_time <= current_time) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("next date must evaluated to a time in the future",
-                KR(ret), K(current_time), K(next_time), K(current_time_obj), K(next_time_obj));
-          } else {
-            int64_t next_date_ts = 0;
-            ObTime ob_time;
-            ObTimeConvertCtx time_cvrt_ctx(TZ_INFO(&session), true);
-            OZ (ObTimeConverter::datetime_to_ob_time(next_time_obj.get_datetime(),
-                session.get_timezone_info(), ob_time));
-            OZ (ObTimeConverter::ob_time_to_utc(ObTimestampTZType, time_cvrt_ctx, ob_time));
-            OZ (ObTimeConverter::ob_time_to_datetime(ob_time, time_cvrt_ctx, next_date_ts));
-            if (OB_SUCC(ret)) {
-              next_date_utc_ts = next_date_ts;
-            }
-          }
+          next_date_ts = next_time;
         }
 
         if (is_oracle_tenant && !is_oracle_mode) {
           THIS_WORKER.set_compatibility_mode(Worker::CompatMode::MYSQL);
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
+    ObResolverParams &params,
+    ObSQLSessionInfo &session,
+    const ParseNode &node,
+    ObIAllocator &allocator,
+    int64_t &timestamp)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *const_expr = nullptr;
+  ParamStore params_array;
+  ObObj obj;
+  timestamp = 0;
+  if (OB_FAIL(ObResolverUtils::resolve_const_expr(
+      params, node, const_expr, nullptr))) {
+    LOG_WARN("fail to resolve const expr", KR(ret));
+  } else if (OB_FAIL(ObSQLUtils::calc_const_expr(
+      &session, *const_expr, obj, allocator, params_array))) {
+    LOG_WARN("fail to calc const expr", KR(ret));
+  } else {
+    if (obj.is_timestamp()) {
+      timestamp = obj.get_timestamp();
+    } else if (obj.is_timestamp_tz()) {
+      timestamp = obj.get_otimestamp_value().time_us_;
+    } else if (obj.is_datetime()) {
+      int64_t tmp_timestamp = 0;
+      if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(
+          obj.get_datetime(), TZ_INFO(&session), tmp_timestamp))) {
+        LOG_WARN("failed to convert datetime to timestamp",
+            KR(ret), K(obj.get_datetime()));
+      } else {
+        timestamp = tmp_timestamp;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected obj type", KR(ret), K(obj));
     }
   }
   return ret;
