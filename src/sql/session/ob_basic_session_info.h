@@ -983,7 +983,7 @@ public:
   ///@{ user variables related:
   sql::ObSessionValMap &get_user_var_val_map() {return user_var_val_map_;}
   const sql::ObSessionValMap &get_user_var_val_map() const {return user_var_val_map_;}
-  int replace_user_variable(const common::ObString &var, const ObSessionVariable &val);
+  int replace_user_variable(const common::ObString &var, const ObSessionVariable &val, bool need_track = true);
   int replace_user_variables(const ObSessionValMap &user_var_map);
   int remove_user_variable(const common::ObString &var);
   int get_user_variable(const common::ObString &var, ObSessionVariable &val) const;

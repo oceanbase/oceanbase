@@ -2237,6 +2237,7 @@ int ObSQLSessionInfo::replace_user_variable(
     OZ (reset_all_package_state_by_dbms_session(false));
   } else if (is_package_variable && OB_NOT_NULL(get_pl_engine())) {
     OZ (set_package_variable(ctx, name, value.value_, true));
+    OZ (ObBasicSessionInfo::replace_user_variable(name, value, false));
   } else {
     OZ (ObBasicSessionInfo::replace_user_variable(name, value));
   }
