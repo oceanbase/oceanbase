@@ -3041,22 +3041,6 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   ObArray<ObExprResType> types;
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
-  //listagg有效性检测
-  if (lib::is_oracle_mode()) {
-    if (expr.get_real_param_count() > 2) {
-      ret = OB_ERR_PARAM_SIZE;
-      LOG_WARN("listagg has 2 params at most", K(ret), K(expr.get_real_param_count()));
-    } else if (expr.get_real_param_count() == 2) {
-      ObRawExpr *param_expr = NULL;
-      if (OB_ISNULL(param_expr = expr.get_real_param_exprs().at(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(param_expr));
-      } else if (OB_UNLIKELY(!param_expr->is_const_expr())) {
-        ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
-        LOG_WARN("separator expr should be const expr", K(ret), K(*param_expr));
-      } else {/*do nothing */}
-    }
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
