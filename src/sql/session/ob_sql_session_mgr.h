@@ -376,6 +376,7 @@ public:
 
   int init();
   void destroy();
+  static int mtl_new(ObTenantSQLSessionMgr *&tenant_session_mgr);
   static int mtl_init(ObTenantSQLSessionMgr *&tenant_session_mgr);
   static void mtl_destroy(ObTenantSQLSessionMgr *&tenant_session_mgr);
   ObSQLSessionInfo *alloc_session();

@@ -326,12 +326,10 @@ int ObTenantSqlMemoryManager::ObSqlWorkAreaCalcInfo::calculate_global_bound_size
   return ret;
 }
 
-////////////////////////////////////////////////////////////////////////////////////
-int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
+int ObTenantSqlMemoryManager::mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  sql_mem_mgr = nullptr;
   // 系统租户不创建
   if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
     sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager,
@@ -339,7 +337,19 @@ int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
     if (nullptr == sql_mem_mgr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
-    } else if (OB_FAIL(sql_mem_mgr->allocator_.init(
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  // 系统租户不init
+  if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
+    if (OB_FAIL(sql_mem_mgr->allocator_.init(
               lib::ObMallocAllocator::get_instance(),
               OB_MALLOC_NORMAL_BLOCK_SIZE,
               ObMemAttr(tenant_id, "SqlMemMgr")))) {
