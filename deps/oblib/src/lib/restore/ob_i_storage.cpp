@@ -169,6 +169,7 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
           OB_LOG(WARN, "object name is empty", K(uri), K(ret), K(bucket_end));
         }  else if (OB_ISNULL(bucket_name_buff =
             static_cast<char *>(allocator.alloc(bucket_length + 1)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           OB_LOG(WARN, "failed to alloc bucket name buff", K(ret), K(uri), K(bucket_length));
         } else if (OB_FAIL(databuff_printf(bucket_name_buff, bucket_length + 1,
                                            "%.*s", bucket_length, uri.ptr() + bucket_start))) {
