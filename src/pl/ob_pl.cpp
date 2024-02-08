@@ -4312,12 +4312,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     CK (OB_NOT_NULL(coll));
     OX (set_allocator ? coll->set_allocator(&allocator) : coll->set_allocator(NULL));
     if (OB_FAIL(ret)) {
-    } else if (!set_null) {
-      if (user_type->is_associative_array_type()) {
-        OX (coll->set_inited());
-      } else {
-        OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : coll->set_inited());
-      }
+    } else if (user_type->is_associative_array_type()) {
+      OX (coll->set_inited());
+    } else {
+      OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : (set_null ? (void)NULL : coll->set_inited()));
     }
     OX (coll->set_type(pl_type.get_type()));
     OZ (get_element_data_type(pl_type, elem_desc, &allocator));
