@@ -1787,10 +1787,16 @@ int ObPLResolver::resolve_declare_record_type(const ParseNode *type_node,
                 LOG_WARN("not null member does not dafault value", K(ret));
               } else {
                 if (OB_NOT_NULL(default_node)) {
-                  ObString expr_str(default_node->str_len_, default_node->str_value_);
+                  ObRawExpr *new_default_expr = NULL;
                   OZ (resolve_expr(default_node, unit_ast, default_expr,
                                   combine_line_and_col(default_node->stmt_loc_), true, &data_type));
                   OZ (check_param_default_expr_legal(default_expr, false));
+                  OX (new_default_expr = default_expr);
+                  OZ (replace_record_member_default_expr(new_default_expr));
+                  if (OB_SUCC(ret) && new_default_expr != default_expr) {
+                    OX (default_expr = new_default_expr);
+                    OZ (unit_ast.add_expr(new_default_expr));
+                  }
                   OX (default_expr_idx = unit_ast.get_expr_count() - 1);
                 } else {
                   /*
@@ -15763,6 +15769,67 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
   return ret;
 }
 
+int ObPLResolver::replace_record_member_default_expr(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(current_block_));
+  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+  } else if (T_QUESTIONMARK == expr->get_expr_type()) {
+    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr);
+    ObRawExpr *subprogram_expr = NULL;
+    CK (OB_NOT_NULL(const_expr));
+    OZ (ObRawExprUtils::build_get_subprogram_var(expr_factory_,
+                                                 current_block_->get_namespace().get_package_id(),
+                                                 current_block_->get_namespace().get_routine_id(),
+                                                 const_expr->get_value().get_unknown(),
+                                                 &expr->get_result_type(),
+                                                 subprogram_expr,
+                                                 &resolve_ctx_.session_info_));
+    CK (OB_NOT_NULL(subprogram_expr));
+    OX (expr = subprogram_expr);
+  } else if (expr->is_obj_access_expr()) {
+    ObObjAccessRawExpr *obj_expr = static_cast<ObObjAccessRawExpr *>(expr);
+    ObRawExpr *subprogram_expr = NULL;
+    ObRawExpr *new_obj_expr = NULL;
+    ObIArray<ObObjAccessIdx> &access_idxs = obj_expr->get_orig_access_idxs();
+    bool need_rebuild = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
+      if (ObObjAccessIdx::IS_LOCAL == access_idxs.at(i).access_type_) {
+        ObExprResType *result_type = NULL;
+        OZ (convert_pltype_to_restype(expr_factory_.get_allocator(), access_idxs.at(i).var_type_, result_type));
+        OZ (ObRawExprUtils::build_get_subprogram_var(expr_factory_,
+                                                     current_block_->get_namespace().get_package_id(),
+                                                     current_block_->get_namespace().get_routine_id(),
+                                                     access_idxs.at(i).var_index_,
+                                                     result_type,
+                                                     subprogram_expr,
+                                                     &resolve_ctx_.session_info_));
+        CK (OB_NOT_NULL(subprogram_expr));
+        OX (access_idxs.at(i).access_type_ = ObObjAccessIdx::IS_SUBPROGRAM_VAR);
+        OX (access_idxs.at(i).get_sysfunc_ = subprogram_expr);
+        OX (need_rebuild = true);
+      }
+    }
+    if (OB_SUCC(ret) && need_rebuild) {
+      OZ (make_var_from_access(access_idxs,
+                               expr_factory_,
+                               &(resolve_ctx_.session_info_),
+                               &(resolve_ctx_.schema_guard_),
+                               current_block_->get_namespace(),
+                               new_obj_expr));
+      CK (OB_NOT_NULL(new_obj_expr));
+      OX (expr = new_obj_expr);
+    }
+  }
+  if (OB_SUCC(ret) && expr->get_expr_type() != T_OP_GET_SUBPROGRAM_VAR) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      OZ (SMART_CALL(replace_record_member_default_expr(expr->get_param_expr(i))));
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::check_param_default_expr_legal(ObRawExpr *expr, bool is_subprogram_expr)
 {
   int ret = OB_SUCCESS;
@@ -15823,7 +15890,7 @@ int ObPLResolver::check_param_default_expr_legal(ObRawExpr *expr, bool is_subpro
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-    OZ (check_param_default_expr_legal(expr->get_param_expr(i), is_subprogram_expr));
+    OZ (SMART_CALL(check_param_default_expr_legal(expr->get_param_expr(i), is_subprogram_expr)));
   }
 
   return ret;
