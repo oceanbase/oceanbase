@@ -348,11 +348,17 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                       SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", KPC(col), K(buf), K(buf_len), K(pos), K(ret));
                     }
                   } else if (ob_is_string_tc(default_value.get_type())) {
-                    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
                     ObString out_str = default_value.get_string();
-                    if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
-                      SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
-                    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
+                    if (oceanbase::common::ObCharsetType::CHARSET_INVALID == charset_type ||
+                        oceanbase::common::ObCharsetType::CHARSET_BINARY == charset_type) {
+                      // observer perform no conversion of result sets or error messages, you can see more detail the official website of MySQL
+                    } else {
+                      ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
+                        SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
+                      }
+                    }
+                    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
