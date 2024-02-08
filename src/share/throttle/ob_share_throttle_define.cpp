@@ -63,7 +63,8 @@ void FakeAllocatorForTxShare::init_throttle_config(int64_t &resource_limit,
  * @param[out] last_update_limit_ts last update ts (for performance optimization)
  * @param[out] is_updated to decide if update_decay_factor() is needed
  */
-void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t holding_size,
+void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
+                                                    const int64_t holding_size,
                                                     const int64_t config_specify_resource_limit,
                                                     int64_t &resource_limit,
                                                     int64_t &last_update_limit_ts,
@@ -76,7 +77,7 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t holding_size,
   int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_update_limit_ts;
   if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
-    int64_t remain_memory = lib::get_tenant_memory_remain(MTL_ID());
+    int64_t remain_memory = lib::get_tenant_memory_remain(tenant_id);
     int64_t usable_remain_memory = remain_memory / 100 * USABLE_REMAIN_MEMORY_PERCETAGE;
     if (remain_memory > MAX_UNUSABLE_MEMORY) {
       usable_remain_memory = std::max(usable_remain_memory, remain_memory - MAX_UNUSABLE_MEMORY);
@@ -96,6 +97,7 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t holding_size,
     if (is_updated && REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
       SHARE_LOG(INFO,
                 "adaptive update",
+                "Tenant ID", tenant_id,
                 "Config Specify Resource Limit(MB)", config_specify_resource_limit / 1024 / 1024,
                 "TxShare Current Memory Limit(MB)", resource_limit / 1024 / 1024,
                 "Holding Memory(MB)", holding_size / 1024 / 1024,
