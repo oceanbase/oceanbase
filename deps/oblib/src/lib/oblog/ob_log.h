@@ -865,6 +865,8 @@ private:
   // This info will be logged when log file created.
   const char *new_file_info_;
   bool info_as_wdiag_;
+  std::deque<std::string> file_list_;//to store the names of log-files
+  std::deque<std::string> wf_file_list_;//to store the names of warning log-files
 };
 
 inline ObLogger& ObLogger::get_logger()
