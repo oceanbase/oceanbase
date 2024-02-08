@@ -4005,7 +4005,6 @@ int ObQueryInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, con
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  int64_t found_rows = 0;
   OB_UNIS_DECODE(affected_rows);
   sess.set_affected_rows(affected_rows);
   return ret;
