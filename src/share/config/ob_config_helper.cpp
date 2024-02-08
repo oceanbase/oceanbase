@@ -307,9 +307,12 @@ bool ObConfigStaleTimeChecker::check(const ObConfigItem &t) const
 bool ObConfigCompressFuncChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
-  for (int i = 0; i < ARRAYSIZEOF(common::compress_funcs) && !is_valid; ++i) {
+  for (int i = 0; i < ARRAYSIZEOF(common::compress_funcs); ++i) {
     if (0 == ObString::make_string(compress_funcs[i]).case_compare(t.str())) {
-      is_valid = true;
+      if (i != DISABLED_ZLIB_1_COMPRESS_IDX) {
+        is_valid = true;
+      }
+      break;
     }
   }
   return is_valid;
