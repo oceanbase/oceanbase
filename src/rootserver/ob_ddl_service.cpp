@@ -24846,8 +24846,8 @@ int ObDDLService::create_normal_tenant(
   const int64_t start_time = ObTimeUtility::fast_current_time();
   LOG_INFO("[CREATE_TENANT] STEP 2. start create tenant", K(tenant_id), K(tenant_schema), K(source_tenant_id));
   int ret = OB_SUCCESS;
-  ObSArray<ObTableSchema> tables;
   ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
+  ObSArray<ObTableSchema> tables;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
