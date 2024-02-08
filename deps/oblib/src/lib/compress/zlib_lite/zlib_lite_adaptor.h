@@ -54,6 +54,8 @@ private:
   int zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
 
 private:
+  bool qpl_support_ = false;
+
   //zlib compress level,default is 1.
   static constexpr int compress_level = 1;
 
