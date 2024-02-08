@@ -2937,6 +2937,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
   exist = false;
   ObDagListIndex loop_list[2] = { READY_DAG_LIST, RANK_DAG_LIST };
   ObIDag *cancel_dag = nullptr;
+  ObIDagNet *tmp_dag_net = nullptr;
   bool cancel_flag = false;
   int64_t cancel_dag_cnt = 0;
 
@@ -2953,9 +2954,10 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
         if (cur->get_dag_status() == ObIDag::DAG_STATUS_READY) {
           cancel_dag = cur;
           cur = cur->get_next();
-          if (OB_UNLIKELY(nullptr != cancel_dag->get_dag_net())) {
+          tmp_dag_net = cancel_dag->get_dag_net();
+          if (OB_NOT_NULL(tmp_dag_net) && !tmp_dag_net->is_co_dag_net())  {
             tmp_ret = OB_ERR_UNEXPECTED;
-            COMMON_LOG(WARN, "compaction dag should not in dag net", KR(tmp_ret));
+            COMMON_LOG(WARN, "compaction dag can only in co merge dag net", KR(tmp_ret), KPC(cancel_dag), KPC(tmp_dag_net));
           } else if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cancel_dag, false/*try_move_child*/))) {
             COMMON_LOG(WARN, "failed to erase dag", K(tmp_ret), KPC(cancel_dag));
             ob_abort();
