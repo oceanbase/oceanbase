@@ -45,11 +45,17 @@ void ObTransCtx::print_trace_log_()
 void ObTransCtx::before_unlock(CtxLockArg &arg)
 {
   arg.trans_id_ = trans_id_;
+  arg.ls_id_ = ls_id_;
   opid_++;
   if (has_pending_callback_) {
     arg.commit_cb_ = commit_cb_;
     arg.has_pending_callback_ = has_pending_callback_;
     has_pending_callback_ = false;
+  }
+
+  if (need_retry_redo_sync_by_task_) {
+    arg.need_retry_redo_sync_ = true;
+    need_retry_redo_sync_by_task_ = false;
   }
 
   if (elr_handler_.is_elr_prepared()
@@ -67,6 +73,10 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
     // in the ending transaction context in the subsequent process after unlocking
     (void)ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
   }
+  if (arg.need_retry_redo_sync_) {
+    (void)MTL(ObTransService *)->retry_redo_sync_by_task(arg.trans_id_, arg.ls_id_);
+  }
+
   if (arg.has_pending_callback_) {
     int64_t remaining_wait_interval_us = get_remaining_wait_interval_us_();
     if (0 == remaining_wait_interval_us) {
