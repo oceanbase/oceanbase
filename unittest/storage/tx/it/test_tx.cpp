@@ -210,7 +210,7 @@ TEST_F(ObTestTx, start_trans_expired)
   tx_param.isolation_ = ObTxIsolationLevel::RC;
   tx_param.cluster_id_ = 100;
   ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
-  usleep(5000); // 5ms
+  usleep(100000); // 100ms
   // create tx ctx failed caused by trans_timeout
   ASSERT_EQ(OB_TRANS_TIMEOUT, n1->write(tx, 100, 112));
   ASSERT_EQ(OB_SUCCESS, n1->rollback_tx(tx));
