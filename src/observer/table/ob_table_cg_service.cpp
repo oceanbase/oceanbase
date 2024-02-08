@@ -2004,6 +2004,7 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
   base_ctdef.index_tid_ = index_tid;
   base_ctdef.is_ignore_ = false; // insert ignore
   base_ctdef.is_batch_stmt_ = false;
+  base_ctdef.is_table_api_ = true;
   int64_t binlog_row_image = share::ObBinlogRowImage::FULL;
   ObSQLSessionInfo &session = ctx.get_session_info();
 
