@@ -421,9 +421,6 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
     session_info_->set_table_name_hidden(old_flag);
   }
   OZ(column_namespace_checker_.add_reference_table(table_item));
-  if (OB_SUCC(ret) && OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-    LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
-  }
   if (OB_SUCC(ret)) {
     current_scope_ = T_INSERT_SCOPE;
     const ObTableSchema *table_schema = NULL;
