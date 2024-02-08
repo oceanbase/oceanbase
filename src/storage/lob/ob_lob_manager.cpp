@@ -1178,8 +1178,7 @@ int ObLobManager::init_out_row_ctx(
     if (nullptr != param.tx_desc_) {
       param.seq_no_st_ = param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(), N);
     } else {
-      int tmp_seq = ObSequence::get_and_inc_max_seq_no(N);
-      param.seq_no_st_ = transaction::ObTxSEQ::mk_v0(tmp_seq);
+      // do nothing, for direct load has no tx desc, do not use seq no
     }
     param.used_seq_cnt_ = 0;
     param.total_seq_cnt_ = N;
