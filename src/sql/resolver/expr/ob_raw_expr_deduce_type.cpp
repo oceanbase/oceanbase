@@ -373,6 +373,10 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObExprResT
       const ObPrecision prec = MAX(types.at(idx).get_precision(), max_prec);
       types.at(idx).set_precision(prec);
       types.at(idx).set_scale(0);
+    } else if (is_mysql_mode && ob_is_decimal_int_tc(types.at(idx).get_type())) {
+      // for decimal int type in mysql, reset calc accuracy to itself to avoid accuracy reuse
+      // during type deduce
+      types.at(idx).set_calc_accuracy(types.at(idx).get_accuracy());
     } else if (!is_mysql_mode && (is_ddl_stmt || is_show_stmt) && types.at(idx).is_decimal_int()
                && param_expr->is_column_ref_expr()) {
       // If c1 and c2 are both ObDecimalIntType columns, result type of c1 + c2 is ObDecimalIntType.

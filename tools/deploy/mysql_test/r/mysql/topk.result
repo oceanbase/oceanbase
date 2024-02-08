@@ -866,7 +866,7 @@ Outputs & filters:
   0 - output([t1.c3], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(1), offset(nil)
   1 - output([t1.c3], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -921,7 +921,7 @@ Outputs & filters:
   0 - output([t1.c3], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(10), offset(nil)
   1 - output([t1.c3], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -976,7 +976,7 @@ Outputs & filters:
   0 - output([t1.c3], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(1), offset(nil)
   1 - output([t1.c3], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1031,7 +1031,7 @@ Outputs & filters:
   0 - output([t1.c3], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(1), offset(4)
   1 - output([t1.c3], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1086,7 +1086,7 @@ Outputs & filters:
   0 - output([t1.c3], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), startup_filter([0]), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), startup_filter([0]), rowset=256
       limit(0), offset(nil)
   1 - output([t1.c3], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1141,7 +1141,7 @@ Outputs & filters:
   0 - output([t1.c2], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1207,7 +1207,7 @@ Outputs & filters:
   0 - output([t1.c1], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c1], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1273,7 +1273,7 @@ Outputs & filters:
   0 - output([t1.c2], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))],
        [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1346,7 +1346,7 @@ Outputs & filters:
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_SUM(T_FUN_SUM(t1.c2))],
        [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))],
        [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1,
-       -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -1407,7 +1407,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)),
-       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))]), filter(nil), rowset=256
@@ -1464,7 +1464,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)),
-       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))]), filter(nil), rowset=256
@@ -1526,7 +1526,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)),
-       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))]), filter(nil), rowset=256
@@ -1588,7 +1588,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)),
-       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))]), filter(nil), rowset=256
@@ -1650,7 +1650,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)),
-       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([t1.c2], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))],
        [T_FUN_MIN(T_FUN_MIN(t1.c3))], [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))]), filter(nil), rowset=256
@@ -1991,7 +1991,7 @@ Outputs & filters:
  13 - output([t1.c3], [t1.c1], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15,
        4))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1)) + T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
+       DOUBLE(-1, -1)))) / cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DOUBLE(33, 0))]), filter(nil), rowset=256
       limit(7), offset(nil)
  14 - output([t1.c3], [t1.c1], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c3))], [T_FUN_MIN(T_FUN_MIN(t1.c3))],
        [T_FUN_MAX(T_FUN_MAX(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
