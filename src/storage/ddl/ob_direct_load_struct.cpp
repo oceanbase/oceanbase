@@ -51,9 +51,9 @@ int ObTabletDirectLoadInsertParam::assign(const ObTabletDirectLoadInsertParam &o
 ObDDLInsertRowIterator::ObDDLInsertRowIterator(
     sql::ObPxMultiPartSSTableInsertOp *op,
     const bool is_slice_empty, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-    const int64_t rowkey_cnt, const int64_t snapshot_version, const int64_t context_id)
+    const int64_t rowkey_cnt, const int64_t snapshot_version, const int64_t context_id, const int64_t parallel_idx)
   : lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), op_(op), ls_id_(ls_id), current_tablet_id_(tablet_id), current_row_(), is_next_row_cached_(true),
-    is_slice_empty_(is_slice_empty), rowkey_count_(rowkey_cnt), snapshot_version_(snapshot_version), lob_slice_id_(0), context_id_(context_id)
+    is_slice_empty_(is_slice_empty), rowkey_count_(rowkey_cnt), snapshot_version_(snapshot_version), lob_slice_id_(0), context_id_(context_id), parallel_idx_(parallel_idx)
 {
   lob_id_cache_.set(1/*start*/, 0/*end*/);
 }
@@ -246,10 +246,8 @@ int ObDDLInsertRowIterator::switch_to_new_lob_slice()
   } else if (OB_UNLIKELY(AUTO_INC_CACHE_SIZE > lob_id_cache_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected autoincrement value count", K(ret), K(lob_id_cache_));
-  } else if (OB_FAIL(lob_id_cache_.get_value(lob_id))) {
-    LOG_WARN("get value failed", K(ret), K(lob_id));
-  } else if (OB_FAIL(block_start_seq.set_parallel_degree(lob_id / AUTO_INC_CACHE_SIZE))) {
-    LOG_WARN("set parall degree failed", K(ret), K(lob_id));
+  } else if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx_))) {
+    LOG_WARN("set parall degree failed", K(ret), K(parallel_idx_));
   } else {
     // new slice info to open.
     slice_info.slice_id_ = 0;

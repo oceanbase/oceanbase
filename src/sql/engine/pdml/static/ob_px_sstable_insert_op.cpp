@@ -212,7 +212,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         LOG_WARN("create sstable slice writer failed", K(ret), K(block_start_seq), K(slice_info));
       } else {
         ObDDLInsertRowIterator row_iter(this, is_current_slice_empty /*is_slice_empty*/,
-          notify_ls_id, notify_tablet_id, table_schema->get_rowkey_column_num(), snapshot_version_, slice_info.context_id_);
+          notify_ls_id, notify_tablet_id, table_schema->get_rowkey_column_num(), snapshot_version_, slice_info.context_id_, parallel_idx);
         if (OB_FAIL(tenant_direct_load_mgr->fill_sstable_slice(slice_info,
                                                               &row_iter,
                                                               affected_rows,

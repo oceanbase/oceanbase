@@ -265,7 +265,8 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t rowkey_cnt,
       const int64_t snapshot_version,
-      const int64_t context_id);
+      const int64_t context_id,
+      const int64_t parallel_idx);
   virtual ~ObDDLInsertRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(ls_id), K_(current_tablet_id), K_(current_row), K_(is_slice_empty), K_(is_next_row_cached), K_(rowkey_count), K_(snapshot_version),
@@ -289,6 +290,7 @@ private:
   int64_t lob_slice_id_;
   share::ObTabletCacheInterval lob_id_cache_;
   int64_t context_id_;
+  int64_t parallel_idx_;
 };
 
 class ObLobMetaRowIterator : public ObIStoreRowIterator
