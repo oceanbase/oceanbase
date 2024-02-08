@@ -332,6 +332,8 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   bool session_enable_pdml = false;
   bool enable_auto_dop = false;
   uint64_t session_pdml_dop = ObGlobalHint::UNSET_PARALLEL;
+  bool disable_pdml = false;
+  bool is_pk_auto_inc = false;
   if (OB_ISNULL(ctx_.get_exec_ctx()) || OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()), K(query_ctx));
@@ -348,8 +350,15 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else if (ctx_.has_var_assign() && !ctx_.is_var_assign_only_in_root_stmt()) {
     can_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() &&
-             !static_cast< const ObInsertStmt &>(stmt).value_from_select()) {
+      OB_FAIL(static_cast< const ObInsertStmt &>(stmt).check_pdml_disabled(ctx_.is_online_ddl(),
+                                                                           disable_pdml,
+                                                                           is_pk_auto_inc))) {
+    LOG_WARN("fail to check pdml disabled for insert stmt", K(ret));
+  } else if (disable_pdml) {
     can_use_pdml = false;
+    if (is_pk_auto_inc) {
+      ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_PK_AUTO_INC);
+    }
   } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt())
              && static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()
              && static_cast<const ObDelUpdStmt &>(stmt).is_dml_table_from_join()) {
