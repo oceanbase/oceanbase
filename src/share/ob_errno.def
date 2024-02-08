@@ -1784,6 +1784,9 @@ DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout")
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 DEFINE_ERROR(OB_CLOG_DISK_HANG, -6325, -1, "HY000", "ob clog disk hang");
+// 6326: OB_TABLE_LOCK_SPLIT_TWICE
+// 6327: OB_TABLE_LOCK_IS_SPLITTING
+// 6328: OB_TABLE_LOCK_SPLIT_FAIL
 
 // for freeze
 // DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
