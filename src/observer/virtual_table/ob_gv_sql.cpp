@@ -206,7 +206,17 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       //sql_id
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SQL_ID: {
       ObString sql_id;
-      if (!cache_obj->is_sql_crsr()) {
+      if (OB_NOT_NULL(pl_func)) {
+        if (OB_FAIL(ob_write_string(*allocator_,
+                                    pl_func->get_stat().sql_id_,
+                                    sql_id))) {
+          SERVER_LOG(ERROR, "copy sql_id failed", K(ret));
+        } else {
+          cells[i].set_varchar(sql_id);
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                        ObCharset::get_default_charset()));
+        }
+      } else if (!cache_obj->is_sql_crsr()) {
         cells[i].set_null();
       } else if (OB_FAIL(ob_write_string(*allocator_,
                                          plan->stat_.sql_id_,

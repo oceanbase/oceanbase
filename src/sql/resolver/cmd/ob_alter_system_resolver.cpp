@@ -818,7 +818,8 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_ISNULL(sql_id_node)) {
       // do nothing
     // currently, only support plan cache's fine-grained cache evict
-    } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN) {
+    } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN &&
+               stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PL_OBJ) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support plan cache's fine-grained cache evict", K(stmt->flush_cache_arg_.cache_type_), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "only support plan cache's fine-grained cache evict, other type");
@@ -827,18 +828,25 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("not supported plan cache's fine-grained cache evict in oracle mode", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "plan cache's fine-grained cache evict in oracle mode is");
     } else if (OB_ISNULL(sql_id_node->children_)
-               || OB_ISNULL(sql_id_node->children_[0])
-               || T_SQL_ID != sql_id_node->type_) {
+               || OB_ISNULL(sql_id_node->children_[0])) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
-    } else if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SQL_ID_LENGTH+1)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
-    } else {
-      stmt->flush_cache_arg_.sql_id_.assign_ptr(
-          sql_id_node->children_[0]->str_value_,
-          static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
+    } else if (T_SQL_ID == sql_id_node->type_) {
+      if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SQL_ID_LENGTH+1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else {
+        stmt->flush_cache_arg_.sql_id_.assign_ptr(
+            sql_id_node->children_[0]->str_value_,
+            static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
+        stmt->flush_cache_arg_.is_fine_grained_ = true;
+      }
+    } else if (T_SCHEMA_ID == sql_id_node->type_) {
+      stmt->flush_cache_arg_.schema_id_ = sql_id_node->children_[0]->value_;
       stmt->flush_cache_arg_.is_fine_grained_ = true;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
     }
 
     // retrive schema guard

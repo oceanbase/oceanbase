@@ -424,6 +424,8 @@ public:
 public:
   int flush_plan_cache();
   int flush_plan_cache_by_sql_id(uint64_t db_id, common::ObString sql_id);
+  template<typename GETPLKVEntryOp, typename EvictAttr>
+  int flush_pl_cache_single_cache_obj(uint64_t db_id, EvictAttr &attr);
   int flush_lib_cache();
   int flush_lib_cache_by_ns(const ObLibCacheNameSpace ns);
   int flush_pl_cache();

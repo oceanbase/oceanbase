@@ -2385,6 +2385,7 @@ typedef enum ObItemType
   T_BLOCKING,
   T_PQ_SUBQUERY,
   T_FLUSH_PRIVILEGES,
+  T_SCHEMA_ID,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

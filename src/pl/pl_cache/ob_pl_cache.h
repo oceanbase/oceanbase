@@ -55,6 +55,7 @@ struct PCVPlSchemaObj
   schema_version_(0),
   schema_type_(share::schema::OB_MAX_SCHEMA),
   table_type_(share::schema::MAX_TABLE_TYPE),
+  table_name_(),
   is_tmp_table_(false),
   is_explicit_db_name_(false),
   inner_alloc_(nullptr) {}
@@ -66,6 +67,7 @@ struct PCVPlSchemaObj
     schema_version_(0),
     schema_type_(share::schema::OB_MAX_SCHEMA),
     table_type_(share::schema::MAX_TABLE_TYPE),
+    table_name_(),
     is_tmp_table_(false),
     is_explicit_db_name_(false),
     inner_alloc_(alloc) {}
@@ -298,6 +300,8 @@ public:
 
   void destroy();
 
+  common::ObString &get_sql_id() { return sql_id_; }
+
   int create_new_pl_object_value(ObPLObjectValue *&pl_object_value);
   void free_pl_object_value(ObPLObjectValue *pl_object_value);
   int64_t get_mem_size();
@@ -306,6 +310,7 @@ public:
 private:
   bool is_inited_;
   ObPLObjectKey key_;  //used for manager key memory
+  common::ObString sql_id_;
 	// a list of plan sets with different param types combination
   common::ObDList<ObPLObjectValue> object_value_sets_;
 };
