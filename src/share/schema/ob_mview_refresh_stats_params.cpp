@@ -357,27 +357,30 @@ int ObMViewRefreshStatsParams::fetch_mview_refresh_stats_params(ObISQLClient &sq
       if (OB_FAIL(sql.assign_fmt(
             "select collection_level, retention_period from"
             "("
-            "   with defvals as"
-            "     (select collection_level, retention_period from %s where tenant_id = 0)"
-            "   select ifnull(e.collection_level, d.collection_level) collection_level,"
-            "          ifnull(e.retention_period, d.retention_period) retention_period"
-            "   from"
-            "     (select tenant_id, mview_id, collection_level, retention_period from %s"
-            "       right outer join"
-            "       (select tenant_id, mview_id from %s where tenant_id = 0 and mview_id = %ld)"
-            "       using (tenant_id, mview_id)"
-            "     ) e, defvals d"
+            "  with defvals as"
+            "  ("
+            "    select"
+            "      ifnull(max(collection_level), 1) as collection_level,"
+            "      ifnull(max(retention_period), 31) as retention_period"
+            "    from %s"
+            "    where tenant_id = 0"
+            "  )"
+            "  select"
+            "    ifnull(e.collection_level, d.collection_level) collection_level,"
+            "    ifnull(e.retention_period, d.retention_period) retention_period"
+            "  from"
+            "    (select tenant_id, mview_id, collection_level, retention_period from %s"
+            "      right outer join"
+            "      (select tenant_id, mview_id from %s where tenant_id = 0 and mview_id = %ld)"
+            "      using (tenant_id, mview_id)"
+            "    ) e,"
+            "    defvals d"
             ")",
             OB_ALL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_TNAME, OB_ALL_MVIEW_REFRESH_STATS_PARAMS_TNAME,
             OB_ALL_MVIEW_TNAME, mview_id))) {
         LOG_WARN("fail to assign sql with sys defaults", KR(ret));
       } else if (OB_FAIL(read_stats_params(sql_client, exec_tenant_id, sql, params))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to read stats params", KR(ret), K(exec_tenant_id), K(sql));
-        } else {
-          ret = OB_SUCCESS;
-          params = get_default();
-        }
+        LOG_WARN("fail to read stats params", KR(ret), K(exec_tenant_id), K(sql));
       }
     } else {
       if (OB_FAIL(sql.assign_fmt("select collection_level, retention_period from %s"
