@@ -1325,7 +1325,11 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
-    LOG_WARN("failed to acquire tablet", K(ret), K(key));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
+    }
   } else {
     time_guard.click("Acquire");
     ObTablet *tmp_tablet = tmp_tablet_hdl.get_obj();
