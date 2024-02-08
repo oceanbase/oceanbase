@@ -68,8 +68,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
   const ObString &kv_attributes = tb_ctx.get_table_schema()->get_kv_attributes();
 
-  if (OB_FAIL(one_result.assign_property_names(tb_ctx.get_query_col_names()))) {
-    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
+  if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
+    LOG_WARN("fail to deep copy property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
       ObHTableFilterOperator *htable_result_iter = nullptr;

@@ -1313,7 +1313,8 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
 ////////////////////////////////////////////////////////////////
 ObTableQueryResult::ObTableQueryResult()
     :row_count_(0),
-     allocator_(ObModIds::TABLE_PROC),
+     allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     prop_name_allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      fixed_result_size_(0),
      curr_idx_(0)
 {
@@ -1333,6 +1334,7 @@ void ObTableQueryResult::reset()
 {
   properties_names_.reset();
   reset_except_property();
+  prop_name_allocator_.reset();
 }
 
 void ObTableQueryResult::rewind()
@@ -1415,7 +1417,7 @@ int ObTableQueryResult::deep_copy_property_names(const ObIArray<ObString> &other
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); i++) {
-    if (OB_FAIL(ob_write_string(allocator_, other.at(i), properties_names_.at(i)))) {
+    if (OB_FAIL(ob_write_string(prop_name_allocator_, other.at(i), properties_names_.at(i)))) {
       LOG_WARN("failed to write string", K(ret), K(other.at(i)));
     }
   }
