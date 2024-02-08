@@ -151,7 +151,7 @@ cmake_dependent_option(
 
 # OB_BUILD_RPM => build OB_BUILD_LIBOBTABLE
 cmake_dependent_option(
-  OB_BUILD_LIBOBTABLE "Build liboblog" ON
+  OB_BUILD_LIBOBTABLE "Build liboblog" OFF
   "NOT OB_BUILD_RPM" ON
 )
 
