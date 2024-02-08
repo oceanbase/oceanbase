@@ -180,6 +180,9 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
     query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
+    if (0 == query_range_ctx_->range_optimizer_max_mem_size_) {
+      query_range_ctx_->range_optimizer_max_mem_size_ = INT64_MAX;
+    }
     query_range_ctx_->use_in_optimization_ = use_in_optimization;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
