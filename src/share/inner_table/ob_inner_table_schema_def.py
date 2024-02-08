@@ -14189,12 +14189,12 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
-def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15417', all_def_keywords['__all_virtual_column_group_mapping']))
+# 15417: __all_virtual_column_group_mapping abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418', all_def_keywords['__all_virtual_cgroup_config'])))
 
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15419', all_def_keywords['__all_virtual_column_group_history']))
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15420', all_def_keywords['__all_virtual_column_group_mapping_history']))
+# 15419: __all_virtual_column_group_history abandoned
+# 15420: __all_virtual_column_group_mapping_history abandoned
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
 # 15423: __all_tenant_scheduler_running_job
