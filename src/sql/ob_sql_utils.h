@@ -670,6 +670,7 @@ public:
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
   static bool check_need_disconnect_parser_err(const int ret_code);
+  static bool check_json_expr(ObItemType type);
 
   static int print_identifier_require_quotes(ObCollationType collation_type,
                                              const ObString &ident,

@@ -348,6 +348,8 @@ private:
   int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
   int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
   int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
+
+  int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
 protected:
   // data members
   /*these member is only for with clause*/

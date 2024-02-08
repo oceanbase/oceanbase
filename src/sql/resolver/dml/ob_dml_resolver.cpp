@@ -9788,6 +9788,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
             }
           } else if (ob_is_geometry(select_expr->get_data_type()) && !select_expr->is_column_ref_expr()) {
             col_expr->set_srs_id(OB_DEFAULT_COLUMN_SRS_ID);
+          } else if (ObSQLUtils::check_json_expr(select_expr->get_expr_type())) {
+            with_is_json_constraint = true;
           }
           is_break = true;
 
