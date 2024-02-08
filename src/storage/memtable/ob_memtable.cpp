@@ -567,6 +567,8 @@ int ObMemtable::lock(
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
   } else if (OB_FAIL(lock_(param, context, tmp_key, mtk))) {
     TRANS_LOG(WARN, "lock_ failed", K(ret), K(param));
+  } else {
+    guard.set_memtable(this);
   }
 
 
@@ -611,6 +613,8 @@ int ObMemtable::lock(
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
   } else if (OB_FAIL(lock_(param, context, rowkey.get_store_rowkey(), mtk))) {
     TRANS_LOG(WARN, "lock_ failed", K(ret), K(param));
+  } else {
+    guard.set_memtable(this);
   }
 
   if (OB_FAIL(ret) && (OB_TRY_LOCK_ROW_CONFLICT != ret) && (OB_TRANSACTION_SET_VIOLATION != ret)) {
