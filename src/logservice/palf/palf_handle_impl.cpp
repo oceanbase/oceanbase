@@ -71,6 +71,7 @@ PalfHandleImpl::PalfHandleImpl()
     palf_env_impl_(NULL),
     append_cost_stat_("[PALF STAT WRITE LOG COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     flush_cb_cost_stat_("[PALF STAT FLUSH CB COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    handle_submit_log_cost_stat_("[PALF STAT HANDLE SUBMIT LOG COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     last_accum_write_statistic_time_(OB_INVALID_TIMESTAMP),
     accum_write_log_size_(0),
     last_accum_fetch_statistic_time_(OB_INVALID_TIMESTAMP),
@@ -109,6 +110,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
                          LogIOWorker *log_io_worker,
+                         LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
@@ -131,6 +133,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
              || NULL == log_block_pool
              || NULL == log_rpc
              || NULL == log_io_worker
+             || NULL == log_shared_queue_th
              || NULL == palf_env_impl
              || false == self.is_valid()
              || NULL == election_timer
@@ -138,16 +141,16 @@ int PalfHandleImpl::init(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
-        K(log_io_worker), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
+        K(log_io_worker), K(log_shared_queue_th), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
   } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, replica_type))) {
     PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(replica_type));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &hot_cache_, \
-          log_rpc, log_io_worker, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+          log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker));
+        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
           alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
@@ -175,6 +178,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
                          LogIOWorker *log_io_worker,
+                         LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
@@ -194,12 +198,14 @@ int PalfHandleImpl::load(const int64_t palf_id,
              || NULL == alloc_mgr
              || NULL == log_rpc
              || NULL == log_io_worker
+             || NULL == log_shared_queue_th
              || false == self.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker));
+        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &hot_cache_, log_rpc,
-        log_io_worker, &plugins_, entry_header, palf_epoch, is_integrity, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, is_integrity,
+        PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
     //     to 'base_lsn_', we will generate default PalfBaseInfo or get it from LogSnapshotMeta(rebuild).
@@ -4084,6 +4090,24 @@ int PalfHandleImpl::advance_reuse_lsn(const LSN &flush_log_end_lsn)
     PALF_LOG(WARN, "sw_.advance_reuse_lsn failed", K(ret), K(flush_log_end_lsn));
   } else {
     PALF_LOG(TRACE, "advance_reuse_lsn success", K(ret), K(flush_log_end_lsn));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::try_handle_next_submit_log()
+{
+  int ret = OB_SUCCESS;
+  PALF_LOG(TRACE, "try_handle_next_submit_log begin", KPC(this));
+  const int64_t begin_ts = ObTimeUtility::current_time();
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(sw_.try_handle_next_submit_log())) {
+    PALF_LOG(WARN, "sw_.try_handle_next_submit_log failed", K(ret), KPC(this));
+  } else {
+    const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
+    handle_submit_log_cost_stat_.stat(time_cost);
+    PALF_LOG(TRACE, "try_handle_next_submit_log success", K(ret), KPC(this));
   }
   return ret;
 }

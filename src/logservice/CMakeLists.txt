@@ -108,9 +108,11 @@ ob_set_subtarget(ob_logservice palf
   palf/log_group_buffer.cpp
   palf/log_group_entry.cpp
   palf/log_group_entry_header.cpp
+  palf/log_shared_queue_thread.cpp
   palf/log_io_task.cpp
   palf/log_io_task_cb_thread_pool.cpp
   palf/log_io_task_cb_utils.cpp
+  palf/log_shared_task.cpp
   palf/log_io_worker.cpp
   palf/log_iterator_storage.cpp
   palf/log_learner.cpp

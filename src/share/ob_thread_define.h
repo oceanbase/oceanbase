@@ -99,6 +99,10 @@ TG_DEF(LogIOTaskCbThreadPool, LogIOCb, QUEUE_THREAD,
        ThreadCountPair(palf::LogIOTaskCbThreadPool::THREAD_NUM,
        palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
        palf::LogIOTaskCbThreadPool::MAX_LOG_IO_CB_TASK_NUM)
+TG_DEF(LogSharedQueueTh, LogSharedQueueThread, QUEUE_THREAD,
+       ThreadCountPair(palf::LogSharedQueueTh::THREAD_NUM,
+       palf::LogSharedQueueTh::MINI_MODE_THREAD_NUM),
+       palf::LogSharedQueueTh::MAX_LOG_HANDLE_TASK_NUM)
 TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1, (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(LogRouteService, LogRouteSrv, QUEUE_THREAD, 1, (common::MAX_SERVER_COUNT) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(LogRouterTimer, LogRouterTimer, TIMER)

@@ -322,6 +322,7 @@ public:
                                     char *buf,
                                     int64_t &out_read_size) const;
   int64_t get_last_slide_log_id() const;
+  virtual int try_handle_next_submit_log();
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
@@ -329,8 +330,10 @@ public:
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
   K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn),           \
   K_(last_fetch_req_time), K_(is_truncating), K_(is_rebuilding), K_(last_rebuild_lsn),          \
-  "freeze_mode", freeze_mode_2_str(freeze_mode_), \
+  "freeze_mode", freeze_mode_2_str(freeze_mode_), K_(has_pending_handle_submit_task), \
   "last_fetch_trigger_type", fetch_trigger_type_2_str(last_fetch_trigger_type_), KP(this));
+protected:
+  virtual bool is_handle_thread_lease_expired(const int64_t thread_lease_begin_ts) const;
 private:
   int do_init_mem_(const int64_t palf_id,
                    const PalfBaseInfo &palf_base_info,
@@ -609,6 +612,7 @@ private:
   int64_t last_record_group_log_id_;
   int64_t append_cnt_array_[APPEND_CNT_ARRAY_SIZE];
   FreezeMode freeze_mode_;
+  bool has_pending_handle_submit_task_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogSlidingWindow);
