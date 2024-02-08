@@ -2329,12 +2329,18 @@ int ObTransformSimplifyExpr::remove_ora_decode(ObDMLStmt *stmt, bool &trans_happ
   trans_happened = false;
   ObSEArray<ObRawExpr *, 2> old_exprs;
   ObSEArray<ObRawExpr *, 2> new_exprs;
+  ObStmtExprGetter visitor;
+  visitor.remove_all();
+  visitor.add_scope(SCOPE_HAVING);
+  visitor.add_scope(SCOPE_WHERE);
+  visitor.add_scope(SCOPE_JOINED_TABLE);
+  visitor.add_scope(SCOPE_SEMI_INFO);
   ObSEArray<ObRawExpr *, 16> relation_exprs;
   trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(stmt));
-  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, visitor))) {
     LOG_WARN("failed to get stmt's relation exprs");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
