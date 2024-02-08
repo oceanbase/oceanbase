@@ -244,6 +244,7 @@ public:
   RPC_AP(PR5 inner_drop_tenant_snapshot, OB_INNER_DROP_TENANT_SNAPSHOT, (obrpc::ObInnerDropTenantSnapshotArg), obrpc::ObInnerDropTenantSnapshotResult);
   RPC_AP(PR5 flush_ls_archive, OB_FLUSH_LS_ARCHIVE, (obrpc::ObFlushLSArchiveArg), obrpc::Int64);
   RPC_S(PR5 notify_clone_scheduler, OB_NOTIFY_CLONE_SCHEDULER, (obrpc::ObNotifyCloneSchedulerArg), obrpc::ObNotifyCloneSchedulerResult);
+  RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
   RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);
   RPC_S(PR5 client_session_create_time, OB_CLIENT_SESSION_CONNECT_TIME, (ObClientSessionCreateTimeAndAuthArg), ObClientSessionCreateTimeAndAuthRes);

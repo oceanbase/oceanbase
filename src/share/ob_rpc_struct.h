@@ -3742,7 +3742,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObNotifySwitchLeaderArg);
 private:
   //tenant_id is invalid weakup all tenant
-  //teenant_id is valid weakup target tenant
+  //tenant_id is valid weakup target tenant
   uint64_t tenant_id_;
   //ls_id is invalid iterator all ls
   //ls_id is valid, only check target ls
@@ -3750,6 +3750,39 @@ private:
   //advise_leader maybe invalid
   common::ObAddr advise_leader_;
   SwitchLeaderComment comment_;
+};
+
+struct ObNotifyTenantThreadArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TenantThreadType
+  {
+    INVALID_TYPE = -1,
+    RECOVERY_LS_SERVICE,
+  };
+  ObNotifyTenantThreadArg() : tenant_id_(OB_INVALID_TENANT_ID), thread_type_(INVALID_TYPE) {}
+  ~ObNotifyTenantThreadArg() {}
+  TO_STRING_KV(K_(tenant_id), K_(thread_type));
+  int init(const uint64_t tenant_id, const TenantThreadType thread_type);
+  int assign(const ObNotifyTenantThreadArg &other);
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && INVALID_TYPE != thread_type_;
+  }
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  TenantThreadType get_thread_type() const
+  {
+    return thread_type_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyTenantThreadArg);
+private:
+  uint64_t tenant_id_;
+  TenantThreadType thread_type_;
 };
 
 struct ObCreateTabletInfo
