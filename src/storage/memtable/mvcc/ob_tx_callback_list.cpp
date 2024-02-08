@@ -778,7 +778,7 @@ int ObTxCallbackList::get_stat_for_display(ObTxCallbackListStat &stat) const
 {
   int ret = OB_SUCCESS;
 #define _ASSIGN_STAT_(x) stat.x = x;
-  LST_DO(_ASSIGN_STAT_, (), id_, sync_scn_, checksum_scn_, length_, logged_, removed_);
+  LST_DO(_ASSIGN_STAT_, (), id_, sync_scn_, length_, logged_, removed_, branch_removed_);
 #undef __ASSIGN_STAT_
   return ret;
 }
