@@ -1571,6 +1571,7 @@ int ObIndexBlockRowScanner::init_by_micro_data(const ObMicroBlockData &idx_block
     if (ObMicroBlockData::DDL_MERGE_INDEX_BLOCK == idx_block_data.type_ && is_ddl_merge_type() && is_normal_query_) {
       if (OB_NOT_NULL(ddl_merge_iter_)) {
         iter_ = ddl_merge_iter_;
+        index_format_ = ObIndexFormat::DDL_MERGE;
       } else {
         if (OB_ISNULL(iter_buf = allocator_->alloc(sizeof(ObDDLMergeBlockRowIterator)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1585,6 +1586,7 @@ int ObIndexBlockRowScanner::init_by_micro_data(const ObMicroBlockData &idx_block
       if (nullptr == idx_block_data.get_extra_buf()) {
         if (OB_NOT_NULL(raw_iter_)) {
           iter_ = raw_iter_;
+          index_format_ = ObIndexFormat::RAW_DATA;
         } else {
           if (OB_ISNULL(iter_buf = allocator_->alloc(sizeof(ObRAWIndexBlockRowIterator)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1598,6 +1600,7 @@ int ObIndexBlockRowScanner::init_by_micro_data(const ObMicroBlockData &idx_block
       } else {
         if (OB_NOT_NULL(transformed_iter_)) {
           iter_ = transformed_iter_;
+          index_format_ = ObIndexFormat::TRANSFORMED;
         } else {
           if (OB_ISNULL(iter_buf = allocator_->alloc(sizeof(ObTFMIndexBlockRowIterator)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1613,6 +1616,7 @@ int ObIndexBlockRowScanner::init_by_micro_data(const ObMicroBlockData &idx_block
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == idx_block_data.type_) {
     if (OB_NOT_NULL(ddl_iter_)) {
       iter_ = ddl_iter_;
+      index_format_ = ObIndexFormat::BLOCK_TREE;
     } else {
       if (OB_ISNULL(iter_buf = allocator_->alloc(sizeof(ObDDLIndexBlockRowIterator)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

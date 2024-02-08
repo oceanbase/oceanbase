@@ -123,6 +123,7 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_aggregator.cpp
   blocksstable/index_block/ob_index_block_builder.cpp
   blocksstable/index_block/ob_index_block_macro_iterator.cpp
+  blocksstable/index_block/ob_index_block_dual_meta_iterator.cpp
   blocksstable/index_block/ob_ddl_sstable_scan_merge.cpp
   blocksstable/index_block/ob_index_block_row_scanner.cpp
   blocksstable/index_block/ob_ddl_index_block_row_iterator.cpp

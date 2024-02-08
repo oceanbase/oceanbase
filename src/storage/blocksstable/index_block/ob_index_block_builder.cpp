@@ -12,7 +12,7 @@
  */
 
 #include "ob_index_block_builder.h"
-#include "ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_macro_block_writer.h"
 #include "storage/blocksstable/ob_imacro_block_flush_callback.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
