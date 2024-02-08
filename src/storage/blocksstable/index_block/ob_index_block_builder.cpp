@@ -438,7 +438,7 @@ void ObSSTableIndexBuilder::reset()
 bool ObSSTableIndexBuilder::check_index_desc(const ObDataStoreDesc &index_desc) const
 {
   bool ret = true;
-  // TODO(zhuixin.gsy): these args influence write_micro_block and need to be evaluated
+  // these args influence write_micro_block and need to be evaluated
   if (!index_desc.is_valid()
       || index_desc.merge_info_ != nullptr
       || index_desc.get_row_column_count() != index_desc.get_rowkey_column_count() + 1
@@ -644,7 +644,6 @@ int ObSSTableIndexBuilder::trim_empty_roots()
 }
 int ObSSTableIndexBuilder::ObMacroMetaIter::init(IndexTreeRootCtxList &roots, const bool is_cg)
 {
-  // TODO(zhuixin.gsy) reserve roots_
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -1523,7 +1522,6 @@ int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_bui
   } else if (OB_UNLIKELY(next_level_builder_ == nullptr)) {
     root_builder = this;
   } else {
-    //TODO(zhuixin.gsy) check if row_count == 0 is error?
     if (OB_LIKELY(micro_writer_->get_row_count() > 0)) {
       if (OB_FAIL(append_index_micro_block())) {
         STORAGE_LOG(WARN, "Fail to append index micro block, ", K(ret));
@@ -1847,7 +1845,6 @@ int ObDataIndexBlockBuilder::insert_and_update_index_tree(const ObDatumRow *inde
 int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
     const ObDatumRowkey &rowkey, int64_t &estimate_meta_block_size)
 {
-  // TODO(zhuixin.gsy) fix and add agg_row_buf_ max size
   int ret = OB_SUCCESS;
   ObDataMacroBlockMeta macro_meta;
   const int64_t rowkey_cnt = rowkey.datum_cnt_;

@@ -172,7 +172,6 @@ protected:
   virtual void reset_obj();
 
 protected:
-  // TODO(zhuixin.gsy) rm *obj_pool_ and *allocator_
   T *obj_;
   ObITenantMetaObjPool *obj_pool_;
   common::ObIAllocator *allocator_;

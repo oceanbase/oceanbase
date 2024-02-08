@@ -1294,7 +1294,6 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
     }
   }
 
-  // TODO(zhuixin.gsy): ensure bloomfilter correct for index micro block
   if (OB_SUCC(ret)) {
     last_micro_size_ = micro_block_desc.data_size_;
     last_micro_expand_pct_ = micro_block_desc.original_size_  * 100 / micro_block_desc.data_size_;
@@ -1343,7 +1342,7 @@ int ObMacroBlockWriter::try_active_flush_macro_block()
 int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
 {
   int ret = OB_SUCCESS;
-  ObLogicMacroBlockId cur_logic_id; // TODO(zhuixin.gsy) rm this if DDL Rebuild Ready
+  ObLogicMacroBlockId cur_logic_id;
   cur_logic_id.logic_version_ = data_store_desc_->get_logical_version();
   cur_logic_id.column_group_idx_ = data_store_desc_->get_table_cg_idx();
   cur_logic_id.data_seq_.macro_data_seq_ = current_macro_seq_;

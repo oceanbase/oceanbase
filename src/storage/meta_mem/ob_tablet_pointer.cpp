@@ -686,7 +686,7 @@ ObITabletFilterOp::~ObITabletFilterOp()
   total_tablet_cnt_ += total_cnt_;
   not_in_mem_tablet_cnt_ += not_in_mem_cnt_;
   invalid_attr_tablet_cnt_ += invalid_attr_cnt_;
-  LOG_INFO("zhuixin debug filter destructed",
+  LOG_INFO("tablet skip filter destructed",
       K_(total_cnt), K_(skip_cnt), K_(not_in_mem_cnt), K_(invalid_attr_cnt),
       K_(total_tablet_cnt), K_(total_skip_cnt), K_(not_in_mem_tablet_cnt), K_(invalid_attr_tablet_cnt));
 }

@@ -1,12 +1,14 @@
-// Copyright (c) 2021 Ant Group CO., Ltd.
-// OceanBase is licensed under Mulan PubL v1.
-// You can use this software according to the terms and conditions of the Mulan PubL v1.
-// You may obtain a copy of Mulan PubL v1 at:
-//             http://license.coscl.org.cn/MulanPubL-1.0
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-// See the Mulan PubL v1 for more details.
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/blocksstable/index_block/ob_agg_row_struct.h"
@@ -83,7 +85,7 @@ int ObAggRowWriter::sort_metas(const ObIArray<ObSkipIndexColMeta> &agg_col_arr,
     }
     std::sort(col_meta_list_.begin(), col_meta_list_.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count_; ++i) {
-      LOG_DEBUG("zhuixin debug sort", K(i), K(col_meta_list_.at(i).first), K(col_meta_list_.at(i).second));
+      LOG_DEBUG("sort", K(i), K(col_meta_list_.at(i).first), K(col_meta_list_.at(i).second));
     }
   }
   return ret;
@@ -195,13 +197,13 @@ int ObAggRowWriter::write_cell(
       } else {
         col_off_arr.set(idx, pos - orig_pos);
         MEMCPY(buf + pos, datum.ptr_, datum.len_); // copy data
-        LOG_DEBUG("zhuixin debug write cell", K(idx), K(datum), K(pos), K(val), K(start), K(end));
+        LOG_DEBUG("write cell", K(idx), K(datum), K(pos), K(val), K(start), K(end));
         pos += datum.len_;
       }
       ++idx;
     }
     if (OB_SUCC(ret) && stored_col_cnt > 0) {
-      LOG_DEBUG("zhuixin debug write cell(reserved)", K(idx), K(pos), K(orig_pos), K(header_size_));
+      LOG_DEBUG("write cell(reserved)", K(idx), K(pos), K(orig_pos), K(header_size_));
       col_off_arr.set(stored_col_cnt - 1, pos - orig_pos); // cell end
     }
   }
@@ -432,7 +434,7 @@ int ObAggRowReader::read_cell(
     }
     col_off = col_off_arr.at(pre_cnt);
     col_len = col_off_arr.at(pre_cnt + 1) - col_off;
-    LOG_DEBUG("zhuixin debug read cell", K(ret), K(pre_cnt), K(col_off), K(col_len));
+    LOG_DEBUG("read cell", K(ret), K(pre_cnt), K(col_off), K(col_len));
   }
   return ret;
 }
