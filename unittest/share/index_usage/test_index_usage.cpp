@@ -112,8 +112,7 @@ TEST_F(TestIndexUsageInfo, test_sample_filter)
   int64_t count = 0;
   mgr_.is_sample_mode_=true;
   for (int64_t i = 0; i < 20; i++) {
-    int64_t random_num = common::ObClockGenerator::getClock();
-    is_filter = mgr_.sample_filterd(random_num);
+    is_filter = mgr_.sample_filterd(i);
     if (!is_filter) {
       count++;
     }
@@ -122,8 +121,7 @@ TEST_F(TestIndexUsageInfo, test_sample_filter)
   mgr_.is_sample_mode_=false;
   count = 0;
   for (int64_t i = 0; i < 20; i++) {
-    int64_t random_num = common::ObClockGenerator::getClock();
-    is_filter = mgr_.sample_filterd(random_num);
+    is_filter = mgr_.sample_filterd(i);
     if (!is_filter) {
       count++;
     }
