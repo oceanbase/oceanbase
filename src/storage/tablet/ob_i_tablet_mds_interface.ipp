@@ -199,7 +199,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletBindingMdsUse
   const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_addr = get_mds_data_().aux_tablet_info_.committed_kv_;
 
   if (CLICK_FAIL(ObTabletMdsData::load_aux_tablet_info(aux_tablet_info_addr, aux_tablet_info))) {
-    MDS_LOG_GET(WARN, "failed to load auto inc seq");
+    MDS_LOG_GET(WARN, "failed to load aux tablet info");
   } else if (!aux_tablet_info.is_valid()) {
     ret = OB_EMPTY_RESULT;
   } else if (CLICK_FAIL(read_op(aux_tablet_info))) {
