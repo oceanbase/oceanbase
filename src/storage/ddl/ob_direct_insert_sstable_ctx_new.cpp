@@ -2760,6 +2760,8 @@ int ObTabletFullDirectLoadMgr::update_major_sstable()
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
+  ObArenaAllocator tmp_arena("DDLUpdateTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObStorageSchema *storage_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2770,14 +2772,20 @@ int ObTabletFullDirectLoadMgr::update_major_sstable()
                                                tablet_handle,
                                                ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(tmp_arena, storage_schema))) {
+    LOG_WARN("load storage schema failed", K(ret), K(ls_id_), K(tablet_id_));
   } else {
-    SCN ddl_commit_scn = get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
-    if (OB_ISNULL(ls_handle.get_ls()->get_tablet_svr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls tablet service is null", K(ret), K(ls_id_));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->update_tablet_ddl_commit_scn(tablet_id_, ddl_commit_scn))) {
-      LOG_WARN("update ddl commit scn failed", K(ret), K(ls_id_), K(tablet_id_), K(ddl_commit_scn));
+    ObTabletHandle new_tablet_handle;
+    ObUpdateTableStoreParam param(tablet_handle.get_obj()->get_snapshot_version(),
+                                  ObVersionRange::MIN_VERSION, // multi_version_start
+                                  storage_schema,
+                                  ls_handle.get_ls()->get_rebuild_seq());
+    param.ddl_info_.keep_old_ddl_sstable_ = true;
+    param.ddl_info_.ddl_commit_scn_ = get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
+    if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
+      LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     }
   }
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
