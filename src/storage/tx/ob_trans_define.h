@@ -1212,7 +1212,8 @@ public:
   static const int64_t END_TRANS_CB_TASK = 0;
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
-  static const int64_t MAX = 3;
+  static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
+  static const int64_t MAX = 4;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
