@@ -31,7 +31,8 @@ OB_SERIALIZE_MEMBER(ObFrameInfo,
                     frame_idx_,
                     frame_size_,
                     zero_init_pos_,
-                    zero_init_size_);
+                    zero_init_size_,
+                    use_rich_format_);
 
 int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
                             common::ObIAllocator &allocator)
@@ -53,6 +54,10 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
     LOG_WARN("failed to prepare allocate array", K(ret));
   } else {
     char *frame_mem = NULL;
+    int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    if (const_frame_.count() > 0 && const_frame_.at(0).use_rich_format_) {
+      item_size += sizeof(VectorHeader);
+    }
     for (int i = 0; OB_SUCC(ret) && i < other.const_frame_.count(); i++) {
       if (OB_ISNULL(frame_mem = (char *)allocator.alloc(other.const_frame_.at(i).frame_size_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -65,11 +70,10 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
       for (int j = 0; OB_SUCC(ret) && j < other.const_frame_.at(i).expr_cnt_; j++) {
           char *other_frame_mem = other.const_frame_ptrs_.at(i);
           int64_t other_frame_size = other.const_frame_.at(i).frame_size_;
-          const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
           ObDatum *other_expr_datum = reinterpret_cast<ObDatum *>
-                                      (other_frame_mem + j * datum_eval_info_size);
+                                      (other_frame_mem + j * item_size);
           ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                      (frame_mem + j * datum_eval_info_size);
+                                      (frame_mem + j * item_size);
           // 在mysql模式下, 空串len为0, 且ptr = NULL, 当ptr为NULL时, copy时不需要再改变ptr值
           if (NULL == other_expr_datum->ptr_) {
             // do nothing
@@ -93,6 +97,20 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
           }
       } // end for
     } // for end
+    // init const vector header
+    if (const_frame_.count() > 0 && const_frame_.at(0).use_rich_format_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < other.rt_exprs_.count(); i++) {
+        ObExpr &expr = other.rt_exprs_.at(i);
+        if (IS_CONST_LITERAL(expr.type_)) {
+          char *frame = const_frame_ptrs_.at(expr.frame_idx_);
+          VecValueTypeClass vec_tc = expr.get_vec_value_tc();
+          ObDatum *datum = reinterpret_cast<ObDatum*>(frame + expr.datum_off_);
+          ObEvalInfo *eval_info = reinterpret_cast<ObEvalInfo *>(frame + expr.eval_info_off_);
+          VectorHeader *vec_header = reinterpret_cast<VectorHeader *>(frame + expr.vector_header_off_);
+          ret = vec_header->init_uniform_const_vector(vec_tc, datum, eval_info);
+        }
+      }
+    }
 
     if (OB_SUCC(ret)) {
       // deep copy extra info & inner function ptrs
@@ -282,14 +300,17 @@ int ObExprFrameInfo::alloc_frame(ObIAllocator &exec_allocator,
       }
     }
     int64_t begin_idx = frame_idx;
-    const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     ALLOC_FRAME_MEM(dynamic_frame_);
     //for subquery core
     //提前将frame中的datum置为null
+    int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    if (dynamic_frame_.count() > 0 && dynamic_frame_.at(0).use_rich_format_) {
+      item_size += sizeof(VectorHeader);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_frame_.count(); ++i) {
       char *cur_frame = frames[begin_idx + i];
       for (int64_t j = 0; j < dynamic_frame_.at(i).expr_cnt_; ++j) {
-        ObDatum *datum = reinterpret_cast<ObDatum *>(cur_frame + j * datum_eval_info_size);
+        ObDatum *datum = reinterpret_cast<ObDatum *>(cur_frame + j * item_size);
         datum->set_null();
       }
     }
@@ -392,6 +413,19 @@ OB_DEF_DESERIALIZE(ObExprFrameInfo)
   OB_UNIS_DECODE(datum_frame_);
   OB_UNIS_DECODE(dynamic_frame_);
   ObExpr::get_serialize_array() = seri_arr_bak;
+  if (const_frame_.count() > 0 && const_frame_.at(0).use_rich_format_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rt_exprs_.count(); i++) {
+      ObExpr &expr = rt_exprs_.at(i);
+      if (IS_CONST_LITERAL(expr.type_)) {
+        char *frame = const_frame_ptrs_.at(expr.frame_idx_);
+        VecValueTypeClass vec_tc = expr.get_vec_value_tc();
+        ObDatum *datum = reinterpret_cast<ObDatum*>(frame + expr.datum_off_);
+        ObEvalInfo *eval_info = reinterpret_cast<ObEvalInfo *>(frame + expr.eval_info_off_);
+        VectorHeader *vec_header = reinterpret_cast<VectorHeader *>(frame + expr.vector_header_off_);
+        ret = vec_header->init_uniform_const_vector(vec_tc, datum, eval_info);
+      }
+    }
+  }
 
   return ret;
 }
@@ -566,11 +600,16 @@ OB_NOINLINE int ObPreCalcExprFrameInfo::do_batch_stmt_eval(ObExecContext &exec_c
 void ObPreCalcExprFrameInfo::clear_datum_evaluted_flags(char **frames)
 {
   int64_t datum_frame_idx = const_frame_ptrs_.count() + param_frame_.count() + dynamic_frame_.count();
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t item_size = 0;
+  if (datum_frame_.count() > 0 && datum_frame_.at(0).use_rich_format_) {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+  } else {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  }
   for (int64_t i = 0; i < datum_frame_.count(); ++i) {
     char *cur_frame = frames[datum_frame_idx + i];
     for (int64_t j = 0; j < datum_frame_.at(i).expr_cnt_; ++j) {
-      char *datum_ptr = cur_frame + j * datum_eval_info_size;
+      char *datum_ptr = cur_frame + j * item_size;
       ObEvalInfo *eval_info = reinterpret_cast<ObEvalInfo *>(datum_ptr + sizeof(ObDatum));
       eval_info->clear_evaluated_flag();
     }

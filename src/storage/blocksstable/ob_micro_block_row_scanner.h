@@ -89,7 +89,7 @@ public:
       const int64_t row_cap,
       common::ObIArray<ObSqlDatumInfo> &datums,
       const int64_t datum_offset,
-      const ObTableIterParam &iter_param);
+      uint32_t *len_array);
   int get_aggregate_result(
       const int32_t col_idx,
       const int64_t *row_ids,
@@ -120,8 +120,31 @@ public:
       reader_->reserve_reader_memory(reserve);
     }
   }
+
+  int get_rows_for_old_format(
+      const common::ObIArray<int32_t> &col_offsets,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const int64_t vector_offset,
+      const char **cell_datas,
+      sql::ObExprPtrIArray &exprs,
+      common::ObIArray<ObSqlDatumInfo> &datum_infos,
+      blocksstable::ObDatumRow *default_row);
+  int get_rows_for_rich_format(
+      const common::ObIArray<int32_t> &col_offsets,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const int64_t vector_offset,
+      const char **cell_datas,
+      uint32_t *len_array,
+      sql::ObExprPtrIArray &exprs,
+      blocksstable::ObDatumRow *default_row);
   int64_t get_current_pos() const
   { return current_; }
+  ObIMicroBlockReader *get_reader() const
+  { return reader_; }
   VIRTUAL_TO_STRING_KV(K_(can_ignore_multi_version));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
@@ -149,14 +172,12 @@ private:
       sql::ObBlackFilterExecutor &filter,
       sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
-
 protected:
   bool is_inited_;
   bool use_fuse_row_cache_;
   bool reverse_scan_;
   bool is_left_border_;
   bool is_right_border_;
-  bool has_lob_out_row_;
   int64_t current_;         // current cursor
   int64_t start_;           // start of scan, inclusive.
   int64_t last_;            // end of scan, inclusive.

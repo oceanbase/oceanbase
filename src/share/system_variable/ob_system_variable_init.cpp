@@ -3280,166 +3280,179 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[232].default_value_ = "" ;
-      ObSysVars[232].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
-      ObSysVars[232].name_ = "optimizer_features_enable" ;
-      ObSysVars[232].data_type_ = ObVarcharType ;
-      ObSysVars[232].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[232].id_ = SYS_VAR_OPTIMIZER_FEATURES_ENABLE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_FEATURES_ENABLE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_FEATURES_ENABLE] = 232 ;
-      ObSysVars[232].base_value_ = "" ;
-    ObSysVars[232].alias_ = "OB_SV_OPTIMIZER_FEATURES_ENABLE" ;
+      ObSysVars[232].default_value_ = "1" ;
+      ObSysVars[232].info_ = "whether use rich vector format in vectorized execution engine" ;
+      ObSysVars[232].name_ = "_enable_rich_vector_format" ;
+      ObSysVars[232].data_type_ = ObIntType ;
+      ObSysVars[232].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[232].id_ = SYS_VAR__ENABLE_RICH_VECTOR_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_RICH_VECTOR_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_RICH_VECTOR_FORMAT] = 232 ;
+      ObSysVars[232].base_value_ = "1" ;
+    ObSysVars[232].alias_ = "OB_SV__ENABLE_RICH_VECTOR_FORMAT" ;
     }();
 
     [&] (){
-      ObSysVars[233].default_value_ = "0" ;
-      ObSysVars[233].info_ = "In the weak read state, the replica status of the current machine is fed back to the proxy." ;
-      ObSysVars[233].name_ = "_ob_proxy_weakread_feedback" ;
-      ObSysVars[233].data_type_ = ObIntType ;
-      ObSysVars[233].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[233].id_ = SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK] = 233 ;
-      ObSysVars[233].base_value_ = "0" ;
-    ObSysVars[233].alias_ = "OB_SV__OB_PROXY_WEAKREAD_FEEDBACK" ;
+      ObSysVars[233].default_value_ = "" ;
+      ObSysVars[233].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
+      ObSysVars[233].name_ = "optimizer_features_enable" ;
+      ObSysVars[233].data_type_ = ObVarcharType ;
+      ObSysVars[233].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[233].id_ = SYS_VAR_OPTIMIZER_FEATURES_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_FEATURES_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_FEATURES_ENABLE] = 233 ;
+      ObSysVars[233].base_value_ = "" ;
+    ObSysVars[233].alias_ = "OB_SV_OPTIMIZER_FEATURES_ENABLE" ;
     }();
 
     [&] (){
       ObSysVars[234].default_value_ = "0" ;
-      ObSysVars[234].info_ = "The national character set which should be translated to response nstring data" ;
-      ObSysVars[234].name_ = "ncharacter_set_connection" ;
+      ObSysVars[234].info_ = "In the weak read state, the replica status of the current machine is fed back to the proxy." ;
+      ObSysVars[234].name_ = "_ob_proxy_weakread_feedback" ;
       ObSysVars[234].data_type_ = ObIntType ;
-      ObSysVars[234].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_charset" ;
-      ObSysVars[234].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NULLABLE ;
-      ObSysVars[234].base_class_ = "ObCharsetSysVar" ;
-      ObSysVars[234].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_charset" ;
-      ObSysVars[234].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_charset" ;
-      ObSysVars[234].id_ = SYS_VAR_NCHARACTER_SET_CONNECTION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NCHARACTER_SET_CONNECTION] = 234 ;
-      ObSysVars[234].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
+      ObSysVars[234].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[234].id_ = SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK] = 234 ;
       ObSysVars[234].base_value_ = "0" ;
-    ObSysVars[234].alias_ = "OB_SV_NCHARACTER_SET_CONNECTION" ;
+    ObSysVars[234].alias_ = "OB_SV__OB_PROXY_WEAKREAD_FEEDBACK" ;
     }();
 
     [&] (){
-      ObSysVars[235].default_value_ = "1" ;
-      ObSysVars[235].info_ = "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine" ;
-      ObSysVars[235].name_ = "automatic_sp_privileges" ;
+      ObSysVars[235].default_value_ = "0" ;
+      ObSysVars[235].info_ = "The national character set which should be translated to response nstring data" ;
+      ObSysVars[235].name_ = "ncharacter_set_connection" ;
       ObSysVars[235].data_type_ = ObIntType ;
-      ObSysVars[235].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[235].id_ = SYS_VAR_AUTOMATIC_SP_PRIVILEGES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTOMATIC_SP_PRIVILEGES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AUTOMATIC_SP_PRIVILEGES] = 235 ;
-      ObSysVars[235].base_value_ = "1" ;
-    ObSysVars[235].alias_ = "OB_SV_AUTOMATIC_SP_PRIVILEGES" ;
+      ObSysVars[235].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_charset" ;
+      ObSysVars[235].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NULLABLE ;
+      ObSysVars[235].base_class_ = "ObCharsetSysVar" ;
+      ObSysVars[235].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_charset" ;
+      ObSysVars[235].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_charset" ;
+      ObSysVars[235].id_ = SYS_VAR_NCHARACTER_SET_CONNECTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NCHARACTER_SET_CONNECTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NCHARACTER_SET_CONNECTION] = 235 ;
+      ObSysVars[235].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
+      ObSysVars[235].base_value_ = "0" ;
+    ObSysVars[235].alias_ = "OB_SV_NCHARACTER_SET_CONNECTION" ;
     }();
 
     [&] (){
-      ObSysVars[236].default_value_ = "" ;
-      ObSysVars[236].info_ = "enabling a series of privilege features based on an OceanBase release number" ;
-      ObSysVars[236].name_ = "privilege_features_enable" ;
-      ObSysVars[236].data_type_ = ObVarcharType ;
-      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[236].id_ = SYS_VAR_PRIVILEGE_FEATURES_ENABLE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PRIVILEGE_FEATURES_ENABLE] = 236 ;
-      ObSysVars[236].base_value_ = "" ;
-    ObSysVars[236].alias_ = "OB_SV_PRIVILEGE_FEATURES_ENABLE" ;
+      ObSysVars[236].default_value_ = "1" ;
+      ObSysVars[236].info_ = "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine" ;
+      ObSysVars[236].name_ = "automatic_sp_privileges" ;
+      ObSysVars[236].data_type_ = ObIntType ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[236].id_ = SYS_VAR_AUTOMATIC_SP_PRIVILEGES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTOMATIC_SP_PRIVILEGES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AUTOMATIC_SP_PRIVILEGES] = 236 ;
+      ObSysVars[236].base_value_ = "1" ;
+    ObSysVars[236].alias_ = "OB_SV_AUTOMATIC_SP_PRIVILEGES" ;
     }();
 
     [&] (){
       ObSysVars[237].default_value_ = "" ;
-      ObSysVars[237].info_ = "whether turn on mysql privilege check" ;
-      ObSysVars[237].name_ = "_priv_control" ;
+      ObSysVars[237].info_ = "enabling a series of privilege features based on an OceanBase release number" ;
+      ObSysVars[237].name_ = "privilege_features_enable" ;
       ObSysVars[237].data_type_ = ObVarcharType ;
       ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[237].id_ = SYS_VAR__PRIV_CONTROL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PRIV_CONTROL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PRIV_CONTROL] = 237 ;
+      ObSysVars[237].id_ = SYS_VAR_PRIVILEGE_FEATURES_ENABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PRIVILEGE_FEATURES_ENABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PRIVILEGE_FEATURES_ENABLE] = 237 ;
       ObSysVars[237].base_value_ = "" ;
-    ObSysVars[237].alias_ = "OB_SV__PRIV_CONTROL" ;
+    ObSysVars[237].alias_ = "OB_SV_PRIVILEGE_FEATURES_ENABLE" ;
     }();
 
     [&] (){
-      ObSysVars[238].default_value_ = "0" ;
-      ObSysVars[238].info_ = "specifies whether check the mysql routine priv" ;
-      ObSysVars[238].name_ = "_enable_mysql_pl_priv_check" ;
-      ObSysVars[238].data_type_ = ObIntType ;
+      ObSysVars[238].default_value_ = "" ;
+      ObSysVars[238].info_ = "whether turn on mysql privilege check" ;
+      ObSysVars[238].name_ = "_priv_control" ;
+      ObSysVars[238].data_type_ = ObVarcharType ;
       ObSysVars[238].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[238].id_ = SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK] = 238 ;
-      ObSysVars[238].base_value_ = "0" ;
-    ObSysVars[238].alias_ = "OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK" ;
+      ObSysVars[238].id_ = SYS_VAR__PRIV_CONTROL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PRIV_CONTROL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PRIV_CONTROL] = 238 ;
+      ObSysVars[238].base_value_ = "" ;
+    ObSysVars[238].alias_ = "OB_SV__PRIV_CONTROL" ;
     }();
 
     [&] (){
-      ObSysVars[239].default_value_ = "1" ;
-      ObSysVars[239].info_ = "whether use pl cache in session" ;
-      ObSysVars[239].name_ = "ob_enable_pl_cache" ;
+      ObSysVars[239].default_value_ = "0" ;
+      ObSysVars[239].info_ = "specifies whether check the mysql routine priv" ;
+      ObSysVars[239].name_ = "_enable_mysql_pl_priv_check" ;
       ObSysVars[239].data_type_ = ObIntType ;
-      ObSysVars[239].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[239].id_ = SYS_VAR_OB_ENABLE_PL_CACHE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_CACHE] = 239 ;
-      ObSysVars[239].base_value_ = "1" ;
-    ObSysVars[239].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
+      ObSysVars[239].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[239].id_ = SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK] = 239 ;
+      ObSysVars[239].base_value_ = "0" ;
+    ObSysVars[239].alias_ = "OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK" ;
     }();
 
     [&] (){
-      ObSysVars[240].default_value_ = "4096" ;
-      ObSysVars[240].info_ = "default lob inrow threshold config" ;
-      ObSysVars[240].name_ = "ob_default_lob_inrow_threshold" ;
+      ObSysVars[240].default_value_ = "1" ;
+      ObSysVars[240].info_ = "whether use pl cache in session" ;
+      ObSysVars[240].name_ = "ob_enable_pl_cache" ;
       ObSysVars[240].data_type_ = ObIntType ;
-      ObSysVars[240].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[240].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold" ;
-      ObSysVars[240].id_ = SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD] = 240 ;
-      ObSysVars[240].base_value_ = "4096" ;
-    ObSysVars[240].alias_ = "OB_SV_DEFAULT_LOB_INROW_THRESHOLD" ;
+      ObSysVars[240].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[240].id_ = SYS_VAR_OB_ENABLE_PL_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_CACHE] = 240 ;
+      ObSysVars[240].base_value_ = "1" ;
+    ObSysVars[240].alias_ = "OB_SV_ENABLE_PL_CACHE" ;
     }();
 
     [&] (){
-      ObSysVars[241].default_value_ = "1" ;
-      ObSysVars[241].info_ = "whether use storage cardinality estimation" ;
-      ObSysVars[241].name_ = "_enable_storage_cardinality_estimation" ;
+      ObSysVars[241].default_value_ = "4096" ;
+      ObSysVars[241].info_ = "default lob inrow threshold config" ;
+      ObSysVars[241].name_ = "ob_default_lob_inrow_threshold" ;
       ObSysVars[241].data_type_ = ObIntType ;
-      ObSysVars[241].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[241].id_ = SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION ;
+      ObSysVars[241].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[241].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold" ;
+      ObSysVars[241].id_ = SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD] = 241 ;
+      ObSysVars[241].base_value_ = "4096" ;
+    ObSysVars[241].alias_ = "OB_SV_DEFAULT_LOB_INROW_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[242].default_value_ = "1" ;
+      ObSysVars[242].info_ = "whether use storage cardinality estimation" ;
+      ObSysVars[242].name_ = "_enable_storage_cardinality_estimation" ;
+      ObSysVars[242].data_type_ = ObIntType ;
+      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[242].id_ = SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION] = 241 ;
-      ObSysVars[241].base_value_ = "1" ;
-    ObSysVars[241].alias_ = "OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION] = 242 ;
+      ObSysVars[242].base_value_ = "1" ;
+    ObSysVars[242].alias_ = "OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION" ;
     }();
 
     [&] (){
-      ObSysVars[242].default_value_ = "en_US" ;
-      ObSysVars[242].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
-      ObSysVars[242].name_ = "lc_time_names" ;
-      ObSysVars[242].data_type_ = ObVarcharType ;
-      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[242].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
-      ObSysVars[242].id_ = SYS_VAR_LC_TIME_NAMES ;
+      ObSysVars[243].default_value_ = "en_US" ;
+      ObSysVars[243].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
+      ObSysVars[243].name_ = "lc_time_names" ;
+      ObSysVars[243].data_type_ = ObVarcharType ;
+      ObSysVars[243].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[243].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
+      ObSysVars[243].id_ = SYS_VAR_LC_TIME_NAMES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 242 ;
-      ObSysVars[242].base_value_ = "en_US" ;
-    ObSysVars[242].alias_ = "OB_SV_LC_TIME_NAMES" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 243 ;
+      ObSysVars[243].base_value_ = "en_US" ;
+    ObSysVars[243].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
     [&] (){
-      ObSysVars[243].default_value_ = "0" ;
-      ObSysVars[243].info_ = "whether to enable automatic activation of all granted roles when users log in to the server" ;
-      ObSysVars[243].name_ = "activate_all_roles_on_login" ;
-      ObSysVars[243].data_type_ = ObIntType ;
-      ObSysVars[243].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[243].id_ = SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN ;
+      ObSysVars[244].default_value_ = "0" ;
+      ObSysVars[244].info_ = "whether to enable automatic activation of all granted roles when users log in to the server" ;
+      ObSysVars[244].name_ = "activate_all_roles_on_login" ;
+      ObSysVars[244].data_type_ = ObIntType ;
+      ObSysVars[244].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[244].id_ = SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN] = 243 ;
-      ObSysVars[243].base_value_ = "0" ;
-    ObSysVars[243].alias_ = "OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN] = 244 ;
+      ObSysVars[244].base_value_ = "0" ;
+    ObSysVars[244].alias_ = "OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -3448,7 +3461,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 244;
+static int64_t var_amount = 245;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

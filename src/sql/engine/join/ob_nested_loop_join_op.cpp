@@ -15,6 +15,7 @@
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
 
 namespace oceanbase
 {
@@ -372,6 +373,12 @@ int ObNestedLoopJoinOp::rescan_right_operator()
     // FIXME bin.lb: handle monitor dump + material ?
     if (PHY_MATERIAL == right_->get_spec().type_) {
       if (OB_FAIL(static_cast<ObMaterialOp*>(right_)->rewind())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("rewind failed", K(ret));
+        }
+      }
+    } else if (PHY_VEC_MATERIAL == right_->get_spec().type_) {
+      if (OB_FAIL(static_cast<ObMaterialVecOp*>(right_)->rewind())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("rewind failed", K(ret));
         }

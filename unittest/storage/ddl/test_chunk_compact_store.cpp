@@ -284,7 +284,7 @@ TEST_F(TestCompactChunk, test_read_writer_compact)
 
   cs_chunk.init(1, 1,
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, true, share::SORT_COMPACT_LEVEL);
-  RowMeta row_meta(allocator_);
+  ChunkRowMeta row_meta(allocator_);
   row_meta.col_cnt_ = COLUMN_CNT;
   row_meta.fixed_cnt_ = COLUMN_CNT;
   row_meta.var_data_off_ = 8 * row_meta.fixed_cnt_;
@@ -340,7 +340,7 @@ TEST_F(TestCompactChunk, test_read_writer_compact_vardata)
 
   cs_chunk.init(1, 1,
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, true, share::SORT_COMPACT_LEVEL);
-  RowMeta row_meta(allocator_);
+  ChunkRowMeta row_meta(allocator_);
   row_meta.col_cnt_ = COLUMN_CNT;
   row_meta.fixed_cnt_ = 0;
   row_meta.var_data_off_ = 0;
@@ -653,7 +653,7 @@ TEST_F(TestCompactChunk, test_rescan_get_last_row_compact)
   ObCompactStore cs_chunk;
   cs_chunk.init(1, 1,
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, false/*disable trunc*/, share::SORT_COMPACT_LEVEL);
-  RowMeta row_meta(allocator_);
+  ChunkRowMeta row_meta(allocator_);
   row_meta.col_cnt_ = COLUMN_CNT;
   row_meta.fixed_cnt_ = 0;
   row_meta.var_data_off_ = 0;
@@ -722,7 +722,7 @@ TEST_F(TestCompactChunk, test_rescan_add_storagedatum)
   ObCompactStore cs_chunk;
   cs_chunk.init(1, 1,
         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, false/*disable trunc*/, share::SORT_COMPACT_LEVEL);
-  RowMeta row_meta(allocator_);
+  ChunkRowMeta row_meta(allocator_);
   row_meta.col_cnt_ = COLUMN_CNT;
   row_meta.fixed_cnt_ = 0;
   row_meta.var_data_off_ = 0;

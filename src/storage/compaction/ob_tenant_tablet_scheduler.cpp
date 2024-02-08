@@ -64,6 +64,15 @@ ObFastFreezeChecker::~ObFastFreezeChecker()
   reset();
 }
 
+int ObFastFreezeChecker::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(store_map_.create(FAST_FREEZE_TABLET_STAT_KEY_BUCKET_NUM, "FastFrezCkr", "FastFrezCkr", MTL_ID()))) {
+    LOG_WARN("failed to init fast freeze checker", K(ret));
+  }
+  return ret;
+}
+
 void ObFastFreezeChecker::reset()
 {
   enable_fast_freeze_ = false;
@@ -291,6 +300,8 @@ int ObTenantTabletScheduler::init()
                                     MTL_ID(),
                                     "bf_queue"))) {
     LOG_WARN("Fail to init bloom filter queue", K(ret));
+  } else if (OB_FAIL(fast_freeze_checker_.init())) {
+    LOG_WARN("Fail to create fast freeze checker", K(ret));
   } else if (OB_FAIL(prohibit_medium_map_.init())) {
     LOG_WARN("Fail to create prohibit medium ls id map", K(ret));
   } else {
@@ -1469,6 +1480,12 @@ bool ObTenantTabletScheduler::get_enable_adaptive_compaction()
     enable_adaptive_compaction = false;
     FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret), K(cur_sys_stat));
   }
+#ifdef ENABLE_DEBUG_LOG
+  if (GCONF.enable_crazy_medium_compaction) {
+    enable_adaptive_compaction = true;
+    LOG_DEBUG("set crazy medium, set enable_adaptive_compaction = true");
+  }
+#endif
   return enable_adaptive_compaction;
 }
 
@@ -1656,8 +1673,9 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
     }
   } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::UPDATE_TABLET_REPORT_STATUS))){
   }
-  LOG_DEBUG("schedule tablet medium", K(ret), K(ls_id), K(tablet_id),
-            K(tablet_merge_finish), K(last_major_snapshot_version), K(merge_version), K(is_leader));
+  LOG_INFO("schedule tablet medium", K(ret), K(ls_id), K(tablet_id),
+            K(tablet_merge_finish), K(last_major_snapshot_version), K(merge_version), K(is_leader),
+            K(could_major_merge), K(enable_adaptive_compaction), K(tablet_could_schedule_merge));
   if (OB_FAIL(ret) || !is_leader || 0 >= last_major_snapshot_version) {
     // follower or no major: do nothing
   } else if (OB_FAIL(tablet.read_medium_info_list(tmp_allocator, medium_list))) {

@@ -1,0 +1,8 @@
+#select c2, sum(c1), min(c1), max(c1) from t1 group by c2;
+#select/*+USE_HASH_AGGREGATION*/ c2, count(c1), sum(c1 + 1), min(c1*2), max(c1 - 1) from t1 group by c2;
+#select /*+leading(t1, t2) USE_HASH(t1, t2)*/* from t1, t2 where t1.c1 = t2.c1;
+#select /*+leading(t1, t2) USE_HASH(t1, t2)*/* from t1, t2 where t1.c2 = t2.c2;
+#select /*+ use_hash(t1 t2)*/ * from t1 a left outer join t2 b on a.c1=b.c1 order by a.c1, a.c2;
+#select /*+ use_hash(t1 t2)*/ * from t1 a right outer join t2 b on t1.c1=t2.c1;
+#select /*+ use_hash(t1 t2)*/ * from t1 a full outer join t2 b on t1.c1=t2.c1;
+#select * from t1 order by c1, c2;

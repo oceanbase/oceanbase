@@ -187,6 +187,7 @@ public:
                             const ObIArray<ObRawExpr *> &keys);
   inline void set_in_server_cnt(int64_t in_server_cnt) {  in_server_cnt_ = in_server_cnt;  }
   inline int64_t get_in_server_cnt() {  return in_server_cnt_;  }
+  bool support_rich_format_vectorize() const;
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);

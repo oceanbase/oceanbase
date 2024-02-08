@@ -28,7 +28,8 @@ template <typename T, int max_block_size = OB_MALLOC_BIG_BLOCK_SIZE,
           typename BlockAllocatorT = ModulePageAllocator,
           bool auto_free = false,
           typename BlockPointerArrayT = ObSEArray<T *, OB_BLOCK_POINTER_ARRAY_SIZE,
-                                                  BlockAllocatorT, auto_free> >
+                                                  BlockAllocatorT, auto_free>,
+          bool use_trivial_ctor = false>
 class Ob2DArray
 {
 public:
@@ -111,15 +112,17 @@ private:
 template <typename T, int max_block_size = OB_MALLOC_BIG_BLOCK_SIZE,
           typename BlockAllocatorT = ModulePageAllocator,
           bool auto_free = false,
-          typename BlockPointerArrayT = ObSEArray<T *, 64, BlockAllocatorT, auto_free> >
+          typename BlockPointerArrayT = ObSEArray<T *, 64, BlockAllocatorT, auto_free>,
+          bool use_trivial_ctor = false>
 using ObSegmentArray = Ob2DArray<T, max_block_size, BlockAllocatorT,
-                                auto_free, BlockPointerArrayT>;
+                                auto_free, BlockPointerArrayT, use_trivial_ctor>;
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-          BlockPointerArrayT>::Ob2DArray(const BlockAllocatorT &alloc)
+          BlockPointerArrayT, use_trivial_ctor>::Ob2DArray(const BlockAllocatorT &alloc)
     : magic_(0x2D2D2D2D),
       block_alloc_(alloc),
       blocks_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc),
@@ -131,18 +134,20 @@ Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::~Ob2DArray()
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::~Ob2DArray()
 {
   destroy();
 }
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 template <typename U>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::inner_assign(const U &other)
+              BlockPointerArrayT, use_trivial_ctor>::inner_assign(const U &other)
 {
   int ret = OB_SUCCESS;
   if ((void *)this != (void *)&other) {
@@ -161,9 +166,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline int64_t Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                        BlockPointerArrayT>::mem_used() const
+                        BlockPointerArrayT, use_trivial_ctor>::mem_used() const
 {
   // TODO: inaccurate: didn't count BlockPointerArrayT
   return (sizeof(T) * capacity_);
@@ -171,18 +177,20 @@ inline int64_t Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline int64_t Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                        BlockPointerArrayT>::get_capacity() const
+                        BlockPointerArrayT, use_trivial_ctor>::get_capacity() const
 {
   return capacity_;
 }
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                    BlockPointerArrayT>::realloc_first_block(const int64_t new_capacity)
+                    BlockPointerArrayT, use_trivial_ctor>::realloc_first_block(const int64_t new_capacity)
 {
   int ret = OB_SUCCESS;
   OB_ASSERT(get_block_count() == 1);
@@ -218,9 +226,10 @@ inline int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                    BlockPointerArrayT>::new_block(const int64_t block_capacity)
+                    BlockPointerArrayT, use_trivial_ctor>::new_block(const int64_t block_capacity)
 {
   if (block_capacity != BLOCK_CAPACITY) {
     OB_ASSERT(get_block_count() == 0);
@@ -241,9 +250,10 @@ inline int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 }
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline T *Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                    BlockPointerArrayT>::get_obj_pos(int64_t i) const
+                    BlockPointerArrayT, use_trivial_ctor>::get_obj_pos(int64_t i) const
 {
   OB_ASSERT(i >= 0);
   OB_ASSERT(i < capacity_);
@@ -254,18 +264,24 @@ inline T *Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                    BlockPointerArrayT>::construct_items(T *ptr, int64_t cnt)
+                    BlockPointerArrayT, use_trivial_ctor>::construct_items(T *ptr, int64_t cnt)
 {
-  MyOp::array_construct(ptr, cnt);
+  if (!use_trivial_ctor) {
+    MyOp::array_construct(ptr, cnt);
+  } else {
+    memset(ptr, 0, sizeof(T) * cnt);
+  }
 }
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::set_default(const int64_t new_size)
+              BlockPointerArrayT, use_trivial_ctor>::set_default(const int64_t new_size)
 {
   int ret = OB_SUCCESS;
   if (new_size > capacity_) {
@@ -308,9 +324,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::init(const int64_t new_size) {
+              BlockPointerArrayT, use_trivial_ctor>::init(const int64_t new_size) {
   int ret = OB_SUCCESS;
   if (new_size == 0) {
     reset();
@@ -330,9 +347,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::push_back(const T &obj)
+              BlockPointerArrayT, use_trivial_ctor>::push_back(const T &obj)
 {
   int ret = OB_SUCCESS;
   if (count_ >= capacity_) {
@@ -369,8 +387,9 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::pop_back()
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::pop_back()
 {
   if (OB_LIKELY(0 < count_)) {
     T *obj_buf = get_obj_pos(count_ - 1);
@@ -381,8 +400,9 @@ void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::pop_back(T &obj)
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::pop_back(T &obj)
 {
   int ret = OB_ENTRY_NOT_EXIST;
   if (OB_LIKELY(0 < count_)) {
@@ -400,8 +420,9 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::remove(int64_t idx)
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::remove(int64_t idx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
@@ -425,9 +446,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::at(int64_t idx, T &obj) const
+              BlockPointerArrayT, use_trivial_ctor>::at(int64_t idx, T &obj) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
@@ -443,9 +465,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                    BlockPointerArrayT>::at(int64_t idx)
+                    BlockPointerArrayT, use_trivial_ctor>::at(int64_t idx)
 {
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
     LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "invalid idx. Fatal!!!", K(idx), K_(count));
@@ -455,9 +478,10 @@ inline T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 inline const T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                          BlockPointerArrayT>::at(int64_t idx) const
+                          BlockPointerArrayT, use_trivial_ctor>::at(int64_t idx) const
 {
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
     LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "invalid idx. Fatal!!!", K(idx), K_(count));
@@ -467,8 +491,9 @@ inline const T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::destruct_objs()
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::destruct_objs()
 {
   if (std::is_trivially_destructible<T>::value) {
     // do nothing
@@ -484,8 +509,9 @@ void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
-void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>::destroy()
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
+void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::destroy()
 {
   destruct_objs();
   int64_t block_count = get_block_count();
@@ -500,9 +526,10 @@ void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::reserve(int64_t capacity)
+              BlockPointerArrayT, use_trivial_ctor>::reserve(int64_t capacity)
 {
   int ret = OB_SUCCESS;
   if (capacity > get_capacity()) {
@@ -545,9 +572,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 // otherwise it may cause lack of destruction
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-              BlockPointerArrayT>::set_all(const T &value){
+              BlockPointerArrayT, use_trivial_ctor>::set_all(const T &value){
   int ret = OB_SUCCESS;
   for(int i = 0; OB_SUCC(ret) && i < count_; ++i){
     if (OB_FAIL(construct_assign(at(i), value))) {
@@ -560,9 +588,10 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 
 template <typename T, int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int64_t Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
-                  BlockPointerArrayT>::to_string(char *buf, int64_t buf_len) const
+                  BlockPointerArrayT, use_trivial_ctor>::to_string(char *buf, int64_t buf_len) const
 {
   int64_t pos = 0;
   J_ARRAY_START();
@@ -580,11 +609,12 @@ int64_t Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
 template <typename T,
           int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size,
               BlockAllocatorT,
               auto_free,
-              BlockPointerArrayT>::prepare_allocate(int64_t capacity)
+              BlockPointerArrayT, use_trivial_ctor>::prepare_allocate(int64_t capacity)
 {
   int ret = OB_SUCCESS;
   int64_t N = get_capacity();
@@ -609,9 +639,10 @@ int Ob2DArray<T, max_block_size,
 template <typename T,
           int max_block_size,
           typename BlockAllocatorT, bool auto_free,
-          typename BlockPointerArrayT>
+          typename BlockPointerArrayT,
+          bool use_trivial_ctor>
 bool Ob2DArray<T, max_block_size,
-               BlockAllocatorT, auto_free, BlockPointerArrayT>::empty() const
+               BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::empty() const
 {
   return 0 == count_;
 }

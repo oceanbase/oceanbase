@@ -829,6 +829,7 @@ int ObTableScanOp::init_table_scan_rtdef()
   das_ref_.set_mem_attr(mem_attr);
   das_ref_.set_expr_frame_info(&MY_SPEC.plan_->get_expr_frame_info());
   das_ref_.set_execute_directly(!MY_SPEC.use_dist_das_);
+  das_ref_.set_enable_rich_format(MY_SPEC.use_rich_format_);
   set_cache_stat(plan_ctx->get_phy_plan()->stat_);
   bool is_null_value = false;
   if (OB_SUCC(ret) && NULL != MY_SPEC.limit_) {
@@ -889,6 +890,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
+  LOG_DEBUG("scan flag", K(MY_CTDEF.scan_flags_));
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
   if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
@@ -1842,12 +1844,13 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
     } else {
       // We need do filter first before do the limit.
       // See the issue 47201028.
-      if(need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
+      if (need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
         bool all_filtered = false;
-        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
-                                      *brs_.skip_,
-                                      count,
-                                      all_filtered))) {
+        if (OB_FAIL(filter_rows(MY_SPEC.filters_,
+                                *brs_.skip_,
+                                count,
+                                all_filtered,
+                                brs_.all_rows_active_))) {
           LOG_WARN("filter batch failed in das get_next_batch", K(ret));
         } else if (all_filtered) {
           //Do nothing.
@@ -1879,6 +1882,7 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
     // It's hard to use, we split it into two calls here since get_next_rows() is reentrant
     // when got OB_ITER_END.
     ret = scan_result_.get_next_rows(count, batch_size);
+    brs_.all_rows_active_ = true;
     if (OB_ITER_END == ret && count > 0) {
       ret = OB_SUCCESS;
     }
@@ -1899,10 +1903,11 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
       // See the issue 47201028.
       if (need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
         bool all_filtered = false;
-        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
-                                      *brs_.skip_,
-                                      count,
-                                      all_filtered))) {
+        if (OB_FAIL(filter_rows(MY_SPEC.filters_,
+                                *brs_.skip_,
+                                count,
+                                all_filtered,
+                                brs_.all_rows_active_))) {
           LOG_WARN("filter batch failed in das get_next_batch", K(ret));
         } else if (all_filtered) {
           //Do nothing.

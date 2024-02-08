@@ -91,7 +91,7 @@ private:
   int compare_range(const ObCSRange &index_range);
   bool contain_rows(const ObCSRange &index_range);
   bool locate_back(const ObCSRange &locate_range);
-  bool can_agg_micro_index(const blocksstable::ObMicroIndexInfo &index_info);
+  int can_agg_micro_index(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg);
 
 private:
   bool is_reverse_scan_;

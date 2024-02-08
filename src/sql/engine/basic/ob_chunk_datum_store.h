@@ -115,7 +115,8 @@ public:
                      char *buf,
                      const int64_t buf_len,
                      const uint32_t extra_size = 0,
-                     const bool unswizzling = false);
+                     const bool unswizzling = false,
+                     int64_t vector_row_idx = OB_INVALID_ID);
     static int build(StoredRow *&sr,
                      const ObExprPtrIArray &exprs,
                      ObEvalCtx &ctx,
@@ -147,13 +148,14 @@ public:
         common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
 
   private:
-    template <bool UNSWIZZLING>
+    template <bool UNSWIZZLING, bool IS_VECTOR_ROW>
     static int do_build(StoredRow *&sr,
                         const ObExprPtrIArray &exprs,
                         ObEvalCtx &ctx,
                         char *buf,
                         const int64_t buf_len,
-                        const uint32_t extra_size);
+                        const uint32_t extra_size,
+                        int64_t vector_row_idx = OB_INVALID_ID);
 
   public:
     uint32_t cnt_;
@@ -474,7 +476,7 @@ public:
 
     int append_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
           BlockBuffer *buf, int64_t row_extend_size, StoredRow **stored_row,
-          const bool unswizzling);
+          const bool unswizzling, int64_t vector_row_idx = OB_INVALID_ID);
     int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
       const int64_t row_size, uint32_t row_extend_size, StoredRow **stored_row = nullptr);
     int copy_stored_row(const StoredRow &stored_row, StoredRow **dst_sr);
@@ -636,7 +638,8 @@ public:
     BlockBufferWrap() : BlockBuffer(), rows_(0) {}
 
     int append_row(const common::ObIArray<ObExpr*> &exprs,
-                   ObEvalCtx *ctx, int64_t row_extend_size);
+                   ObEvalCtx *ctx, int64_t row_extend_size,
+                   int64_t vector_row_idx);
     void reset() { rows_ = 0; BlockBuffer::reset(); }
 
   public:

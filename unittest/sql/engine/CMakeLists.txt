@@ -1,6 +1,7 @@
 #sql_unittest(test_exec_context)
 sql_unittest(test_physical_plan)
 sql_unittest(test_sql_fixed_array)
+sql_unittest(test_bit_vector)
 
 add_subdirectory(aggregate)
 add_subdirectory(dml)

@@ -47,6 +47,7 @@ public:
     const int64_t row_id, int32_t &cmp_ret);
 
   int batch_decode(const int64_t *row_ids, const int64_t row_cap, common::ObDatum *datums);
+  int decode_vector(ObVectorDecodeCtx &vector_ctx);
   int get_row_count(
     const int64_t *row_ids, const int64_t row_cap, const bool contains_null, int64_t &count);
   OB_INLINE int get_distinct_count(int64_t &distinct_cnt) const
@@ -226,8 +227,13 @@ public:
   {
     decoder_allocator_.set_reserve_memory(reserve);
   }
-  virtual int get_column_datum(const int32_t col_offset,
-    const int64_t row_index, ObStorageDatum &datum) override;
+  virtual int get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
+      const int32_t col_offset,
+      const int64_t row_index,
+      ObStorageDatum &datum) override;
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const override
   {
     return 1 == col_offsets.count() &&
@@ -235,8 +241,15 @@ public:
             && transform_helper_.get_micro_block_header()->all_lob_in_row_;
   }
 
-  virtual int get_aggregate_result(const int32_t col_offset, const share::schema::ObColumnParam *col_param,
-    const int64_t *row_ids, const int64_t row_cap, storage::ObAggDatumBuf &agg_datum_buf, ObAggCell &agg_cell) override;
+  virtual int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const int32_t col_offset,
+      const share::schema::ObColumnParam &col_param,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObAggDatumBuf &agg_datum_buf,
+      ObAggCell &agg_cell) override;
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(const int32_t group_by_col, const char **cell_datas,
     storage::ObGroupByCell &group_by_cell) const override;
@@ -244,6 +257,18 @@ public:
     const int64_t row_cap, storage::ObGroupByCell &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(const int64_t *row_ids, const char **cell_datas,
     const int64_t row_cap, storage::ObGroupByCell &group_by_cell) override;
+  virtual int get_rows(
+      const common::ObIArray<int32_t> &cols,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const char **cell_datas,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ObExprPtrIArray &exprs) override;
+  virtual bool has_lob_out_row() const override final
+  { return transform_helper_.get_micro_block_header()->has_lob_out_row(); }
 
 private:
   // use inner_reset to reuse the decoder buffer
@@ -274,8 +299,8 @@ private:
     sql::ObWhiteFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     const int32_t col_offset, const share::schema::ObColumnParam *col_param,
     ObStorageDatum &decoded_datum, common::ObBitmap &result_bitmap);
-
   int get_col_datums(int32_t col_id, const int64_t *row_ids, const int64_t row_cap, common::ObDatum *col_datums);
+  int get_col_data(int32_t col_id, ObVectorDecodeCtx &ctx);
 
 private:
   int32_t request_cnt_;  // request column count

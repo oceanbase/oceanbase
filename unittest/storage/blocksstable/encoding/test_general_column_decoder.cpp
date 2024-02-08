@@ -125,6 +125,26 @@ TEST_F(TestDictDecoder, cell_decode_to_datum_test)
   cell_decode_to_datum_test();
 }
 
+TEST_F(TestDictDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_FIXED);
+  TEST_ONE(VEC_DISCRETE);
+  TEST_ONE(VEC_CONTINUOUS);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
+}
+
 TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
   const int64_t string_len = UINT16_MAX + 3;
   char *string_buf = nullptr;
@@ -175,6 +195,26 @@ TEST_F(TestRLEDecoder, cell_decode_to_datum_test)
   cell_decode_to_datum_test();
 }
 
+TEST_F(TestRLEDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_FIXED);
+  TEST_ONE(VEC_DISCRETE);
+  TEST_ONE(VEC_CONTINUOUS);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
+}
+
 TEST_F(TestIntBaseDiffDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();
@@ -183,6 +223,24 @@ TEST_F(TestIntBaseDiffDecoder, batch_decode_to_datum_test)
 TEST_F(TestIntBaseDiffDecoder, cell_decode_to_datum_test)
 {
   cell_decode_to_datum_test();
+}
+
+TEST_F(TestIntBaseDiffDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_FIXED);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
 }
 
 TEST_F(TestHexDecoder, batch_decode_to_datum_test)
@@ -195,6 +253,25 @@ TEST_F(TestHexDecoder, cell_decode_to_datum_test)
   cell_decode_to_datum_test();
 }
 
+TEST_F(TestHexDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_DISCRETE);
+  TEST_ONE(VEC_CONTINUOUS);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
+}
+
 TEST_F(TestStringDiffDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();
@@ -203,6 +280,25 @@ TEST_F(TestStringDiffDecoder, batch_decode_to_datum_test)
 TEST_F(TestStringDiffDecoder, cell_decode_to_datum_test)
 {
   cell_decode_to_datum_test();
+}
+
+TEST_F(TestStringDiffDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_DISCRETE);
+  TEST_ONE(VEC_CONTINUOUS);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
 }
 
 TEST_F(TestStringPrefixDecoder, batch_decode_to_datum_test)
@@ -220,15 +316,51 @@ TEST_F(TestStringPrefixDecoder, cell_decode_to_datum_test_without_hex)
   cell_decode_to_datum_test_without_hex();
 }
 
+TEST_F(TestStringPrefixDecoder, batch_decode_to_vector_test)
+{
+  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
+  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
+  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
+
+  #define TEST_ONE(vec_format) \
+  TEST_ONE_WITH_ALIGN(true, vec_format) \
+  TEST_ONE_WITH_ALIGN(false, vec_format)
+
+  TEST_ONE(VEC_UNIFORM);
+  TEST_ONE(VEC_DISCRETE);
+  TEST_ONE(VEC_CONTINUOUS);
+  #undef TEST_ONE
+  #undef TEST_ONE_WITH_ALIGN
+}
+
 TEST_F(TestColumnEqualDecoder, cell_decode_to_datum_test)
 {
   cell_column_equal_decode_to_datum_test();
+}
+
+TEST_F(TestColumnEqualDecoder, col_equal_batch_decode_to_vector_test)
+{
+  col_equal_batch_decode_to_vector_test(VEC_FIXED);
+  col_equal_batch_decode_to_vector_test(VEC_UNIFORM);
+  col_equal_batch_decode_to_vector_test(VEC_DISCRETE);
+  col_equal_batch_decode_to_vector_test(VEC_CONTINUOUS);
 }
 
 TEST_F(TestInterColumnSubstringDecoder, cell_decode_to_datum_test)
 {
   cell_inter_column_substring_to_datum_test();
 }
+
+TEST_F(TestInterColumnSubstringDecoder, col_substr_batch_decode_to_vector_test)
+{
+  col_substr_batch_decode_to_vector_test(VEC_UNIFORM);
+  col_substr_batch_decode_to_vector_test(VEC_DISCRETE);
+  col_substr_batch_decode_to_vector_test(VEC_CONTINUOUS);
+}
+
+
 // TEST_F(TestDictDecoder, batch_decode_perf_test)
 // {
 //   batch_get_row_perf_test();

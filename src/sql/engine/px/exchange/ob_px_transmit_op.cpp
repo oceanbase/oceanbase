@@ -23,6 +23,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include <unordered_set>
 
 namespace oceanbase
 {
@@ -133,12 +134,19 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
   part_ch_info_(),
   ch_info_(nullptr),
   sample_done_(false),
-  ranges_(),
   sample_stores_(),
   cur_transmit_sampled_rows_(NULL),
   has_set_hybrid_key_(false),
   batch_param_remain_(false),
-  receive_channel_ready_(false)
+  receive_channel_ready_(false),
+  data_msg_type_(dtl::ObDtlMsgType::PX_DATUM_ROW),
+  disable_fast_append_(false),
+  slice_info_bkts_(nullptr),
+  slice_bkt_item_cnts_(nullptr),
+  vectors_(&px_row_allocator_),
+  row_size_array_(nullptr),
+  return_rows_(nullptr),
+  use_hash_reorder_(false)
 {
   MEMSET(rand48_buf_, 0, sizeof(rand48_buf_));
 }
@@ -147,6 +155,7 @@ void ObPxTransmitOp::destroy()
 {
   task_ch_set_.reset();
   px_row_allocator_.reset();
+  use_hash_reorder_ = false;
   ch_blocks_.reset();
   blk_bufs_.reset();
   task_channels_.reset();
@@ -154,7 +163,6 @@ void ObPxTransmitOp::destroy()
   loop_.reset();
   chs_agent_.~ObDtlChanAgent();
   part_ch_info_.~ObPxPartChInfo();
-  ranges_.reset();
   has_set_hybrid_key_ = false;
   receive_channel_ready_ = false;
   for (int i = 0; i < sample_stores_.count(); ++i) {
@@ -189,6 +197,24 @@ int ObPxTransmitOp::inner_open()
   } else if (OB_FAIL(ObTransmitOp::inner_open())) {
     LOG_WARN("initialize operator context failed", K(ret));
   } else {
+    if (get_spec().use_rich_format_) {
+      init_data_msg_type(get_spec().output_);
+      if (OB_ISNULL(row_size_array_
+                            = static_cast<uint32_t *>
+                                (px_row_allocator_.alloc(get_spec().max_batch_size_
+                                                         * sizeof(uint32_t))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc row size array", K(ret), K(get_spec().max_batch_size_));
+      } else if (OB_ISNULL(return_rows_
+                            = static_cast<ObCompactRow **>
+                                (px_row_allocator_.alloc(get_spec().max_batch_size_
+                                                         * sizeof(ObCompactRow *))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc return rows", K(ret), K(get_spec().max_batch_size_));
+      } else if (OB_FAIL(vectors_.init(get_spec().output_.count()))) {
+        LOG_WARN("failed to init vector array", K(ret));
+      }
+    }
     rand48_buf_[0] = 0x330E; // 0x330E is the arbitrary value of srand48
     rand48_buf_[1] = trans_input->get_sqc_id();
     rand48_buf_[2] = trans_input->get_task_id();
@@ -199,6 +225,29 @@ int ObPxTransmitOp::inner_open()
     } else {
       OZ(fetch_first_row());
       OZ(init_channel(*trans_input));
+    }
+    if (OB_SUCC(ret)
+        && get_spec().use_rich_format_
+        && NULL == static_cast<const ObPxTransmitSpec &> (get_spec()).tablet_id_expr_
+        && MY_SPEC.max_batch_size_ * task_channels_.count() <= MAX_BKT_FOR_REORDER) {
+      use_hash_reorder_ = true;
+      if (OB_ISNULL(slice_info_bkts_ = static_cast<uint16_t **>
+                 (px_row_allocator_.alloc(task_channels_.count() * sizeof(uint16_t *))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc slice info bkts", K(ret), K(task_channels_.count()));
+      } else if (OB_ISNULL(slice_bkt_item_cnts_ = static_cast<uint16_t *>
+                 (px_row_allocator_.alloc(task_channels_.count() * sizeof(uint16_t))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc slice info bkts", K(ret), K(task_channels_.count()));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < task_channels_.count(); ++i) {
+          if (OB_ISNULL(slice_info_bkts_[i] = static_cast<uint16_t *>
+                  (px_row_allocator_.alloc(get_spec().max_batch_size_ * sizeof(uint16_t))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc slice info bkts", K(ret), K(get_spec().max_batch_size_));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -308,9 +357,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
   ObDtlDfoKey parent_key;
   ObDtlSqcInfo self_info;
   LOG_TRACE("Try to get channel information from SQC", K(lbt()));
-  uint64_t min_cluster_version = 0;
   CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
-  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans_input.get_data_ch(
               task_ch_set_, phy_plan_ctx->get_timeout_timestamp(), ch_info_))) {
@@ -343,7 +390,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
       LOG_WARN("fail to get ch provider ptr", K(ret));
     } else {
       use_interm_result = sqc_proxy->get_transmit_use_interm_result();
-      if (!need_wait_sync_msg(*sqc_proxy, min_cluster_version)) {
+      if (!need_wait_sync_msg(*sqc_proxy)) {
         receive_channel_ready_ = true;
       }
     }
@@ -370,7 +417,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
         if (should_reg_dm) {
           ch->set_register_dm_info(register_dm_info);
         }
-        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
+        ch->set_enable_channel_sync(true);
         ch->set_batch_id(px_batch_id);
         ch->set_compression_type(dfc_.get_compressor_type());
         ch->set_operator_owner();
@@ -428,6 +475,11 @@ int ObPxTransmitOp::inner_get_next_row()
 
 int ObPxTransmitOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
+  return get_spec().use_rich_format_ ? next_vector(max_row_cnt) : next_batch(max_row_cnt);
+}
+
+int ObPxTransmitOp::next_batch(const int64_t max_row_cnt)
+{
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
   const ObBatchRows *brs = NULL;
@@ -439,6 +491,29 @@ int ObPxTransmitOp::inner_get_next_batch(const int64_t max_row_cnt)
     ObDatum *datums = MY_SPEC.random_expr_->locate_datums_for_update(eval_ctx_, brs->size_);
     for (int64_t i = 0; i < brs->size_; i++) {
       datums[i].set_int(get_random_seq());
+    }
+  }
+  return ret;
+}
+
+int ObPxTransmitOp::next_vector(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  clear_evaluated_flag();
+  const ObBatchRows *brs = NULL;
+  if (OB_FAIL(child_->get_next_batch(max_row_cnt, brs))) {
+    LOG_WARN("get next batch row failed", K(ret));
+  } else if (OB_FAIL(brs_.copy(brs))) {
+    LOG_WARN("copy batch result failed", K(ret));
+  } else if (NULL != MY_SPEC.random_expr_ && brs->size_ > 0) {
+    //ObDatum *datums = MY_SPEC.random_expr_->locate_datums_for_update(eval_ctx_, brs->size_);
+    if (OB_FAIL(MY_SPEC.random_expr_->init_vector(eval_ctx_, VEC_FIXED, brs->size_))) {
+      LOG_WARN("init vector failed", K(ret));
+    } else {
+      int64_t *value = MY_SPEC.random_expr_->get_fixed_vector_data<int64_t>(eval_ctx_);
+      for (int64_t i = 0; i < brs->size_; i++) {
+        value[i] = get_random_seq();
+      }
     }
   }
   return ret;
@@ -549,6 +624,7 @@ int ObPxTransmitOp::set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc)
   return ret;
 }
 
+template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
 int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
 {
   int ret = OB_SUCCESS;
@@ -579,7 +655,7 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
           ret = OB_SUCCESS;
           ObPxNewRow px_eof_row;
           px_eof_row.set_eof_row();
-          px_eof_row.set_data_type(ObDtlMsgType::PX_DATUM_ROW);
+          px_eof_row.set_data_type(data_msg_type_);
           for (int i = 0; i < task_channels_.count() && OB_SUCC(ret); i++) {
             dtl::ObDtlChannel *ch = task_channels_.at(i);
             if (OB_FAIL(ch->send(px_eof_row, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_, false))) {
@@ -602,8 +678,8 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
     } else if (OB_FAIL(set_wf_hybrid_slice_id_calc_type(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (OB_FAIL(slice_calc.get_slice_indexes(
-                       get_spec().output_, eval_ctx_, slice_idx_array))) {
+    } else if (OB_FAIL((slice_calc.get_slice_indexes<CALC_TYPE, false>(
+                       get_spec().output_, eval_ctx_, slice_idx_array)))) {
       LOG_WARN("fail get slice idx", K(ret));
     } else if (dfc_.all_ch_drained()) {
       int tmp_ret = child_->drain_exch();
@@ -632,6 +708,7 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
   return ret;
 }
 
+template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
 int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
 {
   int ret = OB_SUCCESS;
@@ -669,12 +746,13 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
         metric_.count();
         if (OB_FAIL(set_wf_hybrid_slice_id_calc_type(slice_calc))) {
           LOG_WARN("failed to set wf hybrid keys", K(ret));
-        } else if (OB_FAIL(slice_calc.get_slice_indexes(get_spec().output_, eval_ctx_, slice_idx_array))) {
+        } else if (OB_FAIL((slice_calc.get_slice_indexes<CALC_TYPE, false>(get_spec().output_, eval_ctx_, slice_idx_array)))) {
           LOG_WARN("fail get slice idx", K(ret));
         } else if (NULL != spec.tablet_id_expr_
                    && OB_FAIL(slice_calc.get_previous_row_tablet_id(tablet_id))) {
           LOG_WARN("failed to get previous row tablet_id", K(ret));
         }
+        LOG_DEBUG("[VEC2.0 PX] send rows batch without prefetch", K(i), K(slice_idx_array), K(tablet_id.get_int()));
         FOREACH_CNT_X(slice_idx, slice_idx_array, OB_SUCC(ret)) {
           if (OB_FAIL(send_row(*slice_idx, send_row_time_recorder, tablet_id.get_int()))) {
             LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx_array));
@@ -683,9 +761,9 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       }
     } else if (brs_.size_ > 0) {
       int64_t *indexes = NULL;
-      if (OB_FAIL(slice_calc.get_slice_idx_vec(spec_.output_, eval_ctx_,
+      if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, false>(spec_.output_, eval_ctx_,
                                                *brs_.skip_, brs_.size_,
-                                               indexes))) {
+                                               indexes)))) {
         LOG_WARN("calc slice indexes failed", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
@@ -702,6 +780,8 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
                                1); // low temporal locality
           }
         }
+        LOG_DEBUG("[VEC2.0 PX] send rows batch with prefetch", K(CALC_TYPE),
+                 K(ObArrayWrap<int64_t>(indexes, brs_.size_)));
         for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
           if (brs_.skip_->at(i)) {
             continue;
@@ -710,7 +790,7 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
           row_count += 1;
           metric_.count();
           if (OB_FAIL(send_row(indexes[i], send_row_time_recorder, tablet_id.get_int()))) {
-            LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx_array));
+            LOG_WARN("fail emit row to interm result", K(ret), K(indexes[i]));
           }
         }
       }
@@ -721,7 +801,7 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
       } else if (batch_param_remain_) {
         ObPxNewRow px_eof_row;
         px_eof_row.set_eof_row();
-        px_eof_row.set_data_type(ObDtlMsgType::PX_DATUM_ROW);
+        px_eof_row.set_data_type(data_msg_type_);
         ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
         if (OB_ISNULL(phy_plan_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -746,6 +826,188 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
   return ret;
 }
 
+template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
+int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
+{
+  int ret = OB_SUCCESS;
+  int64_t send_row_time_recorder = 0;
+  ObObj tablet_id;
+  ObSliceIdxCalc::SliceIdxArray slice_idx_array;
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(next_row())) {
+      LOG_WARN("fetch next rows failed", K(ret));
+      break;
+    }
+    if (dfc_.all_ch_drained()) {
+      int tmp_ret = child_->drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
+      LOG_TRACE("all channel has been drained");
+      break;
+    }
+    const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
+    batch_info_guard.set_batch_size(brs_.size_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
+      LOG_WARN("failed to set rollup hybrid keys", K(ret));
+    } else if (brs_.size_ > 0
+        && (!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
+      for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
+        ObExpr *expr = spec_.output_.at(i);
+        if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
+          ObIVector *vec = expr->get_vector(eval_ctx_);
+          const char *payload = vec->get_payload(0);
+          if (NULL != payload) {
+          } else if (OB_FAIL(expr->init_vector(eval_ctx_, VEC_UNIFORM_CONST, 1 /*size*/))) {
+            LOG_WARN("init vector failed", K(ret));
+          } else {
+            vec->set_null(0);
+          }
+        } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
+          LOG_WARN("eval expr failed", K(ret));
+        }
+      }
+      if (use_hash_reorder_) {
+        memset(slice_bkt_item_cnts_, 0, task_channels_.count() * sizeof(uint16_t));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+        if (brs_.skip_->at(i)) {
+          continue;
+        }
+        batch_info_guard.set_batch_idx(i);
+        metric_.count();
+        //TODO: shanting2.0 支持wf2.0时做一下简单适配
+        if (OB_FAIL(set_wf_hybrid_slice_id_calc_type(slice_calc))) {
+          LOG_WARN("failed to set wf hybrid keys", K(ret));
+        } else if (OB_FAIL((slice_calc.get_slice_indexes<CALC_TYPE, true>(get_spec().output_,
+                            eval_ctx_, slice_idx_array, brs_.skip_)))) {
+          LOG_WARN("fail get slice idx", K(ret));
+        } else if (NULL != spec.tablet_id_expr_
+        // 为什么要获取上一次的tablet_id
+                   && OB_FAIL(slice_calc.get_previous_row_tablet_id(tablet_id))) {
+          LOG_WARN("failed to get previous row tablet_id", K(ret));
+        }
+        if (!use_hash_reorder_) {
+          LOG_DEBUG("[VEC2.0 PX] send rows vec without prefetch", K(i), K(slice_idx_array), K(tablet_id.get_int()));
+          FOREACH_CNT_X(slice_idx, slice_idx_array, OB_SUCC(ret)) {
+            if (OB_FAIL(send_row(*slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
+              LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx_array));
+            }
+          }
+        } else {
+          for (int64_t idx = 0; idx < slice_idx_array.count(); ++idx) {
+            int64_t slice_idx = slice_idx_array.at(idx);
+            if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == slice_idx) {
+              op_monitor_info_.otherstat_1_value_++;
+              op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
+            } else {
+              slice_info_bkts_[slice_idx][slice_bkt_item_cnts_[slice_idx]++] = static_cast<uint16_t> (i);
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret) && use_hash_reorder_) {
+        if (OB_FAIL(hash_reorder_send_batch(batch_info_guard))) {
+          LOG_WARN("failed to send batch", K(ret));
+        }
+      }
+    } else if (brs_.size_ > 0) {
+      int64_t *indexes = NULL;
+      if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, true>(spec_.output_, eval_ctx_,
+                                               *brs_.skip_, brs_.size_,
+                                               indexes)))) {
+        LOG_WARN("calc slice indexes failed", K(ret));
+      } else {
+        for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
+          ObExpr *expr = spec_.output_.at(i);
+          if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
+            ObIVector *vec = expr->get_vector(eval_ctx_);
+            const char *payload = vec->get_payload(0);
+            if (NULL != payload) {
+            } else if (OB_FAIL(expr->init_vector(eval_ctx_, VEC_UNIFORM_CONST, 1 /*size*/))) {
+              LOG_WARN("init vector failed", K(ret));
+            } else {
+              vec->set_null(0);
+            }
+          } else if (OB_FAIL(spec_.output_.at(i)->eval_vector(eval_ctx_, brs_))) {
+            LOG_WARN("eval expr failed", K(ret));
+          }
+        }
+        LOG_DEBUG("[VEC2.0 PX] send rows vec with prefetch", K(CALC_TYPE),
+                 K(ObArrayWrap<int64_t>(indexes, brs_.size_)));
+        if (dtl::ObDtlMsgType::PX_VECTOR_ROW == data_msg_type_) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+            if (brs_.skip_->at(i) || indexes[i] < 0) { continue; }
+              ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[i]));
+              channel->get_vector_row_writer().prefetch();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!disable_fast_append_ && use_hash_reorder_) {
+          memset(slice_bkt_item_cnts_, 0, task_channels_.count() * sizeof(uint16_t));
+          for (int64_t i = 0; i < brs_.size_; ++i) {
+            if (brs_.skip_->at(i)) {
+              continue;
+            }
+            if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
+              op_monitor_info_.otherstat_1_value_++;
+              op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
+            } else {
+              int64_t slice_idx = indexes[i];
+              slice_info_bkts_[slice_idx][slice_bkt_item_cnts_[slice_idx]++] = static_cast<uint16_t> (i);
+            }
+          }
+          if (OB_FAIL(hash_reorder_send_batch(batch_info_guard))) {
+            LOG_WARN("failed to send batch", K(ret));
+          }
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+            if (brs_.skip_->at(i)) {
+              continue;
+            }
+            batch_info_guard.set_batch_idx(i);
+            metric_.count();
+            int64_t slice_idx = indexes[i];
+            if (OB_FAIL(send_row(indexes[i], send_row_time_recorder, tablet_id.get_int(), i))) {
+              LOG_WARN("fail emit row to interm result", K(ret), K(indexes[i]));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && brs_.end_) {
+      if (OB_FAIL(try_wait_channel())) {
+        LOG_WARN("failed to wait channel init", K(ret));
+      } else if (batch_param_remain_) {
+        ObPxNewRow px_eof_row;
+        px_eof_row.set_eof_row();
+        px_eof_row.set_data_type(data_msg_type_);
+        ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+        if (OB_ISNULL(phy_plan_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("phy plan ctx is null", K(ret));
+        }
+        for (int i = 0; i < task_channels_.count() && OB_SUCC(ret); i++) {
+          dtl::ObDtlChannel *ch = task_channels_.at(i);
+          if (OB_FAIL(ch->send(px_eof_row, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_, false))) {
+            LOG_WARN("fail send eof row to slice channel", K(px_eof_row), K(ret));
+          } else if (OB_FAIL(ch->push_buffer_batch_info())) {
+            LOG_WARN("channel push back batch failed", K(ret));
+          }
+        }
+      } else if (OB_FAIL(send_eof_row())) {
+        LOG_WARN("fail send eof rows to channels", K(ret));
+      }
+      break;
+    }
+    // for those break out ops
+  }
+  LOG_TRACE("Transmit time record, send rows in vector", K(ret));
+  return ret;
+}
+
 int ObPxTransmitOp::send_eof_row()
 {
   int ret = OB_SUCCESS;
@@ -760,7 +1022,7 @@ int ObPxTransmitOp::send_eof_row()
     LOG_WARN("unexpected status: ch info is null", K(ret),
       KP(ch_info_), K(task_channels_.count()));
   } else {
-    ObTransmitEofAsynSender eof_asyn_sender(task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_);
+    ObTransmitEofAsynSender eof_asyn_sender(task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_, data_msg_type_);
     if (OB_FAIL(eof_asyn_sender.asyn_send())) {
       LOG_WARN("failed to asyn send drain", K(ret), K(lbt()));
     } else if (GCONF.enable_sql_audit) {
@@ -774,6 +1036,7 @@ int ObPxTransmitOp::send_eof_row()
   return ret;
 }
 
+template <bool USE_VEC>
 int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
 {
   int ret = OB_SUCCESS;
@@ -809,8 +1072,22 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
       break;
     } else if (OB_FAIL(try_wait_channel())) {
       LOG_WARN("failed to wait channel", K(ret));
+    } else if (USE_VEC) {
+      ObPxNewRow px_row(get_spec().output_, OB_INVALID_ID, data_msg_type_);
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+      batch_info_guard.set_batch_size(rows);
+      for (int64_t i = 0; OB_SUCC(ret) && i < rows; i++) {
+        if (brs_.skip_->at(i)) {
+          continue;
+        }
+        row_count++;
+        metric_.count();
+        batch_info_guard.set_batch_idx(i);
+        px_row.set_vector_row_idx(i);
+        ret = chs_agent_.broadcast_row(px_row, &eval_ctx_);
+      }
     } else {
-      ObPxNewRow px_row(get_spec().output_);
+      ObPxNewRow px_row(get_spec().output_, OB_INVALID_ID, data_msg_type_);
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
       batch_info_guard.set_batch_size(rows);
       for (int64_t i = 0; OB_SUCC(ret) && i < rows; i++) {
@@ -839,7 +1116,8 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
 
 int ObPxTransmitOp::send_row(int64_t slice_idx,
                              int64_t &time_recorder,
-                             int64_t tablet_id)
+                             int64_t tablet_id,
+                             int64_t vector_row_idx)
 {
   UNUSED(time_recorder);
   int ret = OB_SUCCESS;
@@ -851,8 +1129,69 @@ int ObPxTransmitOp::send_row(int64_t slice_idx,
     if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == slice_idx) {
       op_monitor_info_.otherstat_1_value_++;
       op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-    } else if (!is_vectorized()) {
+    // TODO: shanting2.0. use opt when DTL 2.0 implemented.
+    } else if (!is_vectorized() || disable_fast_append_) {
       is_send_row_normal = true;
+    } else if (get_spec().use_rich_format_) {
+      if (NULL != spec.tablet_id_expr_) {
+        update_row(spec.tablet_id_expr_, tablet_id);
+      }
+      ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx));
+      bool is_rpc_channel = channel->get_channel_type() == ObDtlChannel::DtlChannelType::RPC_CHANNEL;
+      switch (data_msg_type_) {
+        case dtl::ObDtlMsgType::PX_VECTOR_FIXED: {
+          ObDtlVectorFixedMsgWriter &fixed_writer = channel->get_vector_fixed_msg_writer();
+          if (!fixed_writer.is_inited()) {
+            is_send_row_normal = true;
+          } else if (OB_FAIL(fixed_writer.append_row(spec.output_, vector_row_idx, eval_ctx_))) {
+            if (OB_BUF_NOT_ENOUGH != ret) {
+              LOG_WARN("failed to append row", K(ret));
+            } else {
+              is_send_row_normal = true;
+              fixed_writer.update_write_ret();
+              ret = OB_SUCCESS;
+            }
+          } else {
+            fixed_writer.update_buffer_used();
+          }
+          break;
+        }
+        case dtl::ObDtlMsgType::PX_VECTOR_ROW: {
+          ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
+          if (!row_writer.is_inited()) {
+            is_send_row_normal = true;
+          } else if (OB_FAIL(row_writer.try_append_row(spec.output_, eval_ctx_))) {
+            if (OB_BUF_NOT_ENOUGH != ret) {
+              LOG_WARN("failed to append row", K(ret));
+            } else {
+              is_send_row_normal = true;
+              ret = OB_SUCCESS;
+            }
+          }
+          break;
+        }
+        case dtl::ObDtlMsgType::PX_VECTOR: {
+          if (is_rpc_channel) {
+            is_send_row_normal = true;
+          } else {
+            ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
+            if (!row_writer.is_inited()) {
+              is_send_row_normal = true;
+            } else if (OB_FAIL(row_writer.try_append_row(spec.output_, eval_ctx_))) {
+              if (OB_BUF_NOT_ENOUGH != ret) {
+                LOG_WARN("failed to append row", K(ret));
+              } else {
+                is_send_row_normal = true;
+                ret = OB_SUCCESS;
+              }
+            }
+          }
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get invalid msg type", K(ret), K(data_msg_type_));
+      }
     } else {
       OB_ASSERT(slice_idx >= 0 && slice_idx < ch_blocks_.count());
       ObChunkDatumStore::BlockBufferWrap &blk_buf = blk_bufs_.at(slice_idx);
@@ -862,7 +1201,7 @@ int ObPxTransmitOp::send_row(int64_t slice_idx,
         if (NULL != spec.tablet_id_expr_) {
           update_row(spec.tablet_id_expr_, tablet_id);
         }
-        if (OB_FAIL(blk_buf.append_row(spec.output_, &eval_ctx_, 0))) {
+        if (OB_FAIL(blk_buf.append_row(spec.output_, &eval_ctx_, 0, vector_row_idx))) {
           if (OB_BUF_NOT_ENOUGH != ret) {
             SQL_DTL_LOG(WARN, "failed to add row", K(ret));
           } else {
@@ -877,18 +1216,21 @@ int ObPxTransmitOp::send_row(int64_t slice_idx,
       }
     }
   }
+  LOG_DEBUG("[VEC2.0 PX] px transmit send row", K(get_spec().get_id()), K(get_spec().use_rich_format_),
+          K(slice_idx), K(tablet_id), K(vector_row_idx), K(is_send_row_normal));
   if (OB_SUCC(ret) && is_send_row_normal) {
-    if (OB_FAIL(send_row_normal(slice_idx, time_recorder, tablet_id))) {
+    if (OB_FAIL(send_row_normal(slice_idx, time_recorder, tablet_id, vector_row_idx))) {
       LOG_WARN("fail to send row normal", K(ret));
     }
   }
-  LOG_DEBUG("Send row", K(slice_idx), K(ret));
+  LOG_DEBUG("Send row", K(slice_idx), K(ret), K(is_vectorized()));
   return ret;
 }
 
 int ObPxTransmitOp::send_row_normal(int64_t slice_idx,
                            int64_t &time_recorder,
-                           int64_t tablet_id)
+                           int64_t tablet_id,
+                           int64_t vector_row_idx)
 {
   UNUSED(time_recorder);
   int ret = OB_SUCCESS;
@@ -907,12 +1249,11 @@ int ObPxTransmitOp::send_row_normal(int64_t slice_idx,
     if (NULL != spec.tablet_id_expr_) {
       update_row(spec.tablet_id_expr_, tablet_id);
     }
-    ObPxNewRow px_row(get_spec().output_);
+    ObPxNewRow px_row(get_spec().output_, vector_row_idx, data_msg_type_);
     if (OB_FAIL(ch->send(px_row, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail send row to slice channel", K(px_row), K(slice_idx), K(ret));
       }
-    } else {
     }
   }
   LOG_DEBUG("Send row", K(slice_idx), K(ret));
@@ -928,7 +1269,7 @@ int ObPxTransmitOp::broadcast_eof_row()
           K(ret));
   ObPxNewRow px_eof_row;
   px_eof_row.set_eof_row();
-  px_eof_row.set_data_type(ObDtlMsgType::PX_DATUM_ROW);
+  px_eof_row.set_data_type(data_msg_type_);
   if (OB_FAIL(chs_agent_.broadcast_row(px_eof_row, &eval_ctx_, true))) {
     LOG_WARN("unexpected NULL ptr", K(ret));
   } else if (OB_FAIL(chs_agent_.flush())) {
@@ -1003,9 +1344,9 @@ int ObPxTransmitOp::link_ch_sets(ObPxTaskChSet &ch_set,
         if (OB_FAIL(ch_set.get_channel_info(idx, ci))) {
           LOG_WARN("fail get channel info", K(idx), K(ret));
         } else if (nullptr != dfc && ci.type_ == DTL_CT_LOCAL) {
-          ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val);
+          ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
         } else {
-          ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val);
+          ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, ObDtlChannel::DtlChannelType::RPC_CHANNEL);
         }
         if (OB_FAIL(ret)) {
         } else if (nullptr == ch) {
@@ -1168,6 +1509,140 @@ int ObPxTransmitOp::try_wait_channel()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!receive_channel_ready_) && OB_FAIL(wait_channel_ready_msg())) {
     LOG_WARN("failed to wait channel ready msg", K(ret));
+  }
+  return ret;
+}
+
+void ObPxTransmitOp::init_data_msg_type(const common::ObIArray<ObExpr *> &output)
+{
+  bool all_fixed = true;
+  int64_t col_cnt = output.count();
+  for (int64_t i = 0; all_fixed && i < col_cnt; ++i) {
+    if (!output.at(i)->is_fixed_length_data_) {
+      all_fixed = false;
+    }
+  }
+  if (col_cnt > ObDtlVectorsBuffer::MAX_COL_CNT) {
+    data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR_ROW;
+  } else if (all_fixed) {
+    data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR_FIXED;
+  } else {
+    data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR_ROW;
+  }
+  int err_sim = OB_E(EventTable::EN_DTL_OPTION) 0;
+  if (0 != err_sim) {
+    if (1 == std::abs(err_sim)) {
+      data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR_ROW;
+    } else if (2 == std::abs(err_sim)) {
+      data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR_FIXED;
+    } else if (3 == std::abs(err_sim)) {
+      data_msg_type_ = dtl::ObDtlMsgType::PX_VECTOR;
+    } else if (4 == std::abs(err_sim)) {
+      disable_fast_append_ = true;
+    }
+  }
+}
+
+int ObPxTransmitOp::hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard)
+{
+  int ret = OB_SUCCESS;
+  int64_t send_row_time_recorder = 0;
+  ObObj tablet_id; //not used
+  if (OB_FAIL(try_wait_channel())) {
+    LOG_WARN("failed to wait channel init", K(ret));
+  } else if (vectors_.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_spec().output_.count(); ++i) {
+      OZ (vectors_.push_back(get_spec().output_.at(i)->get_vector(eval_ctx_)));
+    }
+  }
+  const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
+  if (OB_FAIL(ret)) {
+  } else {
+    switch (data_msg_type_) {
+      case dtl::ObDtlMsgType::PX_VECTOR_FIXED: {
+        for (int64_t channel_idx = 0; OB_SUCC(ret) && channel_idx < task_channels_.count(); ++channel_idx) {
+          if (0 == slice_bkt_item_cnts_[channel_idx]) {
+            continue;
+          }
+          bool is_send_row_normal = false;
+          ObDtlBasicChannel *channel =
+                          static_cast<ObDtlBasicChannel *> (task_channels_.at(channel_idx));
+          ObDtlVectorFixedMsgWriter &fixed_writer = channel->get_vector_fixed_msg_writer();
+          if (!fixed_writer.is_inited()) {
+            is_send_row_normal = true;
+          } else if (OB_FAIL(fixed_writer.append_batch(spec.output_, vectors_,
+                                                    slice_info_bkts_[channel_idx], slice_bkt_item_cnts_[channel_idx],
+                                                    eval_ctx_))) {
+            if (OB_BUF_NOT_ENOUGH != ret) {
+              LOG_WARN("failed to append row", K(ret));
+            } else {
+              is_send_row_normal = true;
+              fixed_writer.update_write_ret();
+              ret = OB_SUCCESS;
+            }
+          } else {
+            fixed_writer.update_buffer_used();
+            metric_.count(slice_bkt_item_cnts_[channel_idx]);
+          }
+          if (is_send_row_normal && OB_SUCC(ret)) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < slice_bkt_item_cnts_[channel_idx]; ++i) {
+              batch_info_guard.set_batch_idx(slice_info_bkts_[channel_idx][i]);
+              if (OB_FAIL(send_row_normal(channel_idx,
+                                          send_row_time_recorder,
+                                          tablet_id.get_int(),
+                                          slice_info_bkts_[channel_idx][i]))) {
+                LOG_WARN("fail to send row normal", K(ret));
+              }
+            }
+          }
+        }
+        break;
+      }
+      case dtl::ObDtlMsgType::PX_VECTOR:
+      case dtl::ObDtlMsgType::PX_VECTOR_ROW: {
+        for (int64_t channel_idx = 0; OB_SUCC(ret) && channel_idx < task_channels_.count(); ++channel_idx) {
+          if (0 == slice_bkt_item_cnts_[channel_idx]) {
+            continue;
+          }
+          bool is_send_row_normal = false;
+          ObDtlBasicChannel *channel =
+                          static_cast<ObDtlBasicChannel *> (task_channels_.at(channel_idx));
+          bool is_rpc_channel = channel->get_channel_type()
+                                == ObDtlChannel::DtlChannelType::RPC_CHANNEL;
+          ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
+          if (!row_writer.is_inited() || (data_msg_type_ == dtl::ObDtlMsgType::PX_VECTOR && is_rpc_channel)) {
+            is_send_row_normal = true;
+          } else if (OB_FAIL(row_writer.try_append_batch(spec.output_, vectors_,
+                                                        eval_ctx_, slice_info_bkts_[channel_idx],
+                                                        slice_bkt_item_cnts_[channel_idx], row_size_array_,
+                                                        return_rows_))) {
+            if (OB_BUF_NOT_ENOUGH != ret) {
+              LOG_WARN("failed to append row", K(ret));
+            } else {
+              is_send_row_normal = true;
+              ret = OB_SUCCESS;
+            }
+          } else {
+            metric_.count(slice_bkt_item_cnts_[channel_idx]);
+          }
+          if (is_send_row_normal && OB_SUCC(ret)) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < slice_bkt_item_cnts_[channel_idx]; ++i) {
+              batch_info_guard.set_batch_idx(slice_info_bkts_[channel_idx][i]);
+              if (OB_FAIL(send_row_normal(channel_idx,
+                                          send_row_time_recorder,
+                                          tablet_id.get_int(),
+                                          slice_info_bkts_[channel_idx][i]))) {
+                LOG_WARN("fail to send row normal", K(ret));
+              }
+            }
+          }
+        }
+        break;
+      }
+      default :
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid msg type", K(ret), K(data_msg_type_));
+    }
   }
   return ret;
 }

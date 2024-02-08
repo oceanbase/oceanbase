@@ -28,16 +28,18 @@ namespace dtl {
 ObDtlLocalChannel::ObDtlLocalChannel(
     const uint64_t tenant_id,
     const uint64_t id,
-    const ObAddr &peer)
-    : ObDtlBasicChannel(tenant_id, id, peer)
+    const ObAddr &peer,
+    DtlChannelType type)
+    : ObDtlBasicChannel(tenant_id, id, peer, type)
 {}
 
 ObDtlLocalChannel::ObDtlLocalChannel(
     const uint64_t tenant_id,
     const uint64_t id,
     const ObAddr &peer,
-    const int64_t hash_val)
-    : ObDtlBasicChannel(tenant_id, id, peer, hash_val)
+    const int64_t hash_val,
+    DtlChannelType type)
+    : ObDtlBasicChannel(tenant_id, id, peer, hash_val, type)
 {}
 
 ObDtlLocalChannel::~ObDtlLocalChannel()
@@ -86,6 +88,9 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
           LOG_WARN("fail to process internal result", K(ret));
         }
       }
+    } else if (ObDtlMsgType::PX_VECTOR == buf->msg_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("vector is not supported in local channel", K(ret), K(buf->msg_type()));
     } else if (OB_FAIL(DTL.get_channel(peer_id_, chan))) {
       int tmp_ret = ret;
       // cache版本升级不需要处理，数据发送到receive端大致几种情况：
@@ -102,27 +107,8 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
         ret = OB_SUCCESS;
         tmp_ret = OB_SUCCESS;
       } else if (buf->is_data_msg() && 1 == buf->seq_no()) {
-        if (!ObInitChannelPieceMsgCtx::enable_dh_channel_sync(buf->enable_channel_sync())) {
-          LOG_TRACE("first msg blocked", K(is_block), KP(peer_id_), K(ret),
-              K(buf->tenant_id()), K(buf->seq_no()), K(buf->is_data_msg()), KP(buf),
-              K(buf->is_eof()));
-          bool is_eof = buf->is_eof();
-          if (OB_FAIL(DTL.get_dfc_server().cache(/*buf->tenant_id(), */peer_id_, buf, true))) {
-            LOG_WARN("get DTL channel fail", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
-          } else {
-            // return block after cache first msg
-            is_block = !is_eof;
-            if (nullptr != buf) {
-              free_buf(buf);
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("expect buffer is null", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
-            }
-            buf = nullptr;
-          }
-        } else {
-          ret = tmp_ret;
-          LOG_WARN("failed to get channel", K(ret));
-        }
+        ret = tmp_ret;
+        LOG_WARN("failed to get channel", K(ret));
       } else {
         LOG_TRACE("get DTL channel fail", K(buf->seq_no()), KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret), K(buf->is_data_msg()));
       }

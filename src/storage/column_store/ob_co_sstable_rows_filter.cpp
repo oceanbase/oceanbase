@@ -201,7 +201,6 @@ int ObCOSSTableRowsFilter::apply(const ObCSRange &range)
     LOG_WARN("Invalid argument", K(ret), K(range));
   } else if (!prepared_ && OB_FAIL(prepare_apply(range))) {
     LOG_WARN("Failed to prepare apply filter", K(range), KPC(this));
-  } else if (FALSE_IT(reuse_lob_locator())) {
   } else if (OB_FAIL(apply_filter(nullptr, filter_, range, 0))) {
     LOG_WARN("Failed to apply filter", K(ret), K(range), KPC_(filter));
   } else {
@@ -526,15 +525,15 @@ int ObCOSSTableRowsFilter::transform_filter_tree(
       LOG_WARN("Failed to find common sub filter tree", K(ret), K(base_filter_idx));
     } else if (origin_child_count == tmp_filter_indexes.count()) {
       common_filter_executor = &filter;
-    } else if (1 < tmp_filter_indexes.count()
-                && OB_FAIL(filter.pull_up_common_node(common_filter_executor, tmp_filter_indexes))) {
+    } else if (1 < tmp_filter_indexes.count() &&
+               OB_FAIL(filter.pull_up_common_node(tmp_filter_indexes, common_filter_executor))) {
       LOG_WARN("Failed to pull up common node", K(ret), K(tmp_filter_indexes));
     }
     if (OB_SUCC(ret)) {
-      if (1 < tmp_filter_indexes.count()
-           && OB_FAIL(common_filter_executor->set_cg_param(*common_col_group_ids, common_col_exprs))) {
+      if (1 < tmp_filter_indexes.count() &&
+          OB_FAIL(common_filter_executor->set_cg_param(*common_col_group_ids, common_col_exprs))) {
         LOG_WARN("Failed to set cg param to filter", K(ret), KPC(common_filter_executor),
-                KP(common_col_group_ids), KP(common_col_exprs));
+                 KP(common_col_group_ids), KP(common_col_exprs));
       } else {
         ++base_filter_idx;
         if (common_filter_executor == &filter || base_filter_idx >= filter.get_child_count()) {
@@ -725,13 +724,6 @@ void ObCOSSTableRowsFilter::adjust_batch_size()
   // TODO(hanling): Optimize in the future.
 }
 
-void ObCOSSTableRowsFilter::reuse_lob_locator()
-{
-  if (nullptr != access_ctx_->lob_locator_helper_) {
-    access_ctx_->lob_locator_helper_->reuse();
-  }
-}
-
 OB_INLINE ObCGBitmap* ObCOSSTableRowsFilter::get_child_bitmap(uint32_t depth)
 {
   ObCGBitmap *child_bitmap = nullptr;
@@ -739,71 +731,6 @@ OB_INLINE ObCGBitmap* ObCOSSTableRowsFilter::get_child_bitmap(uint32_t depth)
     child_bitmap = bitmap_buffer_[depth + 1];
   }
   return child_bitmap;
-}
-
-int ObCOSSTableRowsFilter::filter_batch_rows(
-    sql::ObPushdownFilterExecutor *parent,
-    sql::ObPushdownFilterExecutor *filter,
-    const uint64_t row_count)
-{
-  int ret = OB_SUCCESS;
-  common::ObBitmap *result = nullptr;
-  if (OB_UNLIKELY(nullptr == filter || row_count == 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), KP(filter), K(row_count));
-  } else if (OB_FAIL(filter->init_bitmap(row_count, result))) {
-    LOG_WARN("Failed to get filter bitmap", K(ret));
-  } else if (OB_ISNULL(result)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null filter bitmap", K(ret));
-  } else if (nullptr != parent && OB_FAIL(parent->prepare_skip_filter())) {
-    LOG_WARN("Failed to check parent blockscan", K(ret));
-  } else if (filter->is_filter_node()) {
-    if (OB_UNLIKELY(!filter->is_filter_black_node())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected filter node", K(ret), K(row_count), KP(filter));
-    } else if (OB_FAIL(static_cast<sql::ObBlackFilterExecutor*>(filter)->filter_batch(
-                parent, 0, row_count, *result))) {
-      LOG_WARN("Faile to filter batch black filter node.", K(ret), K(row_count), KP(filter));
-    }
-  } else if (filter->is_logic_op_node()) {
-    if (OB_UNLIKELY(filter->get_child_count() < 2)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected child count of filter executor", K(ret), K(filter->get_child_count()), KP(filter));
-    } else {
-      sql::ObPushdownFilterExecutor **children = filter->get_childs();
-      for (uint32_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); i++) {
-        const common::ObBitmap *child_result = nullptr;
-        if (OB_ISNULL(children[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null child filter", K(ret));
-        } else if (OB_FAIL(filter_batch_rows(filter, children[i], row_count))) {
-          LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
-        } else if (OB_ISNULL(child_result = children[i]->get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected get null filter bitmap", K(ret));
-        } else {
-          if (filter->is_logic_and_node()) {
-            if (OB_FAIL(result->bit_and(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_false()) {
-              break;
-            }
-          } else  {
-            if (OB_FAIL(result->bit_or(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_true()) {
-              break;
-            }
-          }
-        }
-      }
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported filter executor type", K(ret), K(filter->get_type()));
-  }
-  return ret;
 }
 
 sql::ObCommonFilterTreeStatus ObCOSSTableRowsFilter::merge_common_filter_tree_status(

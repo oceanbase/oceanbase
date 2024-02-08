@@ -396,11 +396,15 @@ int ObMultipleMerge::get_next_rows(int64_t &count, int64_t capacity)
   } else if (ObQRIterType::T_SINGLE_GET == get_type()) {
     ObDatumRow *row = nullptr;
     sql::ObEvalCtx *eval_ctx = nullptr;
+    const int64_t size = min(capacity, access_param_->get_op()->get_batch_size());
     if (OB_ISNULL(access_param_->get_op())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected access param: null op", K(ret));
     } else if (FALSE_IT(eval_ctx = &access_param_->get_op()->get_eval_ctx())) {
-    } else if (FALSE_IT(eval_ctx->reuse(min(capacity, access_param_->get_op()->get_batch_size())))) {
+    } else if (FALSE_IT(eval_ctx->reuse(size))) {
+    } else if (access_param_->get_op()->enable_rich_format_ &&
+               OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, *eval_ctx, size))) {
+      LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
     } else if (OB_FAIL(get_next_row(row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get single row", K(ret));
@@ -494,7 +498,11 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
         if (OB_SUCC(ret)) {
           // back to normal path
           ObDatumRow *out_row = nullptr;
-          if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
+          if (0 == vector_store->get_row_count() &&
+              access_param_->get_op()->enable_rich_format_ &&
+              OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
+            LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+          } else if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
             LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
           } else if (OB_FAIL(process_fuse_row(nullptr == access_param_->output_exprs_, unprojected_row_, out_row))) {
             LOG_WARN("get row from fuse failed", K(ret), K(unprojected_row_));
@@ -546,17 +554,20 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect aggregate pushdown status", K(ret),
              K(access_ctx_->range_array_pos_->count()));
-  }
-
-  if (OB_FAIL(ret)) {
   } else {
     ObAggregatedStore *agg_row_store = reinterpret_cast<ObAggregatedStore *>(block_row_store_);
     agg_row_store->reuse_aggregated_row();
     if (OB_NOT_NULL(access_param_->get_op())) {
+      sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
       int64_t batch_size = max(1, access_param_->get_op()->get_batch_size());
-      access_param_->get_op()->get_eval_ctx().reuse(batch_size);
+      eval_ctx.reuse(batch_size);
+      if (access_param_->get_op()->enable_rich_format_ &&
+          OB_FAIL(init_exprs_uniform_header(access_param_->aggregate_exprs_, eval_ctx, eval_ctx.get_batch_size()))) {
+        LOG_WARN("Fail to init aggregate exprs header", K(ret));
+      }
     }
     reuse_lob_locator();
+    bool need_init_expr_header = true;
     while (OB_SUCC(ret) && !agg_row_store->is_end()) {
       bool can_batch = false;
       // clear evaluated flag for every row
@@ -574,6 +585,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
           if (OB_LIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret || OB_ITER_END == ret)) {
             // OB_ITER_END should use fuse to make sure no greater key in dynamic data
             ret = OB_SUCCESS;
+            // pd_agg/pd_groupby not set in cg scanner, need reset expr format
+            need_init_expr_header = true;
           } else {
             LOG_WARN("fail to get next aggregate row fast", K(ret));
           }
@@ -603,7 +616,12 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
 
         if (OB_SUCC(ret)) {
           ObDatumRow *out_row = nullptr;
-          if (OB_FAIL(process_fuse_row(
+          if (need_init_expr_header &&
+              access_param_->get_op()->enable_rich_format_ &&
+              OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), 1))) {
+            LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
+          } else if (FALSE_IT(need_init_expr_header = false)) {
+          } else if (OB_FAIL(process_fuse_row(
                       false,
                       unprojected_row_,
                       out_row))) {

@@ -105,7 +105,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       influence_plan_var_indexs_(),
       is_first_gen_(true),
       is_first_gen_config_(true),
-      sys_var_fac_(orig_tenant_id_),
+      sys_var_fac_(),
       next_frag_mem_point_(OB_MALLOC_NORMAL_BLOCK_SIZE), // 8KB
       sys_vars_encode_max_size_(0),
       consistency_level_(INVALID_CONSISTENCY),
@@ -153,7 +153,9 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       is_password_expired_(false),
       process_query_time_(0),
       last_update_tz_time_(0),
-      is_client_sessid_support_(false)
+      is_client_sessid_support_(false),
+      use_rich_vector_format_(false),
+      last_refresh_schema_version_(OB_INVALID_VERSION)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -440,6 +442,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   process_query_time_ = 0;
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
+  use_rich_vector_format_ = true;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -453,6 +456,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     sys_var_fac_.destroy();
   }
   client_identifier_.reset();
+  last_refresh_schema_version_ = OB_INVALID_VERSION;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -1058,6 +1062,9 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
     // 为了避免获取租户系统变量的SQL触发update_query_sensitive_system_variable形成循环依赖，这里直接跳过
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
     LOG_WARN("fail to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_INVALID_VERSION != last_refresh_schema_version_
+             && last_refresh_schema_version_ == refreshed_schema_version) {
+    // do nothing, version not changed, skip refresh
   } else if (OB_CORE_SCHEMA_VERSION >= refreshed_schema_version) {
     // 建租户过程 or 建租户失败 or 本地schema未刷新出来的场景，大概率获取不到系统变量，此时跳过
   } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_variable_schema))) {
@@ -1105,6 +1112,7 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
         set_global_vars_version(schema_version);
       }
     }
+    last_refresh_schema_version_ = refreshed_schema_version;
   }
   return ret;
 }
@@ -1466,6 +1474,8 @@ int ObBasicSessionInfo::get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const
       LOG_ERROR("influence plan system var is NULL", K(i), K(ret));
     } else if (OB_FAIL(sys_vars.push_back(sys_vars_[index]->get_value()))) {
       LOG_WARN("influence plan system variables push failed", K(ret));
+    } else {
+      LOG_WARN("luofan test get_influence_plan_sys_var", KPC(sys_vars_[index]));
     }
   }
   return ret;
@@ -2663,6 +2673,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_runtime_bloom_filter_max_size(int_val));
       break;
     }
+    case SYS_VAR__ENABLE_RICH_VECTOR_FORMAT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_enable_rich_vector_format(int_val != 0));
+      break;
+    }
     case SYS_VAR_OPTIMIZER_FEATURES_ENABLE: {
       if (OB_FAIL(check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check optimizer_features_enable valid", K(val), K(ret));
@@ -3106,6 +3122,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_runtime_bloom_filter_max_size(int_val));
+      break;
+    }
+    case SYS_VAR__ENABLE_RICH_VECTOR_FORMAT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_enable_rich_vector_format(int_val != 0));
       break;
     }
     case SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD: {
@@ -4183,7 +4205,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_rich_vector_format_);
   return ret;
 }
 
@@ -4213,7 +4236,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_rich_vector_format_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4248,7 +4272,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_rich_vector_format_);
   return len;
 }
 
@@ -4417,7 +4442,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
               exec_min_cluster_version_,
-              is_client_sessid_support_);
+              is_client_sessid_support_,
+              use_rich_vector_format_);
   }();
   return ret;
 }
@@ -4618,9 +4644,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     exec_min_cluster_version_ = CLUSTER_VERSION_4_0_0_0;
   }
   if (OB_SUCC(ret) && pos < data_len) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-    is_client_sessid_support_);
+    LST_DO_CODE(OB_UNIS_DECODE, is_client_sessid_support_);
   }
+  LST_DO_CODE(OB_UNIS_DECODE, use_rich_vector_format_);
   // deep copy string.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -4934,7 +4960,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
               exec_min_cluster_version_,
-              is_client_sessid_support_);
+              is_client_sessid_support_,
+              use_rich_vector_format_);
   return len;
 }
 

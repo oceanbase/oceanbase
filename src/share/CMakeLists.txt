@@ -542,6 +542,27 @@ ob_set_subtarget(ob_share wr
   wr/ob_wr_collector.cpp
 )
 
+ob_set_subtarget(ob_share vector
+  vector/ob_vector_base.cpp
+  vector/ob_fixed_length_vector.cpp
+  vector/ob_continuous_vector.cpp
+  vector/ob_discrete_vector.cpp
+  vector/ob_uniform_vector.cpp
+  vector/ob_uniform_base.cpp
+  vector/ob_fixed_length_base.cpp
+  vector/ob_discrete_base.cpp
+  vector/ob_continuous_base.cpp
+  vector/expr_cmp_func.cpp
+)
+
+ob_set_subtarget(ob_share aggregate
+  aggregate/iaggregate.cpp
+  aggregate/count.cpp
+  aggregate/min_max.cpp
+  aggregate/sum.cpp
+  aggregate/processor.cpp
+  aggregate/single_row.cpp)
+
 ob_add_new_object_target(ob_share ob_share)
 
 target_compile_options(ob_share PRIVATE)

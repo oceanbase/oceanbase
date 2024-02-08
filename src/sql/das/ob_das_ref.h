@@ -108,6 +108,7 @@ public:
   DASTaskIter begin_task_iter() { return batched_tasks_.begin(); }
   ObDASTaskFactory &get_das_factory() { return das_factory_; }
   void set_mem_attr(const common::ObMemAttr &memattr) { das_alloc_.set_attr(memattr); }
+  void set_enable_rich_format(const bool v) { enable_rich_format_ = v; }
   ObExecContext &get_exec_ctx() { return exec_ctx_; }
   template <typename DASOp>
   bool has_das_op(const ObDASTabletLoc *tablet_loc, DASOp *&das_op);
@@ -192,7 +193,8 @@ public:
     uint64_t flags_;
     struct {
       uint64_t execute_directly_                : 1;
-      uint64_t reserved_                        : 63;
+      uint64_t enable_rich_format_              : 1;
+      uint64_t reserved_                        : 62;
     };
   };
 };

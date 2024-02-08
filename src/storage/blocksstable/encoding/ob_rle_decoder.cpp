@@ -99,6 +99,42 @@ int ObRLEDecoder::batch_decode(
   return ret;
 }
 
+int ObRLEDecoder::decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    const ObIRowIndex *row_index,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  UNUSED(row_index);
+  int ret = OB_SUCCESS;
+  int64_t null_cnt = 0;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_FAIL(extract_ref_and_null_count(
+      vector_ctx.row_ids_, vector_ctx.row_cap_, vector_ctx.len_arr_, null_cnt))) {
+    LOG_WARN("Failed to extract refs",K(ret));
+  } else {
+    if (0 == null_cnt) {
+      if (OB_FAIL(dict_decoder_.batch_decode_dict<false>(
+          decoder_ctx.obj_meta_,
+          decoder_ctx.col_header_->get_store_obj_type(),
+          decoder_ctx.col_header_->length_ - meta_header_->offset_,
+          vector_ctx))) {
+        LOG_WARN("Failed to batch decode dict", K(ret), K(decoder_ctx), K(vector_ctx));
+      }
+    } else {
+      if (OB_FAIL(dict_decoder_.batch_decode_dict<true>(
+          decoder_ctx.obj_meta_,
+          decoder_ctx.col_header_->get_store_obj_type(),
+          decoder_ctx.col_header_->length_ - meta_header_->offset_,
+          vector_ctx))) {
+        LOG_WARN("Failed to batch decode dict", K(ret), K(decoder_ctx), K(vector_ctx));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRLEDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
@@ -489,12 +525,12 @@ int ObRLEDecoder::set_res_with_bitset(
   return ret;
 }
 
+template<typename T>
 int ObRLEDecoder::extract_ref_and_null_count(
     const int64_t *row_ids,
     const int64_t row_cap,
-    common::ObDatum *datums,
-    int64_t &null_count,
-    uint32_t *ref_buf) const
+    T ref_buf,
+    int64_t &null_count) const
 {
   int ret = OB_SUCCESS;
   const ObIntArrayFuncTable &row_id_array
@@ -534,12 +570,8 @@ int ObRLEDecoder::extract_ref_and_null_count(
       }
       curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
     }
-    if (nullptr != datums) {
-      datums[trav_idx].pack_ = static_cast<uint32_t>(curr_ref);
-    }
-    if (nullptr != ref_buf) {
-      ref_buf[trav_idx] = static_cast<uint32_t>(curr_ref);
-    }
+
+    load_ref_to_buf(ref_buf, trav_idx, curr_ref);
     if (curr_ref >= dict_count) {
       null_count++;
     }
@@ -548,6 +580,24 @@ int ObRLEDecoder::extract_ref_and_null_count(
     trav_idx += step;
   }
   return ret;
+}
+
+template<>
+void ObRLEDecoder::load_ref_to_buf(std::nullptr_t ref_buf, const int64_t trav_idx, const uint32_t ref) const
+{
+  return;
+}
+
+template<>
+void ObRLEDecoder::load_ref_to_buf(ObDatum *ref_buf, const int64_t trav_idx, const uint32_t ref) const
+{
+  ref_buf[trav_idx].pack_ = ref;
+}
+
+template<>
+void ObRLEDecoder::load_ref_to_buf(uint32_t *ref_buf, const int64_t trav_idx, const uint32_t ref) const
+{
+  ref_buf[trav_idx] = ref;
 }
 
 int ObRLEDecoder::get_distinct_count(int64_t &distinct_count) const
@@ -584,7 +634,7 @@ int ObRLEDecoder::read_reference(
 {
   int ret = OB_SUCCESS;
   int64_t null_cnt = 0;
-  if (OB_FAIL(extract_ref_and_null_count(row_ids, row_cap, nullptr, null_cnt, group_by_cell.get_refs_buf()))) {
+  if (OB_FAIL(extract_ref_and_null_count(row_ids, row_cap, group_by_cell.get_refs_buf(), null_cnt))) {
     LOG_WARN("Failed to extract refs",K(ret));
   }
   return ret;

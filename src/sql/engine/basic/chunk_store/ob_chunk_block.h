@@ -32,10 +32,10 @@ namespace storage {
 namespace sql
 {
 
-struct RowHeader final
+struct ChunkRowHeader final
 {
 public:
-  RowHeader() : offset_len_(4), has_null_(false), reserved_(0) {}
+  ChunkRowHeader() : offset_len_(4), has_null_(false), reserved_(0) {}
 public:
   uint32_t row_size_;
   union {
@@ -48,11 +48,11 @@ public:
   };
 };
 
-struct RowMeta final
+struct ChunkRowMeta final
 {
   OB_UNIS_VERSION_V(1);
 public:
-  RowMeta(common::ObIAllocator &alloc) : allocator_(alloc), col_cnt_(0), extra_size_(0),
+  ChunkRowMeta(common::ObIAllocator &alloc) : allocator_(alloc), col_cnt_(0), extra_size_(0),
                                          fixed_cnt_(0), fixed_offsets_(NULL), projector_(NULL),
                                          nulls_off_(0), var_offsets_off_(0), extra_off_(0),
                                          fix_data_off_(0), var_data_off_(0),
@@ -61,7 +61,7 @@ public:
   }
   int init(const ObExprPtrIArray &exprs, const int32_t extra_size);
   int init(const ObIArray<storage::ObColumnSchemaItem> &col_array, const int32_t extra_size);
-  int32_t get_row_fixed_size() const { return sizeof(RowHeader) + var_data_off_; }
+  int32_t get_row_fixed_size() const { return sizeof(ChunkRowHeader) + var_data_off_; }
   int32_t get_var_col_cnt() const { return col_cnt_ - fixed_cnt_; }
   int32_t get_fixed_length(const int64_t idx) const
   {

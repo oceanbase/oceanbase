@@ -26,6 +26,7 @@
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
 #include "lib/wide_integer/ob_wide_integer.h"
 #include "share/ob_lob_access_utils.h" // for Text types
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

@@ -174,7 +174,8 @@ protected:
   static bool is_user_request(const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason)
   {
     return ObAdaptiveMergePolicy::USER_REQUEST == merge_reason
-      || ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason;
+      || ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason
+      || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == merge_reason;
   }
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,

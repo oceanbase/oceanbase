@@ -16,6 +16,7 @@
 #include "ob_integer_stream_decoder.h"
 #include "ob_cs_encoding_util.h"
 #include "ob_cs_decoding_util.h"
+#include "ob_string_stream_vector_decoder.h"
 
 namespace oceanbase
 {
@@ -71,6 +72,23 @@ int ObStringColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
     convert_func(string_ctx, string_ctx.str_data_, *string_ctx.str_ctx_,
         string_ctx.offset_data_, nullptr/*ref_data*/, row_ids, row_cap, datums);
   }
+  return ret;
+}
+
+int ObStringColumnDecoder::decode_vector(
+    const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObStringColumnDecoderCtx &string_ctx = ctx.string_ctx_;
+  ObStringStreamVecDecoder::StrVecDecoderCtx vec_decoder_ctx(
+    string_ctx.str_data_, string_ctx.str_ctx_, string_ctx.offset_data_, string_ctx.offset_ctx_, string_ctx.need_copy_);
+
+  if (OB_FAIL(ObStringStreamVecDecoder::decode_vector(
+    string_ctx, vec_decoder_ctx, nullptr, ObVecDecodeRefWidth::VDRW_NOT_REF, vector_ctx))) {
+    LOG_WARN("fail to decode_vector", K(ret), K(vec_decoder_ctx), K(vector_ctx));
+  }
+  return ret;
+
   return ret;
 }
 
@@ -433,7 +451,7 @@ int ObStringColumnDecoder::pushdown_operator(
         LOG_WARN("Unexpected operation type", KR(ret), K(op_type));
       }
     }
-    LOG_DEBUG("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
+    LOG_TRACE("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
         K(filter.get_op_type()), K(pd_filter_info), K(result_bitmap.popcnt()));
   }
   return ret;

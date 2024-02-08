@@ -26,7 +26,8 @@ public:
   int init(const int64_t task_id,
            const int64_t timeout_ts,
            const common::ObAddr &result_addr,
-           rpc::frame::ObReqTransport *transport);
+           rpc::frame::ObReqTransport *transport,
+           const bool enable_rich_format);
   void set_output_info(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx)
   {
     output_exprs_ = output_exprs;
@@ -49,8 +50,10 @@ private:
   obrpc::ObDASRpcProxy rpc_proxy_;
   ObDASDataFetchRes result_;
   ObChunkDatumStore::Iterator result_iter_;
+  ObTempRowStore::Iterator vec_result_iter_;
   bool has_more_;
   bool need_check_output_datum_;
+  bool enable_rich_format_;
 };
 }  // namespace sql
 }  // namespace oceanbase

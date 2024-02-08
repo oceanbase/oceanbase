@@ -1132,13 +1132,17 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       char *datum_ptr_buf = reinterpret_cast<char *>(cur_allocator.alloc(SIMPLE_ROW_CNT * cur_column_cnt * sizeof(char) * single_ptr_buf_len)); \
       ObDatum *datum_buf = new ObDatum[SIMPLE_ROW_CNT * cur_column_cnt]; \
       ObSEArray<ObSqlDatumInfo, 16> datum_arr; \
+      void *expr_arr = cur_allocator.alloc(sizeof(sql::ObExpr) * cur_column_cnt); \
+      sql::ObExpr *exprs = reinterpret_cast<sql::ObExpr *>(expr_arr); \
       for (int64_t i = 0; i < cur_column_cnt; ++i) { \
         ASSERT_EQ(OB_SUCCESS, datum_arr.push_back(ObSqlDatumInfo())); \
         datum_arr.at(i).datum_ptr_ = datum_buf + SIMPLE_ROW_CNT * i; \
         if (i == cur_column_cnt - 1) { \
-          datum_arr.at(i).map_type_ = ObObjDatumMapType::OBJ_DATUM_STRING; \
+          exprs[i].obj_datum_map_ = ObObjDatumMapType::OBJ_DATUM_STRING; \
+          datum_arr.at(i).expr_ = exprs + i; \
         } else { \
-          datum_arr.at(i).map_type_ = ObObjDatumMapType::OBJ_DATUM_NUMBER; \
+          exprs[i].obj_datum_map_ = ObObjDatumMapType::OBJ_DATUM_NUMBER; \
+          datum_arr.at(i).expr_ = exprs + i; \
         } \
         cols.push_back(i); \
         col_params.push_back(param); \

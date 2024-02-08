@@ -88,12 +88,10 @@ class ObDtlRpcChannel
 
 public:
   explicit ObDtlRpcChannel(const uint64_t tenant_id,
-     const uint64_t id, const common::ObAddr &peer);
+     const uint64_t id, const common::ObAddr &peer, DtlChannelType type);
   explicit ObDtlRpcChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr &peer,
-                           const int64_t hash_val);
+                           const int64_t hash_val, DtlChannelType type);
   virtual ~ObDtlRpcChannel();
-
-  virtual DtlChannelType get_channel_type() { return DtlChannelType::RPC_CHANNEL; }
 
   virtual int init() override;
   virtual void destroy();

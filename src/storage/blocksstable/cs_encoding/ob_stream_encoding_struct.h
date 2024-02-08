@@ -259,7 +259,6 @@ struct ObIntegerStreamMeta
   uint8_t decimal_precision_width_;
 };
 
-
 struct ObIntegerStreamEncoderInfo
 {
   ObIntegerStreamEncoderInfo() { reset(); }
@@ -419,13 +418,6 @@ struct ObStringStreamEncoderCtx
   ObStringStreamEncoderInfo info_;
 };
 
-template <int TYPE_TAG>
-struct ObCSEncodingStoreTypeInference { typedef char Type; };
-
-template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_1_BYTE> { typedef uint8_t Type; };
-template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_2_BYTE> { typedef uint16_t Type; };
-template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_4_BYTE> { typedef uint32_t Type; };
-template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_8_BYTE> { typedef uint64_t Type; };
 
 struct ObIntegerStreamDecoderCtx
 {
@@ -464,6 +456,28 @@ enum ObRefStoreWidthV : uint8_t
   REF_IN_DATUMS = 5,
   MAX_WIDTH_V = 6
 };
+
+enum ObVecDecodeRefWidth : uint8_t
+{
+  VDRW_1_BYTE = ObIntegerStream::UintWidth::UW_1_BYTE,
+  VDRW_2_BYTE = ObIntegerStream::UintWidth::UW_2_BYTE,
+  VDRW_4_BYTE = ObIntegerStream::UintWidth::UW_4_BYTE,
+  VDRW_8_BYTE = ObIntegerStream::UintWidth::UW_8_BYTE,
+  VDRW_NOT_REF = 4,
+  VDRW_TEMP_UINT32_REF = 5, // ref is a temporarily allocated uint32-array, regardless of ref store width.
+  VDRW_MAX = 6
+};
+
+template <int TYPE_TAG>
+struct ObCSEncodingStoreTypeInference { typedef unsigned char Type; };
+
+template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_1_BYTE> { typedef uint8_t Type; };
+template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_2_BYTE> { typedef uint16_t Type; };
+template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_4_BYTE> { typedef uint32_t Type; };
+template <> struct ObCSEncodingStoreTypeInference<ObIntegerStream::UintWidth::UW_8_BYTE> { typedef uint64_t Type; };
+template <> struct ObCSEncodingStoreTypeInference<ObVecDecodeRefWidth::VDRW_TEMP_UINT32_REF> { typedef uint32_t Type; };
+
+#define FIX_STRING_OFFSET_WIDTH_V 4 // represet fixed length string when do partial specialization for template
 
 static OB_INLINE int32_t *get_width_tag_map()
 {

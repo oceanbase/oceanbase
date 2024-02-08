@@ -239,6 +239,8 @@ public:
   virtual int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count = 1) = 0;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) = 0;
   virtual int eval_micro_block(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
       const int64_t *row_ids,
@@ -256,7 +258,7 @@ public:
   virtual int copy_output_rows(const int32_t datum_offset);
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding);
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt);
-  virtual bool can_use_index_info() const { return true; }
+  virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg, bool &can_agg);
   virtual bool need_access_data() const { return true; }
   virtual bool finished() const { return false; }
   virtual int reserve_group_by_buf(const int64_t size);
@@ -277,10 +279,7 @@ protected:
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
   int pad_column_if_need(blocksstable::ObStorageDatum &datum);
   int deep_copy_datum(const blocksstable::ObStorageDatum &src, common::ObIAllocator &tmp_alloc);
-  int read_agg_datum(
-      const blocksstable::ObMicroIndexInfo &index_info,
-      const bool is_cg,
-      blocksstable::ObStorageDatum &agg_datum);
+  int read_agg_datum(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg);
   void clear_group_by_info();
   OB_INLINE common::ObDatum &get_group_by_result_datum(const int32_t datum_offset)
   {
@@ -292,6 +291,7 @@ protected:
   // for scalar group by pushdown
   blocksstable::ObStorageDatum result_datum_;
   blocksstable::ObStorageDatum def_datum_;
+  blocksstable::ObStorageDatum skip_index_datum_;
   common::ObIAllocator &allocator_;
   bool is_lob_col_;
   bool aggregated_;
@@ -305,6 +305,7 @@ protected:
   int64_t group_by_result_cnt_;
   bool is_assigned_to_group_by_processor_;
 private:
+  virtual bool can_use_index_info() const { return true; }
   DISALLOW_COPY_AND_ASSIGN(ObAggCell);
 };
 
@@ -322,6 +323,8 @@ public:
   virtual int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count = 1) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
   virtual int eval_micro_block(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
       const int64_t *row_ids,
@@ -354,11 +357,6 @@ public:
   virtual void reuse() override;
   virtual int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count = 1) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
-  virtual bool can_use_index_info() const override
-  {
-    return nullptr != basic_info_.col_param_ &&
-           (basic_info_.col_param_->get_meta_type().is_numeric_type() || basic_info_.col_param_->get_meta_type().is_temporal_type());
-  }
   virtual int eval_batch_in_group_by(
       const common::ObDatum *datums,
       const int64_t count,
@@ -368,6 +366,11 @@ public:
       const bool is_default_datum = false) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
+  virtual bool can_use_index_info() const override
+  {
+    return nullptr != basic_info_.col_param_ &&
+           (basic_info_.col_param_->get_meta_type().is_numeric_type() || basic_info_.col_param_->get_meta_type().is_temporal_type());
+  }
   ObDatumCmpFuncType cmp_fun_;
   uint32_t *group_by_ref_array_;
   common::ObArenaAllocator datum_allocator_;
@@ -382,11 +385,6 @@ public:
   virtual void reuse() override;
   virtual int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count = 1) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
-  virtual bool can_use_index_info() const override
-  {
-    return nullptr != basic_info_.col_param_ &&
-           (basic_info_.col_param_->get_meta_type().is_numeric_type() || basic_info_.col_param_->get_meta_type().is_temporal_type());
-  }
   virtual int eval_batch_in_group_by(
       const common::ObDatum *datums,
       const int64_t count,
@@ -396,6 +394,11 @@ public:
       const bool is_default_datum = false) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
+  virtual bool can_use_index_info() const override
+  {
+    return nullptr != basic_info_.col_param_ &&
+           (basic_info_.col_param_->get_meta_type().is_numeric_type() || basic_info_.col_param_->get_meta_type().is_temporal_type());
+  }
   ObDatumCmpFuncType cmp_fun_;
   uint32_t *group_by_ref_array_;
   common::ObArenaAllocator datum_allocator_;
@@ -416,11 +419,7 @@ public:
   virtual int init(const bool is_group_by, sql::ObEvalCtx *eval_ctx) override;
   virtual int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count = 1) override;
   virtual int eval_batch(const common::ObDatum *datums, const int64_t count) override;
-  virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override
-  {
-    UNUSEDx(index_info, is_cg);
-    return OB_NOT_SUPPORTED;
-  }
+  virtual int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg = false) override;
   virtual int eval_batch_in_group_by(
       const common::ObDatum *datums,
       const int64_t count,
@@ -432,12 +431,12 @@ public:
   virtual int copy_output_rows(const int32_t datum_offset) override;
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding) override;
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt) override;
-  virtual bool can_use_index_info() const override { return false; }
   virtual int reserve_group_by_buf(const int64_t size) override;
   virtual int output_extra_group_by_result(const int64_t start, const int64_t count) override;
   OB_INLINE bool is_sum_use_int() const { return sum_use_int_flag_; }
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(obj_tc), K_(sum_use_int_flag), K_(num_int));
 private:
+  virtual bool can_use_index_info() const override;
   int init_decimal_int_func();
   OB_INLINE int16_t child_scale() const { return basic_info_.agg_expr_->args_[0]->datum_meta_.scale_; }
   template<typename RES_T>
@@ -447,6 +446,9 @@ private:
   int eval_float(const common::ObDatum &datum, const int32_t datum_offset);
   int eval_double(const common::ObDatum &datum, const int32_t datum_offset);
   int eval_number(const common::ObDatum &datum, const int32_t datum_offset);
+  template<typename RES_T>
+  int eval_number_decimal_int(const common::ObDatum &datum, const int32_t datum_offset);
+  int init_eval_skip_index_func_for_decimal();
   template<typename RES_T, typename ARG_T>
   int eval_decimal_int(const common::ObDatum &datum, const int32_t datum_offset);
   template<typename ARG_T>
@@ -508,7 +510,10 @@ private:
   ObSumEvalAggFuncType eval_func_;
   ObSumEvalBatchAggFuncType eval_batch_func_;
   ObSumCopyDatumFuncType copy_datum_func_;
+  ObSumEvalAggFuncType eval_skip_index_func_;
+  blocksstable::ObStorageDatum cast_datum_;
   char *sum_temp_buffer_;
+  char *cast_temp_buffer_;
 };
 
 // mysql compatibility, select a,count(a), output first value of a
@@ -527,6 +532,8 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int eval_micro_block(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
       const int64_t *row_ids,
@@ -551,11 +558,12 @@ public:
   }
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding) override;
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt) override;
-  virtual bool can_use_index_info() const override { return finished(); }
   virtual bool need_access_data() const override { return !finished(); }
   virtual bool finished() const override { return aggregated_; }
   virtual int reserve_group_by_buf(const int64_t size) override;
   virtual int output_extra_group_by_result(const int64_t start, const int64_t count) override;
+  virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+    const bool is_cg, bool &can_agg) override;
   OB_INLINE void set_determined_value()
   {
     is_determined_value_ = true;
@@ -565,6 +573,7 @@ public:
   }
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(is_determined_value), K_(aggregated_flag_cnt));
 private:
+  virtual bool can_use_index_info() const override { return finished(); }
   void clear_group_by_info();
   bool is_determined_value_;
   int64_t aggregated_flag_cnt_;

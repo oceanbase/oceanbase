@@ -24,17 +24,21 @@ namespace sql
 {
 
 // wrapper class to handle sql expr string/text type result
-class ObTextStringDatumResult : public common::ObTextStringResult
+template <typename VectorType>
+class ObTextStringVectorResult : public common::ObTextStringResult
 {
 public:
-  ObTextStringDatumResult(const ObObjType type, const ObExpr* expr, ObEvalCtx *ctx, ObDatum *res_datum) :
-    common::ObTextStringResult(type, expr->obj_meta_.has_lob_header(), NULL), expr_(expr), ctx_(ctx), res_datum_(res_datum)
+  ObTextStringVectorResult(const ObObjType type, const ObExpr* expr, ObEvalCtx *ctx, ObDatum *res_datum) :
+    common::ObTextStringResult(type, expr->obj_meta_.has_lob_header(), NULL), expr_(expr), ctx_(ctx), res_datum_(res_datum), res_vec_(NULL), batch_idx_(0)
   {}
-  ObTextStringDatumResult(const ObObjType type, bool has_header, ObDatum *res_datum) :
-    common::ObTextStringResult(type, has_header, NULL), expr_(NULL), ctx_(NULL), res_datum_(res_datum)
+  ObTextStringVectorResult(const ObObjType type, bool has_header, ObDatum *res_datum) :
+    common::ObTextStringResult(type, has_header, NULL), expr_(NULL), ctx_(NULL), res_datum_(res_datum), res_vec_(NULL), batch_idx_(0)
+  {}
+  ObTextStringVectorResult(const ObObjType type, const ObExpr* expr, ObEvalCtx *ctx, VectorType *res_vec, int64_t batch_idx) :
+    common::ObTextStringResult(type, expr->obj_meta_.has_lob_header(), NULL), expr_(expr), ctx_(ctx), res_datum_(NULL), res_vec_(res_vec), batch_idx_(batch_idx)
   {}
 
-  ~ObTextStringDatumResult(){};
+  ~ObTextStringVectorResult(){};
 
   TO_STRING_KV(KP_(expr), KP_(ctx), KPC_(res_datum));
 
@@ -50,7 +54,82 @@ private:
   const ObExpr *expr_;
   ObEvalCtx *ctx_;
   ObDatum *res_datum_;
+  VectorType *res_vec_;
+  int64_t batch_idx_;
 };
+
+template <typename VectorType>
+int ObTextStringVectorResult<VectorType>::init(int64_t res_len, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_init_) {
+    SQL_LOG(WARN, "Lob: textstring result init already", K(ret), K(*this));
+  } else if (OB_ISNULL(allocator) && (OB_ISNULL(expr_) || OB_ISNULL(ctx_))) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_LOG(WARN, "Lob: invalid arguments", K(ret), KP(expr_), KP(ctx_), KP(allocator));
+  } else if(OB_ISNULL(res_datum_) && OB_ISNULL(res_vec_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_LOG(WARN, "Lob: invalid arguments", K(ret), K(type_), KPC(res_datum_));
+  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
+    SQL_LOG(WARN, "Lob: calc buffer len failed", K(ret), K(type_), K(res_len));
+  } else if (buff_len_ == 0) {
+    OB_ASSERT(has_lob_header_ == false); // empty result without header
+  } else {
+    buffer_ = OB_ISNULL(allocator)
+              ? expr_->get_str_res_mem(*ctx_, buff_len_) : (char *)allocator->alloc(buff_len_);
+    if (OB_ISNULL(buffer_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "Lob: alloc buffer failed", K(ret), KP(expr_), KP(allocator), K(buff_len_));
+    } else if (OB_FAIL(fill_temp_lob_header(res_len))) {
+      SQL_LOG(WARN, "Lob: fill_temp_lob_header failed", K(ret), K(type_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_init_ = true;
+  }
+  return ret;
+}
+
+template <typename VectorType>
+int ObTextStringVectorResult<VectorType>::init_with_batch_idx(int64_t res_len, int64_t batch_idx)
+{
+  int ret = OB_SUCCESS;
+  if(OB_ISNULL(expr_)
+     || OB_ISNULL(ctx_)
+     || (OB_ISNULL(res_datum_) && OB_ISNULL(res_vec_))) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_LOG(WARN, "Lob: invalid arguments", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
+  } else if (OB_FAIL(ObTextStringResult::calc_buffer_len(res_len))) {
+    SQL_LOG(WARN, "Lob: calc buffer len failed", K(ret), K(type_), KP(expr_), KP(ctx_), KP(res_datum_));
+  } else {
+    buffer_ = expr_->get_str_res_mem(*ctx_, buff_len_, batch_idx);
+    if (OB_ISNULL(buffer_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "Lob: alloc buffer failed", K(ret), KP(expr_), K(buff_len_));
+    } else if (OB_FAIL(fill_temp_lob_header(res_len))) {
+      SQL_LOG(WARN, "Lob: fill_temp_lob_header failed", K(ret), K(type_));
+    }
+  }
+  return ret;
+}
+
+template <typename VectorType>
+void ObTextStringVectorResult<VectorType>::set_result()
+{
+  NULL == res_datum_
+      ? res_vec_->set_string(batch_idx_, buffer_, pos_)
+          : res_datum_->set_string(buffer_, pos_);
+}
+
+template <typename VectorType>
+void ObTextStringVectorResult<VectorType>::set_result_null()
+{
+  NULL == res_datum_
+      ? res_vec_->set_null(batch_idx_)
+          : res_datum_->set_null();
+}
+
+using ObTextStringDatumResult = ObTextStringVectorResult<common::ObIVector>;
 
 class ObTextStringObObjResult : public common::ObTextStringResult
 {
@@ -97,6 +176,24 @@ public:
     return ret;
   };
 
+  template <typename VectorType>
+  static int get_string(const ObExpr &expr, ObIAllocator &allocator, int64_t arg_idx,
+                        const int64_t idx, VectorType *vector, ObString &str)
+  {
+    int ret = OB_SUCCESS;
+    if (vector == NULL || vector->is_null(idx)) {
+      str.assign_ptr("", 0);
+    } else {
+      str = vector->get_string(idx);
+      const ObDatumMeta &meta = expr.args_[arg_idx]->datum_meta_;
+      bool has_lob_header = expr.args_[arg_idx]->obj_meta_.has_lob_header();
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, vector, meta, has_lob_header, str, idx))) {
+        COMMON_LOG(WARN, "Lob: fail to get string.", K(ret), K(str));
+      }
+    }
+    return ret;
+  };
+
   static int read_real_string_data(ObIAllocator &allocator, const ObDatum &datum, const ObDatumMeta &meta,
                                    bool has_lob_header, ObString &str)
   {
@@ -109,11 +206,75 @@ public:
       if (datum.len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) {
         str.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)));
       } else {
-        ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-        if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
-          COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
-        } else if (OB_FAIL(str_iter.get_full_data(str))) {
-          COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+        const ObMemLobCommon *memlob = reinterpret_cast<const ObMemLobCommon*>(datum.ptr_);
+        if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0) {
+          if (memlob->is_simple_) {
+            str.assign_ptr(memlob->data_, static_cast<int32_t>(datum.len_ - sizeof(ObMemLobCommon)));
+          } else {
+            const ObLobCommon *disklob = reinterpret_cast<const ObLobCommon*>(memlob->data_);
+            if (disklob->in_row_) {
+              str.assign_ptr(disklob->get_inrow_data_ptr(),
+                 static_cast<int32_t>(disklob->get_byte_size(datum.len_ - sizeof(ObMemLobCommon))));
+            } else {
+              int64_t disk_lob_handle_size = disklob->get_handle_size(0);
+              str.assign_ptr(memlob->data_ + disk_lob_handle_size,
+                 static_cast<int32_t>(datum.len_ - sizeof(ObMemLobCommon) - disk_lob_handle_size));
+            }
+          }
+        } else {
+          ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+          if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
+            COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
+          } else if (OB_FAIL(str_iter.get_full_data(str))) {
+            COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+          }
+        }
+      }
+    }
+    return ret;
+  };
+
+  template <typename VectorType>
+  static int read_real_string_data(ObIAllocator &allocator, const VectorType &vector,
+                                   const ObDatumMeta &meta, bool has_lob_header, ObString &str,
+                                   const int64_t idx)
+  {
+    int ret = OB_SUCCESS;
+    str = vector->get_string(idx);
+    if (vector->is_null(idx)) {
+      str.reset();
+    } else if (is_lob_storage(meta.type_)) {
+      const ObLobCommon& lob = vector->get_lob_data(idx);
+      if (vector->get_length(idx) != 0 && !lob.is_mem_loc_ && lob.in_row_) {
+        str.assign_ptr(lob.get_inrow_data_ptr(),
+                       static_cast<int32_t>(lob.get_byte_size(vector->get_length(idx))));
+      } else {
+        const ObMemLobCommon *memlob =
+          reinterpret_cast<const ObMemLobCommon *>(vector->get_payload(idx));
+        if (vector->get_length(idx) != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0) {
+          if (memlob->is_simple_) {
+            str.assign_ptr(memlob->data_,
+                           static_cast<int32_t>(vector->get_length(idx) - sizeof(ObMemLobCommon)));
+          } else {
+            const ObLobCommon *disklob = reinterpret_cast<const ObLobCommon*>(memlob->data_);
+            if (disklob->in_row_) {
+              str.assign_ptr(disklob->get_inrow_data_ptr(),
+                             static_cast<int32_t>(disklob->get_byte_size(
+                               vector->get_length(idx) - sizeof(ObMemLobCommon))));
+            } else {
+              int64_t disk_lob_handle_size = disklob->get_handle_size(0);
+              str.assign_ptr(memlob->data_ + disk_lob_handle_size,
+                             static_cast<int32_t>(vector->get_length(idx) - sizeof(ObMemLobCommon)
+                                                  - disk_lob_handle_size));
+            }
+          }
+        } else {
+          ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+          if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
+            COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
+          } else if (OB_FAIL(str_iter.get_full_data(str))) {
+            COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+          }
         }
       }
     }

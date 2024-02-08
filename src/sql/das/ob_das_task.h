@@ -20,6 +20,7 @@
 #include "sql/das/ob_das_define.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 #include "lib/list/ob_obj_store.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 namespace oceanbase
@@ -311,11 +312,15 @@ public:
 public:
   DASOpResultIter()
     : task_iter_(),
-      wild_datum_info_(nullptr)
+      wild_datum_info_(nullptr),
+      enable_rich_format_(false)
   { }
-  DASOpResultIter(const DASTaskIter &task_iter, WildDatumPtrInfo &wild_datum_info)
+  DASOpResultIter(const DASTaskIter &task_iter,
+                  WildDatumPtrInfo &wild_datum_info,
+                  const bool enable_rich_format)
     : task_iter_(task_iter),
-      wild_datum_info_(&wild_datum_info)
+      wild_datum_info_(&wild_datum_info),
+      enable_rich_format_(enable_rich_format)
   {
   }
   int get_next_row();
@@ -328,6 +333,7 @@ private:
 private:
   DASTaskIter task_iter_;
   WildDatumPtrInfo *wild_datum_info_;
+  bool enable_rich_format_;
 };
 
 class ObDASTaskArg
@@ -521,14 +527,18 @@ public:
   int init(const uint64_t tenant_id, const int64_t task_id);
 public:
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
+  ObTempRowStore &get_vec_row_store() { return vec_row_store_; }
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
+  int64_t get_task_id() const { return task_id_; }
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store));
 private:
   ObChunkDatumStore datum_store_;
   uint64_t tenant_id_;
   int64_t task_id_;
   bool has_more_;
+  bool enable_rich_format_;
+  ObTempRowStore vec_row_store_;
 };
 
 class ObDASDataEraseReq

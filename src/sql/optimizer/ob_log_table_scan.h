@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 
 namespace oceanbase
 {
@@ -399,6 +400,9 @@ public:
 
   inline BaseTableOptInfo* get_table_opt_info() { return table_opt_info_; }
 
+  ObPxRFStaticInfo &get_px_rf_info() { return px_rf_info_; }
+  int set_px_rf_info(ObPxRFStaticInfo &px_rf_info) { return px_rf_info_.assign(px_rf_info); }
+
   inline const common::ObIArray<common::ObEstRowCountRecord> &get_est_row_count_record() const
   { return est_records_; }
 
@@ -599,6 +603,8 @@ protected: // memeber variables
 
   share::schema::ObTableType table_type_;
   bool use_column_store_;
+
+  ObPxRFStaticInfo px_rf_info_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

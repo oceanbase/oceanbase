@@ -57,6 +57,7 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_column_equal_encoder.cpp
   blocksstable/encoding/ob_const_decoder.cpp
   blocksstable/encoding/ob_const_encoder.cpp
+  blocksstable/encoding/ob_vector_decode_util.cpp
   blocksstable/encoding/ob_dict_decoder.cpp
   blocksstable/encoding/ob_dict_encoder.cpp
   blocksstable/encoding/ob_encoding_allocator.cpp
@@ -116,6 +117,9 @@ ob_set_subtarget(ob_storage blocksstable_cs_encoding
   blocksstable/cs_encoding/ob_integer_stream_decoder.cpp
   blocksstable/cs_encoding/ob_string_stream_encoder.cpp
   blocksstable/cs_encoding/ob_string_stream_decoder.cpp
+  blocksstable/cs_encoding/ob_integer_stream_vector_decoder.cpp
+  blocksstable/cs_encoding/ob_string_stream_vector_decoder.cpp
+  blocksstable/cs_encoding/ob_cs_vector_decoding_util.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_index_block

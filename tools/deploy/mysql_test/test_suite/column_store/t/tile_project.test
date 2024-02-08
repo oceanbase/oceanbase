@@ -8,6 +8,7 @@ set @@recyclebin = off;
 
 --disable_warnings
 set session ob_query_timeout=10000000000;
+set session _enable_rich_vector_format = true;
 drop table if exists ct1,ct2,ct3;
 --enable_warnings
 

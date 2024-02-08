@@ -32,6 +32,25 @@ public:
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
               ObExpr &rt_expr) const override;
+
+  static int eval_between_vector(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const EvalBound &bound);
+  enum EvalBetweenStage {
+    BETWEEN_LEFT,
+    BETWEEN_RIGHT,
+    BETWEEN_MAX
+  };
+
+  struct EvalVectorBetweenCmp;
+
+  typedef int (*EvalVectorBetweenFunc) (const ObExpr &expr,
+                                        const ObExpr &left,
+                                        const ObExpr &right,
+                                        ObEvalCtx &ctx,
+                                        ObBitVector &skip,
+                                        const EvalBound &bound);
 private:
   // types and constants
 private:

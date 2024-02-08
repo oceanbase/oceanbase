@@ -326,7 +326,6 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           buffer->set_data_msg(false);
           buffer->timeout_ts() = timeout_ts_;
           buffer->set_msg_type(dtl::ObDtlMsgType::FINISH_SQC_RESULT);
-          const bool is_first_buffer_cached = false;
           const bool inc_recv_buf_cnt = false;
           if (OB_FAIL(common::serialization::encode(buf, size, pos, header))) {
             LOG_WARN("fail to encode buffer", K(ret));
@@ -335,7 +334,7 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           } else if (FALSE_IT(buffer->size() = pos)) {
           } else if (FALSE_IT(pos = 0)) {
           } else if (FALSE_IT(buffer->tenant_id() = ch->get_tenant_id())) {
-          } else if (OB_FAIL(ch->attach(buffer, is_first_buffer_cached, inc_recv_buf_cnt))) {
+          } else if (OB_FAIL(ch->attach(buffer, inc_recv_buf_cnt))) {
             LOG_WARN("fail to feedup buffer", K(ret));
           } else if (FALSE_IT(ch->free_buffer_count())) {
           } else {

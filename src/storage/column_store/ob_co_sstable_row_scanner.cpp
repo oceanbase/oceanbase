@@ -560,12 +560,18 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
   int ret = OB_SUCCESS;
   LOG_TRACE("[COLUMNSTORE] COScanner filter_rows [start]", K(ret), K_(state), K_(blockscan_state),
             K_(current), K_(group_size), K_(end));
+  if (iter_param_->has_lob_column_out()) {
+    access_ctx_->reuse_lob_locator_helper();
+  }
   if (nullptr != group_by_cell_) {
     ret = filter_group_by_rows();
   } else if (nullptr != access_ctx_->limit_param_) {
     ret = filter_rows_with_limit(blockscan_state);
   } else {
     ret = filter_rows_without_limit(blockscan_state);
+  }
+  if (iter_param_->has_lob_column_out()) {
+    access_ctx_->reuse_lob_locator_helper();
   }
   LOG_TRACE("[COLUMNSTORE] COScanner filter_rows [end]", K(ret), K_(state), K_(blockscan_state),
             K_(current), K_(group_size), K_(end));
@@ -763,8 +769,8 @@ int ObCOSSTableRowScanner::update_continuous_range(
 int ObCOSSTableRowScanner::fetch_rows()
 {
   int ret = OB_SUCCESS;
-  if (nullptr != access_ctx_->lob_locator_helper_) {
-    access_ctx_->lob_locator_helper_->reuse();
+  if (iter_param_->has_lob_column_out()) {
+    access_ctx_->reuse_lob_locator_helper();
   }
   if (nullptr == group_by_cell_) {
     ret = fetch_output_rows();

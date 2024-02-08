@@ -534,13 +534,16 @@ int ObDASDataEraseReq::init(const uint64_t tenant_id, const int64_t task_id)
 
 OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     datum_store_,
-                    tenant_id_, task_id_, has_more_);
+                    tenant_id_, task_id_, has_more_,
+                    enable_rich_format_, vec_row_store_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
           tenant_id_(0),
           task_id_(0),
-          has_more_(false)
+          has_more_(false),
+          enable_rich_format_(false),
+          vec_row_store_()
 {
 }
 
@@ -586,7 +589,12 @@ int DASOpResultIter::get_next_rows(int64_t &count, int64_t capacity)
         //otherwise, get_next_row in the local das task maybe touch a wild datum ptr
         reset_wild_datums_ptr();
       }
-      ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
+      LOG_DEBUG("das get next rows", K(enable_rich_format_), K(scan_op->is_local_task()), KP(scan_op));
+      if (OB_FAIL(scan_op->get_output_result_iter()->get_next_rows(count, capacity))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get rows", K(ret));
+        }
+      }
       if (!scan_op->is_local_task()) {
         //remote task will change datum ptr, need to mark this flag
         //in order to let the next local task reset datum ptr before get_next_rows

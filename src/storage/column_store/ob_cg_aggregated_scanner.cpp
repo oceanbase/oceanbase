@@ -104,7 +104,7 @@ int ObCGAggregatedScanner::get_next_rows(uint64_t &count, const uint64_t capacit
   } else if (check_agg_finished()) {
     ret = OB_ITER_END;
   } else if (!need_access_data_) {
-    if (OB_FAIL(cg_agg_cells_.process(0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/, cur_processed_row_count_))) {
+    if (OB_FAIL(cg_agg_cells_.process(*iter_param_, *access_ctx_, 0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/, cur_processed_row_count_))) {
       LOG_WARN("Fail to process agg cells", K(ret));
     } else {
       ret = OB_ITER_END;

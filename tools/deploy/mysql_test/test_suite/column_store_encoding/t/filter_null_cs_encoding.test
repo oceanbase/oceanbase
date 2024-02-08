@@ -10,6 +10,7 @@ connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
 set @@recyclebin = off;
 set ob_query_timeout=1000000000;
 set ob_trx_timeout=1000000000;
+set session _enable_rich_vector_format = true;
 
 --disable_warnings
 drop table if exists t1;

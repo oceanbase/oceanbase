@@ -820,17 +820,21 @@ public:
 
 struct ObSqlDatumInfo {
 public:
-  ObSqlDatumInfo() : datum_ptr_(nullptr), map_type_(OBJ_DATUM_MAPPING_MAX) {}
-  ObSqlDatumInfo(common::ObDatum* datum_ptr, const ObObjDatumMapType map_type)
-    : datum_ptr_(datum_ptr), map_type_(map_type)
+  ObSqlDatumInfo() :
+      datum_ptr_(nullptr),
+      expr_(nullptr)
+  {}
+  ObSqlDatumInfo(common::ObDatum* datum_ptr, sql::ObExpr *expr)
+      : datum_ptr_(datum_ptr), expr_(expr)
   {}
   ~ObSqlDatumInfo() = default;
-  OB_INLINE void reset() { datum_ptr_ = nullptr; map_type_ = OBJ_DATUM_MAPPING_MAX; }
-  OB_INLINE bool is_valid() const { return datum_ptr_ != nullptr && map_type_ != OBJ_DATUM_MAPPING_MAX; }
-  TO_STRING_KV(KP_(datum_ptr), K_(map_type));
+  OB_INLINE void reset() { datum_ptr_ = nullptr; expr_ = nullptr; }
+  OB_INLINE bool is_valid() const { return datum_ptr_ != nullptr && expr_ != nullptr; }
+  OB_INLINE common::ObObjDatumMapType get_obj_datum_map() const { return expr_->obj_datum_map_; }
+  TO_STRING_KV(KP_(datum_ptr), KP_(expr));
 
   common::ObDatum *datum_ptr_;
-  ObObjDatumMapType map_type_;
+  const sql::ObExpr *expr_;
 };
 
 } // namespace blocksstable

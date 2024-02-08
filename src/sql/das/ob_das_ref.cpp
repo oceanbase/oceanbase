@@ -74,7 +74,7 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
 
 DASOpResultIter ObDASRef::begin_result_iter()
 {
-  return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_);
+  return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_, enable_rich_format_);
 }
 
 ObIDASTaskOp* ObDASRef::find_das_task(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type)

@@ -25,7 +25,6 @@
 #include "sql/engine/px/ob_sub_trans_ctrl.h"
 #include "sql/engine/ob_engine_op_traits.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_local_first_buffer_manager.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
 #include "sql/ob_sql_trans_control.h"
 #include "lib/allocator/ob_safe_arena.h"
@@ -52,7 +51,6 @@ public:
         allocator_(common::ObModIds::OB_SQL_PX),
         local_worker_factory_(gctx, allocator_),
         thread_worker_factory_(gctx, allocator_),
-        first_buffer_cache_(allocator_),
         is_single_tsc_leaf_dfo_(false),
         all_shared_rf_msgs_()
   {}
@@ -71,8 +69,6 @@ public:
   int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);
   }
-  int init_first_buffer_cache(int64_t dop);
-  void destroy_first_buffer_cache();
 
   // for ddl insert sstable
   // using start and end pair function to control the life cycle of ddl context
@@ -130,8 +126,6 @@ private:
   int try_prealloc_data_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
   int try_prealloc_transmit_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
   int try_prealloc_receive_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
-
-  dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return &first_buffer_cache_; }
   void try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op);
   int construct_p2p_dh_map() {
     return sqc_ctx_.sqc_proxy_.construct_p2p_dh_map(
@@ -147,7 +141,6 @@ private:
   ObPxLocalWorkerFactory local_worker_factory_; // 当仅有1个task时，使用 local 构造 worker
   ObPxThreadWorkerFactory thread_worker_factory_; // 超过1个task的部分，使用thread 构造 worker
   int64_t reserved_thread_count_;
-  dtl::ObDtlLocalFirstBufferCache first_buffer_cache_;
   bool is_single_tsc_leaf_dfo_;
   ObArray<int64_t> all_shared_rf_msgs_; // for clear
   DISALLOW_COPY_AND_ASSIGN(ObPxSubCoord);

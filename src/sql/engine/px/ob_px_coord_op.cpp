@@ -42,6 +42,7 @@
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
+#include "sql/engine/px/exchange/ob_px_ms_coord_vec_op.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
@@ -127,7 +128,6 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   first_row_fetched_(false),
   first_row_sent_(false),
   qc_id_(common::OB_INVALID_ID),
-  first_buffer_cache_(allocator_),
   register_interrupted_(false),
   px_sequence_id_(0),
   interrupt_id_(0),
@@ -171,13 +171,6 @@ int ObPxCoordOp::init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info)
     LOG_TRACE("Worker init dfc", K(dfo_key), K(dfc_.is_receive()), K(force_block), K(ret));
     ret = OB_SUCCESS;
 #endif
-    ObDtlLocalFirstBufferCache *buf_cache = nullptr;
-    if (OB_FAIL(DTL.get_dfc_server().get_buffer_cache(
-                ctx_.get_my_session()->get_effective_tenant_id(), dfo_key, buf_cache))) {
-      LOG_WARN("failed to get buffer cache", K(dfo_key));
-    } else {
-      dfc_.set_first_buffer_cache(buf_cache);
-    }
     LOG_TRACE("QC init dfc", K(dfo_key), K(dfc_.is_receive()), K(force_block));
   }
   return ret;
@@ -254,8 +247,6 @@ int ObPxCoordOp::rescan()
     } else if (FALSE_IT(clear_interrupt())) {
     } else if (OB_FAIL(destroy_all_channel())) {
       LOG_WARN("release dtl channel failed", K(ret));
-    } else if (FALSE_IT(unregister_first_buffer_cache())) {
-      LOG_WARN("failed to register first buffer cache", K(ret));
     } else if (OB_FAIL(free_allocator())) {
       LOG_WARN("failed to free allocator", K(ret));
     } else if (FALSE_IT(reset_for_rescan())) {
@@ -287,8 +278,6 @@ int ObPxCoordOp::rescan()
       LOG_WARN("fail setup all receive/transmit op input", K(ret));
     } else if (OB_FAIL(setup_loop_proc())) {
       LOG_WARN("fail setup loop proc", K(ret));
-    } else if (OB_FAIL(register_first_buffer_cache(root_dfo))) {
-      LOG_WARN("failed to register first buffer cache", K(ret));
     }
   } else {
     if (OB_FAIL(ObPxCoordOp::inner_rescan())) {
@@ -303,48 +292,6 @@ int ObPxCoordOp::rescan()
 #endif
 
   return ret;
-}
-
-int ObPxCoordOp::register_first_buffer_cache(ObDfo *root_dfo)
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  if (OB_ISNULL(phy_plan_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect status: physical plan context is null", K(ret));
-  } else if (OB_ISNULL(phy_plan_ctx->get_phy_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect status: physical plan is null", K(ret));
-  } else {
-    int64_t dop = phy_plan_ctx->get_phy_plan()->get_px_dop();
-    if (OB_FAIL(first_buffer_cache_.init(dop, dop))) {
-      LOG_WARN("failed to init first buffer cache", K(ret));
-    } else {
-      ObDtlDfoKey dfo_key;
-      dfo_key.set(GCTX.server_id_, root_dfo->get_px_sequence_id(),
-          root_dfo->get_qc_id(), root_dfo->get_dfo_id());
-      first_buffer_cache_.set_first_buffer_key(dfo_key);
-      msg_loop_.set_first_buffer_cache(&first_buffer_cache_);
-      if (OB_FAIL(DTL.get_dfc_server().register_first_buffer_cache(
-                  ctx_.get_my_session()->get_effective_tenant_id(), get_first_buffer_cache()))) {
-        LOG_WARN("failed to register first buffer cache", K(ret));
-      }
-      LOG_TRACE("trace QC register first buffer cache", K(dfo_key), K(dop));
-    }
-  }
-  return ret;
-}
-
-void ObPxCoordOp::unregister_first_buffer_cache()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(DTL.get_dfc_server().unregister_first_buffer_cache(
-    ctx_.get_my_session()->get_effective_tenant_id(),
-    first_buffer_cache_.get_first_buffer_key(),
-    &first_buffer_cache_))) {
-    LOG_WARN("failed to register first buffer cache", K(ret));
-  }
-  LOG_TRACE("trace QC unregister first buffer cache", K(first_buffer_cache_.get_first_buffer_key()));
 }
 
 int ObPxCoordOp::inner_open()
@@ -381,8 +328,6 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("NULL root dfo", K(ret));
   } else if (OB_FAIL(setup_op_input(*root_dfo))) {
     LOG_WARN("fail setup all receive/transmit op input", K(ret));
-  } else if (OB_FAIL(register_first_buffer_cache(root_dfo))) {
-    LOG_WARN("failed to register first buffer cache", K(ret));
   } else {
     ctx_.add_extra_check(server_alive_checker_);
     debug_print(*root_dfo);
@@ -587,7 +532,6 @@ int ObPxCoordOp::inner_close()
     }
   }
 
-  unregister_first_buffer_cache();
   (void)ObDetectManagerUtils::qc_unregister_detectable_id_from_dm(detectable_id_, register_detectable_id_);
   const ObIArray<ObDfo *> &dfos = coord_info_.dfo_mgr_.get_all_dfos();
   if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()) {
@@ -920,9 +864,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   ObExecContext &ctx, ObDfo &parent_dfo, ObPxTaskChSets &parent_ch_sets)
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = 0;
   CK (OB_NOT_NULL(ctx.get_physical_plan_ctx()) && OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()));
-  OX (min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(task_ch_set_.assign(parent_ch_sets.at(0)))) {
     LOG_WARN("fail assign data", K(ret));
@@ -955,7 +897,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_is_px_channel(true);
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
-        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
+        ch->set_enable_channel_sync(true);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -992,9 +934,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
 {
   int ret = OB_SUCCESS;
   ObPxTaskChSets tmp_ch_sets;
-  uint64_t min_cluster_version = 0;
   CK (OB_NOT_NULL(ctx.get_physical_plan_ctx()) && OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()));
-  OX (min_cluster_version = ctx.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObPxChProviderUtil::inner_get_data_ch(
       tmp_ch_sets, ch_info, 0, 0, task_ch_set_, false))) {
@@ -1028,7 +968,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_thread_id(thread_id);
         ch->set_audit(enable_audit);
         ch->set_is_px_channel(true);
-        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
+        ch->set_enable_channel_sync(true);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -1093,6 +1033,10 @@ int ObPxCoordOp::batch_rescan()
       reinterpret_cast<ObPxMSCoordOp *>(this)->reset_finish_ch_cnt();
       reinterpret_cast<ObPxMSCoordOp *>(this)->reset_readers();
       reinterpret_cast<ObPxMSCoordOp *>(this)->reuse_heap();
+    } else if (PHY_VEC_PX_MERGE_SORT_COORD == get_spec().get_type()) {
+      reinterpret_cast<ObPxMSCoordVecOp *>(this)->reset_finish_ch_cnt();
+      reinterpret_cast<ObPxMSCoordVecOp *>(this)->reset_readers();
+      reinterpret_cast<ObPxMSCoordVecOp *>(this)->reuse_heap();
     }
   }
   return ret;

@@ -45,7 +45,7 @@ public:
   int add_batch(const common::ObDatum **datums, const common::ObIArray<ObExpr *> &exprs,
                 const uint16_t selector[], const int64_t size,
                 ObChunkDatumStore::StoredRow **stored_rows, BatchCtx *batch_ctx) override;
-  void set_meta(const RowMeta *row_meta) override {};
+  void set_meta(const ChunkRowMeta *row_meta) override {};
   int prepare_blk_for_write(ObTempBlockStore::Block *blk) final override;
 
   inline int get_last_stored_row(const ObChunkDatumStore::StoredRow *&sr)

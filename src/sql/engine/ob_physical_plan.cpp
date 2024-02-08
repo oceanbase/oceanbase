@@ -133,6 +133,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    use_rich_format_(false),
     subschema_ctx_(allocator_),
     all_local_session_vars_(&allocator_)
 {
@@ -220,6 +221,7 @@ void ObPhysicalPlan::reset()
   is_packed_ = false;
   has_instead_of_trigger_ = false;
   enable_append_ = false;
+  use_rich_format_ = false;
   append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
@@ -786,6 +788,7 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
+                    use_rich_format_,
                     subschema_ctx_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
@@ -1015,6 +1018,10 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
     op->id_ = tmp_op_id;
     op->plan_ = this;
     op->max_batch_size_ = (ObOperatorFactory::is_vectorized(type)) ? batch_size_ : 0;
+    op->use_rich_format_ = use_rich_format_
+                           && op->is_vectorized()
+                           && ObOperatorFactory::support_rich_format(type);
+    LOG_TRACE("alloc op spec", K(use_rich_format_), K(*op));
   }
   return ret;
 }

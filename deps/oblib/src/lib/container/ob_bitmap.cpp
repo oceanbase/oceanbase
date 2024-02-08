@@ -262,6 +262,57 @@ inline static void bitmap_to_bits_mask(
 }
 )
 
+OB_DECLARE_DEFAULT_CODE(
+inline static void uint64_mask_to_bits_mask(
+    const uint64_t *data,
+    const int64_t size,
+    uint8_t *skip)
+{
+  const uint64_t *pos = data;
+  const uint64_t *end_pos = data + size;
+  uint64_t i = 0;
+  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
+
+  while (pos < end_pos) {
+    if (*pos == 0) {
+      i = pos - data;
+      skip64[i / 64] |= 1LU << (i % 64);
+    }
+    ++pos;
+  }
+}
+)
+
+OB_DECLARE_AVX512_SPECIFIC_CODE(
+inline static void uint64_mask_to_bits_mask(
+    const uint64_t *data,
+    const int64_t size,
+    uint8_t *skip)
+{
+  const uint64_t *pos = data;
+  const uint64_t *end_pos = data + size;
+  const uint64_t *end_pos64 = data + size / 8 * 8;
+  uint64_t i = 0;
+  const __m512i zero64 = _mm512_setzero_si512();
+
+  while (pos < end_pos64) {
+    __m512i v = _mm512_loadu_si512(pos);
+    skip[i++] |= _mm512_cmp_epi64_mask(v, zero64, 0);
+    pos += 8;
+  }
+
+  uint64_t *skip64 = reinterpret_cast<uint64_t *>(skip);
+
+  while (pos < end_pos) {
+    if (*pos == 0) {
+      i = pos - data;
+      skip64[i / 64] |= 1LU << (i % 64);
+    }
+    ++pos;
+  }
+}
+)
+
 class SelectAndOp {
 public:
   OB_INLINE static uint8_t apply(uint8_t a, uint8_t b) { return a & b; }
@@ -685,6 +736,33 @@ int ObBitmap::to_bits_mask(
     common::specific::normal::bitmap_to_bits_mask(from, to, need_flip, data_, bits);
   }
   return ret;
+}
+
+void ObBitmap::filter(
+    const bool has_null,
+    const uint8_t *nulls,
+    const uint64_t *data,
+    const int64_t size,
+    uint8_t *skip)
+{
+  if (!has_null) {
+#if OB_USE_MULTITARGET_CODE
+  } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    SelectOpImpl<SelectOrOp>::apply_op_sse42(skip, nulls, (size + 7) / 8);
+#endif
+  } else {
+    SelectOpImpl<SelectOrOp>::apply_op(skip, nulls, (size + 7) / 8);
+  }
+
+#if OB_USE_MULTITARGET_CODE
+  if (common::is_arch_supported(ObTargetArch::AVX512)) {
+    common::specific::avx512::uint64_mask_to_bits_mask(data, size, skip);
+  } else {
+#endif
+    common::specific::normal::uint64_mask_to_bits_mask(data, size, skip);
+#if OB_USE_MULTITARGET_CODE
+  }
+#endif
 }
 
 } //end namespace oceanbase

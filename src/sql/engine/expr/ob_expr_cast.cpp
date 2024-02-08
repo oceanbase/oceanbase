@@ -25,6 +25,7 @@
 #include "pl/ob_pl_allocator.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/engine/expr/vector_cast/vector_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
 
 // from sql_parser_base.h
@@ -1155,6 +1156,7 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     rt_expr.is_called_in_sql_ = is_called_in_sql();
     if (OB_SUCC(ret)) {
+      bool just_eval_arg = false;
       const ObRawExpr *src_raw_expr = raw_expr.get_param_expr(0);
       if (OB_ISNULL(src_raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1176,10 +1178,20 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
         OB_ASSERT(rt_expr.eval_func_ != nullptr);
         OB_ASSERT(rt_expr.eval_batch_func_ != nullptr);
       } else {
-        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
-                    out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
+        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type, out_type, out_cs_type,
+                                                      cast_mode, *(op_cg_ctx.allocator_),
+                                                      just_eval_arg, rt_expr))) {
           LOG_WARN("choose_cast_func failed", K(ret));
         }
+      }
+      if (OB_SUCC(ret)) {
+        int tmp_ret = OB_E(EventTable::EN_ENABLE_VECTOR_CAST) OB_SUCCESS;
+        rt_expr.eval_vector_func_ =
+          tmp_ret == OB_SUCCESS ?
+            VectorCasterUtil::get_vector_cast(rt_expr.args_[0]->get_vec_value_tc(),
+                                              rt_expr.get_vec_value_tc(), just_eval_arg,
+                                              rt_expr.eval_func_, cast_mode) :
+            nullptr;
       }
     }
     if (OB_SUCC(ret)) {

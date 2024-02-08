@@ -1,3 +1,4 @@
+set session _enable_rich_vector_format = true;
 alter system enable_table_without_all_cg = false;
 create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
 create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);

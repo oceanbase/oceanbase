@@ -7350,8 +7350,12 @@ int ObTableSchema::check_skip_index_valid() const
       LOG_WARN("unexpected skip index on virtual generated column", K(ret), KPC(column_schema));
     } else if (OB_UNLIKELY(is_skip_index_black_list_type(column_schema->get_meta_type().get_type()))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "skip index on column with invalid column type");
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, ob_obj_type_str(column_schema->get_meta_type().get_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
+      LOG_WARN("not supported skip index on column with invalid column type", K(ret), KPC(column_schema));
+    } else if (column_schema->get_skip_index_attr().has_sum() &&
+               !can_agg_sum(column_schema->get_meta_type().get_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
       LOG_WARN("not supported skip index on column with invalid column type", K(ret), KPC(column_schema));
     } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::calc_skip_index_maximum_size(
         column_schema->get_skip_index_attr(),
