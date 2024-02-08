@@ -89,6 +89,10 @@ public:
                    const bool is_reverse_scan,
                    blocksstable::DDLBtreeIterator &iter,
                    ObBlockMetaTreeValue *&cur_tree_value) const;
+  int skip_to_next_valid_position(const blocksstable::ObDatumRowkey &rowkey,
+                                  const blocksstable::ObStorageDatumUtils &datum_utils,
+                                  blocksstable::DDLBtreeIterator &iter,
+                                  ObBlockMetaTreeValue *&tree_value) const;
   int get_next_tree_value(blocksstable::DDLBtreeIterator &iter,
                           const int64_t step,
                           ObBlockMetaTreeValue *&tree_value) const;

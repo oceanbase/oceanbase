@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include "storage/access/ob_rows_info.h"
 #include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ls/ob_ls.h"
@@ -64,7 +65,6 @@ int ObDDLIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
                                      const ObStorageDatumUtils *datum_utils,
                                      ObIAllocator *allocator,
                                      const bool is_reverse_scan,
-                                     const bool set_iter_end,
                                      const ObIndexBlockIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
@@ -174,6 +174,113 @@ int ObDDLIndexBlockRowIterator::locate_range(const ObDatumRange &range,
     is_iter_finish_ = false;
   }
   LOG_TRACE("Locate range in ddl block by range", K(ret), K(range), KPC(this));
+  return ret;
+}
+
+int ObDDLIndexBlockRowIterator::locate_range()
+{
+  int ret = OB_SUCCESS;
+  ObDatumRange range;
+  range.set_start_key(ObDatumRowkey::MIN_ROWKEY);
+  range.set_end_key(ObDatumRowkey::MAX_ROWKEY);
+  range.set_left_open();
+  range.set_right_open();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
+  } else if (OB_ISNULL(block_meta_tree_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("block meta tree is null", K(ret));
+  } else if (OB_FAIL(block_meta_tree_->locate_range(range,
+                                                    *datum_utils_,
+                                                    false, /*is_left_border*/
+                                                    false, /*is_right_border*/
+                                                    is_reverse_scan_,
+                                                    btree_iter_,
+                                                    cur_tree_value_))) {
+    if (OB_BEYOND_THE_RANGE != ret) {
+      LOG_WARN("block meta tree locate range failed", K(ret), K(range));
+    } else {
+      is_iter_finish_ = true;
+      LOG_INFO("no data to locate", K(ret));
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(cur_tree_value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cur tree value is null", K(ret), KP(cur_tree_value_));
+  } else {
+    is_iter_start_ = true;
+    is_iter_finish_ = false;
+  }
+  return ret;
+}
+
+int ObDDLIndexBlockRowIterator::skip_to_next_valid_position(const ObDatumRowkey &rowkey)
+{
+  int ret = OB_SUCCESS;
+  storage::ObBlockMetaTreeValue *tmp_tree_value = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
+  } else if (OB_ISNULL(block_meta_tree_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("block meta tree is null", K(ret));
+  } else if (OB_FAIL(block_meta_tree_->skip_to_next_valid_position(rowkey,
+                                                                   *datum_utils_,
+                                                                   btree_iter_,
+                                                                   tmp_tree_value))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("Failed to skip to next valid position in block meta tree", K(ret), K(rowkey));
+    } else {
+      is_iter_finish_ = true;
+    }
+  } else {
+    cur_tree_value_ = tmp_tree_value;
+  }
+  return ret;
+}
+
+int ObDDLIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
+  } else if (OB_ISNULL(rows_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rows info", K(ret));
+  } else {
+    const ObDatumRowkey *cur_rowkey = cur_rowkey = cur_tree_value_->rowkey_;;
+    bool is_decided = false;
+    for (; OB_SUCC(ret) && rowkey_begin_idx < rowkey_end_idx; ++rowkey_begin_idx) {
+      if (rows_info->is_row_skipped(rowkey_begin_idx)) {
+        continue;
+      }
+      const ObDatumRowkey &rowkey = rows_info->get_rowkey(rowkey_begin_idx);
+      int32_t cmp_ret = 0;
+      if (OB_ISNULL(cur_rowkey)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null rowkey", K(ret), K(cur_tree_value_), KP(cur_rowkey));
+      } else if (OB_FAIL(rowkey.compare(*cur_rowkey, *datum_utils_, cmp_ret, false))) {
+        LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), KPC(cur_rowkey));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (cmp_ret > 0) {
+        idx_block_row.rowkey_end_idx_ = rowkey_begin_idx;
+        is_decided = true;
+        break;
+      } else if (cmp_ret == 0) {
+        idx_block_row.rowkey_end_idx_ = rowkey_begin_idx + 1;
+        is_decided = true;
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret) && !is_decided) {
+      idx_block_row.rowkey_end_idx_ = rowkey_begin_idx;
+    }
+  }
   return ret;
 }
 
@@ -404,7 +511,6 @@ int ObDDLSStableAllRangeIterator::init(const ObMicroBlockData &idx_block_data,
                                        const ObStorageDatumUtils *datum_utils,
                                        ObIAllocator *allocator,
                                        const bool is_reverse_scan,
-                                       const bool set_iter_end,
                                        const ObIndexBlockIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
@@ -646,7 +752,6 @@ int ObDDLMergeEmptyIterator::init(const ObMicroBlockData &idx_block_data,
                                   const ObStorageDatumUtils *datum_utils,
                                   ObIAllocator *allocator,
                                   const bool is_reverse_scan,
-                                  const bool set_iter_end,
                                   const ObIndexBlockIterParam &iter_param)
 {
   is_inited_ = true;
@@ -870,7 +975,6 @@ int ObDDLMergeBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
                                      const ObStorageDatumUtils *datum_utils,
                                      ObIAllocator *allocator,
                                      const bool is_reverse_scan,
-                                     const bool set_iter_end,
                                      const ObIndexBlockIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
@@ -888,7 +992,6 @@ int ObDDLMergeBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
                                                datum_utils,
                                                allocator,
                                                is_reverse_scan,
-                                               set_iter_end,
                                                iter_param,
                                                sst_index_iter))) {
       LOG_WARN("fail to init sstable index iter", K(ret), K(iters_), KPC(sst_index_iter));
@@ -970,7 +1073,6 @@ int ObDDLMergeBlockRowIterator::init_sstable_index_iter(const ObMicroBlockData &
                                                         const ObStorageDatumUtils *datum_utils,
                                                         ObIAllocator *allocator,
                                                         const bool is_reverse_scan,
-                                                        const bool set_iter_end,
                                                         const ObIndexBlockIterParam &iter_param,
                                                         ObIndexBlockRowIterator *&sst_index_iter)
 {
@@ -1064,7 +1166,7 @@ int ObDDLMergeBlockRowIterator::init_sstable_index_iter(const ObMicroBlockData &
     if (OB_ISNULL(sst_index_iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is null", K(idx_block_data.type_), K(ret));
-    } else if (OB_FAIL(sst_index_iter->init(idx_block_data, datum_utils, allocator, is_reverse_scan, set_iter_end, iter_param))) {
+    } else if (OB_FAIL(sst_index_iter->init(idx_block_data, datum_utils, allocator, is_reverse_scan, iter_param))) {
       LOG_WARN("fail to init iter", K(ret), K(idx_block_data), KPC(sst_index_iter));
     }
   }
@@ -2029,7 +2131,6 @@ int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
                                             datum_utils_,
                                             allocator_,
                                             is_reverse_scan_,
-                                            false/*set iter end*/,
                                             iter_param_))) {
       LOG_WARN("fail to init iter", K(ret), KPC(idx_block_data_), KPC(tmp_merge_iter));
     } else if (OB_FAIL(tmp_merge_iter->locate_range(range, is_left_border, is_right_border, true/*is_normal_cg*/))) {

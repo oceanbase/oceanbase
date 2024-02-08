@@ -35,7 +35,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -52,6 +51,9 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) override;
+  virtual int locate_range() override;
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual bool end_of_block() const override;
   virtual int get_index_row_count(const ObDatumRange &range,
@@ -60,6 +62,7 @@ public:
                                   int64_t &index_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void set_iter_end() override { is_iter_finish_ = true; }
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLIndexBlockRowIterator",
                        K_(is_iter_start), K_(is_iter_finish), KP(cur_tree_value_), KP(block_meta_tree_), K(is_normal_cg_));
 public:
@@ -69,7 +72,6 @@ public:
                      const bool is_normal_cg,
                      const int64_t iter_step = INT64_MAX);
   bool is_valid() { return OB_NOT_NULL(block_meta_tree_); }
-  void set_iter_end() { is_iter_finish_ = true; }
   int get_next_meta(const ObDataMacroBlockMeta *&meta);
 private:
   bool is_iter_start_;
@@ -90,7 +92,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -139,7 +140,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -178,7 +178,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -254,7 +253,6 @@ private:
                               const ObStorageDatumUtils *datum_utils,
                               ObIAllocator *allocator,
                               const bool is_reverse_scan,
-                              const bool set_iter_end,
                               const ObIndexBlockIterParam &iter_param,
                               ObIndexBlockRowIterator *&sst_index_iter);
   int init_ddl_kv_index_iters(const ObMicroBlockData &idx_block_data,
