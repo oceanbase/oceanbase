@@ -4394,7 +4394,7 @@ int ObPartTransCtx::check_replay_avaliable_(const palf::LSN &offset,
   return ret;
 }
 
-int ObPartTransCtx::push_repalying_log_ts(const SCN log_ts_ns, const bool is_first)
+int ObPartTransCtx::push_replaying_log_ts(const SCN log_ts_ns, const int64_t log_entry_no)
 {
   int ret = OB_SUCCESS;
 
@@ -4412,8 +4412,14 @@ int ObPartTransCtx::push_repalying_log_ts(const SCN log_ts_ns, const bool is_fir
     exec_info_.max_applying_log_ts_ = log_ts_ns;
     exec_info_.max_applying_part_log_no_ = 0;
   }
-  if (is_first) {
-    ctx_tx_data_.set_start_log_ts(log_ts_ns);
+  if (OB_SUCC(ret)) {
+    if (!ctx_tx_data_.get_start_log_ts().is_valid()) {
+      ctx_tx_data_.set_start_log_ts(log_ts_ns);
+    }
+    if (OB_UNLIKELY(replay_completeness_.is_unknown())) {
+      const bool replay_continous = exec_info_.next_log_entry_no_ == log_entry_no;
+      set_replay_completeness_(replay_continous);
+    }
   }
   return ret;
 }
@@ -5719,6 +5725,10 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(is_exiting_)) {
     TRANS_LOG(DEBUG, "transaction is exiting", "context", *this);
+  } else if (OB_UNLIKELY(replay_completeness_.is_incomplete()) && (get_retain_cause() == RetainCause::UNKOWN)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "incomplete replayed ctx should not switch to leader", K(ret), KPC(this));
+    print_trace_log_();
   } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_append_mode_initial_scn(
                  append_mode_initial_scn))) {
     /* We can not ensure whether there are some redo logs after the append_mode_initial_scn.
@@ -9537,10 +9547,9 @@ inline bool ObPartTransCtx::has_replay_serial_final_() const
     exec_info_.max_applied_log_ts_ >= exec_info_.serial_final_scn_;
 }
 
-int ObPartTransCtx::set_replay_completeness(const bool complete)
+int ObPartTransCtx::set_replay_completeness_(const bool complete)
 {
   int ret = OB_SUCCESS;
-  CtxLockGuard guard(lock_);
   if (OB_UNLIKELY(replay_completeness_.is_unknown())) {
     if (!complete && !ctx_tx_data_.has_recovered_from_tx_table()) {
       if (OB_FAIL(supplement_undo_actions_if_exist_())) {
@@ -9559,12 +9568,6 @@ int ObPartTransCtx::set_replay_completeness(const bool complete)
     }
   }
   return ret;
-}
-
-bool ObPartTransCtx::is_replay_completeness_unknown() const
-{
-  CtxLockGuard guard(lock_);
-  return replay_completeness_.is_unknown();
 }
 
 inline bool ObPartTransCtx::is_support_parallel_replay_() const

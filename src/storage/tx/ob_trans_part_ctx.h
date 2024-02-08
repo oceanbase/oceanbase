@@ -362,7 +362,7 @@ public:
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
   int submit_redo_log_for_freeze();
   int return_redo_log_cb(ObTxLogCb *log_cb);
-  int push_repalying_log_ts(const share::SCN log_ts_ns, const bool is_first);
+  int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
                            const palf::LSN &offset,
                            const int64_t log_entry_no);
@@ -372,8 +372,7 @@ public:
   int replay_one_part_of_big_segment(const palf::LSN &offset,
                                      const share::SCN &timestamp,
                                      const int64_t &part_log_no);
-  int set_replay_completeness(const bool complete);
-  bool is_replay_completeness_unknown() const;
+
   int replay_redo_in_ctx(const ObTxRedoLog &redo_log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
@@ -639,6 +638,7 @@ private:
                                  const share::SCN &timestamp,
                                  const int64_t &part_log_no);
   bool is_support_parallel_replay_() const;
+  int set_replay_completeness_(const bool complete);
   int errsim_notify_mds_();
 protected:
   virtual int get_gts_(share::SCN &gts);
