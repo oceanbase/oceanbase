@@ -68,7 +68,7 @@ int MdsTableBase::init(const ObTabletID tablet_id,
       mgr_handle_.set_mds_table_mgr(p_mgr);
       debug_info_.do_init_tablet_pointer_ = pointer;
       debug_info_.init_trace_id_ = *ObCurTraceId::get_trace_id();
-      debug_info_.init_ts_ = ObClockGenerator::getCurrentTime();
+      debug_info_.init_ts_ = ObClockGenerator::getClock();
       if (MDS_FAIL(register_to_mds_table_mgr())) {
         MDS_LOG(WARN, "fail to register mds table", KR(ret), K(*this), K(ls_id), K(tablet_id));
       }
@@ -102,7 +102,7 @@ void MdsTableBase::mark_removed_from_t3m(ObTabletPointer *pointer)
   } else {
     debug_info_.do_remove_tablet_pointer_ = pointer;
     debug_info_.remove_trace_id_ = *ObCurTraceId::get_trace_id();
-    ATOMIC_STORE(&debug_info_.remove_ts_, ObClockGenerator::getCurrentTime());
+    ATOMIC_STORE(&debug_info_.remove_ts_, ObClockGenerator::getClock());
   }
 }
 
@@ -111,7 +111,7 @@ void MdsTableBase::mark_switched_to_empty_shell()
   if (ATOMIC_LOAD(&debug_info_.switch_to_empty_shell_ts_) != 0) {
     MDS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "this MdsTable has been marked switch to empty shell", K(*this));
   } else {
-    ATOMIC_STORE(&debug_info_.switch_to_empty_shell_ts_, ObClockGenerator::getCurrentTime());
+    ATOMIC_STORE(&debug_info_.switch_to_empty_shell_ts_, ObClockGenerator::getClock());
   }
 }
 
