@@ -1017,9 +1017,31 @@ public:
                                           ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                           ObBitSet<> &initplan_idxs,
                                           ObBitSet<> &onetime_idxs,
-                                          const ObIArray<ObRawExpr *> *filters,
+                                          const ObIArray<ObRawExpr *> &filters,
                                           const bool or_cursor_expr,
                                           const bool is_update_set);
+
+  int inner_candi_allocate_subplan_filter(ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
+                                          ObIArray<ObSEArray<CandidatePlan, 4>> &dist_best_list,
+                                          ObIArray<ObQueryRefRawExpr *> &query_refs,
+                                          ObIArray<ObExecParamRawExpr *> &params,
+                                          ObIArray<ObExecParamRawExpr *> &onetime_exprs,
+                                          ObBitSet<> &initplan_idxs,
+                                          ObBitSet<> &onetime_idxs,
+                                          const ObIArray<ObRawExpr *> &filters,
+                                          const bool for_cursor_expr,
+                                          const bool is_update_set,
+                                          const int64_t dist_methods,
+                                          ObIArray<CandidatePlan> &subquery_plans);
+
+  int prepare_subplan_candidate_list(ObIArray<ObLogPlan*> &subplans,
+                                     ObIArray<ObExecParamRawExpr *> &params,
+                                     ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
+                                     ObIArray<ObSEArray<CandidatePlan, 4>> &dist_best_list);
+  int get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subplans,
+                                           const bool for_cursor_expr,
+                                           const bool ignore_hint,
+                                           int64_t &dist_methods);
 
   int generate_subplan_filter_info(const ObIArray<ObRawExpr*> &subquery_exprs,
                                    ObIArray<ObLogPlan*> &subquery_ops,
@@ -1038,6 +1060,12 @@ public:
 
   int adjust_exprs_with_onetime(ObIArray<ObRawExpr *> &exprs);
 
+  int get_subplan_filter_distributed_method(ObLogicalOperator *&top,
+                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
+                                            const ObIArray<ObExecParamRawExpr *> &params,
+                                            const bool for_cursor_expr,
+                                            const bool has_onetime,
+                                            int64_t &distributed_methods);
   int create_subplan_filter_plan(ObLogicalOperator *&top,
                                  const ObIArray<ObLogicalOperator*> &subquery_ops,
                                  const ObIArray<ObLogicalOperator*> &dist_subquery_ops,
@@ -1046,8 +1074,8 @@ public:
                                  const ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                  const ObBitSet<> &initplan_idxs,
                                  const ObBitSet<> &onetime_idxs,
-                                 const bool for_cursor_expr,
-                                 const ObIArray<ObRawExpr*> *filters,
+                                 const int64_t dist_methods,
+                                 const ObIArray<ObRawExpr*> &filters,
                                  const bool is_update_set);
 
   int check_contains_recursive_cte(ObIArray<ObLogicalOperator*> &child_ops,
@@ -1095,7 +1123,7 @@ public:
                                      const ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                      const ObBitSet<> &initplan_idxs,
                                      const ObBitSet<> &onetime_idxs,
-                                     const ObIArray<ObRawExpr*> *filters,
+                                     const ObIArray<ObRawExpr*> &filters,
                                      const DistAlgo dist_algo,
                                      const bool is_update_set);
   int allocate_subplan_filter_as_top(ObLogicalOperator *&old_top,

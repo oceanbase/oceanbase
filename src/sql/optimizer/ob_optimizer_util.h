@@ -127,6 +127,18 @@ public:
                                       bool &ordering_all_used,
                                       common::ObIArray<ObOrderDirection> &directions,
                                       common::ObIArray<int64_t> *match_map = NULL);
+  // when there is no input ordering or interesting ordering, generate a stable ordering use this function
+  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                      ObIArray<ObOrderDirection> &directions);
+  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                      ObIArray<ObOrderDirection> &directions,
+                                      ObBitSet<64> &used_expr_idxs,
+                                      ObIArray<int64_t> &expr_map,
+                                      ObIArray<ObRawExpr*> &adjusted_exprs,
+                                      ObIArray<ObOrderDirection> &adjusted_directions);
+  static bool stable_expr_cmp_func(std::pair<ObRawExpr*,int64_t> l_pair,
+                                   std::pair<ObRawExpr*,int64_t> r_pair);
+  static int cmp_expr(ObRawExpr *l_expr, ObRawExpr *r_expr, int64_t &res);
 
   static int adjust_exprs_by_mapping(const common::ObIArray<ObRawExpr *> &exprs,
                                      const common::ObIArray<int64_t> &match_map,

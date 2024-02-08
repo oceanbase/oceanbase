@@ -457,7 +457,6 @@ public:
     }
     return bret;
   }
-  int is_at_most_one_row(bool &is_one_row) const;
   int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
   bool is_precise_get() const { return table_graph_.is_precise_get_; }

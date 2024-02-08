@@ -2315,8 +2315,6 @@ struct NullAwareAntiJoinInfo {
     int compute_fd_item_set_for_subquery(const uint64_t table_id,
                                          ObLogicalOperator *subplan_root);
 
-    int compute_one_row_info_for_table_scan(ObIArray<AccessPath *> &access_paths);
-
     int compute_one_row_info_for_join(const ObJoinOrder *left_tree,
                                       const ObJoinOrder *right_tree,
                                       const ObIArray<ObRawExpr*> &join_condition,

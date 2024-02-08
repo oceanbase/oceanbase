@@ -2381,6 +2381,7 @@ typedef enum ObItemType
   T_COLUMN_GROUP_DROP,
   T_ALTER_COLUMN_GROUP_OPTION,
   T_BLOCKING,
+  T_PQ_SUBQUERY,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

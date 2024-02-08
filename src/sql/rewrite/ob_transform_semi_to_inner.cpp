@@ -715,7 +715,8 @@ int ObTransformSemiToInner::collect_unique_property_of_from_items(ObTransformerC
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null table", K(ret), K(table));
-      } else if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx, stmt, table, pkeys))) {
+      // lijinmao todo: fix bug here, need generate unique from table except basic table
+      } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx, stmt, table, pkeys))) {
         LOG_WARN("failed to generate unique key", K(ret));
       } else if (pkeys.empty()) {
         ret = OB_ERR_UNEXPECTED;

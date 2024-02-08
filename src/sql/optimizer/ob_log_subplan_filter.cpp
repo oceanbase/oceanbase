@@ -837,3 +837,77 @@ int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
   }
   return ret;
 }
+
+int ObLogSubPlanFilter::print_outline_data(PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  ObPQSubqueryHint hint;
+  const ObDMLStmt *stmt = NULL;
+  ObString qb_name;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULl", K(ret), K(get_plan()), K(stmt));
+  } else if (DistAlgo::DIST_BASIC_METHOD == get_distributed_algo()) {
+    /* do not print data for basic. need remove this when support split subplan filter op */
+  } else if (OB_FAIL(get_sub_qb_names(hint.get_sub_qb_names()))) {
+    LOG_WARN("fail to get subplan qb_names", K(ret));
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+    LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+  } else {
+    hint.set_dist_algo(get_distributed_algo());
+    hint.set_qb_name(qb_name);
+    if (OB_FAIL(hint.print_hint(plan_text))) {
+      LOG_WARN("failed to print pq subquery hint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::print_used_hint(PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  const ObPQSubqueryHint *explicit_hint = NULL;
+  const ObPQSubqueryHint *implicit_hint = NULL;
+  const ObPQSubqueryHint *hint = NULL;
+  ObSEArray<ObString, 4> sub_qb_names;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULl", K(ret), K(get_plan()));
+  } else if (OB_FAIL(get_sub_qb_names(sub_qb_names))) {
+    LOG_WARN("fail to get subplan qb_names", K(ret));
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_valid_pq_subquery_hint(sub_qb_names,
+                                                                                explicit_hint,
+                                                                                implicit_hint))) {
+    LOG_WARN("fail to get valid pq subquery hint", K(ret));
+  } else if (NULL == (hint = (NULL == explicit_hint
+                              && sub_qb_names.count() == get_plan()->get_stmt()->get_subquery_expr_size())
+                             ? implicit_hint : explicit_hint)) {
+    /* do nothing */
+  } else if (get_distributed_algo() != hint->get_dist_algo()) {
+    /* do nothing */
+  } else if (OB_FAIL(hint->print_hint(plan_text))) {
+    LOG_WARN("failed to print used pq pq subquery hint", K(ret));
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::get_sub_qb_names(ObIArray<ObString> &sub_qb_names)
+{
+  int ret = OB_SUCCESS;
+  sub_qb_names.reuse();
+  ObLogicalOperator *child = NULL;
+  const ObDMLStmt *stmt = NULL;
+  ObString qb_name;
+  for (int64_t i = 1; OB_SUCC(ret) && i < get_num_of_child(); i++) {
+    if (OB_ISNULL(child = get_child(i)) || OB_ISNULL(child->get_plan())
+        || OB_ISNULL(stmt = child->get_plan()->get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(child), K(stmt));
+    } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+      LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+    } else if (OB_FAIL(sub_qb_names.push_back(qb_name))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
