@@ -123,7 +123,7 @@ TEST(TestMallocAllocator, user_tenant)
       // shouldn't reused if not exists in unrecycled_list
       ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
       ObTenantCtxAllocator *cur_allocator = malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id).ref_allocator();
-#if (defined(__powerpc64__))
+#if defined(__powerpc64__)
       // do nothing //Power ppc64le may allocator the same addr just recyle/free
 #else
       ASSERT_NE(last_allocator, cur_allocator);
