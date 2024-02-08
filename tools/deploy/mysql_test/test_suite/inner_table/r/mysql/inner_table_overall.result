@@ -688,6 +688,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12415	__all_virtual_tenant_event_history	2	201001	1
 12416	__all_virtual_balance_task_helper	2	201001	1
 12417	__all_virtual_balance_group_ls_stat	2	201001	1
+12419	__all_virtual_cgroup_config	2	201001	1
 12420	__all_virtual_flt_config	2	201001	1
 12421	__all_virtual_tenant_scheduler_job_class	2	201001	1
 12422	__all_virtual_recover_table_job	2	201001	1
@@ -1089,6 +1090,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21474	DBA_OB_IMPORT_TABLE_TASK_HISTORY	1	201001	1
 21477	GV$OB_TENANT_RUNTIME_INFO	1	201001	1
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
+21479	GV$OB_CGROUP_CONFIG	1	201001	1
+21480	V$OB_CGROUP_CONFIG	1	201001	1
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1

@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::gv_ob_thread_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT svr_ip AS SVR_IP,        svr_port AS SVR_PORT,        tenant_id AS TENANT_ID,        tid AS TID,        tname AS TNAME,        status AS STATUS,        latch_wait AS LATCH_WAIT,        latch_hold AS LATCH_HOLD,        trace_id AS TRACE_ID FROM oceanbase.__all_virtual_thread )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT svr_ip AS SVR_IP,        svr_port AS SVR_PORT,        tenant_id AS TENANT_ID,        tid AS TID,        tname AS TNAME,        status AS STATUS,        latch_wait AS LATCH_WAIT,        latch_hold AS LATCH_HOLD,        trace_id AS TRACE_ID,        cgroup_path AS CGROUP_PATH FROM oceanbase.__all_virtual_thread )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

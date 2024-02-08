@@ -8561,6 +8561,20 @@ balance_group_name	varchar(512)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_group_ls_stat;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_cgroup_config;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+cfs_quota_us	bigint(20)	NO		NULL	
+cfs_period_us	bigint(20)	NO		NULL	
+shares	bigint(20)	NO		NULL	
+cgroup_path	varchar(256)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_cgroup_config;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_cgroup_config runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_flt_config;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
