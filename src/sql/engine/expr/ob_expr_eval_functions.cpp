@@ -1105,6 +1105,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprXmlConcat::eval_xml_concat,                           /* 663 */
   NULL, //ObExprXmlForest::eval_xml_forest,                           /* 664 */
   NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 665 */
+  NULL, //ObExprPassword::eval_password,                              /* 666 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
