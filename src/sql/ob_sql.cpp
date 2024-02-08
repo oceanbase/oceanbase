@@ -4338,6 +4338,8 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.enable_udr_ = enable_udr;
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+      // pc_key_ may be modified elsewhere, so reset it before adding plan
+      pc_ctx.fp_result_.pc_key_.key_id_ = pc_ctx.sql_ctx_.statement_id_;
       //远程SQL第二次进入plan，将raw_sql作为pc_key存入plan cache中，
       //然后使用ps接口直接用参数化后的sql作为key来查plan cache，可以节省一次对SQL fast parse的代价
       if (pc_ctx.sql_ctx_.is_remote_sql_) {
