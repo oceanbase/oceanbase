@@ -471,6 +471,19 @@ bool ObDatumFuncs::is_geometry(const ObObjType type)
   return (tc == ObGeometryTC);
 }
 
+/**
+ * This function is primarily responsible for handling inconsistent hash computations
+ * for null types and the null values of those types, such as string, float, double, etc.
+ * It ensures that the hashing process treats null values and null type representations
+ * consistently across such data types, avoiding discrepancies in hash results.
+ */
+bool ObDatumFuncs::is_null_aware_hash_type(const ObObjType type)
+{
+  const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
+  return is_string_type(type) || is_json(type) || is_geometry(type) ||
+            (tc == ObUserDefinedSQLTC) || (tc == ObFloatTC) || (tc == ObDoubleTC);
+}
+
 OB_SERIALIZE_MEMBER(ObCmpFunc, ser_cmp_func_);
 OB_SERIALIZE_MEMBER(ObHashFunc, ser_hash_func_, ser_batch_hash_func_);
 
