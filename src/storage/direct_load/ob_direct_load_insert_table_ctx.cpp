@@ -188,6 +188,7 @@ int ObDirectLoadInsertTabletContext::close()
       LOG_WARN("fail to close tablet direct load", KR(ret), K(param_.ls_id_),
                K(param_.tablet_id_));
     } else {
+      handle_.reset();
       is_open_ = false;
     }
   }

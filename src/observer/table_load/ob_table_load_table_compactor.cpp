@@ -97,6 +97,14 @@ int ObTableLoadTableCompactResult::add_table(ObIDirectLoadPartitionTable *table)
   return ret;
 }
 
+void ObTableLoadTableCompactResult::release_all_table_data()
+{
+  for (int64_t i = 0; i < all_table_array_.count(); ++i) {
+    ObIDirectLoadPartitionTable *table = all_table_array_.at(i);
+    table->release_data();
+  }
+}
+
 /**
  * ObTableLoadTableCompactCtx
  */

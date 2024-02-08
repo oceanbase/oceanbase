@@ -39,6 +39,7 @@ public:
   void reset();
   int init();
   int add_table(storage::ObIDirectLoadPartitionTable *table);
+  void release_all_table_data();
 public:
   typedef common::ObLinkHashMap<common::ObTabletID, ObTableLoadTableCompactTabletResult>
     TabletResultMap;
