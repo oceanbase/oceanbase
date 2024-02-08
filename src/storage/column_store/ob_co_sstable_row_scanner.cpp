@@ -411,7 +411,7 @@ int ObCOSSTableRowScanner::construct_cg_iter_params_for_single_row(
   } else {
     ObTableIterParam* cg_param = nullptr;
     const common::ObIArray<int32_t> *access_cgs = nullptr;
-    const int64_t schema_rowkey_cnt = row_param.get_read_info()->get_schema_rowkey_count();
+    const int64_t rowkey_cnt = row_param.get_read_info()->get_rowkey_count();
     if (OB_ISNULL(access_cgs = row_param.get_read_info()->get_cg_idxs())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected null access cg index", K(ret));
@@ -419,7 +419,7 @@ int ObCOSSTableRowScanner::construct_cg_iter_params_for_single_row(
       for (int64_t i = 0; OB_SUCC(ret) && i < row_param.out_cols_project_->count(); ++i) {
         const int32_t col_offset = row_param.out_cols_project_->at(i);
         sql::ObExpr* expr = row_param.output_exprs_ == nullptr ? nullptr : row_param.output_exprs_->at(i);
-        if ((nullptr == expr || !is_group_idx_expr(expr)) && col_offset >= schema_rowkey_cnt) {
+        if ((nullptr == expr || !is_group_idx_expr(expr)) && col_offset >= rowkey_cnt) {
           int32_t cg_idx = access_cgs->at(col_offset);
           if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, expr, cg_param))) {
             LOG_WARN("Fail to get cg iter param", K(ret), K(i), K(cg_idx), K(row_param), KPC(access_cgs));
@@ -450,7 +450,6 @@ int ObCOSSTableRowScanner::construct_cg_iter_params(
   } else {
     ObTableIterParam* cg_param = nullptr;
     const common::ObIArray<int32_t> *access_cgs = nullptr;
-    const int64_t schema_rowkey_cnt = row_param.get_read_info()->get_schema_rowkey_count();
     // Assert only one column in one column group
     if (row_param.enable_pd_aggregate()) {
       if (OB_FAIL(construct_cg_agg_iter_params(row_param, context, iter_params))) {
