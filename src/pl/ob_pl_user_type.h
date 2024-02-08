@@ -1206,7 +1206,7 @@ public:
   inline bool is_xmltype() const { return ObPLOpaqueType::PL_XML_TYPE == type_; }
   inline bool is_json_type() const { return ObPLOpaqueType::PL_JSON_TYPE == type_; }
 
-  inline ObIAllocator& get_allocator() { return allocator_; }
+  ObIAllocator& get_allocator(); // { return allocator_; }
 
   virtual int deep_copy(ObPLOpaque *dst);
 

@@ -4500,6 +4500,15 @@ int64_t ObPLAssocArray::get_last()
   return last_;
 }
 
+ObIAllocator& ObPLOpaque::get_allocator()
+{
+  int ret = OB_SUCCESS;
+  if (allocator_.used() > 1024 * 1024 * 512) {
+    LOG_ERROR("opaque allocator hold too much memory", K(allocator_.used()));
+  }
+  return allocator_;
+}
+
 int ObPLOpaque::deep_copy(ObPLOpaque *dst)
 {
   int ret = OB_SUCCESS;
