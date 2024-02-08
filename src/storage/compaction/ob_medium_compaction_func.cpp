@@ -65,13 +65,13 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   ObGetMergeTablesParam param;
   param.merge_type_ = MEDIUM_MERGE;
   int64_t max_reserved_snapshot = 0;
-  int64_t medium_snapshot = 0;
   ObTablet &tablet = *tablet_handle_.get_obj();
+
   if (OB_FAIL(ObAdaptiveMergePolicy::get_meta_merge_tables(param, ls_, tablet, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get meta merge tables", K(ret), K(param));
     }
-  } else if (FALSE_IT(medium_snapshot = result.version_range_.snapshot_version_)) {
+  } else if (FALSE_IT(medium_info.medium_snapshot_ = result.version_range_.snapshot_version_)) {
   } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
     LOG_WARN("failed to get reserved snapshot", K(ret), KPC(this));
   } else if (medium_info.medium_snapshot_ < max_reserved_snapshot
@@ -86,7 +86,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
   if (OB_FAIL(ret)) {
   } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn) {
     ret = OB_NO_NEED_MERGE;
-  } else if (OB_FAIL(check_frequency(max_reserved_snapshot, medium_snapshot))) { // check schedule interval
+  } else if (OB_FAIL(check_frequency(max_reserved_snapshot, medium_info.medium_snapshot_))) { // check schedule interval
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to check medium scn valid", K(ret), KPC(this));
     }
@@ -94,7 +94,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
     medium_info.set_basic_info(
       ObMediumCompactionInfo::MEDIUM_COMPACTION,
       merge_reason_,
-      medium_snapshot);
+      medium_info.medium_snapshot_);
     LOG_TRACE("choose_medium_snapshot", K(ret), KPC(this), K(result), K(medium_info));
   }
   return ret;
