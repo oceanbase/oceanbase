@@ -104,23 +104,23 @@ private:
 struct ObTenantSnapshotGCParam : public share::ObIDagInitParam {
   ObTenantSnapshotGCParam(const share::ObTenantSnapshotID tenant_snapshot_id,
                           const common::ObArray<share::ObLSID> &gc_ls_id_arr,
-                          const bool gc_all_tenant_snapshot,
+                          const bool gc_tenant_snapshot,
                           const common::ObCurTraceId::TraceId& trace_id,
                           ObTenantSnapshotMgr *tenant_snapshot_mgr)
                               : tenant_snapshot_id_(tenant_snapshot_id),
                                 gc_ls_id_arr_(gc_ls_id_arr),
-                                gc_all_tenant_snapshot_(gc_all_tenant_snapshot),
+                                gc_tenant_snapshot_(gc_tenant_snapshot),
                                 trace_id_(trace_id),
                                 tenant_snapshot_mgr_(tenant_snapshot_mgr){}
   virtual ~ObTenantSnapshotGCParam(){}
   virtual bool is_valid() const override;
 
   TO_STRING_KV(K(tenant_snapshot_id_),
-      K(gc_ls_id_arr_), K(gc_all_tenant_snapshot_), K(trace_id_), KP(tenant_snapshot_mgr_));
+      K(gc_ls_id_arr_), K(gc_tenant_snapshot_), K(trace_id_), KP(tenant_snapshot_mgr_));
 
   const share::ObTenantSnapshotID tenant_snapshot_id_;
   const common::ObArray<share::ObLSID> gc_ls_id_arr_;
-  const bool gc_all_tenant_snapshot_;  // gc tenant snapshot or gc ls snapshot
+  const bool gc_tenant_snapshot_;  // gc tenant snapshot or gc ls snapshot
   const common::ObCurTraceId::TraceId trace_id_;
   ObTenantSnapshotMgr *tenant_snapshot_mgr_;
 };
@@ -131,7 +131,7 @@ public:
                                 is_inited_(false),
                                 tenant_snapshot_id_(),
                                 gc_ls_id_arr_(),
-                                gc_all_tenant_snapshot_(false),
+                                gc_tenant_snapshot_(false),
                                 tenant_snapshot_mgr_() {}
   virtual ~ObTenantSnapshotGCDag() {}
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
@@ -157,7 +157,7 @@ private:
   bool is_inited_;
   share::ObTenantSnapshotID tenant_snapshot_id_;
   common::ObArray<share::ObLSID> gc_ls_id_arr_;
-  bool gc_all_tenant_snapshot_;
+  bool gc_tenant_snapshot_;
   ObTenantSnapshotMgr *tenant_snapshot_mgr_;
 };
 
@@ -167,12 +167,12 @@ public:
                                  is_inited_(false),
                                  tenant_snapshot_id_(),
                                  gc_ls_id_arr_(),
-                                 gc_all_tenant_snapshot_(false),
+                                 gc_tenant_snapshot_(false),
                                  tenant_snapshot_mgr_(nullptr) {}
   virtual ~ObTenantSnapshotGCTask() {}
   int init(const share::ObTenantSnapshotID tenant_snapshot_id,
            const common::ObArray<share::ObLSID> *gc_ls_id_arr,
-           bool gc_all_tenant_snapshot,
+           bool gc_tenant_snapshot,
            ObTenantSnapshotMgr *tenant_snapshot_mgr);
 protected:
   virtual int process() override;
@@ -183,7 +183,7 @@ protected:
   bool is_inited_;
   share::ObTenantSnapshotID tenant_snapshot_id_;
   const common::ObArray<share::ObLSID> *gc_ls_id_arr_;
-  bool gc_all_tenant_snapshot_;
+  bool gc_tenant_snapshot_;
   ObTenantSnapshotMgr *tenant_snapshot_mgr_;
 };
 

@@ -31,6 +31,7 @@ ObTenantSnapshotService::ObTenantSnapshotService()
   : is_inited_(false),
     is_running_(false),
     meta_loaded_(false),
+    unit_is_deleting_(false),
     tenant_snapshot_mgr_(),
     ls_snapshot_mgr_(),
     meta_handler_(),
@@ -75,6 +76,7 @@ int ObTenantSnapshotService::init()
     meta_loaded_ = false;
     running_mode_ = RUNNING_MODE::INVALID;
     is_inited_ = true;
+    unit_is_deleting_ = false;
   }
 
   return ret;
@@ -288,6 +290,25 @@ int ObTenantSnapshotService::clone_running_env_check_()
   return ret;
 }
 
+int ObTenantSnapshotService::check_if_tenant_has_been_dropped_(bool &has_dropped)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+
+  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  schema::ObSchemaGetterGuard guard;
+  has_dropped = false;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, has_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 int ObTenantSnapshotService::decide_running_mode_(enum RUNNING_MODE& running_mode)
 {
   int ret = OB_SUCCESS;
@@ -296,7 +317,14 @@ int ObTenantSnapshotService::decide_running_mode_(enum RUNNING_MODE& running_mod
   const share::schema::ObTenantSchema *tenant_schema = NULL;
   ObTenantStatus tenant_status = TENANT_STATUS_MAX;
 
-  if (OB_FAIL(get_tenant_status_(tenant_status))) {
+  bool has_dropped = false;
+  if (unit_is_deleting_) {
+    running_mode = GC;
+  } else if (OB_FAIL(check_if_tenant_has_been_dropped_(has_dropped))) {
+    LOG_WARN("fail to check_if_tenant_has_been_dropped_", KR(ret));
+  } else if (has_dropped) {
+    running_mode = GC;
+  } else if (OB_FAIL(get_tenant_status_(tenant_status))) {
     LOG_WARN("fail to get_tenant_status_", KR(ret));
   } else if (TENANT_STATUS_NORMAL == tenant_status) {
     running_mode = NORMAL;
@@ -461,14 +489,14 @@ int ObTenantSnapshotService::schedule_create_tenant_snapshot_dag_(const ObTenant
 
 int ObTenantSnapshotService::schedule_gc_tenant_snapshot_dag_(const ObTenantSnapshotID &tenant_snapshot_id,
                                                               const ObArray<ObLSID> &gc_ls_id_arr,
-                                                              const bool gc_all_tenant_snapshot,
+                                                              const bool gc_tenant_snapshot,
                                                               const common::ObCurTraceId::TraceId& trace_id)
 {
   int ret = OB_SUCCESS;
 
   ObTenantSnapshotGCParam param(tenant_snapshot_id,
                                 gc_ls_id_arr,
-                                gc_all_tenant_snapshot,
+                                gc_tenant_snapshot,
                                 trace_id,
                                 &tenant_snapshot_mgr_);
   ObTenantDagScheduler *dag_scheduler = MTL(ObTenantDagScheduler*);
@@ -504,15 +532,6 @@ void ObTenantSnapshotService::run_in_normal_mode_()
     LOG_INFO("fail to normal_running_env_check_", KR(ret));
   }
 
-  if (OB_SUCC(ret) && !meta_loaded_) {
-    if (OB_FAIL(load_())) {
-      LOG_ERROR("fail to load slog meta", KR(ret), KPC(this));
-    } else {
-      meta_loaded_ = true;
-      LOG_INFO("ObTenantSnapshotService load slog meta succ", KR(ret), KPC(this));
-    }
-  }
-
   if (OB_SUCC(ret) && meta_loaded_) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(try_gc_tenant_snapshot_())) {
@@ -520,6 +539,30 @@ void ObTenantSnapshotService::run_in_normal_mode_()
     }
     if (OB_TMP_FAIL(try_create_tenant_snapshot_in_meta_table_())) {
       LOG_WARN("fail to try_create_tenant_snapshot_in_meta_table_", KR(tmp_ret));
+    }
+  }
+}
+
+void ObTenantSnapshotService::run_in_gc_mode_()
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+
+  if (ATOMIC_LOAD(&running_mode_) != GC) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_INFO("the running mode is not GC", KR(ret), KPC(this));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("get_min_data_version failed", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_0_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_INFO("ObTenantSnapshotService does not work before data version upgrade to 4_3_0_0",
+        KR(ret), KPC(this), K(data_version));
+  }
+
+  if (OB_SUCC(ret) && meta_loaded_) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_gc_tenant_snapshot_())) {
+      LOG_WARN("fail to try_gc_tenant_snapshot_", KR(tmp_ret));
     }
   }
 }
@@ -590,7 +633,12 @@ int ObTenantSnapshotService::try_gc_tenant_snapshot_()
 {
   int ret = OB_SUCCESS;
 
-  TryGcTenantSnapshotFunctor fn;
+  bool tenant_has_been_dropped = false;
+  if (GC == running_mode_) {
+    tenant_has_been_dropped  = true;
+  }
+
+  TryGcTenantSnapshotFunctor fn(tenant_has_been_dropped);
   if (OB_FAIL(tenant_snapshot_mgr_.for_each(fn))) {
     LOG_WARN("fail to add all try_gc dag task", KR(ret));
   }
@@ -602,39 +650,44 @@ bool ObTenantSnapshotService::TryGcTenantSnapshotFunctor::operator()(
   const ObTenantSnapshotID &tenant_snapshot_id, ObTenantSnapshot* tenant_snapshot)
 {
   int ret = OB_SUCCESS;
-  bool gc_all_tenant_snapshot = false;
+  bool gc_tenant_snapshot = false;
   ObArray<ObLSID> gc_ls_id_arr;
   common::ObCurTraceId::TraceId trace_id;
 
   ObTenantSnapshotService *tenant_snapshot_service = MTL(ObTenantSnapshotService *);
-  if (OB_UNLIKELY(OB_ISNULL(tenant_snapshot_service))) {
+  if (OB_ISNULL(tenant_snapshot_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObTenantSnapshotService is null", KR(ret), K(tenant_snapshot_service));
-  } else if (OB_UNLIKELY(OB_ISNULL(tenant_snapshot))) {
+  } else if (OB_ISNULL(tenant_snapshot)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_snapshot is null", KR(ret), K(tenant_snapshot));
+    LOG_WARN("tenant_snapshot is null", KR(ret));
   } else if (!tenant_snapshot_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_snapshot_id is not valid", KR(ret), K(tenant_snapshot_id));
-  } else if (OB_FAIL(tenant_snapshot->try_start_gc_tenant_snapshot_dag(gc_all_tenant_snapshot,
+  } else if (OB_FAIL(tenant_snapshot->try_start_gc_tenant_snapshot_dag(tenant_has_been_dropped_,
+                                                                       gc_tenant_snapshot,
                                                                        gc_ls_id_arr,
                                                                        trace_id))) {
     if (OB_NO_NEED_UPDATE == ret || OB_EAGAIN == ret) {
-      LOG_INFO("fail to try_start_gc_tenant_snapshot_dag now, try later", KR(ret), K(tenant_snapshot_id));
+      LOG_INFO("fail to try_start_gc_tenant_snapshot_dag now, try later",
+          KR(ret), K(tenant_snapshot_id), K(tenant_has_been_dropped_));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to start try_start_gc_tenant_snapshot_dag", KR(ret), K(tenant_snapshot_id));
+      LOG_WARN("fail to start try_start_gc_tenant_snapshot_dag",
+          KR(ret), K(tenant_snapshot_id), K(tenant_has_been_dropped_));
     }
   } else {
     ObTraceIDGuard trace_guard(trace_id);
     if (OB_FAIL(tenant_snapshot_service->schedule_gc_tenant_snapshot_dag_(tenant_snapshot_id,
                                                                           gc_ls_id_arr,
-                                                                          gc_all_tenant_snapshot,
+                                                                          gc_tenant_snapshot,
                                                                           trace_id))) {
-      LOG_WARN("fail to schedule_gc_tenant_snapshot_dag_", KR(ret), KPC(tenant_snapshot));
+      LOG_WARN("fail to schedule_gc_tenant_snapshot_dag_",
+          KR(ret), KPC(tenant_snapshot), K(tenant_has_been_dropped_));
       tenant_snapshot->finish_gc_tenant_snapshot_dag();
     } else {
-      LOG_INFO("schedule_gc_tenant_snapshot success", KR(ret), KPC(tenant_snapshot));
+      LOG_INFO("schedule_gc_tenant_snapshot success",
+          KR(ret), KPC(tenant_snapshot), K(tenant_has_been_dropped_));
     }
   }
   return true;
@@ -660,6 +713,22 @@ int ObTenantSnapshotService::try_create_tenant_snapshot_in_meta_table_()
   return ret;
 }
 
+int ObTenantSnapshotService::try_load_meta_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(common_env_check_())) {
+    LOG_INFO("failed to common_env_check_", KR(ret));
+  } else if (!meta_loaded_) {
+    if (OB_FAIL(load_())) {
+      LOG_ERROR("fail to load ckpt meta", KR(ret), KPC(this));
+    } else {
+      meta_loaded_ = true;
+      LOG_INFO("ObTenantSnapshotService load ckpt meta succ", KR(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
 void ObTenantSnapshotService::run1()
 {
   int ret = OB_SUCCESS;
@@ -671,12 +740,18 @@ void ObTenantSnapshotService::run1()
       LOG_INFO("failed to common_env_check_", KR(ret));
     }
 
-    if (OB_SUCC(ret) && NORMAL != running_mode_) {
+    if (OB_SUCC(ret) && running_mode_ != GC) {
       RUNNING_MODE tmp_running_mode = RUNNING_MODE::INVALID;
       if (OB_FAIL(decide_running_mode_(tmp_running_mode))) {
         LOG_INFO("fail to decide_running_mode_", KR(ret), KPC(this));
       } else {
         running_mode_ = tmp_running_mode;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(try_load_meta_())) {
+        LOG_INFO("fail to try_load_meta_", KR(ret), KPC(this));
       }
     }
 
@@ -698,6 +773,10 @@ void ObTenantSnapshotService::run1()
       }
 
       run_in_normal_mode_();
+    }
+
+    if (OB_SUCC(ret) && GC == running_mode_) {
+      run_in_gc_mode_();
     }
 
     {
@@ -751,7 +830,7 @@ bool ObTenantSnapshotService::GetAllLSSnapshotMapKeyFunctor::operator()(
   int ret = OB_SUCCESS;
   if (!ls_snap_map_key.is_valid()) {
     LOG_DEBUG("invalid ObLSSnapshotMapKey, skip", K(ls_snap_map_key));
-  } else if (OB_UNLIKELY(OB_ISNULL(ls_snapshot_key_arr_))) {
+  } else if (OB_ISNULL(ls_snapshot_key_arr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_snapshot_key_arr_ is null", KR(ret));
   } else if (OB_FAIL(ls_snapshot_key_arr_->push_back(ls_snap_map_key))){
@@ -785,7 +864,7 @@ int ObTenantSnapshotService::get_ls_snapshot_vt_info(const ObLSSnapshotMapKey &l
                                                       ls_snapshot_key.ls_id_,
                                                       ls_snapshot))){
     LOG_WARN("fail to get ObLSSnapshot", KR(ret), K(ls_snapshot_key));
-  } else if (OB_UNLIKELY(OB_ISNULL(ls_snapshot))) {
+  } else if (OB_ISNULL(ls_snapshot)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_snapshot is nullptr", KR(ret), K(ls_snapshot_key));
   } else {
@@ -807,7 +886,7 @@ int ObTenantSnapshotService::get_ls_snapshot_vt_info(const ObLSSnapshotMapKey &l
     } else {
       LOG_WARN("fail to get tenant snapshot", KR(ret), K(ls_snapshot_key));
     }
-  } else if (OB_UNLIKELY(OB_ISNULL(tenant_snapshot))) {
+  } else if (OB_ISNULL(tenant_snapshot)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_snapshot is nullptr", KR(ret), K(tenant_snapshot_id));
   } else {
@@ -822,5 +901,80 @@ int ObTenantSnapshotService::get_ls_snapshot_vt_info(const ObLSSnapshotMapKey &l
   }
   return ret;
 }
+
+int ObTenantSnapshotService::check_all_tenant_snapshot_released(bool& is_released)
+{
+  int ret = OB_SUCCESS;
+
+  is_released = false;
+  int64_t cnt = INT64_MAX;
+
+  if (!ATOMIC_LOAD(&meta_loaded_)) {
+    is_released = false;
+    FLOG_INFO("cannot process before tenant snapshot meta loaded", KR(ret), KPC(this));
+  } else if (GC != ATOMIC_LOAD(&running_mode_)) {
+    is_released = false;
+    FLOG_INFO("running_mode_ is not switch to GC", KR(ret), KPC(this));
+  } else if (OB_FAIL(tenant_snapshot_mgr_.get_tenant_snapshot_cnt(cnt))) {
+    FLOG_WARN("fail to get_tenant_snapshot_cnt", KR(ret));
+  } else {
+    if (0 == cnt) {
+      is_released = true;
+    } else {
+      is_released = false;
+    }
+  }
+  FLOG_INFO("check_all_tenant_snapshot_released finished", KR(ret), K(is_released), K(cnt), KPC(this));
+  return ret;
+}
+
+void ObTenantSnapshotService::notify_unit_is_deleting()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(common_env_check_())) {
+    LOG_WARN("fail to common_env_check_", KR(ret));
+  } else if (FALSE_IT(unit_is_deleting_ = true)) {
+  } else {
+    ObThreadCondGuard guard(cond_);
+    cond_.signal();
+  }
+  LOG_INFO("try_set_running_mode_to_gc finished", KR(ret), KPC(this));
+}
+
+bool ObTenantSnapshotService::DumpTenantSnapInfoFunctor::operator()(
+    const ObTenantSnapshotID &tenant_snapshot_id,
+    ObTenantSnapshot* tenant_snapshot)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(tenant_snapshot)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant snapshot is unexpected null", KR(ret), K(tenant_snapshot_id));
+  } else {
+    LOG_INFO("dump tenant snapshot info", KPC(tenant_snapshot));
+  }
+
+  return true;
+}
+
+void ObTenantSnapshotService::dump_all_tenant_snapshot_info()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(common_env_check_())) {
+    LOG_WARN("fail to common_env_check_", KR(ret));
+  } else if (!ATOMIC_LOAD(&meta_loaded_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tenant snapshot meta unloaded", KR(ret), KPC(this));
+  } else {
+    DumpTenantSnapInfoFunctor fn;
+    if (OB_FAIL(tenant_snapshot_mgr_.for_each(fn))) {
+      LOG_WARN("fail to dump tenant snapshot info", KR(ret));
+    }
+  }
+  LOG_INFO("dump tenant snapshot info finished", KR(ret), KPC(this));
+}
+
 } // storage
 } // oceanbase

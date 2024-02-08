@@ -225,7 +225,7 @@ bool ObTenantSnapshotGCParam::is_valid() const
   if (OB_UNLIKELY(!tenant_snapshot_id_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the tenant_snapshot_id_ is invalid", KR(ret), KPC(this));
-  } else if (!gc_all_tenant_snapshot_ && gc_ls_id_arr_.empty()) {  // gc_all_tenant_snapshot_ == false means gc ls snap
+  } else if (!gc_tenant_snapshot_ && gc_ls_id_arr_.empty()) {  // gc_tenant_snapshot_ == false means gc ls snap
     ret = OB_INVALID_ARGUMENT;                                    // therefore gc_ls_id_arr_ could not be empty
     LOG_WARN("gc_ls_id_arr_ is empty", KR(ret), KPC(this));
   } else if (!trace_id_.is_valid()) {
@@ -262,7 +262,7 @@ int ObTenantSnapshotGCDag::init_by_param(const share::ObIDagInitParam *param)
   } else {
     tenant_snapshot_id_ = gc_param->tenant_snapshot_id_;
     gc_ls_id_arr_ = gc_param->gc_ls_id_arr_;
-    gc_all_tenant_snapshot_ = gc_param->gc_all_tenant_snapshot_;
+    gc_tenant_snapshot_ = gc_param->gc_tenant_snapshot_;
     tenant_snapshot_mgr_ = gc_param->tenant_snapshot_mgr_;
     is_inited_ = true;
   }
@@ -281,7 +281,7 @@ int ObTenantSnapshotGCDag::create_first_task()
     LOG_WARN("fail to create ObTenantSnapshotGCDag", KR(ret));
   } else if (OB_FAIL(task->init(tenant_snapshot_id_,
                      &gc_ls_id_arr_,
-                     gc_all_tenant_snapshot_,
+                     gc_tenant_snapshot_,
                      tenant_snapshot_mgr_))) {
     LOG_WARN("fail to init ObTenantSnapshotGCTask", KR(ret));
   } else if(OB_FAIL(add_task(*task))) {
@@ -347,7 +347,7 @@ int64_t ObTenantSnapshotGCDag::hash() const
 //****** ObTenantSnapshotGCTask
 int ObTenantSnapshotGCTask::init(const ObTenantSnapshotID tenant_snapshot_id,
                                  const ObArray<ObLSID> *gc_ls_id_arr,
-                                 bool gc_all_tenant_snapshot,
+                                 bool gc_tenant_snapshot,
                                  ObTenantSnapshotMgr* tenant_snapshot_mgr)
 {
   int ret = OB_SUCCESS;
@@ -366,7 +366,7 @@ int ObTenantSnapshotGCTask::init(const ObTenantSnapshotID tenant_snapshot_id,
   } else {
     tenant_snapshot_id_ = tenant_snapshot_id;
     gc_ls_id_arr_ = gc_ls_id_arr;
-    gc_all_tenant_snapshot_ = gc_all_tenant_snapshot;
+    gc_tenant_snapshot_ = gc_tenant_snapshot;
     tenant_snapshot_mgr_ = tenant_snapshot_mgr;
     is_inited_ = true;
   }
@@ -394,10 +394,10 @@ int ObTenantSnapshotGCTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant_snapshot has been deleted", KR(ret), K(tenant_snapshot_id_));
   } else {
-    if (OB_FAIL(tenant_snapshot->execute_gc_tenant_snapshot_dag(gc_all_tenant_snapshot_, *gc_ls_id_arr_))) {
+    if (OB_FAIL(tenant_snapshot->execute_gc_tenant_snapshot_dag(gc_tenant_snapshot_, *gc_ls_id_arr_))) {
       LOG_WARN("fail to execute gc tenant snapshot dag", KR(ret));
     } else {
-      if (gc_all_tenant_snapshot_) {
+      if (gc_tenant_snapshot_) {
         if (OB_FAIL(tenant_snapshot_mgr_->del_tenant_snapshot(tenant_snapshot->get_tenant_snapshot_id()))) {
           LOG_WARN("fail to delete tenant snapshot in tenant_snapshot_mgr_",
               KR(ret), KPC(tenant_snapshot_mgr_), KPC(tenant_snapshot));
@@ -410,7 +410,7 @@ int ObTenantSnapshotGCTask::process()
   }
 
   LOG_INFO("ObTenantSnapshotGCTask finished",
-      KR(ret), K(gc_all_tenant_snapshot_), K(tenant_snapshot_id_), KPC(gc_ls_id_arr_));
+      KR(ret), K(gc_tenant_snapshot_), K(tenant_snapshot_id_), KPC(gc_ls_id_arr_));
   return ret;
 }
 
