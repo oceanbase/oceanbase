@@ -94,6 +94,29 @@ public:
     }
     return ret;
   }
+  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell) override
+  {
+    int ret = OB_SUCCESS;
+    AggrRowPtr agg_row = agg_ctx.agg_rows_.at(batch_idx);
+    NotNullBitVector &notnulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+    if (agg_func != T_FUN_COUNT) {
+      if (OB_LIKELY(!is_null)) {
+        char *cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, agg_row);
+        if (helper::is_var_len_agg_cell(in_tc)) {
+          *reinterpret_cast<int64_t *>(cell) = reinterpret_cast<int64_t>(data);
+          *reinterpret_cast<int32_t *>(cell + sizeof(char *)) = data_len;
+        } else {
+          MEMCPY(cell, data, data_len);
+        }
+        notnulls.set(agg_col_idx);
+      }
+    } else if (!is_null) { // COUNT function, only need to set not null
+      notnulls.set(agg_col_idx);
+    }
+    return ret;
+  }
   template <typename ColumnFmt>
   inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)

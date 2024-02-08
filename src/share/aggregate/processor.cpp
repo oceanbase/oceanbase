@@ -654,11 +654,19 @@ int Processor::prepare_adding_one_row()
     for (int i = 0; OB_SUCC(ret) && i < agg_ctx_.aggr_infos_.count(); i++) {
       ObAggrInfo &info = agg_ctx_.aggr_infos_.at(i);
       add_one_row_fn fn_ptr = nullptr;
-      if (info.param_exprs_.count() <= 0 || info.param_exprs_.count() > 1) {
+      if ((info.param_exprs_.count() <= 0 && !info.is_implicit_first_aggr())
+          || info.param_exprs_.count() > 1) {
         fn_ptr = aggregate::add_one_row<ObVectorBase>;
       } else {
-        ObDatumMeta meta = info.param_exprs_.at(0)->datum_meta_;
-        VectorFormat fmt = info.param_exprs_.at(0)->get_format(agg_ctx_.eval_ctx_);
+        ObDatumMeta meta;
+        VectorFormat fmt;
+        if (info.is_implicit_first_aggr()) {
+          meta = info.expr_->datum_meta_;
+          fmt = info.expr_->get_format(agg_ctx_.eval_ctx_);
+        } else {
+          meta = info.param_exprs_.at(0)->datum_meta_;
+          fmt = info.param_exprs_.at(0)->get_format(agg_ctx_.eval_ctx_);
+        }
         VecValueTypeClass vec_tc = get_vec_value_tc(meta.type_, meta.scale_, meta.precision_);
         switch(fmt) {
           case common::VEC_UNIFORM: {
