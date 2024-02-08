@@ -3665,7 +3665,27 @@ int ObLSBackupMetaTask::process()
     DEBUG_SYNC(BEFORE_BACKUP_1001_META);
   }
 #endif
-  if (IS_NOT_INIT) {
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (ls_id.is_sys_ls()) {
+      ret = OB_E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
+    } else {
+      ret = OB_E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
+    }
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_meta",
+                            "tenant_id", param_.tenant_id_,
+                            "task_id", param_.job_desc_.task_id_,
+                            "ls_id", param_.ls_id_.id(),
+                            "turn_id", param_.turn_id_,
+                            "retry_id", param_.retry_id_);
+      LOG_WARN("errsim backup meta task failed", K(ret));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup meta task do not init", K(ret));
   } else {
@@ -3682,19 +3702,6 @@ int ObLSBackupMetaTask::process()
     }
   }
 
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (ls_id.is_sys_ls()) {
-      ret = OB_E(EventTable::EN_BACKUP_SYS_META_TASK_FAILED) OB_SUCCESS;
-    } else {
-      ret = OB_E(EventTable::EN_BACKUP_USER_META_TASK_FAILED) OB_SUCCESS;
-    }
-    if (OB_FAIL(ret)) {
-      SERVER_EVENT_SYNC_ADD("backup_errsim", "backup_meta");
-      LOG_WARN("errsim backup meta task failed", K(ret));
-    }
-  }
-#endif
   if (OB_FAIL(ret)) {
     bool is_set = false;
     ls_backup_ctx_->set_result_code(ret, is_set);
