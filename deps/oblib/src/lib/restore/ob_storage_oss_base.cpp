@@ -17,6 +17,7 @@
 #include "common/ob_string_buf.h"
 #include "apr_errno.h"
 #include "ob_storage.h"
+#include "aos_crc64.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/utility/ob_tracepoint.h"
 
@@ -643,7 +644,8 @@ ObStorageOssMultiPartWriter::ObStorageOssMultiPartWriter()
     object_(),
     partnum_(0),
     is_opened_(false),
-    file_length_(-1)
+    file_length_(-1),
+    total_crc_(0)
 {
   upload_id_.len = -1;
   upload_id_.data = NULL;
@@ -697,6 +699,7 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
         is_opened_ = true;
         base_buf_pos_ = 0;
         file_length_ = 0;
+        total_crc_ = 0;
       }
     }
   }
@@ -790,6 +793,9 @@ int ObStorageOssMultiPartWriter::write_single_part()
             K_(base_buf_pos), K_(bucket), K_(object), K(ret));
         print_oss_info(resp_headers, aos_ret);
         cleanup();
+      } else {
+        // TODO @fangdan: supports parallel uploads
+        total_crc_ = aos_crc64(total_crc_, base_buf_, base_buf_pos_);
       }
       bool is_slow = false;
       print_access_storage_log("oss upload one part ", object_, start_time, base_buf_pos_, &is_slow);
@@ -894,6 +900,16 @@ int ObStorageOssMultiPartWriter::close()
         OB_LOG(WARN, "fail to complete multipart upload", K_(bucket), K_(object), K(ret));
         print_oss_info(resp_headers, aos_ret);
         cleanup();
+      } else {
+        const char *expected_crc_str = (const char *)(apr_table_get(resp_headers, OSS_HASH_CRC64_ECMA));
+        if (OB_NOT_NULL(expected_crc_str)) {
+          uint64_t expected_crc = aos_atoui64(expected_crc_str);
+          if (OB_UNLIKELY(expected_crc != total_crc_)) {
+            ret = OB_CHECKSUM_ERROR;
+            OB_LOG(WARN, "multipart object crc is not equal to returned crc",
+                K(ret), K_(total_crc), K(expected_crc));
+          }
+        }
       }
     }
   }
@@ -1011,15 +1027,29 @@ int ObStorageOssReader::pread(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "aos pool or oss option is NULL", K(aos_pool), K(oss_option), K(ret));
   } else {
-    if (has_meta_ && file_length_ == offset) {
+    // When is_range_read is true, it indicates that only a part of the data is read.
+    // When false, it indicates that the entire object is read
+    bool is_range_read = true;
+    int64_t get_data_size = buf_size;
+    if (has_meta_) {
+      if (file_length_ < offset) {
+        ret = OB_FILE_LENGTH_INVALID;
+        OB_LOG(WARN, "File lenth is invilid", K_(file_length),
+            K(offset), K_(bucket), K_(object), K(ret));
+      } else {
+        get_data_size = MIN(buf_size, file_length_ - offset);
+        if (get_data_size == file_length_) {
+          // read entire object
+          is_range_read = false;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (get_data_size == 0) {
       read_size = 0;
-    } else if (has_meta_ && file_length_ < offset) {
-      ret = OB_FILE_LENGTH_INVALID;
-      OB_LOG(WARN, "File lenth is invilid", K(file_length_), K(offset),
-          K(bucket_), K(object_), K(ret));
     } else {
       const int64_t start_time = ObTimeUtility::current_time();
-      int64_t get_data_size = buf_size;
       aos_string_t bucket;
       aos_string_t object;
       aos_str_set(&bucket, bucket_.ptr());
@@ -1037,49 +1067,61 @@ int ObStorageOssReader::pread(
       const char *const OSS_RANGE_KEY = "Range";
 
       char range_size[OSS_RANGE_SIZE];
-      //oss read size is [10, 100] include the 10 and 100 bytes
-      //we except is [10, 100) not include the end, so we subtraction 1 to the end
-      int n = snprintf(range_size, OSS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + get_data_size - 1);
-      if(n <=0 || n >= OSS_RANGE_SIZE) {
-        ret = OB_SIZE_OVERFLOW;
-        OB_LOG(WARN, "fail to get range size", K(n), K(OSS_RANGE_SIZE), K(ret));
-      } else if (NULL == (headers = aos_table_make(aos_pool, AOS_TABLE_INIT_SIZE))) {
+      if (NULL == (headers = aos_table_make(aos_pool, AOS_TABLE_INIT_SIZE))) {
         ret = OB_OSS_ERROR;
         OB_LOG(WARN, "fail to make oss headers", K(ret));
       } else {
-        apr_table_set(headers, OSS_RANGE_KEY, range_size);
+        if (is_range_read) {
+          // oss read size is [10, 100] include the 10 and 100 bytes
+          // we except is [10, 100) not include the end, so we subtraction 1 to the end
+          if (OB_FAIL(databuff_printf(range_size, OSS_RANGE_SIZE, "bytes=%ld-%ld",
+                                      offset, offset + get_data_size - 1))) {
+            OB_LOG(WARN, "fail to get range size", K(ret),
+                K(offset), K(get_data_size), K(OSS_RANGE_SIZE));
+          } else {
+            apr_table_set(headers, OSS_RANGE_KEY, range_size);
+          }
+        }
 
-        if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,
+        if (OB_FAIL(ret)) {
+        } else if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,
             &buffer, &resp_headers)) ||  !aos_status_is_ok(aos_ret)) {
-            convert_io_error(aos_ret, ret);
-          OB_LOG(WARN, "fail to get object to buffer", K(bucket_), K(object_), K(ret));
+          convert_io_error(aos_ret, ret);
+          OB_LOG(WARN, "fail to get object to buffer", K_(bucket), K_(object), K(ret));
           print_oss_info(resp_headers, aos_ret);
         } else {
           //check date len
           aos_list_for_each_entry(aos_buf_t, content, &buffer, node) {
             len += aos_buf_size(content);
           }
-          if(len > get_data_size) {
+          // For appendable file, there may be data written in between the time when the reader is opened and pread is called.
+          // At this point, the actual size of the file could be larger than the determined file length at the time of opening.
+          // Therefore, if it's not a range read, the data read could exceed the expected amount to be read
+          if (is_range_read && len > get_data_size) {
             ret = OB_OSS_ERROR;
-            OB_LOG(WARN, "get data size error", K(get_data_size), K(len), K(bucket_),
-                K(object_), K(ret));
+            OB_LOG(WARN, "get data size error", K(get_data_size), K(len), K_(bucket),
+                K_(object), K(ret), K_(has_meta), K(offset));
           } else {
             //copy to buf
+            read_size = 0;
+            int64_t needed_size = -1;
             aos_list_for_each_entry(aos_buf_t, content, &buffer, node) {
               size = aos_buf_size(content);
-              if (buf_pos + size > get_data_size) {
+              needed_size = MIN(size, get_data_size - buf_pos);
+              if (is_range_read && (buf_pos + size > get_data_size)) {
                 ret = OB_SIZE_OVERFLOW;
                 OB_LOG(WARN, "the size is too long", K(buf_pos), K(size), K(get_data_size), K(ret));
                 break;
               } else {
-                memcpy(buf + buf_pos, content->pos, (size_t)size);
-                buf_pos += size;
-              }
-            }
+                memcpy(buf + buf_pos, content->pos, (size_t)needed_size);
+                buf_pos += needed_size;
+                read_size += needed_size;
 
-            if (OB_SUCC(ret)) {
-              read_size = len;
-            }
+                if (buf_pos >= get_data_size) {
+                  break;
+                }
+              }
+            } // end aos_list_for_each_entry
           }
         }
       }

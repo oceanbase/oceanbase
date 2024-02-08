@@ -1161,14 +1161,19 @@ int ObStorageS3Reader::pread_(char *buf,
     } else {
       Aws::S3::Model::GetObjectRequest request;
       Aws::S3::Model::GetObjectOutcome outcome;
+      const bool check_crc = (default_s3_crc_algo == ObStorageCRCAlgorithm::OB_CRC32_ALGO);
+      if (check_crc) {
+        request.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
+      }
       char range_read[64] = { 0 };
       request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
       request.SetAdditionalCustomHeaderValue("Connection", "keep-alive");
+      const int64_t get_data_size = has_meta_ ? MIN(buf_size, file_length_ - offset) : buf_size;
 
       if (OB_FAIL(databuff_printf(range_read, sizeof(range_read),
-                                  "bytes=%ld-%ld", offset, offset + buf_size - 1))) {
-        OB_LOG(WARN, "fail to set range to read",
-            K(ret), K_(bucket), K_(object), K(offset), K(buf_size));
+                                  "bytes=%ld-%ld", offset, offset + get_data_size - 1))) {
+        OB_LOG(WARN, "fail to set range to read", K(ret),
+            K_(bucket), K_(object), K(offset), K(buf_size), K_(has_meta), K_(file_length));
       } else if (FALSE_IT(request.SetRange(range_read))) {
       } else if (OB_FAIL(s3_client_->get_object(request, outcome))) {
         OB_LOG(WARN, "failed to get s3 object", K(ret), K(range_read));
@@ -1952,6 +1957,7 @@ int ObStorageS3MultiPartWriter::close_()
   }
 
   // list parts
+  const bool check_crc = (default_s3_crc_algo == ObStorageCRCAlgorithm::OB_CRC32_ALGO);
   Aws::S3::Model::CompletedMultipartUpload completedMultipartUpload;
   int64_t part_num = 0;
   if (OB_SUCC(ret)) {
@@ -1972,6 +1978,9 @@ int ObStorageS3MultiPartWriter::close_()
         for (int64_t i = 0; OB_SUCC(ret) && i < parts.size(); i++) {
           Aws::S3::Model::CompletedPart tmp_part;
           tmp_part.WithPartNumber(parts[i].GetPartNumber()).WithETag(parts[i].GetETag());
+          if (check_crc) {
+            tmp_part.SetChecksumCRC32(parts[i].GetChecksumCRC32());
+          }
           completedMultipartUpload.AddParts(std::move(tmp_part));
         }
       }
@@ -1984,7 +1993,7 @@ int ObStorageS3MultiPartWriter::close_()
     Aws::S3::Model::CompleteMultipartUploadRequest request;
     request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
     request.WithUploadId(upload_id_).WithMultipartUpload(completedMultipartUpload);
-    const bool check_crc = (default_s3_crc_algo == ObStorageCRCAlgorithm::OB_CRC32_ALGO);
+
     Aws::String complete_crc;
     if (check_crc) {
       if (OB_ISNULL(sum_hash_)) {
@@ -2070,6 +2079,7 @@ int ObStorageS3MultiPartWriter::write_single_part_()
         ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "sum_hash should not be null", K(ret));
       } else {
+        // TODO @fangdan: supports parallel uploads
         Aws::Utils::Crypto::CRC32 part_hash;
         request.SetChecksumAlgorithm(Aws::S3::Model::ChecksumAlgorithm::CRC32);
         Aws::String part_str(base_buf_, base_buf_pos_);

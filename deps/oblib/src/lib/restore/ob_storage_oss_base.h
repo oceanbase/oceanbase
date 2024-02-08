@@ -186,6 +186,7 @@ private:
   int partnum_;
   bool is_opened_;
   int64_t file_length_;
+  uint64_t total_crc_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMultiPartWriter);
 };
