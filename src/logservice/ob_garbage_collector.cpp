@@ -119,6 +119,7 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::remove_self_from_learnerlis
               .by(MTL_ID())
               .timeout(TIMEOUT_US)
               .max_process_handler_time(TIMEOUT_US)
+              .group_id(share::OBCG_STORAGE)
               .get_palf_stat(get_palf_stat_req, get_palf_stat_resp))) {
     CLOG_LOG(WARN, "get_palf_stat failed", K(ls_id), K(leader), K(get_palf_stat_req));
   } else {
@@ -160,6 +161,7 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_ls_array_(const ObAd
       if (OB_SUCCESS != (tmp_ret = rpc_proxy_->to(leader)
                                              .by(MTL_ID())
                                              .timeout(TIMEOUT)
+                                             .group_id(share::OBCG_STORAGE)
                                              .query_ls_is_valid_member(request, response))
           || (OB_SUCCESS != (tmp_ret = response.ret_value_))) {
         CLOG_LOG(WARN, "query_is_valid_member failed", K(tmp_ret), K(leader), K(request));
@@ -1364,7 +1366,7 @@ int ObGarbageCollector::get_ls_status_from_table(const ObLSID &ls_id,
   // sys tenant should always return LS_NORMAL
   if (OB_SYS_TENANT_ID == tenant_id) {
     ls_status = OB_LS_NORMAL;
-  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, ls_id, status_info, *sql_proxy_))) {
+  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, ls_id, status_info, *sql_proxy_, share::OBCG_STORAGE))) {
     CLOG_LOG(INFO, "failed to get ls status info from table", K(ret), K(tenant_id), K(ls_id));
   } else {
     ls_status = status_info.status_;

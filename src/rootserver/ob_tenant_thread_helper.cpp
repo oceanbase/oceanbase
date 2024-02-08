@@ -314,7 +314,7 @@ int ObTenantThreadHelper::check_can_do_recovery_(const uint64_t tenant_id)
         if (OB_ISNULL(GCTX.sql_proxy_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql can't null", K(ret), K(GCTX.sql_proxy_));
-        } else if (OB_FAIL(restore_table_operator.init(GCTX.sql_proxy_, tenant_id))) {
+        } else if (OB_FAIL(restore_table_operator.init(GCTX.sql_proxy_, tenant_id, share::OBCG_STORAGE /*group_id*/))) {
           LOG_WARN("fail to init restore table operator", KR(ret), K(tenant_id));
         } else if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id,
                 job_info))) {
