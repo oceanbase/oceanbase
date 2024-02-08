@@ -1877,7 +1877,6 @@ int ObTenantSnapshotUtil::inner_lock_line_for_all_tenant_table_(
         }
       } else {
         ObString status_str;
-        schema::ObTenantStatus tenant_status;
         EXTRACT_VARCHAR_FIELD_MYSQL(*res, "status", status_str);
         if (OB_SUCC(ret)) {
           if (OB_FAIL(schema::get_tenant_status(status_str, tenant_status))) {
