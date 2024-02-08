@@ -18,8 +18,7 @@ static inline cycles_t easy_get_cycles()
     val = (val << 32) | low;
     return val;
 }
-
-#else
+#elif defined(__aarch64__)
 
 static inline uint64_t easy_rdtscp()
 {
@@ -32,6 +31,19 @@ static inline cycles_t easy_get_cycles()
 {
     return easy_rdtscp();
 }
+#elif defined(__powerpc64__)
+static inline uint64_t easy_rdtscp()
+{
+    uint64_t virtual_timer_value;
+    asm volatile("mfspr %0, 268" : "=r"(virtual_timer_value)); 
+    return virtual_timer_value;
+}
+
+static inline cycles_t easy_get_cycles()
+{
+    return easy_rdtscp();
+}
+
 #endif
 
 double easy_get_cpu_mhz(int no_cpu_freq_fail);

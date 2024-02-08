@@ -31,7 +31,7 @@ int jump_call(void * arg_, int(*func_) (void*), void* stack_addr);
 inline int call_with_new_stack(void * arg_, int(*func_) (void*))
 {
   int ret = OB_SUCCESS;
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__) 
   void *ori_stack_addr = nullptr;
   size_t ori_stack_size = 0;
   void *stack_addr = nullptr;

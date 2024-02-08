@@ -110,6 +110,12 @@ inline bool cas128_lf(types::uint128_t  *dst, types::uint128_t & expected, types
 #define CAS128(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_ACQ_REL, __ATOMIC_RELAXED)
 #define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_ACQUIRE)
 
+#elif defined(__powerpc64__)
+//#define CAS128_ASM(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_SEQ_CST,__ATOMIC_SEQ_CST)
+
+#define CAS128(src, cmp, with) __atomic_compare_exchange(((types::uint128_t*)(src)), ((types::uint128_t*)(&(cmp))), ((types::uint128_t*)&(with)),false,__ATOMIC_ACQ_REL, __ATOMIC_RELAXED)
+#define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_ACQUIRE)
+
 #else
   #error arch unsupported
 #endif

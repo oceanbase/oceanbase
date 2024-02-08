@@ -728,10 +728,17 @@ int ObSSTable::set_upper_trans_version(const int64_t upper_trans_version)
   int ret = OB_SUCCESS;
 
   const int64_t old_val = ATOMIC_LOAD(&upper_trans_version_);
+
   // only set once
-  if (INT64_MAX == old_val && INT64_MAX != upper_trans_version) {
-    const int64_t new_val = std::max(upper_trans_version, max_merged_trans_version_);
-    ATOMIC_CAS(&upper_trans_version_, old_val, new_val);
+  if (INT64_MAX == old_val && INT64_MAX > upper_trans_version) { 
+    int64_t new_val = (int64_t) upper_trans_version;
+    if (INT64_MAX == max_merged_trans_version_) {
+      ATOMIC_CAS(&upper_trans_version_, old_val, new_val);
+    }
+    else {
+      new_val = std::max(upper_trans_version, max_merged_trans_version_);
+      ATOMIC_CAS(&upper_trans_version_, old_val, new_val);
+    }
   }
 
   LOG_INFO("succeed to set upper trans version", K(key_),
@@ -810,7 +817,11 @@ int ObSSTable::deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&v
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < deep_copy_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(deep_copy_size));
-#if __aarch64__
+#if defined(__powerpc64__) 
+  } else if (OB_UNLIKELY(0 != (reinterpret_cast<int64_t>(buf) % PPC64LE_CP_BUF_ALIGN))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deep copy buffer on powerpc64 platform not alighed", K(ret), KP(buf));
+#elif __aarch64__
   } else if (OB_UNLIKELY(0 != (reinterpret_cast<int64_t>(buf) % AARCH64_CP_BUF_ALIGN))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deep copy buffer on aarch64 platform not alighed", K(ret), KP(buf));

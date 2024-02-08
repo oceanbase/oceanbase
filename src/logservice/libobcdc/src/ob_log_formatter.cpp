@@ -1857,8 +1857,10 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
               "column_num", row_value->column_num_);
         } else if (row_value->is_json_diff_[i]) {
+#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
           br_data->putNewJsonDiff(str_val->ptr(), str_val->length());
           LOG_DEBUG("putNewJsonDiff", K(i), KPC(str_val));
+#endif
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }

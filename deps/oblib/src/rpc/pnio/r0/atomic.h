@@ -11,13 +11,21 @@
  */
 
 #pragma once
+#if (defined(__x86_64__) ||  defined(__aarch64__) )
 #define BARRIER() asm volatile(""::: "memory")
 #define MBARRIER() __sync_synchronize()
+#elif defined(__powerpc64__)
+#define BARRIER() (__asm__ __volatile__ ("" : : : "memory"))
+#define MBARRIER() (__asm__ __volatile__ ("sync" : : : "memory")) 
+#endif
+
 
 #if defined(__x86_64__)
 #define SPIN_PAUSE() asm("pause\n")
 #elif defined(__aarch64__)
 #define SPIN_PAUSE() asm("yield\n")
+#elif defined(__powerpc64__)
+#define SPIN_PAUSE() asm volatile("or 27,27,27\n":::"memory")
 #endif
 
 #define LOAD(x) __atomic_load_n((x), __ATOMIC_ACQUIRE)

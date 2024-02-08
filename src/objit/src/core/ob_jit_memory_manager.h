@@ -66,6 +66,7 @@ public:
     return allocator_.finalize();
   }
 
+//to confirm for for Power ppc64le 2023-12  ???//#if ( defined(__aarch64__) || defined(__powerpc64__) )
 #if defined(__aarch64__)
   /// Inform the memory manager about the total amount of memory required to
   /// allocate all sections to be loaded:
