@@ -157,7 +157,17 @@ static __inline__ uint64_t rdtsc()
 {
     return rdtscp();
 }
-
+#else
+static __inline__ uint64_t rdtscp()
+{
+    int64_t virtual_timer_value;
+    asm volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+    return virtual_timer_value;
+}
+static __inline__ uint64_t rdtsc()
+{
+    return rdtscp();
+}
 #endif
 
 #if defined(__x86_64__)
@@ -212,7 +222,13 @@ uint64_t get_cpufreq_khz()
 
     return freq_khz;
 }
-
+#else
+uint64_t get_cpufreq_khz(void)
+{
+    uint64_t timer_frequency;
+    asm volatile("mrs %0, cntfrq_el0":"=r"(timer_frequency));
+    return timer_frequency / 1000;
+}
 #endif
 
 // 初始化tsc时钟
