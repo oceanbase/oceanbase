@@ -327,6 +327,7 @@ struct EvalVectorCmpWithNull
         ObBitmapNullVectorBase &res_nulls = *static_cast<ObBitmapNullVectorBase *>(expr.get_vector(ctx));
         if (OB_LIKELY(bound.get_all_rows_active() && eval_flags.accumulate_bit_cnt(bound) == 0)) {
           res_nulls.get_nulls()->set_all(bound.start(), bound.end());
+          res_nulls.set_has_null();
           eval_flags.set_all(bound.start(), bound.end());
         } else {
           for (int i = bound.start(); i < bound.end(); i++) {
