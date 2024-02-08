@@ -433,6 +433,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             LOG_WARN("Unexpected const expr", K(const_expr->get_value()), K(ret));
           }
         } else if (into_expr->is_obj_access_expr()) {
+          if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION
+              && ObObjAccessIdx::has_same_collection_access(s.get_value_expr(i), static_cast<const ObObjAccessRawExpr *>(into_expr))) {
+            ObLLVMValue p_result_obj;
+            OZ (generator_.generate_expr(s.get_value_index(i), s, OB_INVALID_INDEX, p_result_obj));
+          }
           OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
         }
 
