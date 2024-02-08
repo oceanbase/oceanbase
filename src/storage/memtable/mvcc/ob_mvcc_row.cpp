@@ -684,7 +684,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
       } else if (SCN::max_scn() != iter->trans_version_ && iter->trans_version_ > elr_commit_version) {
         // leader revoke
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexected transaction version", K(*iter), K(elr_commit_version));
+        TRANS_LOG(ERROR, "unexpected transaction version", K(*iter), K(elr_commit_version));
       } else {
         iter->trans_version_ = elr_commit_version;
         iter->set_elr();

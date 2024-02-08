@@ -139,7 +139,7 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
         LOG_WARN("get palf role failed", K(ret));
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
-        LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
+        LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
@@ -177,7 +177,7 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
         LOG_WARN("get palf role failed", K(ret));
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
-        LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
+        LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(res.autoinc_params_.reserve(arg.src_tablet_ids_.count()))) {
@@ -238,7 +238,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
         LOG_WARN("get palf role failed", K(ret));
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
-        LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
+        LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else {

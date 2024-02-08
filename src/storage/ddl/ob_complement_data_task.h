@@ -376,7 +376,7 @@ public:
 private:
   int prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy);
   int generate_build_select_sql(ObSqlString &sql_string);
-  // to fetch partiton/subpartition name for select sql.
+  // to fetch partition/subpartition name for select sql.
   int fetch_source_part_info(
       const common::ObTabletID &src_tablet_id,
       const share::schema::ObTableSchema &src_table_schema,

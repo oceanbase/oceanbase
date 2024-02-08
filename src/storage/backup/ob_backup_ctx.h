@@ -180,7 +180,7 @@ private:
   int write_meta_index_list_(const common::ObIArray<ObBackupMetaIndex> &index_list);
   template <class IndexType>
   int write_index_list_(const ObBackupBlockType &index_type, const common::ObIArray<IndexType> &index_list);
-  int build_common_header_(const ObBackupBlockType &block_type, const int64_t data_length, const int64_t align_lenght,
+  int build_common_header_(const ObBackupBlockType &block_type, const int64_t data_length, const int64_t align_length,
       share::ObBackupCommonHeader *&common_header);
   int write_data_align_(
       const blocksstable::ObBufferReader &buffer, const ObBackupBlockType &block_type, const int64_t alignment);

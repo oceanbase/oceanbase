@@ -543,7 +543,7 @@ protected: // memeber variables
 // // removal these in cg layer, up to opt layer.
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ddl_output_column_ids_;
 // removal these in cg layer, up to opt layer end.
-  // table partiton locations
+  // table partition locations
   ObTablePartitionInfo *table_partition_info_; //this member is not in copy_without_child,
                                                //because its used in EXCHANGE stage, and
                                                //copy_without_child used before this

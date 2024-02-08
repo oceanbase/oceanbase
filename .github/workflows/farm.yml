@@ -3,6 +3,12 @@ name: Farm
 on:
   pull_request:
     branches: [ master,develop ]
+    paths-ignore:
+      - 'docs/**'
+      - '.github/**'
+      - 'README.md'
+      - 'README_CN.md'
+      - 'CONTRIBUTING.md'
   schedule:
     - cron: '30 9 * * *'
 
