@@ -271,6 +271,30 @@ public:
     return ret;
   }
 
+  int get_gts_sync(const uint64_t tenant_id,
+                   const MonotonicTs stc,
+                   const int64_t timeout_us,
+                   share::SCN &scn,
+                   MonotonicTs &receive_gts_ts)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
+
+    do {
+      int64_t n = ObClockGenerator::getClock();
+      if (n >= expire_ts) {
+        ret = OB_TIMEOUT;
+      } else if (OB_FAIL(get_gts(tenant_id, stc, NULL, scn, receive_gts_ts))) {
+        if (OB_EAGAIN == ret) {
+          ob_usleep(500);
+        }
+      }
+    } while (OB_EAGAIN == ret);
+
+    return ret;
+    return get_gts(tenant_id, stc, NULL, scn, receive_gts_ts);
+  }
+
   int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn) {
     if (get_gts_error_) { return get_gts_error_; }
     return OB_SUCCESS;
