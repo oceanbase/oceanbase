@@ -751,7 +751,7 @@ int ObExprFuncRound::calc_round_expr_numeric1_batch(const ObExpr &expr,
   return ret;
 }
 
-#define ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, res_vec)                  \
+#define ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, res_vec)            \
 switch (left_format) {                                                          \
   case VEC_FIXED: {                                                             \
     ret = func_name<ObFixedLengthBase, res_vec>(expr, ctx, skip, bound);        \
@@ -778,31 +778,31 @@ switch (left_format) {                                                          
   }                                                                             \
 }
 
-#define ROUND_DISPATCH_VECTOR_IN_RES_ARG_FORMAT(func_name)                            \
-switch (res_format) {                                                           \
-  case VEC_FIXED: {                                                             \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObFixedLengthBase);           \
-    break;                                                                      \
-  }                                                                             \
-  case VEC_DISCRETE: {                                                          \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObDiscreteFormat);            \
-    break;                                                                      \
-  }                                                                             \
-  case VEC_CONTINUOUS: {                                                        \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObContinuousFormat);          \
-    break;                                                                      \
-  }                                                                             \
-  case VEC_UNIFORM: {                                                           \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObUniformFormat<false>);      \
-    break;                                                                      \
-  }                                                                             \
-  case VEC_UNIFORM_CONST: {                                                     \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObUniformFormat<true>);       \
-    break;                                                                      \
-  }                                                                             \
-  default: {                                                                    \
-    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObVectorBase);                \
-  }                                                                             \
+#define ROUND_DISPATCH_VECTOR_IN_RES_ARG_FORMAT(func_name)                          \
+switch (res_format) {                                                               \
+  case VEC_FIXED: {                                                                 \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObFixedLengthBase);         \
+    break;                                                                          \
+  }                                                                                 \
+  case VEC_DISCRETE: {                                                              \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObDiscreteFormat);          \
+    break;                                                                          \
+  }                                                                                 \
+  case VEC_CONTINUOUS: {                                                            \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObContinuousFormat);        \
+    break;                                                                          \
+  }                                                                                 \
+  case VEC_UNIFORM: {                                                               \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObUniformFormat<false>);    \
+    break;                                                                          \
+  }                                                                                 \
+  case VEC_UNIFORM_CONST: {                                                         \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObUniformFormat<true>);     \
+    break;                                                                          \
+  }                                                                                 \
+  default: {                                                                        \
+    ROUND_DISPATCH_VECTOR_IN_LEFT_ARG_FORMAT(func_name, ObVectorBase);              \
+  }                                                                                 \
 }
 
 int ObExprFuncRound::calc_round_expr_numeric1_vector(const ObExpr &expr,
