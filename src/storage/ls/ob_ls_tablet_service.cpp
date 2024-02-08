@@ -2697,6 +2697,8 @@ int ObLSTabletService::direct_insert_rows(
     ObTableLoadStore store(table_ctx);
     if (OB_FAIL(store.init())) {
       LOG_WARN("fail to init store", KR(ret));
+    } else if (OB_FAIL(store.px_check_for_write(tablet_id))) {
+      LOG_WARN("fail to check for write", KR(ret), K(tablet_id));
     }
 
     while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {

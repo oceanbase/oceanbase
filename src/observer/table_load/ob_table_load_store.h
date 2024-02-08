@@ -85,6 +85,7 @@ private:
 public:
   int px_start_trans(const table::ObTableLoadTransId &trans_id);
   int px_finish_trans(const table::ObTableLoadTransId &trans_id);
+  int px_check_for_write(const ObTabletID &tablet_id);
   int px_write(const table::ObTableLoadTransId &trans_id,
                const ObTabletID &tablet_id,
                const common::ObIArray<common::ObNewRow> &row_array);
