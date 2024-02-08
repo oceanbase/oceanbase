@@ -6076,10 +6076,12 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     LOG_WARN("Argument passed in is NULL", K(ctx), K(interface_name), K(ret));
   } else if (OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->params_)
-      || OB_ISNULL(ctx->result_)) {
+      || OB_ISNULL(ctx->result_)
+      || OB_ISNULL(ctx->exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid context", K(ctx->exec_ctx_), K(ctx->params_), K(ctx->result_));
   } else {
+    ctx->exec_ctx_->get_my_session()->init_use_rich_format();
     ObString name(interface_name);
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
