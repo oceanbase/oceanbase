@@ -28,6 +28,7 @@
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_service.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
@@ -169,6 +170,7 @@ int ObServerReloadConfig::operator()()
       (void)reload_diagnose_info_config(GCONF.enable_perf_event);
       (void)reload_trace_log_config(GCONF.enable_record_trace_log);
 
+      reload_tenant_freezer_config_();
       reload_tenant_scheduler_config_();
     }
   }
@@ -333,6 +335,28 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
       (void)MTL(compaction::ObTenantTabletScheduler *)->reload_tenant_config();
       return OB_SUCCESS;
     };
+    omt->operate_in_each_tenant(f);
+  }
+}
+
+int ObServerReloadConfig::ObReloadTenantFreezerConfOp::operator()()
+{
+  int ret = OB_SUCCESS;
+  // NOTICE: tenant freezer should update before ObSharedMemAllocMgr.
+  MTL(ObTenantFreezer *)->reload_config();
+  MTL(ObSharedMemAllocMgr*)->update_throttle_config();
+  return ret;
+}
+
+void ObServerReloadConfig::reload_tenant_freezer_config_()
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt should not be null", K(ret));
+  } else {
+    ObReloadTenantFreezerConfOp f;
     omt->operate_in_each_tenant(f);
   }
 }

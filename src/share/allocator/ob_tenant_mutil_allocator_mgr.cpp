@@ -139,12 +139,8 @@ int ObTenantMutilAllocatorMgr::get_tenant_memstore_limit_percent_(const uint64_t
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "tenant config invalid", K(ret), K(tenant_id));
-    } else {
-      limit_percent = tenant_config->memstore_limit_percentage;
+    MTL_SWITCH(tenant_id) {
+      limit_percent = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
     }
   }
   return ret;

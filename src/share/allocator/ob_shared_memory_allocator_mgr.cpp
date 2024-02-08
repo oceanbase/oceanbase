@@ -40,18 +40,18 @@ void ObSharedMemAllocMgr::update_throttle_config()
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     int64_t share_mem_limit_percentage = tenant_config->_tx_share_memory_limit_percentage;
-    int64_t memstore_limit_percentage = tenant_config->memstore_limit_percentage;
+    int64_t tenant_memstore_limit_percentage = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
     int64_t tx_data_limit_percentage = tenant_config->_tx_data_memory_limit_percentage;
     int64_t mds_limit_percentage = tenant_config->_mds_memory_limit_percentage;
     int64_t trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
     int64_t max_duration = tenant_config->writing_throttling_maximum_duration;
     if (0 == share_mem_limit_percentage) {
       // 0 means use (memstore_limit + 10)
-      share_mem_limit_percentage = memstore_limit_percentage + 10;
+      share_mem_limit_percentage = tenant_memstore_limit_percentage + 10;
     }
 
     int64_t share_mem_limit = total_memory / 100 * share_mem_limit_percentage;
-    int64_t memstore_limit = total_memory / 100 * memstore_limit_percentage;
+    int64_t memstore_limit = total_memory / 100 * tenant_memstore_limit_percentage;
     int64_t tx_data_limit = total_memory / 100 * tx_data_limit_percentage;
     int64_t mds_limit = total_memory / 100 * mds_limit_percentage;
 
@@ -78,7 +78,7 @@ void ObSharedMemAllocMgr::update_throttle_config()
                 K(total_memory),
                 K(share_mem_limit_percentage),
                 K(share_mem_limit),
-                K(memstore_limit_percentage),
+                K(tenant_memstore_limit_percentage),
                 K(memstore_limit),
                 K(tx_data_limit_percentage),
                 K(tx_data_limit),
