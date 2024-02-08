@@ -648,6 +648,8 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
     snapshot.valid_ = true;
   }
   ObTransTraceLog &tlog = tx.get_tlog();
+  common::ObTraceIdAdaptor trace_id;
+  trace_id.set(ObCurTraceId::get());
   REC_TRANS_TRACE_EXT(&tlog, get_read_snapshot, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(txid), tx.tx_id_,
                       OB_ID(isolation_level), (int)isolation,
@@ -655,7 +657,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
                       OB_ID(snapshot_version), snapshot.core_.version_,
                       OB_ID(snapshot_txid), snapshot.core_.tx_id_.get_id(),
                       OB_ID(snapshot_scn), snapshot.core_.scn_.cast_to_int(),
-                      OB_ID(trace_id), ObCurTraceId::get_trace_id_str(),
+                      OB_ID(trace_id), trace_id,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
@@ -718,6 +720,8 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
     ret = get_read_snapshot(tx, isolation, expire_ts, snapshot);
   }
   ObTransTraceLog &tlog = tx.get_tlog();
+  common::ObTraceIdAdaptor trace_id;
+  trace_id.set(ObCurTraceId::get());
   REC_TRANS_TRACE_EXT(&tlog, get_ls_read_snapshot, OB_Y(ret), OB_Y(expire_ts),
                       OB_ID(ls_id), lsid.id(),
                       OB_ID(isolation_level), (int)isolation,
@@ -725,7 +729,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
                       OB_ID(snapshot_version), snapshot.core_.version_,
                       OB_ID(snapshot_txid), snapshot.core_.tx_id_.get_id(),
                       OB_ID(snapshot_scn), snapshot.core_.scn_.cast_to_int(),
-                      OB_ID(trace_id), ObCurTraceId::get_trace_id_str(),
+                      OB_ID(trace_id), trace_id,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
