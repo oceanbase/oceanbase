@@ -51,7 +51,10 @@ public:
   void run();
 
   bool is_started() { return is_started_; }
+
+  TO_STRING_KV(K(is_inited_), K(is_started_), KP(meta_handler_));
 private:
+  int wait_();
   int get_clone_job_(ObArray<ObCloneJob>& clone_jobs);
   int try_clone_(const ObCloneJob& job);
   void try_clone_one_ls_(const ObCloneJob& job, ObLS* ls);

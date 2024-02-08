@@ -149,10 +149,6 @@ public:
                                          share::ObTenantSnapshotID &tenant_snapshot_id);
   static int check_and_get_data_version(const uint64_t tenant_id,
                                         uint64_t &data_version);
-  static int get_sys_ls_info(common::ObISQLClient &sql_client,
-                             const uint64_t tenant_id,
-                             const share::ObTenantSnapshotID &tenant_snapshot_id,
-                             ObArray<share::ObTenantSnapLSReplicaSimpleItem> &simple_items);
   static int check_tenant_has_snapshot(common::ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
                                        bool &has_snapshot);

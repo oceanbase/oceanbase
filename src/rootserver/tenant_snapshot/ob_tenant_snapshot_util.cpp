@@ -968,25 +968,6 @@ int ObTenantSnapshotUtil::check_and_get_data_version(const uint64_t tenant_id,
   return ret;
 }
 
-int ObTenantSnapshotUtil::get_sys_ls_info(common::ObISQLClient &sql_client,
-                                          const uint64_t tenant_id,
-                                          const ObTenantSnapshotID &tenant_snapshot_id,
-                                          ObArray<ObTenantSnapLSReplicaSimpleItem> &simple_items)
-{
-  int ret = OB_SUCCESS;
-  simple_items.reset();
-  ObTenantSnapshotTableOperator snap_op;
-  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !tenant_snapshot_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_snapshot_id));
-  } else if (OB_FAIL(snap_op.init(tenant_id, &sql_client))) {
-    LOG_WARN("failed to init table op", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(snap_op.get_tenant_snap_ls_replica_simple_items(tenant_snapshot_id, SYS_LS, simple_items))) {
-    LOG_WARN("failed to get sys ls replica simple items", KR(ret), K(tenant_snapshot_id));
-  }
-  return ret;
-}
-
 int ObTenantSnapshotUtil::check_tenant_has_snapshot(common::ObISQLClient &sql_client,
                                                     const uint64_t tenant_id,
                                                     bool &has_snapshot)

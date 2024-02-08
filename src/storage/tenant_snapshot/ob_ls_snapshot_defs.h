@@ -104,7 +104,7 @@ public:
       meta_handler_(nullptr),
       build_ctx_mutex_() {};
 
-  ~ObLSSnapshot() {};
+  ~ObLSSnapshot() { reset(); };
 
   int init(const share::ObTenantSnapshotID& tenant_snapshot_id,
            const ObLSID& ls_id,
@@ -114,13 +114,15 @@ public:
 
   void reset()
   {
-    tenant_snapshot_id_.reset();
-    ls_id_.reset();
-    meta_existed_ = false;
-    try_free_build_ctx_();
-    build_ctx_allocator_ = nullptr;
-    meta_handler_ = nullptr;
-    is_inited_ = false;
+    if (IS_INIT) {
+      tenant_snapshot_id_.reset();
+      ls_id_.reset();
+      meta_existed_ = false;
+      try_free_build_ctx_();
+      build_ctx_allocator_ = nullptr;
+      meta_handler_ = nullptr;
+      is_inited_ = false;
+    }
   }
 
   ObLSSnapshot &operator=(const ObLSSnapshot &other) = delete;
