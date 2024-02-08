@@ -13791,6 +13791,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12465: __all_virtual_share_storage_quota_assignment
 # 12466: enabled_roles
 # 12467: __all_virtual_ls_replica_task_history
+# 12468: __all_virtual_session_ps_info
 # 余留位置
 #
 
@@ -14223,6 +14224,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15441: __all_virtual_share_storage_quota_assignment
 # 15442: __all_virtual_column_group
 # 15443: __all_virtual_ls_replica_task_history
+# 15444: __all_virtual_session_ps_info
 # 余留位置
 
 
@@ -32622,6 +32624,8 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 21541: GV$OB_SESSION_PS_INFO
+# 21542: V$OB_SESSION_PS_INFO
 # 余留位置
 
 ################################################################################
@@ -58969,6 +58973,8 @@ def_table_schema(
 
 # 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+# 28219: GV$OB_SESSION_PS_INFO
+# 28220: V$OB_SESSION_PS_INFO
 
 ################################################################################
 # Lob Table (50000, 70000)
