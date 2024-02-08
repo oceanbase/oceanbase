@@ -60,12 +60,13 @@ public:
   int handle_table_compact_success();
   TO_STRING_KV(KP_(store_ctx), KP_(merger), KP_(compactor));
 private:
-  ObTableLoadTableCompactor *new_compactor();
+  int new_compactor();
+  void release_compactor();
 
 public:
-  common::ObArenaAllocator allocator_;
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadMerger *merger_;
+  mutable obsys::ObRWLock rwlock_;
   ObTableLoadTableCompactor *compactor_;
   ObTableLoadTableCompactResult result_;
 };
