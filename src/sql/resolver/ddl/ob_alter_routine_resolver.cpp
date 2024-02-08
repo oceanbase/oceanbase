@@ -223,6 +223,7 @@ int ObAlterRoutineResolver::resolve_compile_clause(
     if (OB_SUCC(ret)
           && 1 == alter_clause_node.int32_values_[0]  // ALTER COMPILE DEBUG
           && !need_recreate
+          && session_info_->get_pl_attached_id() > 0
           && OB_INVALID_ID != session_info_->get_pl_attached_id()) {
       OZ (register_debug_info(routine_info));
     }
