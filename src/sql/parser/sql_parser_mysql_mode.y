@@ -7890,7 +7890,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($2);
   UNUSED($3);
   UNUSED($4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 11,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
                            NULL,    /* opt_materialized */
                            $6,    /* view name */
                            $7,    /* column list */
@@ -7899,7 +7899,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            NULL,
                            $11,    /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL
                );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 1; /* is alter view */
