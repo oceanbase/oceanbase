@@ -98,7 +98,7 @@ public:
   }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
-    bool can_reuse = cg_idx == cg_idx && enable_pd_aggregate() == is_aggregate
+    bool can_reuse = cg_idx == cg_idx_ && enable_pd_aggregate() == is_aggregate
                       && nullptr != output_exprs_ && output_exprs_->count() == exprs.count() ;
     if (can_reuse) {
       for (int64_t i = 0; i < exprs.count(); ++i) {
