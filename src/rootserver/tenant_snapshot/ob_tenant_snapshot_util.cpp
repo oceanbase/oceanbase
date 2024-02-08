@@ -533,8 +533,8 @@ int ObTenantSnapshotUtil::unlock_tenant_snapshot_simulated_mutex_from_snapshot_t
   const int64_t owner_job_id = OB_INVALID_ID;
   bool is_conflicted_owner_job_id = true;
 
-  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || ObTenantSnapStatus::MAX == old_status ||
-      !snapshot_scn.is_valid())) {
+  //NOTE: snapshot_scn may be invalid in case of failure to create snapshot.
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || ObTenantSnapStatus::MAX == old_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(old_status), K(snapshot_scn));
   } else if (OB_FAIL(unlock_(trans, tenant_id, owner_job_id, old_status, snapshot_scn, is_conflicted_owner_job_id))) {
@@ -706,7 +706,6 @@ int ObTenantSnapshotUtil::add_create_tenant_snapshot_task(ObMySQLTransaction &tr
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  SCN gts_scn = SCN::invalid_scn();
   int64_t create_time = OB_INVALID_TIMESTAMP;
   ObTenantSnapshotTableOperator table_op;
   ObTenantSnapItem item;
@@ -717,9 +716,6 @@ int ObTenantSnapshotUtil::add_create_tenant_snapshot_task(ObMySQLTransaction &tr
                   || !tenant_snapshot_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(snapshot_name), K(tenant_snapshot_id));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_and_get_data_version(tenant_id, data_version))) {
     LOG_WARN("fail to check and get data version or tenant is in upgrading procedure", KR(ret), K(tenant_id));
   } else if (FALSE_IT(create_time = ObTimeUtility::current_time())) {
@@ -877,7 +873,7 @@ int ObTenantSnapshotUtil::add_restore_tenant_task(ObMySQLTransaction &trans,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(snap_item));
   } else if (ObTenantSnapStatus::NORMAL != snap_item.get_status()) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_OP_NOT_ALLOW;
     LOG_WARN("not allowed for current snapshot operation", KR(ret), K(snap_item));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there may be other operation on the same tenant snapshot, restore tenant");
   } else if (OB_FAIL(table_op.init(snap_item.get_tenant_id(), &trans))) {

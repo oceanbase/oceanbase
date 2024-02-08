@@ -126,11 +126,11 @@ private:
 
   int check_all_ls_restore_finish_(const share::ObCloneJob &job,
                                    TenantRestoreStatus &tenant_restore_status);
-  int check_one_ls_replica_restore_finish_(const share::ObCloneJob& job,
-                                           const share::ObLSInfo& ls_info,
-                                           const share::ObLSStatusInfoArray& ls_array,
-                                           const ObArray<share::ObTenantSnapLSReplicaSimpleItem>& ls_snapshot_array,
-                                           TenantRestoreStatus &tenant_restore_status);
+  int check_one_ls_restore_finish_(const share::ObCloneJob& job,
+                                   const share::ObLSStatusInfo& ls_status_info,
+                                   const ObArray<share::ObLSInfo>& ls_info_array,
+                                   const ObArray<share::ObTenantSnapLSReplicaSimpleItem>& ls_snapshot_array,
+                                   TenantRestoreStatus &tenant_restore_status);
 private:
   static const int32_t MAX_RETRY_CNT = 5;
   static const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;

@@ -176,8 +176,9 @@ int ObCloneTenantExecutor::wait_clone_tenant_finished_(ObExecContext &ctx,
                                                 "DBA_OB_CLONE_PROGRESS or DBA_OB_CLONE_HISTORY",
                                                 failed_status.length(), failed_status.ptr()))) {
             LOG_WARN("fail to append format", KR(tmp_ret), K(job_id), K(MTL_ID()));
+          } else {
+            LOG_USER_ERROR(OB_ERR_CLONE_TENANT, format_msg.string().length(), format_msg.ptr());
           }
-          LOG_USER_ERROR(OB_ERR_CLONE_TENANT, format_msg.string().length(), format_msg.ptr());
         }
       }
     }
