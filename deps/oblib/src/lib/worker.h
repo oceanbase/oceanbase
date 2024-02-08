@@ -249,7 +249,7 @@ class ObRuntimeContext
   OB_UNIS_VERSION(1);
 public:
   ObRuntimeContext()
-      : compat_mode_(Worker::CompatMode::INVALID)
+      : compat_mode_(Worker::CompatMode::MYSQL)
   {}
   Worker::CompatMode compat_mode_;
 #ifdef ERRSIM
