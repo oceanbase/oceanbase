@@ -4383,7 +4383,7 @@ int ObQueryRange::set_partial_row_border(
         } else {
           // do nothing
         }
-        ObKeyPart *item = NULL != l_cur ? l_cur->item_next_ : NULL;
+        ObKeyPart *item = NULL != l_cur && l_cur->pos_.offset_ == new_key_part->pos_.offset_ ? l_cur->item_next_ : NULL;
         while (OB_SUCC(ret) && NULL != item) {
           ObKeyPart *new_item = NULL;
           if (OB_ISNULL(new_item = deep_copy_key_part(item))) {
@@ -4395,7 +4395,7 @@ int ObQueryRange::set_partial_row_border(
             item = item->item_next_;
           }
         }
-        item = NULL != r_cur ? r_cur->item_next_ : NULL;
+        item = NULL != r_cur && r_cur->pos_.offset_ == new_key_part->pos_.offset_ ? r_cur->item_next_ : NULL;
         while (OB_SUCC(ret) && NULL != item) {
           ObKeyPart *new_item = NULL;
           if (OB_ISNULL(new_item = deep_copy_key_part(item))) {
