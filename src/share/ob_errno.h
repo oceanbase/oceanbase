@@ -1827,6 +1827,7 @@ constexpr int OB_KV_ROWKEY_COUNT_NOT_MATCH = -10510;
 constexpr int OB_KV_COLUMN_TYPE_NOT_MATCH = -10511;
 constexpr int OB_KV_COLLATION_MISMATCH = -10512;
 constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
+constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
@@ -4031,6 +4032,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLUMN_TYPE_NOT_MATCH__USER_ERROR_MSG "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
 #define OB_KV_COLLATION_MISMATCH__USER_ERROR_MSG "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
+#define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
@@ -6242,6 +6244,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLUMN_TYPE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10511, Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
 #define OB_KV_COLLATION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10512, Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
+#define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
@@ -6270,7 +6273,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2207];
+extern int g_all_ob_errnos[2208];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

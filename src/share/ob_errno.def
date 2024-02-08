@@ -2407,6 +2407,7 @@ DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey
 DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
+DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
