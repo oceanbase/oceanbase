@@ -518,7 +518,7 @@ int ObUnitManager::alter_unit_config(const ObUnitConfig &unit_config)
   } else {
     // copy unit resource
     ObUnitResource new_ur = old_config->unit_resource();
-    const ObUnitResource &old_ur = old_config->unit_resource();
+    const ObUnitResource old_ur = old_config->unit_resource();
 
     // update based on user specified
     if (OB_FAIL(new_ur.update_and_check_valid_for_unit(rpc_ur))) {
