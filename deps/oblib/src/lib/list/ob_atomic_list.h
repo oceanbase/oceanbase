@@ -20,14 +20,9 @@ namespace oceanbase
 namespace common
 {
 
-#if (defined(__x86_64__) ||  defined(__aarch64__) )
-//#define OB_HAS_128BIT_CAS 1  
-#elif defined(__powerpc64__)
+#if defined(__powerpc64__) /*define it for powerpc64 */
 #define OB_HAS_128BIT_CAS 1
-#else
-//
 #endif
-
 #define DOUBLE_FREE_CHECK 1
 
 // Generic atomic list Implementation (for pointer data types only). Uses
