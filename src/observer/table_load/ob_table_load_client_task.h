@@ -42,13 +42,9 @@ public:
   int get_table_ctx(ObTableLoadTableCtx *&table_ctx);
   OB_INLINE sql::ObSQLSessionInfo *get_session_info() { return session_info_; }
   OB_INLINE ObTableLoadClientExecCtx *get_exec_ctx() { return exec_ctx_; }
-  int add_trans_id(const table::ObTableLoadTransId &trans_id);
-  int get_next_trans_id(table::ObTableLoadTransId &trans_id);
+  OB_INLINE void set_trans_id(const table::ObTableLoadTransId &trans_id) { trans_id_ = trans_id; }
+  OB_INLINE const table::ObTableLoadTransId &get_trans_id() const { return trans_id_; }
   int64_t get_next_batch_id() { return ATOMIC_FAA(&next_batch_id_, 1); }
-  OB_INLINE const common::ObIArray<table::ObTableLoadTransId> &get_trans_ids() const
-  {
-    return trans_ids_;
-  }
   int set_status_running();
   int set_status_committing();
   int set_status_commit();
@@ -62,13 +58,12 @@ public:
   int add_task(ObTableLoadTask *task);
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(database_id), K_(table_id), K_(ddl_param),
                K_(column_names), K_(column_idxs), K_(result_info), KP_(session_info),
-               K_(free_session_ctx), KP_(exec_ctx), KP_(task_scheduler), K_(trans_ids),
-               K_(next_trans_idx), KP_(table_ctx), K_(client_status), K_(error_code),
-               K_(ref_count));
+               K_(free_session_ctx), KP_(exec_ctx), KP_(task_scheduler), K_(trans_id),
+               KP_(table_ctx), K_(client_status), K_(error_code), K_(ref_count));
 private:
   int create_session_info(uint64_t user_id, uint64_t database_id, uint64_t table_id,
-                                 sql::ObSQLSessionInfo *&session_info,
-                                 sql::ObFreeSessionCtx &free_session_ctx);
+                          sql::ObSQLSessionInfo *&session_info,
+                          sql::ObFreeSessionCtx &free_session_ctx);
   int init_column_names_and_idxs();
   int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
 public:
@@ -87,8 +82,7 @@ private:
   ObTableLoadClientExecCtx *exec_ctx_;
   ObTableLoadObjectAllocator<ObTableLoadTask> task_allocator_;
   ObITableLoadTaskScheduler *task_scheduler_;
-  common::ObArray<table::ObTableLoadTransId> trans_ids_;
-  int64_t next_trans_idx_;
+  table::ObTableLoadTransId trans_id_;
   int64_t next_batch_id_ CACHE_ALIGNED;
   mutable obsys::ObRWLock rw_lock_;
   ObTableLoadTableCtx *table_ctx_;
