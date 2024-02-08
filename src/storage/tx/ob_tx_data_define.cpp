@@ -46,13 +46,16 @@ int ObUndoStatusList::serialize(char *buf, const int64_t buf_len, int64_t &pos) 
 int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObArray<ObUndoStatusNode *> node_arr;
-  node_arr.reset();
+  ObSEArray<ObUndoStatusNode *, 32> node_arr;
+  node_arr.reuse();
   ObUndoStatusNode *node = head_;
   // generate undo status node stack
   while (OB_NOT_NULL(node)) {
-    node_arr.push_back(node);
-    node = node->next_;
+    if (OB_FAIL(node_arr.push_back(node))) {
+      STORAGE_LOG(WARN, "push back undo status node failed", KR(ret), K(node_arr.count()));
+    } else {
+      node = node->next_;
+    }
   }
 
   LST_DO_CODE(OB_UNIS_ENCODE, undo_node_cnt_);
