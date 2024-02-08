@@ -339,10 +339,10 @@ class ObTableTTLOperation
 {
 public:
   ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, const ObTTLTaskParam &para,
-                      uint64_t del_row_limit, ObRowkey start_rowkey)
+                      uint64_t del_row_limit, ObRowkey start_rowkey, uint64_t hbase_cur_version)
   : tenant_id_(tenant_id), table_id_(table_id), max_version_(para.max_version_),
     time_to_live_(para.ttl_), is_htable_(para.is_htable_), del_row_limit_(del_row_limit),
-    start_rowkey_(start_rowkey)
+    start_rowkey_(start_rowkey), hbase_cur_version_(hbase_cur_version)
   {}
 
   ~ObTableTTLOperation() {}
@@ -360,6 +360,7 @@ public:
   bool is_htable_;
   uint64_t del_row_limit_;
   ObRowkey start_rowkey_;
+  uint64_t hbase_cur_version_;
 };
 
 /// common result for ObTable

@@ -277,6 +277,7 @@ ob_set_subtarget(ob_share common_mixed
   restore/ob_tenant_clone_table_operator.cpp
   index_usage/ob_index_usage_info_mgr.cpp
   index_usage/ob_index_usage_report_task.cpp
+  table/ob_table_util.cpp
 )
 
 ob_set_subtarget(ob_share tablet
