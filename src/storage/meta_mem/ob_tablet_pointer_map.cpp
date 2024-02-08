@@ -323,14 +323,14 @@ int ObTabletPointerMap::load_and_hook_meta_obj(
 {
   int ret = OB_SUCCESS;
   uint64_t hash_val = 0;
-  ObMetaDiskAddr disk_addr;
+  ObUpdateTabletPointerParam update_pointer_param;
   ObTabletPointer *meta_pointer = ptr_hdl.get_resource_ptr();
   do {
     bool need_free_obj = false;
     ObTablet *t = nullptr;
     // Move load obj from disk out of the bucket lock, because
     // wash obj may acquire the bucket lock again, which cause dead lock.
-    if (OB_FAIL(load_meta_obj(key, meta_pointer, disk_addr, t))) {
+    if (OB_FAIL(load_meta_obj(key, meta_pointer, update_pointer_param, t))) {
       STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(meta_pointer), K(lbt()));
     } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
       STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
@@ -348,18 +348,18 @@ int ObTabletPointerMap::load_and_hook_meta_obj(
           if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
             STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(meta_pointer));
           }
-        } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
+        } else if (OB_UNLIKELY(update_pointer_param.tablet_addr_ != meta_pointer->get_addr()
             || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
             || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
           ret = OB_ITEM_NOT_MATCH;
           need_free_obj = true;
           if (REACH_TIME_INTERVAL(1000000)) {
-            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(disk_addr), KPC(meta_pointer),
+            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(update_pointer_param), KPC(meta_pointer),
                 KPC(tmp_ptr_hdl.get_resource_ptr()));
           }
         } else {
-          if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
-            STORAGE_LOG(WARN, "fail to hook object", K(ret), KP(meta_pointer));
+          if (OB_FAIL(meta_pointer->hook_obj(update_pointer_param.tablet_attr_, t, guard))) {
+            STORAGE_LOG(WARN, "fail to hook object", K(ret), K(update_pointer_param), KP(meta_pointer));
           }
         }
       } // write lock end
@@ -428,7 +428,7 @@ int ObTabletPointerMap::load_meta_obj(
 int ObTabletPointerMap::load_meta_obj(
     const ObTabletMapKey &key,
     ObTabletPointer *meta_pointer,
-    ObMetaDiskAddr &load_addr,
+    ObUpdateTabletPointerParam &update_pointer_param,
     ObTablet *&t)
 {
   int ret = common::OB_SUCCESS;
@@ -447,6 +447,7 @@ int ObTabletPointerMap::load_meta_obj(
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       ObTabletPointerHandle tmp_ptr_hdl(*this);
+      ObMetaDiskAddr load_addr;
       // check whether the tablet has been deleted
       if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
         if (common::OB_ENTRY_NOT_EXIST != ret) {
@@ -462,6 +463,8 @@ int ObTabletPointerMap::load_meta_obj(
         t->tablet_addr_ = load_addr;
         if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
           STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
+        } else if (OB_FAIL(t->get_updating_tablet_pointer_param(update_pointer_param))) {
+          STORAGE_LOG(WARN, "fail to get updating tablet pointer parameters", K(ret), KPC(t));
         }
       }
     }
@@ -650,14 +653,15 @@ int ObTabletPointerMap::get_attr_for_obj(const ObTabletMapKey &key, ObMetaObjGua
 
 int ObTabletPointerMap::compare_and_swap_addr_and_object(
     const ObTabletMapKey &key,
-    const ObMetaDiskAddr &new_addr,
     const ObMetaObjGuard<ObTablet> &old_guard,
-    ObMetaObjGuard<ObTablet> &new_guard)
+    const ObMetaObjGuard<ObTablet> &new_guard,
+    const ObUpdateTabletPointerParam &update_pointer_param)
 {
   int ret = common::OB_SUCCESS;
   ObTabletPointerHandle ptr_hdl(*this);
   ObTabletPointer *t_ptr = nullptr;
   ObMetaObjGuard<ObTablet> ptr_guard;
+  const ObMetaDiskAddr &new_addr = update_pointer_param.tablet_addr_;
   uint64_t hash_val = 0;
 
   if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
@@ -696,8 +700,8 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
       if (t_ptr->get_addr().is_equal_for_persistence(new_addr)) {
         // no need to update tablet attr, including creating memtables or updating the same tablets
         STORAGE_LOG(DEBUG, "no need to update tablet attr", K(ret), K(new_addr), K(t_ptr->get_addr()), K(new_guard), K(old_guard));
-      } else if (OB_FAIL(t_ptr->set_tablet_attr(*new_guard.get_obj()))) {
-        STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), K(new_addr), K(new_guard));
+      } else if (OB_FAIL(t_ptr->set_tablet_attr(update_pointer_param.tablet_attr_))) {
+        STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), KPC(t_ptr), K(update_pointer_param));
       }
 
       if (OB_SUCC(ret)) {

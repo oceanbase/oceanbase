@@ -155,7 +155,7 @@ int ObTabletPointer::read_from_disk(
   return ret;
 }
 
-int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointer::hook_obj(const ObTabletAttr &attr, ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
 {
   int ret = OB_SUCCESS;
   guard.reset();
@@ -175,7 +175,7 @@ int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
     obj_.ptr_ = t;
     guard.set_obj(obj_);
     ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
-    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(*t))) { // only set tablet attr when first hook obj
+    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(attr))) { // only set tablet attr when first hook obj
       STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(guard));
     }
   }
@@ -657,16 +657,14 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   return ret;
 }
 
-int ObTabletPointer::set_tablet_attr(ObTablet &tablet)
+int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
 {
   int ret = OB_SUCCESS;
-  attr_.reset();
-  if (OB_FAIL(tablet.calc_tablet_attr(attr_))) {
-    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      ret = OB_SUCCESS; // the invalid attr is allowed
-    } else {
-      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(tablet));
-    }
+  if (OB_UNLIKELY(!attr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(attr));
+  } else {
+    attr_ = attr;
   }
   return ret;
 }

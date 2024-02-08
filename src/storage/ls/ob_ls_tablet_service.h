@@ -545,6 +545,7 @@ private:
   int refresh_tablet_addr(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
+      const ObUpdateTabletPointerParam &param,
       ObTabletHandle &tablet_handle);
   int inner_remove_tablet(
       const share::ObLSID &ls_id,
