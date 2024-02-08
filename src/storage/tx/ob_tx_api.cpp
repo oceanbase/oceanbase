@@ -1389,7 +1389,6 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       }
     }
   }
-  tx.state_change_flags_.EXTRA_CHANGED_ = true;
   int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, rollback_explicit_savepoint, OB_Y(ret),
@@ -1434,7 +1433,6 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
       TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
     }
   }
-  tx.state_change_flags_.EXTRA_CHANGED_ = true;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, release_explicit_savepoint, OB_Y(ret),
                       OB_ID(savepoint), savepoint,
@@ -1533,7 +1531,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
   if (OB_TIMEOUT == ret && ObTimeUtility::current_time() >= tx.get_expire_ts()) {
      ret = OB_TRANS_TIMEOUT;
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && parts.count() > 0) {
     tx.post_rb_savepoint_(parts, savepoint);
   }
   return ret;
