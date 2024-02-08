@@ -13345,8 +13345,6 @@ int ObDDLService::create_hidden_table(
                   allocator,
                   tenant_data_version))) {
           LOG_WARN("fail to create hidden table", K(ret));
-        } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema, trans, OB_DDL_ALTER_TABLE))) {
-          LOG_WARN("failed to update data table schema attribute", K(ret));
         } else {
           LOG_INFO("create hidden table success!", K(table_id), K(new_table_schema));
         }
@@ -13680,8 +13678,6 @@ int ObDDLService::recover_restore_table_ddl_task(
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
           dst_tenant_trans, allocator, tenant_data_version))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
-        } else if (OB_FAIL(ddl_operator.update_table_attribute(dst_table_schema, dst_tenant_trans, OB_DDL_ALTER_TABLE))) {
-          LOG_WARN("failed to update data table schema attribute", K(ret), K(arg));
         } else {
           ObPrepareAlterTableArgParam param;
           if (OB_FAIL(param.init(arg.consumer_group_id_, session_id, 0/*sql_mode, unused*/, arg.ddl_stmt_str_,
@@ -16442,7 +16438,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
   }
 
   if (OB_SUCC(ret)) {
-    bool need_sync_schema_version = false;
     ObTableCreator table_creator(
                    tenant_id,
                    frozen_scn,
@@ -16460,7 +16455,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); i++) {
       share::schema::ObTableSchema *table_schema = const_cast<ObTableSchema*>(schemas.at(i));
-      if (OB_FAIL(ddl_operator.create_table(*table_schema, trans, NULL, need_sync_schema_version))) {
+      if (OB_FAIL(ddl_operator.create_table(*table_schema, trans, NULL,
+          i == schemas.count() - 1/*need_sync_schema_version, to update data table schema version*/))) {
         LOG_WARN("failed to create table schema", K(ret));
       } else if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, *table_schema))) {
         LOG_WARN("failed to insert temp table info", K(ret), KPC(table_schema));
@@ -16468,12 +16464,20 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     }
 
     int64_t last_schema_version = OB_INVALID_VERSION;
+    if (FAILEDx(get_last_schema_version(last_schema_version))) {
+      LOG_WARN("get last schema version failed", K(ret), K(last_schema_version));
+    } else if (OB_UNLIKELY(last_schema_version < schemas.at(schemas.count() - 1)->get_schema_version())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected last schema version", K(ret), K(last_schema_version),
+        "table schema version", schemas.at(schemas.count() - 1)->get_schema_version());
+    } else {
+      // update schema version after sync version by creating lob table.
+      hidden_table_schema.set_schema_version(last_schema_version);
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); i++) {
       share::schema::ObTableSchema *table_schema = const_cast<ObTableSchema*>(schemas.at(i));
-      if (OB_INVALID_VERSION == last_schema_version
-          && OB_FAIL(get_last_schema_version(last_schema_version))) {
-        LOG_WARN("get last schema version failed", K(ret), K(last_schema_version));
-      } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(trans, tenant_id,
+      if (OB_FAIL(ddl_operator.insert_ori_schema_version(trans, tenant_id,
                   table_schema->get_table_id(), last_schema_version))) {
         LOG_WARN("failed to insert_ori_schema_version!", K(ret), KPC(table_schema), K(last_schema_version));
       }
