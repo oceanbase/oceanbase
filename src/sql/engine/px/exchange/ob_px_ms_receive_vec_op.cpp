@@ -675,7 +675,7 @@ int ObPxMSReceiveVecOp::inner_get_next_row()
 int ObPxMSReceiveVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
-  do_clear_datum_eval_flag();
+  clear_evaluated_flag();
   clear_dynamic_const_parent_flag();
   // 从channel sets 读取数据，并向上迭代
   const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
