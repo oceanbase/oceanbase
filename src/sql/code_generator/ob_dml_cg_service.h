@@ -197,6 +197,9 @@ private:
                               const ObTableSchema *table_schema,
                               ObIArray<uint64_t> &minimal_column_ids);
 
+  int append_shadow_pk_dependent_cid(const ObTableSchema *table_schema,
+                                     ObIArray<uint64_t> &minimal_column_ids);
+
   int append_heap_table_part_id(const ObTableSchema *table_schema,
                                 ObIArray<uint64_t> &minimal_column_ids);
 
