@@ -1098,7 +1098,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #else
   if (OB_FAIL(ret) || rollback) { print_log = true; }
 #endif
-  if (print_log && OB_NOT_NULL(session)) {
+  if (print_log
+      && OB_NOT_NULL(session)
+      && OB_TRY_LOCK_ROW_CONFLICT != exec_ctx.get_errcode()) {
     LOG_INFO("end stmt", K(ret),
              "plain_select", is_plain_select,
              "stmt_type", stmt_type,
