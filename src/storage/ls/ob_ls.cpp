@@ -1056,6 +1056,8 @@ void ObLS::unregister_common_service_()
   if (ls_meta_.ls_id_ == IDS_LS) {
     MTL(ObTransIDService *)->reset_ls();
     MTL(ObTimestampService *)->reset_ls();
+    // temporary fix of
+    MTL(sql::ObDASIDService *)->reset_ls();
     UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
     UNREGISTER_FROM_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
   }
