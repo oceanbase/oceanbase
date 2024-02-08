@@ -1433,6 +1433,26 @@ int ObOperator::filter_row(ObEvalCtx &eval_ctx, const ObIArray<ObExpr *> &exprs,
   return ret;
 }
 
+int ObOperator::filter_row_vector(ObEvalCtx &eval_ctx,
+                                  const common::ObIArray<ObExpr *> &exprs,
+                                  const sql::ObBitVector &skip_bit,
+                                  bool &filtered)
+{
+  int ret = OB_SUCCESS;
+  filtered = false;
+  const int64_t batch_idx = eval_ctx.get_batch_idx();
+  EvalBound eval_bound(eval_ctx.get_batch_size(), batch_idx, batch_idx + 1, false);
+  FOREACH_CNT_X(e, exprs, OB_SUCC(ret) && !filtered) {
+    if (OB_FAIL((*e)->eval_vector(eval_ctx, skip_bit, eval_bound))) {
+      LOG_WARN("Failed to evaluate vector", K(ret));
+    } else {
+      ObIVector *res = (*e)->get_vector(eval_ctx);
+      filtered = !res->is_true(batch_idx);
+    }
+  }
+  return ret;
+}
+
 int ObOperator::filter(const common::ObIArray<ObExpr *> &exprs, bool &filtered)
 {
   return filter_row(eval_ctx_, exprs, filtered);

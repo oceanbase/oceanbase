@@ -228,6 +228,7 @@ struct ObDoArithFixedVectorEval
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], right_arr[idx], args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
         // do nothing
@@ -273,6 +274,7 @@ struct ObDoArithFixedConstVectorEval
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], *right_val, args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
           && INT_MIN < *right_val < INT_MAX) {
         // do nothing
@@ -318,6 +320,7 @@ struct ObDoArithConstFixedVectorEval
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], *left_val, right_arr[idx], args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && INT_MIN < *left_val < INT_MAX
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
       } else {
@@ -394,11 +397,18 @@ inline int ObDoNumberVectorEval(VECTOR_EVAL_FUNC_ARG_DECL, const bool right_eval
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); idx++) {
         ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
       }
+      if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+        reinterpret_cast<ObDiscreteFormat *>(res_vec)->get_nulls()->unset_all(bound.start(),
+                                                                              bound.end());
+      }
     } else {
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); idx++) {
         if (left_vec->is_null(idx) || right_vec->is_null(idx)) {
           res_vec->set_null(idx);
         } else {
+          if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+            res_vec->unset_null(idx);
+          }
           ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
         }
       }
@@ -806,6 +816,7 @@ struct ObVectorArithOpWrap : public Base
     if (left_vec.is_null(idx) || right_vec.is_null(idx)) {
       res_vec.set_null(idx);
     } else {
+      res_vec.unset_null(idx);
       ret = ObVectorArithOpWrap()(res_vec, left_vec, right_vec, idx, args...);
     }
     return ret;

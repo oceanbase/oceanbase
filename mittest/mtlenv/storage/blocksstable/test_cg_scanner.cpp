@@ -594,6 +594,7 @@ TEST_F(TestCGScanner, test_filter)
   pd_filter.cell_data_ptrs_ = reinterpret_cast<const char **>(buf3);
   buf3 = allocator_.alloc(sizeof(int64_t) * pd_filter.batch_size_);
   pd_filter.row_ids_ = reinterpret_cast<int64_t *>(buf3);
+  pd_filter.skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(256)));
   pd_filter.is_inited_ = true;
 
   int64_t start = 5;

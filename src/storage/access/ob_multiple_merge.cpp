@@ -63,6 +63,7 @@ ObMultipleMerge::ObMultipleMerge()
       get_table_param_(nullptr),
       read_memtable_only_(false),
       block_row_store_(nullptr),
+      skip_bit_(nullptr),
       out_project_cols_(),
       lob_reader_(),
       scan_state_(ScanState::NONE)
@@ -85,6 +86,12 @@ ObMultipleMerge::~ObMultipleMerge()
       access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
+  }
+  if (nullptr != skip_bit_) {
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(skip_bit_);
+    }
+    skip_bit_ = nullptr;
   }
 }
 
@@ -141,6 +148,7 @@ int ObMultipleMerge::init(
     get_table_param_ = &get_table_param;
     access_param_->iter_param_.set_table_param(get_table_param_);
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
+    const int64_t batch_size = access_param_->iter_param_.vectorized_enabled_ ? access_param_->get_op()->get_batch_size() : 1;
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(read_info)) {
         ret = OB_ERR_UNEXPECTED;
@@ -162,7 +170,11 @@ int ObMultipleMerge::init(
       LOG_WARN("fail to alloc row store", K(ret));
     } else if (param.iter_param_.is_use_iter_pool() && OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
+    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(access_ctx_->stmt_allocator_->alloc(ObBitVector::memory_size(batch_size))))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc skip bit", K(ret), K(batch_size));
     } else {
+      skip_bit_->init(batch_size);
       access_ctx_->block_row_store_ = block_row_store_;
       inited_ = true;
       LOG_TRACE("succ to init multiple merge", K(*this));
@@ -766,6 +778,12 @@ void ObMultipleMerge::reset()
     }
     block_row_store_ = nullptr;
   }
+  if (nullptr != skip_bit_) {
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(skip_bit_);
+    }
+    skip_bit_ = nullptr;
+  }
   padding_allocator_.reset();
   iters_.reset();
   access_param_ = NULL;
@@ -1073,7 +1091,7 @@ int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
       && !access_param_->op_filters_->empty()) {
     // Execute filter in sql static typing engine.
     // %row is already projected to output expressions for main table scan.
-    if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, filtered))) {
+    if (OB_FAIL(access_param_->get_op()->filter_row_outside(*access_param_->op_filters_, *skip_bit_, filtered))) {
       LOG_WARN("filter row failed", K(ret));
     }
   }

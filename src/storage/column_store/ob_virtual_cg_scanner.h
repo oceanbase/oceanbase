@@ -105,7 +105,7 @@ public:
 private:
 	int init_datum_infos_and_default_row(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   int init_cg_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
-  int do_filter(sql::ObPushdownFilterExecutor *filter, bool &result);
+  int do_filter(sql::ObPushdownFilterExecutor *filter, const sql::ObBitVector &skip_bit, bool &result);
   int add_lob_header_if_need(
       const share::schema::ObColumnParam &column_param,
       ObIAllocator &allocator,
