@@ -62,6 +62,7 @@ public:
                                  const bool enable_oracle_empty_char_reshape_to_null,
                                  ObIAllocator &allocator,
                                  blocksstable::ObStorageDatum &datum_value);
+  static int padding_fixed_string_value(int64_t max_len, ObIAllocator &alloc, ObObj &value);
   static int generate_spatial_index_rows(ObIAllocator &allocator,
                                          const ObDASDMLBaseCtDef &das_ctdef,
                                          const ObString &wkb_str,
