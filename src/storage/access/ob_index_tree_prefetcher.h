@@ -194,8 +194,6 @@ protected:
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   const ObStorageDatumUtils *datum_utils_;
-  common::ObFixedArray<int32_t, common::ObIAllocator> agg_projector_;
-  common::ObFixedArray<share::schema::ObColumnSchemaV2, common::ObIAllocator> agg_column_schema_;
   static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
   ObIndexBlockRowScanner index_scanner_;
   ObMicroBlockDataHandle last_micro_block_handle_;
