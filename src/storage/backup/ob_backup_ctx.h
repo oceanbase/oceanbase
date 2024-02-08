@@ -229,8 +229,8 @@ struct ObLSBackupCtx {
 public:
   ObLSBackupCtx();
   virtual ~ObLSBackupCtx();
-  int open(
-      const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy);
+  int open(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
+      common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache);
   int next(common::ObTabletID &tablet_id);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   int hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
@@ -246,9 +246,12 @@ public:
 
   int get_max_file_id(int64_t &max_file_id);
   int set_max_file_id(const int64_t file_id);
-  int get_prefetch_task_id(int64_t &prefetch_task_id);
   int wait_task(const int64_t file_id);
   int finish_task(const int64_t file_id);
+  int64_t get_prefetch_task_id()
+  {
+    return ATOMIC_FAA(&prefetch_task_id_, 1);
+  }
 
   ObBackupTabletHolder &get_tablet_holder()
   {
@@ -312,6 +315,7 @@ public:
   int64_t rebuild_seq_; // rebuild seq of backup ls meta
   int64_t check_tablet_info_cost_time_;
   share::SCN backup_tx_table_filled_tx_scn_;
+  ObBackupTabletChecker tablet_checker_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 
