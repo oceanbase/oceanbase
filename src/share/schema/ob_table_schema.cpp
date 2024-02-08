@@ -4486,6 +4486,10 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           is_offline = true;
         }
       }
+      if ((src_meta.is_signed_integer() && dst_meta.is_unsigned_integer())
+        || (src_meta.is_unsigned_integer() && dst_meta.is_signed_integer())) {
+          is_offline = true;
+      }
       if (!src_meta.is_lob_storage() && dst_meta.is_lob_storage()) {
         is_offline = true;
       }
