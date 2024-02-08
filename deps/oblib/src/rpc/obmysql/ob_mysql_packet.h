@@ -162,6 +162,8 @@ union ObProxyCapabilityFlags
   bool is_weak_stale_feedback() const { return 1 == cap_flags_.OB_CAP_PROXY_WEAK_STALE_FEEDBACK; }
   bool is_flt_show_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT
                                                         && is_ob_protocol_v2_support(); }
+  bool is_session_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_SESSIOIN_SYNC
+                                                        && is_ob_protocol_v2_support(); }
   bool is_load_local_support() const { return 1 == cap_flags_.OB_CAP_LOCAL_FILES; }
   bool is_client_sessid_support() const { return 1 == cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID; }
 

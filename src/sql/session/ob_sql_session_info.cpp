@@ -200,7 +200,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       in_bytes_(0),
       out_bytes_(0),
       current_dblink_sequence_id_(0),
-      client_non_standard_(false)
+      client_non_standard_(false),
+      is_session_sync_support_(false)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -384,6 +385,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
   current_dblink_sequence_id_ = 0;
   dblink_sequence_schemas_.reset();
+  is_session_sync_support_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -1688,7 +1690,8 @@ OB_DEF_SERIALIZE(ObSQLSessionInfo)
       gtt_session_scope_unique_id_,
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
-      gtt_trans_scope_ids_);
+      gtt_trans_scope_ids_,
+      affected_rows_);
   return ret;
 }
 
@@ -1719,7 +1722,8 @@ OB_DEF_DESERIALIZE(ObSQLSessionInfo)
       gtt_session_scope_unique_id_,
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
-      gtt_trans_scope_ids_);
+      gtt_trans_scope_ids_,
+      affected_rows_);
   (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
   return ret;
 }
@@ -1751,7 +1755,8 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       gtt_session_scope_unique_id_,
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
-      gtt_trans_scope_ids_);
+      gtt_trans_scope_ids_,
+      affected_rows_);
   return len;
 }
 
@@ -3984,6 +3989,88 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
         LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
       }
     }
+  }
+  return ret;
+}
+
+int ObQueryInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(sess.get_affected_rows());
+  return ret;
+}
+
+int ObQueryInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  int64_t found_rows = 0;
+  OB_UNIS_DECODE(affected_rows);
+  sess.set_affected_rows(affected_rows);
+  return ret;
+}
+
+int ObQueryInfoEncoder::get_serialize_size(ObSQLSessionInfo &sess, int64_t &len) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ADD_LEN(sess.get_affected_rows());
+  return ret;
+}
+
+int ObQueryInfoEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialize(sess, buf, length, pos))) {
+    LOG_WARN("failed to fetch session info.", K(ret), K(pos), K(length));
+  }
+  return ret;
+}
+
+int64_t ObQueryInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
+{
+  int64_t len = 0;
+  get_serialize_size(sess, len);
+  return len;
+}
+
+int ObQueryInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                          const char* last_sess_buf, int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  if (current_sess_length != last_sess_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
+    LOG_TRACE("success to compare session info", K(ret));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare buf session info", K(ret),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  }
+  return ret;
+}
+
+int ObQueryInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+            int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  int64_t pos = 0;
+  const char *buf = last_sess_buf;
+  int64_t data_len = last_sess_length;
+  int64_t affected_rows = 0;
+
+  LST_DO_CODE(OB_UNIS_DECODE, affected_rows);
+  if (sess.get_affected_rows() != affected_rows) {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_WARN("failed to verify affected_rows", K(ret),
+      "current_affected_rows", sess.get_affected_rows(),
+      "last_affected_rows", affected_rows);
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("success to verify VariousInfo", K(ret));
   }
   return ret;
 }
