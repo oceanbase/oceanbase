@@ -54,9 +54,9 @@ TEST_F(TestJsonPath, test_is_mysql_terminator_mysql)
   for(int i = 0; i < sizeof(ch); ++i)
   {
     if (i <= 3) {
-      ASSERT_EQ(true, ObJsonPathUtil::is_mysql_terminator(ch[i]));
+      ASSERT_EQ(true, ObJsonPathUtil::is_key_name_terminator(ch[i]));
     } else {
-      ASSERT_EQ(false, ObJsonPathUtil::is_mysql_terminator(ch[i]));
+      ASSERT_EQ(false, ObJsonPathUtil::is_key_name_terminator(ch[i]));
     }
   }
 }
