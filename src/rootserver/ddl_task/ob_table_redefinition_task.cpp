@@ -287,6 +287,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     }
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
+    const ObTableSchema *hidden_table_schema = nullptr;
     ObDDLRedefinitionSSTableBuildTask task(
         task_id_,
         tenant_id_,
@@ -309,7 +310,9 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
       LOG_WARN("failed to get orig table schema", K(ret));
-    } else if (OB_FAIL(task.init(*orig_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, hidden_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(target_object_id_));
+    } else if (OB_FAIL(task.init(*orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
       LOG_WARN("fail to init table redefinition sstable build task", K(ret));
     } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit ddl build single replica", K(ret));

@@ -17278,7 +17278,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
       }
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+      if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
       } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
         LOG_WARN("fail to get drop cols id set", K(ret));
@@ -17488,7 +17488,7 @@ int ObDDLService::rebuild_hidden_table_constraints(
     LOG_WARN("fail to get constraints that need to rebuild", K(ret));
   } else if (rebuild_constraints.count() == 0) {
     // no constraints, or constraints have been rebuilt.
-  } else if (OB_FAIL(col_name_map.init(orig_table_schema, alter_table_arg.alter_table_schema_))) {
+  } else if (OB_FAIL(col_name_map.init(orig_table_schema, hidden_table_schema, alter_table_arg.alter_table_schema_))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     new_table_schema.clear_constraint();
@@ -17978,7 +17978,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     LOG_WARN("fail to get fk infos that need to rebuild", K(ret));
   } else if (OB_FAIL(inc_table_schema.set_foreign_key_infos(rebuild_fk_infos))) {
     LOG_WARN("fail to set fk infos", K(ret));
-  } else if (OB_FAIL(col_name_map.init(orig_table_schema, alter_table_arg.alter_table_schema_))) {
+  } else if (OB_FAIL(col_name_map.init(orig_table_schema, hidden_table_schema, alter_table_arg.alter_table_schema_))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     ObIArray<ObForeignKeyInfo> &foreign_key_infos = inc_table_schema.get_foreign_key_infos();
@@ -19294,7 +19294,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
       uint64_t hidden_column_id = 0;
       if (nullptr == orig_table_schema->get_column_schema(orig_column_id)) {
         hidden_column_id = orig_column_id;
-      } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+      } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret));
       } else if (OB_FAIL(get_hidden_table_column_id_by_orig_column_id(*orig_table_schema,
                                                                       *hidden_table_schema,
