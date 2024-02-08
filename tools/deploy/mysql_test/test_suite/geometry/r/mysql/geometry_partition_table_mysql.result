@@ -1,47 +1,47 @@
 # ----------------------------------------------------------------------
 # Base test of GEOMETRY spatial index.
 # ----------------------------------------------------------------------
-DROP TABLE IF EXISTS t1;
-create table t1(c1 int primary key, g geometry not null srid 0) partition by hash(c1) partitions 2;
-create spatial index idx on t1 (g) local;
-insert into t1 (c1, g) values (0, st_geomfromtext('point(1 1)'));
-explain select /*+index(t1 idx)*/ st_astext(g) from t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+DROP TABLE IF EXISTS partition_t1;
+create table partition_t1(c1 int primary key, g geometry not null srid 0) partition by hash(c1) partitions 2;
+create spatial index idx on partition_t1 (g) local;
+insert into partition_t1 (c1, g) values (0, st_geomfromtext('point(1 1)'));
+explain select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
 Query Plan
-=============================================================
-|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |291         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |291         |
-|2 |  └─PX PARTITION ITERATOR|        |1       |289         |
-|3 |    └─TABLE FULL SCAN    |t1(idx) |1       |289         |
-=============================================================
+======================================================================
+|ID|OPERATOR                 |NAME             |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |PX COORDINATOR           |                 |1       |291         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |291         |
+|2 |  └─PX PARTITION ITERATOR|                 |1       |289         |
+|3 |    └─TABLE FULL SCAN    |partition_t1(idx)|1       |289         |
+======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(st_astext(t1.g))]), filter(nil)
-  1 - output([INTERNAL_FUNCTION(st_astext(t1.g))]), filter(nil)
+  0 - output([INTERNAL_FUNCTION(st_astext(partition_t1.g))]), filter(nil)
+  1 - output([INTERNAL_FUNCTION(st_astext(partition_t1.g))]), filter(nil)
       dop=1
-  2 - output([t1.g]), filter(nil)
+  2 - output([partition_t1.g]), filter(nil)
       force partition granule
-  3 - output([t1.g]), filter([st_intersects(t1.g, st_geomfromtext('point(1 1)'))])
-      access([t1.c1], [t1.g]), partitions(p[0-1])
+  3 - output([partition_t1.g]), filter([st_intersects(partition_t1.g, st_geomfromtext('point(1 1)'))])
+      access([partition_t1.c1], [partition_t1.g]), partitions(p[0-1])
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.__cellid_17], [t1.__mbr_17], [t1.c1]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,MIN,MIN 
-      ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX),
-       (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN 
-      ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX),
-       (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN 
-      ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX),
-       (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN 
-      ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX),
-       (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN 
-      ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX),
-       (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN 
-      ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX),
-       (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
-select /*+index(t1 idx)*/ st_astext(g) from t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+      range_key([partition_t1.__cellid_17], [partition_t1.__mbr_17], [partition_t1.c1]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX),
+       (1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN 
+      ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX),
+       (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN 
+      ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX),
+       (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN 
+      ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX),
+       (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN 
+      ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX),
+       (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN 
+      ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX),
+       (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN 
+      ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
 st_astext(g)
 POINT(1 1)
-drop table t1;
+drop table partition_t1;
 DROP TABLE IF EXISTS t1;
 create table t1(c1 int primary key, g geometry not null srid 0) partition by range(c1) ( partition p0 values less than (4),
 partition p1 values less than (10));

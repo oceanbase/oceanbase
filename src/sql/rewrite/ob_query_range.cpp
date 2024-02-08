@@ -9021,49 +9021,81 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         query_range_ctx_->cur_expr_is_precise_ = false;
         exec_ctx = query_range_ctx_->exec_ctx_;
       }
-      ObKeyPartList and_ranges;
+      ObKeyPart *head = nullptr;
+      ObKeyPart *last = nullptr;
+      hash::ObHashSet<uint64_t> cellid_set;
+      if (OB_FAIL(cellid_set.create(128, "CoveredByKeyPart", "HashNode"))) {
+        LOG_WARN("failed to create cellid set", K(ret));
+      } else if (!cellid_set.created()) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("fail to init cellid set", K(ret));
+      }
       for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
-        ObKeyPart *head = NULL;
-        ObKeyPart *last = NULL;
-        if (OB_ISNULL((head = create_new_key_part()))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("alloc memory failed", K(ret));
-        } else {
-          ObObj val;
-          val.set_uint64(cells[i]);
-          head->id_ = out_key_part->id_;
-          head->pos_ = out_key_part->pos_;
-          if (OB_FAIL(get_geo_single_keypart(val, val, *head))) {
-            LOG_WARN("get normal cmp keypart failed", K(ret));
-          } else {
-            last = head;
-          }
-        }
-        ObS2Cellids ancestors;
-        if (OB_FAIL(s2object->get_ancestors(cells[i], ancestors))) {
-          LOG_WARN("Get ancestors of cell failed", K(ret));
-        }
-        for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
-          ObKeyPart *tmp = NULL;
-          if (OB_ISNULL((tmp = create_new_key_part()))) {
+        int hash_ret = cellid_set.exist_refactored(cells[i]);
+        if (OB_HASH_NOT_EXIST == hash_ret) {
+          ObKeyPart *cell_head = nullptr;
+          ObKeyPart *cell_last = nullptr;
+          if (OB_FAIL(cellid_set.set_refactored(cells[i]))) {
+            LOG_WARN("failed to add cellid into set", K(ret));
+          } else if (OB_ISNULL((cell_head = create_new_key_part()))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_ERROR("alloc memory failed", K(ret));
           } else {
             ObObj val;
-            val.set_uint64(ancestors[i]);
-            tmp->id_ = out_key_part->id_;
-            tmp->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+            val.set_uint64(cells[i]);
+            cell_head->id_ = out_key_part->id_;
+            cell_head->pos_ = out_key_part->pos_;
+            if (OB_FAIL(get_geo_single_keypart(val, val, *cell_head))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
             } else {
-              last->or_next_ = tmp;
-              last = tmp;
+              cell_last = cell_head;
             }
           }
-        }
-        if (!and_ranges.add_last(head)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Add key part range failed", K(ret));
+          ObS2Cellids ancestors;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(s2object->get_ancestors(cells[i], ancestors))) {
+            LOG_WARN("Get ancestors of cell failed", K(ret));
+          }
+          // if cur cellid is exists in set, then it's ancestors also exist in set
+          int hash_ret = OB_HASH_NOT_EXIST;
+          for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
+            hash_ret = cellid_set.exist_refactored(ancestors[i]);
+            if (hash_ret == OB_HASH_NOT_EXIST) {
+              ObKeyPart *tmp = NULL;
+              if (OB_FAIL(cellid_set.set_refactored(ancestors[i]))) {
+                LOG_WARN("failed to add cellid into set", K(ret));
+              } else if (OB_ISNULL((tmp = create_new_key_part()))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_ERROR("alloc memory failed", K(ret));
+              } else {
+                ObObj val;
+                val.set_uint64(ancestors[i]);
+                tmp->id_ = out_key_part->id_;
+                tmp->pos_ = out_key_part->pos_;
+                if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+                  LOG_WARN("get normal cmp keypart failed", K(ret));
+                } else {
+                  cell_last->or_next_ = tmp;
+                  cell_last = tmp;
+                }
+              }
+            } else if (OB_HASH_EXIST != hash_ret) {
+              ret = hash_ret;
+              LOG_WARN("fail to check if key exist", K(ret), K(ancestors[i]), K(i));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_ISNULL(head)) {
+              head = cell_head;
+            } else {
+              last->or_next_ = cell_head;
+            }
+            last = cell_last;
+          }
+        } else if (OB_HASH_EXIST != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("fail to check if key exist", K(ret), K(cells[i]), K(i));
         }
       }
 
@@ -9075,31 +9107,15 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
       } else {
         query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, NULL, NULL);
       }
-      ObKeyPart *temp_result = NULL;
+
       ObS2Cellids cells_cover_geo;
-      ObSqlBitSet<> key_offsets;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
-        LOG_WARN("And query range failed", K(ret));
-      } else if (NULL == temp_result) {
-        // no range left
-      } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
-        LOG_WARN("failed to refine large range graph", K(ret));
-      } else if (OB_FAIL(remove_useless_range_graph(temp_result, key_offsets))) {
-        LOG_WARN("failed to remove useless range", K(ret));
-      } else if (OB_FAIL(s2object->get_cellids(cells_cover_geo, false))) {
-          LOG_WARN("Get cellids from s2object failed", K(ret));
-      } else {
-        // get the last node
-        ObKeyPart *cur = temp_result;
-        ObKeyPart *last = NULL;
-        while (OB_NOT_NULL(cur)) {
-          last = cur;
-          cur = cur->or_next_;
-        }
-        for (uint64_t i = 0; OB_SUCC(ret) && i < cells_cover_geo.size(); i++) {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_cover_geo.size(); i++) {
+        int hash_ret = cellid_set.exist_refactored(cells_cover_geo[i]);
+        if (OB_HASH_NOT_EXIST == hash_ret) {
           ObKeyPart *tmp = NULL;
-          if (OB_ISNULL((tmp = create_new_key_part()))) {
+          if (OB_FAIL(cellid_set.set_refactored(cells_cover_geo[i]))) {
+            LOG_WARN("failed to add cellid into set", K(ret));
+          } else if (OB_ISNULL((tmp = create_new_key_part()))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_ERROR("alloc memory failed", K(ret));
           } else {
@@ -9114,24 +9130,35 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
               last = tmp;
             }
           }
+        } else if (OB_HASH_EXIST != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("fail to check if key exist", K(ret), K(cells_cover_geo[i]), K(i));
         }
-        // copy temp_result to out_key_part
-        if (OB_FAIL(out_key_part->create_normal_key())) {
-          LOG_WARN("create normal key failed", K(ret));
-        } else if (OB_ISNULL(out_key_part->normal_keypart_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("normal keypart is null");
-        } else {
-          out_key_part->null_safe_ = temp_result->null_safe_;
-          out_key_part->normal_keypart_->include_start_ = true;
-          out_key_part->normal_keypart_->include_end_ = true;
-          out_key_part->normal_keypart_->start_ = temp_result->normal_keypart_->start_;
-          out_key_part->normal_keypart_->end_ = temp_result->normal_keypart_->end_;
-          out_key_part->normal_keypart_->always_false_ = false;
-          out_key_part->normal_keypart_->always_true_ = false;
-          out_key_part->item_next_ = temp_result->item_next_;
-          out_key_part->or_next_ = temp_result->or_next_;
-          out_key_part->and_next_ = temp_result->and_next_;
+      }
+      // copy temp_result to out_key_part
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(out_key_part->create_normal_key())) {
+        LOG_WARN("create normal key failed", K(ret));
+      } else if (OB_ISNULL(out_key_part->normal_keypart_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("normal keypart is null");
+      } else {
+        out_key_part->null_safe_ = head->null_safe_;
+        out_key_part->normal_keypart_->include_start_ = true;
+        out_key_part->normal_keypart_->include_end_ = true;
+        out_key_part->normal_keypart_->start_ = head->normal_keypart_->start_;
+        out_key_part->normal_keypart_->end_ = head->normal_keypart_->end_;
+        out_key_part->normal_keypart_->always_false_ = false;
+        out_key_part->normal_keypart_->always_true_ = false;
+        out_key_part->item_next_ = head->item_next_;
+        out_key_part->or_next_ = head->or_next_;
+        out_key_part->and_next_ = head->and_next_;
+      }
+      // clear hashset
+      if (cellid_set.created()) {
+        int tmp_ret = cellid_set.destroy();
+        if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+          LOG_WARN("failed to destory param set", K(ret));
         }
       }
     }
