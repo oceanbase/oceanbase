@@ -347,12 +347,6 @@ add_library(malloc_hook STATIC
   alloc/malloc_hook.h)
 target_link_libraries(malloc_hook oblib_base)
 
-target_link_libraries(oblib_lib
-  PUBLIC ob_malloc compress restore
-  ${DEP_DIR}/lib/libxml2.a
-  ${DEP_DIR}/lib/liblzma.a
-)
-
 if(OB_BUILD_CLOSE_MODULES)
   target_link_libraries(oblib_lib PUBLIC
   ${DEP_3RD_DIR}/usr/local/lib/libxslt.a
@@ -361,3 +355,8 @@ if(OB_BUILD_CLOSE_MODULES)
   )
 endif()
 
+target_link_libraries(oblib_lib
+  PUBLIC ob_malloc compress restore
+  ${DEP_DIR}/lib/libxml2.a
+  ${DEP_DIR}/lib/liblzma.a
+)
