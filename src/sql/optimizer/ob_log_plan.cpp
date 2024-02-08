@@ -7830,7 +7830,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     /*do nothing*/
   } else if (OB_FAIL(get_stmt()->get_order_exprs(candi_subquery_exprs))) {
     LOG_WARN("failed to get exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
   } else if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
@@ -8965,28 +8965,6 @@ int ObLogPlan::candi_allocate_subplan_filter_for_where()
   return ret;
 }
 
-int ObLogPlan::candi_allocate_subplan_filter_for_exprs(ObIArray<ObRawExpr*> &exprs)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObQueryRefRawExpr*, 4> subqueries;
-  ObSEArray<ObRawExpr*, 4> nested_subquery_exprs;
-  if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(exprs,
-                                                       subqueries,
-                                                       false))) {
-    LOG_WARN("failed to extract query ref expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_nested_exprs(subqueries,
-                                                       nested_subquery_exprs))) {
-    LOG_WARN("failed to get nested subquery exprs", K(ret));
-  } else if (!nested_subquery_exprs.empty() &&
-             OB_FAIL(candi_allocate_subplan_filter(nested_subquery_exprs))) {
-    LOG_WARN("failed to allocate subplan filter for order by exprs", K(ret));
-  } else if (!exprs.empty() &&
-             OB_FAIL(candi_allocate_subplan_filter(exprs))) {
-    LOG_WARN("failed to allocate subplan filter for order by exprs", K(ret));
-  } else { /*do nothing*/ }
-  return ret;
-}
-
 int ObLogPlan::candi_allocate_subplan_filter(const ObIArray<ObRawExpr*> &subquery_exprs,
                                              const ObIArray<ObRawExpr *> *filters,
                                              const bool is_update_set,
@@ -9002,15 +8980,24 @@ int ObLogPlan::candi_allocate_subplan_filter(const ObIArray<ObRawExpr*> &subquer
   ObSEArray<ObExecParamRawExpr *, 4> onetime_exprs;
   ObSEArray<ObRawExpr *, 4> new_filters;
   OPT_TRACE_TITLE("start generate subplan filter");
-  if (OB_FAIL(generate_subplan_filter_info(subquery_exprs,
-                                           subplans,
-                                           query_refs,
-                                           params,
-                                           onetime_exprs,
-                                           initplan_idxs,
-                                           onetime_idxs,
-                                           for_cursor_expr,
-                                           for_on_condition))) {
+  ObSEArray<ObQueryRefRawExpr*, 4> subqueries;
+  ObSEArray<ObRawExpr*, 4> nested_subquery_exprs;
+  if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(subquery_exprs, subqueries, false))) {
+    LOG_WARN("failed to extract query ref expr", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_nested_exprs(subqueries, nested_subquery_exprs))) {
+    LOG_WARN("failed to get nested subquery exprs", K(ret));
+  } else if (!nested_subquery_exprs.empty() &&
+             OB_FAIL(SMART_CALL(candi_allocate_subplan_filter(nested_subquery_exprs)))) {
+    LOG_WARN("failed to allocate subplan filter for order by exprs", K(ret));
+  } else if (OB_FAIL(generate_subplan_filter_info(subquery_exprs,
+                                                  subplans,
+                                                  query_refs,
+                                                  params,
+                                                  onetime_exprs,
+                                                  initplan_idxs,
+                                                  onetime_idxs,
+                                                  for_cursor_expr,
+                                                  for_on_condition))) {
     LOG_WARN("failed to generated subplan filter info", K(ret));
   } else if (NULL != filters && OB_FAIL(adjust_exprs_with_onetime(*filters, new_filters))) {
     LOG_WARN("failed to transform filters with onetime", K(ret));
