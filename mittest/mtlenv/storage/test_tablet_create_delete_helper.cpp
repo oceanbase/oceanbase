@@ -133,7 +133,7 @@ void TestTabletCreateDeleteHelper::TearDownTestCase()
   ret = t3m->init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MockTenantModuleEnv::get_instance().destroy();

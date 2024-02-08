@@ -80,7 +80,7 @@ void TestWriteTabletSlog::SetUpTestCase()
 void TestWriteTabletSlog::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
 
   startup_accel_handler_.destroy();

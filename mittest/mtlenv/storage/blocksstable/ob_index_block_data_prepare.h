@@ -238,7 +238,7 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
 
 void TestIndexBlockDataPrepare::TearDownTestCase()
 {
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_), false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_)));
   ObKVGlobalCache::get_instance().destroy();
   OB_STORE_CACHE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
