@@ -132,7 +132,7 @@ void ObLCObjectManager::common_free(ObILibCacheObject *cache_obj,
   if (OB_ISNULL(cache_obj)) {
     // do nothing
   } else {
-    if (!cache_obj->added_lc()) {
+    if (ref_handle != PC_DIAG_HANDLE && !cache_obj->added_lc()) {
         cache_obj->set_logical_del_time(ObTimeUtility::current_monotonic_time());
         LOG_WARN("set logical del time", K(cache_obj->get_logical_del_time()),
                                          K(cache_obj->added_lc()),
