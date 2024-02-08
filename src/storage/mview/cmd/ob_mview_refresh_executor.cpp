@@ -166,7 +166,7 @@ int ObMViewRefreshExecutor::do_refresh()
       refresh_param.tenant_id_ = tenant_id_;
       refresh_param.mview_id_ = mview_id;
       refresh_param.refresh_method_ = refresh_method;
-      refresh_param.parallelism_ = arg_->parallelism_;
+      refresh_param.parallelism_ = arg_->refresh_parallel_;
       while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
         ObMViewTransaction trans;
         ObMViewRefresher refresher;

@@ -42,8 +42,9 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
   --     (that is, if more materialized views are specified than refresh
   --     methods), then that materialized view is refreshed according to its
   --     default refresh method.
-  --   PARALLELISM
-  --     Max degree of parallelism for executing refresh.
+  --   REFRESH_PARALLEL
+  --     Max degree of parallelism for executing refresh. Now only works on
+  --     complete refresh.
   --     n <= 1 specifies serial executing.
   --     n > 1  specifies parallel executing with n parallel processes.
   --
@@ -53,6 +54,6 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
   PROCEDURE refresh(
     IN     mv_name                VARCHAR(65535),
     IN     method                 VARCHAR(65535) DEFAULT NULL,
-    IN     parallelism            INT            DEFAULT 1);
+    IN     refresh_parallel       INT            DEFAULT 1);
 
 END dbms_mview;

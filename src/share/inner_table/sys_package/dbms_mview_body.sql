@@ -58,7 +58,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     atomic_refresh         IN     BOOLEAN        := true,
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
-    skip_ext_data          IN     BOOLEAN        := false);
+    skip_ext_data          IN     BOOLEAN        := false,
+    refresh_parallel       IN     BINARY_INTEGER := 1);
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH);
 
   PROCEDURE refresh(
@@ -73,7 +74,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     atomic_refresh         IN     BOOLEAN        := true,
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
-    skip_ext_data          IN     BOOLEAN        := false)
+    skip_ext_data          IN     BOOLEAN        := false,
+    refresh_parallel       IN     BINARY_INTEGER := 1)
   IS
   BEGIN
     COMMIT;
@@ -88,7 +90,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                atomic_refresh,
                nested,
                out_of_place,
-               skip_ext_data);
+               skip_ext_data,
+               refresh_parallel);
   END;
 
   PROCEDURE refresh(
@@ -103,7 +106,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     atomic_refresh         IN     BOOLEAN        := true,
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
-    skip_ext_data          IN     BOOLEAN        := false)
+    skip_ext_data          IN     BOOLEAN        := false,
+    refresh_parallel       IN     BINARY_INTEGER := 1)
   IS
   list                VARCHAR2(4000);
   BEGIN
@@ -120,7 +124,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                atomic_refresh,
                nested,
                out_of_place,
-               skip_ext_data);
+               skip_ext_data,
+               refresh_parallel);
   END;
 
 END dbms_mview;

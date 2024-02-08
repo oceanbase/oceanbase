@@ -196,22 +196,19 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
                                                                refresh_job))) {
       LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
     } else {
-      const ObString mview_refresh_func("DBMS_MVIEW.refresh");
-      ObString job_action;
-      // job_action is generated as "mlog_purge_func('db_name.table_name')"
-      if (OB_FAIL(ObMViewSchedJobUtils::generate_job_action(
-          allocator,
-          mview_refresh_func,
-          db_name,
-          table_name,
-          job_action))) {
-        LOG_WARN("failed to generate mview job action", KR(ret));
+      ObSqlString job_action;
+      if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s', refresh_parallel => %ld)",
+                                        static_cast<int>(db_name.length()), db_name.ptr(),
+                                        static_cast<int>(table_name.length()), table_name.ptr(),
+                                        refresh_info->parallel_))) {
+        LOG_WARN("fail to assign job action", KR(ret), K(db_name), K(table_name),
+                 K(refresh_info->parallel_));
       } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
           sql_client,
           tenant_id,
           job_id,
           refresh_job,
-          job_action,
+          job_action.string(),
           refresh_info->start_time_,
           refresh_info->next_time_expr_,
           refresh_info->exec_env_))) {
