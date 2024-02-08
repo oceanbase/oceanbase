@@ -115,8 +115,6 @@ int ObIntegerColumnDecoder::pushdown_operator(
   if (OB_UNLIKELY(row_cnt < 1 || row_cnt != result_bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(result_bitmap.size()));
-  } else if (!GCONF.enable_cs_encoding_filter) {
-    ret = OB_NOT_SUPPORTED;
   } else {
     if (integer_ctx.has_null_bitmap()) {
       for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {

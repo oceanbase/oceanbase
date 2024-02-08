@@ -402,8 +402,6 @@ int ObStringColumnDecoder::pushdown_operator(
   if (OB_UNLIKELY(row_cnt < 1 || row_cnt != result_bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(string_ctx), K(result_bitmap.size()));
-  } else if (!GCONF.enable_cs_encoding_filter) {
-    ret = OB_NOT_SUPPORTED;
   } else {
     const int64_t row_start = pd_filter_info.start_;
     const int64_t row_count = pd_filter_info.count_;

@@ -574,24 +574,16 @@ int ObSchemaUtils::build_column_group(
     column_group.set_block_size(table_schema.get_block_size());
     column_group.set_compressor_type(table_schema.get_compressor_type());
     const ObStoreFormatType store_format = table_schema.get_store_format();
-    int64_t storage_encoding_mode = 0;
-    omt::ObTenantConfigGuard tcg(TENANT_CONF(tenant_id));
-    if (OB_LIKELY(tcg.is_valid())) {
-      storage_encoding_mode = tcg->storage_encoding_mode;
-    }
     bool is_flat = lib::Worker::CompatMode::ORACLE == mode ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
                                             || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
                                             || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
                                          : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
                                             || (OB_STORE_FORMAT_COMPACT_MYSQL == store_format));
-    if (is_flat || ( ObStorageEncodingMode::ALL_ENCODING == storage_encoding_mode)) {
-      // all use encoding
+    if (is_flat) {
+      // use the encoding type according to the row format
       column_group.set_row_store_type(table_schema.get_row_store_type());
-    } else if (ObStorageEncodingMode::ALL_ENCODING == storage_encoding_mode) {
-      // all use cs_encoding
-      column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
     } else {
-      // row_store uses encoding; column_store uses cs_encoding
+      // row_store encoding type according to the row format; column_store uses cs_encoding
       if ((cg_type == ObColumnGroupType::DEFAULT_COLUMN_GROUP) || (cg_type == ObColumnGroupType::ALL_COLUMN_GROUP)) {
         column_group.set_row_store_type(table_schema.get_row_store_type());
       } else {

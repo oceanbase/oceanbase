@@ -11323,8 +11323,6 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_colum
   } else {
     const int64_t num_child = cg_node.num_child_;
     bool exist_single_type = false;
-    bool already_exist_all_column_group = false;
-    bool already_exist_single_column_group = false;
     // handle all_type column_group & single_type column_group
     for (int64_t i = 0; OB_SUCC(ret) && (i < num_child); ++i) {
       ParseNode *node = cg_node.children_[i];
@@ -11332,25 +11330,23 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_colum
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("children of column_group_list should not be null", KR(ret));
       } else if (T_ALL_COLUMN_GROUP == node->type_) {
-        if (already_exist_all_column_group) {
+        if (exist_all_column_group) {
           ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
           SQL_RESV_LOG(WARN, "all column group already exist in sql",
-                        K(ret), K(node->children_[i]->type_));
+                       K(ret), K(node->children_[i]->type_));
           const ObString error_msg = "all columns";
           LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
         } else {
-          already_exist_all_column_group = true;
           exist_all_column_group = true;
         }
       } else if (T_SINGLE_COLUMN_GROUP == node->type_) {
-        if (already_exist_single_column_group) {
+        if (exist_single_type) {
           ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
           SQL_RESV_LOG(WARN, "single column group already exist in sql",
-                        K(ret), K(node->type_));
+                       K(ret), K(node->type_));
           const ObString error_msg = "each column";
           LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
         } else {
-          already_exist_single_column_group = true;
           exist_single_type = true;
         }
       } else if (T_NORMAL_COLUMN_GROUP == node->type_) {
