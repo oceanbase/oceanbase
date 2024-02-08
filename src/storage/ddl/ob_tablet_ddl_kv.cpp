@@ -54,7 +54,8 @@ ObBlockMetaTree::~ObBlockMetaTree()
 int ObBlockMetaTree::init(ObTablet &tablet,
                           const ObITable::TableKey &table_key,
                           const share::SCN &ddl_start_scn,
-                          const uint64_t data_format_version)
+                          const uint64_t data_format_version,
+                          const ObStorageSchema *storage_schema)
 {
   int ret = OB_SUCCESS;
   const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
@@ -64,9 +65,9 @@ int ObBlockMetaTree::init(ObTablet &tablet,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || data_format_version <= 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || data_format_version <= 0 || OB_ISNULL(storage_schema))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key));
+    LOG_WARN("invalid argument", K(ret), K(table_key), KP(storage_schema));
   } else if (FALSE_IT(arena_.set_attr(mem_attr))) {
   } else if (OB_FAIL(block_tree_.init())) {
     LOG_WARN("init block tree failed", K(ret));
@@ -80,6 +81,7 @@ int ObBlockMetaTree::init(ObTablet &tablet,
                                                               data_format_version,
                                                               static_cast<ObSSTable *>(first_ddl_sstable),
                                                               table_key.get_end_scn(),
+                                                              storage_schema,
                                                               data_desc_))) {
     LOG_WARN("prepare data store desc failed", K(ret), K(table_key), K(data_format_version));
   } else {
@@ -824,7 +826,11 @@ int ObDDLMemtable::init(
     LOG_WARN("invalid argument", K(ret), K(table_key), K(ddl_start_scn), K(data_format_version));
   } else {
     ObTabletCreateSSTableParam sstable_param;
-    if (OB_FAIL(block_meta_tree_.init(tablet, table_key, ddl_start_scn, data_format_version))) {
+    ObStorageSchema *storage_schema = nullptr;
+    ObArenaAllocator arena("init_ddl_memt", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
+      LOG_WARN("load storage schema failed", K(ret), KPC(this));
+    } else if (OB_FAIL(block_meta_tree_.init(tablet, table_key, ddl_start_scn, data_format_version, storage_schema))) {
       LOG_WARN("init mem index sstable failed", K(ret), K(table_key), K(ddl_start_scn));
     } else if (OB_FAIL(init_sstable_param(tablet, table_key, ddl_start_scn, sstable_param))) {
       LOG_WARN("init sstable param failed", K(ret));
@@ -833,6 +839,7 @@ int ObDDLMemtable::init(
     } else {
       is_inited_ = true;
     }
+    ObTabletObjLoadHelper::free(arena, storage_schema);
   }
   return ret;
 }
