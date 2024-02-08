@@ -1181,7 +1181,7 @@ int64_t ObFastParserBase::is_hint_begin(int64_t pos)
     ch = raw_sql_.char_at(pos);
     next_ch = raw_sql_.char_at(++pos);
     // check and ignore comment
-    while (ch != '*' && next_ch != '/' && !raw_sql_.is_search_end()) {
+    while (ch != '*' && next_ch != '/' && !raw_sql_.is_search_end(pos)) {
       ch = raw_sql_.char_at(pos);
       next_ch = raw_sql_.char_at(++pos);
     }
