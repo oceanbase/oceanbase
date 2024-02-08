@@ -647,7 +647,7 @@ int ObHashJoinVecOp::process_left(bool &need_not_read_right)
 
 // copy ObOperator::drain_exch
 // It's same as the base operator, but only need add sync to wait exit for shared hash join
-int ObHashJoinVecOp::drain_exch()
+int ObHashJoinVecOp::do_drain_exch()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
