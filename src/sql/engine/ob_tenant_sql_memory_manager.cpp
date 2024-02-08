@@ -285,11 +285,12 @@ int ObTenantSqlMemoryManager::ObSqlWorkAreaCalcInfo::calculate_global_bound_size
   const bool auto_calc)
 {
   int ret = OB_SUCCESS;
+  int64_t error_sim = std::abs(OB_E(EventTable::EN_SQL_MEMORY_MRG_OPTION) 0);
   int64_t max_wa_size = wa_max_memory_size;
   // int64_t max_wa_size = wa_max_memory_size;
   // 最大占比6.25%（oracle 5%）
   // 这里改为按照8个并发来设置
-  int64_t max_bound_size = (max_wa_size >> 3);
+  int64_t max_bound_size = (0 == error_sim) ? (max_wa_size >> 3) : error_sim;
   profile_cnt_ = profile_cnt;
   int64_t avg_bound_size = (0 == profile_cnt_) ? max_bound_size : max_wa_size / profile_cnt_;
   int64_t best_interval_idx = -1;
