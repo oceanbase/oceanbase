@@ -318,6 +318,7 @@ public:
   RPC_S(PRD try_add_dep_infos_for_synonym_batch, obrpc::OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, (ObTryAddDepInofsForSynonymBatchArg));
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 get_root_key, obrpc::OB_GET_ROOT_KEY, (obrpc::ObRootKeyArg), obrpc::ObRootKeyResult);
+  RPC_S(PR5 reload_master_key, obrpc::OB_RELOAD_MASTER_KEY, (obrpc::ObReloadMasterKeyArg), obrpc::ObReloadMasterKeyResult);
 #endif
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
