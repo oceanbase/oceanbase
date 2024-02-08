@@ -292,7 +292,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &minor_tables);
+      const ObTablesHandleArray &minor_tables,
+      const ObTabletRestoreAction::ACTION &restore_action);
   static int build_tablet_with_ddl_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
