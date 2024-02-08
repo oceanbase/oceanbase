@@ -455,6 +455,7 @@ int ObMediumCompactionScheduleFunc::check_frequency(
     const int64_t time_interval = (current_time - max_reserved_snapshot) / 2;
     const int64_t last_major_snapshot_version = tablet->get_last_major_snapshot_version();
     if (0 >= last_major_snapshot_version) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("major sstable should not be empty", K(ret), K(last_major_snapshot_version));
     } else if (last_major_snapshot_version + time_interval > medium_snapshot) {
       ret = OB_NO_NEED_MERGE;
