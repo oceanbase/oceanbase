@@ -235,10 +235,22 @@ public:
 // DONT : Modify this definition
 class ObTxData : public ObTxCommitData, public ObTxDataLink
 {
+public:
+  enum ExclusiveType {
+    NORMAL = 0,
+    EXCLUSIVE,
+    DELETED
+  };
 private:
   const static int64_t UNIS_VERSION = 1;
 public:
-  ObTxData() : ObTxCommitData(), ObTxDataLink(), tx_data_allocator_(nullptr), ref_cnt_(0), undo_status_list_(), flag_(0) {}
+  ObTxData()
+      : ObTxCommitData(),
+        ObTxDataLink(),
+        tx_data_allocator_(nullptr),
+        ref_cnt_(0),
+        undo_status_list_(),
+        exclusive_flag_(ExclusiveType::NORMAL) {}
   ObTxData(const ObTxData &rhs);
   ObTxData &operator=(const ObTxData &rhs);
   ObTxData &operator=(const ObTxCommitData &rhs);
@@ -328,7 +340,7 @@ public:
   share::ObTenantTxDataAllocator *tx_data_allocator_;
   int64_t ref_cnt_;
   ObUndoStatusList undo_status_list_;
-  int64_t flag_;
+  ExclusiveType exclusive_flag_;
 };
 
 class ObTxDataGuard

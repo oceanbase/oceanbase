@@ -69,6 +69,7 @@ void ObCtxTxData::reset()
   tx_data_guard_.reset();
   read_only_ = false;
   recovered_from_tx_table_ = false;
+  max_replayed_rollback_scn_.set_min();
 }
 
 void ObCtxTxData::destroy()

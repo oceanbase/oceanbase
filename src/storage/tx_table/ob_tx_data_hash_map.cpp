@@ -64,6 +64,20 @@ int ObTxDataHashMap::insert(const transaction::ObTransID &key, ObTxData *value)
   } else {
     int64_t pos = get_pos(key);
 
+    if (OB_UNLIKELY(ObTxData::ExclusiveType::NORMAL != value->exclusive_flag_)) {
+      if (ObTxData::ExclusiveType::EXCLUSIVE != value->exclusive_flag_) {
+        STORAGE_LOG(ERROR, "invalid exclusive flag", KPC(value));
+      } else {
+        ObTxData *iter = buckets_[pos].next_;
+        while (OB_NOT_NULL(iter)) {
+          if (iter->contain(key)) {
+            iter->exclusive_flag_ = ObTxData::ExclusiveType::DELETED;
+          }
+          iter = iter->hash_node_.next_;
+        }
+      }
+    }
+
     // atomic insert this value
     while (true) {
       ObTxData *next_value = ATOMIC_LOAD(&buckets_[pos].next_);
@@ -133,7 +147,7 @@ int ObTxDataHashMap::Iterator::get_next(ObTxDataGuard &guard)
       while (++bucket_idx_ < tx_data_map_.BUCKETS_CNT) {
         val_ = tx_data_map_.buckets_[bucket_idx_].next_;
 
-        if (OB_NOT_NULL(val_)) {
+        if (OB_NOT_NULL(val_) && (ObTxData::ExclusiveType::DELETED != val_->exclusive_flag_)) {
           break;
         }
       }
