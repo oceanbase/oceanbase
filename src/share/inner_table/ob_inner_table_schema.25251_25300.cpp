@@ -975,6 +975,856 @@ int ObInnerTableSchema::user_users_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::dba_mview_logs_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVIEW_LOGS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVIEW_LOGS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 0, 'YES', 'NO') AS  VARCHAR2(3)) AS PRIMARY_KEY,       CAST('NO' AS VARCHAR2(3)) AS OBJECT_ID,       CAST(         DECODE((           SELECT COUNT(*)             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C1,                  SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C2             WHERE B.TABLE_ID = C1.TABLE_ID               AND C1.COLUMN_ID >= 16               AND C1.COLUMN_ID < 65520               AND D.TABLE_ID = C2.TABLE_ID               AND C2.ROWKEY_POSITION != 0               AND C1.COLUMN_ID != C2.COLUMN_ID               AND C1.TENANT_ID = EFFECTIVE_TENANT_ID()               AND C2.TENANT_ID = EFFECTIVE_TENANT_ID()           ), 0, 'NO', 'YES') AS VARCHAR2(3)       ) AS FILTER_COLUMNS,       CAST('YES' AS VARCHAR2(3)) AS SEQUENCE,       CAST('YES' AS VARCHAR2(3)) AS INCLUDE_NEW_VALUES,       CAST(DECODE(C.PURGE_MODE, 1, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_ASYNCHRONOUS,       CAST(DECODE(C.PURGE_MODE, 2, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_DEFERRED,       CAST(C.PURGE_START AS DATE) AS PURGE_START /* TODO: DD-MON-YYYY */,       CAST(C.PURGE_NEXT AS VARCHAR2(200)) AS PURGE_INTERVAL,       CAST(C.LAST_PURGE_DATE AS DATE) AS LAST_PURGE_DATE /* TODO: DD-MON-YYYY */,       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,       CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MLOG_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID        AND B.TABLE_ID = C.MLOG_ID       AND B.TABLE_TYPE = 15       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_mview_logs_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_MVIEW_LOGS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_MVIEW_LOGS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   	SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 0, 'YES', 'NO') AS  VARCHAR2(3)) AS PRIMARY_KEY,       CAST('NO' AS VARCHAR2(3)) AS OBJECT_ID,       CAST(         DECODE((           SELECT COUNT(*)             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C1,                  SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C2             WHERE B.TABLE_ID = C1.TABLE_ID               AND C1.COLUMN_ID >= 16               AND C1.COLUMN_ID < 65520               AND D.TABLE_ID = C2.TABLE_ID               AND C2.ROWKEY_POSITION != 0               AND C1.COLUMN_ID != C2.COLUMN_ID               AND C1.TENANT_ID = EFFECTIVE_TENANT_ID()               AND C2.TENANT_ID = EFFECTIVE_TENANT_ID()           ), 0, 'NO', 'YES') AS VARCHAR2(3)       ) AS FILTER_COLUMNS,       CAST('YES' AS VARCHAR2(3)) AS SEQUENCE,       CAST('YES' AS VARCHAR2(3)) AS INCLUDE_NEW_VALUES,       CAST(DECODE(C.PURGE_MODE, 1, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_ASYNCHRONOUS,       CAST(DECODE(C.PURGE_MODE, 2, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_DEFERRED,       CAST(C.PURGE_START AS DATE) AS PURGE_START /* TODO: DD-MON-YYYY */,       CAST(C.PURGE_NEXT AS VARCHAR2(200)) AS PURGE_INTERVAL,       CAST(C.LAST_PURGE_DATE AS DATE) AS LAST_PURGE_DATE /* TODO: DD-MON-YYYY */,       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,       CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MLOG_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID        AND B.TABLE_ID = C.MLOG_ID       AND B.TABLE_TYPE = 15       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND (A.DATABASE_ID = USERENV('SCHEMAID')         OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, B.DATABASE_ID) = 1) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mview_logs_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVIEW_LOGS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVIEW_LOGS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   	SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS LOG_OWNER,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS MASTER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS LOG_TABLE,       CAST(NULL AS VARCHAR2(128)) AS LOG_TRIGGER,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 66048, 'YES', 'NO') AS  VARCHAR2(3)) AS ROWIDS,       CAST(DECODE(bitand(D.TABLE_MODE, 66048), 0, 'YES', 'NO') AS  VARCHAR2(3)) AS PRIMARY_KEY,       CAST('NO' AS VARCHAR2(3)) AS OBJECT_ID,       CAST(         DECODE((           SELECT COUNT(*)             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C1,                  SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT C2             WHERE B.TABLE_ID = C1.TABLE_ID               AND C1.COLUMN_ID >= 16               AND C1.COLUMN_ID < 65520               AND D.TABLE_ID = C2.TABLE_ID               AND C2.ROWKEY_POSITION != 0               AND C1.COLUMN_ID != C2.COLUMN_ID               AND C1.TENANT_ID = EFFECTIVE_TENANT_ID()               AND C2.TENANT_ID = EFFECTIVE_TENANT_ID()           ), 0, 'NO', 'YES') AS VARCHAR2(3)       ) AS FILTER_COLUMNS,       CAST('YES' AS VARCHAR2(3)) AS SEQUENCE,       CAST('YES' AS VARCHAR2(3)) AS INCLUDE_NEW_VALUES,       CAST(DECODE(C.PURGE_MODE, 1, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_ASYNCHRONOUS,       CAST(DECODE(C.PURGE_MODE, 2, 'YES', 'NO') AS VARCHAR2(3)) AS PURGE_DEFERRED,       CAST(C.PURGE_START AS DATE) AS PURGE_START /* TODO: DD-MON-YYYY */,       CAST(C.PURGE_NEXT AS VARCHAR2(200)) AS PURGE_INTERVAL,       CAST(C.LAST_PURGE_DATE AS DATE) AS LAST_PURGE_DATE /* TODO: DD-MON-YYYY */,       CAST(0 AS NUMBER) AS LAST_PURGE_STATUS,       CAST(C.LAST_PURGE_ROWS AS NUMBER) AS NUM_ROWS_PURGED,       CAST('YES' AS VARCHAR2(3)) AS COMMIT_SCN_BASED,       CAST('NO' AS VARCHAR2(3)) AS STAGING_LOG     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MLOG_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID        AND B.TABLE_ID = C.MLOG_ID       AND B.TABLE_TYPE = 15       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mviews_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVIEWS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVIEWS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME * 1000 * 1000 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::all_mviews_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_ALL_MVIEWS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_MVIEWS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME * 1000 * 1000 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND (A.DATABASE_ID = USERENV('SCHEMAID')         OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, B.DATABASE_ID) = 1) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mviews_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVIEWS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVIEWS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS CONTAINER_NAME,       B.VIEW_DEFINITION AS QUERY /* TODO: LONG */,       CAST(LENGTH(B.VIEW_DEFINITION) AS NUMBER) AS QUERY_LEN,       CAST('N' AS VARCHAR2(1)) AS UPDATABLE,       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,       CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,       CAST(         DECODE(C.REFRESH_MODE, 0, 'NEVER',                                1, 'DEMAND',                                2, 'COMMIT',                                3, 'STATEMENT',                                   NULL         ) AS VARCHAR2(6)       ) AS REFRESH_MODE,       CAST(         DECODE(C.REFRESH_METHOD, 0, 'NEVER',                                  1, 'COMPLETE',                                  2, 'FAST',                                  3, 'FORCE',                                     NULL          ) AS VARCHAR2(8)       ) AS REFRESH_METHOD,       CAST(         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',                              1, 'DEFERRED',                              2, 'PERBUILT',                                 NULL         ) AS VARCHAR2(9)       ) AS BUILD_MODE,       CAST(NULL AS VARCHAR2(18)) AS FAST_REFRESHABLE,       CAST(         DECODE(C.LAST_REFRESH_TYPE, 0, 'COMPLETE',                                     1, 'FAST',                                        'NA'         ) AS VARCHAR2(8)       ) AS LAST_REFRESH_TYPE,       CAST(C.LAST_REFRESH_DATE AS DATE) AS LAST_REFRESH_DATE /* TODO: DD-MON-YYYY */,       CAST(C.LAST_REFRESH_DATE + C.LAST_REFRESH_TIME * 1000 * 1000 AS DATE) AS LAST_REFRESH_END_TIME /* TODO: DD-MON-YYYY */,       CAST(NULL AS VARCHAR2(19)) AS STALENESS,       CAST(NULL AS VARCHAR2(19)) AS AFTER_FAST_REFRESH,       CAST(DECODE(C.BUILD_MODE, 2, 'Y', 'N') AS VARCHAR2(1)) AS UNKNOWN_PREBUILT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_PLSQL_FUNC,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_EXTERNAL_TABLE,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_CONSIDER_FRESH,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_IMPORT,       CAST('N' AS VARCHAR2(1)) AS UNKNOWN_TRUSTED_FD,       CAST(NULL AS VARCHAR2(19)) AS COMPILE_STATE,       CAST('Y' AS VARCHAR2(1)) AS USE_NO_INDEX,       CAST(NULL AS DATE) AS STALE_SINCE,       CAST(NULL AS NUMBER) AS NUM_PCT_TABLES,       CAST(NULL AS NUMBER) AS NUM_FRESH_PCT_REGIONS,       CAST(NULL AS NUMBER) AS NUM_STALE_PCT_REGIONS,       CAST('NO' AS VARCHAR2(3)) AS SEGMENT_CREATED,       CAST(NULL AS VARCHAR2(128)) AS EVALUATION_EDITION,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,       CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND B.DATA_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_stats_sys_defaults_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_STATS_SYS_DEFAULTS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_STATS_SYS_DEFAULTS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(PARAMETER_NAME AS CHAR(16)) AS PARAMETER_NAME,       CAST(VALUE AS VARCHAR2(40)) AS VALUE     FROM     (       /* COLLECTION_LEVEL */       SELECT         'COLLECTION_LEVEL' PARAMETER_NAME,         DECODE(NVL(MAX(COLLECTION_LEVEL), 1),                0, 'NONE',                1, 'TYPICAL',                2, 'ADVANCED',                   NULL) VALUE       FROM         SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT       WHERE         TENANT_ID = EFFECTIVE_TENANT_ID()        UNION ALL        /* RETENTION_PERIOD */       SELECT         'RETENTION_PERIOD' PARAMETER_NAME,         TO_CHAR(NVL(MAX(RETENTION_PERIOD), 31)) VALUE       FROM         SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT       WHERE         TENANT_ID = EFFECTIVE_TENANT_ID()     ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mvref_stats_sys_defaults_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVREF_STATS_SYS_DEFAULTS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVREF_STATS_SYS_DEFAULTS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(PARAMETER_NAME AS CHAR(16)) AS PARAMETER_NAME,       CAST(VALUE AS VARCHAR2(40)) AS VALUE     FROM     (       /* COLLECTION_LEVEL */       SELECT         'COLLECTION_LEVEL' PARAMETER_NAME,         DECODE(NVL(MAX(COLLECTION_LEVEL), 1),                0, 'NONE',                1, 'TYPICAL',                2, 'ADVANCED',                   NULL) VALUE       FROM         SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT       WHERE         TENANT_ID = EFFECTIVE_TENANT_ID()        UNION ALL        /* RETENTION_PERIOD */       SELECT         'RETENTION_PERIOD' PARAMETER_NAME,         TO_CHAR(NVL(MAX(RETENTION_PERIOD), 31)) VALUE       FROM         SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT       WHERE         TENANT_ID = EFFECTIVE_TENANT_ID()     ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_stats_params_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_STATS_PARAMS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_STATS_PARAMS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(MV_OWNER AS VARCHAR2(128)) AS MV_OWNER,       CAST(MV_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(         DECODE(COLLECTION_LEVEL, 0, 'NONE',                                  1, 'TYPICAL',                                  2, 'ADVANCED',                                     NULL         ) AS VARCHAR2(8)       ) AS COLLECTION_LEVEL,       CAST(RETENTION_PERIOD AS NUMBER) AS RETENTION_PERIOD     FROM     (       WITH DEFVALS AS        (         SELECT           NVL(MAX(COLLECTION_LEVEL), 1) AS COLLECTION_LEVEL,           NVL(MAX(RETENTION_PERIOD), 31) AS RETENTION_PERIOD         FROM           SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT         WHERE           TENANT_ID = EFFECTIVE_TENANT_ID()       )        SELECT         A.DATABASE_NAME MV_OWNER,         B.TABLE_NAME MV_NAME,         NVL(C.COLLECTION_LEVEL, D.COLLECTION_LEVEL) COLLECTION_LEVEL,         NVL(C.RETENTION_PERIOD, D.RETENTION_PERIOD) RETENTION_PERIOD       FROM         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,         (           SELECT TENANT_ID, MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_PARAMS_REAL_AGENT           RIGHT OUTER JOIN           (             SELECT TENANT_ID, MVIEW_ID FROM SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT           )           USING (TENANT_ID, MVIEW_ID)         ) C,         DEFVALS D       WHERE A.DATABASE_ID = B.DATABASE_ID         AND B.TABLE_ID = C.MVIEW_ID         AND B.TABLE_TYPE = 7         AND A.TENANT_ID = EFFECTIVE_TENANT_ID()         AND B.TENANT_ID = EFFECTIVE_TENANT_ID()         AND C.TENANT_ID = EFFECTIVE_TENANT_ID()     ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mvref_stats_params_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVREF_STATS_PARAMS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVREF_STATS_PARAMS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(MV_OWNER AS VARCHAR2(128)) AS MV_OWNER,       CAST(MV_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(         DECODE(COLLECTION_LEVEL, 0, 'NONE',                                  1, 'TYPICAL',                                  2, 'ADVANCED',                                     NULL         ) AS VARCHAR2(8)       ) AS COLLECTION_LEVEL,       CAST(RETENTION_PERIOD AS NUMBER) AS RETENTION_PERIOD     FROM     (       WITH DEFVALS AS        (         SELECT           NVL(MAX(COLLECTION_LEVEL), 1) AS COLLECTION_LEVEL,           NVL(MAX(RETENTION_PERIOD), 31) AS RETENTION_PERIOD         FROM           SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS_REAL_AGENT         WHERE           TENANT_ID = EFFECTIVE_TENANT_ID()       )        SELECT         A.DATABASE_NAME MV_OWNER,         B.TABLE_NAME MV_NAME,         NVL(C.COLLECTION_LEVEL, D.COLLECTION_LEVEL) COLLECTION_LEVEL,         NVL(C.RETENTION_PERIOD, D.RETENTION_PERIOD) RETENTION_PERIOD       FROM         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,         (           SELECT TENANT_ID, MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_PARAMS_REAL_AGENT           RIGHT OUTER JOIN           (             SELECT TENANT_ID, MVIEW_ID FROM SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT           )           USING (TENANT_ID, MVIEW_ID)         ) C,         DEFVALS D       WHERE A.DATABASE_ID = B.DATABASE_ID         AND B.TABLE_ID = C.MVIEW_ID         AND B.TABLE_TYPE = 7         AND A.TENANT_ID = EFFECTIVE_TENANT_ID()         AND B.TENANT_ID = EFFECTIVE_TENANT_ID()         AND C.TENANT_ID = EFFECTIVE_TENANT_ID()         AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')     ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_run_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_RUN_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_RUN_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.USER_NAME AS VARCHAR2(128)) AS RUN_OWNER,       CAST(B.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(B.NUM_MVS_TOTAL AS NUMBER) AS NUM_MVS,       CAST(B.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,       CAST(B.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,       CAST(B.METHOD AS VARCHAR2(4000)) AS METHOD,       CAST(B.ROLLBACK_SEG AS VARCHAR2(4000)) AS ROLLBACK_SEG,       CAST(DECODE(B.PUSH_DEFERRED_RPC, 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,       CAST(DECODE(B.REFRESH_AFTER_ERRORS, 1, 'Y', 'N') AS CHAR(1)) AS REFRESH_AFTER_ERRORS,       CAST(B.PURGE_OPTION AS NUMBER) AS PURGE_OPTION,       CAST(B.PARALLELISM AS NUMBER) AS PARALLELISM,       CAST(B.HEAP_SIZE AS NUMBER) AS HEAP_SIZE,       CAST(DECODE(B.ATOMIC_REFRESH, 1, 'Y', 'N') AS CHAR(1)) AS ATOMIC_REFRESH,       CAST(DECODE(B.NESTED, 1, 'Y', 'N') AS CHAR(1)) AS NESTED,       CAST(DECODE(B.OUT_OF_PLACE, 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,       CAST(B.NUMBER_OF_FAILURES AS NUMBER) AS NUMBER_OF_FAILURES,       CAST(B.START_TIME AS TIMESTAMP(6)) AS START_TIME,       CAST(B.END_TIME AS TIMESTAMP(6)) AS END_TIME,       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,       CAST(B.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,       CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE     FROM       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B     WHERE A.USER_ID = B.RUN_USER_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mvref_run_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVREF_RUN_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVREF_RUN_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(B.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(B.NUM_MVS_TOTAL AS NUMBER) AS NUM_MVS,       CAST(B.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,       CAST(B.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,       CAST(B.METHOD AS VARCHAR2(4000)) AS METHOD,       CAST(B.ROLLBACK_SEG AS VARCHAR2(4000)) AS ROLLBACK_SEG,       CAST(DECODE(B.PUSH_DEFERRED_RPC, 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,       CAST(DECODE(B.REFRESH_AFTER_ERRORS, 1, 'Y', 'N') AS CHAR(1)) AS REFRESH_AFTER_ERRORS,       CAST(B.PURGE_OPTION AS NUMBER) AS PURGE_OPTION,       CAST(B.PARALLELISM AS NUMBER) AS PARALLELISM,       CAST(B.HEAP_SIZE AS NUMBER) AS HEAP_SIZE,       CAST(DECODE(B.ATOMIC_REFRESH, 1, 'Y', 'N') AS CHAR(1)) AS ATOMIC_REFRESH,       CAST(DECODE(B.NESTED, 1, 'Y', 'N') AS CHAR(1)) AS NESTED,       CAST(DECODE(B.OUT_OF_PLACE, 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,       CAST(B.NUMBER_OF_FAILURES AS NUMBER) AS NUMBER_OF_FAILURES,       CAST(B.START_TIME AS TIMESTAMP(6)) AS START_TIME,       CAST(B.END_TIME AS TIMESTAMP(6)) AS END_TIME,       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,       CAST(B.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,       CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE     FROM       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B     WHERE A.USER_ID = B.RUN_USER_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(         DECODE(C.REFRESH_TYPE, 0, 'COMPLETE',                                1, 'FAST',                                   NULL         ) AS VARCHAR2(30)       ) AS REFRESH_METHOD,       CAST(NULL AS VARCHAR2(4000)) AS REFRESH_OPTIMIZATIONS,       CAST(NULL AS VARCHAR2(4000)) AS ADDITIONAL_EXECUTIONS,       CAST(C.START_TIME AS TIMESTAMP(6)) AS START_TIME,       CAST(C.END_TIME AS TIMESTAMP(6)) AS END_TIME,       CAST(C.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,       CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mvref_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVREF_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVREF_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(         DECODE(C.REFRESH_TYPE, 0, 'COMPLETE',                                1, 'FAST',                                   NULL         ) AS VARCHAR2(30)       ) AS REFRESH_METHOD,       CAST(NULL AS VARCHAR2(4000)) AS REFRESH_OPTIMIZATIONS,       CAST(NULL AS VARCHAR2(4000)) AS ADDITIONAL_EXECUTIONS,       CAST(C.START_TIME AS TIMESTAMP(6)) AS START_TIME,       CAST(C.END_TIME AS TIMESTAMP(6)) AS END_TIME,       CAST(C.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,       CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND B.TABLE_TYPE = 7       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_change_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_CHANGE_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_CHANGE_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(C.DATABASE_NAME AS VARCHAR2(128)) AS TBL_OWNER,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS TBL_NAME,       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(E.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(E.NUM_ROWS_INS AS NUMBER) AS NUM_ROWS_INS,       CAST(E.NUM_ROWS_UPD AS NUMBER) AS NUM_ROWS_UPD,       CAST(E.NUM_ROWS_DEL AS NUMBER) AS NUM_ROWS_DEL,       CAST(0 AS NUMBER) AS NUM_ROWS_DL_INS,       CAST('N' AS CHAR(1)) AS PMOPS_OCCURRED,       CAST(NULL AS VARCHAR2(4000)) AS PMOP_DETAILS,       CAST(E.NUM_ROWS AS NUMBER) AS NUM_ROWS     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E     WHERE A.DATABASE_ID = B.DATABASE_ID       AND C.DATABASE_ID = D.DATABASE_ID       AND E.MVIEW_ID = B.TABLE_ID       AND E.DETAIL_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND E.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::user_mvref_change_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_USER_MVREF_CHANGE_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_USER_MVREF_CHANGE_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(C.DATABASE_NAME AS VARCHAR2(128)) AS TBL_OWNER,       CAST(D.TABLE_NAME AS VARCHAR2(128)) AS TBL_NAME,       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(E.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(E.NUM_ROWS_INS AS NUMBER) AS NUM_ROWS_INS,       CAST(E.NUM_ROWS_UPD AS NUMBER) AS NUM_ROWS_UPD,       CAST(E.NUM_ROWS_DEL AS NUMBER) AS NUM_ROWS_DEL,       CAST(0 AS NUMBER) AS NUM_ROWS_DL_INS,       CAST('N' AS CHAR(1)) AS PMOPS_OCCURRED,       CAST(NULL AS VARCHAR2(4000)) AS PMOP_DETAILS,       CAST(E.NUM_ROWS AS NUMBER) AS NUM_ROWS     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E     WHERE A.DATABASE_ID = B.DATABASE_ID       AND C.DATABASE_ID = D.DATABASE_ID       AND E.MVIEW_ID = B.TABLE_ID       AND E.DETAIL_TABLE_ID = D.TABLE_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()       AND E.TENANT_ID = EFFECTIVE_TENANT_ID()       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_mvref_stmt_stats_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_MVREF_STMT_STATS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_MVREF_STMT_STATS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,       CAST(C.STEP AS NUMBER) AS STEP,       CAST(C.SQLID AS VARCHAR2(32)) AS SQLID /* TODO: VARCHAR2(14) */,       C.STMT AS STMT /* TODO: CLOB */,       CAST(C.EXECUTION_TIME AS NUMBER) AS EXECUTION_TIME,       C.EXECUTION_PLAN AS EXECUTION_PLAN /* TODO: XMLTYPE STORAGE BINARY */     FROM       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,       SYS.ALL_VIRTUAL_MVIEW_REFRESH_STMT_STATS_REAL_AGENT C     WHERE A.DATABASE_ID = B.DATABASE_ID       AND B.TABLE_ID = C.MVIEW_ID       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()       AND C.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase
