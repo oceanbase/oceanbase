@@ -487,61 +487,63 @@ int ObExprInOrNotIn::calc_result_typeN(ObExprResType &type,
 }
 
 /* 比较规则：
- * 1、去除null之后相等，但是c1或c2包含null，结果是null
- * 2、c2未初始化，结果是null
- * 3、c1未初始化，结果是null
- * 4、c1 in (c2,c3,c4), 如果其中某个结果是null，则整体结果是null
- * 5、除上面情况，不相等，false
- * 6、其它情况，true
- * 7、nt1 in nt1, true, 但是，两个未初始化集合比较，结果为null，空集和空集比较，true
+ * Oracle document:
+ * Two nested table variables are equal if and only if they have the same set of elements (in any order).
+
+ * the problem is how to define "the same set of elements", which is not documented by Oracle.
+ * the rules we follow here are:
+ * 1. if the elements are of an uncomparable type, such as Record, return an error
+ * 2. when NULL (NULL can be a nested table itself or its element) is compared with any other element, return NULL
+ * 3. nt in (nt1, nt2, ...) returns:
+ *    a. TRUE if any of nt=nt1, nt=nt2, ... is TRUE
+ *    b. NULL if none of them is TRUE, and at least one of them is NULL
+ *    c. FALSE if all of them are FALSE
 */
+// forbid composite types in IN expr before composite types comparison is refactored
 int ObExprInOrNotIn::eval_pl_udt_in(const ObExpr &expr,
                                     ObEvalCtx &ctx,
                                     ObDatum &expr_datum)
 {
-  int ret = OB_SUCCESS;
-  CollectionPredRes res = CollectionPredRes::COLL_PRED_INVALID;
-  ObDatum *left = NULL;
-  ObDatum *right = NULL;
-  pl::ObPLCollection *coll = NULL;
-  OZ(expr.args_[0]->eval(ctx, left));
-  if (OB_SUCC(ret)) {
-    coll = reinterpret_cast<pl::ObPLCollection *>(left->get_ext());
-    if (OB_NOT_NULL(coll) && coll->is_contain_null_val()) {
-      set_datum_result(T_OP_IN == expr.type_, false, true, expr_datum);
-    } else {
-      const ObExpr *row = expr.args_[1];
-      for (int64_t i = 0; OB_SUCC(ret) && i < row->arg_cnt_; ++i) {
-        OZ(row->args_[i]->eval(ctx, right));
-        CollectionPredRes eq_cmp_res = COLL_PRED_INVALID;
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObRelationalExprOperator::pl_udt_compare2(
-                      eq_cmp_res, *left->extend_obj_, *right->extend_obj_,
-                      ctx.exec_ctx_, CO_EQ))) {
-            LOG_WARN("failed to compare to nest table", K(ret));
-          } else {
-            res = static_cast<CollectionPredRes>(eq_cmp_res);
-            if (COLL_PRED_TRUE == res) {
-              break;
-            } else if (COLL_PRED_NULL == res) {
-              break;
-            }
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (COLL_PRED_NULL == res) {
-          set_datum_result(T_OP_IN == expr.type_, false, true, expr_datum);
-        } else if (COLL_PRED_TRUE == res) {
-          set_datum_result(T_OP_IN == expr.type_, true, false, expr_datum);
-        } else if (COLL_PRED_FALSE == res) {
-          set_datum_result(T_OP_IN == expr.type_, false, false, expr_datum);
-        } else {
-          set_datum_result(T_OP_IN == expr.type_, false, false, expr_datum);
-        }
-      }
-    }
-  }
+  int ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "IN expr for composite types is");
+  LOG_WARN("IN expr for composite types is not supported", K(expr));
+  // CollectionPredRes res = CollectionPredRes::COLL_PRED_INVALID;
+  // ObDatum *left = NULL;
+  // ObDatum *right = NULL;
+  // pl::ObPLCollection *coll = NULL;
+  // bool is_any_result_null = false;
+  // OZ(expr.args_[0]->eval(ctx, left));
+  // if (OB_SUCC(ret)) {
+  //   coll = reinterpret_cast<pl::ObPLCollection *>(left->get_ext());
+  //   const ObExpr *row = expr.args_[1];
+  //   for (int64_t i = 0; OB_SUCC(ret) && i < row->arg_cnt_; ++i) {
+  //     OZ(row->args_[i]->eval(ctx, right));
+  //     CollectionPredRes eq_cmp_res = COLL_PRED_INVALID;
+  //     if (OB_SUCC(ret)) {
+  //       if (OB_FAIL(ObRelationalExprOperator::pl_udt_compare2(
+  //                   eq_cmp_res, *left->extend_obj_, *right->extend_obj_,
+  //                   ctx.exec_ctx_, CO_EQ))) {
+  //         LOG_WARN("failed to compare to nest table", K(ret));
+  //       } else {
+  //         res = static_cast<CollectionPredRes>(eq_cmp_res);
+  //         if (COLL_PRED_TRUE == res) {
+  //           break;
+  //         } else if (COLL_PRED_NULL == res) {
+  //           is_any_result_null = true;
+  //         }
+  //       }
+  //     }
+  //     if (OB_SUCC(ret)) {
+  //       if (COLL_PRED_TRUE == res) {
+  //         set_datum_result(T_OP_IN == expr.type_, true, false, expr_datum);
+  //       } else if (is_any_result_null) {
+  //         set_datum_result(T_OP_IN == expr.type_, false, true, expr_datum);
+  //       } else {
+  //         set_datum_result(T_OP_IN == expr.type_, false, false, expr_datum);
+  //       }
+  //     }
+  //   }
+  // }
   return ret;
 }
 
