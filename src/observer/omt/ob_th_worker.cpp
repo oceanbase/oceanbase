@@ -224,7 +224,7 @@ ObThWorker::Status ObThWorker::check_wait()
   } else if (curr_time > last_check_time_ + WORKER_CHECK_PERIOD) {
     st = check_throttle();
     if (st != WS_OUT_OF_THROTTLE) {
-      if (OB_UNLIKELY(curr_time > get_query_start_time() + threshold)) {
+      if (OB_UNLIKELY(0 != threshold && curr_time > get_query_start_time() + threshold)) {
         tenant_->lq_yield(*this);
       }
     }
