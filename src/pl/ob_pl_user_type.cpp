@@ -2246,6 +2246,15 @@ int ObCollectionType::deserialize(
       OZ (ObSPIService::spi_extend_assoc_array(
         OB_INVALID_ID, &resolve_ctx, *(table->get_allocator()), *assoc_table, count));
     } else {
+      if (table->get_count() > 0) {
+        for (int64_t i = 0; i < table->get_count(); ++i) {
+          int tmp_ret = OB_SUCCESS;
+          if ((tmp_ret = ObUserDefinedType::destruct_obj(table->get_data()[i], &resolve_ctx.session_info_)) != OB_SUCCESS) {
+            LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(i));
+          }
+        }
+      }
+      OX (table->set_count(0));
       OZ (ObSPIService::spi_set_collection(
         OB_INVALID_ID, &resolve_ctx, *table->get_allocator(), *table, count, true));
     }
