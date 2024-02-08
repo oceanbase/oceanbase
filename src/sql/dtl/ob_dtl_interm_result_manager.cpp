@@ -20,6 +20,7 @@
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_msg_type.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "deps/oblib/src/lib/hash/ob_hashtable.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -168,7 +169,6 @@ void ObDTLIntermResultManager::destroy()
 void ObDTLIntermResultManager::mtl_destroy(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
   if (nullptr != dtl_interm_result_manager) {
-    dtl_interm_result_manager->destroy();
     ob_delete(dtl_interm_result_manager);
     dtl_interm_result_manager = nullptr;
   }
@@ -262,7 +262,7 @@ void ObDTLIntermResultManager::free_interm_result_info(ObDTLIntermResultInfo *re
   }
 }
 
-int ObDTLIntermResultManager::erase_interm_result_info(ObDTLIntermResultKey &key,
+int ObDTLIntermResultManager::erase_interm_result_info(const ObDTLIntermResultKey &key,
     bool need_unregister_check_item_from_dm)
 {
   int ret = OB_SUCCESS;
@@ -369,20 +369,27 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
 int ObDTLIntermResultManager::erase_tenant_interm_result_info()
 {
   int ret = OB_SUCCESS;
-  for (auto iter = map_.begin(); iter != map_.end(); ++iter) {
-    ObDTLIntermResultKey &key = iter->first;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = erase_interm_result_info(key))) {
-      if (OB_HASH_NOT_EXIST != tmp_ret) {
-        LOG_WARN("fail to erase result info", K(key), K(tmp_ret));
-        ret = tmp_ret;
+  MAP::bucket_iterator bucket_it = map_.bucket_begin();
+  while (bucket_it != map_.bucket_end()) {
+    MAP::hashtable::bucket_lock_cond blc(*bucket_it);
+    MAP::hashtable::writelocker locker(blc.lock());
+    MAP::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
+    while (node_it != bucket_it->node_end()) {
+      int tmp_ret = OB_SUCCESS;
+      const ObDTLIntermResultKey &key = node_it->first;
+      node_it++;
+      if (OB_SUCCESS != (tmp_ret = erase_interm_result_info(key))) {
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
+          LOG_WARN("fail to erase result info", K(key), K(tmp_ret));
+          ret = tmp_ret;
+        }
       }
     }
+    bucket_it++;
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("erase_tenant_interm_result_info", K(MTL_ID()), K(map_.size()));
   }
-
   return ret;
 }
 
