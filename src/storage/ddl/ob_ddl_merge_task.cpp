@@ -818,7 +818,7 @@ int get_sorted_meta_array(
                   LOG_WARN("hold macro block failed", K(ret));
                 } else if (OB_FAIL(data_macro_meta.deep_copy(copied_meta, allocator))) {
                   LOG_WARN("deep copy macro block meta failed", K(ret));
-                } else if (OB_FAIL(meta_tree.insert_macro_block(macro_handle, &copied_meta->end_key_, copied_meta))) {
+                } else if (OB_FAIL(meta_tree.insert_macro_block(macro_handle, &copied_meta->end_key_, copied_meta))) { // useless co_sstable_row_offset
                   LOG_WARN("insert meta tree failed", K(ret), K(macro_handle), KPC(copied_meta));
                   copied_meta->~ObDataMacroBlockMeta();
                 } else {

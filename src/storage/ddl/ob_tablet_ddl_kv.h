@@ -44,18 +44,20 @@ namespace storage
 class ObBlockMetaTreeValue final
 {
 public:
-  ObBlockMetaTreeValue() : block_meta_(nullptr), rowkey_(nullptr), header_() {}
+  ObBlockMetaTreeValue() : co_sstable_row_offset_(0), block_meta_(nullptr), rowkey_(nullptr), header_() {}
   ObBlockMetaTreeValue(const blocksstable::ObDataMacroBlockMeta *block_meta,
                        const blocksstable::ObDatumRowkey *rowkey)
-    : block_meta_(block_meta), rowkey_(rowkey), header_(){}
+    : co_sstable_row_offset_(0), block_meta_(block_meta), rowkey_(rowkey), header_(){}
   ~ObBlockMetaTreeValue()
   {
+    co_sstable_row_offset_ = 0;
     block_meta_ = nullptr;
     rowkey_ = nullptr;
   }
-  TO_STRING_KV(KPC_(block_meta), KPC_(rowkey), K_(header));
+  TO_STRING_KV(K_(co_sstable_row_offset), KPC_(block_meta), KPC_(rowkey), K_(header));
 
 public:
+  int64_t co_sstable_row_offset_;
   const blocksstable::ObDataMacroBlockMeta *block_meta_;
   const blocksstable::ObDatumRowkey *rowkey_;
   blocksstable::ObIndexBlockRowHeader header_;
@@ -78,7 +80,8 @@ public:
   void destroy_tree_value();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
                          const blocksstable::ObDatumRowkey *rowkey,
-                         const blocksstable::ObDataMacroBlockMeta *meta);
+                         const blocksstable::ObDataMacroBlockMeta *meta,
+                         const int64_t co_sstable_row_offset = 0);
   int locate_key(const blocksstable::ObDatumRange &range,
                  const blocksstable::ObStorageDatumUtils &datum_utils,
                  blocksstable::DDLBtreeIterator &iter,
@@ -161,7 +164,8 @@ public:
   void reset();
   int insert_block_meta_tree(
       const ObDDLMacroHandle &macro_handle,
-      blocksstable::ObDataMacroBlockMeta *data_macro_meta);
+      blocksstable::ObDataMacroBlockMeta *data_macro_meta,
+      const int64_t co_sstable_row_offset);
   void set_scn_range(
       const share::SCN &start_scn,
       const share::SCN &end_scn);

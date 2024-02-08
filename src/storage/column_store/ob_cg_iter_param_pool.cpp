@@ -75,6 +75,7 @@ int ObCGIterParamPool::get_iter_param(
         LOG_WARN("Unexpected null iter param", K(ret));
       } else if (tmp_param->can_be_reused(cg_idx, exprs, is_aggregate)) {
         iter_param = tmp_param;
+        iter_param->get_table_param_ = row_param.get_table_param_;
         break;
       }
     }
@@ -199,6 +200,7 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.output_exprs_ = output_exprs;
     cg_param.op_ = row_param.op_;
     cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
+    cg_param.get_table_param_ = row_param.get_table_param_;
   }
   if (OB_FAIL(ret) && nullptr != output_exprs) {
     output_exprs->reset();
@@ -253,6 +255,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
     cg_param.tablet_id_ = row_param.tablet_id_;
     cg_param.cg_idx_ = cg_idx;
     cg_param.read_info_ = cg_param.cg_read_info_handle_.get_read_info();
+    cg_param.get_table_param_ = row_param.get_table_param_;
     cg_param.cg_col_param_ = col_param;
     cg_param.out_cols_project_ = out_cols_project;
     cg_param.agg_cols_project_ = nullptr;
