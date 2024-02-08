@@ -868,18 +868,17 @@ int ObStorageHATabletsBuilder::get_major_sstable_max_snapshot_(
     int64_t &max_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObITable *> sstables;
+  ObArray<ObSSTableWrapper> sstables;
 
   max_snapshot_version = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
-  } else if (major_sstable_array.count() > 0 && OB_FAIL(major_sstable_array.get_all_tables(sstables))) {
+  } else if (major_sstable_array.count() > 0 && OB_FAIL(major_sstable_array.get_all_table_wrappers(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-      const ObITable *table = sstables.at(i);
-      const ObSSTable *sstable = nullptr;
+      const ObITable *table = sstables.at(i).get_sstable();
 
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
@@ -914,7 +913,10 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
 {
   int ret = OB_SUCCESS;
   scn_range.reset();
-  ObArray<ObITable *> sstables;
+
+  ObArray<ObSSTableWrapper> sstables;
+  scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  scn_range.end_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -922,11 +924,11 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
   } else if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get remote logical minor scn range get invalid argument", K(ret), KP(tablet));
-  } else if (minor_sstable_array.count() > 0 && OB_FAIL(minor_sstable_array.get_all_tables(sstables))) {
+  } else if (minor_sstable_array.count() > 0 && OB_FAIL(minor_sstable_array.get_all_table_wrappers(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-      const ObITable *table = sstables.at(i);
+      const ObITable *table = sstables.at(i).get_sstable();
 
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
@@ -996,7 +998,7 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_scn_(
     SCN &max_start_scn)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObITable *> sstables;
+  ObArray<ObSSTableWrapper> sstables;
   max_start_scn = SCN::max_scn();
 
   if (!is_inited_) {
@@ -1005,11 +1007,11 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_scn_(
   } else if (ddl_sstable_array.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl sstable should not be empty", K(ret));
-  } else if (OB_FAIL(ddl_sstable_array.get_all_tables(sstables))) {
+  } else if (OB_FAIL(ddl_sstable_array.get_all_table_wrappers(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-      const ObITable *table = sstables.at(i);
+      const ObITable *table = sstables.at(i).get_sstable();
 
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;

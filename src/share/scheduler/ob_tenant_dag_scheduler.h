@@ -919,8 +919,7 @@ private:
   }
   OB_INLINE bool is_mini_compaction_dag(ObDagType::ObDagTypeEnum dag_type) const
   {
-    return ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
-           ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type;
+    return ObDagType::DAG_TYPE_MINI_MERGE == dag_type;
   }
   OB_INLINE bool is_minor_compaction_dag(ObDagType::ObDagTypeEnum dag_type) const
   {

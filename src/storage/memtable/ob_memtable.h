@@ -51,6 +51,10 @@ namespace memtable
 class ObMemtableScanIterator;
 class ObMemtableGetIterator;
 
+
+/*
+ * Attention! When tx is rollback, insert/update/delete row count and size will not reduced accordingly
+ */
 struct ObMtStat
 {
   ObMtStat() { reset(); }
