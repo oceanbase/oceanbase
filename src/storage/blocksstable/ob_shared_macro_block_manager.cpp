@@ -717,58 +717,10 @@ int ObSharedMacroBlockMgr::create_new_sstable(
   ObSSTableMetaHandle meta_handle;
   if (OB_FAIL(old_table.get_meta(meta_handle))) {
     LOG_WARN("get meta handle fail", K(ret), K(old_table));
-  } else {
-    const ObSSTableBasicMeta &basic_meta = meta_handle.get_sstable_meta().get_basic_meta();
-    param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
-    param.ddl_scn_ = basic_meta.ddl_scn_;
-    param.table_key_ = old_table.get_key();
-    param.sstable_logic_seq_ = meta_handle.get_sstable_meta().get_sstable_seq();
-    param.table_mode_ = basic_meta.table_mode_;
-    param.index_type_ = static_cast<share::schema::ObIndexType>(basic_meta.index_type_);
-    param.schema_version_ = basic_meta.schema_version_;
-    param.create_snapshot_version_ = basic_meta.create_snapshot_version_;
-    param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
-    param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
-    param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
-    param.recycle_version_ = basic_meta.recycle_version_;
-    param.latest_row_store_type_ = basic_meta.latest_row_store_type_;
-    param.is_ready_for_read_ = true;
-
-    ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-        param.root_block_addr_, param.root_block_data_);
-    ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-        param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
-    param.root_row_store_type_ = res.root_row_store_type_;
-    param.data_index_tree_height_ = res.root_desc_.height_;
-    param.index_blocks_cnt_ = res.index_blocks_cnt_;
-    param.data_blocks_cnt_ = res.data_blocks_cnt_;
-    param.micro_block_cnt_ = res.micro_block_cnt_;
-    param.use_old_macro_block_count_ = res.use_old_macro_block_count_;
-    param.row_count_ = res.row_count_;
-    param.column_cnt_ = res.data_column_cnt_;
-    param.data_checksum_ = res.data_checksum_;
-    param.occupy_size_ = res.occupy_size_;
-    param.original_size_ = res.original_size_;
-    param.max_merged_trans_version_ = res.max_merged_trans_version_;
-    param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
-    param.compressor_type_ = res.compressor_type_;
-    param.encrypt_id_ = res.encrypt_id_;
-    param.master_key_id_ = res.master_key_id_;
-    param.data_block_ids_ = res.data_block_ids_;
-    param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    param.nested_offset_ = block_info.nested_offset_;
-    param.nested_size_ = block_info.nested_size_;
-    param.other_block_ids_ = res.other_block_ids_;
-    MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-
-    if (param.table_key_.is_major_sstable()) {
-      if (OB_FAIL(param.column_checksums_.assign(res.data_column_checksums_))) {
-        LOG_WARN("fail to fill column checksum", K(ret), K(res));
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
+  } else if (OB_FAIL(param.init_for_small_sstable(res, old_table.get_key(),
+                                                  meta_handle.get_sstable_meta(), block_info))) {
+    LOG_WARN("fail to init create sstable param for small sst",
+        K(ret), K(res), K(old_table.get_key()), K(meta_handle.get_sstable_meta()), K(block_info));
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param));

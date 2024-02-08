@@ -555,9 +555,9 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
     ObIndexBlockRebuilder index_block_rebuilder;
     ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
     int64_t macro_block_column_count = 0;
-    if (OB_UNLIKELY(!ddl_param.is_valid())) {
+    if (OB_UNLIKELY(!ddl_param.is_valid() || OB_ISNULL(storage_schema))) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(ddl_param));
+      LOG_WARN("invalid argument", K(ret), K(ddl_param), KP(storage_schema));
     } else if (OB_FAIL(ObTabletDDLUtil::prepare_index_data_desc(
             tablet,
             ddl_param.table_key_.is_column_store_sstable() ? ddl_param.table_key_.get_column_group_id() : -1/*negative value means row store*/,
@@ -613,161 +613,30 @@ int ObTabletDDLUtil::create_ddl_sstable(
     ObTableHandleV2 &sstable_handle)
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObSSTableMergeRes, res) {
-    if (OB_UNLIKELY(nullptr == sstable_index_builder || !ddl_param.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), KP(sstable_index_builder), K(ddl_param));
+  if (OB_UNLIKELY(nullptr == sstable_index_builder || !ddl_param.is_valid() || OB_ISNULL(storage_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(sstable_index_builder), K(ddl_param), KP(storage_schema));
+  } else {
+    const int64_t create_schema_version_on_tablet = tablet.get_tablet_meta().create_schema_version_;
+    ObTabletCreateSSTableParam param;
+    if (OB_FAIL(param.init_for_ddl(sstable_index_builder, ddl_param, first_ddl_sstable,
+        *storage_schema, macro_block_column_count, create_schema_version_on_tablet))) {
+      LOG_WARN("fail to init param for ddl",
+          K(ret), K(macro_block_column_count), K(create_schema_version_on_tablet),
+          KPC(sstable_index_builder), K(ddl_param),
+          KPC(first_ddl_sstable), KPC(storage_schema));
+    } else if (ddl_param.table_key_.is_co_sstable()) {
+      if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator, sstable_handle))) {
+        LOG_WARN("create sstable failed", K(ret), K(param));
+      }
     } else {
-      int64_t column_count = 0;
-      int64_t full_column_cnt = 0; // only used for co sstable
-      share::schema::ObTableMode table_mode = storage_schema->get_table_mode_struct();
-      share::schema::ObIndexType index_type = storage_schema->get_index_type();
-      int64_t rowkey_column_cnt = storage_schema->get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-      common::ObRowStoreType row_store_type = storage_schema->get_row_store_type();
-      if (nullptr != first_ddl_sstable) {
-        ObSSTableMetaHandle meta_handle;
-        if (OB_FAIL(first_ddl_sstable->get_meta(meta_handle))) {
-          LOG_WARN("get sstable meta handle fail", K(ret), KPC(first_ddl_sstable));
-        } else {
-          column_count = meta_handle.get_sstable_meta().get_column_count();
-          table_mode = meta_handle.get_sstable_meta().get_basic_meta().table_mode_;
-          index_type = static_cast<share::schema::ObIndexType>(meta_handle.get_sstable_meta().get_basic_meta().index_type_);
-          rowkey_column_cnt = meta_handle.get_sstable_meta().get_basic_meta().rowkey_column_count_;
-          row_store_type = meta_handle.get_sstable_meta().get_basic_meta().latest_row_store_type_;
-          if (first_ddl_sstable->is_co_sstable()) {
-            const ObCOSSTableV2 *first_co_sstable = static_cast<const ObCOSSTableV2 *>(first_ddl_sstable);
-            if (OB_ISNULL((first_co_sstable))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("first co sstable is null", K(ret), KP(first_co_sstable), KPC(first_ddl_sstable));
-            } else {
-              full_column_cnt = first_co_sstable->get_cs_meta().full_column_cnt_;
-            }
-          }
-        }
-      } else if (ddl_param.table_key_.is_column_store_sstable()) {
-        if (ddl_param.table_key_.is_normal_cg_sstable()) {
-          rowkey_column_cnt = 0;
-          column_count = 1;
-        } else { // co sstable with all cg or rowkey cg
-          const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
-          const int64_t cg_idx = ddl_param.table_key_.get_column_group_id();
-          if (cg_idx < 0 || cg_idx >= cg_schemas.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected column group index", K(ret), K(cg_idx));
-          } else if (OB_FAIL(storage_schema->get_stored_column_count_in_sstable(full_column_cnt))) { // set full_column_cnt in first ddl sstable
-            LOG_WARN("fail to get stored column count in sstable", K(ret));
-          } else if (cg_schemas.at(cg_idx).is_rowkey_column_group()) {
-            column_count = rowkey_column_cnt;
-          } else {
-            column_count = full_column_cnt;
-            if (macro_block_column_count > 0 && macro_block_column_count < column_count) {
-              LOG_INFO("use macro block column count", K(ddl_param), K(macro_block_column_count), K(column_count));
-              column_count = macro_block_column_count;
-              full_column_cnt = macro_block_column_count;
-            }
-          }
-        }
-      } else { // row store sstable
-        if (OB_FAIL(storage_schema->get_stored_column_count_in_sstable(column_count))) {
-          LOG_WARN("fail to get stored column count in sstable", K(ret));
-        } else if (macro_block_column_count > 0 && macro_block_column_count < column_count) {
-          LOG_INFO("use macro block column count", K(ddl_param), K(macro_block_column_count), K(column_count));
-          column_count = macro_block_column_count;
-        }
+      if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
+        LOG_WARN("create sstable failed", K(ret), K(param));
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(sstable_index_builder->close(res))) {
-        LOG_WARN("close sstable index builder close failed", K(ret));
-      } else if (ddl_param.table_key_.is_normal_cg_sstable() // index builder of cg sstable cannot get trans_version from row, manually set it
-          && FALSE_IT(res.max_merged_trans_version_ = ddl_param.snapshot_version_)) {
-      } else if (OB_UNLIKELY((ddl_param.table_key_.is_major_sstable() ||
-                              ddl_param.table_key_.is_ddl_sstable()) &&
-                             res.row_count_ > 0 &&
-                             res.max_merged_trans_version_ != ddl_param.snapshot_version_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("max_merged_trans_version_ in res is different from ddl snapshot version", K(ret),
-                 K(res), K(ddl_param));
-      } else {
-        const int64_t create_schema_version_on_tablet = tablet.get_tablet_meta().create_schema_version_;
-        ObTabletCreateSSTableParam param;
-        param.table_key_ = ddl_param.table_key_;
-        param.table_mode_ = table_mode;
-        param.index_type_ = index_type;
-        param.rowkey_column_cnt_ = rowkey_column_cnt;
-        param.schema_version_ = create_schema_version_on_tablet;
-        param.latest_row_store_type_ = row_store_type;
-        param.create_snapshot_version_ = ddl_param.snapshot_version_;
-        param.ddl_scn_ = ddl_param.start_scn_;
-        ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-            param.root_block_addr_, param.root_block_data_);
-        ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-            param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
-        param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-        param.root_row_store_type_ = res.root_row_store_type_;
-        param.data_index_tree_height_ = res.root_desc_.height_;
-        param.index_blocks_cnt_ = res.index_blocks_cnt_;
-        param.data_blocks_cnt_ = res.data_blocks_cnt_;
-        param.micro_block_cnt_ = res.micro_block_cnt_;
-        param.use_old_macro_block_count_ = res.use_old_macro_block_count_;
-        param.row_count_ = res.row_count_;
-        param.column_cnt_ = column_count;
-        param.full_column_cnt_ = full_column_cnt;
-        param.data_checksum_ = res.data_checksum_;
-        param.occupy_size_ = res.occupy_size_;
-        param.original_size_ = res.original_size_;
-        param.max_merged_trans_version_ = ddl_param.snapshot_version_;
-        param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
-        param.compressor_type_ = res.compressor_type_;
-        param.encrypt_id_ = res.encrypt_id_;
-        param.master_key_id_ = res.master_key_id_;
-        param.nested_size_ = res.nested_size_;
-        param.nested_offset_ = res.nested_offset_;
-        param.data_block_ids_ = res.data_block_ids_;
-        param.other_block_ids_ = res.other_block_ids_;
-        MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-        if (ddl_param.table_key_.is_co_sstable()) {
-          param.column_group_cnt_ = storage_schema->get_column_group_count();
-          // only set true when build empty major sstable. ddl co sstable must set false and fill cg sstables
-          param.is_empty_co_table_ = ddl_param.table_key_.is_major_sstable() && 0 == param.data_blocks_cnt_;
-          const int64_t base_cg_idx = ddl_param.table_key_.get_column_group_id();
-          if (base_cg_idx < 0 || base_cg_idx >= storage_schema->get_column_group_count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column group index", K(ret), K(ddl_param.table_key_));
-          } else {
-            const ObStorageColumnGroupSchema &base_cg_schema = storage_schema->get_column_groups().at(base_cg_idx);
-            if (base_cg_schema.is_all_column_group()) {
-              param.co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-            } else if (base_cg_schema.is_rowkey_column_group()) {
-              param.co_base_type_ = ObCOSSTableBaseType::ROWKEY_CG_TYPE;
-            } else {
-              ret = OB_ERR_SYS;
-              LOG_WARN("unknown type of base cg schema", K(ret), K(base_cg_idx));
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(param.column_checksums_.assign(res.data_column_checksums_))) {
-          LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
-        } else if (OB_UNLIKELY(param.column_checksums_.count() != column_count)) {
-          // we have corrected the col_default_checksum_array_ in prepare_index_data_desc
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column checksums", K(ret), K(column_count), K(param));
-        } else {
-          if (ddl_param.table_key_.is_co_sstable()) {
-            if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, allocator, sstable_handle))) {
-              LOG_WARN("create sstable failed", K(ret), K(param));
-            }
-          } else {
-            if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
-              LOG_WARN("create sstable failed", K(ret), K(param));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            LOG_INFO("create ddl sstable success", K(ddl_param), K(sstable_handle),
-                "create_schema_version", create_schema_version_on_tablet);
-          }
-        }
-      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("create ddl sstable success", K(ddl_param), K(sstable_handle),
+          "create_schema_version", create_schema_version_on_tablet);
     }
   }
   return ret;
