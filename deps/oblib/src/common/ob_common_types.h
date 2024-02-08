@@ -53,7 +53,8 @@ struct ObQueryFlag
 #define OBSF_BIT_FOR_FOREING_KEY_CHECK 1
 #define OBSF_BIT_IS_NEW_QUERY_RANGE   1
 #define OBSF_BIT_ENABLE_RICH_FORMAT   1
-#define OBSF_BIT_RESERVED             29
+#define OBSF_BIT_IS_MDS_QUERY         1
+#define OBSF_BIT_RESERVED             27
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -80,6 +81,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_ENABLE_RICH_FORMAT = (0x1UL << OBSF_BIT_ENABLE_RICH_FORMAT) - 1;
   static const uint64_t OBSF_MASK_FOR_FOREING_KEY_CHECK = (0x1UL << OBSF_BIT_FOR_FOREING_KEY_CHECK) - 1;
   static const uint64_t OBSF_MASK_IS_NEW_QUERY_RANGE = (0x1UL << OBSF_BIT_IS_NEW_QUERY_RANGE) - 1;
+  static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
 
   enum ScanOrder
   {
@@ -143,6 +145,7 @@ struct ObQueryFlag
       uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
       uint64_t for_foreign_key_check_ : OBSF_BIT_FOR_FOREING_KEY_CHECK;
       uint64_t is_new_query_range_ : OBSF_BIT_IS_NEW_QUERY_RANGE;
+      uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -162,7 +165,8 @@ struct ObQueryFlag
               const bool multi_version_minor_merge = false,
               const bool need_feedback = false,
               const bool is_large_query = false,
-              const bool is_sstable_cut = false)
+              const bool is_sstable_cut = false,
+              const bool is_mds_query = false)
   {
     flag_ = 0;
     scan_order_ = order & OBSF_MASK_SCAN_ORDER;
@@ -182,6 +186,7 @@ struct ObQueryFlag
     is_need_feedback_ = need_feedback & OBSF_MASK_NEED_FEEDBACK;
     is_large_query_ = is_large_query & OBSF_MASK_IS_LARGE_QUERY;
     is_sstable_cut_ = is_sstable_cut & OBSF_MASK_IS_SSTABLE_CUT;
+    is_mds_query_ = is_mds_query & OBSF_MASK_IS_MDS_QUERY;
   }
   void reset() { flag_ = 0; }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
@@ -228,6 +233,7 @@ struct ObQueryFlag
   inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
+  inline bool is_mds_query() const { return is_mds_query_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -262,6 +268,7 @@ struct ObQueryFlag
                "is_lookup_for_4377", is_lookup_for_4377_,
                "enable_rich_format", enable_rich_format_,
                "is_for_foreign_key_check", for_foreign_key_check_,
+               "is_mds_query", is_mds_query_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };
