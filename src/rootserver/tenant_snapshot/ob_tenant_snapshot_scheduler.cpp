@@ -190,7 +190,7 @@ int ObTenantSnapshotScheduler::get_tenant_snapshot_jobs_(
   uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
   ObArbitrationServiceStatus arbitration_service_status;
   int64_t paxos_replica_num = OB_INVALID_COUNT;
-  int64_t restore_job_num = 0;
+  int64_t clone_job_num = 0;
 
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -242,8 +242,8 @@ int ObTenantSnapshotScheduler::get_tenant_snapshot_jobs_(
         } else if (OB_FAIL(delete_jobs.push_back(delete_job))) {
           LOG_WARN("push back failed", KR(ret), K(item), K(delete_job));
         }
-      } else if (ObTenantSnapStatus::RESTORING == items.at(i).get_status()) {
-        restore_job_num++;
+      } else if (ObTenantSnapStatus::CLONING == items.at(i).get_status()) {
+        clone_job_num++;
       } else if (ObTenantSnapStatus::FAILED == items.at(i).get_status()) {
         // when a tenant snapshot is created failed,
         // for the normal tenant snapshot, it will be setted as DELETING and be deleted directly;
@@ -259,10 +259,10 @@ int ObTenantSnapshotScheduler::get_tenant_snapshot_jobs_(
 
   if (OB_FAIL(ret)) {
   } else if ((create_jobs.count() > 1)
-            || (create_jobs.count() + restore_job_num > 1)) {
+            || (create_jobs.count() + clone_job_num > 1)) {
     //only one creation job/restoration job can exist at a time, num > 1 is illegal!
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected tenant snapshot count", KR(ret), K(create_jobs), K(restore_job_num));
+    LOG_ERROR("unexpected tenant snapshot count", KR(ret), K(create_jobs), K(clone_job_num));
   }
 
   return ret;
@@ -1028,8 +1028,8 @@ int ObTenantSnapshotScheduler::finish_create_tenant_snapshot_(
                                 true /*for update*/,
                                 global_lock))) {
     LOG_WARN("failed to get special tenant snapshot item", KR(ret), K(user_tenant_id));
-  } else if (ObTenantSnapStatus::RESTORING == global_lock.get_status()) {
-    // For fork tenant (a job type of tenant cloning), the status of global_lock is set as RESTORING at beginning.
+  } else if (ObTenantSnapStatus::CLONING == global_lock.get_status()) {
+    // For fork tenant (a job type of tenant cloning), the status of global_lock is set as CLONING at beginning.
     // in this case, the global_lock should be unlocked after cloning tenant is finished
   } else if (OB_FAIL(ObTenantSnapshotUtil::unlock_tenant_snapshot_simulated_mutex_from_snapshot_task(
                                                                                   trans,
@@ -1077,8 +1077,8 @@ int ObTenantSnapshotScheduler::create_tenant_snapshot_fail_(const ObCreateSnapsh
                                 global_lock))) {
       LOG_WARN("failed to get special tenant snapshot item", KR(ret), K(user_tenant_id));
     } else {
-      if (ObTenantSnapStatus::RESTORING == global_lock.get_status()) {
-        // For fork tenant (a job type of tenant cloning), the status of global_lock is set as RESTORING at beginning.
+      if (ObTenantSnapStatus::CLONING == global_lock.get_status()) {
+        // For fork tenant (a job type of tenant cloning), the status of global_lock is set as CLONING at beginning.
         // in this case, when creating snapshot failed,
         // the snapshot and global_lock should only be released by clone job
         if (OB_FAIL(table_op.update_tenant_snap_item(tenant_snapshot_id,

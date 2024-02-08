@@ -30,7 +30,7 @@ enum class ObTenantSnapStatus : int64_t
   CREATING = 0,
   DECIDED,
   NORMAL,
-  RESTORING,
+  CLONING,
   DELETING,
   FAILED,
   MAX,
@@ -40,7 +40,7 @@ enum class ObLSSnapStatus : int64_t
 {
   CREATING = 0,
   NORMAL,
-  RESTORING,
+  CLONING,
   FAILED,
   MAX,
 };
@@ -233,7 +233,7 @@ private:
   ObTenantSnapType type_;
   int64_t create_time_;
   uint64_t data_version_;
-  // when the status_ is RESTORING, the clone_job id will be owner_job_id of "global_lock"(snapshot_id == 0)
+  // when the status_ is CLONING, the clone_job id will be owner_job_id of "global_lock"(snapshot_id == 0)
   // for the other status or the other snapshot, the owner_job_id always be OB_INVALID_ID
   int64_t owner_job_id_;
 };

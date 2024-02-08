@@ -672,10 +672,10 @@ int ObTenantSnapshotUtil::lock_(ObMySQLTransaction &trans,
       if (CREATE_OP == op) {
         new_status = ObTenantSnapStatus::CREATING;
       } else { // FORK_OP == op
-        new_status = ObTenantSnapStatus::RESTORING;
+        new_status = ObTenantSnapStatus::CLONING;
       }
     } else if (RESTORE_OP == op) {
-      new_status = ObTenantSnapStatus::RESTORING;
+      new_status = ObTenantSnapStatus::CLONING;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tenant snapshot operation", KR(ret), K(tenant_id), K(op));
@@ -835,9 +835,9 @@ int ObTenantSnapshotUtil::get_tenant_snapshot_info(common::ObISQLClient &sql_cli
   return ret;
 }
 
-int ObTenantSnapshotUtil::add_restore_tenant_task(ObMySQLTransaction &trans,
-                                                  const uint64_t tenant_id,
-                                                  const share::ObTenantSnapshotID &tenant_snapshot_id)
+int ObTenantSnapshotUtil::add_clone_tenant_task(ObMySQLTransaction &trans,
+                                                const uint64_t tenant_id,
+                                                const share::ObTenantSnapshotID &tenant_snapshot_id)
 {
   int ret = OB_SUCCESS;
   ObTenantSnapshotTableOperator table_op;
@@ -853,18 +853,18 @@ int ObTenantSnapshotUtil::add_restore_tenant_task(ObMySQLTransaction &trans,
   } else if (ObTenantSnapStatus::NORMAL != snap_item.get_status()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("not allowed for current snapshot operation", KR(ret), K(tenant_id), K(snap_item.get_status()));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there may be other operation on the same tenant snapshot, restore tenant");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there may be other operation on the same tenant snapshot, clone tenant");
   } else if (OB_FAIL(table_op.update_tenant_snap_item(tenant_snapshot_id,
                                                       ObTenantSnapStatus::NORMAL,   /*old_status*/
-                                                      ObTenantSnapStatus::RESTORING /*new_status*/))) {
+                                                      ObTenantSnapStatus::CLONING /*new_status*/))) {
     LOG_WARN("update tenant snapshot status failed", KR(ret), K(tenant_id), K(tenant_snapshot_id));
   }
 
   return ret;
 }
 
-int ObTenantSnapshotUtil::add_restore_tenant_task(ObMySQLTransaction &trans,
-                                                  const ObTenantSnapItem &snap_item)
+int ObTenantSnapshotUtil::add_clone_tenant_task(ObMySQLTransaction &trans,
+                                                const ObTenantSnapItem &snap_item)
 {
   int ret = OB_SUCCESS;
   ObTenantSnapshotTableOperator table_op;
@@ -875,12 +875,12 @@ int ObTenantSnapshotUtil::add_restore_tenant_task(ObMySQLTransaction &trans,
   } else if (ObTenantSnapStatus::NORMAL != snap_item.get_status()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("not allowed for current snapshot operation", KR(ret), K(snap_item));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there may be other operation on the same tenant snapshot, restore tenant");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "there may be other operation on the same tenant snapshot, clone tenant");
   } else if (OB_FAIL(table_op.init(snap_item.get_tenant_id(), &trans))) {
     LOG_WARN("failed to init table op", KR(ret), K(snap_item));
   } else if (OB_FAIL(table_op.update_tenant_snap_item(snap_item.get_tenant_snapshot_id(),
                                                       ObTenantSnapStatus::NORMAL,   /*old_status*/
-                                                      ObTenantSnapStatus::RESTORING /*new_status*/))) {
+                                                      ObTenantSnapStatus::CLONING /*new_status*/))) {
     LOG_WARN("update tenant snapshot status failed", KR(ret), K(snap_item));
   }
 

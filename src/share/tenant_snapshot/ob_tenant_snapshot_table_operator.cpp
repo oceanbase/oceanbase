@@ -357,7 +357,7 @@ const char* ObTenantSnapshotTableOperator::TENANT_SNAP_STATUS_ARRAY[] =
   "CREATING",
   "DECIDED",
   "NORMAL",
-  "RESTORING",
+  "CLONING",
   "DELETING",
   "FAILED",
 };
@@ -366,7 +366,7 @@ const char* ObTenantSnapshotTableOperator::LS_SNAP_STATUS_ARRAY[] =
 {
   "CREATING",
   "NORMAL",
-  "RESTORING",
+  "CLONING",
   "FAILED",
 };
 
