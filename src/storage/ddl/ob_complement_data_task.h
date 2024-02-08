@@ -129,6 +129,10 @@ public:
   int write_start_log(const ObComplementDataParam &param);
   int add_column_checksum(const ObIArray<int64_t> &report_col_checksums, const ObIArray<int64_t> &report_col_ids);
   int get_column_checksum(ObIArray<int64_t> &report_col_checksums, ObIArray<int64_t> &report_col_ids);
+  int check_already_committed(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      bool &is_commited);
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(tablet_direct_load_mgr_handle), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
