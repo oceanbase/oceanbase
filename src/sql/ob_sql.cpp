@@ -2806,6 +2806,15 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         result.get_session().set_group_id_not_expected(false);
       }
       NG_TRACE(resolve_end);
+      if (OB_SUCC(ret)) {
+        // move init datum param store here
+        // if `opt_param("enable_rich_vector_format", "false")` is used in hints, use_rich_format will
+        // be off, we need reset value in pctx and initialize param frame accordingly.
+        if (NULL != pc_ctx && NULL != pc_ctx->exec_ctx_.get_physical_plan_ctx()) {
+          pc_ctx->exec_ctx_.get_physical_plan_ctx()->set_rich_format(context.session_info_->use_rich_format());
+          pc_ctx->exec_ctx_.get_physical_plan_ctx()->init_datum_param_store();
+        }
+      }
       //add ref obj schema version to PL and ps info
       if (OB_SUCC(ret)) {
         if (OB_FAIL(result.get_ref_objects().assign(resolver_ctx.query_ctx_->global_dependency_tables_))) {
@@ -4959,9 +4968,6 @@ int ObSql::handle_parser(const ObString &sql,
     }
     if (OB_SUCC(ret)) {
       pctx->set_original_param_cnt(pctx->get_param_store().count());
-      if (OB_FAIL(pctx->init_datum_param_store())) {
-        LOG_WARN("fail to init datum param store", K(ret));
-      }
     }
   }
   LOG_DEBUG("SQL MEM USAGE", K(parser_mem_usage), K(last_mem_usage));

@@ -107,6 +107,7 @@ struct ObOptParamHint
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
     DEF(COMPACT_SORT_LEVEL,)              \
     DEF(WORKAREA_SIZE_POLICY,)         \
+    DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -124,6 +125,7 @@ struct ObOptParamHint
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }
+  int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
   void reset();
   TO_STRING_KV(K_(param_types), K_(param_vals));
   common::ObSEArray<OptParamType, 1, common::ModulePageAllocator, true> param_types_;

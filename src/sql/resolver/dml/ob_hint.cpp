@@ -780,6 +780,11 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
       break;
     }
+    case ENABLE_RICH_VECTOR_FORMAT: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                     || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -873,6 +878,19 @@ int ObOptParamHint::has_opt_param(const OptParamType param_type, bool &has_hint)
     LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
   } else {
     has_hint = !obj.is_nop_value();
+  }
+  return ret;
+}
+
+int ObOptParamHint::check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param_v,
+                                                 bool &val) const
+{
+  int ret = OB_SUCCESS;
+  has_opt_param_v = false, val = false;
+  if (OB_FAIL(has_opt_param(param_type, has_opt_param_v))) {
+    LOG_WARN("check opt param failed", K(ret));
+  } else if (OB_FAIL(has_enable_opt_param(param_type, val))) {
+    LOG_WARN("get opt param value failed", K(ret));
   }
   return ret;
 }
