@@ -340,6 +340,7 @@ public:
   // virtual int get_online_stat_collect_result();
 
   virtual int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
+  virtual int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
   virtual void unlock(const uint32_t lock_tid);
   int prepare_index_builder_if_need(const ObTableSchema &table_schema);
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const share::SCN &start_scn);

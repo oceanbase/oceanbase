@@ -82,7 +82,7 @@ private:
 
 
 class ObTablet;
-
+class ObTabletDirectLoadMgrHandle;
 class ObDDLKVPendingGuard final
 {
 public:
@@ -90,10 +90,13 @@ public:
     ObTablet *tablet,
     const ObDDLMacroBlock &macro_block,
     const int64_t snapshot_version,
-    const uint64_t data_format_version);
+    const uint64_t data_format_version,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
 public:
-  ObDDLKVPendingGuard(ObTablet *tablet, const share::SCN &start_scn, const share::SCN &scn,
-    const int64_t snapshot_version, const uint64_t data_format_version);
+  ObDDLKVPendingGuard(
+    ObTablet *tablet,
+    const share::SCN &scn,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
   int get_ddl_kv(ObDDLKV *&kv);
@@ -101,7 +104,6 @@ public:
   TO_STRING_KV(KP(tablet_), K(scn_), K(kv_handle_), K(ret_));
 private:
   ObTablet *tablet_;
-  share::SCN start_scn_;
   share::SCN scn_;
   ObDDLKVHandle kv_handle_;
   int ret_;

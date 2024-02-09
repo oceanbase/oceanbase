@@ -1887,6 +1887,19 @@ int ObTabletDirectLoadMgr::wrlock(const int64_t timeout_us, uint32_t &tid)
   return ret;
 }
 
+int ObTabletDirectLoadMgr::rdlock(const int64_t timeout_us, uint32_t &tid)
+{
+  int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = timeout_us + ObTimeUtility::current_time();
+  if (OB_SUCC(lock_.rdlock(ObLatchIds::TABLET_DIRECT_LOAD_MGR_LOCK, abs_timeout_us))) {
+    tid = static_cast<uint32_t>(GETTID());
+  }
+  if (OB_TIMEOUT == ret) {
+    ret = OB_EAGAIN;
+  }
+  return ret;
+}
+
 void ObTabletDirectLoadMgr::unlock(const uint32_t tid)
 {
   if (OB_SUCCESS != lock_.unlock(&tid)) {
