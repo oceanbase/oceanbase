@@ -172,8 +172,14 @@ private:
       ObSSTable &new_sstable) const;
   int parse_merge_type(const ObSSTable &sstable, compaction::ObMergeType &merge_type) const;
   int try_switch_macro_block();
-  int check_write_complete(const MacroBlockId &macro_id, const int64_t macro_size);
-  int do_write_block(const ObMacroBlockWriteInfo &write_info, ObBlockInfo &block_info);
+  static int check_write_complete(
+    const MacroBlockId &macro_id,
+    const int64_t offset,
+    const int64_t size);
+  static int do_write_block(
+      const MacroBlockId& macro_id,
+      const ObMacroBlockWriteInfo &write_info,
+      ObBlockInfo &block_info);
   DISALLOW_COPY_AND_ASSIGN(ObSharedMacroBlockMgr);
 
 private:
@@ -192,7 +198,6 @@ private:
   lib::ObMutex blocks_mutex_; // protect block_used_size_
   ObLinearHashMap<MacroBlockId, int32_t> block_used_size_;
   ObBlockDefragmentationTask defragmentation_task_;
-  common::ObArenaAllocator io_allocator_;
   int tg_id_;
   bool is_inited_;
 };
