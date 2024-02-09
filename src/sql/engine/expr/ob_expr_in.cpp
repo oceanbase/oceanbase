@@ -1087,86 +1087,97 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
   ObDatum *right_store[expr.inner_func_cnt_]; // store all right param ptrs
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   bool right_has_null = false; // right param has null
-  /*
-  * CAN_CMP_MEM used for common short path
-  * the params of left and right
-  * both are string type
-  * both are CS_TYPE_UTF8MB4_BIN
-  * both dont have null value
-  * both dont have tailing space
-  * right params count is 2(> 2 will turn to hash calc)
-  */
-  bool can_cmp_mem = expr.args_[0]->obj_meta_.is_string_type()
-                      && CS_TYPE_UTF8MB4_BIN == expr.args_[0]->obj_meta_.get_collation_type();
-  // eval all right params
-  for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
-    // Because we know that in this scenario,
-    // the values on the right side are constants,
-    // meaning they are single-line data,
-    // so we use the eval interface.
-    if (OB_FAIL(expr.args_[1]->args_[i]->eval(ctx, right_store[i]))) {
-      LOG_WARN("failed to eval right datum", K(ret), K(i));
+  ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+  my_skip.deep_copy(skip, bound.start(), bound.end());
+  bool left_all_null = true;
+  for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+    if (input_left_vec->is_null(idx)) {
+      my_skip.set(idx);
+      res_vec->set_null(idx);
+      eval_flags.set(idx);
     } else {
-      check_right_can_cmp_mem(*right_store[i], expr.args_[1]->args_[i]->obj_meta_,
-                              can_cmp_mem, right_has_null);
+      left_all_null = false;
     }
   }
-  if (OB_SUCC(ret)) {
-    check_left_can_cmp_mem(expr, skip, eval_flags, bound, can_cmp_mem);
-    int64_t idx = bound.start();
-    if (can_cmp_mem && !std::is_same<LeftVec, ObFixedLengthBase>::value) {
-      static const char SPACE = ' ';
-      const char *ptr0 = right_store[0]->ptr_;
-      const char *ptr1 = right_store[1]->ptr_;
-      uint32_t len0 = right_store[0]->len_;
-      uint32_t len1 = right_store[1]->len_;
-      const char *left_str_ptr = nullptr;
-      int32_t left_str_len = 0;
-      for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
-        // If can_cmp_mem is true, then it is guaranteed that the right side is non-null.
-        if (input_left_vec->is_null(idx)) {
-          res_vec->set_null(idx);
-        } else {
-          input_left_vec->get_payload(idx, left_str_ptr, left_str_len);
-          if (left_str_len > 0 && SPACE == left_str_ptr[left_str_len - 1]) {
-            can_cmp_mem = false;
-            break;
-          } else {
-            bool is_equal = false;
-            is_equal = (left_str_len >= len0
-                        && 0 == MEMCMP(ptr0, left_str_ptr, len0)
-                        && is_all_space(left_str_ptr + len0, left_str_len - len0));
-            is_equal = is_equal || (left_str_len >= len1
-                                    && 0 == MEMCMP(ptr1, left_str_ptr, len1)
-                                    && is_all_space(left_str_ptr + len1, left_str_len - len1));
-            res_vec->set_int(idx, T_OP_IN == expr.type_ ? is_equal : !is_equal);
-          }
-        }
-      }
-      if (idx > bound.start()) {
-        eval_flags.set_all(bound.start(), idx);
+  // If all the values on the left are null,
+  // perform a short-circuit calculation and return immediately.
+  if (!left_all_null) {
+    /*
+    * CAN_CMP_MEM used for common short path
+    * the params of left and right
+    * both are string type
+    * both are CS_TYPE_UTF8MB4_BIN
+    * both dont have null value
+    * both dont have tailing space
+    * right params count is 2(> 2 will turn to hash calc)
+    */
+    bool can_cmp_mem = expr.args_[0]->obj_meta_.is_string_type()
+                        && CS_TYPE_UTF8MB4_BIN == expr.args_[0]->obj_meta_.get_collation_type();
+    // eval all right params
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
+      // Because we know that in this scenario,
+      // the values on the right side are constants,
+      // meaning they are single-line data,
+      // so we use the eval interface.
+      if (OB_FAIL(expr.args_[1]->args_[i]->eval(ctx, right_store[i]))) {
+        LOG_WARN("failed to eval right datum", K(ret), K(i));
+      } else {
+        check_right_can_cmp_mem(*right_store[i], expr.args_[1]->args_[i]->obj_meta_,
+                                can_cmp_mem, right_has_null);
       }
     }
-    if (!can_cmp_mem) {
-      const char *l_payload = nullptr;
-      const char *fixed_base_l_payload = nullptr;
-      ObLength l_len = 0;
-      int cmp_ret = 0;
-      sql::RowCmpFunc row_cmp_func = VectorCmpExprFuncsHelper::get_row_cmp_func(
-                                                expr.args_[0]->datum_meta_,
-                                                expr.args_[1]->args_[0]->datum_meta_);
-      if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-        fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
-        l_len = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
-      }
-      for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
-        if (skip.at(idx) || eval_flags.at(idx)) {
-          continue;
+    if (OB_SUCC(ret)) {
+      check_left_can_cmp_mem(expr, skip, eval_flags, bound, can_cmp_mem);
+      int64_t idx = bound.start();
+      if (can_cmp_mem && !std::is_same<LeftVec, ObFixedLengthBase>::value) {
+        static const char SPACE = ' ';
+        const char *ptr0 = right_store[0]->ptr_;
+        const char *ptr1 = right_store[1]->ptr_;
+        uint32_t len0 = right_store[0]->len_;
+        uint32_t len1 = right_store[1]->len_;
+        const char *left_str_ptr = nullptr;
+        int32_t left_str_len = 0;
+        for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
+          // If can_cmp_mem is true, then it is guaranteed that the right side is non-null.
+          // If input_left_vec->is_null(idx), res_vec has been set before.
+          if (!input_left_vec->is_null(idx)) {
+            input_left_vec->get_payload(idx, left_str_ptr, left_str_len);
+            if (left_str_len > 0 && SPACE == left_str_ptr[left_str_len - 1]) {
+              can_cmp_mem = false;
+              break;
+            } else {
+              bool is_equal = false;
+              is_equal = (left_str_len >= len0
+                          && 0 == MEMCMP(ptr0, left_str_ptr, len0)
+                          && is_all_space(left_str_ptr + len0, left_str_len - len0));
+              is_equal = is_equal || (left_str_len >= len1
+                                      && 0 == MEMCMP(ptr1, left_str_ptr, len1)
+                                      && is_all_space(left_str_ptr + len1, left_str_len - len1));
+              res_vec->set_int(idx, T_OP_IN == expr.type_ ? is_equal : !is_equal);
+            }
+          }
         }
-        if (input_left_vec->is_null(idx)) {
-          res_vec->set_null(idx);
-          eval_flags.set(idx);
-        } else {
+        if (idx > bound.start()) {
+          eval_flags.set_all(bound.start(), idx);
+        }
+      }
+      if (!can_cmp_mem) {
+        const char *l_payload = nullptr;
+        const char *fixed_base_l_payload = nullptr;
+        ObLength l_len = 0;
+        int cmp_ret = 0;
+        sql::RowCmpFunc row_cmp_func = VectorCmpExprFuncsHelper::get_row_cmp_func(
+                                                  expr.args_[0]->datum_meta_,
+                                                  expr.args_[1]->args_[0]->datum_meta_);
+        if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
+          fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
+          l_len = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
+        }
+        for (; OB_SUCC(ret) && idx < bound.end(); ++idx) {
+          if (my_skip.at(idx) || eval_flags.at(idx)) {
+            continue;
+          }
+          // The situation "input_left_vec->is_null(idx)" has already been handled previously.
           if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
             l_payload = fixed_base_l_payload + l_len * idx;
           } else {
@@ -1688,81 +1699,93 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
   const char *fixed_base_l_payload = nullptr;
   bool is_exist = false;
   bool right_all_null = false;
-  if (OB_FAIL(build_right_hash_without_row(in_id, right_param_num, expr,
-                                            ctx, exec_ctx, in_ctx, right_has_null))) {
-      LOG_WARN("failed to build hash table for right params", K(ret));
-  } else {
-    fallback = in_ctx->is_hash_calc_disabled();
-    if (!fallback) {
-      // refresh inctx hash fun to left hash func
-      if (OB_NOT_NULL(in_ctx->hash_func_buff_)) {
-        in_ctx->hash_func_buff_[0] = (void *)
-            (expr.args_[0]->basic_funcs_->murmur_hash_v2_);
-      }
-      // hash table use self as left, so here right param is left for cmp func
-      DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-                              expr.args_[1]->args_[0]->datum_meta_.type_,
-                              expr.args_[0]->datum_meta_.type_,
-                              expr.args_[1]->args_[0]->datum_meta_.scale_,
-                              expr.args_[0]->datum_meta_.scale_,
-                              expr.args_[1]->args_[0]->datum_meta_.precision_,
-                              expr.args_[0]->datum_meta_.precision_,
-                              lib::is_oracle_mode(),
-                              expr.args_[0]->datum_meta_.cs_type_,
-                              expr.args_[0]->obj_meta_.has_lob_header() ||
-                              expr.args_[1]->args_[0]->obj_meta_.has_lob_header());
-      for (int i = 0; i < right_param_num; i++) {
-        in_ctx->cmp_functions_[i] = (void *)func_ptr;
-      }
-      if (0 == in_ctx->get_static_engine_hashset_size()) {
-        // Scenarios where in_list contains only null.
-        if (in_ctx->ctx_hash_null_) {
-          for (int64_t left_idx = bound.start(); left_idx < bound.end(); ++left_idx) {
-            if (skip.at(left_idx) || eval_flags.at(left_idx)) { continue; }
-            res_vec->set_null(left_idx);
-            eval_flags.set(left_idx);
-          }
-          right_all_null = true;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("static_engine_hashset_size unexpected", K(ret), K(right_has_null),
-                  K(in_ctx->get_static_engine_hashset_size()));
-        }
-      } else if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-        fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
-        left_datum.len_ = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
-      }
+  ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+  my_skip.deep_copy(skip, bound.start(), bound.end());
+  bool left_all_null = true;
+  for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+    if (input_left_vec->is_null(idx)) {
+      my_skip.set(idx);
+      res_vec->set_null(idx);
+      eval_flags.set(idx);
+    } else {
+      left_all_null = false;
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (right_all_null) {
-  } else if (!fallback) {
-    for (int64_t left_idx = bound.start(); OB_SUCC(ret) && left_idx < bound.end(); ++left_idx) {
-      if (skip.at(left_idx) || eval_flags.at(left_idx)) {
-        continue;
-      }
-      if (input_left_vec->is_null(left_idx)) {
-        res_vec->set_null(left_idx);
-        eval_flags.set(left_idx);
-      } else if (OB_NOT_NULL(in_ctx)) {  //second we search in hashset.
-        if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-          left_datum.ptr_ = fixed_base_l_payload + left_idx * left_datum.len_;
-        } else {
-          left_datum.ptr_ = input_left_vec->get_payload(left_idx);
-          left_datum.len_ = input_left_vec->get_length(left_idx);
+  if (!left_all_null) {
+    if (OB_FAIL(build_right_hash_without_row(in_id, right_param_num, expr,
+                                              ctx, exec_ctx, in_ctx, right_has_null))) {
+        LOG_WARN("failed to build hash table for right params", K(ret));
+    } else {
+      fallback = in_ctx->is_hash_calc_disabled();
+      if (!fallback) {
+        // refresh inctx hash fun to left hash func
+        if (OB_NOT_NULL(in_ctx->hash_func_buff_)) {
+          in_ctx->hash_func_buff_[0] = (void *)
+              (expr.args_[0]->basic_funcs_->murmur_hash_v2_);
         }
-        if (OB_FAIL(tmp_row.set_elem(&left_datum))) {
-          LOG_WARN("failed to load left", K(ret));
-        } else if (OB_FAIL(in_ctx->exist_in_static_engine_hashset(tmp_row, is_exist))) {
-          LOG_WARN("failed to search in hashset", K(ret));
-        } else {
-          set_vector_result(T_OP_IN == expr.type_, is_exist, in_ctx->ctx_hash_null_, res_vec, left_idx);
-          eval_flags.set(left_idx);
+        // hash table use self as left, so here right param is left for cmp func
+        DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+                                expr.args_[1]->args_[0]->datum_meta_.type_,
+                                expr.args_[0]->datum_meta_.type_,
+                                expr.args_[1]->args_[0]->datum_meta_.scale_,
+                                expr.args_[0]->datum_meta_.scale_,
+                                expr.args_[1]->args_[0]->datum_meta_.precision_,
+                                expr.args_[0]->datum_meta_.precision_,
+                                lib::is_oracle_mode(),
+                                expr.args_[0]->datum_meta_.cs_type_,
+                                expr.args_[0]->obj_meta_.has_lob_header() ||
+                                expr.args_[1]->args_[0]->obj_meta_.has_lob_header());
+        for (int i = 0; i < right_param_num; i++) {
+          in_ctx->cmp_functions_[i] = (void *)func_ptr;
+        }
+        if (0 == in_ctx->get_static_engine_hashset_size()) {
+          // Scenarios where in_list contains only null.
+          if (in_ctx->ctx_hash_null_) {
+            for (int64_t left_idx = bound.start(); left_idx < bound.end(); ++left_idx) {
+              if (skip.at(left_idx) || eval_flags.at(left_idx)) { continue; }
+              res_vec->set_null(left_idx);
+              eval_flags.set(left_idx);
+            }
+            right_all_null = true;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("static_engine_hashset_size unexpected", K(ret), K(right_has_null),
+                    K(in_ctx->get_static_engine_hashset_size()));
+          }
+        } else if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
+          fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
+          left_datum.len_ = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
         }
       }
     }
-  } else {
-    ret = eval_vector_in_without_row_fallback(expr, ctx, skip, bound);
+    if (OB_FAIL(ret)) {
+    } else if (right_all_null) {
+    } else if (!fallback) {
+      for (int64_t left_idx = bound.start(); OB_SUCC(ret) && left_idx < bound.end(); ++left_idx) {
+        if (skip.at(left_idx) || eval_flags.at(left_idx)) {
+          continue;
+        }
+        // The situation "input_left_vec->is_null(idx)" has already been handled previously.
+        if (OB_NOT_NULL(in_ctx)) {  //second we search in hashset.
+          if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
+            left_datum.ptr_ = fixed_base_l_payload + left_idx * left_datum.len_;
+          } else {
+            left_datum.ptr_ = input_left_vec->get_payload(left_idx);
+            left_datum.len_ = input_left_vec->get_length(left_idx);
+          }
+          if (OB_FAIL(tmp_row.set_elem(&left_datum))) {
+            LOG_WARN("failed to load left", K(ret));
+          } else if (OB_FAIL(in_ctx->exist_in_static_engine_hashset(tmp_row, is_exist))) {
+            LOG_WARN("failed to search in hashset", K(ret));
+          } else {
+            set_vector_result(T_OP_IN == expr.type_, is_exist, in_ctx->ctx_hash_null_, res_vec, left_idx);
+            eval_flags.set(left_idx);
+          }
+        }
+      }
+    } else {
+      ret = eval_vector_in_without_row_fallback(expr, ctx, skip, bound);
+    }
   }
 
   return ret;
