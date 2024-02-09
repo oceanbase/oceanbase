@@ -1924,7 +1924,7 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle trans commit request", K(ret), K(msg));
 #else
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_TRANS_COMMITED != ret) {
     TRANS_LOG(WARN, "handle trans commit request failed", K(ret), K(msg));
   }
 #endif

@@ -347,7 +347,11 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
   int ret = OB_SUCCESS;
   if (!session->get_is_deserialized() && session->is_in_transaction()) {
     auto session_id = session->get_sessid();
-    LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
+    if (cause >= 0) {
+      LOG_INFO("begin to kill tx", "caused_by", transaction::ObTxAbortCauseNames::of(cause), K(cause), K(session_id), KPC(session));
+    } else {
+      LOG_INFO("begin to kill tx", "caused_by", common::ob_error_name(cause), K(cause), K(session_id), KPC(session));
+    }
     transaction::ObTxDesc *tx_desc = session->get_tx_desc();
     auto tx_tenant_id = tx_desc->get_tenant_id();
     const ObTransID tx_id = tx_desc->get_tx_id();
