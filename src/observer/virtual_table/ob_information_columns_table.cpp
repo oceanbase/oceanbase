@@ -320,7 +320,6 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
     // do nothing
   }
   while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_more_) {
-    ++logical_index;
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "column_schema is NULL", K(ret));
@@ -329,6 +328,7 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
       if (column_schema->is_hidden()) {
         continue;
       }
+      ++logical_index;
       // use const_column_iterator, if it's index table
       // so should use the physical position
       if (table_schema.is_index_table()) {
