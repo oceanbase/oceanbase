@@ -1716,14 +1716,23 @@ int ObPartTransCtx::serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t 
   } else if (!exec_info_.max_applying_log_ts_.is_valid()) {
     ret = OB_TRANS_CTX_NOT_EXIST;
     TRANS_LOG(INFO, "tx ctx has no persisted log", K(ret), KPC(this));
-  // 3. Tx ctx has no persisted log, so donot need persisting
-  } else if (!replay_completeness_.is_complete()) {
+    // 3. Tx ctx replay incomplete, skip
+  } else if (replay_completeness_.is_incomplete()) {
     // NB: we need refresh rec log ts for incomplete replay ctx
     if (OB_FAIL(refresh_rec_log_ts_())) {
       TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), KPC(this));
     } else {
       ret = OB_TRANS_CTX_NOT_EXIST;
       TRANS_LOG(INFO, "tx ctx is an incomplete replay ctx", K(ret), KPC(this));
+    }
+    // ctx created by replay redo of parallel replay, skip
+  } else if (replay_completeness_.is_unknown()
+             && !exec_info_.is_empty_ctx_created_by_transfer_) {
+    if (OB_FAIL(refresh_rec_log_ts_())) {
+      TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), KPC(this));
+    } else {
+      ret = OB_TRANS_CTX_NOT_EXIST;
+      TRANS_LOG(INFO, "tx ctx replay completeness unknown, skip checkpoint", K(ret), KPC(this));
     }
   // 4. Fetch the current state of the tx ctx table
   } else if (OB_FAIL(get_tx_ctx_table_info_(ctx_info))) {
