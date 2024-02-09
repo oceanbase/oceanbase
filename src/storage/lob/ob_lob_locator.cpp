@@ -19,6 +19,7 @@
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_lob_access_utils.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,8 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     locator_allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     rowkey_str_(),
     enable_locator_v2_(),
-    is_inited_(false)
+    is_inited_(false),
+    scan_flag_()
 {
 }
 
@@ -96,6 +98,7 @@ int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
       ls_id_ = ls_id.id();
       read_snapshot_ = ctx.mvcc_acc_ctx_.snapshot_;
       enable_locator_v2_ = table_param.enable_lob_locator_v2();
+      scan_flag_ = scan_param.scan_flag_;
       if (snapshot_version != read_snapshot_.version_.get_val_for_tx()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "snapshot version mismatch",
@@ -310,6 +313,7 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
       // mysql inrow lobs & systable lobs do not have extern fields
       bool has_extern = (lib::is_oracle_mode() && !is_systable);
       ObMemLobExternFlags extern_flags(has_extern);
+      extern_flags.has_retry_info_ = 0; // default obj should only be inrow, no need retry info
       ObLobCommon lob_common;
       int64_t full_loc_size = ObLobLocatorV2::calc_locator_full_len(extern_flags,
                                                                     rowkey_str_.length(),
@@ -544,6 +548,11 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
         ObMemLobTxInfo tx_info(read_snapshot_.version_.get_val_for_tx(),
                                read_snapshot_.tx_id_.get_id(),
                                read_snapshot_.scn_.cast_to_int());
+        ObMemLobRetryInfo retry_info;
+        retry_info.addr_ = MYADDR;
+        retry_info.is_select_leader_ = true;
+        retry_info.read_latest_ = scan_flag_.read_latest_;
+        retry_info.timeout_ = access_ctx.timeout_;
         ObMemLobLocationInfo location_info(tablet_id_, ls_id_, cs_type);
         if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
           STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));
@@ -551,6 +560,8 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           STORAGE_LOG(WARN, "Lob: set transaction info failed", K(ret), K(tx_info));
         } else if (extern_flags.has_location_info_ && OB_FAIL(locator.set_location_info(location_info))) {
           STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(location_info));
+        } else if (extern_flags.has_retry_info_ && OB_FAIL(locator.set_retry_info(retry_info))) {
+          STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(retry_info));
         }
       }
 
