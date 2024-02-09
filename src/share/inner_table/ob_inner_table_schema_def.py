@@ -31951,9 +31951,22 @@ def_table_schema(
       CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
       oceanbase.__all_virtual_user A,
-      oceanbase.__all_virtual_mview_refresh_run_stats B
+      oceanbase.__all_virtual_mview_refresh_run_stats B,
+      (
+        SELECT
+          C1.TENANT_ID AS TENANT_ID,
+          C1.REFRESH_ID AS REFRESH_ID
+        FROM
+          oceanbase.__all_virtual_mview_refresh_stats C1,
+          oceanbase.__all_virtual_table C2
+        WHERE C1.TENANT_ID = C2.TENANT_ID
+          AND C1.MVIEW_ID = C2.TABLE_ID
+        GROUP BY TENANT_ID, REFRESH_ID
+      ) C
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.USER_ID = B.RUN_USER_ID
+      AND B.TENANT_ID = C.TENANT_ID
+      AND B.REFRESH_ID = C.REFRESH_ID
 """.replace("\n", " ")
 )
 
@@ -31992,9 +32005,22 @@ def_table_schema(
       CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
       oceanbase.__all_user A,
-      oceanbase.__all_mview_refresh_run_stats B
+      oceanbase.__all_mview_refresh_run_stats B,
+      (
+        SELECT
+          C1.TENANT_ID AS TENANT_ID,
+          C1.REFRESH_ID AS REFRESH_ID
+        FROM
+          oceanbase.__all_mview_refresh_stats C1,
+          oceanbase.__all_table C2
+        WHERE C1.TENANT_ID = C2.TENANT_ID
+          AND C1.MVIEW_ID = C2.TABLE_ID
+        GROUP BY TENANT_ID, REFRESH_ID
+      ) C
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.USER_ID = B.RUN_USER_ID
+      AND B.TENANT_ID = C.TENANT_ID
+      AND B.REFRESH_ID = C.REFRESH_ID
 """.replace("\n", " ")
 )
 
@@ -51999,10 +52025,23 @@ def_table_schema(
       CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
-      SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B
+      SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B,
+      (
+        SELECT
+          C1.TENANT_ID AS TENANT_ID,
+          C1.REFRESH_ID AS REFRESH_ID
+        FROM
+          SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1,
+          SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2
+        WHERE C1.TENANT_ID = C2.TENANT_ID
+          AND C1.MVIEW_ID = C2.TABLE_ID
+        GROUP BY C1.TENANT_ID, C1.REFRESH_ID
+      ) C
     WHERE A.USER_ID = B.RUN_USER_ID
+      AND B.REFRESH_ID = C.REFRESH_ID
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
 
@@ -52042,10 +52081,23 @@ def_table_schema(
       CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
-      SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B
+      SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B,
+      (
+        SELECT
+          C1.TENANT_ID AS TENANT_ID,
+          C1.REFRESH_ID AS REFRESH_ID
+        FROM
+          SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1,
+          SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2
+        WHERE C1.TENANT_ID = C2.TENANT_ID
+          AND C1.MVIEW_ID = C2.TABLE_ID
+        GROUP BY C1.TENANT_ID, C1.REFRESH_ID
+      ) C
     WHERE A.USER_ID = B.RUN_USER_ID
+      AND B.REFRESH_ID = C.REFRESH_ID
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
 )
