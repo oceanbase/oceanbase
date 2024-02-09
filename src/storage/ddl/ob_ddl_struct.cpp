@@ -147,9 +147,9 @@ int ObDDLKVHandle::set_obj(ObDDLKV *ddl_kv)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_kv));
   } else {
+    ddl_kv->inc_ref();
     reset();
     ddl_kv_ = ddl_kv;
-    ddl_kv_->inc_ref();
   }
   return ret;
 }
@@ -264,12 +264,12 @@ ObTabletDirectLoadMgrHandle::~ObTabletDirectLoadMgrHandle()
 int ObTabletDirectLoadMgrHandle::set_obj(ObTabletDirectLoadMgr *mgr)
 {
   int ret = OB_SUCCESS;
-  reset();
   if (OB_ISNULL(mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret));
   } else {
     mgr->inc_ref();
+    reset();
     tablet_mgr_ = mgr;
   }
   return ret;

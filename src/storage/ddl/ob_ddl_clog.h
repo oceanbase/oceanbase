@@ -132,7 +132,6 @@ private:
   blocksstable::MacroBlockId macro_block_id_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
-  ObTabletDirectLoadMgrHandle direct_load_mgr_handle_;
   ObTabletHandle tablet_handle_;
 };
 
