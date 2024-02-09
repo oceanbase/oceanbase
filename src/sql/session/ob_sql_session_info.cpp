@@ -563,6 +563,18 @@ int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_co
   return ret;
 }
 
+//to control subplan filter and multiple level join group rescan
+bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_spf_batch_rescan;
+  }
+  return bret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {
