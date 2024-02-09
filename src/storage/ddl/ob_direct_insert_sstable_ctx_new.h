@@ -85,6 +85,11 @@ public:
       const ObTabletDirectLoadInsertParam &param,
       const share::SCN checkpoint_scn = share::SCN::min_scn());
 
+  int replay_create_tablet_direct_load(
+      const ObTabletHandle &tablet_handle,
+      const int64_t execution_id,
+      const ObTabletDirectLoadInsertParam &param);
+
   // to start the direct load, write start log in actually.
   // @param [in] is_full_direct_load.
   // @param [in] ls_id.
@@ -426,6 +431,12 @@ public:
       const uint64_t table_id,
       const int64_t ddl_task_id,
       const bool is_replay); // schedule build a major sstable
+  int replay_commit(
+      ObTablet &tablet,
+      const share::SCN &start_scn,
+      const share::SCN &commit_scn,
+      const uint64_t table_id,
+      const int64_t ddl_task_id);
 
   void set_commit_scn_nolock(const share::SCN &scn);
   int set_commit_scn(const share::SCN &scn);
