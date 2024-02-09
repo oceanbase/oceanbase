@@ -154,6 +154,25 @@ int ObUnitTableOperator::get_units(const common::ObAddr &server,
   return ret;
 }
 
+int ObUnitTableOperator::check_server_empty(const common::ObAddr &server, bool &is_empty)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObUnit> units;
+  is_empty = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", KR(ret), K(server));
+  } else if (OB_FAIL(get_units(server, units))) {
+    LOG_WARN("fail to get units", KR(ret), K(server));
+  } else if (units.count() > 0) {
+    is_empty = false;
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_units(const common::ObIArray<uint64_t> &pool_ids,
                                    common::ObIArray<ObUnit> &units) const
 {
