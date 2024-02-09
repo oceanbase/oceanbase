@@ -143,6 +143,7 @@ ls_gc_delay_time
 ls_meta_table_check_interval
 major_compact_trigger
 major_freeze_duty_time
+max_partition_num
 max_stale_time_for_weak_consistency
 max_string_print_length
 max_syslog_file_count

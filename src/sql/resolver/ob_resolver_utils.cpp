@@ -8612,5 +8612,15 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
   return ret;
 }
 
+int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
+{
+  int64_t max_partition_num = OB_MAX_PARTITION_NUM_MYSQL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    max_partition_num = tenant_config->max_partition_num;
+  }
+  return max_partition_num;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
