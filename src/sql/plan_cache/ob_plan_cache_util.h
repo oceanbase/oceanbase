@@ -859,6 +859,11 @@ struct ObPlanStat
     }
   }
 
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
+  }
+
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */
