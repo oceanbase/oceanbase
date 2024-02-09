@@ -478,6 +478,8 @@ public:
       min_cluster_version_ = curr_cluster_version;
     }
   }
+  inline bool is_disable_auto_memory_mgr() const { return disable_auto_memory_mgr_; }
+  inline void disable_auto_memory_mgr() { disable_auto_memory_mgr_ = true; }
 
   int set_logical_plan(ObLogicalPlanRawData &logical_plan);
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
@@ -666,6 +668,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  bool disable_auto_memory_mgr_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 };
