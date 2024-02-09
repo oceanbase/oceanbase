@@ -399,6 +399,7 @@ struct ObAuditRecordData {
     int64_t scn_;          // snapshot's position in the txn
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
+  int64_t seq_num_; // sequence num, for sequencing stmts in transaction
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
   uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
