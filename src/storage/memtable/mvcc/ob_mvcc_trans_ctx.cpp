@@ -788,6 +788,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
     int64_t my_epoch = list->get_log_epoch();
     int64_t min_epoch = 0;
     int min_epoch_idx =-1;
+    bool flush_min_epoch_list = false;
     common::ObByteLock *log_lock = NULL;
     if (my_epoch == INT64_MAX) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -800,11 +801,26 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
         TRANS_LOG(WARN, "has smaller epoch unlogged", KPC(this),
                   K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
       }
+      // if current list pending size too large, try to submit the min_epoch list
+      if (OB_UNLIKELY(list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
+        flush_min_epoch_list = true;
+      }
     } else {
       lock_guard.set(log_lock);
     }
     if (OB_FAIL(ret) && log_lock) {
       log_lock->unlock();
+    }
+    if (OB_UNLIKELY(flush_min_epoch_list)) {
+      ObTxCallbackList *min_epoch_list = get_callback_list_(min_epoch_idx, false);
+      if (OB_ISNULL(log_lock = min_epoch_list->try_lock_log())) {
+        // lock conflict, acquired by others
+      } else {
+        TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
+        list_idx = min_epoch_idx;
+        lock_guard.set(log_lock);
+        ret = OB_SUCCESS;
+      }
     }
   }
   return ret;
