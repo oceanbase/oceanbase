@@ -334,7 +334,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
       ObPLRecord *record = reinterpret_cast<ObPLRecord*>(src.get_ext());
       CK  (OB_NOT_NULL(record));
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
-        OZ (SMART_CALL(destruct_obj(record->get_element()[i], session)));
+        OZ (SMART_CALL(destruct_obj(record->get_element()[i], session, set_null)));
       }
       OX (set_null ? src.set_null() : record->set_null());
     }
@@ -347,7 +347,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
       CK  (OB_NOT_NULL(collection));
       if (OB_SUCC(ret) && OB_NOT_NULL(collection->get_allocator())) {
         for (int64_t i = 0; OB_SUCC(ret) && i < collection->get_count(); ++i) {
-          OZ (SMART_CALL(destruct_obj(collection->get_data()[i], session)));
+          OZ (SMART_CALL(destruct_obj(collection->get_data()[i], session, set_null)));
         }
       }
       if (OB_SUCC(ret)) {
@@ -3714,7 +3714,7 @@ int ObPLCollection::delete_collection_elem(int64_t index)
     ObObj *obj = static_cast<ObObj *>(get_data());
     // data的type设置为max表示被delete
     if (index < get_count()) {
-      if (OB_FAIL(ObUserDefinedType::destruct_obj(obj[index], NULL))) {
+      if (OB_FAIL(ObUserDefinedType::destruct_obj(obj[index], NULL, false))) {
         LOG_WARN("failed to destruct obj", K(ret), K(obj[index]), K(index));
       } else {
         obj[index].set_type(ObMaxType);
