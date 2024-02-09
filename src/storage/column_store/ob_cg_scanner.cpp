@@ -43,7 +43,7 @@ int ObCGScanner::init(
   } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
-  } else if (OB_FAIL(prefetcher_.init(*sstable_, iter_param, access_ctx))) {
+  } else if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
     LOG_WARN("fail to init prefetcher, ", K(ret));
   } else {
     iter_param_ = &iter_param;
@@ -83,10 +83,10 @@ int ObCGScanner::switch_context(
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
   } else {
     if (!prefetcher_.is_valid()) {
-      if (OB_FAIL(prefetcher_.init(*sstable_, iter_param, access_ctx))) {
+      if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
         LOG_WARN("fail to init prefetcher, ", K(ret));
       }
-    } else if (OB_FAIL(prefetcher_.switch_context(*sstable_, iter_param, access_ctx))) {
+    } else if (OB_FAIL(prefetcher_.switch_context(get_type(), *sstable_, iter_param, access_ctx))) {
       LOG_WARN("Fail to switch context for prefetcher", K(ret));
     }
     if (OB_SUCC(ret)) {
