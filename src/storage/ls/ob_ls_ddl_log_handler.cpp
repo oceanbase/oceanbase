@@ -410,6 +410,7 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           }
         }
       }
+      (void)tenant_direct_load_mgr->gc_tablet_direct_load(*ls_);
     }
   }
   return OB_SUCCESS;
