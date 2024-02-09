@@ -1301,8 +1301,8 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     }
   } else if (stmt.is_update_stmt()) {
     ObUpdateStmt &upd_stmt = static_cast<ObUpdateStmt &>(stmt);
-    if (OB_FAIL(upd_stmt.get_assign_values(pre_group_by_exprs, true))) {
-      LOG_WARN("failed to get assign values", K(ret));
+    if (OB_FAIL(ObTransformUtils::get_post_join_exprs(&stmt, pre_group_by_exprs, true))) {
+      LOG_WARN("failed to get post join exprs", K(ret));
     }
   }
   int64_t pre_count = pre_group_by_exprs.count();
