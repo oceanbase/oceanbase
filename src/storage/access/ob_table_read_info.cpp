@@ -865,7 +865,7 @@ void ObCGReadInfoHandle::reset()
 
 /*
  * ------------------------------- ObTenantCGReadInfoMgr -------------------------------
- */
+*/
 ObTenantCGReadInfoMgr::ObTenantCGReadInfoMgr()
   : allocator_(MTL_ID()),
     index_read_info_(),
@@ -873,6 +873,7 @@ ObTenantCGReadInfoMgr::ObTenantCGReadInfoMgr()
     lock_(),
     hold_cg_read_info_cnt_(0),
     in_progress_cnt_(0),
+    alloc_buf_(nullptr),
     is_inited_(false)
 {
 }

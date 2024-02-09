@@ -719,8 +719,10 @@ int ObCOSSTableV2::cg_scan(
     if (OB_SUCC(ret)) {
       cg_iter = cg_scanner;
     } else {
-      cg_scanner->~ObICGIterator();
-      FREE_TABLE_STORE_CG_IETRATOR(context, cg_scanner);
+      if (nullptr != cg_scanner) {
+        cg_scanner->~ObICGIterator();
+        FREE_TABLE_STORE_CG_IETRATOR(context, cg_scanner);
+      }
     }
   }
   return ret;
