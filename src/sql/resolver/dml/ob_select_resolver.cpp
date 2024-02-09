@@ -1417,6 +1417,27 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
         // nowait  wait_us = 0;
         wait_us = wait_or_skip_node->value_ * 1000000LL;
         skip_locked = false;
+      } else if (wait_or_skip_node->type_ == T_SFU_DECIMAL) {
+        // "select * from t1 for update wait 1.0;" is same as "wait 1"
+        // "select * from t1 for update wait 1.5;" throw OB_ERR_REQUIRE_INTEGER
+        ObNumber value;
+        ObString time_str(wait_or_skip_node->str_len_, wait_or_skip_node->str_value_);
+        if (OB_ISNULL(allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator is null", K(ret));
+        } else if (OB_FAIL(value.from(wait_or_skip_node->str_value_,
+                                      wait_or_skip_node->str_len_,
+                                      *allocator_))) {
+          LOG_WARN("from number failed", K(ret));
+        } else if (OB_UNLIKELY(!value.is_valid_int())) {
+          ret = OB_ERR_REQUIRE_INTEGER;
+          LOG_WARN("wait time not a integer value", K(ret), K(value));
+        } else if (OB_FAIL(ObTimeUtility2::str_to_time(
+                      time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
+          LOG_WARN("str to time failed", K(ret));
+        } else {
+          skip_locked = false;
+        }
       }
     } else {
       wait_us = -1;
