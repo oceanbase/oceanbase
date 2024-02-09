@@ -106,7 +106,8 @@ ObLS::ObLS()
     switch_epoch_(0),
     ls_meta_(),
     rs_reporter_(nullptr),
-    startup_transfer_info_()
+    startup_transfer_info_(),
+    need_delay_resource_recycle_(false)
 {}
 
 ObLS::~ObLS()
@@ -211,6 +212,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("register to service failed", K(ret));
     } else {
       election_priority_.set_ls_id(ls_id);
+      need_delay_resource_recycle_ = false;
       is_inited_ = true;
       LOG_INFO("ls init success", K(ls_id));
     }
@@ -740,6 +742,7 @@ void ObLS::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   startup_transfer_info_.reset();
   ls_transfer_status_.reset();
+  need_delay_resource_recycle_ = false;
 }
 
 int ObLS::offline_tx_(const int64_t start_ts)
@@ -2513,6 +2516,22 @@ int ObLS::set_ls_migration_gc(
   return ret;
 }
 
+bool ObLS::need_delay_resource_recycle() const
+{
+  LOG_INFO("need delay resource recycle", KPC(this));
+  return need_delay_resource_recycle_;
+}
 
+void ObLS::set_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = true;
+  LOG_INFO("set delay resource recycle", KPC(this));
+}
+
+void ObLS::clear_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = false;
+  LOG_INFO("clear delay resource recycle", KPC(this));
+}
 }
 }

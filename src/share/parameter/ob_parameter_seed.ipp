@@ -255,6 +255,11 @@ DEF_INT_WITH_CHECKER(_enable_defensive_check, OB_CLUSTER_PARAMETER, "1",
                      "1 means normal defensive check is enabled, "
                      "2 means more strict defensive check is enabled, such as check partition id validity",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_delay_resource_recycle_after_correctness_issue, OB_CLUSTER_PARAMETER, "False",
+         "whether hinder the recycling of the log resources and the sstable resources under correctness issues",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //
 DEF_BOOL(_sql_insert_multi_values_split_opt, OB_CLUSTER_PARAMETER, "True",
          "True means that the split + batch optimization for inserting multiple rows of the insert values ​​statement can be done",

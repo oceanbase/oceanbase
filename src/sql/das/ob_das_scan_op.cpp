@@ -18,6 +18,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/ob_des_exec_context.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -1201,6 +1202,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       "data_table_tablet_id", tablet_id_ ,
                       KPC_(snapshot),
                       KPC_(tx_desc));
+      concurrency_control::ObDataValidationService::set_delay_resource_recycle(ls_id_);
       if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
         for (int64_t i = 0; i < trans_info_array_.count(); i++) {
           LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
