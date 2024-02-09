@@ -887,7 +887,7 @@ TEST_F(TestIndexTree, test_accumulative_info)
   ObMacroBlockWriter index_macro_writer;
   ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), data_seq));
   ObBaseIndexBlockBuilder builder;
-  ret = builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer);
+  ret = builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer, 0);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObIMicroBlockWriter *micro_writer = builder.micro_writer_;
 
@@ -1655,7 +1655,7 @@ int main(int argc, char **argv)
 {
   system("rm -f test_index_tree.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_index_tree.log");
+  OB_LOGGER.set_file_name("test_index_tree.log", true);
   srand(time(NULL));
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
