@@ -698,15 +698,17 @@ int ObMajorMergeProgressChecker::set_table_compaction_info_status(
 int ObMajorMergeProgressChecker::validate_index_ckm()
 {
   int ret = OB_SUCCESS;
-  if (idx_ckm_validate_array_.count() < 50
-    && progress_.get_wait_index_ckm_table_cnt() > 100
-    && !is_extra_check_round()) {
-    // do nothing
-  } else if (idx_ckm_validate_array_.count() > 0) {
-    if (OB_FAIL(loop_index_ckm_validate_array())) {
-      LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
+  if (idx_ckm_validate_array_.count() > 0) {
+    if (idx_ckm_validate_array_.count() < 50
+      && progress_.get_wait_index_ckm_table_cnt() > 100
+      && !is_extra_check_round()) {
+      // do nothing
+    } else {
+      if (OB_FAIL(loop_index_ckm_validate_array())) {
+        LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
+      }
     }
-    idx_ckm_validate_array_.reset();
+    idx_ckm_validate_array_.reuse(); // reuse array
   }
   return ret;
 }
