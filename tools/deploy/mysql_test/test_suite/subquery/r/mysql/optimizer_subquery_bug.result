@@ -470,10 +470,11 @@ Query Plan
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |3           |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
-|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
-|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
-|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
-|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+|2 |  ├─TABLE FULL SCAN          |t1   |3       |3           |
+|3 |  └─MATERIAL                 |     |1       |3           |
+|4 |    └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|5 |      └─SCALAR GROUP BY      |     |1       |3           |
+|6 |        └─TABLE FULL SCAN    |t2   |3       |3           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -481,19 +482,20 @@ Outputs & filters:
       distinct([VIEW1.sum(b)])
   1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  2 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       access([VIEW1.sum(b)])
-  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
-  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true, 
       pushdown_aggregation([T_FUN_SUM(t2.b)])
-  5 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.a]), range(MIN ; MAX)always true
 select (select sum(b) from t2) as temp from t1 group by temp having temp > 4;
 +------+
 | temp |
@@ -507,10 +509,11 @@ Query Plan
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |3           |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
-|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
-|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
-|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
-|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+|2 |  ├─TABLE FULL SCAN          |t1   |3       |3           |
+|3 |  └─MATERIAL                 |     |1       |3           |
+|4 |    └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|5 |      └─SCALAR GROUP BY      |     |1       |3           |
+|6 |        └─TABLE FULL SCAN    |t2   |3       |3           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -518,19 +521,20 @@ Outputs & filters:
       distinct([VIEW1.sum(b)])
   1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  2 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       access([VIEW1.sum(b)])
-  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) < cast(4, DECIMAL_INT(33, 0))]), rowset=16
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) < cast(4, DECIMAL_INT(33, 0))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
-  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true, 
       pushdown_aggregation([T_FUN_SUM(t2.b)])
-  5 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.a]), range(MIN ; MAX)always true
 select (select sum(b) from t2) as temp from t1 group by temp having temp < 4;
 +------+
 | temp |
@@ -545,14 +549,15 @@ Query Plan
 |1 |├─SUBPLAN SCAN                   |VIEW2|1       |3           |
 |2 |│ └─HASH DISTINCT                |     |1       |3           |
 |3 |│   └─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
-|4 |│     ├─SUBPLAN SCAN             |VIEW1|1       |3           |
-|5 |│     │ └─SCALAR GROUP BY        |     |1       |3           |
-|6 |│     │   └─TABLE FULL SCAN      |t2   |3       |3           |
-|7 |│     └─TABLE FULL SCAN          |t1   |3       |3           |
-|8 |└─MATERIAL                       |     |1       |3           |
-|9 |  └─SUBPLAN SCAN                 |VIEW3|1       |3           |
-|10|    └─SCALAR GROUP BY            |     |1       |3           |
-|11|      └─TABLE FULL SCAN          |t3   |1       |3           |
+|4 |│     ├─TABLE FULL SCAN          |t1   |3       |3           |
+|5 |│     └─MATERIAL                 |     |1       |3           |
+|6 |│       └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|7 |│         └─SCALAR GROUP BY      |     |1       |3           |
+|8 |│           └─TABLE FULL SCAN    |t2   |3       |3           |
+|9 |└─MATERIAL                       |     |1       |3           |
+|10|  └─SUBPLAN SCAN                 |VIEW3|1       |3           |
+|11|    └─SCALAR GROUP BY            |     |1       |3           |
+|12|      └─TABLE FULL SCAN          |t3   |1       |3           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -564,25 +569,26 @@ Outputs & filters:
       distinct([VIEW1.sum(b)])
   3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  5 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  6 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       access([VIEW1.sum(b)])
-  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+  7 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
-  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+  8 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true, 
       pushdown_aggregation([T_FUN_SUM(t2.b)])
-  7 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.a]), range(MIN ; MAX)always true
-  8 - output([VIEW3.sum(b)]), filter(nil), rowset=16
   9 - output([VIEW3.sum(b)]), filter(nil), rowset=16
+ 10 - output([VIEW3.sum(b)]), filter(nil), rowset=16
       access([VIEW3.sum(b)])
- 10 - output([T_FUN_SUM(T_FUN_SUM(t3.b))]), filter(nil), rowset=16
+ 11 - output([T_FUN_SUM(T_FUN_SUM(t3.b))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t3.b))])
- 11 - output([T_FUN_SUM(t3.b)]), filter(nil), rowset=16
+ 12 - output([T_FUN_SUM(t3.b)]), filter(nil), rowset=16
       access([t3.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t3.a]), range(MIN ; MAX)always true, 
@@ -600,10 +606,11 @@ Query Plan
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |3           |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
-|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
-|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
-|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
-|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+|2 |  ├─TABLE FULL SCAN          |t1   |3       |3           |
+|3 |  └─MATERIAL                 |     |1       |3           |
+|4 |    └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|5 |      └─SCALAR GROUP BY      |     |1       |3           |
+|6 |        └─TABLE FULL SCAN    |t2   |3       |3           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -611,19 +618,20 @@ Outputs & filters:
       distinct([VIEW1.sum(b)])
   1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  2 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       access([VIEW1.sum(b)])
-  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))], [T_FUN_SUM(T_FUN_SUM(t2.b)) > T_FUN_SUM(T_FUN_SUM(t2.b))]), rowset=16
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))], [T_FUN_SUM(T_FUN_SUM(t2.b)) > T_FUN_SUM(T_FUN_SUM(t2.b))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
-  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true, 
       pushdown_aggregation([T_FUN_SUM(t2.b)])
-  5 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.a]), range(MIN ; MAX)always true
 select (select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t2);
 +------+
 | temp |
@@ -637,28 +645,30 @@ Query Plan
 |ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
-|1 |├─SUBPLAN SCAN             |VIEW1|1       |3           |
-|2 |│ └─SCALAR GROUP BY        |     |1       |3           |
-|3 |│   └─TABLE FULL SCAN      |t2   |3       |3           |
-|4 |└─TABLE FULL SCAN          |t1   |3       |3           |
+|1 |├─TABLE FULL SCAN          |t1   |3       |3           |
+|2 |└─MATERIAL                 |     |1       |3           |
+|3 |  └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|4 |    └─SCALAR GROUP BY      |     |1       |3           |
+|5 |      └─TABLE FULL SCAN    |t2   |3       |3           |
 ============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([VIEW1.sum(b)], [t1.a]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  1 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
       access([VIEW1.sum(b)])
-  2 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+  4 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
-  3 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+  5 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
       access([t2.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.a]), range(MIN ; MAX)always true, 
       pushdown_aggregation([T_FUN_SUM(t2.b)])
-  4 - output([t1.a]), filter(nil), rowset=16
-      access([t1.a]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t1.a]), range(MIN ; MAX)always true
 select (select sum(b) from t2) as temp, a from t1 group by a having temp > 4;
 +------+---+
 | temp | a |

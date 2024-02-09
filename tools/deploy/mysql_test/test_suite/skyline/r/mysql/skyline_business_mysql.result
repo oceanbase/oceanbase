@@ -578,23 +578,24 @@ where b.card_no is null
 order by a.card_no
 limit 0,2000;
 Query Plan
-=============================================================================================================
-|ID|OPERATOR                          |NAME                                           |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------------------------------------------
-|0 |LIMIT                             |                                               |1       |3           |
-|1 |└─NESTED-LOOP ANTI JOIN           |                                               |1       |3           |
-|2 |  ├─SUBPLAN SCAN                  |a                                              |1       |3           |
-|3 |  │ └─MERGE DISTINCT              |                                               |1       |3           |
-|4 |  │   └─TABLE FULL SCAN           |pcb_common_bill_01(UK_CARDNO_ATTR_PRODID_OUTNO)|1       |3           |
-|5 |  └─SUBPLAN SCAN                  |VIEW1                                          |1       |18          |
-|6 |    └─DISTRIBUTED TABLE RANGE SCAN|b(uk_cardno)                                   |1       |18          |
-=============================================================================================================
+==================================================================================================
+|ID|OPERATOR               |NAME                                           |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------------------
+|0 |LIMIT                  |                                               |1       |5           |
+|1 |└─MERGE ANTI JOIN      |                                               |1       |5           |
+|2 |  ├─SUBPLAN SCAN       |a                                              |1       |3           |
+|3 |  │ └─MERGE DISTINCT   |                                               |1       |3           |
+|4 |  │   └─TABLE FULL SCAN|pcb_common_bill_01(UK_CARDNO_ATTR_PRODID_OUTNO)|1       |3           |
+|5 |  └─SUBPLAN SCAN       |VIEW1                                          |1       |3           |
+|6 |    └─TABLE FULL SCAN  |b(uk_cardno)                                   |1       |3           |
+==================================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.card_no]), filter(nil), rowset=16
       limit(2000), offset(0)
   1 - output([a.card_no]), filter(nil), rowset=16
-      conds(nil), nl_params_([a.card_no(:0)]), use_batch=false
+      equal_conds([a.card_no = VIEW1.b.card_no]), other_conds(nil)
+      merge_directions([ASC])
   2 - output([a.card_no]), filter(nil), rowset=16
       access([a.card_no])
   3 - output([pcb_common_bill_01.CARD_NO]), filter(nil), rowset=16
@@ -606,13 +607,12 @@ Outputs & filters:
       range_key([pcb_common_bill_01.CARD_NO], [pcb_common_bill_01.ATTRIBUTE_INST], [pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.OUT_BILL_NO], [pcb_common_bill_01.shadow_pk_0]),
        range(5001,MIN,MIN,MIN,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX,MAX,MAX,
       MAX)
-  5 - output(nil), filter(nil), rowset=16
-      access(nil)
+  5 - output([VIEW1.b.card_no]), filter(nil), rowset=16
+      access([VIEW1.b.card_no])
   6 - output([b.card_no]), filter([(T_OP_LIKE, b.card_no, '5001____________', '\\')]), rowset=16
       access([b.card_no]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([b.card_no], [b.shadow_pk_0]), range(5001,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX), 
-      range_cond([:0 = b.card_no])
+      range_key([b.card_no], [b.shadow_pk_0]), range(5001,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX)
 CREATE TABLE `pcb_installment_00` (
 `BILL_NO` varchar(28) NOT NULL,
 `INSTALL_NUM` decimal(5,0) NOT NULL,

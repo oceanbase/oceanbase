@@ -4068,13 +4068,10 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
 double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
 {
   double ret = rows;
-  if (rows < parallel) {
-    parallel = rows;
-
+  if (parallel >= 1) {
+    ret = rows / parallel;
   }
-  //at least one parallel
-  parallel = parallel < 1 ? 1: parallel;
-  ret = rows / parallel;
+  ret = ret < 1 ? 1 : ret;
   return ret;
 }
 
@@ -6869,6 +6866,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
                DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       right_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, 1);
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
                DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
