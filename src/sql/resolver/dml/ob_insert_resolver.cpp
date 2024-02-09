@@ -954,6 +954,7 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
   int ret = OB_SUCCESS;
   ObInsertStmt *stmt = get_insert_stmt();
   ObColumnRefRawExpr *value_desc = NULL;
+  ObColumnRefRawExpr *base_column_ref = const_cast<ObColumnRefRawExpr*>(column_ref);
   if (OB_ISNULL(column_ref) || OB_ISNULL(stmt) || OB_ISNULL(params_.expr_factory_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(column_ref), K(stmt), KP_(params_.expr_factory));
@@ -976,9 +977,23 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN(("value desc is null"));
     } else {
+      if (OB_FAIL(ObTransformUtils::get_base_column(stmt, base_column_ref))) {
+        // may be invalid updatable view, will be handled later.
+        ret = OB_SUCCESS;
+        base_column_ref = const_cast<ObColumnRefRawExpr*>(column_ref);
+        LOG_WARN("failed to get base column", K(ret));
+      }
       value_desc->set_result_type(column_ref->get_result_type());
       value_desc->set_result_flag(column_ref->get_result_flag());
       value_desc->set_column_flags(column_ref->get_column_flags());
+      if (base_column_ref != column_ref) {
+        if (base_column_ref->is_table_part_key_column()) {
+          value_desc->set_table_part_key_column();
+        }
+        if (base_column_ref->is_table_part_key_org_column()) {
+          value_desc->set_table_part_key_org_column();
+        }
+      }
       value_desc->set_dependant_expr(const_cast<ObRawExpr *>(column_ref->get_dependant_expr()));
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
