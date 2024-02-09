@@ -7637,8 +7637,9 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
           && (cursor->get_package_id() != current_block_->get_namespace().get_package_id()
               || cursor->get_routine_id() != current_block_->get_namespace().get_routine_id())) {
             const ObPLCursor *external_cursor = NULL;
+            ObPLBlockNS *external_ns = NULL;
             CK (OB_NOT_NULL(current_block_->get_namespace().get_external_ns()));
-            CK (OB_NOT_NULL(current_block_->get_namespace().get_external_ns()->get_parent_ns()));
+            CK (OB_NOT_NULL(external_ns = const_cast<ObPLBlockNS *>(current_block_->get_namespace().get_external_ns()->get_parent_ns())));
             OZ (current_block_->get_namespace().get_external_ns()->get_parent_ns()->get_cursor(
                 cursor->get_package_id(),
                 cursor->get_routine_id(),
@@ -7649,8 +7650,15 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("cursor NULL", K(cursor_index), K(cursor_name), K(ret));
               } else {
+                ObSEArray<int64_t, 16> external_expr_idxs;
+                ObIArray<ObRawExpr *> *external_exprs = const_cast<ObIArray<ObRawExpr*>*>(external_ns->get_exprs());
+                CK (OB_NOT_NULL(external_exprs));
+                for (int64_t i = 0; OB_SUCC(ret) && i < expr_idxs.count(); ++i) {
+                  OZ (external_expr_idxs.push_back(external_exprs->count()));
+                  OZ (external_exprs->push_back(func.get_exprs().at(expr_idxs.at(i))));
+                }
                 OZ (const_cast<ObPLCursor*>(external_cursor)->set(prepare_result.route_sql_,
-                                          expr_idxs,
+                                          external_expr_idxs,
                                           prepare_result.ps_sql_,
                                           prepare_result.type_,
                                           prepare_result.for_update_,
@@ -15498,7 +15506,11 @@ int ObPLResolver::resolve_cursor(
       if (ns.get_block_type() != ObPLBlockNS::BLOCK_ROUTINE
           || ns.get_symbol_table() != current_block_->get_namespace().get_symbol_table()) {
         CK (OB_NOT_NULL(current_block_));
-        OZ (add_external_cursor(current_block_->get_namespace(), &ns, *cur, cursor, func));
+        OZ (add_external_cursor(current_block_->get_namespace(),
+                                &ns,
+                                *cur,
+                                cursor,
+                                func));
       } else {
         cursor = ns.get_cursors().at(i);
       }
