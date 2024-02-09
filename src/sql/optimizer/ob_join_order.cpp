@@ -1953,15 +1953,15 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
             find_pos = k;
           }
         }
-        if (OB_SUCC(ret) && find_pos < 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("can not find column group info for filter", K(ret));
+        if (OB_FAIL(ret)) {
+        } else if (find_pos < 0) {
+          //ignore index column group
         } else if (find_pos > max_pos) {
           max_pos = find_pos;
         }
       }
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || filter_columns.empty()) {
     } else if (max_pos < 0 || max_pos >= column_group_infos.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("can not find column group info for filter", K(ret));
