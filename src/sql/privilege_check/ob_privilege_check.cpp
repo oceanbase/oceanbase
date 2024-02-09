@@ -1491,6 +1491,8 @@ int get_revoke_stmt_need_privs(
                                          stmt->get_database_name(),
                                          stmt->get_table_name()))) {
       LOG_WARN("Can not grant information_schema database", K(ret));
+    } else if (lib::is_mysql_mode() && stmt->get_revoke_all()) {
+      //check privs at resolver
     } else {
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
