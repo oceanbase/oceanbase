@@ -197,7 +197,9 @@ public:
       write_epoch_start_tid_(0),
       need_merge_(false),
       for_replay_(false),
+      has_branch_replayed_into_first_list_(false),
       serial_final_scn_(share::SCN::max_scn()),
+      serial_final_seq_no_(),
       serial_sync_scn_(share::SCN::min_scn()),
       callback_main_list_append_count_(0),
       callback_slave_list_append_count_(0),
@@ -274,7 +276,8 @@ public:
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);
-  void set_parallel_logging(const share::SCN serial_final_scn);
+  void set_parallel_logging(const share::SCN serial_final_scn,
+                            const transaction::ObTxSEQ serial_final_seq_no);
   void set_skip_checksum_calc();
   bool skip_checksum_calc() const { return ATOMIC_LOAD(&skip_checksum_); }
   void merge_multi_callback_lists();
@@ -325,6 +328,7 @@ public:
   transaction::ObPartTransCtx *get_trans_ctx() const;
   TO_STRING_KV(KP(this),
                K_(serial_final_scn),
+               K_(serial_final_seq_no),
                K_(serial_sync_scn),
                KP_(callback_lists),
                K_(need_merge),
@@ -387,8 +391,17 @@ private:
   // On Leader, if no write after takeover, merge is also not required
   bool need_merge_;
   bool for_replay_;
-  // the last serial logg's scn
+  // used to mark that some branch callback replayed in first callback list
+  // actually, by default they were replayed into its own callback list by
+  // hash on branch id.
+  // this can happened when txn recovery from a point after serial final log
+  // and branch callback before (or equals to) serial final scn will be put
+  // into the first list for easy to handle (ensure each callback list will
+  // be `appended only` after serial final state).
+  bool has_branch_replayed_into_first_list_;
+  // the last serial log's scn
   share::SCN serial_final_scn_;
+  transaction::ObTxSEQ serial_final_seq_no_;
   // currently synced serial log's scn
   // when serial_sync_scn_ == serial_final_scn_
   // it means the serial logging or serial replay has been finished

@@ -157,7 +157,8 @@ int ObIMvccCtx::register_row_replay_cb(
 int ObIMvccCtx::register_table_lock_cb_(
     ObLockMemtable *memtable,
     ObMemCtxLockOpLinkNode *lock_op,
-    ObOBJLockCallback *&cb)
+    ObOBJLockCallback *&cb,
+    const share::SCN replay_scn)
 {
   int ret = OB_SUCCESS;
   static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
@@ -171,6 +172,9 @@ int ObIMvccCtx::register_table_lock_cb_(
     TRANS_LOG(WARN, "encode memtable key failed", K(ret));
   } else {
     cb->set(mt_key, lock_op);
+    if (replay_scn.is_valid()) {
+      cb->set_scn(replay_scn);
+    }
     if (OB_FAIL(append_callback(cb))) {
       TRANS_LOG(WARN, "append table lock callback failed", K(ret), K(*cb));
     } else {
@@ -216,10 +220,10 @@ int ObIMvccCtx::register_table_lock_replay_cb(
     TRANS_LOG(WARN, "invalid argument", K(ret), K(memtable), K(lock_op));
   } else if (OB_FAIL(register_table_lock_cb_(memtable,
                                              lock_op,
-                                             cb))) {
+                                             cb,
+                                             scn))) {
     TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
   } else {
-    cb->set_scn(scn);
     TRANS_LOG(DEBUG, "replay register table lock callback", K(*cb));
   }
   return ret;

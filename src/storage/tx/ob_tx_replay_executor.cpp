@@ -361,32 +361,28 @@ int ObTxReplayExecutor::replay_redo_()
   int tmp_ret = OB_SUCCESS;
   ObTxRedoLogTempRef temp_ref;
   ObTxRedoLog redo_log(temp_ref);
+  const bool serial_final = log_block_.get_header().is_serial_final();
+  ObTxSEQ max_seq_no;
   if (is_tx_log_replay_queue()) {
     tx_part_log_no_ += 1; // redo is compound with tx log, mark part_log_no is required
   }
+
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "[Replay Tx] ls should not be null", K(ret), K(ls_));
   } else if (OB_FAIL(log_block_.deserialize_log_body(redo_log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", K(ret), K(redo_log), K(lsn_),
               K(log_ts_ns_));
-  } else if (OB_FAIL(replay_redo_in_memtable_(redo_log))) {
+  } else if (OB_FAIL(replay_redo_in_memtable_(redo_log, serial_final, max_seq_no))) {
     TRANS_LOG(WARN, "[Replay Tx] replay redo in memtable error", K(ret), K(lsn_), K(log_ts_ns_));
   } else if (OB_FAIL(ctx_->replay_redo_in_ctx(redo_log,
                                               lsn_,
                                               log_ts_ns_,
                                               tx_part_log_no_,
                                               is_tx_log_replay_queue(),
-                                              log_block_.get_header().is_serial_final()))) {
+                                              serial_final,
+                                              max_seq_no))) {
     TRANS_LOG(WARN, "[Replay Tx] replay redo in tx_ctx error", K(ret), K(lsn_), K(log_ts_ns_));
-  // } else if (first_created_ctx_ && redo_log.get_log_no() > 0) {
-  //   // replay a commited tx in recovery process
-  //   ctx_->force_no_need_replay_checksum();
-  //   TRANS_LOG(
-  //       WARN,
-  //       "[Replay Tx] Don't replay from first redo log and Part_ctx is not existed in tx ctx table",
-  //       K(first_created_ctx_), K(redo_log.get_log_no()));
-    // ctx_->supplement_undo_actions_if_exist();
   }
   if (OB_SUCC(ret) && OB_TMP_FAIL(mt_ctx_->remove_callbacks_for_fast_commit(replay_queue_, share::SCN::minus(log_ts_ns_, 1)))) {
     TRANS_LOG(WARN, "[Replay Tx] remove callbacks for fast commit", K(ret), K(tmp_ret),
@@ -563,7 +559,7 @@ int ObTxReplayExecutor::replay_clear_()
   return ret;
 }
 
-int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
+int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo, const bool serial_final, ObTxSEQ &max_seq_no)
 {
   int ret = OB_SUCCESS;
   // ObMemtable *cur_mem = nullptr;
@@ -578,6 +574,8 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
 
   ObCLogEncryptInfo encrypt_info;
   encrypt_info.init();
+
+  max_seq_no.reset();
 
   if (OB_ISNULL(mmi_ptr_)) {
     if (nullptr
@@ -625,8 +623,18 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
                     K(row_head.tablet_id_), KP(ls_), K(log_ts_ns_), K(tx_part_log_no_),
                     KPC(ctx_));
         }
-      } else {
-        // do nothing
+      } else if (OB_UNLIKELY(serial_final)) {
+        // because the seq no in one log-entry is not in order
+        // must iterator all to pick the max value
+        const ObTxSEQ seq_no = mmi_ptr_->get_row_seq_no();
+        if (OB_UNLIKELY(!seq_no.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "seq no is invalid in mutator row", K(seq_no), KPC(this));
+          ob_abort();
+        }
+        if (seq_no.get_seq() > max_seq_no.get_seq()) {
+          max_seq_no = seq_no;
+        }
       }
     }
   }
@@ -779,22 +787,18 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
     TRANS_LOG(WARN, "[Replay Tx] this is not a ObMemtable", K(ret), KP(mem_ptr), KPC(mem_ptr),
               KP(mmi_ptr));
   } else if (FALSE_IT(timeguard.click("get_memtable"))) {
+    // _NOTE_:
+    // set max_end_scn before repaly_row to ensure memtable will not be released
+    // before current log replay success
+  } else if (OB_FAIL(data_mem_ptr->set_max_end_scn(log_ts_ns_))) {
+    TRANS_LOG(WARN, "[Replay Tx] set memtable max end log ts failed", K(ret), KP(data_mem_ptr));
   } else if (OB_FAIL(data_mem_ptr->replay_row(store_ctx, log_ts_ns_, mmi_ptr))) {
     TRANS_LOG(WARN, "[Replay Tx] replay row error", K(ret));
-  } else if (OB_FAIL(data_mem_ptr->set_max_end_scn(log_ts_ns_))) { // for freeze log_ts , may be
-    TRANS_LOG(WARN, "[Replay Tx] set memtable max end log ts failed", K(ret), KP(data_mem_ptr));
   } else if (OB_FAIL(data_mem_ptr->set_rec_scn(log_ts_ns_))) {
     TRANS_LOG(WARN, "[Replay Tx] set rec_log_ts error", K(ret), KPC(data_mem_ptr));
   }
 
   timeguard.click("replay_finish");
-  if (OB_FAIL(ret) && ret != OB_NO_NEED_UPDATE) {
-    // We need rollback all callbacks of this log to avoid replay a row
-    // in a freeze memtable which has a smaller end ts than this log.
-    //
-    // The rollback operation must hold write_ref to make memtable stay in memory.
-    mt_ctx_->rollback_redo_callbacks(replay_queue_, log_ts_ns_);
-  }
   return ret;
 }
 
