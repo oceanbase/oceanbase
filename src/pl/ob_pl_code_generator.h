@@ -225,7 +225,8 @@ public:
                    jit::ObLLVMValue &for_update,
                    jit::ObLLVMValue &hidden_rowid,
                    jit::ObLLVMValue &params,
-                   jit::ObLLVMValue &count);
+                   jit::ObLLVMValue &count,
+                   jit::ObLLVMValue &skip_locked);
   int generate_into(const ObPLInto &into,
                     jit::ObLLVMValue &into_array_value,
                     jit::ObLLVMValue &into_count_value,

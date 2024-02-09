@@ -4021,6 +4021,7 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int_pointer_type));//formal_param_idxs
     OZ (arg_types.push_back(int_pointer_type));//actual_param_exprs
     OZ (arg_types.push_back(int64_type));//cursor_param_count
+    OZ (arg_types.push_back(bool_type));//skip_locked
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_cursor_open"), ft, spi_service_.spi_cursor_open_));
   }
@@ -4909,10 +4910,11 @@ int ObPLCodeGenerator::generate_open(
     ObLLVMValue formal_params;
     ObLLVMValue actual_params;
     ObLLVMValue cursor_param_count;
+    ObLLVMValue skip_locked;
     ObLLVMValue ret_err;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
     OZ (generate_sql(cursor_sql, str, len, ps_sql, type, for_update, hidden_rowid, sql_params,
-                     sql_param_count));
+                     sql_param_count, skip_locked));
     OZ (args.push_back(str));
     OZ (args.push_back(ps_sql));
     OZ (args.push_back(type));
@@ -4944,6 +4946,7 @@ int ObPLCodeGenerator::generate_open(
     OZ (args.push_back(formal_params));
     OZ (args.push_back(actual_params));
     OZ (args.push_back(cursor_param_count));
+    OZ (args.push_back(skip_locked));
     OZ (get_helper().create_call(ObString("spi_cursor_open"), get_spi_service().spi_cursor_open_, args, ret_err));
     OZ (check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
   }
@@ -5568,8 +5571,9 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     ObLLVMValue hidden_rowid;
     ObLLVMValue params;
     ObLLVMValue count, is_type_record;
+    ObLLVMValue skip_locked;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
-    OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count));
+    OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count, skip_locked));
     if (OB_SUCC(ret)) {
       if (s.get_params().empty()) {
         OZ (args.push_back(str));
@@ -6786,7 +6790,8 @@ int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
                                     jit::ObLLVMValue &for_update,
                                     jit::ObLLVMValue &hidden_rowid,
                                     jit::ObLLVMValue &params,
-                                    jit::ObLLVMValue &count)
+                                    jit::ObLLVMValue &count,
+                                    jit::ObLLVMValue &skip_locked)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue int_value;
@@ -6812,6 +6817,8 @@ int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
     } else if (OB_FAIL(generate_expression_array(
         sql.is_forall_sql() ? sql.get_array_binding_params() : sql.get_params(), params, count))) {
       LOG_WARN("get precalc expr array ir value failed", K(ret));
+    } else if (OB_FAIL(helper_.get_int8(sql.is_skip_locked(), skip_locked))) {
+      LOG_WARN("failed to get int8", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;
