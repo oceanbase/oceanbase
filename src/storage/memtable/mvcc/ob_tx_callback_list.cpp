@@ -579,8 +579,14 @@ int ObTxCallbackList::tx_calc_checksum_before_scn(const SCN scn)
 int ObTxCallbackList::tx_calc_checksum_all()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(checksum_scn_.is_max())) {
-    // skip repeate calc checksum
+  if (OB_UNLIKELY(checksum_scn_.is_max() &&
+                  0 != checksum_)) {
+    // There could be a scenario where, under the condition that checksum_scn is
+    // persisted at its maximum value, while checksum_ might be 0. In such a
+    // scenario, we still rely on calculating the checksum to prevent mistakenly
+    // using 0 for checksum verification and avoid potential errors.
+    //
+    // skip the unnecessary repeate calc checksum
   } else {
     LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
     ObCalcChecksumFunctor functor;
@@ -705,6 +711,7 @@ int ObTxCallbackList::replay_fail(const SCN scn, const bool serial_replay)
 void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, SCN &checksum_scn)
 {
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
+
   if (checksum_scn_.is_max()) {
     checksum = checksum_;
     checksum_scn = checksum_scn_;
