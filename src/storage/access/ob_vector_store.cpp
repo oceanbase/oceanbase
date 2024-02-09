@@ -240,7 +240,10 @@ int ObVectorStore::fill_rows(
       LOG_WARN("Failed to fill output rows", K(ret));
     }
   } else if (nullptr != group_by_cell_) {
-    if (OB_FAIL(group_by_cell_->copy_output_rows(count_))) {
+    if (iter_param_->use_uniform_format() &&
+        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_, false))) {
+      LOG_WARN("Failed to init uniform header", K(ret));
+    } else if (OB_FAIL(group_by_cell_->copy_output_rows(count_))) {
       LOG_WARN("Failed to copy output rows", K(ret));
     }
   }
@@ -323,19 +326,28 @@ int ObVectorStore::fill_group_by_rows(
 {
   int ret = OB_SUCCESS;
   int64_t output_cnt = 0;
+  bool already_init_uniform = false;
   if (!group_by_cell_->is_processing()) {
-    if (OB_FAIL(do_group_by(group_idx, reader, begin_index, end_index, res))) {
+    if (iter_param_->use_uniform_format() &&
+        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_))) {
+      LOG_WARN("Failed to init uniform header", K(ret));
+    } else if (OB_FAIL(do_group_by(group_idx, reader, begin_index, end_index, res))) {
       LOG_WARN("Failed to do group by", K(ret));
     } else if (!group_by_cell_->is_exceed_sql_batch()) {
       output_cnt = group_by_cell_->get_distinct_cnt();
     } else {
       group_by_cell_->reset_projected_cnt();
       group_by_cell_->set_is_processing(true);
+      already_init_uniform = true;
     }
   }
   if (OB_FAIL(ret)) {
   } else if (group_by_cell_->is_processing()) {
-    if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
+    if (!already_init_uniform &&
+        iter_param_->use_uniform_format() &&
+        OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx_))) {
+      LOG_WARN("Failed to init uniform header", K(ret));
+    } else if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
       if (OB_LIKELY(OB_ITER_END == ret)) {
         ret = OB_SUCCESS;
         group_by_cell_->set_is_processing(false);

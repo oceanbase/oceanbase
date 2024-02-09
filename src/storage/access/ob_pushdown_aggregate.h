@@ -679,6 +679,12 @@ public:
         "size", is_valid_bitmap ? bitmap->size() : 0);
     return ret;
   }
+  // TODO remove this after use vectorize 2.0 in group by pushdown
+  int init_uniform_header(
+      const sql::ObExprPtrIArray *output_exprs,
+      const sql::ObExprPtrIArray *agg_exprs,
+      sql::ObEvalCtx &eval_ctx,
+      const bool init_output = true);
   DECLARE_TO_STRING;
 private:
   static const int64_t DEFAULT_AGG_CELL_CNT = 2;

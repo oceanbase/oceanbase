@@ -3208,6 +3208,21 @@ int ObGroupByCell::check_distinct_and_ref_valid()
   return ret;
 }
 
+int ObGroupByCell::init_uniform_header(
+    const sql::ObExprPtrIArray *output_exprs,
+    const sql::ObExprPtrIArray *agg_exprs,
+    sql::ObEvalCtx &eval_ctx,
+    const bool init_output)
+{
+  int ret = OB_SUCCESS;
+  if (init_output && OB_FAIL(init_exprs_uniform_header(output_exprs, eval_ctx, eval_ctx.max_batch_size_))) {
+    LOG_WARN("Failed to init uniform header for output exprs", K(ret));
+  } else if (OB_FAIL(init_exprs_uniform_header(agg_exprs, eval_ctx, eval_ctx.max_batch_size_))) {
+    LOG_WARN("Failed to init uniform header for agg exprs", K(ret));
+  }
+  return ret;
+}
+
 int64_t ObGroupByCell::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
