@@ -178,12 +178,12 @@ struct ObDoArithVectorBaseEval
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     const int64_t cond =
       (bound.get_all_rows_active() << 2) | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    if (cond == 4) { // all_rolls_active == true, evaluated = false, all_not_null = false
+    if (cond == 4) { // all_rows_active == true, evaluated = false, all_not_null = false
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::null_check_vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
       eval_flags.set_all(bound.start(), bound.end());
-    } else if (cond == 5) { // all_rolls_active == true, evaluated = false, all_not_null = true
+    } else if (cond == 5) { // all_rows_active == true, evaluated = false, all_not_null = true
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
@@ -223,7 +223,7 @@ struct ObDoArithFixedVectorEval
 
     const int64_t cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], right_arr[idx], args...);
@@ -269,7 +269,7 @@ struct ObDoArithFixedConstVectorEval
 
     const int cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], *right_val, args...);
@@ -315,7 +315,7 @@ struct ObDoArithConstFixedVectorEval
 
     const int cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], *left_val, right_arr[idx], args...);
