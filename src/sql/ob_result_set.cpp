@@ -1930,7 +1930,10 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(MTL_ID()))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(OB_SERVER_TENANT_ID))) {
+          // Only when the local machine has no tenant resources will it be sent to the remote end
+          // for execution. Therefore, the local machine can only use the resources of 500 tenants.
+          // The scanner will limit the package size to no more than 64M.
         } else if (OB_FAIL(handle.get_more(*transmit_result))) {
           LOG_WARN("fail wait response", K(ret));
         } else {
