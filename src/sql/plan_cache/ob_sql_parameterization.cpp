@@ -2218,8 +2218,10 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
     // select 1 - (2/3/4) from dual;
     // 对于常量节点2，都不能转换成-2
     // do nothing
-  } else if (ob_is_numeric_type(ITEM_TO_OBJ_TYPE(tree->children_[1]->type_)) &&
-             tree->children_[1]->value_ >= 0) {
+  } else if (ob_is_number_or_decimal_int_tc(ITEM_TO_OBJ_TYPE(tree->children_[1]->type_))
+             || ((ob_is_integer_type(ITEM_TO_OBJ_TYPE(tree->children_[1]->type_))
+                  || ob_is_real_type(ITEM_TO_OBJ_TYPE(tree->children_[1]->type_)))
+                 && tree->children_[1]->value_ >= 0)) {
     ParseNode *child = tree->children_[1];
     tree->type_ = T_OP_ADD;
     if (!is_from_pl) {
@@ -2249,8 +2251,7 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
     } else {
       child->is_trans_from_minus_ = 1;
     }
-  } else if (T_OP_MUL == tree->children_[1]->type_
-             || T_OP_DIV == tree->children_[1]->type_
+  } else if (T_OP_MUL == tree->children_[1]->type_ || T_OP_DIV == tree->children_[1]->type_
              || T_OP_INT_DIV == tree->children_[1]->type_
              || (lib::is_mysql_mode() && T_OP_MOD == tree->children_[1]->type_)) {
     /*  '0 - 2 * 3' should be transformed to '0 + (-2) * 3' */
