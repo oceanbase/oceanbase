@@ -1018,7 +1018,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::COMPILE_TIME: {
       uint64_t compile_time = 0;
-      cells[i].set_null();
+      cells[i].set_uint64(compile_time);
       break;
     }
     default: {
