@@ -30,10 +30,10 @@
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 
-// const char* host = "100.88.11.91";
+// const char* host = "127.0.0.1";
 // int32_t sql_port = 60809;
 // int32_t rpc_port = 60808;
-const char* host = "11.158.97.240";
+const char* host = "127.0.0.1";
 int32_t sql_port = 41101;
 int32_t rpc_port = 41100;
 const char* tenant = "sys";
