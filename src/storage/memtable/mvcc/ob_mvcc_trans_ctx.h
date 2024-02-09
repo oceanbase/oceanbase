@@ -486,6 +486,7 @@ public:
   const ObMemtableKey *get_key() { return &key_; }
   int get_memtable_key(uint64_t &table_id, common::ObStoreRowkey &rowkey) const;
   bool is_logging_blocked() const override;
+  uint32_t get_freeze_clock() const override;
   transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;

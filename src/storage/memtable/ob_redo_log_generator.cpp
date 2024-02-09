@@ -105,6 +105,9 @@ public:
     } else if (iter->is_logging_blocked()) {
       ret = OB_BLOCK_FROZEN;
       ctx_.last_log_blocked_memtable_ = static_cast<memtable::ObMemtable *>(iter->get_memtable());
+    } else if (OB_UNLIKELY(iter->get_freeze_clock() >= ctx_.freeze_clock_)) {
+      // when flush redo for frozen memtable, if memtable is active, should stop
+      ret = OB_BLOCK_FROZEN;
     } else {
       bool fake_fill = false;
       if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {

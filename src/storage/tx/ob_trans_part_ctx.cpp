@@ -1825,10 +1825,9 @@ int ObPartTransCtx::remove_callback_for_uncommited_txn(
 }
 
 // the semantic of submit redo for freeze is
-// should flush all redos which can be flushed
-// otherwise, need return some error to caller
-// to indicate need retry
-int ObPartTransCtx::submit_redo_log_for_freeze()
+// should flush all redos bellow specified freeze_clock (inclusive)
+// otherwise, need return some error to caller to indicate need retry
+int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(TRACE, "", K_(trans_id), K_(ls_id));
@@ -1838,7 +1837,7 @@ int ObPartTransCtx::submit_redo_log_for_freeze()
   if (need_submit) {
     CtxLockGuard guard(lock_);
     tg.click();
-    ret = submit_redo_log_for_freeze_(submitted);
+    ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
     tg.click();
     if (submitted) {
       REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
@@ -1905,7 +1904,7 @@ int ObPartTransCtx::serial_submit_redo_after_write_()
     int64_t before_submit_pending_size = mt_ctx_.get_pending_log_size();
     bool should_switch = should_switch_to_parallel_logging_();
     ObTxRedoSubmitter submitter(*this, mt_ctx_);
-    ret = submitter.submit(false /*flush all log*/, should_switch, false /*display blocked info*/);
+    ret = submitter.serial_submit(should_switch);
     if (should_switch && submitter.get_submitted_cnt() > 0) {
       const share::SCN serial_final_scn = submitter.get_submitted_scn();
       switch_to_parallel_logging_(serial_final_scn);
@@ -1966,13 +1965,13 @@ int ObPartTransCtx::prepare_for_submit_redo(ObTxLogCb *&log_cb,
   return ret;
 }
 
-int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted)
+int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t freeze_clock)
 {
   int ret = OB_SUCCESS;
   ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
   if (OB_SUCC(check_can_submit_redo_())) {
     ObTxRedoSubmitter submitter(*this, mt_ctx_);
-    if (OB_FAIL(submitter.submit(true/*flush all*/, false/*final serial*/, true /*display blocked info*/))) {
+    if (OB_FAIL(submitter.submit_for_freeze(freeze_clock, true /*display blocked info*/))) {
       if (OB_BLOCK_FROZEN != ret) {
         TRANS_LOG(WARN, "fail to submit redo log for freeze", K(ret));
         // for some error, txn will be aborted immediately
@@ -2859,7 +2858,7 @@ int ObPartTransCtx::submit_redo_if_parallel_logging_()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_parallel_logging())) {
     ObTxRedoSubmitter submitter(*this, mt_ctx_);
-    if (OB_FAIL(submitter.submit(true/*flush all*/, false/*final serial*/, true /*display blocked info*/))) {
+    if (OB_FAIL(submitter.submit_all(true /*display blocked info*/))) {
       TRANS_LOG(WARN, "submit redo log fail", K(ret));
     }
   }
@@ -9237,8 +9236,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       if (exec_info_.state_ == ObTxState::INIT) {
         // promise redo log before move log
         bool submitted = false;
-        if (OB_FAIL(submit_redo_log_for_freeze_(submitted))) {
-          TRANS_LOG(WARN, "submit log failed", KR(ret), KPC(this));
+        ObTxRedoSubmitter submitter(*this, mt_ctx_);
+        if (OB_FAIL(submitter.serial_submit(false))) {
+          TRANS_LOG(WARN, "submit redo failed", K(ret), KPC(this));
         } else {
           sub_state_.set_transfer_blocking();
         }

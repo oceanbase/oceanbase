@@ -35,22 +35,33 @@ public:
     helper_(NULL),
     from_all_list_(false),
     flush_all_(false),
-    write_seq_no_(),
     serial_final_(false),
     submit_if_not_full_(true),
+    flush_freeze_clock_(UINT32_MAX),
+    write_seq_no_(),
     submit_cb_list_idx_(-1),
     submit_out_cnt_(0),
     submitted_scn_()
   {}
   ~ObTxRedoSubmitter();
-  // submit, will traversal all callback-list
-  int submit(const bool flush_all, const bool is_final, const bool display_blocked_info = false);
+  int submit_for_freeze(const uint32_t freeze_clock = UINT32_MAX, const bool display_blocked_info = true) {
+    return submit_(true, freeze_clock, false, display_blocked_info);
+  }
+  int serial_submit(const bool is_final) {
+    return submit_(false, UINT32_MAX, is_final, false);
+  }
+  int submit_all(const bool display_blocked_info) {
+    return submit_(true, UINT32_MAX, false, display_blocked_info);
+  }
   // fill log_block, and if full submit out and continue to fill
   int fill(ObTxLogBlock &log_block, memtable::ObRedoLogSubmitHelper &helper, const bool display_blocked_info = true);
   // parallel submit, only traversal writter's callback-list
   int parallel_submit(const ObTxSEQ &write_seq);
   int get_submitted_cnt() const { return submit_out_cnt_; }
   share::SCN get_submitted_scn() const { return submitted_scn_; }
+private:
+  // general submit entry, will traversal all callback-list
+  int submit_(const bool flush_all, const uint32_t freeze_clock, const bool is_final, const bool display_blocked_info);
 private:
   // common submit redo pipeline
   // prepare -> fill -> submit_out -> after_submit
@@ -68,9 +79,16 @@ private:
   int submit_log_block_out_(const int64_t replay_hint, bool &submitted);
   int after_submit_redo_out_();
 public:
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(from_all_list), K_(flush_all),
-               K_(write_seq_no), K_(serial_final),
-               K_(submit_if_not_full), K_(submit_out_cnt), K_(submit_cb_list_idx));
+  TO_STRING_KV(K_(tx_id),
+               K_(ls_id),
+               K_(from_all_list),
+               K_(flush_all),
+               K_(flush_freeze_clock),
+               K_(write_seq_no),
+               K_(serial_final),
+               K_(submit_if_not_full),
+               K_(submit_out_cnt),
+               K_(submit_cb_list_idx));
 private:
   ObPartTransCtx &tx_ctx_;
   memtable::ObMemtableCtx &mt_ctx_;
@@ -81,15 +99,17 @@ private:
   memtable::ObRedoLogSubmitHelper *helper_;
   // for writer thread submit, only submit single list
   // for freeze or switch leader or commit, submit from all list
-  bool from_all_list_;
+  bool from_all_list_ : 1;
   // whether flush all logs before can return
-  bool flush_all_;
+  bool flush_all_ : 1;
+  // whether is submitting the final serial log
+  bool serial_final_ : 1;
+  // wheter submit out if log_block is not full filled
+  bool submit_if_not_full_ : 1;
+  // flush memtables before and equals specified freeze_clock
+  int64_t flush_freeze_clock_;
   // writer seq_no, used to select logging callback-list
   ObTxSEQ write_seq_no_;
-  // whether is submitting the final serial log
-  bool serial_final_;
-  // wheter submit out if log_block is not full filled
-  bool submit_if_not_full_;
   // submit from which list, use by wirte thread logging
   int submit_cb_list_idx_;
   // the count of logs this submitter submitted out
@@ -163,11 +183,15 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
 // the caller has hold TransCtx's FlushRedo write Lock
 // which ensure no writer thread is logging
 // and also hold TransCtx's CtxLock, which is safe to operate in the flush pipline
-int ObTxRedoSubmitter::submit(const bool flush_all, const bool is_final, const bool display_blocked_info)
+int ObTxRedoSubmitter::submit_(const bool flush_all,
+                               const uint32_t freeze_clock,
+                               const bool is_final,
+                               const bool display_blocked_info)
 {
   int ret = OB_SUCCESS;
   from_all_list_ = true;
   flush_all_ = flush_all;
+  flush_freeze_clock_ = freeze_clock;
   serial_final_ = is_final;
   ObTxLogBlock log_block;
   log_block_ = &log_block;
@@ -205,7 +229,6 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
   int ret = OB_SUCCESS;
   memtable::ObTxFillRedoCtx ctx;
   ctx.tx_id_ = tx_id_;
-  const bool parallel_logging = tx_ctx_.is_parallel_logging();
   ctx.write_seq_no_ = write_seq_no_;
   const bool is_parallel_logging = tx_ctx_.is_parallel_logging();
   bool stop = false;
@@ -277,7 +300,7 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
       bool submitted = false;
       int submit_ret = OB_SUCCESS;
       if (ctx.fill_count_ > 0 && !skip_submit) {
-        const int64_t replay_hint = ctx.tx_id_.get_id() + (parallel_logging ? ctx.list_idx_ : 0);
+        const int64_t replay_hint = ctx.tx_id_.get_id() + (is_parallel_logging ? ctx.list_idx_ : 0);
         submit_ret = submit_log_block_out_(replay_hint, submitted);
         if (OB_SUCCESS == submit_ret) {
           submit_ret = after_submit_redo_out_();
@@ -371,6 +394,7 @@ int ObTxRedoSubmitter::fill_log_block_(memtable::ObTxFillRedoCtx &ctx)
     ctx.helper_ = helper_;
     ctx.skip_lock_node_ = false;
     ctx.all_list_ = from_all_list_;
+    ctx.freeze_clock_ = flush_freeze_clock_;
     ctx.fill_count_ = 0;
     ctx.list_idx_ = submit_cb_list_idx_;
     int64_t start_ts = ObTimeUtility::fast_current_time();

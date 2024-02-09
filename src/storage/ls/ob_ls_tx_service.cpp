@@ -429,9 +429,9 @@ int ObLSTxService::replay(const void *buffer,
   return ret;
 }
 
-int ObLSTxService::traverse_trans_to_submit_redo_log(ObTransID &fail_tx_id)
+int ObLSTxService::traverse_trans_to_submit_redo_log(ObTransID &fail_tx_id, const uint32_t freeze_clock)
 {
-  return mgr_->traverse_tx_to_submit_redo_log(fail_tx_id);
+  return mgr_->traverse_tx_to_submit_redo_log(fail_tx_id, freeze_clock);
 }
 int ObLSTxService::traverse_trans_to_submit_next_log() { return mgr_->traverse_tx_to_submit_next_log(); }
 
