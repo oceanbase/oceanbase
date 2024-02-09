@@ -127,6 +127,18 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   OB_UNIS_ENCODE(calc_part_id_expr_);
   OB_UNIS_ENCODE(global_index_rowkey_exprs_);
   OB_UNIS_ENCODE(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_ENCODE(has_aux_lookup);
+  if (OB_SUCC(ret) && has_aux_lookup) {
+    OB_UNIS_ENCODE(*aux_lookup_ctdef_);
+    OB_UNIS_ENCODE(*aux_lookup_loc_meta_);
+  }
+
+  bool has_text_ir = false;
+  OB_UNIS_ENCODE(has_text_ir);
+  if (OB_SUCC(ret) && has_text_ir) {
+    OB_UNIS_ENCODE(*text_ir_ctdef_);
+  }
   return ret;
 }
 
@@ -154,6 +166,17 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   OB_UNIS_ADD_LEN(calc_part_id_expr_);
   OB_UNIS_ADD_LEN(global_index_rowkey_exprs_);
   OB_UNIS_ADD_LEN(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_ADD_LEN(has_aux_lookup);
+  if (has_aux_lookup) {
+    OB_UNIS_ADD_LEN(*aux_lookup_ctdef_);
+    OB_UNIS_ADD_LEN(*aux_lookup_loc_meta_);
+  }
+  bool has_text_ir = false;
+  OB_UNIS_ADD_LEN(has_text_ir);
+  if (has_text_ir) {
+    OB_UNIS_ADD_LEN(*text_ir_ctdef_);
+  }
   return len;
 }
 
@@ -198,6 +221,30 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   OB_UNIS_DECODE(calc_part_id_expr_);
   OB_UNIS_DECODE(global_index_rowkey_exprs_);
   OB_UNIS_DECODE(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_DECODE(has_aux_lookup);
+  if (OB_SUCC(ret) && has_aux_lookup) {
+    if (OB_ISNULL(aux_lookup_ctdef_ = OB_NEWx(ObDASScanCtDef, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for aux lookup ctdef", K(ret));
+    } else if (OB_ISNULL(aux_lookup_loc_meta_ = OB_NEWx(ObDASTableLocMeta, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for aux lookup table location meta", K(ret));
+    } else {
+      OB_UNIS_DECODE(*aux_lookup_ctdef_);
+      OB_UNIS_DECODE(*aux_lookup_loc_meta_);
+    }
+  }
+  bool has_text_ir = false;
+  OB_UNIS_DECODE(has_text_ir);
+  if (OB_SUCC(ret) && has_text_ir) {
+    if (OB_ISNULL(text_ir_ctdef_ = OB_NEWx(ObDASIRCtDef, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for text ir ctdef", K(ret));
+    } else {
+      OB_UNIS_DECODE(*text_ir_ctdef_);
+    }
+  }
   return ret;
 }
 

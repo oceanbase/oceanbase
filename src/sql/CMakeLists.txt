@@ -68,6 +68,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
+  das/ob_text_retrieval_op.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
