@@ -270,6 +270,7 @@ public:
       const ObITable::TableKey &table_key,
       const share::SCN &start_scn,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+      ObTabletHandle &tablet_handle,
       share::SCN &commit_scn,
       bool &is_remote_write,
       uint32_t &lock_tid);

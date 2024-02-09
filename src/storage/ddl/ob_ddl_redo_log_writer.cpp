@@ -1228,6 +1228,7 @@ int ObDDLRedoLogWriter::write_commit_log(
     const ObITable::TableKey &table_key,
     const share::SCN &start_scn,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletHandle &tablet_handle,
     SCN &commit_scn,
     bool &is_remote_write,
     uint32_t &lock_tid)
@@ -1260,6 +1261,9 @@ int ObDDLRedoLogWriter::write_commit_log(
   } else if (start_scn != direct_load_mgr_handle.get_obj()->get_start_scn()) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("current task is restarted", K(ret), K(start_scn), "current_start_scn", direct_load_mgr_handle.get_obj()->get_start_scn());
+  } else if (direct_load_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
+    commit_scn = direct_load_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
+    LOG_WARN("already committed", K(ret), K(start_scn), K(commit_scn), K(direct_load_mgr_handle.get_obj()->get_start_scn()), K(log));
   } else if (!remote_write_) {
     if (OB_FAIL(local_write_ddl_commit_log(
       log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), direct_load_mgr_handle, handle, lock_tid))) {
