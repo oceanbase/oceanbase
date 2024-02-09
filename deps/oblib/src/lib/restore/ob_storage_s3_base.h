@@ -14,6 +14,7 @@
 #define SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_S3_BASE_H_
 
 #include <openssl/md5.h>
+#include <malloc.h>
 #include "lib/restore/ob_i_storage.h"
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
@@ -120,13 +121,20 @@ public:
   virtual void *AllocateMemory(std::size_t blockSize,
       std::size_t alignment, const char *allocationTag = NULL) override
   {
+    // When memory allocation fails, S3 SDK calls abort, causing a program crash.
+    // Replaced ob_malloc_align with memalign,, which retries allocation with ob_malloc_retry,
+    // thus hanging the thread instead of crashing.
+    // The ob_malloc_retry function exits the loop only when it successfully allocates memory or
+    // when the requested allocation is greater than or equal to 2GB. Thus, if an allocation of
+    // 2GB or more fails, it may still cause the program to crash.
+    lib::ObMallocHookAttrGuard guard(attr_);
     UNUSED(allocationTag);
     std::size_t real_alignment = MAX(alignment, 16); // should not be smaller than 16
-    return ob_malloc_align(real_alignment, blockSize, attr_);
+    return memalign(real_alignment, blockSize);
   }
   virtual void FreeMemory(void *memoryPtr) override
   {
-    ob_free_align(memoryPtr);
+    free(memoryPtr);
     memoryPtr = NULL;
   }
 
