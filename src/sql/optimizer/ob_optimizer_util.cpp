@@ -6193,6 +6193,22 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
           is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
                         && PRECISION_UNKNOWN_YET == dst_type.get_precision();
         }
+      } else if (ObCharType == child_type.get_type()) {
+        if (ObVarcharType == dst_type.get_type() && !expr->is_const_expr()) {
+          if ((dst_acc.get_length() >= child_type.get_accuracy().get_length() ||
+               dst_acc.get_length() == -1) &&
+              dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObNCharType == child_type.get_type()) {
+        if (ObNVarchar2Type == dst_type.get_type() && !expr->is_const_expr()) {
+          if ((dst_acc.get_length() >= child_type.get_accuracy().get_length() ||
+               dst_acc.get_length() == -1) &&
+               dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+            is_lossless = true;
+          }
+        }
       }
     }
     LOG_DEBUG("lossless column cast", K(child_type), K(child_tc), K(dst_type), K(dst_tc),
