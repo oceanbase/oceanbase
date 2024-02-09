@@ -932,7 +932,7 @@ bool ObTxDesc::execute_commit_cb()
 #ifdef ENABLE_DEBUG_LOG
           ob_abort();
 #endif
-          TRANS_LOG(WARN, "unexpected error happen, cb_tid_ should smaller than 0",
+          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0",
                     KP(this), K(tx_id), KP(cb_tid_));
         }
         ATOMIC_STORE_REL(&cb_tid_, GETTID());
@@ -944,7 +944,6 @@ bool ObTxDesc::execute_commit_cb()
                             OB_ID(thread_id), GETTID());
         commit_cb_lock_.unlock();
         cb->callback(commit_out_);
-        ATOMIC_STORE_REL(&cb_tid_, -GETTID());
       } else {
         commit_cb_lock_.unlock();
       }
