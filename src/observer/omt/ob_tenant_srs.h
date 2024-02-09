@@ -84,6 +84,7 @@ public:
   virtual ~ObSrsCacheGuard();
   int get_srs_item(uint64_t srs_id, const common::ObSrsItem *&srs_item);
   void set_srs_snapshot(ObSrsCacheSnapShot *srs_cache) { srs_cache_ =  srs_cache; }
+  inline bool empty() { return srs_cache_ == nullptr; }
 private:
   ObSrsCacheSnapShot *srs_cache_;
 };
