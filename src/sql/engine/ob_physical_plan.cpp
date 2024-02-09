@@ -478,7 +478,8 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
   if (record.is_timeout()) {
     ATOMIC_INC(&(stat_.timeout_count_));
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
-  } else if (!GCONF.enable_perf_event) { // short route
+  }
+  if (!GCONF.enable_perf_event) { // short route
     ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
                                    - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
