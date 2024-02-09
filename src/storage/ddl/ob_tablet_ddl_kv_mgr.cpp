@@ -336,7 +336,8 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
 }
 
 int ObTabletDDLKvMgr::get_or_create_ddl_kv(
-    const share::SCN &scn,
+    const share::SCN &macro_redo_scn,
+    const share::SCN &macro_redo_start_scn,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
     ObDDLKVHandle &kv_handle)
 {
@@ -346,18 +347,24 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (!scn.is_valid_and_not_min()) {
+  } else if (OB_UNLIKELY(!macro_redo_scn.is_valid_and_not_min() || !macro_redo_start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(scn));
+    LOG_WARN("invalid argument", K(ret), K(macro_redo_scn), K(macro_redo_start_scn));
   } else if (OB_FAIL(direct_load_mgr_handle.get_obj()->rdlock(TRY_LOCK_TIMEOUT/*10s*/, direct_load_lock_tid))) {
     // usually use the latest start scn to allocate kv.
     LOG_WARN("lock failed", K(ret));
+  } else if (OB_UNLIKELY(macro_redo_start_scn < direct_load_mgr_handle.get_obj()->get_start_scn())) {
+    ret = OB_TASK_EXPIRED;
+    LOG_WARN("ddl task expired", K(ret), K(macro_redo_start_scn), "start_scn", direct_load_mgr_handle.get_obj()->get_start_scn());
+  } else if (OB_UNLIKELY(macro_redo_start_scn > direct_load_mgr_handle.get_obj()->get_start_scn())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected start scn in memory", K(ret), K(macro_redo_start_scn), "start_scn", direct_load_mgr_handle.get_obj()->get_start_scn());
   } else {
     uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
     if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
       LOG_WARN("failed to rdlock", K(ret), KPC(this));
     } else {
-      try_get_ddl_kv_unlock(scn, kv_handle);
+      try_get_ddl_kv_unlock(macro_redo_scn, kv_handle);
     }
     if (lock_tid != 0) {
       unlock(lock_tid);
@@ -368,7 +375,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(
     if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
       LOG_WARN("failed to wrlock", K(ret), KPC(this));
     } else {
-      try_get_ddl_kv_unlock(scn, kv_handle);
+      try_get_ddl_kv_unlock(macro_redo_scn, kv_handle);
       if (kv_handle.is_valid()) {
         // do nothing
       } else if (OB_FAIL(alloc_ddl_kv(direct_load_mgr_handle.get_obj()->get_start_scn(),

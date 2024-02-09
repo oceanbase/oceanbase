@@ -308,8 +308,14 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       if (OB_SUCC(ret) && need_replay) {
         if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block,
             snapshot_version, data_format_version, direct_load_mgr_handle))) {
-          LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block),
-            K(snapshot_version), K(data_format_version));
+          if (OB_TASK_EXPIRED == ret) {
+            need_replay = false;
+            LOG_INFO("task expired, skip replay the redo", K(ret), K(macro_block), KPC(direct_load_mgr_handle.get_obj()));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block),
+              K(snapshot_version), K(data_format_version));
+          }
         }
       }
     }

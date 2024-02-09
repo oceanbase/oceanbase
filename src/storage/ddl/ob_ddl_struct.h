@@ -96,6 +96,7 @@ public:
   ObDDLKVPendingGuard(
     ObTablet *tablet,
     const share::SCN &scn,
+    const share::SCN &start_scn,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
