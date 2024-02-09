@@ -1280,6 +1280,7 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
   column.set_collation_type(expr.get_collation_type());
   column.set_accuracy(expr.get_accuracy());
   column.set_zero_fill(expr.get_result_type().has_result_flag(ZEROFILL_FLAG));
+  column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
   if (OB_FAIL(ret)) {
   } else if (column.is_enum_or_set() && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
     LOG_WARN("set enum or set info failed", K(ret), K(expr));
