@@ -186,7 +186,8 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
     // before we reuse it
 
     // if reuse come from commit_cb, assume current thread hold one reference
-    final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
+    int64_t cb_tid = ATOMIC_LOAD_ACQ(&tx.cb_tid_);
+    final_ref_cnt = cb_tid == GETTID() ? 2 : 1;
     while (tx.get_ref() > final_ref_cnt) {
       PAUSE();
       if (++spin_cnt > 2000) {
