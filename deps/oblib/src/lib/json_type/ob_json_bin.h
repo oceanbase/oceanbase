@@ -194,6 +194,7 @@ public:
   {
     return field_type_;
   }
+
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
@@ -397,6 +398,12 @@ public:
 
   // release resource
   void destroy();
+
+  virtual uint64_t member_count() const override
+  {
+    return (json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT) ?
+      element_count() : 1;
+  }
 
 private:
   // used as stack

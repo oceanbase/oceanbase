@@ -301,6 +301,11 @@ public:
   // @return Returns object_iterator
   virtual JsonObjectIterator object_iterator() const;
 
+  // Get member count of json.
+  // scalar 1, array, object as child number
+  // @return json containner returns the capacity, json scalar return 1.
+  virtual uint64_t member_count() const = 0;
+
   // getter
   virtual bool get_boolean() const = 0;
   virtual double get_double() const = 0;
