@@ -91,6 +91,9 @@ int ObCOMerger::inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t id
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null table", K(ret));
   } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
   } else if (OB_FAIL(init_merge_iters(sstable))) {
     STORAGE_LOG(WARN, "failed to init_merge_iters", K(ret));

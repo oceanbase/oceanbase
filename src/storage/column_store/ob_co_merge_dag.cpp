@@ -491,6 +491,12 @@ int ObCOMergeBatchExeDag::create_first_task()
     LOG_WARN("execute task is unexpected null", KR(ret), KP(execute_task));
   } else if (OB_FAIL(create_task(execute_task/*parent*/, finish_task, *ctx, *dag_net))) {
     LOG_WARN("fail to create finish task", K(ret), KPC(dag_net));
+  } else { // fill compaction param
+    // the dag_net has been set, and the dag hasn't been added to the scheduler now
+    param_.compaction_param_.sstable_cnt_ = ctx->get_tables_handle().get_count();
+    param_.compaction_param_.estimate_concurrent_cnt_ = ctx->get_concurrent_cnt();
+    param_.compaction_param_.add_time_ = common::ObTimeUtility::fast_current_time();
+    param_.compaction_param_.batch_size_ = end_cg_idx_ - start_cg_idx_;
   }
 
   if (OB_FAIL(ret)) {
@@ -500,16 +506,8 @@ int ObCOMergeBatchExeDag::create_first_task()
     }
     if (OB_NOT_NULL(finish_task)) {
       remove_task(*finish_task);
-      execute_task = nullptr;
+      finish_task = nullptr;
     }
-  }
-
-  // the dag_net has been set, and the dag hasn't been added to the scheduler now
-  if (OB_SUCC(ret)) { // fill compaction param
-    param_.compaction_param_.sstable_cnt_ = ctx->get_tables_handle().get_count();
-    param_.compaction_param_.estimate_concurrent_cnt_ = ctx->get_concurrent_cnt();
-    param_.compaction_param_.add_time_ = common::ObTimeUtility::fast_current_time();
-    param_.compaction_param_.batch_size_ = end_cg_idx_ - start_cg_idx_;
   }
   return ret;
 }
