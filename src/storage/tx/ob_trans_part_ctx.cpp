@@ -1016,6 +1016,50 @@ int ObPartTransCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
+int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
+{
+  int ret = OB_SUCCESS;
+  ObMemtableKeyArray memtable_key_info_arr;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(get_memtable_key_arr(memtable_key_info_arr))) {
+    TRANS_LOG(WARN, "get memtable key arr fail", KR(ret), K(memtable_key_info_arr));
+  } else {
+    // If the row has been dumped into sstable, we can not get the
+    // memtable key info since the callback of it has been dropped.
+    // So we need to judge whether the transaction has been dumped
+    // into sstable here. Futhermore, we need to fitler out ratain
+    // transactions by !tx_ctx->is_exiting().
+    if (memtable_key_info_arr.empty() && !is_exiting() && get_memtable_ctx()->maybe_has_undecided_callback()) {
+      ObMemtableKeyInfo key_info;
+      memtable_key_info_arr.push_back(key_info);
+    }
+    int64_t count = memtable_key_info_arr.count();
+    for (int i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObTxLockStat tx_lock_stat;
+      if (OB_FAIL(tx_lock_stat.init(get_addr(),
+                                    get_tenant_id(),
+                                    get_ls_id(),
+                                    memtable_key_info_arr.at(i),
+                                    get_session_id(),
+                                    0,
+                                    get_trans_id(),
+                                    get_ctx_create_time(),
+                                    get_trans_expired_time()))) {
+        TRANS_LOG(WARN, "trans lock stat init fail", KR(ret), KPC(this), K(memtable_key_info_arr.at(i)));
+      } else if (OB_FAIL(iter.push(tx_lock_stat))) {
+        TRANS_LOG(WARN, "tx_lock_stat_iter push item fail", KR(ret), K(tx_lock_stat));
+      } else {
+        // do nothing
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::trans_replay_abort_(const SCN &final_log_ts)
 {
   int ret = OB_SUCCESS;
