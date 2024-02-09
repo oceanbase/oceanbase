@@ -2432,28 +2432,25 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       if (OB_FAIL(analyze_filter(partition_columns, partition_expr, column_id, filter_exprs.at(idx),
                                  always_true, calc_node, cnt_func_expr, dtc_params, exec_ctx))) {
         LOG_WARN("Failed to analyze filter", K(ret));
+      } else if (!cnt_func_expr) {
+        if (OB_FAIL(normal_filters.push_back(filter_exprs.at(idx)))) {
+          LOG_WARN("Failed to add filter", K(ret));
+        }
+      } else if (OB_FAIL(add_and_node(calc_node, func_node))) {
+        //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
+        //如果是这种保证这个变量名就不太合适
+        LOG_WARN("Failed to add and node", K(ret));
       } else {
-        if (!always_true && NULL != calc_node) {
-          func_always_true = false;
-        }
-        if (!cnt_func_expr) {
-          if (OB_FAIL(normal_filters.push_back(filter_exprs.at(idx)))) {
-            LOG_WARN("Failed to add filter", K(ret));
-          }
-        } else if (OB_FAIL(add_and_node(calc_node, func_node))) {
-          //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
-          //如果是这种保证这个变量名就不太合适
-          LOG_WARN("Failed to add and node", K(ret));
-        } else {
-          is_func_range_get = true;
-        }
+        is_func_range_get = true;
+        func_always_true &= always_true || NULL == calc_node;
       }
     }
 
     if (OB_SUCC(ret)) {
-      bool column_always_true = false;
+      bool column_always_true = true;
       ObPartLocCalcNode *column_node = NULL;
       if (normal_filters.count() > 0) {
+        column_always_true = false;
         if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
                                          column_node, dtc_params, exec_ctx, is_in_range_optimization_enabled))) {
           LOG_WARN("Failed to get query range node", K(ret));
