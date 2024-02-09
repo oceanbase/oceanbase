@@ -359,8 +359,12 @@ int ObTableFilterOperator::init_full_column_name(const ObIArray<ObString>& col_a
     // do nothing
   } else if (OB_FAIL(full_column_name_.assign(col_arr))) {
     LOG_WARN("fail to assign full column name", K(ret));
-  } else if (!is_select_column_empty && OB_FAIL(one_result_->assign_property_names(query_->get_select_columns()))) { // normal query should reset select column
-    LOG_WARN("fail to assign query column name", K(ret));
+  } else if (!is_select_column_empty) {
+    one_result_->reset_property_names();
+    // why need deep copy, query_ is owned to query session when do sync query, and query session destroy before property_names serialize.
+    if (OB_FAIL(one_result_->deep_copy_property_names(query_->get_select_columns()))) { // normal query should reset select column
+      LOG_WARN("fail to assign query column name", K(ret));
+    }
   }
   return ret;
 }
