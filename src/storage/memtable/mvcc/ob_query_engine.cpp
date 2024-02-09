@@ -513,6 +513,7 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
   } else {
     bool need_retry = false;
     do {
+      need_retry = false;
       // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
       ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD / 2> key_array;
       if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
@@ -553,7 +554,7 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
         raw_iter_alloc_.free(iter);
         iter = NULL;
       }
-    } while (need_retry);
+    } while (OB_SUCC(ret) && need_retry);
   }
   return ret;
 }
