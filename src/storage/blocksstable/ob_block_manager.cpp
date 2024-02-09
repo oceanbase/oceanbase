@@ -936,8 +936,8 @@ void ObBlockManager::mark_and_sweep()
   bool skip_mark = false;
   // we must assign alloc_num_ before mark_macro_blocks, because it will be set to 0 in this func
   int64_t alloc_num = 0;
-  // recycle maximum 200 GB space, but no more than 6MB memory consumption for mark_info
-  const int64_t MAX_FREE_BLOCK_COUNT_PER_ROUND = 100000;
+  // recycle maximum 400 GB space, but no more than 8MB memory consumption for mark_info
+  const int64_t MAX_FREE_BLOCK_COUNT_PER_ROUND = 200000;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
