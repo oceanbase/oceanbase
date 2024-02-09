@@ -1057,9 +1057,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
-    if (OB_FAIL(ls->get_paxos_member_list(member_list, paxos_replica_num))) {
-      LOG_WARN("failed to get paxos member list", K(ret), KPC(ls));
-    } else if (OB_FAIL(get_ls_info_(cluster_id, tenant_id, ls->get_ls_id(), ls_info))) {
+    if (OB_FAIL(get_ls_info_(cluster_id, tenant_id, ls->get_ls_id(), ls_info))) {
       LOG_WARN("failed to get ls info", K(ret), K(cluster_id), K(tenant_id), KPC(ls));
       //overwrite ret
       if (OB_FAIL(ls->get_log_handler()->get_election_leader(leader_addr))) {
@@ -1074,6 +1072,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
         const ObLSReplica &replica = replica_array.at(i);
         if (replica.is_strong_leader()) {
           leader_addr = replica.get_server();
+          paxos_replica_num = replica.get_paxos_replica_number();
           break;
         }
       }
