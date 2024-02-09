@@ -3926,6 +3926,7 @@ int ObTablet::do_rowkey_exists(
     bool found = false;
     ObITable *table = nullptr;
     int64_t check_table_cnt = 0;
+    param.set_tablet_handle(table_iter.get_tablet_handle_ptr());
     while (OB_SUCC(ret) && !found) {
       if (OB_FAIL(table_iter.table_store_iter_.get_next(table))) {
         if (OB_ITER_END != ret) {
