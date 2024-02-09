@@ -5558,6 +5558,7 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
       false /*is full row scan?*/,
       false,
       false);
+  query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
   common::ObVersionRange trans_version_rang;
   trans_version_rang.base_version_ = 0;
   trans_version_rang.multi_version_start_ = 0;
