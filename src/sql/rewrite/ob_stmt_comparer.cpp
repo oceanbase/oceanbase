@@ -1196,6 +1196,8 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
   } else if (map_info.view_select_item_map_.count() < first->get_table_size() &&
              OB_FAIL(map_info.view_select_item_map_.prepare_allocate(first->get_table_size()))) {
     LOG_WARN("failed to pre-allocate generated table map", K(ret));
+  } else if (first_table->for_update_ || second_table->for_update_) {
+    relation = QueryRelation::QUERY_UNCOMPARABLE;
   } else if (first_table->is_temp_table() && second_table->is_temp_table()) {
     if (first_table->ref_query_ == second_table->ref_query_) {
       relation = QueryRelation::QUERY_EQUAL;
