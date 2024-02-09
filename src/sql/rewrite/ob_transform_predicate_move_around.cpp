@@ -2841,6 +2841,9 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
       OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(semi_info), K(right_table));
+  } else if (right_table->is_values_table()) {
+    /* not allow predicate moving into values table */
+    OPT_TRACE("right table is values table");
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get left rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
@@ -3044,6 +3047,10 @@ int ObTransformPredicateMoveAround::pushdown_into_table(ObDMLStmt *stmt,
              !table_item->is_generated_table() &&
              !table_item->is_temp_table()) {
     // do nothing
+  } else if (table_item->is_generated_table() &&
+             NULL != table_item->ref_query_ &&
+             table_item->ref_query_->is_values_table_query()) {
+    /* not allow predicate moving into values table query */
   } else if (OB_FAIL(rename_preds.assign(table_preds))) {
     LOG_WARN("failed to assgin exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt,
