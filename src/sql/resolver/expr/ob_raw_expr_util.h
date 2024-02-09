@@ -1068,6 +1068,13 @@ public:
                              const ObIArray<common::ObField> *field_array,
                              const ObIArray<ObRawExpr*> &input_exprs,
                              ObRawExpr *&pack_expr);
+  static int build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
+                                      const ObSQLSessionInfo *session_info,
+                                      ObRawExpr *cast_expr,
+                                      ObRawExpr *input_expr,
+                                      ObRawExpr *next_expr,
+                                      const uint64_t ret_code,
+                                      ObSysFunRawExpr *&new_expr);
 
   static int set_call_in_pl(ObRawExpr *&raw_expr);
 

@@ -339,6 +339,7 @@
 #include "ob_expr_align_date4cmp.h"
 #include "ob_expr_extract_cert_expired_time.h"
 #include "ob_expr_transaction_id.h"
+#include "ob_expr_inner_row_cmp_val.h"
 
 namespace oceanbase
 {
@@ -1115,6 +1116,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 672 */
   NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 673 */
   NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 674 */
+  ObExprInnerRowCmpVal::eval_inner_row_cmp_val,                       /* 675 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

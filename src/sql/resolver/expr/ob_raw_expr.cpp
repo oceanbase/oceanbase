@@ -4167,6 +4167,9 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       }
     } else if (T_FUN_SYS_PART_ID == get_expr_type()) {
       //ignore the print of T_FUN_SYS_PART_ID expr
+    } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == get_expr_type()) {
+      CK(3 == get_param_count());
+      OZ(get_param_expr(2)->get_name(buf, buf_len, pos, type));
     } else {
       int64_t i = 0;
       if (get_param_count() > 1) {

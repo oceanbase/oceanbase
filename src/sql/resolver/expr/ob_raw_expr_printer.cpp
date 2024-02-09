@@ -3249,6 +3249,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         OZ(inner_print_fun_params(*expr));
         break;
       }
+      case T_FUN_SYS_INNER_ROW_CMP_VALUE: {
+        CK(3 == expr->get_param_count());
+        DATA_PRINTF("inner_row_cmp_value");
+        PRINT_EXPR(expr->get_param_expr(2));
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));
