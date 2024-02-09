@@ -706,7 +706,7 @@ private:
   void flush_logs_to_file(ObPLogItem **log_item, const int64_t count);
 
   int try_upgrade_log_item(ObPLogItem *&log_item, bool &upgrade_result);
-  int get_free_disk_space(const char* path, uint64_t &freeDiskSize);
+
   void check_log_end(ObPLogItem &log_item, int64_t pos);
 
   int backtrace_if_needed(ObPLogItem &log_item, const bool force);
