@@ -480,6 +480,7 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
     LOG_WARN("config version change", KR(ret), K(palf_stat_second), K(palf_stat_first));
   } else {
     SpinWLockGuard guard(lock_);
+    ObLSID ls_id = ls_->get_ls_id();
     config_version_ = palf_stat_second.config_version_;
     replicas_scn_.reset();
     if (OB_FAIL(replicas_scn_.assign(replicas_scn))) {
@@ -487,9 +488,9 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
     }
     const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-      LOG_INFO("ls readable scn in memory", KR(ret), K(replicas_scn_));
+      LOG_INFO("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     } else {
-      LOG_TRACE("ls readable scn in memory", KR(ret), K(replicas_scn_));
+      LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     }
   }
   if (FAILEDx(try_reload_and_fix_config_version_(palf_stat_second.config_version_))) {

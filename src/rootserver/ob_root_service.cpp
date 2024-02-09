@@ -5520,11 +5520,17 @@ int ObRootService::do_restart()
   }
 
   // broadcast root server address, ignore error
-  if (OB_SUCC(ret)) {
-    int tmp_ret = update_rslist();
-    if (OB_SUCCESS != tmp_ret) {
-      FLOG_WARN("failed to update rslist but ignored", KR(tmp_ret));
-    }
+  // not full service, can not update rs_list success
+  //if (OB_SUCC(ret)) {
+  //  int tmp_ret = update_rslist();
+  //  if (OB_SUCCESS != tmp_ret) {
+  //    FLOG_WARN("failed to update rslist but ignored", KR(tmp_ret));
+  //  }
+  //}
+  if (FAILEDx(submit_update_rslist_task(true))) {
+    FLOG_WARN("submit_update_rslist_task failed", KR(ret));
+  } else {
+    FLOG_INFO("submit_update_rslist_task succeed");
   }
 
   if (OB_SUCC(ret)) {
@@ -5634,17 +5640,17 @@ int ObRootService::do_restart()
 
   // broadcast root server address again, this task must be in the end part of do_restart,
   // because system may work properly without it.
-  if (FAILEDx(update_rslist())) {
-    FLOG_WARN("broadcast root address failed but ignored", KR(ret));
+  //if (FAILEDx(update_rslist())) {
+  //  FLOG_WARN("broadcast root address failed but ignored", KR(ret));
     // it's ok ret be overwritten, update_rslist_task will retry until succeed
-    if (OB_FAIL(submit_update_rslist_task(true))) {
-      FLOG_WARN("submit_update_rslist_task failed", KR(ret));
-    } else {
-      FLOG_INFO("submit_update_rslist_task succeed");
-    }
+  if (FAILEDx(submit_update_rslist_task(true))) {
+    FLOG_WARN("submit_update_rslist_task failed", KR(ret));
   } else {
-    FLOG_INFO("broadcast root address succeed");
+    FLOG_INFO("submit_update_rslist_task succeed");
   }
+  //} else {
+  //  FLOG_INFO("broadcast root address succeed");
+  //}
 
   if (FAILEDx(report_single_replica(tenant_id, SYS_LS))) {
     FLOG_WARN("report all_core_table replica failed, but ignore",
