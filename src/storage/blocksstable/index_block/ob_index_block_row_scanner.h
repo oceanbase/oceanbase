@@ -235,7 +235,7 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObRAWIndexBlockRowIterator",
-                       K(current_), K(start_), K(end_), KP(micro_reader_), K(endkey_), KPC(datum_row_), KP(allocator_));
+                       K(current_), K(start_), K(end_), KP(micro_reader_), K(endkey_), KP_(datum_row), KP_(allocator));
 private:
   int init_datum_row(const ObStorageDatumUtils &datum_utils, ObIAllocator *allocator);
   bool is_in_border(bool is_reverse_scan, bool is_left_border, bool is_right_border);
