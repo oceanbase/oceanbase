@@ -105,25 +105,6 @@ public:
     } else if (iter->is_logging_blocked()) {
       ret = OB_BLOCK_FROZEN;
       ctx_.last_log_blocked_memtable_ = static_cast<memtable::ObMemtable *>(iter->get_memtable());
-      // TODO:(yunxing.cyx) find a way let redo submitter can quickly check BLOCK_FROZEN
-      // comment out the following piece of code, it not works under multiple CallbackList:
-      /************************************************************************************
-      if (data_node_count == 0) {
-        // To prevent unnecessary submit_log actions for freeze
-        // Becasue the first callback is linked to a logging_blocked memtable
-        transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(mem_ctx_->get_trans_ctx());
-        part_ctx->set_block_frozen_memtable(static_cast<memtable::ObMemtable *>(iter->get_memtable()));
-        int64_t current_time = ObTimeUtility::current_time();
-        if (last_logging_blocked_time_ == 0) {
-          last_logging_blocked_time_ = current_time;
-        } else if (current_time - last_logging_blocked_time_ > 5 * 1_min) {
-          TRANS_LOG(WARN, "logging block cost too much time", KPC(part_ctx), KPC(iter));
-          if (REACH_TENANT_TIME_INTERVAL(1_min)) {
-            bug_detect_for_logging_blocked_();
-          }
-        }
-      }
-      ***********************************************************************************/
     } else {
       bool fake_fill = false;
       if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {

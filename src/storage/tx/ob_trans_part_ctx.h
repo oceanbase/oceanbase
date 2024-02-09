@@ -848,13 +848,11 @@ public:
    */
   int end_access();
   int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObIArray<ObTxLSEpochPair> &downstream_parts);
-  int set_block_frozen_memtable(memtable::ObMemtable *memtable);
-  void clear_block_frozen_memtable();
-  bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
   int handle_tx_keepalive_response(const int64_t status);
 private:
+  bool fast_check_need_submit_redo_for_freeze_() const;
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
   void post_keepalive_msg_(const int status);

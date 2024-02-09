@@ -824,6 +824,18 @@ inline bool ObTxCallbackList::is_append_only_() const
   return callback_mgr_.is_callback_list_append_only(id_);
 }
 
+bool ObTxCallbackList::is_logging_blocked() const
+{
+  bool blocked = false;
+  if (log_latch_.try_lock()) {
+    if (log_cursor_ != &head_ && log_cursor_->is_logging_blocked()) {
+      blocked = true;
+    }
+    log_latch_.unlock();
+  }
+  return blocked;
+}
+
 ObTxCallbackList::LockGuard::LockGuard(ObTxCallbackList &list,
                                        const ObTxCallbackList::LOCK_MODE mode,
                                        ObTimeGuard *tg)
