@@ -381,6 +381,10 @@ public:
   */
   int rebuild();
 
+  int get_parent(ObIJsonBase *& parent) const override
+  {
+    return OB_NOT_SUPPORTED;
+  }
   /*
   Rebuild the json binary at iter position, and copy to string
   This function won't change the data itself.

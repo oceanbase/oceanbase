@@ -272,6 +272,7 @@ public:
     return res;
   }
   inline const ObString get_string() const { return ObString(len_, ptr_); }
+  inline const ObString get_json() const { return get_string(); }
   inline int get_enumset_inner(ObEnumSetInnerValue &inner_value) const
   {
     int64_t pos = 0;

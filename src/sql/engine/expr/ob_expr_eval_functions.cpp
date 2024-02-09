@@ -1117,6 +1117,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 673 */
   NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 674 */
   ObExprInnerRowCmpVal::eval_inner_row_cmp_val,                       /* 675 */
+  ObExprIs::json_is_true,                                             /* 676 */
+  ObExprIs::json_is_false,                                            /* 677 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
