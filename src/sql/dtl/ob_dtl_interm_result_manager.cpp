@@ -628,6 +628,7 @@ int ObDTLIntermResultManager::mtl_start(ObDTLIntermResultManager *&dtl_interm_re
     } else {
       dtl_interm_result_manager->get_gc_task().disable_timeout_check();
       dtl_interm_result_manager->get_gc_task().dtl_interm_result_manager_ = dtl_interm_result_manager;
+      dtl_interm_result_manager->get_gc_task().is_start_ = true;
     }
   }
   return ret;
@@ -635,14 +636,16 @@ int ObDTLIntermResultManager::mtl_start(ObDTLIntermResultManager *&dtl_interm_re
 
 void ObDTLIntermResultManager::mtl_stop(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
-  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager) &&
+      dtl_interm_result_manager->get_gc_task().is_start_) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
   }
 }
 
 void ObDTLIntermResultManager::mtl_wait(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
-  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager &&
+      dtl_interm_result_manager->get_gc_task().is_start_)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
   }
 }
