@@ -7941,7 +7941,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_, physical_row_count_);
 
 int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRequestResult &other)
 {
@@ -7949,13 +7949,14 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   ret_code_ = other.ret_code_;
   row_inserted_ = other.row_inserted_;
   row_scanned_ = other.row_scanned_;
+  physical_row_count_ = other.physical_row_count_;
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_,
                     source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_,
                     task_id_, execution_id_, row_scanned_, row_inserted_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
-                    server_addr_);
+                    server_addr_, physical_row_count_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -7976,6 +7977,7 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   row_scanned_ = other.row_scanned_;
   row_inserted_ = other.row_inserted_;
   server_addr_ = other.server_addr_;
+  physical_row_count_ = other.physical_row_count_;
   return ret;
 }
 

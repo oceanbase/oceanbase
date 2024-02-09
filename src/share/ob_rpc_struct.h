@@ -9499,15 +9499,16 @@ struct ObDDLBuildSingleReplicaRequestResult final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaRequestResult()
-    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0)
+    : ret_code_(OB_SUCCESS), row_inserted_(0), row_scanned_(0), physical_row_count_(0)
   {}
   ~ObDDLBuildSingleReplicaRequestResult() = default;
   int assign(const ObDDLBuildSingleReplicaRequestResult &other);
-  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned))
+  TO_STRING_KV(K_(ret_code), K_(row_inserted), K_(row_scanned), K_(physical_row_count))
 public:
   int64_t ret_code_;
   int64_t row_inserted_;
   int64_t row_scanned_;
+  int64_t physical_row_count_;
 };
 
 struct ObDDLBuildSingleReplicaResponseArg final
@@ -9515,9 +9516,23 @@ struct ObDDLBuildSingleReplicaResponseArg final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaResponseArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
-      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1), row_scanned_(0),
-      row_inserted_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0), server_addr_()
+    : tenant_id_(OB_INVALID_ID),
+      ls_id_(),
+      tablet_id_(),
+      source_table_id_(OB_INVALID_ID),
+      dest_schema_id_(OB_INVALID_ID),
+      ret_code_(OB_SUCCESS),
+      snapshot_version_(0),
+      schema_version_(0),
+      task_id_(0),
+      execution_id_(-1),
+      row_scanned_(0),
+      row_inserted_(0),
+      dest_tenant_id_(OB_INVALID_ID),
+      dest_ls_id_(),
+      dest_schema_version_(0),
+      server_addr_(),
+      physical_row_count_(0)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != dest_tenant_id_
@@ -9529,7 +9544,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id),
                K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
                K_(snapshot_version), K_(schema_version), K_(dest_schema_version), K_(task_id),
-               K_(execution_id), K_(row_scanned), K_(row_inserted), K_(server_addr));
+               K_(execution_id), K_(row_scanned), K_(row_inserted), K_(server_addr), K_(physical_row_count));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -9547,6 +9562,7 @@ public:
   share::ObLSID dest_ls_id_;
   int64_t dest_schema_version_;
   common::ObAddr server_addr_;
+  int64_t physical_row_count_;
 };
 
 struct ObLogReqLoadProxyRequest
