@@ -1175,7 +1175,7 @@ int ObTenantCloneTableOperator::fill_job_from_result_(const ObMySQLResult *resul
   uint64_t clone_tenant_id = OB_INVALID_TENANT_ID;
   ObTenantSnapshotID tenant_snapshot_id;
   ObString tenant_snapshot_name;
-  uint64_t resource_pool_id;
+  uint64_t resource_pool_id = OB_INVALID_ID;
   ObString resource_pool_name;
   ObString unit_config_name;
   uint64_t restore_scn_val = OB_INVALID_SCN_VAL;
