@@ -1174,8 +1174,11 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
   } else {
     // you can't tell exact stmt retry times for a SQL in PL as PL may do whole block retry
     // so we use retry_times_ as stmt_retry_times for any stmt in PL
+    // if pl + stmt_retry_times == 0 scene, will cause timeout early.
+    // So the number of retry times here is at least 1
     const int64_t stmt_retry_times =
-        is_part_of_pl_sql ? retry_times_ : session->get_retry_info().get_retry_cnt();
+        is_part_of_pl_sql ? (retry_times_ == 0 ? 1 : retry_times_):
+        session->get_retry_info().get_retry_cnt();
     ObRetryParam retry_param(ctx, result, *session,
                              curr_query_tenant_local_schema_version_,
                              curr_query_tenant_global_schema_version_,
