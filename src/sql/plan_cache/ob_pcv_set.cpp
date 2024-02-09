@@ -247,7 +247,7 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
              K(pc_ctx.sql_ctx_.session_info_));
   } else if (get_plan_num() >= MAX_PCV_SET_PLAN_NUM) {
     static const int64_t PRINT_PLAN_EXCEEDS_LOG_INTERVAL = 20 * 1000 * 1000; // 20s
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_REACH_MEMORY_LIMIT;
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }
