@@ -13687,6 +13687,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12466: enabled_roles
 # 12467: __all_virtual_ls_replica_task_history
 # 12468: __all_virtual_session_ps_info
+# 12469: __all_virtual_tracepoint_info
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14150,6 +14151,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15442: __all_virtual_column_group
 # 15443: __all_virtual_ls_replica_task_history
 # 15444: __all_virtual_session_ps_info
+# 15445: __all_virtual_tracepoint_info
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -32543,6 +32545,8 @@ def_table_schema(
 
 # 21541: GV$OB_SESSION_PS_INFO
 # 21542: V$OB_SESSION_PS_INFO
+# 21543: GV$OB_TRACEPOINT_INFO
+# 21544: V$OB_TRACEPOINT_INFO
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -58922,6 +58926,8 @@ def_table_schema(
 # 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 28219: GV$OB_SESSION_PS_INFO
 # 28220: V$OB_SESSION_PS_INFO
+# 28221: GV$OB_TRACEPOINT_INFO
+# 28222: V$OB_TRACEPOINT_INFO
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
