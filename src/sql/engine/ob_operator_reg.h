@@ -34,6 +34,7 @@ struct ObOpTypeTraits
   constexpr static bool vectorized_ = false;
   constexpr static uint64_t ob_version_ = 0;
   constexpr static bool support_rich_format_ = false;
+  constexpr static const char *vec_op_name_ = "";
   typedef char LogOp;
   typedef char Spec;
   typedef char Op;
@@ -65,12 +66,12 @@ struct SUPPORT_RICH_FORMAT {};
 #define DEF_OP_INPUT_TRAITS_1(input, type)
 
 
-#define REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, rich_fmt) \
-  REGISTER_OPERATOR_FULL_(log_op, type, spec, op, x, y, z, rich_fmt)
+#define REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, rich_fmt, vec_op_name) \
+  REGISTER_OPERATOR_FULL_(log_op, type, spec, op, x, y, z, rich_fmt, vec_op_name)
 #define REGISTER_OPERATOR_FULL_(...) REGISTER_OPERATOR_FULL__(__VA_ARGS__)
 
 #define REGISTER_OPERATOR_FULL__(log_op, type, op_spec, op, input_type,        \
-                                 vec_type, ob_version, rich_fmt)               \
+                                 vec_type, ob_version, rich_fmt, vec_op_name)  \
   namespace op_reg {                                                           \
   template <> struct ObOpTypeTraits<type> {                                    \
     constexpr static bool registered_ = true;                                  \
@@ -80,7 +81,8 @@ struct SUPPORT_RICH_FORMAT {};
     constexpr static uint64_t ob_version_ =                                    \
         (ob_version == 0 ? CLUSTER_VERSION_4_0_0_0 : ob_version);              \
     constexpr static bool support_rich_format_ =                               \
-        std::is_same<SUPPORT_RICH_FORMAT, rich_fmt>::value;                       \
+        std::is_same<SUPPORT_RICH_FORMAT, rich_fmt>::value;                    \
+    constexpr static const char *vec_op_name_ = support_rich_format_ ? vec_op_name : #type;\
     typedef log_op LogOp;                                                      \
     typedef op_spec Spec;                                                      \
     typedef op Op;                                                             \
@@ -94,13 +96,15 @@ struct SUPPORT_RICH_FORMAT {};
   }
 
 #define REGISTER_OPERATOR_5(log_op, type, spec, op, x) \
-    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, char, 0, char)
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, char, 0, char, "")
 #define REGISTER_OPERATOR_6(log_op, type, spec, op, x, y) \
-    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, 0, char)
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, 0, char, "")
 #define REGISTER_OPERATOR_7(log_op, type, spec, op, x, y, z) \
-    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, char)
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, char, "")
 #define REGISTER_OPERATOR_8(log_op, type, spec, op, x, y, z, rich_fmt) \
-    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, rich_fmt)
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, rich_fmt, #type)
+#define REGISTER_OPERATOR_9(log_op, type, spec, op, x, y, z, rich_format, new_vec_op)\
+    REGISTER_OPERATOR_FULL(log_op, type, spec, op, x, y, z, rich_format, new_vec_op)
 
 #define REGISTER_OPERATOR___(n, ...) REGISTER_OPERATOR_ ##n(__VA_ARGS__)
 #define REGISTER_OPERATOR__(...) REGISTER_OPERATOR___(__VA_ARGS__)
@@ -307,7 +311,7 @@ class ObTableScanSpec;
 class ObTableScanOp;
 REGISTER_OPERATOR(ObLogTableScan, PHY_TABLE_SCAN,
                   ObTableScanSpec, ObTableScanOp, ObTableScanOpInput,
-                  VECTORIZED_OP, 0 /*version*/, SUPPORT_RICH_FORMAT);
+                  VECTORIZED_OP, 0 /*version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_TABLE_SCAN");
 
 class ObLogTableScan;
 class ObRowSampleScanOpInput;
@@ -438,7 +442,7 @@ class ObSubPlanScanSpec;
 class ObSubPlanScanOp;
 REGISTER_OPERATOR(ObLogSubPlanScan, PHY_SUBPLAN_SCAN, ObSubPlanScanSpec,
                   ObSubPlanScanOp, NOINPUT, VECTORIZED_OP,  0 /*+version*/,
-                  SUPPORT_RICH_FORMAT);
+                  SUPPORT_RICH_FORMAT, "PHY_VEC_SUBPLAN_SCAN");
 
 class ObLogUnpivot;
 class ObUnpivotSpec;
@@ -530,7 +534,7 @@ class ObJoinFilterOp;
 class ObJoinFilterOpInput;
 REGISTER_OPERATOR(ObLogJoinFilter, PHY_JOIN_FILTER, ObJoinFilterSpec,
                   ObJoinFilterOp, ObJoinFilterOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_JOIN_FILTER");
 
 // PX Operator
 // PHY_GRANULE_ITERATOR,
@@ -547,7 +551,7 @@ class ObGranuleIteratorOp;
 class ObGIOpInput;
 REGISTER_OPERATOR(ObLogGranuleIterator, PHY_GRANULE_ITERATOR, ObGranuleIteratorSpec,
                   ObGranuleIteratorOp, ObGIOpInput, VECTORIZED_OP, 0 /*+version*/,
-                  SUPPORT_RICH_FORMAT);
+                  SUPPORT_RICH_FORMAT, "PHY_VEC_GRANULE_ITERATOR");
 
 class ObLogExchange;
 class ObPxFifoReceiveSpec;
@@ -555,7 +559,7 @@ class ObPxFifoReceiveOp;
 class ObPxFifoReceiveOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_RECEIVE, ObPxFifoReceiveSpec,
                   ObPxFifoReceiveOp, ObPxFifoReceiveOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_FIFO_RECEIVE");
 
 class ObLogExchange;
 class ObPxMSReceiveSpec;
@@ -578,7 +582,7 @@ class ObPxDistTransmitOp;
 class ObPxDistTransmitOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_DIST_TRANSMIT, ObPxDistTransmitSpec,
                   ObPxDistTransmitOp, ObPxDistTransmitOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_DIST_TRANSMIT");
 
 class ObLogExchange;
 class ObPxRepartTransmitSpec;
@@ -586,7 +590,7 @@ class ObPxRepartTransmitOp;
 class ObPxRepartTransmitOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_REPART_TRANSMIT, ObPxRepartTransmitSpec,
                   ObPxRepartTransmitOp, ObPxRepartTransmitOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_REPART_TRANSMIT");
 
 class ObLogExchange;
 class ObPxReduceTransmitSpec;
@@ -594,7 +598,7 @@ class ObPxReduceTransmitOp;
 class ObPxReduceTransmitOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_REDUCE_TRANSMIT, ObPxReduceTransmitSpec,
                   ObPxReduceTransmitOp, ObPxReduceTransmitOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_REDUCE_TRANSMIT");
 
 class ObLogExchange;
 class ObPxFifoCoordSpec;
@@ -602,14 +606,14 @@ class ObPxFifoCoordOp;
 class ObPxFifoCoordOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_FIFO_COORD, ObPxFifoCoordSpec,
                   ObPxFifoCoordOp, ObPxFifoCoordOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_FIFO_COORD");
 
 class ObPxOrderedCoordSpec;
 class ObPxOrderedCoordOp;
 class ObPxOrderedCoordOpInput;
 REGISTER_OPERATOR(ObLogExchange, PHY_PX_ORDERED_COORD, ObPxOrderedCoordSpec,
                   ObPxOrderedCoordOp, ObPxOrderedCoordOpInput, VECTORIZED_OP,
-                  0 /*+version*/, SUPPORT_RICH_FORMAT);
+                  0 /*+version*/, SUPPORT_RICH_FORMAT, "PHY_VEC_PX_ORDERED_COORD");
 class ObLogExchange;
 class ObPxMSCoordSpec;
 class ObPxMSCoordOp;

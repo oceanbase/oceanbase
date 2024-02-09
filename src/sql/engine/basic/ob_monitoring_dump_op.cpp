@@ -53,7 +53,7 @@ int ObMonitoringDumpOp::inner_open()
     LOG_WARN("unexpected status: child is null", K(ret));
   } else {
     ObObj val;
-    const char* name = get_phy_op_name(spec_.get_left()->type_);
+    const char* name = get_phy_op_name(spec_.get_left()->type_, spec_.use_rich_format_);
     op_name_.set_string(name, strlen(name));
     if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(SYS_VAR_TRACEFILE_IDENTIFIER, val))) {
       LOG_WARN("Get sys variable error", K(ret));

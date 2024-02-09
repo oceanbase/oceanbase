@@ -231,7 +231,7 @@ public:
   virtual ~ObOpSpec();
 
   DECLARE_VIRTUAL_TO_STRING;
-  const char *op_name() const { return ob_phy_operator_type_str(type_); }
+  const char *op_name() const { return ob_phy_operator_type_str(type_, use_rich_format_); }
 
   // Pre-order recursive create execution components (ObOperator and ObOperatorInput)
   // for current DFO.
@@ -274,7 +274,7 @@ public:
   int32_t get_child_num() const { return get_child_cnt(); }
   ObPhyOperatorType get_type() const { return type_; }
   uint64_t get_id() const { return id_; }
-  const char *get_name() const { return get_phy_op_name(type_); }
+  const char *get_name() const { return get_phy_op_name(type_, use_rich_format_); }
 
   int accept(ObOpSpecVisitor &visitor) const;
   int64_t get_rows() const { return rows_; }
