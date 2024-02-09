@@ -757,7 +757,7 @@ int ObCGScanner::build_index_filter(sql::ObPushdownFilterExecutor &filter)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected access context", K(ret), KP_(access_ctx), KP(access_ctx_->stmt_allocator_));
   } else if (OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
-              true, iter_param_->get_read_info(), filter, access_ctx_->stmt_allocator_, prefetcher_.sstable_index_filter_))) {
+              true, iter_param_->get_read_info(), filter, access_ctx_->allocator_, prefetcher_.sstable_index_filter_))) {
     LOG_WARN("Failed to construct skip filter", K(ret), K(filter));
   }
 
