@@ -222,6 +222,7 @@ void ObLSTxCtxMgr::reset()
   total_tx_ctx_count_ = 0;
   active_tx_count_ = 0;
   total_active_readonly_request_count_ = 0;
+  total_request_by_transfer_dest_ = 0;
   leader_takeover_ts_.reset();
   max_replay_commit_version_.reset();
   aggre_rec_scn_.reset();

@@ -403,6 +403,11 @@ public:
   }
   int64_t get_total_active_readonly_request_count() { return ATOMIC_LOAD(&total_active_readonly_request_count_); }
 
+  void inc_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, 1); }
+  void dec_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, -1); }
+  int64_t get_total_request_by_transfer_dest() {
+    return total_request_by_transfer_dest_;
+  }
   // Get all tx obj lock information in this ObLSTxCtxMgr
   // @param [out] iter: all tx obj lock op information
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter);
@@ -854,6 +859,9 @@ private:
   int64_t total_active_readonly_request_count_ CACHE_ALIGNED;
 
   int64_t active_tx_count_;
+
+  // for transfer dest_ls depend src_ls
+  int64_t total_request_by_transfer_dest_;
 
   // It is used to record the time point of leader takeover
   // gts must be refreshed to the newest before the leader provides services
