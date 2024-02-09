@@ -1106,6 +1106,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprXmlForest::eval_xml_forest,                           /* 664 */
   NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 665 */
   NULL, //ObExprPassword::eval_password,                              /* 666 */
+  NULL, // ObExprDocID::generate_doc_id,                              /* 667 */
+  NULL, // ObExprWordSegment::generate_fulltext_column,               /* 668 */
+  NULL, // ObExprWordCount::generate_word_count,                      /* 669 */
+  NULL, // ObExprBM25::eval_bm25_relevance_expr,                      /* 690 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
