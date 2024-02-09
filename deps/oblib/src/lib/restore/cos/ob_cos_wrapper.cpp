@@ -134,7 +134,7 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
   int ret = OB_SUCCESS;
   if (NULL == storage_info || MAX_COS_DOMAIN_LENGTH <= size) {
     ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]cos parse account failed, storage_info=%s, size=%d, ret=%d\n", storage_info, size, ret);
+    cos_warn_log("[COS]cos parse account failed, storage_info=%p, size=%d, ret=%d\n", storage_info, size, ret);
   } else {
     // host=xxxx&access_id=xxx&access_key=xxx&appid=xxx
     char tmp[MAX_COS_DOMAIN_LENGTH];
@@ -169,7 +169,7 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_SUCCESS != (ret = set_field(token + strlen(ACCESS_KEY), access_key_, sizeof(access_key_)))) {
-          cos_warn_log("[COS]fail to set access_key=%s, ret=%d\n", token, ret);
+          cos_warn_log("[COS]fail to set access_key, ret=%d\n", ret);
         } else {
           bitmap |= (1 << 2);
         }
@@ -190,7 +190,7 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
 
     if (OB_SUCCESS == ret && bitmap != 0x0F) {
       ret = OB_COS_ERROR;
-      cos_warn_log("[COS]fail to parse cos account storage_info=%s, bitmap=%x, ret=%d\n", storage_info, bitmap, ret);
+      cos_warn_log("[COS]fail to parse cos account storage_info=%p, bitmap=%x, ret=%d\n", storage_info, bitmap, ret);
     }
   }
 

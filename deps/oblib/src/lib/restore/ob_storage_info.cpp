@@ -107,7 +107,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
     LOG_WARN("storage info init twice", K(ret));
   } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("storage info is invalid", K(ret), K(storage_info));
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
   } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
     if (OB_STORAGE_FILE != device_type_) {
@@ -163,7 +163,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
   has_needed_extension = false;
   if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("storage info is invalid", K(ret), K(storage_info), K(strlen(storage_info)));
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info), K(strlen(storage_info)));
   } else {
     char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
     char *token = NULL;
@@ -192,7 +192,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
-          LOG_WARN("failed to set access key", K(ret), K(token));
+          LOG_WARN("failed to set access key", K(ret));
         }
       } else if (OB_STORAGE_FILE != device_type_ && 0 == strncmp(APPID, token, strlen(APPID))) {
         has_needed_extension = (OB_STORAGE_COS == device_type_);
@@ -250,14 +250,14 @@ int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, 
     int64_t pos = strlen(field);
     if (info_len >= length) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("info is too long ", K(ret), K(info), K(length));
+      LOG_WARN("info is too long ", K(ret), K(info_len), K(length));
     } else if (pos > 0 && OB_FAIL(databuff_printf(field, length, pos, "&"))) {
       // cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx&delete_mode=xxx
       // extension_ may contain both appid and delete_mode
       // so delimiter '&' should be included
-      LOG_WARN("failed to add delimiter to storage info field", K(ret), K(info), K(field), K(length));
+      LOG_WARN("failed to add delimiter to storage info field", K(ret), K(pos), KP(field), K(length));
     } else if (OB_FAIL(databuff_printf(field, length, pos, "%s", info))) {
-      LOG_WARN("failed to set storage info field", K(ret), K(info), K(field), K(length));
+      LOG_WARN("failed to set storage info field", K(ret), K(pos), KP(field), K(length));
     }
   }
   return ret;
