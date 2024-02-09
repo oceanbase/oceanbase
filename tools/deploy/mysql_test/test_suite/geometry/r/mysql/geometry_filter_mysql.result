@@ -118,7 +118,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -179,7 +179,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -240,7 +240,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -302,7 +302,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -363,7 +363,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -425,7 +425,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -487,7 +487,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -548,7 +548,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -668,7 +668,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -729,7 +729,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -999,7 +999,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1068,7 +1068,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1153,7 +1153,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1370,7 +1370,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1431,7 +1431,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1492,7 +1492,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1555,7 +1555,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1616,7 +1616,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1678,7 +1678,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1740,7 +1740,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1801,7 +1801,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1974,7 +1974,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2035,7 +2035,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2096,7 +2096,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2158,7 +2158,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2219,7 +2219,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2281,7 +2281,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2343,7 +2343,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2404,7 +2404,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2465,7 +2465,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2526,7 +2526,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2587,7 +2587,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2650,7 +2650,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2711,7 +2711,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2773,7 +2773,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2835,7 +2835,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2896,7 +2896,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2979,7 +2979,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:

@@ -3312,7 +3312,7 @@ int ObBasicSessionInfo::check_optimizer_features_enable_valid(const ObObj &val)
   } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
     LOG_WARN("failed to get version");
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
-  } else if (version < CLUSTER_VERSION_4_0_0_0 || version > CLUSTER_CURRENT_VERSION) {
+  } else if (OB_UNLIKELY(!ObGlobalHint::is_valid_opt_features_version(version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
   }
@@ -5299,6 +5299,26 @@ int ObBasicSessionInfo::get_auto_increment_cache_size(int64_t &auto_increment_ca
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_sys_variable(SYS_VAR_AUTO_INCREMENT_CACHE_SIZE, auto_increment_cache_size))) {
     LOG_WARN("fail to get variables", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_optimizer_features_enable_version(uint64_t &version) const
+{
+  int ret = OB_SUCCESS;
+  // if OPTIMIZER_FEATURES_ENABLE is set as '', use LASTED_COMPAT_VERSION
+  version = LASTED_COMPAT_VERSION;
+  ObString version_str;
+  uint64_t tmp_version = 0;
+  if (OB_FAIL(get_string_sys_var(SYS_VAR_OPTIMIZER_FEATURES_ENABLE, version_str))) {
+    LOG_WARN("failed to update session_timeout", K(ret));
+  } else if (version_str.empty()
+             || OB_FAIL(ObClusterVersion::get_version(version_str, tmp_version))
+             || !ObGlobalHint::is_valid_opt_features_version(tmp_version)) {
+    LOG_WARN("fail invalid optimizer features version", K(ret), K(version_str), K(tmp_version));
+    ret = OB_SUCCESS;
+  } else {
+    version = tmp_version;
   }
   return ret;
 }
