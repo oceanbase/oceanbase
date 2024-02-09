@@ -15795,6 +15795,10 @@ SELECT
     *
 FROM
     oceanbase.GV$OB_RPC_INCOMING
+WHERE
+        SVR_IP=HOST_IP()
+    AND
+        SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
 )
