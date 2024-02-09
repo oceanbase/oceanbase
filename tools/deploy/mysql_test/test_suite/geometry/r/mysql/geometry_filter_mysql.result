@@ -135,6 +135,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -196,6 +197,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -257,6 +259,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -319,6 +322,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -380,6 +384,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -442,6 +447,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -504,6 +510,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -565,6 +572,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -685,6 +693,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -746,6 +755,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1016,6 +1026,7 @@ Optimization Info:
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1085,6 +1096,7 @@ Optimization Info:
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1170,6 +1182,7 @@ Optimization Info:
       pruned_index_name:[geo_table]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1387,6 +1400,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1448,6 +1462,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1509,6 +1524,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1572,6 +1588,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1633,6 +1650,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1695,6 +1713,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1757,6 +1776,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1818,6 +1838,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1991,6 +2012,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2052,6 +2074,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2113,6 +2136,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2175,6 +2199,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2236,6 +2261,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2298,6 +2324,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2360,6 +2387,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2421,6 +2449,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2482,6 +2511,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2543,6 +2573,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2604,6 +2635,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2667,6 +2699,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2728,6 +2761,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2790,6 +2824,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2852,6 +2887,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2913,6 +2949,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2996,6 +3033,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:

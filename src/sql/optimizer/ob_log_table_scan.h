@@ -56,7 +56,6 @@ public:
         limit_offset_expr_(NULL),
         sample_info_(),
         est_cost_info_(NULL),
-        estimate_method_(INVALID_METHOD),
         table_opt_info_(NULL),
         est_records_(),
         part_expr_(NULL),
@@ -366,8 +365,6 @@ public:
   inline double get_logical_query_range_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->logical_query_range_row_count_; }
   inline void set_index_back_row_count(double index_back_row_count) { if (est_cost_info_ != NULL) est_cost_info_->index_back_row_count_ = index_back_row_count; }
   inline double get_index_back_row_count() const { return est_cost_info_ == NULL ? 0.0 : est_cost_info_->index_back_row_count_; }
-  inline void set_estimate_method(RowCountEstMethod method) { estimate_method_ = method; }
-  inline RowCountEstMethod get_estimate_method() const { return estimate_method_; }
   int is_top_table_scan(bool &is_top_table_scan)
   {
     int ret = common::OB_SUCCESS;
@@ -459,6 +456,7 @@ public:
   share::schema::ObTableType get_table_type() const { return table_type_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  int print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos);
   int get_plan_object_info(PlanText &plan_text,
                            ObSqlPlanItem &plan_item);
   inline ObTablePartitionInfo *get_global_index_back_table_partition_info() { return global_index_back_table_partition_info_; }
@@ -484,7 +482,6 @@ public:
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
-  int pick_out_startup_filters();
   int filter_before_index_back_set();
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
@@ -561,7 +558,6 @@ protected: // memeber variables
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
   ObCostTableScanInfo *est_cost_info_;
-  RowCountEstMethod estimate_method_;
   BaseTableOptInfo *table_opt_info_;
   common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
 

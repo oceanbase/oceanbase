@@ -76,12 +76,7 @@ const double DEFAULT_AGG_EQ = 0.01;
 // clob/blob like "xxx" 的默认选择率
 const double DEFAULT_CLOB_LIKE_SEL = 0.05;
 const double DEFAULT_ANTI_JOIN_SEL = 0.01;
-
-enum ObEstimateType
-{
-  OB_DEFAULT_STAT_EST,
-  OB_CURRENT_STAT_EST,
-};
+const double DEFAULT_INEQ_JOIN_SEL = 0.05;
 
 } // namespace common
 } // namespace oceanabse

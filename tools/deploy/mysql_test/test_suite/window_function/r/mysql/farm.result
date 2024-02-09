@@ -88,16 +88,16 @@ w3 as (order by c_customer_sk)
 ) v
 where rn = 1;
 c_birth_month	c_birth_year	c_customer_sk	c_first_name	group_concat(c_customer_sk) over w2	nv	rn
-12	1936	1	Javier	6,44,16,1	1	1
 12	1925	6	Brunilda	6	2	1
-12	1963	11	Betty	6,44,16,1,8,39,11	3	1
-12	1933	16	Margie	6,44,16	4	1
-5	1956	21	Naomi	23,5,21	5	1
 6	1991	26	Monique	41,24,35,12,49,31,4,26	6	1
+12	1936	1	Javier	6,44,16,1	1	1
+4	1990	46	Jane	2,7,46	10	1
+5	1956	21	Naomi	23,5,21	5	1
+12	1933	16	Margie	6,44,16	4	1
+6	1939	41	Maxine	41	9	1
 6	1964	31	William	41,24,35,12,49,31	7	1
 11	1968	36	Anthony	50,36	8	1
-6	1939	41	Maxine	41	9	1
-4	1990	46	Jane	2,7,46	10	1
+12	1963	11	Betty	6,44,16,1,8,39,11	3	1
 select c_birth_month, c_birth_year, c_customer_sk, c_first_name,
 count(1) over w,
 max(c_birth_year) over w,

@@ -108,6 +108,7 @@ struct ObOptParamHint
     DEF(COMPACT_SORT_LEVEL,)              \
     DEF(WORKAREA_SIZE_POLICY,)         \
     DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
+    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

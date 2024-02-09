@@ -432,9 +432,9 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |21      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -453,9 +453,9 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |21      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -474,9 +474,9 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |21      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -495,9 +495,9 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |21      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |306         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
-|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
+|2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |33          |
 ===============================================================
 Outputs & filters:
 -------------------------------------

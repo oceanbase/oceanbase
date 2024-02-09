@@ -937,6 +937,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_raw_expr_get_hash_value.cpp
   optimizer/ob_replica_compare.cpp
   optimizer/ob_route_policy.cpp
+  optimizer/ob_sel_estimator.cpp
   optimizer/ob_select_log_plan.cpp
   optimizer/ob_sharding_info.cpp
   optimizer/ob_skyline_prunning.cpp

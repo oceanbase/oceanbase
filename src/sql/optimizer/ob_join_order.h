@@ -679,6 +679,10 @@ struct EstimateCostInfo {
     }
     // compute current path is inner path and contribute query ranges
     int compute_valid_inner_path();
+    inline bool is_false_range()
+    {
+      return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
+    }
 
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
@@ -1258,7 +1262,8 @@ struct NullAwareAntiJoinInfo {
         filters_(),
         subquery_exprs_(),
         inner_paths_(),
-        table_opt_info_(NULL)
+        table_opt_info_(NULL),
+        est_method_(EST_INVALID)
       {}
 
       bool is_inner_path_;
@@ -1277,6 +1282,7 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
 
       ObSEArray<ObExprConstraint, 4> expr_constraints_;
+      ObBaseTableEstMethod est_method_;
     };
 
     struct DeducedExprInfo {
@@ -1773,6 +1779,7 @@ struct NullAwareAntiJoinInfo {
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
 
+    int estimate_size_and_width_for_fake_cte(uint64_t table_id, ObSelectLogPlan *nonrecursive_plan);
     int create_one_cte_table_path(const TableItem* table_item,
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();
@@ -2363,7 +2370,8 @@ struct NullAwareAntiJoinInfo {
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                           const bool is_inner_path,
-                                          common::ObIArray<ObRawExpr*> &filter_exprs);
+                                          common::ObIArray<ObRawExpr*> &filter_exprs,
+                                          ObBaseTableEstMethod &method);
 
     inline bool can_use_remote_estimate(OptimizationMethod method)
     {

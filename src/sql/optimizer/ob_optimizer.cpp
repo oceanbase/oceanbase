@@ -550,6 +550,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool has_subquery_in_function_table = false;
   bool has_dblink = false;
   bool force_serial_set_order = false;
+  bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
@@ -575,7 +576,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to check rowsets enabled", K(ret));
   } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
     LOG_WARN("fail to check cursor expression info", K(ret));
+  } else if (OB_FAIL(session.is_storage_estimation_enabled(storage_estimation_enabled))) {
+    LOG_WARN("fail to get storage_estimation_enabled", K(ret));
   } else {
+    ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
     ctx_.set_has_var_assign(has_var_assign);

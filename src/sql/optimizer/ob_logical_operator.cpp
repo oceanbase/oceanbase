@@ -1097,6 +1097,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
   param.need_row_count_ = (get_card() <= param.need_row_count_ || 0 > param.need_row_count_)
                           ? -1 : param.need_row_count_;
   double op_cost = 0.0;
+  bool contain_false_filter = false;
   card = 0.0;
   cost = 0.0;
   if (!param.need_re_est(get_parallel(), get_card())) {  // no need to re est cost
@@ -1106,6 +1107,10 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
     LOG_WARN("failed to check need parallel valid", K(ret));
   } else if (OB_FAIL(SMART_CALL(do_re_est_cost(param, card, op_cost, cost)))) {
     LOG_WARN("failed to do re est operator", K(ret));
+  } else if (OB_FAIL(check_contain_false_startup_filter(contain_false_filter))) {
+    LOG_WARN("failed to check startup filter", K(ret));
+  } else if (contain_false_filter && FALSE_IT(card = 0.0)) {
+    // never reach
   } else if (!param.override_) {
     /* do nothing */
   } else if (OB_ISNULL(get_plan())) {
@@ -5653,6 +5658,60 @@ int ObLogicalOperator::collect_batch_exec_param_post(void* ctx)
                                          join_op->get_above_pushdown_right_params()))) {
       LOG_WARN("failed to collect batch exec param", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::pick_out_startup_filters()
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = get_plan();
+  const ParamStore *params = NULL;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObArray<ObRawExpr *> filter_exprs;
+  if (OB_ISNULL(plan)
+      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
+      || OB_ISNULL(params = opt_ctx->get_params())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
+  } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+    LOG_WARN("assign filter exprs failed", K(ret));
+  } else {
+    filter_exprs_.reset();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    ObRawExpr *qual = filter_exprs.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (qual->is_static_const_expr()) {
+      if (OB_FAIL(startup_exprs_.push_back(qual))) {
+        LOG_WARN("add filter expr failed", K(i), K(ret));
+      } else { /* Do nothing */ }
+    } else if (OB_FAIL(filter_exprs_.push_back(qual))) {
+      LOG_WARN("add filter expr failed", K(i), K(ret));
+    } else { /* Do nothing */ }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_contain_false_startup_filter(bool &contain_false)
+{
+  int ret = OB_SUCCESS;
+  contain_false = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL pointer error", K(get_plan()), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < startup_exprs_.count(); ++i) {
+    ObRawExpr *qual = startup_exprs_.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::check_is_static_false_expr(
+        get_plan()->get_optimizer_context(), *qual, contain_false))) {
+      LOG_WARN("failed to check is static false", K(ret));
+    } else { /* Do nothing */ }
   }
   return ret;
 }

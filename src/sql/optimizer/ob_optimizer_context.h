@@ -232,7 +232,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
-    system_stat_()
+    system_stat_(),
+    storage_estimation_enabled_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -306,6 +307,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
   inline bool force_serial_set_order() const { return force_serial_set_order_; }
   void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
+
+  inline bool is_storage_estimation_enabled() const { return storage_estimation_enabled_; }
+  void set_storage_estimation_enabled(bool storage_estimation_enabled) { storage_estimation_enabled_ = storage_estimation_enabled; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
@@ -682,6 +686,7 @@ private:
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
   OptSystemStat system_stat_;
+  bool storage_estimation_enabled_;
 };
 }
 }
