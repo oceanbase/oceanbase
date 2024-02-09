@@ -3074,6 +3074,8 @@ int ObAssocArrayType::get_serialize_size(
   OX (key_sort_cnt = OB_NOT_NULL(key) ? assoc_table->get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
+    CK (OB_NOT_NULL(key));
+    CK (OB_NOT_NULL(sort));
     OZ (index_type_.get_serialize_size(resolve_ctx, key, size));
     OX (size += serialization::encoded_length(*sort));
     OX (sort++);

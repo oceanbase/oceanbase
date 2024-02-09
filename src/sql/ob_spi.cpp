@@ -5750,6 +5750,9 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
     ALLOC_ASSOC_ARRAY(ObObj, key);
 
     ALLOC_ASSOC_ARRAY(int64_t, sort);
+    if (nullptr != assoc_array.get_key() && nullptr == assoc_array.get_sort()) {
+      assoc_array.set_key(nullptr);
+    }
 
     // NOTE: init extend key avoid to deep copy core!!!
     if (OB_SUCC(ret)) {
@@ -5787,6 +5790,15 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
     REALLOC_ASSOC_ARRAY(ObObj, key);
 
     REALLOC_ASSOC_ARRAY(int64_t, sort);
+    if (OB_FAIL(ret)) {
+      for (int64_t i = assoc_array.get_count() - 1; i >= assoc_array.get_count() - n; --i) {
+        int tmp = ObUserDefinedType::destruct_obj(assoc_array.get_data()[i]);
+        if (OB_SUCCESS != tmp) {
+          LOG_WARN("fail to destruct obj", K(tmp), K(ret));
+        }
+      }
+      assoc_array.set_count(assoc_array.get_count() - n);
+    }
 
     // NOTE: init extend key avoid to deep copy core!!!
     if (OB_SUCC(ret)) {
