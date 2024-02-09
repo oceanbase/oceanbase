@@ -33,7 +33,7 @@ static void convert_io_error(const int sys_err, int &ob_error_code)
     ob_error_code = OB_BACKUP_FILE_NOT_EXIST;
   } else if (EPERM == sys_err) {
     ob_error_code = OB_BACKUP_PERMISSION_DENIED;
-  } else if (ENOSPC == sys_err) {
+  } else if (ENOSPC == sys_err || EDQUOT == sys_err) {
     ob_error_code = OB_BACKUP_DEVICE_OUT_OF_SPACE;
   } else {
     ob_error_code = OB_IO_ERROR;
@@ -76,7 +76,7 @@ int lock_file(int fd)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid fd", K(ret), K(fd));
   } else if (0 != fcntl(fd, F_SETLK, &lock)) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to lock file",
         K(ret), K(fd), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   }
@@ -99,7 +99,7 @@ int unlock_file(int fd)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid fd", K(ret), K(fd));
   } else if (0 != fcntl(fd, F_SETLK, &lock)) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to lock file",
         K(ret), K(fd), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   }
@@ -132,7 +132,7 @@ int ObStorageFileUtil::is_exist(const common::ObString &uri, bool &exist)
   } else if (0 == ::access(path, F_OK)) {
     exist = true;
   } else if (ENOENT != errno && ENOTDIR != errno) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to stat file",
         K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   }
@@ -213,7 +213,7 @@ int ObStorageFileUtil::del_file(const common::ObString &uri)
   } else if (OB_FAIL(get_file_path(uri, path, sizeof(path)))) {
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (0 != ::unlink(path)) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to del file",
         K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   }
@@ -272,7 +272,7 @@ int ObStorageFileUtil::mkdir(const common::ObString &uri)
           STORAGE_LOG(WARN, "already exist the same name file", K(ret), KCSTRING(path),
             K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
         } else if (ENOENT != errno) {
-          ret = OB_IO_ERROR;
+          convert_io_error(errno, ret);
           STORAGE_LOG(WARN, "check is parent dir exist",
               K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
         }
@@ -294,7 +294,7 @@ int ObStorageFileUtil::mkdir(const common::ObString &uri)
           if (0 != ::mkdir(path, S_IRWXU)) {
             if (EEXIST == errno) {
               if (0 != ::access(path, F_OK)) {
-                ret = OB_IO_ERROR;
+                convert_io_error(errno, ret);
                 STORAGE_LOG(WARN, "parent dir is not exist",
                     K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
               }
@@ -307,7 +307,7 @@ int ObStorageFileUtil::mkdir(const common::ObString &uri)
             STORAGE_LOG(INFO, "succeed to create parent dir", KCSTRING(path), K(uri));
           }
         } else {
-          ret = OB_IO_ERROR;
+          convert_io_error(errno, ret);
           STORAGE_LOG(WARN, "check is parent dir exist",
               K(ret), KCSTRING(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
         }
@@ -341,7 +341,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       OB_LOG(WARN, "fail to open dir", K(ret), KCSTRING(dir_path),
           KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
@@ -352,7 +352,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
     is_file = false;
     size  = 0;
     if (0 != ::readdir_r(open_dir, &entry, &result)) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       OB_LOG(WARN, "read dir error", K(ret),
           KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     } else if (NULL != result) {
@@ -368,7 +368,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, common::ObBaseDir
         } else {
           struct stat sb;
           if (-1 == ::stat(sub_dir_path, &sb)) {
-            ret = OB_IO_ERROR;
+            convert_io_error(errno, ret);
             OB_LOG(WARN, "stat fail", K(ret),
                 KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
           } else if (!S_ISREG(sb.st_mode)) {
@@ -425,7 +425,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
     if (!list_ctx.already_open_dir_) {
       if (OB_ISNULL(list_ctx.open_dir_ = ::opendir(dir_path))) {
         if (ENOENT != errno) {
-          ret = OB_IO_ERROR;
+          convert_io_error(errno, ret);
           OB_LOG(WARN, "fail to open dir", K(ret), KCSTRING(dir_path),
               KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
         }
@@ -445,7 +445,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
       }
 
       if (0 != ::readdir_r(list_ctx.open_dir_, &(list_ctx.next_entry_), &result)) {
-        ret = OB_IO_ERROR;
+        convert_io_error(errno, ret);
         OB_LOG(WARN, "read dir error", K(ret),
             KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
       } else if (NULL != result) {
@@ -467,7 +467,7 @@ int ObStorageFileUtil::list_files(const common::ObString &uri, ObStorageListCtxB
           } else {
             struct stat sb;
             if (-1 == ::stat(sub_dir_path, &sb)) {
-              ret = OB_IO_ERROR;
+              convert_io_error(errno, ret);
               OB_LOG(WARN, "stat fail", K(ret), KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
             } else if (!S_ISREG(sb.st_mode)) {
               // not a file
@@ -558,7 +558,7 @@ int ObStorageFileUtil::del_dir(const common::ObString &uri)
       STORAGE_LOG(INFO, "dir do not exist", KCSTRING(dir_path),
           "errono_str", strerror_r(errno, errno_buf, sizeof(errno_buf)));
     } else {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       STORAGE_LOG(WARN, "failed to ls stat dir", K(ret),
           KCSTRING(dir_path), "errono_str", strerror_r(errno, errno_buf, sizeof(errno_buf)));
     }
@@ -567,14 +567,14 @@ int ObStorageFileUtil::del_dir(const common::ObString &uri)
     STORAGE_LOG(WARN, "path is not to dir", K(ret), KCSTRING(dir_path));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       OB_LOG(WARN, "fail to open dir", K(ret), KCSTRING(dir_path),
           KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir && 0 == dir_file_count) {
       if (0 != ::readdir_r(open_dir, &entry, &result)) {
-        ret = OB_IO_ERROR;
+        convert_io_error(errno, ret);
         OB_LOG(WARN, "read dir error", K(ret),
             KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
       } else if (NULL != result
@@ -588,7 +588,7 @@ int ObStorageFileUtil::del_dir(const common::ObString &uri)
     }
     if (OB_SUCC(ret) && 0 == dir_file_count) {
       if (0 != ::rmdir(dir_path)) {
-        ret = OB_IO_ERROR;
+        convert_io_error(errno, ret);
         STORAGE_LOG(WARN, "failed to del file",
             K(ret), KCSTRING(dir_path), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
       }
@@ -623,7 +623,7 @@ int ObStorageFileUtil::list_directories(
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       OB_LOG(WARN, "fail to open dir", K(ret), KCSTRING(dir_path),
           KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
@@ -635,7 +635,7 @@ int ObStorageFileUtil::list_directories(
     directory_name.reset();
     is_directory = false;
     if (0 != ::readdir_r(open_dir, &entry, &result)) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       OB_LOG(WARN, "read dir error", K(ret),
           KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     } else if (NULL != result) {
@@ -652,7 +652,7 @@ int ObStorageFileUtil::list_directories(
         } else {
           struct stat sb;
           if (-1 == stat(sub_dir_path, &sb)) {
-            ret = OB_IO_ERROR;
+            convert_io_error(errno, ret);
             OB_LOG(WARN, "read dir path error", K(ret),
                 KCSTRING(strerror_r(errno, errno_buf, sizeof(errno_buf))));
           } else if (!S_ISDIR(sb.st_mode)) {
@@ -782,7 +782,7 @@ int ObStorageFileReader::pread(
       if (0 == one_read_size) {
         break;
       } else if (one_read_size < 0) {
-        ret = OB_IO_ERROR;
+        convert_io_error(errno, ret);
         STORAGE_LOG(WARN, "failed to read file",
             K(ret), K(read_size), K(buf_size),
             KCSTRING(path_), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
@@ -842,7 +842,7 @@ int ObStorageFileBaseWriter::open(const int flags)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid path", K(ret), KCSTRING(path_));
   } else if (-1 == (fd_ = ::open(path_, flags, S_IRUSR | S_IWUSR))) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to open write file",
         K(ret), KCSTRING(path_), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   } else {
@@ -958,7 +958,7 @@ int ObStorageFileBaseWriter::close()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret), K(fd_));
   } else if (0 != ::close(fd_)) {
-    ret = OB_IO_ERROR;
+    convert_io_error(errno, ret);
     STORAGE_LOG(WARN, "failed to close write file",
         K(ret), K(fd_), KCSTRING(path_), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
   } else {
@@ -1042,7 +1042,7 @@ int ObStorageFileWriter::close()
             K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
       }
     } else if (0 != ::rename(path_, real_path_)) {
-      ret = OB_IO_ERROR;
+      convert_io_error(errno, ret);
       STORAGE_LOG(WARN, "failed to rename meta file",
           K(ret), KCSTRING(real_path_), KCSTRING(path_), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
       //rename failed ,try delete file
