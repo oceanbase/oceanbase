@@ -111,12 +111,6 @@ public:
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   bool compare_without_version(
       const ObTabletTableUpdateTask &other) const;
-  inline bool need_assign_when_equal() const { return false; }
-  inline int assign_when_equal(const ObTabletTableUpdateTask &other)
-  {
-    UNUSED(other);
-    return common::OB_NOT_SUPPORTED;
-  }
   // TODO: need to realize barrier related functions
   bool is_barrier() const;
 
