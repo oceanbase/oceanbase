@@ -392,6 +392,7 @@ TEST_F(ObTableLockServiceTest, lock_part)
   ObTableLockOwnerID OWNER_ONE(1);
   ObTableLockOwnerID OWNER_TWO(2);
   ObLockPartitionRequest lock_arg;
+  ObUnLockPartitionRequest unlock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
   tx_param.isolation_ = ObTxIsolationLevel::RC;
@@ -460,16 +461,16 @@ TEST_F(ObTableLockServiceTest, lock_part)
   get_table_part_ids(table_id, part_ids);
 
   lock_mode = ROW_EXCLUSIVE;
-  lock_arg.owner_id_ = OWNER_ONE;
-  lock_arg.lock_mode_ = lock_mode;
-  lock_arg.op_type_ = OUT_TRANS_UNLOCK;
-  lock_arg.timeout_us_ = 0;
-  lock_arg.table_id_ = table_id;
-  lock_arg.part_object_id_ = part_ids[0];
+  unlock_arg.owner_id_ = OWNER_ONE;
+  unlock_arg.lock_mode_ = lock_mode;
+  unlock_arg.op_type_ = OUT_TRANS_UNLOCK;
+  unlock_arg.timeout_us_ = 0;
+  unlock_arg.table_id_ = table_id;
+  unlock_arg.part_object_id_ = part_ids[0];
 
   ret = MTL(ObTableLockService*)->unlock_partition(*tx_desc,
                                                    tx_param,
-                                                   lock_arg);
+                                                   unlock_arg);
   ASSERT_EQ(OB_SUCCESS, ret);
   // commit
   LOG_INFO("ObTableLockServiceTest::lock_part 4.2");

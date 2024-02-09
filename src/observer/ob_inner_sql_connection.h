@@ -62,10 +62,10 @@ class ObLockObjRequest;
 class ObLockTableRequest;
 class ObLockTabletRequest;
 class ObLockPartitionRequest;
-using ObUnLockObjRequest = ObLockObjRequest;
-using ObUnLockTableRequest = ObLockTableRequest;
-using ObUnLockPartitionRequest = ObLockPartitionRequest;
-using ObUnLockTabletRequest = ObLockTabletRequest;
+class ObUnLockObjRequest;
+class ObUnLockTableRequest;
+class ObUnLockPartitionRequest;
+class ObUnLockTabletRequest;
 }
 }
 namespace observer
@@ -254,7 +254,8 @@ public:
   int forward_request(const uint64_t tenant_id,
                       const int64_t op_type,
                       const ObString &sql,
-                      ObInnerSQLResult &res);
+                      ObInnerSQLResult &res,
+                      const int32_t group_id = 0);
 
 public:
   // nested session and sql execute for foreign key.
@@ -366,7 +367,8 @@ private:
   int forward_request_(const uint64_t tenant_id,
                        const int64_t op_type,
                        const ObString &sql,
-                       ObInnerSQLResult &res);
+                       ObInnerSQLResult &res,
+                       const int32_t group_id = 0);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
 private:
   bool inited_;
