@@ -284,8 +284,9 @@ int ObTableCkmItems::build_column_ckm_sum_array(
   return ret;
 }
 
-#define RECORD_CKM_ERROR_INFO(tablet_array_idx) \
+#define RECORD_CKM_ERROR_INFO(tablet_array_idx, is_global_index) \
   ckm_error_info.tenant_id_ = data_ckm.tenant_id_; \
+  ckm_error_info.is_global_index_ = is_global_index; \
   ckm_error_info.frozen_scn_ = compaction_scn; \
   ckm_error_info.data_table_id_ = data_table_schema->get_table_id(); \
   ckm_error_info.index_table_id_ = index_table_schema->get_table_id(); \
@@ -334,7 +335,7 @@ int ObTableCkmItems::validate_column_ckm_sum(
     }
   }
   if (OB_CHECKSUM_ERROR == ret) {
-    RECORD_CKM_ERROR_INFO(OB_INVALID_INDEX /*array_idx*/);
+    RECORD_CKM_ERROR_INFO(OB_INVALID_INDEX /*array_idx*/, true/*is_global_index*/);
     LOG_ERROR("failed to compare column checksum", KR(ret), K(ckm_error_info),
       K(data_ckm.ckm_items_), K(index_ckm.ckm_items_));
     if (OB_TMP_FAIL(ObColumnChecksumErrorOperator::insert_column_checksum_err_info(sql_proxy, data_ckm.tenant_id_,
@@ -436,7 +437,7 @@ int ObTableCkmItems::validate_tablet_column_ckm(
         }
 #endif
         if (OB_CHECKSUM_ERROR == ret) {
-          RECORD_CKM_ERROR_INFO(idx);
+          RECORD_CKM_ERROR_INFO(idx, false/*is_global_index*/);
           LOG_ERROR("failed to compare column checksum", KR(ret), K(ckm_error_info),
             "data_tablet", data_ckm.tablet_pairs_.at(idx), "data_row_cnt", data_replica_ckm.row_count_, K(data_replica_ckm),
             "index_tablet", index_ckm.tablet_pairs_.at(idx), "index_row_cnt", index_replica_ckm.row_count_, K(index_replica_ckm),

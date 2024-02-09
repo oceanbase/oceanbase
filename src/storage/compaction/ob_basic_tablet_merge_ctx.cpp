@@ -492,7 +492,8 @@ int ObBasicTabletMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_ta
   get_merge_table_param.merge_type_ = get_merge_type();
   get_merge_table_param.merge_version_ = get_merge_version();
   get_merge_table_result.error_location_ = &info_collector_.error_location_;
-  if (OB_FAIL(ObPartitionMergePolicy::get_merge_tables[get_merge_type()](
+  if (is_valid_merge_type(get_merge_type())
+    && OB_FAIL(ObPartitionMergePolicy::get_merge_tables[get_merge_type()](
           get_merge_table_param,
           *get_ls(),
           *get_tablet(),

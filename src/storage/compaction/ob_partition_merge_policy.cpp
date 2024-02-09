@@ -53,6 +53,9 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::get_mini_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type
     };
 
 
@@ -62,6 +65,7 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
     const bool is_multi_version_merge)
 {
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(get_merge_tables), "get merge table func cnt is mismatch");
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_neighbour_major_freeze(snapshot_version, freeze_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {

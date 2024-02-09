@@ -2826,7 +2826,7 @@ int ObDagPrioScheduler::inner_add_dag(
   { \
     info_list[idx].tenant_id_ = MTL_ID(); \
     info_list[idx].value_type_ = value_type; \
-    strcpy(info_list[idx].key_, key_str); \
+    strncpy(info_list[idx].key_, key_str, MIN(common::OB_DAG_KEY_LENGTH - 1, strlen(key_str))); \
     info_list[idx].value_ = value; \
     (void)scheduler_infos.push_back(&info_list[idx++]); \
   }

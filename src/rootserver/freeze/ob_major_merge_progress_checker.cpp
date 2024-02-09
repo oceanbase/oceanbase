@@ -412,8 +412,13 @@ void ObMajorMergeProgressChecker::deal_with_unfinish_table_ids(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (assgin_flag && OB_FAIL(table_ids_.assign(unfinish_table_id_array))) {
-    LOG_WARN("failed to assign table ids", KR(ret), K(unfinish_table_id_array));
+  } else if (assgin_flag) {
+    int64_t retry_times = 0;
+    do {
+      if (OB_FAIL(table_ids_.assign(unfinish_table_id_array))) {
+        LOG_WARN("failed to assign table ids", KR(ret), K(unfinish_table_id_array));
+      }
+    } while (OB_ALLOCATE_MEMORY_FAILED == ret && (++retry_times < ASSGIN_FAILURE_RETRY_TIMES));
   }
 }
 
@@ -470,7 +475,7 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     LOG_WARN("deal with rest data table", KR(ret), K_(compaction_scn));
   } else if (progress_.is_merge_finished()) {
     LOG_INFO("progress is check finished", KR(ret), K_(progress));
-  } else if (progress_.only_remain_special_table_to_verified()) {
+  } else if (progress_.only_remain_special_table_to_verified() || table_ids_.empty()) {
     bool finish_validate = false;
 #ifdef ERRSIM
     ret = OB_E(EventTable::EN_RS_CHECK_SPECIAL_TABLE) ret;
@@ -485,10 +490,6 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     } else if (finish_validate) {
       progress_.deal_with_special_tablet();
     }
-  } else if (table_ids_.empty()) {
-    // DEBUG LOG
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cnt in progress is not equal to table_ids", KR(ret), K(table_ids_), K(progress_));
   }
   (void) ckm_validator_.batch_update_report_scn();
   (void) ckm_validator_.batch_write_tablet_ckm();
