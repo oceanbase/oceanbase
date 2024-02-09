@@ -14237,24 +14237,27 @@ int ObJoinOrder::get_generated_col_index_qual(const int64_t table_id,
     bool is_persistent = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
       ObRawExpr *new_qual = NULL;
+      ObSEArray<ObRawExpr *, 4> new_quals;
       ObRawExpr *qual = quals.at(i);
       if (OB_ISNULL(qual)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (OB_FAIL(deduce_prefix_str_idx_exprs(qual, table_item, new_qual, helper))) {
+      } else if (OB_FAIL(deduce_prefix_str_idx_exprs(qual, table_item, new_quals, helper))) {
         LOG_WARN("deduce prefix str failed", K(ret));
-      } else if (new_qual != NULL) {
-        if (OB_FAIL(quals.push_back(new_qual))) {
+      } else if (!new_quals.empty()) {
+        if (OB_FAIL(append(quals, new_quals))) {
           LOG_WARN("push back failed", K(ret));
         }
-        LOG_TRACE("deduce common gen col", K(*new_qual), K(*qual));
+        LOG_TRACE("deduce gen col of prefix str", K(new_quals), KPC(qual));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(deduce_common_gen_col_index_expr(qual, table_item, new_qual))) {
         LOG_WARN("deduce expr failed", K(ret));
       } else if (new_qual != NULL) {
         if (OB_FAIL(quals.push_back(new_qual))) {
           LOG_WARN("push back failed", K(ret));
         }
-        LOG_TRACE("deduce common gen col", K(*new_qual), K(*qual));
+        LOG_TRACE("deduce gen col of common", KPC(new_qual), KPC(qual));
       } else {
         //do nothing
       }
@@ -14265,7 +14268,7 @@ int ObJoinOrder::get_generated_col_index_qual(const int64_t table_id,
 
 int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                           const TableItem *table_item,
-                                          ObRawExpr *&new_expr,
+                                          ObIArray<ObRawExpr*> &new_exprs,
                                           PathHelper &helper)
 {
   int ret = OB_SUCCESS;
@@ -14273,7 +14276,6 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
-    new_expr = NULL;
     ObColumnRefRawExpr *column_expr = NULL;
     ObRawExpr *value_expr = NULL;
     ObRawExpr *escape_expr = NULL;
@@ -14345,7 +14347,7 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                           escape_expr,
                                           table_item,
                                           type,
-                                          new_expr,
+                                          new_exprs,
                                           helper))) {
         LOG_WARN("get_prefix str idx exprs failed", K(ret));
       } else {
@@ -14364,11 +14366,10 @@ int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
                                         ObRawExpr *escape_expr,
                                         const TableItem *table_item,
                                         ObItemType type,
-                                        ObRawExpr *&new_expr,
+                                        ObIArray<ObRawExpr*> &new_exprs,
                                         PathHelper &helper)
 {
   int ret = OB_SUCCESS;
-  new_expr = NULL;
   if (OB_ISNULL(expr) || OB_ISNULL(table_item) ||
       OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -14382,6 +14383,7 @@ int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
       LOG_WARN("failed to get column exprs", K(ret));
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+      ObRawExpr *new_expr = NULL;
       ObColumnRefRawExpr *gen_column_expr = column_exprs.at(j);
       if (OB_ISNULL(gen_column_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -14418,9 +14420,10 @@ int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
             LOG_WARN("pullup relids and level failed", K(ret));
           } else if (OB_FAIL(add_deduced_expr(new_expr, expr, false))) {
             LOG_WARN("push back failed", K(ret));
+          } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
+            LOG_WARN("push back failed", K(ret));
           } else {
             gen_column_expr->set_explicited_reference();
-            break;
           }
         }
       }
