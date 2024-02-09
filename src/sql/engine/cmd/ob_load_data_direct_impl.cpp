@@ -1723,8 +1723,12 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   int64_t total_line_count = 0;
 
   if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = nullptr;
     int64_t query_timeout = 0;
-    if (OB_FAIL(load_stmt_->get_hints().get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
+    if (OB_ISNULL(session = ctx.get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", KR(ret));
+    } else if (OB_FAIL(load_stmt_->get_hints().get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("fail to get value", K(ret));
     } else if (query_timeout < 0) {
       ret = OB_TIMEOUT;
@@ -1739,11 +1743,12 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       } else if (query_timeout <= 0) {
         ret = OB_TIMEOUT;
         LOG_WARN("session is timeout", K(ret));
-      } else {
-        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
       }
-    } else {
-      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t timeout_ts = ctx.get_my_session()->get_query_start_time() + query_timeout;
+      ctx.get_physical_plan_ctx()->set_timeout_timestamp(timeout_ts);
+      THIS_WORKER.set_timeout_ts(timeout_ts);
     }
   }
 
