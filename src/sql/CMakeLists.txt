@@ -37,6 +37,9 @@ ob_set_subtarget(ob_sql common_mixed
   dblink/ob_tm_service.cpp
   privilege_check/ob_ora_priv_check.cpp
   privilege_check/ob_privilege_check.cpp
+  resolver/mv/ob_mv_checker.cpp
+  resolver/mv/ob_mv_provider.cpp
+  resolver/mv/ob_mv_printer.cpp
 )
 
 ob_set_subtarget(ob_sql das
@@ -252,7 +255,6 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_table_direct_insert_ctx.cpp
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_tenant_snapshot_executor.cpp
-
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -1168,12 +1170,6 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
-)
-
-ob_set_subtarget(ob_sql resolver_mv
-  resolver/mv/ob_mv_checker.cpp
-  resolver/mv/ob_mv_provider.cpp
-  resolver/mv/ob_mv_printer.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr
