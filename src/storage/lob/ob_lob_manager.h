@@ -141,6 +141,7 @@ public:
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
   static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
+  static const ObLobCommon ZERO_LOB; // static empty lob for zero val
 private:
   explicit ObLobManager(const uint64_t tenant_id)
     : tenant_id_(tenant_id),
