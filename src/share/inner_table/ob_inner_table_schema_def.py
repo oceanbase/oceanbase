@@ -8160,7 +8160,8 @@ def_table_schema(
     ('tx_internal_route_version', 'uint'),
     ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
     ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
-    ('plsql_exec_time', 'int')
+    ('plsql_exec_time', 'int'),
+    ('network_wait_time', 'uint', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
