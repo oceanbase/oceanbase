@@ -838,8 +838,7 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
 int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
-  bool is_partition_wise = DistAlgo::DIST_PARTITION_WISE == get_distributed_algo();
-  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info(is_partition_wise))) {
+  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
   }
   return ret;

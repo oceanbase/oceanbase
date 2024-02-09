@@ -709,30 +709,31 @@ int ObLogicalOperator::compute_op_parallel_and_server_info()
 }
 
 
-int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise)
+int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
   const ObLogicalOperator *max_parallel_child = NULL;
-  bool parallel_is_different = false;
-  int64_t op_parallel = ObGlobalHint::UNSET_PARALLEL;
+  bool max_parallel_from_exch = false;
   int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     if (OB_ISNULL(child = get_child(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
-    } else if (child->is_match_all()) {
-      max_parallel_child = (NULL == max_parallel_child && (get_num_of_child() - 1) == i)
-                           ? child : max_parallel_child;
-    } else if (ObGlobalHint::UNSET_PARALLEL == op_parallel) {
-      op_parallel = child->get_parallel();
+    } else if (0 == i) {
       max_parallel_child = child;
-      max_available_parallel = child->get_available_parallel();
+      max_available_parallel = max_parallel_child->get_available_parallel();
+      max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+    } else if (!max_parallel_from_exch &&
+               LOG_EXCHANGE == child->get_type()) {
+      //do nothing
     } else {
-      parallel_is_different |= child->get_parallel() != op_parallel;
-      max_available_parallel = std::max(max_available_parallel, child->get_available_parallel());
-      max_parallel_child = max_parallel_child->get_parallel() < child->get_parallel()
-                           ? child : max_parallel_child;
+      if (max_parallel_child->get_parallel() < child->get_parallel() ||
+          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type())) {
+        max_available_parallel = child->get_available_parallel();
+        max_parallel_child = child;
+        max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+      }
     }
   }
 
@@ -740,9 +741,6 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool 
   } else if (OB_ISNULL(max_parallel_child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ", K(ret), K(max_parallel_child));
-  } else if (OB_UNLIKELY(parallel_is_different && !is_partition_wise)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child op has different parallel except partition wise", K(ret));
   } else if (OB_FAIL(get_server_list().assign(max_parallel_child->get_server_list()))) {
     LOG_WARN("failed to assign server list", K(ret));
   } else {
