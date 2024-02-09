@@ -447,6 +447,7 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
   } else if (item->is_generated_column_) {
     if (!item->is_stored_generated_column_) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "assign virtual generated column");
       LOG_WARN("assign virtual generated column is not supported", K(ret));
     } else {
       if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr))) {
@@ -1043,10 +1044,16 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
           bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(item.column_name_, prop_value));
           if (not_found) {
             obj = &item.default_value_;
+            if (!item.is_nullable_ && !item.is_auto_increment_ && obj->is_null()) {
+              ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+              LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(item.column_name_));
+              LOG_WARN("column can not be null", K(ret), K(item));
+            }
           } else {
             obj = &prop_value;
           }
-          if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
+          if (OB_FAIL(ret)) {
+          } else if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->type_) {
             ObObj null_obj;
             null_obj.set_null();
             obj = not_found ? &null_obj : &prop_value;
@@ -1145,6 +1152,7 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
       LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
     } else if (assign.column_item_->is_virtual_generated_column_) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
       LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
     } else {
       // on update current timestamp will not find value
@@ -1215,6 +1223,56 @@ int ObTableDmlCgService::replace_exprs_with_dependant(ObTableCtx &ctx,
 }
 
 /*
+  add column infos for check nullable before insert new_row to das.
+*/
+int ObTableDmlCgService::add_all_column_infos(ObTableCtx &ctx,
+                                              ObIAllocator &allocator,
+                                              ColContentFixedArray &column_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 64> column_ids;
+  ObIArray<ObTableColumnItem> &items = ctx.get_column_items();
+  const ObTableSchema *table_schema = ctx.get_table_schema();
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (OB_FAIL(table_schema->get_column_ids(column_ids))) {
+    LOG_WARN("fail to get column ids", K(ret));
+  } else if (OB_FAIL(column_infos.init(items.count()))) {
+    LOG_WARN("fail to init column infos capacity", K(ret), K(items.count()));
+  }
+
+  for (int64_t i= 0; OB_SUCC(ret) && i < items.count(); i++) {
+    const ObTableColumnItem &item = items.at(i);
+    ObColumnRefRawExpr *column_expr = item.expr_;
+    if (OB_ISNULL(column_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column ref expr is null", K(ret));
+    } else {
+      ColumnContent column_content;
+      int64_t idx = 0;
+      column_content.auto_filled_timestamp_ = column_expr->get_result_type().has_result_flag(ON_UPDATE_NOW_FLAG);
+      column_content.is_nullable_ = !column_expr->get_result_type().is_not_null_for_write();
+      column_content.is_predicate_column_ = false;
+      column_content.is_implicit_ = false;
+      if (OB_FAIL(ob_write_string(allocator, column_expr->get_column_name(), column_content.column_name_))) {
+        LOG_WARN("fail to copy column name", K(ret), K(column_expr->get_column_name()));
+      } else if (!has_exist_in_array(column_ids, column_expr->get_column_id(), &idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column not exists in schema columns", K(ret), KPC(column_expr), K(column_ids));
+      } else if (FALSE_IT(column_content.projector_index_ = static_cast<uint64_t>(idx))) {
+        //do nothing
+      } else if (OB_FAIL(column_infos.push_back(column_content))) {
+        LOG_WARN("fail to store colum content to column infos", K(ret), K(column_content));
+      }
+    }
+  }
+
+  return ret;
+}
+
+/*
   genreate insert ctdef
   - replace exprs with depenedant expr if there are generated column.
   - construct new row.
@@ -1238,6 +1296,8 @@ int ObTableDmlCgService::generate_insert_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to assign new row", K(ret));
   } else if (OB_FAIL(generate_base_ctdef(ctx, ins_ctdef, old_row, new_row))) {
     LOG_WARN("fail to generate dml base ctdef", K(ret));
+  } else if (OB_FAIL(add_all_column_infos(ctx, allocator, ins_ctdef.column_infos_))) {
+    LOG_WARN("fail to add all column infos", K(ret));
   } else if (OB_FAIL(generate_das_ins_ctdef(ctx,
                                             ctx.get_ref_table_id(),
                                             ins_ctdef.das_ctdef_,
@@ -2005,7 +2065,6 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
   base_ctdef.is_ignore_ = false; // insert ignore
   base_ctdef.is_batch_stmt_ = false;
   base_ctdef.is_table_api_ = true;
-  int64_t binlog_row_image = share::ObBinlogRowImage::FULL;
   ObSQLSessionInfo &session = ctx.get_session_info();
 
   if (OB_FAIL(generate_column_info(index_tid, ctx, base_ctdef))) {
@@ -2017,11 +2076,9 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
     LOG_WARN("fail to get table schema version", K(ret));
   } else if (OB_FAIL(convert_table_param(ctx, base_ctdef))) {
     LOG_WARN("fail to convert table dml param", K(ret));
-  } else if (OB_FAIL(session.get_binlog_row_image(binlog_row_image))) {
-    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
     base_ctdef.tz_info_ = *session.get_tz_info_wrap().get_time_zone_info();
-    base_ctdef.is_total_quantity_log_ = (share::ObBinlogRowImage::FULL == binlog_row_image);
+    base_ctdef.is_total_quantity_log_ = ctx.is_total_quantity_log();
     base_ctdef.encrypt_meta_.reset();
   }
 
@@ -2334,8 +2391,9 @@ int ObTableTscCgService::replace_gen_col_exprs(const ObTableCtx &ctx,
     for (int64_t i = 0; i < access_exprs.count() && OB_SUCC(ret); i++) {
       ObRawExpr *expr = access_exprs.at(i);
       if (!expr->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expr type", K(ret), K(*expr));
+        if (OB_FAIL(res_access_expr.push_back(expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        }
       } else if (FALSE_IT(ref_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
       } else if (!ref_expr->is_virtual_generated_column()) {
         if (OB_FAIL(res_access_expr.push_back(expr))) {

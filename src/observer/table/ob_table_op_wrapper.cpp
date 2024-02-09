@@ -62,7 +62,7 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     ret = COVER_SUCC(tmp_ret);
   }
 
-  op_result.set_errno(ret);
+  op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
   spec->destroy_executor(executor);
   return ret;
@@ -201,6 +201,78 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
   return ret;
 }
 
+int ObTableOpWrapper::get_insert_spec(ObTableCtx &tb_ctx,
+                                      ObTableApiCacheGuard &cache_guard,
+                                      ObTableApiSpec *&spec)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create insert spec", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_TTL>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create ttl spec", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::get_insert_up_spec(ObTableCtx &tb_ctx,
+                                         ObTableApiCacheGuard &cache_guard,
+                                         ObTableApiSpec *&spec)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT_UP>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create insert up spec", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_TTL>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create ttl spec", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process insert operation", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_TTL>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process ttl insert operation", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process insert up operation", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_TTL>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process ttl insert up operation", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
                                               ObNewRow *row,
                                               const ObTableSchema *table_schema,
@@ -223,7 +295,9 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     const ObString &name = arr_col->at(i);
     if (OB_ISNULL(column_schema = table_schema->get_column_schema(name))) {
-      ret = OB_ERR_COLUMN_NOT_FOUND;
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      const ObString &table = table_schema->get_table_name_str();
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, name.length(), name.ptr(), table.length(), table.ptr());
       LOG_WARN("column not exist", K(ret), K(name));
     } else {
       int64_t column_idx = table_schema->get_column_idx(column_schema->get_column_id());
