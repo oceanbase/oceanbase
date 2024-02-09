@@ -54,10 +54,6 @@ void ObCompactStore::rescan()
 {
   cur_blk_id_ = 0;
   start_iter_ = false;
-  // shouldn't truncate for ObChunkSliceStore.
-  if (enable_truncate_) {
-    last_truncate_offset_ = 0;
-  }
   if (OB_NOT_NULL(reader_)) {
     reader_->reuse();
   }
@@ -82,14 +78,6 @@ int ObCompactStore::inner_get_next_row(const ObChunkDatumStore::StoredRow *&sr)
         start_iter_ = true;
         reader_->reuse();
         reader_->set_block(tmp_blk);
-        int64_t file_offset = block_reader_.get_cur_file_offset();
-        if (enable_truncate_ && (file_offset > last_truncate_offset_ + TRUNCATE_SIZE)) {
-          if (OB_FAIL(truncate_file(file_offset))) {
-            LOG_WARN("fail to truncate file", K(ret));
-          } else {
-            last_truncate_offset_ = file_offset;
-          }
-        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -105,14 +93,6 @@ int ObCompactStore::inner_get_next_row(const ObChunkDatumStore::StoredRow *&sr)
       } else {
         reader_->reuse();
         reader_->set_block(tmp_blk);
-        int64_t file_offset = block_reader_.get_cur_file_offset();
-        if (enable_truncate_ && (file_offset > last_truncate_offset_ + TRUNCATE_SIZE)) {
-          if (OB_FAIL(truncate_file(file_offset))) {
-            LOG_WARN("fail to truncate file", K(ret));
-          } else {
-            last_truncate_offset_ = file_offset;
-          }
-        }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(reader_->get_row(sr))) {
             if (ret != OB_ITER_END) {
@@ -380,13 +360,12 @@ int ObCompactStore::init(const int64_t mem_limit,
 {
   int ret = OB_SUCCESS;
   compact_level_ = compact_level;
-  enable_truncate_ = enable_trunc;
   inited_ = true;
   if (OB_ISNULL(exprs) || (compact_level != share::SORT_COMPACT_LEVEL && compact_level != share::SORT_COMPRESSION_COMPACT_LEVEL)) {
   } else {
     OZ(row_meta_.init(*exprs, row_extra_size));
   }
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type));
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));
   OZ(init_writer_reader());
   LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compact_level), K(compress_type),
@@ -407,15 +386,16 @@ int ObCompactStore::init(const int64_t mem_limit,
 {
   int ret = OB_SUCCESS;
   compact_level_ = compact_level;
-  enable_truncate_ = enable_trunc;
   inited_ = true;
   if (compact_level != share::SORT_COMPACT_LEVEL && compact_level != share::SORT_COMPRESSION_COMPACT_LEVEL) {
   } else {
     OZ(row_meta_.init(col_array, row_extra_size));
   }
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type));
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));
   OZ(init_writer_reader());
+  LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compact_level), K(compress_type),
+            K(col_array), K(ret));
   return ret;
 }
 
@@ -436,8 +416,6 @@ void ObCompactStore::reset()
   row_cnt_ = 0;
   start_iter_ = false;
   block_reader_.reset();
-  last_truncate_offset_ = 0;
-  enable_truncate_ = false;
   cur_blk_id_ = 0;
 }
 
