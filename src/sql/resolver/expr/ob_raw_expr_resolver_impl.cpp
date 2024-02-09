@@ -2596,15 +2596,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             /*dynamic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {
-              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).first));
+              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).element<0>()));
               if (OB_SUCC(ret)
-                  && ctx_.external_param_info_->at(i).first->same_as(*c_expr)) {
+                  && ctx_.external_param_info_->at(i).element<0>()->same_as(*c_expr)) {
                 need_save = false;
                 break;
               }
             }
             if (OB_SUCC(ret) && need_save) {
-              OZ (ctx_.external_param_info_->push_back(std::make_pair(c_expr, c_expr)));
+              OZ (ctx_.external_param_info_->push_back(ExternalParamInfo(c_expr, c_expr, 1)));
               OX (ctx_.prepare_param_count_++);
             }
           } else {

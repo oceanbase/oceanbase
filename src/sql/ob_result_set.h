@@ -82,11 +82,11 @@ public:
               ObSQLSessionInfo &session_info,
               pl::ObPLBlockNS *ns,
               bool is_dynamic_sql,
-              common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>> &param_info);
+              common::ObIArray<ExternalParamInfo> &param_info);
     int build_into_exprs(ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql);
     int check_into_exprs(ObStmt &stmt, ObArray<ObDataType> &basic_types, ObBitSet<> &basic_into);
     const ObIArray<ObRawExpr*>& get_into_exprs() const { return into_exprs_; }
-    int recount_dynamic_param_info(ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info);
+    int recount_dynamic_param_info(ObIArray<ExternalParamInfo> &param_info);
 
     common::ObIAllocator &allocator_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> external_params_;

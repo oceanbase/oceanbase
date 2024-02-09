@@ -1312,7 +1312,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
 }
 
 int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
-  common::ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info)
 {
   int ret = OB_SUCCESS;
   int64_t current_position = INT64_MAX;
@@ -1329,7 +1329,7 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
   ObSEArray<ObConstRawExpr *, 4> recount_params;
   for (int64_t i = 0;
        current_position != INT64_MAX && OB_SUCC(ret) && i < param_info.count(); ++i) {
-    ObRawExpr *param = param_info.at(i).first;
+    ObRawExpr *param = param_info.at(i).element<0>();
     if (OB_NOT_NULL(param)
         && T_QUESTIONMARK == param->get_expr_type()
         && static_cast<ObConstRawExpr *>(param)->get_value().get_unknown() > current_position) {
@@ -1356,7 +1356,7 @@ int ObResultSet::ExternalRetrieveInfo::build(
   ObSQLSessionInfo &session_info,
   pl::ObPLBlockNS *ns,
   bool is_dynamic_sql,
-  common::ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info)
 {
   int ret = OB_SUCCESS;
   OZ (build_into_exprs(stmt, ns, is_dynamic_sql));
@@ -1390,23 +1390,34 @@ int ObResultSet::ExternalRetrieveInfo::build(
        * stmt里的？是按照表达式resolve的顺序编号的，这个顺序在prepare阶段需要依赖的
        * 但是route_sql里的？需要按照入参在符号表里的下标进行编号，这个编号是proxy做路由的时候依赖的，所以这里要改掉stmt里QUESTIONMARK的值
        */
-      external_params_.set_capacity(param_info.count());
+      int64_t cnt = 0;
+      for (int64_t i = param_info.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        if (0 == param_info.at(i).element<2>()) {
+          cnt++;
+        } else {
+          break;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
+        OX (param_info.pop_back());
+      }
+      OX (external_params_.set_capacity(param_info.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_info.count(); ++i) {
-        if (OB_ISNULL(param_info.at(i).first) || OB_ISNULL(param_info.at(i).second)) {
+        if (OB_ISNULL(param_info.at(i).element<0>()) || OB_ISNULL(param_info.at(i).element<1>())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param expr is NULL", K(i), K(param_info.at(i).first), K(param_info.at(i).second), K(ret));
-        } else if (OB_FAIL(external_params_.push_back(param_info.at(i).first))) {
-          LOG_WARN("push back error", K(i), K(param_info.at(i).first), K(ret));
-        } else if (T_QUESTIONMARK == param_info.at(i).first->get_expr_type()) {
-          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(param_info.at(i).first);
-          if (OB_FAIL(param_info.at(i).second->get_value().apply(const_expr->get_value()))) {
-            LOG_WARN("apply error", K(const_expr->get_value()), K(param_info.at(i).second->get_value()), K(ret));
+          LOG_WARN("param expr is NULL", K(i), K(param_info.at(i).element<0>()), K(param_info.at(i).element<1>()), K(param_info.at(i).element<2>()), K(ret));
+        } else if (OB_FAIL(external_params_.push_back(param_info.at(i).element<0>()))) {
+          LOG_WARN("push back error", K(i), K(param_info.at(i).element<0>()), K(ret));
+        } else if (T_QUESTIONMARK == param_info.at(i).element<0>()->get_expr_type()) {
+          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(param_info.at(i).element<0>());
+          if (OB_FAIL(param_info.at(i).element<1>()->get_value().apply(const_expr->get_value()))) {
+            LOG_WARN("apply error", K(const_expr->get_value()), K(param_info.at(i).element<1>()->get_value()), K(ret));
           }
         } else {
           //如果不是PL的local变量，需要把QUESTIONMARK的值改为无效值，以免使proxy混淆
-          param_info.at(i).second->get_value().set_unknown(OB_INVALID_INDEX);
-          param_info.at(i).second->set_expr_obj_meta(
-                              param_info.at(i).second->get_value().get_meta());
+          param_info.at(i).element<1>()->get_value().set_unknown(OB_INVALID_INDEX);
+          param_info.at(i).element<1>()->set_expr_obj_meta(
+                              param_info.at(i).element<1>()->get_value().get_meta());
           if (stmt_sql_.empty()) {
             OZ (ob_write_string(allocator_, stmt.get_query_ctx()->get_sql_stmt(), stmt_sql_));
           }

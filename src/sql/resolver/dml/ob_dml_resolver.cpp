@@ -2598,7 +2598,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
              || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
              || real_ref_expr->is_sys_func_expr()
              || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type()) { //允许CURSOR%ROWID通过
-    if (OB_FAIL(ObResolverUtils::revert_external_param_info(params_.external_param_info_, real_ref_expr))) {
+    if (OB_FAIL(ObResolverUtils::revert_external_param_info(params_.external_param_info_, *params_.expr_factory_, real_ref_expr))) {
       LOG_WARN("failed to revert external param info", K(ret), KPC(real_ref_expr));
     } else if (OB_FAIL(ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
                                                              *params_.expr_factory_,
@@ -2618,7 +2618,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
                         params_.external_param_info_, *params_.expr_factory_, params_.prepare_param_count_, self))) {
         LOG_WARN("failed to resolve external param info", K(ret), KPC(self));
       } else if (OB_FAIL(ObResolverUtils::revert_external_param_info(
-                        params_.external_param_info_, real_ref_expr->get_param_expr(0)))) {
+                        params_.external_param_info_, *params_.expr_factory_, real_ref_expr->get_param_expr(0)))) {
         LOG_WARN("failed to revert external param info", K(ret), KPC(self));
       } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(
                         real_ref_expr, real_ref_expr->get_param_expr(0), self))) {
