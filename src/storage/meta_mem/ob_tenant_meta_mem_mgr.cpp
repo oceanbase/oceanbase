@@ -728,7 +728,7 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
     LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
-#ifdef OB_BUILD_RPM
+#ifndef OB_BUILD_RPM
   FLOG_INFO("push tablet into gc queue", K(ret), KP(tablet), K(common::lbt()));
 #endif
   return ret;

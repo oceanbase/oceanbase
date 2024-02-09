@@ -696,9 +696,9 @@ int ObLSService::gc_ls_after_replay_slog()
               usleep(SLEEP_TS);
             }
           } while (tmp_ret != OB_SUCCESS);
-          remove_ls_(ls);
+          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
         } else if (ls_status.is_zombie_state()) {
-          remove_ls_(ls);
+          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
         }
       }
     }
@@ -953,6 +953,7 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
     const ObLSID &ls_id = ls->get_ls_id();
     static const int64_t SLEEP_TS = 100_ms;
     ObLSLockGuard lock_ls(ls);
+    const bool write_slog = remove_from_disk;
     if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
                                                          "LSSafeDestroy"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -960,15 +961,12 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
     } else if (remove_from_disk && OB_FAIL(ls->set_remove_state())) {
       LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
-      // set ls to remove state and prevent slog write
-    } else if(remove_from_disk && OB_FAIL(write_remove_ls_slog_(ls_id))) {
-      LOG_WARN("fail to write remove ls slog", K(ret));
     } else if (OB_FAIL(task->init(MTL_ID(),
                                   handle,
                                   this))) {
       LOG_WARN("init safe destroy task failed", K(ret));
     } else {
-      remove_ls_(ls, remove_from_disk);
+      remove_ls_(ls, remove_from_disk, write_slog);
       // try until success.
       while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
         if (REACH_TIME_INTERVAL(1_min)) { // every minute
@@ -985,25 +983,53 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
   return ret;
 }
 
-void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk)
+void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls->get_ls_id();
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
+  int64_t success_step = 0;
+
   do {
-    if (OB_FAIL(ls->prepare_for_safe_destroy())) {
-      LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
-    } else if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
-      LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
-    } else if (OB_FAIL(remove_ls_from_map_(ls_id))) {
-      LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
+    // We must do prepare_for_safe_destroy to remove tablets from ObLSTabletService before writing the remove_ls_slog,
+    // After removing tablets, no update_tablet_slog will be written. Otherwise, writing the update_tablet_slog will be
+    // concurrent with remove_ls_slog, causing the update_tablet_slog to fall behind remove_ls_slog, and causing replay
+    // creating an invalid tablet during restart.
+    ret = OB_SUCCESS;
+    if (success_step < 1) {
+      if (OB_FAIL(ls->prepare_for_safe_destroy())) {
+        LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
+      } else {
+        success_step = 1;
+      }
+    }
+    if (success_step < 2 && OB_SUCC(ret)) {
+      if(write_slog && OB_FAIL(write_remove_ls_slog_(ls_id))) {
+        LOG_WARN("fail to write remove ls slog", K(ret));
+      } else {
+        success_step = 2;
+      }
+    }
+    if (success_step < 3 && OB_SUCC(ret)) {
+      if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
+        LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
+      } else {
+        success_step = 3;
+      }
+    }
+    if (success_step < 4 && OB_SUCC(ret)) {
+      if (OB_FAIL(remove_ls_from_map_(ls_id))) {
+        LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
+      } else {
+        success_step = 4;
+      }
     }
     if (OB_FAIL(ret)) {
       retry_cnt++;
       ob_usleep(SLEEP_TS);
       if (retry_cnt % 100 == 0) {
-        LOG_ERROR("remove_ls_ cost too much time", K(ret), KP(ls), K(ls_id));
+        LOG_ERROR("remove_ls_ cost too much time", K(ret), KP(ls), K(ls_id), K(success_step));
       }
     }
   } while (OB_FAIL(ret));
