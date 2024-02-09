@@ -64,8 +64,12 @@ bool ObRpcSessionHandler::wakeup_next_thread(ObRequest &req)
         LOG_WARN_RET(hash_ret, "wakeup session but no thread wait", K(req));
         bret = false;
       } else if (NULL != wait_object.req_) {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "previous stream request hasn't processed",
-                  "request", *wait_object.req_);
+        const ObRpcPacket &pkt = reinterpret_cast<const ObRpcPacket&>(req.get_packet());
+        ObRpcPacketCode pcode = pkt.get_pcode();
+        bool is_stream_last = pkt.is_stream_last();
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "previous stream request hasn't been processed yet, "
+                     "this might be an abort packet that indicates execution has timed out",
+                     K(pcode), K(is_stream_last), "previous request", *wait_object.req_);
         bret = false;
       } else {
         // set packet to wait object
