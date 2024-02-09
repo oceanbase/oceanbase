@@ -660,6 +660,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     // do nothing ...
   } else {
     bool need_end_stmt = false;
+    bool need_free_udt = false;
     stmt::StmtType parent_stmt = ctx.exec_ctx_.get_sql_ctx()->stmt_type_;
     if (!session->has_start_stmt() && stmt::StmtType::T_SELECT == parent_stmt) {
       need_end_stmt = true;
@@ -704,6 +705,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       pl_type.set_type_from(pl::PL_TYPE_UDT);
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
+      OX (need_free_udt = true);
     }
     try {
       int64_t package_id = info->is_udt_udf_ ?
@@ -834,9 +836,12 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                               ctx.exec_ctx_.get_allocator(), res));
       }
       OZ(expr.deep_copy_datum(ctx, res));
-
-      if (OB_SUCC(ret) && info->is_udt_cons_) {
-        OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
+    }
+    if (need_free_udt && info->is_udt_cons_) {
+      int tmp = OB_SUCCESS;
+      tmp = pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session());
+      if (OB_SUCCESS != tmp) {
+        LOG_WARN("fail to free udt self memory", K(ret), K(tmp));
       }
     }
     if (deep_in_objs.count() > 0) {
