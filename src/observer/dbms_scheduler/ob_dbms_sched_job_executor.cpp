@@ -220,8 +220,10 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
     }
   }
   if (NULL != session_info) {
-    if (OB_FAIL(ObDBMSSchedJobUtils::destroy_session(free_session_ctx, session_info))) {
-      LOG_WARN("failed to destroy session", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObDBMSSchedJobUtils::destroy_session(free_session_ctx, session_info))) {
+      LOG_WARN("failed to destroy session", KR(tmp_ret));
+      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
     } else {
       session_info = NULL;
     }
