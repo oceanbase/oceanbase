@@ -495,8 +495,9 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
     LOG_WARN("find no base co table", K(ret), KPC(this));
   } else if (OB_FAIL(base_co_table->get_meta(meta_handle))) {
     LOG_WARN("failed to get sstable meta handle", K(ret), KPC(base_co_table));
-  } else if (base_co_table->is_all_cg_base() && OB_FAIL(validate_column_checksums(meta_handle.get_sstable_meta().get_col_checksum(),
-        meta_handle.get_sstable_meta().get_col_checksum_cnt(), cg_schemas))) {
+  } else if (base_co_table->is_all_cg_base() && compaction::is_major_merge_type(static_param_.get_merge_type())
+                && OB_FAIL(validate_column_checksums(meta_handle.get_sstable_meta().get_col_checksum(),
+                  meta_handle.get_sstable_meta().get_col_checksum_cnt(), cg_schemas))) {
     LOG_ERROR("failed to validate column checksums", K(ret), KPC(base_co_table));
     if (OB_CHECKSUM_ERROR == ret) {
       (void) get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id, true/*found_cksum_error*/);
