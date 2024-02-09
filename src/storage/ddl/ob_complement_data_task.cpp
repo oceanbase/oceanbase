@@ -1433,7 +1433,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("tmp_row is nullptr", K(ret));
       } else if (OB_FAIL(add_extra_rowkey(rowkey_column_cnt, extra_rowkey_cnt, *tmp_row))) {
         LOG_WARN("fail to add extra rowkey", K(ret));
-      } else if (OB_FAIL(append_lob(rowkey_column_cnt, extra_rowkey_cnt, row_iter, lob_allocator))) {
+      } else if (!ddl_committed && OB_FAIL(append_lob(rowkey_column_cnt, extra_rowkey_cnt, row_iter, lob_allocator))) {
         LOG_WARN("append lob into macro block failed", K(ret));
       } else if (OB_FAIL(new_row_builder.build(write_row_, tmp_store_row))) {
       } else if (OB_FAIL(ObRowReshapeUtil::reshape_table_rows(
