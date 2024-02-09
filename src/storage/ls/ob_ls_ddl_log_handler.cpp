@@ -132,7 +132,8 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
         ret = OB_ITER_END;
       } else {
         ObTabletID &tablet_id = active_ddl_tablets_.at(idx_);
-        if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
+        if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle,
+            ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
           if (OB_TABLET_NOT_EXIST == ret) {
             if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
               LOG_WARN("push back to delete tablet id failed", K(ret));
@@ -239,7 +240,8 @@ int ObLSDDLLogHandler::online()
         } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
-        } else if (OB_FAIL(ls_->get_tablet(ddl_kv_mgr_handle.get_obj()->get_tablet_id(), tablet_handle))) {
+        } else if (OB_FAIL(ls_->get_tablet(ddl_kv_mgr_handle.get_obj()->get_tablet_id(), tablet_handle,
+            ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
           LOG_WARN("get tablet handle failed", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
         } else if (OB_FAIL(tablet_handle.get_obj()->start_direct_load_task_if_need())) {
           LOG_WARN("start ddl if need failed", K(ret));
