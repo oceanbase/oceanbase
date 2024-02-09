@@ -295,6 +295,9 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
                                          result));
       OX (result.copy_value_or_obj(*modify, true));
       OX (modify->set_param_meta());
+      if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
+        modify->set_is_ref_cursor_type(true);
+      }
       OZ (dones.push_back(true));
     } else {
       OZ (dones.push_back(false));
@@ -355,6 +358,9 @@ int ObExprUDF::process_singal_out_param(int64_t i,
         } else {
           OX (iparams.at(i).copy_value_or_obj(*modify, true));
           OX (modify->set_param_meta());
+          if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
+            modify->set_is_ref_cursor_type(true);
+          }
         }
       } else {
         OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
@@ -364,6 +370,9 @@ int ObExprUDF::process_singal_out_param(int64_t i,
                                            result));
         OX (result.copy_value_or_obj(*modify, true));
         OX (modify->set_param_meta());
+        if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
+          modify->set_is_ref_cursor_type(true);
+        }
       }
       OX (dones.at(i) = true);
     }
