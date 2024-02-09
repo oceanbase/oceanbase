@@ -819,9 +819,6 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
   batch_info_guard.set_batch_idx(0);
   batch_info_guard.set_batch_size(batch_size);
-  if (!is_push_down_ && OB_FAIL(prefetch<HashBucket>(hash_values_for_batch, batch_size, skip))) {
-    SQL_ENG_LOG(WARN, "failed to prefetch", K(ret));
-  }
   auto sf = [&] (const IVectorPtrs &vectors,
                   const uint16_t selector[],
                   const int64_t size,
@@ -829,7 +826,9 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
     ret = preprocess_part_.store_.add_batch(vectors, selector, size, stored_rows);
     return ret;
   };
-  if (OB_FAIL(hash_table_.set_distinct_batch(preprocess_part_.store_.get_row_meta(), batch_size, skip,
+  if (!is_push_down_ && OB_FAIL(prefetch<HashBucket>(hash_values_for_batch, batch_size, skip))) {
+    SQL_ENG_LOG(WARN, "failed to prefetch", K(ret));
+  } else if (OB_FAIL(hash_table_.set_distinct_batch(preprocess_part_.store_.get_row_meta(), batch_size, skip,
                                              my_skip, hash_values_for_batch, sf))) {
     LOG_WARN("failed to set batch", K(ret));
   }
