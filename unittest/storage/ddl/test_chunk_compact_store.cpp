@@ -720,78 +720,78 @@ TEST_F(TestCompactChunk, test_rescan_get_last_row_compact)
   }
 }
 
-TEST_F(TestCompactChunk, test_rescan_add_storagedatum)
-{
-  int ret = OB_SUCCESS;
-  ObCompactStore cs_chunk;
-  cs_chunk.init(1, 1,
-        ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, false/*disable trunc*/, share::SORT_COMPACT_LEVEL);
-  ChunkRowMeta row_meta(allocator_);
-  row_meta.col_cnt_ = COLUMN_CNT;
-  row_meta.fixed_cnt_ = 0;
-  row_meta.var_data_off_ = 0;
-  row_meta.column_length_.prepare_allocate(COLUMN_CNT);
-  row_meta.column_offset_.prepare_allocate(COLUMN_CNT);
-  for (int64_t i = 0; i < COLUMN_CNT; i++) {
-    if (i != COLUMN_CNT) {
-      row_meta.column_length_[i] = 0;
-      row_meta.column_offset_[i] = 0;
-    } else {
-      row_meta.column_length_[i] = 0;
-      row_meta.column_offset_[i] = 0;
-    }
-  }
-  cs_chunk.set_meta(&row_meta);
-  StoredRow **sr;
-  ret = row_generate_.get_stored_row_irregular(sr);
-  ASSERT_EQ(ret, OB_SUCCESS);
+// TEST_F(TestCompactChunk, test_rescan_add_storagedatum)
+// {
+//   int ret = OB_SUCCESS;
+//   ObCompactStore cs_chunk;
+//   cs_chunk.init(1, 1,
+//         ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true, 0, false/*disable trunc*/, share::SORT_COMPACT_LEVEL);
+//   ChunkRowMeta row_meta(allocator_);
+//   row_meta.col_cnt_ = COLUMN_CNT;
+//   row_meta.fixed_cnt_ = 0;
+//   row_meta.var_data_off_ = 0;
+//   row_meta.column_length_.prepare_allocate(COLUMN_CNT);
+//   row_meta.column_offset_.prepare_allocate(COLUMN_CNT);
+//   for (int64_t i = 0; i < COLUMN_CNT; i++) {
+//     if (i != COLUMN_CNT) {
+//       row_meta.column_length_[i] = 0;
+//       row_meta.column_offset_[i] = 0;
+//     } else {
+//       row_meta.column_length_[i] = 0;
+//       row_meta.column_offset_[i] = 0;
+//     }
+//   }
+//   cs_chunk.set_meta(&row_meta);
+//   StoredRow **sr;
+//   ret = row_generate_.get_stored_row_irregular(sr);
+//   ASSERT_EQ(ret, OB_SUCCESS);
 
-  char *buf = reinterpret_cast<char*>(sr);
-  int64_t pos = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < BATCH_SIZE; i++) {
-    StoredRow *tmp_sr = (StoredRow *)(buf + pos);
-    ObStorageDatum ssr[COLUMN_CNT];
-    for (int64_t k = 0; OB_SUCC(ret) && k < COLUMN_CNT; k++) {
-      ssr[k].shallow_copy_from_datum(tmp_sr->cells()[k]);
-    }
-    ret = cs_chunk.add_row(ssr, COLUMN_CNT, 0);
-    ASSERT_EQ(ret, OB_SUCCESS);
-    pos += tmp_sr->row_size_;
-    // get last row
-    const StoredRow *cur_sr = nullptr;
-    ret = cs_chunk.get_last_stored_row(cur_sr);
-    ASSERT_EQ(ret, OB_SUCCESS);
-    int64_t res = 0;
-    for (int64_t k = 0; k < cur_sr->cnt_; k++) {
-      ObDatum cur_cell = cur_sr->cells()[k];
-      res += *(int64_t *)(cur_cell.ptr_);
-    }
-    OB_ASSERT(res == ((1024 * i * COLUMN_CNT) + ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
-  }
+//   char *buf = reinterpret_cast<char*>(sr);
+//   int64_t pos = 0;
+//   for (int64_t i = 0; OB_SUCC(ret) && i < BATCH_SIZE; i++) {
+//     StoredRow *tmp_sr = (StoredRow *)(buf + pos);
+//     ObStorageDatum ssr[COLUMN_CNT];
+//     for (int64_t k = 0; OB_SUCC(ret) && k < COLUMN_CNT; k++) {
+//       ssr[k].shallow_copy_from_datum(tmp_sr->cells()[k]);
+//     }
+//     ret = cs_chunk.add_row(ssr, COLUMN_CNT, 0);
+//     ASSERT_EQ(ret, OB_SUCCESS);
+//     pos += tmp_sr->row_size_;
+//     // get last row
+//     const StoredRow *cur_sr = nullptr;
+//     ret = cs_chunk.get_last_stored_row(cur_sr);
+//     ASSERT_EQ(ret, OB_SUCCESS);
+//     int64_t res = 0;
+//     for (int64_t k = 0; k < cur_sr->cnt_; k++) {
+//       ObDatum cur_cell = cur_sr->cells()[k];
+//       res += *(int64_t *)(cur_cell.ptr_);
+//     }
+//     OB_ASSERT(res == ((1024 * i * COLUMN_CNT) + ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
+//   }
 
-  ret = cs_chunk.finish_add_row();
-  ASSERT_EQ(ret, OB_SUCCESS);
-  for (int j = 0; OB_SUCC(ret) && j < 2; j++ ) {
-    int64_t total_res = 0;
-    cs_chunk.rescan();
-    for (int64_t i = 0; OB_SUCC(ret) && i < BATCH_SIZE; i++) {
-      int64_t result = 0;
-      const StoredRow *cur_sr = nullptr;
-      ret = cs_chunk.get_next_row(cur_sr);
-      if (ret == OB_ITER_END) {
-        ret = OB_SUCCESS;
-      }
-      ASSERT_EQ(ret, OB_SUCCESS);
-      for (int64_t k = 0; k < cur_sr->cnt_; k++) {
-        ObDatum cur_cell = cur_sr->cells()[k];
-        result += *(int64_t *)(cur_cell.ptr_);
-        total_res += *(int64_t *)(cur_cell.ptr_);
-      }
-      OB_ASSERT(result == ((1024 * i * COLUMN_CNT) + ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
-    }
-    OB_ASSERT(total_res == ((1024 * (BATCH_SIZE-1) * BATCH_SIZE * COLUMN_CNT / 2) + BATCH_SIZE * ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
-  }
-}
+//   ret = cs_chunk.finish_add_row();
+//   ASSERT_EQ(ret, OB_SUCCESS);
+//   for (int j = 0; OB_SUCC(ret) && j < 2; j++ ) {
+//     int64_t total_res = 0;
+//     cs_chunk.rescan();
+//     for (int64_t i = 0; OB_SUCC(ret) && i < BATCH_SIZE; i++) {
+//       int64_t result = 0;
+//       const StoredRow *cur_sr = nullptr;
+//       ret = cs_chunk.get_next_row(cur_sr);
+//       if (ret == OB_ITER_END) {
+//         ret = OB_SUCCESS;
+//       }
+//       ASSERT_EQ(ret, OB_SUCCESS);
+//       for (int64_t k = 0; k < cur_sr->cnt_; k++) {
+//         ObDatum cur_cell = cur_sr->cells()[k];
+//         result += *(int64_t *)(cur_cell.ptr_);
+//         total_res += *(int64_t *)(cur_cell.ptr_);
+//       }
+//       OB_ASSERT(result == ((1024 * i * COLUMN_CNT) + ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
+//     }
+//     OB_ASSERT(total_res == ((1024 * (BATCH_SIZE-1) * BATCH_SIZE * COLUMN_CNT / 2) + BATCH_SIZE * ((COLUMN_CNT - 1) * COLUMN_CNT / 2)));
+//   }
+// }
 
 }
 

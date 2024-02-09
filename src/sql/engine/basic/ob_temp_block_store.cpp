@@ -1023,6 +1023,9 @@ int ObTempBlockStore::ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &bu
         free_blk_mem(try_reuse_blk);
         try_reuse_blk = NULL;
       }
+    } else if (try_reuse_blk != NULL) {
+      free_blk_mem(try_reuse_blk);
+      try_reuse_blk = NULL;
     }
   }
   return ret;

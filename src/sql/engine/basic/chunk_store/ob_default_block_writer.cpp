@@ -65,16 +65,16 @@ int ObDefaultBlockWriter::add_row(const ObChunkDatumStore::StoredRow &src_sr, Ob
   return ret;
 }
 
-int ObDefaultBlockWriter::add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+int ObDefaultBlockWriter::add_row(const blocksstable::ObStorageDatum *storage_datums, const ObStorageColumnGroupSchema &cg_schema,
                                const int64_t extra_size, ObChunkDatumStore::StoredRow **stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ensure_init())) {
     LOG_WARN("fail to ensure init", K(ret));
-  } else if (OB_FAIL(ensure_write(storage_datums, cnt, extra_size))) {
+  } else if (OB_FAIL(ensure_write(storage_datums, cg_schema, extra_size))) {
     LOG_WARN("fail to ensure write", K(ret));
-  } else if (OB_FAIL(inner_add_row(storage_datums, cnt, extra_size, stored_row))) {
-    LOG_WARN("add row to block failed", K(ret), K(storage_datums), K(cnt), K(extra_size));
+  } else if (OB_FAIL(inner_add_row(storage_datums, cg_schema, extra_size, stored_row))) {
+    LOG_WARN("add row to block failed", K(ret), K(storage_datums), K(cg_schema), K(extra_size));
   }
   return ret;
 }
@@ -210,30 +210,32 @@ int ObDefaultBlockWriter::add_batch(const common::ObDatum **datums, const common
   return ret;
 }
 
-int ObDefaultBlockWriter::inner_add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+int ObDefaultBlockWriter::inner_add_row(const blocksstable::ObStorageDatum *storage_datums, const ObStorageColumnGroupSchema &cg_schema,
                                         const int64_t extra_size, ObChunkDatumStore::StoredRow **dst_sr)
 {
   int ret = OB_SUCCESS;
   int64_t head_size = sizeof(ObChunkDatumStore::StoredRow);
-  int64_t datum_size = sizeof(ObDatum) * cnt;
+  int64_t datum_size = sizeof(ObDatum) * cg_schema.column_cnt_;
   int64_t row_size = head_size + datum_size + extra_size;
   ObChunkDatumStore::StoredRow *sr = static_cast<ObChunkDatumStore::StoredRow *>((void*)get_cur_buf());
   if (OB_ISNULL(sr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get buffer", K(ret));
   } else {
-    sr->cnt_ = cnt;
-    for (int64_t i = 0; i < cnt; ++i) {
-      const ObDatum *tmp_datum = static_cast<const ObDatum *>(&storage_datums[i]);
+    sr->cnt_ = cg_schema.column_cnt_;
+    for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
+      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      const ObDatum *tmp_datum = static_cast<const ObDatum *>(&storage_datums[column_idx]);
       MEMCPY(sr->payload_ + i * sizeof(ObDatum), tmp_datum, sizeof(ObDatum));
     }
     char* data_start = sr->payload_ + datum_size + extra_size;
     int64_t pos = 0;
-    for (int64_t i = 0; i < cnt; ++i) {
-      MEMCPY(data_start + pos, storage_datums[i].ptr_, storage_datums[i].len_);
+    for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
+      int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+      MEMCPY(data_start + pos, storage_datums[column_idx].ptr_, storage_datums[column_idx].len_);
       sr->cells()[i].ptr_ = data_start + pos;
-      pos += storage_datums[i].len_;
-      row_size += storage_datums[i].len_;
+      pos += storage_datums[column_idx].len_;
+      row_size += storage_datums[column_idx].len_;
     }
     sr->row_size_ = row_size;
     if (OB_FAIL(advance(row_size))) {
@@ -364,13 +366,14 @@ int ObDefaultBlockWriter::prepare_blk_for_write(ObTempBlockStore::Block *blk)
   return ret;
 }
 
-int ObDefaultBlockWriter::ensure_write(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+int ObDefaultBlockWriter::ensure_write(const blocksstable::ObStorageDatum *storage_datums,
+                                       const ObStorageColumnGroupSchema &cg_schema,
                                        const int64_t extra_size)
 {
   int ret = OB_SUCCESS;
   uint64_t row_size;
-  if (OB_FAIL(get_row_stored_size(storage_datums, cnt, extra_size, row_size))) {
-    LOG_WARN("fail to get row_size", K(cnt), K(extra_size), K(row_size), K(ret));
+  if (OB_FAIL(get_row_stored_size(storage_datums, cg_schema, extra_size, row_size))) {
+    LOG_WARN("fail to get row_size", K(cg_schema), K(extra_size), K(row_size), K(ret));
   } else if (OB_FAIL(ensure_write(row_size))) {
     LOG_WARN("fail to call inner ensure write", K(ret));
   }
@@ -378,15 +381,17 @@ int ObDefaultBlockWriter::ensure_write(const blocksstable::ObStorageDatum *stora
   return ret;
 }
 
-int ObDefaultBlockWriter::get_row_stored_size(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+int ObDefaultBlockWriter::get_row_stored_size(const blocksstable::ObStorageDatum *storage_datums,
+                                              const ObStorageColumnGroupSchema &cg_schema,
                                               const int64_t extra_size, uint64_t &size)
 {
   int ret = OB_SUCCESS;
   int64_t head_size = sizeof(ObChunkDatumStore::StoredRow);
-  int64_t datum_size = sizeof(ObDatum) * cnt;
+  int64_t datum_size = sizeof(ObDatum) * cg_schema.column_cnt_;
   int64_t data_size = 0;
-  for (int64_t i = 0; i < cnt; ++i) {
-    data_size += storage_datums[i].len_;
+  for (int64_t i = 0; i < cg_schema.column_cnt_; ++i) {
+    int64_t column_idx = cg_schema.column_idxs_ ? cg_schema.column_idxs_[i] : i;
+    data_size += storage_datums[column_idx].len_;
   }
   size = head_size + datum_size + extra_size + data_size;
   return ret;

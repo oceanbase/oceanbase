@@ -390,6 +390,7 @@ protected:
   ObArray<common::ObObjMeta> lob_col_types_;
   ObTabletHandle tablet_handle_;
   ObTableSchemaItem schema_item_;
+  int64_t dir_id_;
 };
 
 class ObTabletFullDirectLoadMgr final : public ObTabletDirectLoadMgr

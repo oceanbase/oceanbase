@@ -76,7 +76,7 @@ public:
   int add_row(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx, ObChunkDatumStore::StoredRow **stored_row = nullptr);
   int add_row(const ObChunkDatumStore::StoredRow &src_sr, ObChunkDatumStore::StoredRow **dst_sr = nullptr);
   // for chunkslicestore.
-  int add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+  int add_row(const blocksstable::ObDatumRow &datum_row, const ObStorageColumnGroupSchema &cg_schema,
               const int64_t extra_size, ObChunkDatumStore::StoredRow **stored_row = nullptr);
   int get_next_row(const ObChunkDatumStore::StoredRow *&sr);
 
