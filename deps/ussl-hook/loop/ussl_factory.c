@@ -36,9 +36,11 @@ static void clientfd_sk_delete(ussl_sf_t *sf, clientfd_sk_t *s)
       if (s->has_error) {
         shutdown(s->fd, SHUT_WR);
       }
-      if (0 != (ret = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
-        ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
-                      s->fd, errno);
+      if (NULL != s->ep) {
+        if (0 != (ret = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
+          ussl_log_warn("delete client fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
+                        s->fd, errno);
+        }
       }
       if (0 != (ret = libc_epoll_ctl(s->fd_info.org_epfd, EPOLL_CTL_ADD,
                                             s->fd_info.client_fd, &s->fd_info.event))) {
@@ -72,6 +74,8 @@ static acceptfd_sk_t *acceptfd_sk_new(ussl_sf_t *sf)
     s->type = SERVER_SOCK;
     s->has_error = 0;
     s->start_time = time(NULL);
+    s->fd = -1;
+    s->ep = NULL;
     ussl_dlink_init(&s->timeout_link);
   }
   return s;
@@ -86,7 +90,9 @@ static void acceptfd_sk_delete(ussl_sf_t *sf, acceptfd_sk_t *s)
       int err = 0;
       if (s->has_error) {
       } else {
-        if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
+        if (NULL == s->ep) {
+          need_close = 1;
+        } else if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
           ussl_log_warn("remove acceptfd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd, s->fd,
                         errno);
         } else if (0 != (err = dispatch_accept_fd_to_certain_group(s->fd, s->fd_info.client_gid))) {
@@ -96,9 +102,11 @@ static void acceptfd_sk_delete(ussl_sf_t *sf, acceptfd_sk_t *s)
         }
       }
       if (need_close) {
-        if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
-          ussl_log_warn("delete accept fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
-                        s->fd, errno);
+        if (NULL != s->ep) {
+          if (0 != (err = libc_epoll_ctl(s->ep->fd, EPOLL_CTL_DEL, s->fd, NULL))) {
+            ussl_log_warn("delete accept fd from epoll failed, epfd:%d, fd:%d, errno:%d", s->ep->fd,
+                          s->fd, errno);
+          }
         }
         if (0 != (err = ussl_close(s->fd))) {
           ussl_log_warn("ussl_close failed, fd:%d, errno:%d", s->fd, errno);
