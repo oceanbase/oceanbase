@@ -120,6 +120,9 @@ int ObIndexTreeRootCtx::add_absolute_row_offset(const int64_t absolute_row_offse
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "index tree root ctx not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(absolute_row_offset < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected row offset", K(ret), K(absolute_row_offset));
   } else if (OB_ISNULL(absolute_offsets_)) {
     if (OB_ISNULL(array_buf = allocator_->alloc(sizeof(ObAbsoluteOffsetArray)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -818,6 +821,9 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
         }
 
         if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(absolute_row_offset < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected absolute row offset", K(ret), K(use_absolute_offset), K(row_idx), KPC(macro_meta));
         } else if (FALSE_IT(row_desc.row_offset_ = absolute_row_offset)) {
         } else if (OB_FAIL(index_builder_.append_row(*macro_meta, row_desc))) {
           STORAGE_LOG(WARN, "fail to append row", K(ret), KPC(macro_meta), K(j), KPC(roots_.at(i)));

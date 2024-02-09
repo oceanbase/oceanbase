@@ -152,6 +152,9 @@ int ObIndexBlockRowBuilder::build_row(const ObIndexBlockRowDesc &desc, const ObD
   } else if (OB_UNLIKELY(!desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Index block description is not valid", K(ret));
+  } else if (OB_UNLIKELY(desc.row_offset_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected row offset", K(ret), K(desc));
   } else if (OB_FAIL(row_.reserve(rowkey_column_count_ + 1))) {
     STORAGE_LOG(WARN, "Failed to reserve index row", K(ret), K(rowkey_column_count_));
   } else if (OB_FAIL(set_rowkey(desc))) {
