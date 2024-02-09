@@ -746,6 +746,8 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
                                                   input_esets,
                                                   strong_sharding))) {
     LOG_WARN("failed to rebuild repart sharding info", K(ret));
+  } else if (NULL == strong_sharding) {
+    strong_sharding = get_plan()->get_optimizer_context().get_distributed_sharding();
   }
 
   if (OB_SUCC(ret)) {
@@ -760,6 +762,8 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
                                              input_esets,
                                              out_sharding))) {
       LOG_WARN("failed to rebuild repart sharding info", K(ret));
+    } else if (NULL == out_sharding) {
+      /* do nothing */
     } else if (OB_FAIL(weak_sharding.push_back(out_sharding))) {
       LOG_WARN("failed to push back sharding", K(ret));
     }
@@ -782,6 +786,23 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
       OB_ISNULL(input_sharding)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                      src_keys,
+                                                      target_keys,
+                                                      input_sharding->get_partition_keys(),
+                                                      repart_exprs,
+                                                      true))) {
+    LOG_WARN("failed to get repartition keys", K(ret));
+  } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                      src_keys,
+                                                      target_keys,
+                                                      input_sharding->get_sub_partition_keys(),
+                                                      repart_sub_exprs,
+                                                      true))) {
+    LOG_WARN("failed to get sub repartition keys", K(ret));
+  } else if (input_sharding->get_partition_keys().count() != repart_exprs.count()
+             || input_sharding->get_sub_partition_keys().count() != repart_sub_exprs.count()) {
+    out_sharding = NULL;
   } else if (OB_ISNULL(out_sharding = reinterpret_cast<ObShardingInfo*>(
                        get_plan()->get_allocator().alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -791,20 +812,7 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
     LOG_WARN("failed to assign sharding info", K(ret));
   } else {
     ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-    if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
-                                                 src_keys,
-                                                 target_keys,
-                                                 input_sharding->get_partition_keys(),
-                                                 repart_exprs))) {
-      LOG_WARN("failed to get repartition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
-                                                        src_keys,
-                                                        target_keys,
-                                                        input_sharding->get_sub_partition_keys(),
-                                                        repart_sub_exprs))) {
-      LOG_WARN("failed to get sub repartition keys", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_partition_keys(),
-                                                repart_exprs))) {
+    if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_partition_keys(), repart_exprs))) {
       LOG_WARN("failed to add replace pair", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_sub_partition_keys(),
                                                 repart_sub_exprs))) {
