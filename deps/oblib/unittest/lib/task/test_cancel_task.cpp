@@ -92,8 +92,8 @@ TEST(TestCancelTask, cancel_immediately)
   TaskCommon task;
   TaskCommon task_another;
   task_another.exec_time_ = 20000; // 20ms
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task_another, 0, false));
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 50000, true));  // delay = 50ms
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task_another, 50000, false));
   ASSERT_EQ(2, timer.get_tasks_num());
   ASSERT_EQ(OB_SUCCESS, timer.cancel(task)); // cancel it
   ASSERT_EQ(1, timer.get_tasks_num()); // cancel task, do not affect task_another
@@ -113,9 +113,9 @@ TEST(TestCancelTask, cancel_running)
   ASSERT_EQ(OB_SUCCESS, timer.start());
   TaskCommon task;
   task.exec_time_ = 100000; // 100ms
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true)); // repeate = true
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 50000, true)); // repeate = true , delay = 50ms
   ASSERT_EQ(1, timer.get_tasks_num());
-  ::usleep(50000);
+  ::usleep(70000);
   ASSERT_EQ(1, task.task_run_count_); // task is running
   // the running task has been removed from the task array
   ASSERT_EQ(0, timer.get_tasks_num());
@@ -135,12 +135,12 @@ TEST(TestCancelTask, cancel_non_running)
   task1.exec_time_ = 100000; // 100ms
   TaskCommon task2;
   task2.exec_time_ = 50000; //50ms
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task1, 0, false));     // t1
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 10000, true));  // t2
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 30000, true));  // t2
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 50000, true));  // t4
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task1, 50000, false));  // t1
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 100000, true));  // t2
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 300000, true));  // t2
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 500000, true));  // t4
   ASSERT_EQ(4, timer.get_tasks_num()); // 4 tasks were scheduled
-  ::usleep(50000);
+  ::usleep(70000);
   ASSERT_EQ(1, task1.task_run_count_); // t1 is running
   // t1 (i.e., the running task) has been removed from the task array
   ASSERT_EQ(3, timer.get_tasks_num());
