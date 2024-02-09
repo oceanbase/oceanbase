@@ -15336,7 +15336,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
             if (OB_SUCC(ret)) {
               ObSqlString sql;
               if (!is_oracle_mode) {
-                if (OB_FAIL(sql.append_fmt("RENAME TABLE %.*s.%.*s TO %.*s.%.*s",
+                if (OB_FAIL(sql.append_fmt("RENAME TABLE `%.*s`.`%.*s` TO `%.*s`.`%.*s`",
                             rename_item.origin_db_name_.length(),
                             rename_item.origin_db_name_.ptr(),
                             rename_item.origin_table_name_.length(),
@@ -15348,7 +15348,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                   LOG_WARN("failed to append sql", K(ret));
                 }
               } else { // oracle mode
-                if (OB_FAIL(sql.append_fmt("RENAME %.*s TO %.*s",
+                if (OB_FAIL(sql.append_fmt("RENAME \"%.*s\" TO \"%.*s\"",
                             rename_item.origin_table_name_.length(),
                             rename_item.origin_table_name_.ptr(),
                             rename_item.new_table_name_.length(),
