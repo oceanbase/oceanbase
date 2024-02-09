@@ -21,6 +21,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "share/rc/ob_tenant_base.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 #include <algorithm> // std::sort
 
@@ -1055,6 +1056,10 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         } break;
         case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_null();
+        } break;
+        case STMT_TYPE: {
+          cells[cell_idx].set_null();
+          cells[cell_idx].set_default_collation_type();
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
