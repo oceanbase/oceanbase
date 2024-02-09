@@ -410,10 +410,22 @@ struct __decint_cast_impl
     if (eval_flags.accumulate_bit_cnt(bound) == bound.range_size()) {
       // do nothing
     } else {
-      ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
+      bool is_integer_input = ob_is_integer_type(expr.args_[0]->datum_meta_.type_);
+      ObScale in_scale = (is_integer_input ? 0 : expr.args_[0]->datum_meta_.scale_);
       ObScale out_scale = expr.datum_meta_.scale_;
+      ObPrecision out_prec = expr.datum_meta_.precision_;
+      ObPrecision in_prec = expr.args_[0]->datum_meta_.precision_;
+      if (is_integer_input) {
+        if (ob_is_int_tc(expr.args_[0]->datum_meta_.type_)) {
+          if (in_prec > MAX_PRECISION_DECIMAL_INT_64) { in_prec = MAX_PRECISION_DECIMAL_INT_64; }
+        } else { // uint tc
+          in_prec =
+            ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][expr.args_[0]->datum_meta_.type_].get_precision();
+        }
+      }
       bool is_scale_up = (out_scale >= in_scale);
-      if (sizeof(in_type) != sizeof(out_type) || in_scale != out_scale) { // need scale decimal int
+      if (ObDatumCast::need_scale_decimalint(in_scale, in_prec, out_scale, out_prec)
+          || sizeof(in_type) != sizeof(out_type)) { // need scale decimal int
         if (CM_IS_CONST_TO_DECIMAL_INT(expr.extra_)) {
           if (is_scale_up) {
             const_scale<in_type, out_type, true>(expr, ctx, skip, out_scale - in_scale, bound);
