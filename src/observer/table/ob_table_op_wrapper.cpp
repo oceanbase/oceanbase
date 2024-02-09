@@ -413,7 +413,7 @@ int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
   range.border_flag_.set_inclusive_start();
   range.border_flag_.set_inclusive_end();
 
-  if (OB_FAIL(key_ranges.push_back(range))) {
+  if (OB_SUCC(ret) && OB_FAIL(key_ranges.push_back(range))) {
     LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
   }
 

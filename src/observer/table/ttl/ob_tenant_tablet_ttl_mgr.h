@@ -34,7 +34,8 @@ public :
                    last_modify_time_(OB_INVALID_ID),
                    failure_times_(0),
                    is_dirty_(false),
-                   need_refresh_(true) {}
+                   need_refresh_(true),
+                   in_queue_(false) {}
   bool is_valid()
   {
     return task_info_.is_valid() && ttl_para_.is_valid();
@@ -42,8 +43,8 @@ public :
 
   int deep_copy_rowkey(const ObString &rowkey);
 
-  TO_STRING_KV(K_(task_info), K_(task_status), K_(ttl_para), K_(task_start_time),
-               K_(last_modify_time), K_(failure_times), K_(is_dirty), K_(need_refresh));
+  TO_STRING_KV(K_(task_info), K_(task_status), K_(ttl_para), K_(task_start_time), K_(last_modify_time),
+               K_(failure_times), K_(is_dirty), K_(need_refresh), K_(in_queue));
 
 public:
   common::ObArenaAllocator  rowkey_cp_allcoator_; // for rowkey copy in ObTTLTaskInfo
@@ -60,6 +61,7 @@ public:
   bool                    is_moved_;
   bool                    need_refresh_; // should refresh task from task table
   common::ObSpinLock      lock_; // lock for update
+  bool                    in_queue_; // whether in dag queue or not
 };
 
 class ObTenantTabletTTLMgr;
