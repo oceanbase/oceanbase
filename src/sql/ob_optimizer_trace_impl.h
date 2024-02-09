@@ -44,6 +44,7 @@ class TableItem;
 class ObSQLSessionInfo;
 struct CandidatePlan;
 class OptSystemStat;
+class ObSkylineDim;
 
 class ObOptimizerTraceImpl;
 
@@ -267,6 +268,7 @@ public:
   int append(const ObShardingInfo *info);
   int append(const CandidatePlan &plan);
   int append(const ObDSResultItem &ds_result);
+  int append(const ObSkylineDim &dim);
 /***********************************************/
 ////print template type
 /***********************************************/
@@ -285,14 +287,14 @@ public:
   typename std::enable_if<std::is_base_of<ObIArray<ObRawExpr*>, T>::value, int>::type
   append(const T& value);
 
-  //for ObIArray<uint64_t>
+  //for ObIArrayWrap<uint64_t>
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<uint64_t>, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
   append(const T& value);
 
-  //for ObIArray<int64_t>
+  //for ObIArrayWrap<int64_t>
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<int64_t>, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
   append(const T& value);
 
   //for ObIArray<ObDSResultItem>
@@ -399,7 +401,7 @@ ObOptimizerTraceImpl::append(const T& value)
 
 //for ObIArray<uint64_t>
 template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<uint64_t>, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
 ObOptimizerTraceImpl::append(const T& value)
 {
   int ret = OB_SUCCESS;
@@ -416,7 +418,7 @@ ObOptimizerTraceImpl::append(const T& value)
 
 //for ObIArray<int64_t>
 template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<int64_t>, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
 ObOptimizerTraceImpl::append(const T& value)
 {
   int ret = OB_SUCCESS;

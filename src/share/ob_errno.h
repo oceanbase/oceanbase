@@ -1383,6 +1383,9 @@ constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
 constexpr int OB_LOG_REPLAY_ERROR = -6323;
 constexpr int OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT = -6324;
 constexpr int OB_CLOG_DISK_HANG = -6325;
+constexpr int OB_TABLE_LOCK_SPLIT_TWICE = -6326;
+constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
+constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1834,6 +1837,7 @@ constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
 constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
+constexpr int OB_EST_DEVIA_TOO_LARGE = -11004;
 constexpr int OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT = -11005;
 constexpr int OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT = -11006;
 constexpr int OB_ERR_UNKNOWN_AUTHID = -11007;
@@ -3468,6 +3472,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__USER_ERROR_MSG "ob trying to lock config change conflicts"
 #define OB_CLOG_DISK_HANG__USER_ERROR_MSG "ob clog disk hang"
+#define OB_TABLE_LOCK_SPLIT_TWICE__USER_ERROR_MSG "table lock has been splitted before, can not be splitted again"
+#define OB_TABLE_LOCK_IS_SPLITTING__USER_ERROR_MSG "table lock is being splitted, can not be splitted again"
+#define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -4043,6 +4050,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__USER_ERROR_MSG "Plugin '%.*s' is not loaded"
+#define OB_EST_DEVIA_TOO_LARGE__USER_ERROR_MSG "Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__USER_ERROR_MSG "cannot replace a type with table dependents"
 #define OB_ERR_UNKNOWN_AUTHID__USER_ERROR_MSG "Unknown authorization ID `%.*s`@`%.*s`"
@@ -5684,6 +5692,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6324, ob trying to lock config change conflicts"
 #define OB_CLOG_DISK_HANG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6325, ob clog disk hang"
+#define OB_TABLE_LOCK_SPLIT_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6326, table lock has been splitted before, can not be splitted again"
+#define OB_TABLE_LOCK_IS_SPLITTING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6327, table lock is being splitted, can not be splitted again"
+#define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -6259,6 +6270,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
+#define OB_EST_DEVIA_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11004, Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-02303: cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22866: cannot replace a type with table dependents"
 #define OB_ERR_UNKNOWN_AUTHID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11007, Unknown authorization ID `%.*s`@`%.*s`"
@@ -6285,7 +6297,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2212];
+extern int g_all_ob_errnos[2216];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
