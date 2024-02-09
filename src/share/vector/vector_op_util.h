@@ -128,8 +128,7 @@ private:
         return Op::template hash<HashMethod, hash_v2>(meta, vec.get_payload(i),
                                           vec.get_length(i), seed_vec[i], hash_values[i]);
       };
-      //TODO shengle flip_foreach bound
-      ret = sql::ObBitVector::flip_foreach(skip, bound.batch_size(), op);
+      ret = sql::ObBitVector::flip_foreach(skip, bound, op);
     } else { /*has_null && !all_active*/
       auto op = [&](const int64_t i) __attribute__((always_inline)) {
         int ret = OB_SUCCESS;
@@ -141,8 +140,7 @@ private:
         }
         return ret;
       };
-      //TODO shengle flip_foreach bound
-      ret = sql::ObBitVector::flip_foreach(skip, bound.batch_size(), op);
+      ret = sql::ObBitVector::flip_foreach(skip, bound, op);
     }
     return ret;
   }

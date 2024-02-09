@@ -48,14 +48,15 @@ namespace sql
           }
 
 template <typename ResVec>
-static int proc_if_das(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size);
+static int proc_if_das(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
 
 template <>
-int proc_if_das<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip, int64_t batch_size)
+int proc_if_das<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
+                               const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             res_vec->set_int(idx, 1);
             return OB_SUCCESS;
           }))) {
@@ -66,26 +67,27 @@ int proc_if_das<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip, 
 
 template <>
 int proc_if_das<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                 int64_t batch_size)
+                                 const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 1, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
   return ret;
 }
 
 template <typename ResVec>
-static int proc_by_pass(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size,
+static int proc_by_pass(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound,
                         ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
 
 template <>
-int proc_by_pass<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip, int64_t batch_size,
+int proc_by_pass<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
+                                const EvalBound &bound,
                                 ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
 {
   int ret = OB_SUCCESS;
   int valid_cnt = 0;
   if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             ++valid_cnt;
             res_vec->set_int(idx, 1);
             return OB_SUCCESS;
@@ -98,14 +100,14 @@ int proc_by_pass<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
 
 template <>
 int proc_by_pass<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                  int64_t batch_size,
+                                  const EvalBound &bound,
                                   ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 1, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
 
-  int64_t valid_cnt = batch_size - skip.accumulate_bit_cnt(batch_size);
+  int64_t valid_cnt = bound.range_size() - skip.accumulate_bit_cnt(bound);
   join_filter_ctx->n_times_ += valid_cnt;
   join_filter_ctx->total_count_ += valid_cnt;
   ObExprJoinFilter::collect_sample_info_batch(*join_filter_ctx, 0, valid_cnt);
@@ -532,7 +534,6 @@ int ObExprJoinFilter::eval_filter_vector_internal(
     const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
-  int64_t batch_size = bound.batch_size();
   uint64_t op_id = expr.expr_ctx_id_;
   ObExecContext &exec_ctx = ctx.exec_ctx_;
   ObExprJoinFilterContext *join_filter_ctx = NULL;
@@ -543,10 +544,10 @@ int ObExprJoinFilter::eval_filter_vector_internal(
     // join filter ctx may be null in das.
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_if_das(res_vec, skip, batch_size);
+      ret = proc_if_das(res_vec, skip, bound);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_if_das(res_vec, skip, batch_size);
+      ret = proc_if_das(res_vec, skip, bound);
     }
     eval_flags.set_all(true);
   } else {
@@ -563,10 +564,10 @@ int ObExprJoinFilter::eval_filter_vector_internal(
       // rf_msg_ dynamic_disable: disable filter when filter rate < 0.5
       if (VEC_UNIFORM == res_format) {
         IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-        ret = proc_by_pass(res_vec, skip, batch_size, join_filter_ctx);
+        ret = proc_by_pass(res_vec, skip, bound, join_filter_ctx);
       } else if (VEC_FIXED == res_format) {
         IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-        ret = proc_by_pass(res_vec, skip, batch_size, join_filter_ctx);
+        ret = proc_by_pass(res_vec, skip, bound, join_filter_ctx);
       }
       eval_flags.set_all(true);
     } else if (OB_FAIL(join_filter_ctx->rf_msg_->might_contain_vector(expr, ctx, skip, bound,

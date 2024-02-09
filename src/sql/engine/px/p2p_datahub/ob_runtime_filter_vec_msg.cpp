@@ -28,15 +28,15 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 template <typename ResVec>
-static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size);
+static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
 
 template <>
 int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                                          int64_t batch_size)
+                                          const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             res_vec->set_int(idx, 1);
             return OB_SUCCESS;
           }))) {
@@ -47,11 +47,11 @@ int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVec
 
 template <>
 int proc_filter_not_active<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                            int64_t batch_size)
+                                            const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 1, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
   return ret;
 }
 
@@ -714,7 +714,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
 
   if (VEC_FIXED == res_format) {
     IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, batch_size))) {
+    if (OB_FAIL(preset_not_match(res_vec, bound))) {
       LOG_WARN("failed to preset_not_match", K(ret));
     }
   }
@@ -734,7 +734,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
     bool is_match = true;
     const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
     ObDatum datum;
-    for (int64_t batch_i  = 0; batch_i < batch_size; ++batch_i) {
+    for (int64_t batch_i  = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
       if (skip.at(batch_i)) {
         continue;
       } else {
@@ -799,15 +799,14 @@ int ObRFRangeFilterVecMsg::might_contain_vector(
   if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1545,7 +1544,7 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
   uint64_t *right_hash_vals = filter_ctx.right_hash_vals_;
   if (VEC_FIXED == res_format) {
     IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, batch_size))) {
+    if (OB_FAIL(preset_not_match(res_vec, bound))) {
       LOG_WARN("failed to preset_not_match", K(ret));
     }
   }
@@ -1573,7 +1572,7 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
     bool is_match = true;
     const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
     ObDatum datum;
-    for (int64_t batch_i  = 0; batch_i < batch_size && OB_SUCC(ret); ++batch_i) {
+    for (int64_t batch_i  = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
       if (skip.at(batch_i)) {
         continue;
       } else {
@@ -1635,15 +1634,14 @@ int ObRFInFilterVecMsg::might_contain_vector(
 {
   int ret = OB_SUCCESS;
   if (!is_active_) {
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_not_active(res_vec, skip, batch_size);
+      ret = proc_filter_not_active(res_vec, skip, bound);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_not_active(res_vec, skip, batch_size);
+      ret = proc_filter_not_active(res_vec, skip, bound);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1651,15 +1649,14 @@ int ObRFInFilterVecMsg::might_contain_vector(
   } else if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
