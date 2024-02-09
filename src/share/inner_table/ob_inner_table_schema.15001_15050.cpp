@@ -1327,7 +1327,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      16, //column_length
+      128, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -3060,7 +3060,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      16, //column_length
+      128, //column_length
       2, //column_precision
       -1, //column_scale
       false,//is_nullable

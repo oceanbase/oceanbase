@@ -332,7 +332,7 @@ struct ObAuditRecordData {
 
   ObString get_snapshot_source() const
   {
-    return ObString(snapshot_.source_);
+    return ObString(snapshot_source_);
   }
 
   int16_t seq_; //packet->get_packet_header().seq_; always 0 currently
@@ -404,6 +404,7 @@ struct ObAuditRecordData {
   bool partition_hit_;// flag for need das partition route or not
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
+  char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
 };
 
 } //namespace sql
