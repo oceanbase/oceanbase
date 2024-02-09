@@ -1205,8 +1205,8 @@ const uint64_t OB_PUBLIC_SCHEMA_ID            = OB_MIN_INNER_DATABASE_ID + 5;
 const uint64_t OB_ORA_SYS_DATABASE_ID         = OB_MIN_INNER_DATABASE_ID + 6;
 const uint64_t OB_ORA_LBACSYS_DATABASE_ID     = OB_MIN_INNER_DATABASE_ID + 7;
 const uint64_t OB_ORA_AUDITOR_DATABASE_ID     = OB_MIN_INNER_DATABASE_ID + 8;
-// not actual database, only for using and creating outlines without specified database
-const uint64_t OB_OUTLINE_DEFAULT_DATABASE_ID = OB_MIN_INNER_DATABASE_ID + 9;
+// use only if the 'use database' command is not executed.
+const uint64_t OB_MOCK_DEFAULT_DATABASE_ID = OB_MIN_INNER_DATABASE_ID + 9;
 const uint64_t OB_CTE_DATABASE_ID             = OB_MIN_INNER_DATABASE_ID + 10;
 const uint64_t OB_MAX_INNER_DATABASE_ID       = 202000;
 
@@ -1216,7 +1216,7 @@ const char* const OB_MYSQL_SCHEMA_NAME             = "mysql";
 const char* const OB_RECYCLEBIN_SCHEMA_NAME        = "__recyclebin"; //hidden
 const char* const OB_PUBLIC_SCHEMA_NAME            = "__public";     //hidden
 const char* const OB_ORA_SYS_SCHEMA_NAME           = "SYS";
-const char* const OB_OUTLINE_DEFAULT_DATABASE_NAME = "__outline_default_db";
+const char* const OB_MOCK_DEFAULT_DATABASE_NAME = "__outline_default_db";
 const char* const OB_TEST_SCHEMA_NAME              = "test";
 
 OB_INLINE bool is_oceanbase_sys_database_id(const uint64_t database_id)
@@ -1251,7 +1251,7 @@ OB_INLINE bool is_public_database_id(const uint64_t database_id)
 
 OB_INLINE bool is_outline_database_id(const uint64_t database_id)
 {
-  return OB_OUTLINE_DEFAULT_DATABASE_ID == database_id;
+  return OB_MOCK_DEFAULT_DATABASE_ID == database_id;
 }
 
 OB_INLINE bool is_inner_db(const uint64_t db_id)

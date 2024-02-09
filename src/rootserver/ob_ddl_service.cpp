@@ -31869,8 +31869,8 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
     uint64_t database_id = OB_INVALID_ID;
     if (OB_SUCC(ret)) {
       bool database_exist = false;
-      if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
-        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+      if (database_name == OB_MOCK_DEFAULT_DATABASE_NAME) {
+        database_id = OB_MOCK_DEFAULT_DATABASE_ID;
         database_exist = true;
       } else if (OB_FAIL(schema_service_->check_database_exist(tenant_id,
                                                         database_name,

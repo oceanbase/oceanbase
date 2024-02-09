@@ -61,9 +61,9 @@ int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t databa
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameter is NULL", K(ret), K(schema_guard_), K(allocator_));
-  } else if (database_id == OB_OUTLINE_DEFAULT_DATABASE_ID) {
+  } else if (database_id == OB_MOCK_DEFAULT_DATABASE_ID) {
     // virtual outline database
-    if (OB_FAIL(ob_write_string(*allocator_, OB_OUTLINE_DEFAULT_DATABASE_NAME, db_name))) {
+    if (OB_FAIL(ob_write_string(*allocator_, OB_MOCK_DEFAULT_DATABASE_NAME, db_name))) {
       LOG_WARN("fail to write string", K(ret), K(db_schema->get_database_name_str()));
     } else if (FALSE_IT(db_info.db_name_ = db_name)) {
     } else if (FALSE_IT(db_info.is_recycle_ = false)) {
@@ -180,7 +180,7 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
         case DATABASE_NAME : {
           DBInfo db_info;
           if (is_outline_database_id(outline_info->get_database_id())) {
-            cells[cell_idx].set_varchar(OB_OUTLINE_DEFAULT_DATABASE_NAME);
+            cells[cell_idx].set_varchar(OB_MOCK_DEFAULT_DATABASE_NAME);
             cells[cell_idx].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else if (OB_FAIL(database_infos_.get_refactored(outline_info->get_database_id(),
