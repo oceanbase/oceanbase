@@ -1112,6 +1112,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprWordCount::generate_word_count,                      /* 669 */
   NULL, // ObExprBM25::eval_bm25_relevance_expr,                      /* 670 */
   ObExprTransactionId::eval_transaction_id,                           /* 671 */
+  NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 672 */
+  NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 673 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
