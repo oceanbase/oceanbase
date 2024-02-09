@@ -876,9 +876,7 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
 {
   int ret = OB_SUCCESS;
   {
-    // If force_cancel_flag is set but status is not DAG_STATUS_ABORT, the final task actually succeed.
-    if (OB_UNLIKELY(force_cancel_flag_ && DAG_STATUS_ABORT == status)) {
-    } else if (OB_FAIL(remove_child_for_parents())) {
+    if (OB_FAIL(remove_child_for_parents())) {
       COMMON_LOG(WARN, "failed to remove child for parents", K(ret));
     } else if (OB_FAIL(remove_parent_for_children())) {
       COMMON_LOG(WARN, "failed to remove parent for children", K(ret));
@@ -890,6 +888,15 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
     update_status_in_dag_net(dag_net_finished);
   }
   return ret;
+}
+
+void ObIDag::set_force_cancel_flag()
+{
+  force_cancel_flag_ = true;
+  // dag_net and dags in the same dag net should be canceled too.
+  if (OB_NOT_NULL(dag_net_)) {
+    dag_net_->set_cancel();
+  }
 }
 
 int ObIDag::add_child_without_inheritance(ObIDag &child)
@@ -1003,6 +1010,10 @@ ObIDagNet::ObIDagNet(
 {
 }
 
+/*
+ * ATTENTION: DO NOT call this function if if this dag has parent dag.
+ * When parent adds child, child will be add into the same dag net with parent.
+ */
 int ObIDagNet::add_dag_into_dag_net(ObIDag &dag)
 {
   int ret = OB_SUCCESS;
