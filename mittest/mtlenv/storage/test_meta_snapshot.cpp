@@ -113,10 +113,11 @@ int TestMetaSnapshot::check_integrity(
   blocksstable::MacroBlockId tablet_meta_entry;
   ObLinkedMacroBlockItemReader item_reader;
   bool found = false;
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "test");
 
   if (OB_FAIL(ObTenantMetaSnapshotHandler::get_ls_snapshot(snapshot_id, ls_id, tablet_meta_entry))) {
     LOG_WARN("fail to get ls snapshot", K(ret), K(snapshot_id), K(ls_id));
-  } else if (OB_FAIL(item_reader.init(tablet_meta_entry))) {
+  } else if (OB_FAIL(item_reader.init(tablet_meta_entry, mem_attr))) {
     LOG_WARN("fail to init item reader", K(ret), K(tablet_meta_entry));
   } else {
     ObUpdateTabletLog slog;
