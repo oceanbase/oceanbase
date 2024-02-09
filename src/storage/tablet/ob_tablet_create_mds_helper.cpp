@@ -73,7 +73,7 @@ int ObTabletCreateMdsHelper::register_process(
   if (OB_FAIL(ret)) {
     // roll back
     int tmp_ret = OB_SUCCESS;
-    if (CLICK_TMP_FAIL(roll_back_remove_tablets(arg.id_, tablet_id_array))) {
+    if (CLICK_TMP_FAIL(rollback_remove_tablets(arg.id_, tablet_id_array))) {
       LOG_ERROR("failed to roll back remove tablets", K(tmp_ret));
       ob_usleep(1 * 1000 * 1000);
       ob_abort();
@@ -150,7 +150,7 @@ int ObTabletCreateMdsHelper::replay_process(
   if (CLICK_FAIL(ret)) {
     // roll back
     int tmp_ret = OB_SUCCESS;
-    if (CLICK() && OB_TMP_FAIL(roll_back_remove_tablets(arg.id_, tablet_id_array))) {
+    if (CLICK() && OB_TMP_FAIL(rollback_remove_tablets(arg.id_, tablet_id_array))) {
       LOG_ERROR("failed to roll back remove tablets", K(tmp_ret));
       ob_usleep(1 * 1000 * 1000);
       ob_abort();
@@ -950,7 +950,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
   return ret;
 }
 
-int ObTabletCreateMdsHelper::roll_back_remove_tablets(
+int ObTabletCreateMdsHelper::rollback_remove_tablets(
     const share::ObLSID &ls_id,
     const common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
@@ -959,8 +959,6 @@ int ObTabletCreateMdsHelper::roll_back_remove_tablets(
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id;
 
   if (CLICK_FAIL(get_ls(ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
@@ -968,20 +966,11 @@ int ObTabletCreateMdsHelper::roll_back_remove_tablets(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id), K(ls_handle));
   } else {
-    ObTabletIDSet &tablet_id_set = ls->get_tablet_svr()->tablet_id_set_;
-
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
       MDS_TG(10_ms);
-      key.tablet_id_ = tablet_id_array.at(i);
-      if (CLICK_FAIL(ls->get_tablet_svr()->do_remove_tablet(key))) {
-        LOG_WARN("failed to delete tablet", K(ret), K(key));
-      } else if (CLICK_FAIL(tablet_id_set.erase(key.tablet_id_))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("tablet id does not exist, maybe has not been inserted yet", K(ret), K(key));
-        } else {
-          LOG_WARN("failed to erase tablet id", K(ret), K(key));
-        }
+      const common::ObTabletID &tablet_id = tablet_id_array.at(i);
+      if (CLICK_FAIL(ls->get_tablet_svr()->rollback_remove_tablet(ls_id, tablet_id))) {
+        LOG_WARN("failed to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
       }
     }
   }

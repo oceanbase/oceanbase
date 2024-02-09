@@ -245,7 +245,6 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
       obj_pool_ = obj.pool_;
       allocator_ = obj.allocator_;
       t3m_ = obj.t3m_;
-      hold_start_time_ = ObClockGenerator::getClock();
     }
     obj_ = obj.ptr_;
     obj_->inc_ref();
@@ -280,6 +279,7 @@ void ObMetaObjGuard<T>::reset()
   reset_obj();
   obj_pool_ = nullptr;
   allocator_ = nullptr;
+  hold_start_time_ = INT64_MAX;
   t3m_ = nullptr;
 }
 
