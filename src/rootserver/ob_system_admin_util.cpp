@@ -1034,7 +1034,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
       }
 
       if (OB_FAIL(ret)) {
-      } else if (item->tenant_ids_.size() > 0 || item->want_to_set_tenant_config_) {
+      } else if (item->want_to_set_tenant_config_) {
         // tenant config
         ObDMLSqlSplicer dml;
         share::schema::ObSchemaGetterGuard schema_guard;
@@ -1162,7 +1162,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
 
   if (OB_SUCC(ret)) {
     FOREACH_X(item, arg.items_, OB_SUCCESS == ret) {
-      if (item->tenant_ids_.size() > 0) {
+      if (item->want_to_set_tenant_config_) {
         for (uint64_t tenant_id : item->tenant_ids_) {
           if (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id) {
           } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, new_version))) {
