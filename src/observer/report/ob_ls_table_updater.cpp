@@ -19,7 +19,6 @@
 #include "share/ob_define.h"
 #include "lib/ob_running_mode.h"
 
-
 namespace oceanbase
 {
 using namespace common;
@@ -303,7 +302,7 @@ int ObLSTableUpdater::batch_process_tasks(
   } else if (1 != tasks.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected task count", KR(ret), "tasks count", tasks.count());
-	} else {
+  } else {
     const ObLSTableUpdateTask &task = tasks.at(0);
     const uint64_t tenant_id = task.get_tenant_id();
     const ObLSID &ls_id = task.get_ls_id();
