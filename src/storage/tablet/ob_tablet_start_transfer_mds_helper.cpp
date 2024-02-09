@@ -747,7 +747,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
     LOG_WARN("on register start transfer out tx get invalid argument", KR(ret), KP(buf), K(len));
   } else if (CLICK_FAIL(info.deserialize(buf, len, pos))) {
     LOG_WARN("failed to deserialize tx start transfer out tx info", KR(ret), K(len), K(pos));
-  } else if (!info.is_valid()) {
+  } else if (!info.is_valid() || !info.data_end_scn_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out tx info is unexpected", KR(ret), K(info));
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
@@ -803,7 +803,7 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
     LOG_WARN("on replay start transfer out tx get invalid argument", KR(ret), KP(buf), K(len));
   } else if (CLICK_FAIL(info.deserialize(buf, len, pos))) {
     LOG_WARN("failed to deserialize tx start transfer out tx info", KR(ret), K(len), K(pos));
-  } else if (!info.is_valid()) {
+  } else if (!info.is_valid() || !info.data_end_scn_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out tx info is unexpected", KR(ret), K(info));
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
