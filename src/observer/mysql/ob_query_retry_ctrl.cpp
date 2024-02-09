@@ -1072,6 +1072,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("TRX",      OB_GTS_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_GTI_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_WEAK_READ_VERSION_NOT_READY, short_wait_retry_proc,    short_wait_retry_proc,                                nullptr);
+  ERR_RETRY_FUNC("TRX",      OB_SEQ_NO_REORDER_UNDER_PDML,       short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
 
   /* sql */
   ERR_RETRY_FUNC("SQL",      OB_ERR_INSUFFICIENT_PX_WORKER,      px_thread_not_enough_proc,  short_wait_retry_proc,                                nullptr);

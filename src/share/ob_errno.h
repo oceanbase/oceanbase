@@ -1386,6 +1386,7 @@ constexpr int OB_CLOG_DISK_HANG = -6325;
 constexpr int OB_TABLE_LOCK_SPLIT_TWICE = -6326;
 constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
 constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
+constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -3476,6 +3477,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_SPLIT_TWICE__USER_ERROR_MSG "table lock has been splitted before, can not be splitted again"
 #define OB_TABLE_LOCK_IS_SPLITTING__USER_ERROR_MSG "table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
+#define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -5697,6 +5699,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_SPLIT_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6326, table lock has been splitted before, can not be splitted again"
 #define OB_TABLE_LOCK_IS_SPLITTING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6327, table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
+#define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -6300,7 +6303,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2217];
+extern int g_all_ob_errnos[2218];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
