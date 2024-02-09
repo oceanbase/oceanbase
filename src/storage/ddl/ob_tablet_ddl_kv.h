@@ -63,6 +63,16 @@ public:
   blocksstable::ObIndexBlockRowHeader header_;
 };
 
+struct ObDDLBlockMeta
+{
+public:
+  ObDDLBlockMeta() : block_meta_(nullptr), end_row_offset_(-1) {}
+  TO_STRING_KV(KPC(block_meta_), K(end_row_offset_));
+public:
+  const blocksstable::ObDataMacroBlockMeta *block_meta_;
+  int64_t end_row_offset_;
+};
+
 class ObBlockMetaTree
 {
   typedef keybtree::ObKeyBtree<blocksstable::ObDatumRowkeyWrapper, ObBlockMetaTreeValue *> KeyBtree;
@@ -81,7 +91,7 @@ public:
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
                          const blocksstable::ObDatumRowkey *rowkey,
                          const blocksstable::ObDataMacroBlockMeta *meta,
-                         const int64_t co_sstable_row_offset = 0);
+                         const int64_t co_sstable_row_offset);
   int locate_key(const blocksstable::ObDatumRange &range,
                  const blocksstable::ObStorageDatumUtils &datum_utils,
                  blocksstable::DDLBtreeIterator &iter,
@@ -102,11 +112,12 @@ public:
                           ObBlockMetaTreeValue *&tree_value) const;
   int64_t get_macro_block_cnt() const { return macro_blocks_.count(); }
   int get_last_rowkey(const blocksstable::ObDatumRowkey *&last_rowkey);
-  int get_sorted_meta_array(ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array);
+  int get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array);
   int exist(const blocksstable::ObDatumRowkey *rowkey, bool &is_exist);
   const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_.get_desc(); }
   bool is_valid() const { return is_inited_; }
   int64_t get_memory_used() const;
+  const KeyBtree &get_keybtree() const { return block_tree_; }
   TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_));
 
 private:
@@ -169,8 +180,6 @@ public:
   void set_scn_range(
       const share::SCN &start_scn,
       const share::SCN &end_scn);
-  int get_sorted_meta_array(
-      ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array);
   const ObBlockMetaTree *get_block_meta_tree() { return &block_meta_tree_; }
   int init_ddl_index_iterator(const blocksstable::ObStorageDatumUtils *datum_utils,
                               const bool is_reverse_scan,

@@ -2751,7 +2751,7 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
     ObTableHandleV2 sstable_handle;
     ObTabletHandle new_tablet_handle;
     ObTablesHandleArray empty_cg_sstable_handles;
-    ObArray<const ObDataMacroBlockMeta *> empty_meta_array;
+    ObArray<ObDDLBlockMeta> empty_meta_array;
     empty_meta_array.set_attr(ObMemAttr(MTL_ID(), "TblFDL_EMA"));
 
     ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DIRECT_LOAD_MGR_LOCK);
