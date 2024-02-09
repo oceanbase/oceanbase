@@ -1169,7 +1169,8 @@ OB_SERIALIZE_MEMBER_INHERIT(ObDupTableLeaseRequest,
 OB_SERIALIZE_MEMBER_INHERIT(ObDupTableBeforePrepareRequest,
                             ObDupTableMsgBase,
                             tx_id_,
-                            before_prepare_version_);
+                            before_prepare_version_,
+                            before_prepare_scn_src_);
 
 void ObDupTableMsgBase::reset()
 {
@@ -1444,10 +1445,15 @@ int ObDupTableBeforePrepareRequestP::process()
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(arg_.get_tx_id(), true, part_ctx))) {
     DUP_TABLE_LOG(WARN, "get part ctx failed", K(ret), K(arg_));
   } else {
+    if (arg_.get_before_prepare_scn_src()
+        <= transaction::ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::UNKNOWN) {
+      DUP_TABLE_LOG(WARN, "UNKOWN before prepare src", K(ret), K(arg_));
+    }
+
     if (OB_ISNULL(part_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       DUP_TABLE_LOG(WARN, "unexpected part ctx", K(ret), KPC(part_ctx), K(arg_));
-    } else if (OB_FAIL(part_ctx->retry_dup_trx_before_prepare(arg_.get_before_prepare_version()))) {
+    } else if (OB_FAIL(part_ctx->retry_dup_trx_before_prepare(arg_.get_before_prepare_version(), arg_.get_before_prepare_scn_src()))) {
       DUP_TABLE_LOG(WARN, "retry dup trx before_prepare failed", K(ret), KPC(part_ctx), K(arg_));
     }
 
