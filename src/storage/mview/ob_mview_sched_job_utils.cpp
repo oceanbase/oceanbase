@@ -130,15 +130,12 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const ObString &exec_env)
 {
   int ret = OB_SUCCESS;
-  int64_t max_end_date_us = -1;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(share::ObTimeUtility2::str_to_usec("9999-01-01 00:00:00.000", max_end_date_us))) {
-     LOG_WARN("fail to get max_end_date_us", KR(ret));
   } else {
     int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() : start_date.get_timestamp();
-    int64_t end_date_us = repeat_interval.empty() ? start_date_us : max_end_date_us;
+    int64_t end_date_us = 64060560000000000; // 4000-01-01
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
       job_info.job_ = job_id;

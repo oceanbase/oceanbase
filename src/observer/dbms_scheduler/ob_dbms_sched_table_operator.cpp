@@ -32,7 +32,6 @@
 #include "observer/ob_server_struct.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
-#include "storage/mview/ob_mview_sched_job_utils.h"
 
 
 namespace oceanbase
