@@ -593,7 +593,7 @@ protected:// for MDS use
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const override final;
-  virtual ObTabletPointer *get_tablet_ponter_() const override final {
+  virtual ObTabletPointer *get_tablet_pointer_() const override final {
     return static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
   }
 private:
