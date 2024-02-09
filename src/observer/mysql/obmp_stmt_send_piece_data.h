@@ -148,7 +148,9 @@ private:
   ObIAllocator *allocator_;
 };
 
-#define OB_MAX_PIECE_COUNT 1024
+#define OB_MAX_PIECE_BUFFER_COUNT 1024
+#define OB_MAX_PARAM_ID UINT16_MAX
+#define OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD (OB_MAX_PARAM_ID - 4096)  // imprecise estimate
 typedef common::ObFixedArray<ObPieceBuffer, common::ObIAllocator> ObPieceBufferArray;
 
 class ObPiece
@@ -156,7 +158,7 @@ class ObPiece
 public:
   ObPiece() 
     : stmt_id_(0),
-      param_id_(-1),
+      param_id_(OB_MAX_PARAM_ID),
       pos_(0),
       buffer_array_(NULL),
       is_null_map_(),
@@ -173,7 +175,7 @@ public:
       entity_ = nullptr;
     }
     stmt_id_ = 0;
-    param_id_ = -1;
+    param_id_ = OB_MAX_PARAM_ID;
     pos_ = 0;
     err_ret_ = OB_SUCCESS;
   }
