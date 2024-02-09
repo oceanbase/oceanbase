@@ -3165,12 +3165,18 @@ int ObLogicalOperator::alloc_op_post(AllocOpContext& ctx)
       if (ObAllocOpHint::OB_ALL == alloc_op_hints.at(i).alloc_level_ &&
           OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
         LOG_WARN("fail to alloc op at all level", K(ret));
-      } else if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
           (log_op_def::LOG_EXCHANGE == type_ &&
           static_cast<ObLogExchange*>(this)->is_consumer()) &&
           OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
         LOG_WARN("fail to alloc op at dfo level", K(ret));
-      } else if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
           alloc_op_hints.at(i).id_ == op_id_ &&
           OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
         LOG_WARN("fail to alloc op at enumerate level", K(ret));
