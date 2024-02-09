@@ -95,9 +95,6 @@ void TestLSTabletService::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ret);
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      TestSchemaUtils::TEST_TENANT_ID, ObTenantIOConfig::default_instance());
-
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(TestSchemaUtils::TEST_TENANT_ID, ObLSID(TEST_LS_ID), ls_handle);

@@ -165,10 +165,16 @@ public:
     blocksstable::TestDataFilePrepare::SetUp();
     ret = blocksstable::ObTmpFileManager::get_instance().init();
     ASSERT_EQ(OB_SUCCESS, ret);
-    static ObTenantBase tenant_ctx(tenant_id_);
-    ObTenantEnv::set_tenant(&tenant_ctx);
-    ObTenantIOManager *io_service = nullptr;
-    EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+    if (!is_server_tenant(tenant_id_)) {
+      static ObTenantBase tenant_ctx(tenant_id_);
+      ObTenantEnv::set_tenant(&tenant_ctx);
+      ObTenantIOManager *io_service = nullptr;
+      EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
+      EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+      EXPECT_EQ(OB_SUCCESS, io_service->start());
+      tenant_ctx.set(io_service);
+      ObTenantEnv::set_tenant(&tenant_ctx);
+    }
 
     cell_cnt_ = COLS;
     init_exprs();
