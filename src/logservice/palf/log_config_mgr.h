@@ -596,7 +596,6 @@ private:
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
                                          const bool is_arb_replica);
-
 private:
   // inner_config_meta_ is protected by RWLock in PalfHandleImpl,
   // any read/write ops to inner_config_meta_ should acquire RLock/WLock in PalfHandleImpl.
