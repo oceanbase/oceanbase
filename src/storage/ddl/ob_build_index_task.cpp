@@ -498,6 +498,7 @@ int ObUniqueIndexChecker::report_column_checksum(
         item.execution_id_ = execution_id_;
         item.tenant_id_ = tenant_id_;
         item.table_id_ = report_table_id;
+        item.tablet_id_ = tablet_id_.id();
         item.ddl_task_id_ = task_id_;
         item.column_id_ = column_ids.at(i).col_id_;
         item.task_id_ = -tablet_id_.id();
@@ -509,7 +510,12 @@ int ObUniqueIndexChecker::report_column_checksum(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
+      uint64_t data_format_version;
+      int64_t snapshot_version = 0;
+      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id_, task_id_, data_format_version, snapshot_version, unused_task_status))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       }
     }

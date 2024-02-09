@@ -1138,7 +1138,8 @@ int ObTabletDDLUtil::report_ddl_checksum(
     const int64_t execution_id,
     const int64_t ddl_task_id,
     const int64_t *column_checksums,
-    const int64_t column_count)
+    const int64_t column_count,
+    const uint64_t data_format_version)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
@@ -1147,9 +1148,9 @@ int ObTabletDDLUtil::report_ddl_checksum(
   const ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
   if (OB_UNLIKELY(!tablet_id.is_valid() || OB_INVALID_ID == ddl_task_id
-        || !is_valid_id(table_id) || 0 == table_id || execution_id < 0 || nullptr == column_checksums || column_count <= 0)) {
+        || !is_valid_id(table_id) || 0 == table_id || execution_id < 0 || nullptr == column_checksums || column_count <= 0 || data_format_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(table_id), K(execution_id), KP(column_checksums), K(column_count));
+    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(table_id), K(execution_id), KP(column_checksums), K(column_count), K(data_format_version));
   } else if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(sql_proxy) || OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("ls service or sql proxy is null", K(ret), K(tenant_id), KP(sql_proxy), KP(schema_service));
@@ -1178,6 +1179,7 @@ int ObTabletDDLUtil::report_ddl_checksum(
       item.execution_id_ = execution_id;
       item.tenant_id_ = tenant_id;
       item.table_id_ = table_id;
+      item.tablet_id_ = tablet_id.id();
       item.ddl_task_id_ = ddl_task_id;
       item.column_id_ = column_ids.at(i).col_id_;
       item.task_id_ = tablet_id.id();
@@ -1208,7 +1210,7 @@ int ObTabletDDLUtil::report_ddl_checksum(
     }
 #endif
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(ddl_checksum_items, *sql_proxy))) {
+    } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, ddl_checksum_items, *sql_proxy))) {
       LOG_WARN("fail to update checksum", K(ret), K(tablet_id), K(table_id), K(ddl_checksum_items));
     } else {
       LOG_INFO("report ddl checkum success", K(tablet_id), K(table_id), K(execution_id), K(ddl_checksum_items));
