@@ -2408,6 +2408,7 @@ typedef enum ObItemType
   T_CANCEL_LS_REPLICA_TASK,
   T_COALESCE_AGGR,
   T_NO_COALESCE_AGGR,
+  T_AUTO_INCREMENT_CACHE_SIZE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
