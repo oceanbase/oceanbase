@@ -444,6 +444,33 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             SHARE_SCHEMA_LOG(WARN, "fail to print column id", K(ret));
           }
         }
+        if (OB_SUCC(ret) && col->get_skip_index_attr().has_skip_index()) {
+          bool first_skip_idx_attr_printed = false;
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " SKIP_INDEX("))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print skip index", K(ret));
+          }
+          if (OB_SUCC(ret) && col->get_skip_index_attr().has_min_max()) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MIN_MAX"))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print skip index attr", K(ret));
+            } else {
+              first_skip_idx_attr_printed = true;
+            }
+          }
+          if (OB_SUCC(ret) && col->get_skip_index_attr().has_sum()) {
+            if (first_skip_idx_attr_printed && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print skip index attr", K(ret));
+            } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SUM"))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print skip index attr", K(ret));
+            } else {
+              first_skip_idx_attr_printed = true;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print skip index", K(ret));
+            }
+          }
+        }
       }
       //TODO:add print extended_type_info
     }
