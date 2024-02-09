@@ -883,6 +883,7 @@ int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg,
 {
   int ret = OB_SUCCESS;
   GetTxStateWithSCNFunctor fn(SCN::max_scn(), state, trans_version);
+  fn.set_may_exist_undecided_state_in_tx_data_table();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));

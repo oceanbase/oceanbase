@@ -224,7 +224,8 @@ class ObITxDataCheckFunctor
 {
 public:
   ObITxDataCheckFunctor()
-    : tx_data_check_data_() {}
+    : tx_data_check_data_(),
+    may_exist_undecided_state_in_tx_data_table_(false) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) = 0;
   virtual bool recheck() { return false; }
   virtual bool is_decided() const;
@@ -233,6 +234,15 @@ public:
                                            const share::SCN commit_version,
                                            const share::SCN end_scn,
                                            const bool is_rollback);
+  // In the tx_data_table, defensive error reporting strategies are implemented,
+  // which means that potential errors are proactively handled and reported
+  // before they can escalate. Concurrently, there might be cases where
+  // information is retrieved directly from the tx data table without undergoing
+  // these checks. To address this scenario, we utilize configuration settings
+  // to govern the behavior of error reporting, determining when and how such
+  // errors should be reported or managed.
+  bool may_exist_undecided_state_in_tx_data_table() const;
+  void set_may_exist_undecided_state_in_tx_data_table();
 
   VIRTUAL_TO_STRING_KV(K_(tx_data_check_data));
 public:
@@ -276,6 +286,14 @@ public:
   //     determined from the txn state, commit version, or rollback sequence on
   //     the destination side.
   ObTxDataCheckData tx_data_check_data_;
+  // In the tx_data_table, defensive error reporting strategies are implemented,
+  // which means that potential errors are proactively handled and reported
+  // before they can escalate. Concurrently, there might be cases where
+  // information is retrieved directly from the tx data table without undergoing
+  // these checks. To address this scenario, we utilize configuration settings
+  // to govern the behavior of error reporting, determining when and how such
+  // errors should be reported or managed.
+  bool may_exist_undecided_state_in_tx_data_table_;
 };
 
 class ObCommitVersionsArray

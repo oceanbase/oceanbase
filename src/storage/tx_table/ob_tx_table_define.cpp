@@ -446,6 +446,16 @@ void ObITxDataCheckFunctor::resolve_tx_data_check_data_(const int32_t state,
   tx_data_check_data_.is_rollback_ = is_rollback;
 }
 
+bool ObITxDataCheckFunctor::may_exist_undecided_state_in_tx_data_table() const
+{
+  return may_exist_undecided_state_in_tx_data_table_;
+}
+
+void ObITxDataCheckFunctor::set_may_exist_undecided_state_in_tx_data_table()
+{
+  may_exist_undecided_state_in_tx_data_table_ = true;
+}
+
 } // end namespace transaction
 } // end namespace oceanbase
 

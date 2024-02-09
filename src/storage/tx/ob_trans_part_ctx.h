@@ -684,6 +684,10 @@ private:
   int refresh_rec_log_ts_();
   int get_tx_ctx_table_info_(ObTxCtxTableInfo &info);
   const share::SCN get_rec_log_ts_() const;
+
+  int check_is_aborted_in_tx_data_(const ObTransID tx_id,
+                                   bool &is_aborted);
+
   // ========================================================
 
   // ======================== C2PC MSG HANDLER BEGIN ========================
