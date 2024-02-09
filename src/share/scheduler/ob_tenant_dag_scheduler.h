@@ -1446,9 +1446,9 @@ inline bool is_reserve_mode()
   })
 
 
-constexpr uint64_t operator "" _percentage(unsigned long long percentage)
+constexpr double operator "" _percentage(unsigned long long percentage)
 {
-  return percentage / 100;
+  return (percentage + 0.0) / 100;
 }
 
 #define ADAPTIVE_PERCENT 40_percentage
