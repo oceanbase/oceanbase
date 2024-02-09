@@ -10,39 +10,45 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_SRC_SQL_OB_DELETE_STMT_PRINTER_H_
-#define OCEANBASE_SRC_SQL_OB_DELETE_STMT_PRINTER_H_
+#ifndef OCEANBASE_SRC_SQL_OB_UPDATE_STMT_PRINTER_H_
+#define OCEANBASE_SRC_SQL_OB_UPDATE_STMT_PRINTER_H_
 
 #include "ob_dml_stmt_printer.h"
-#include "sql/resolver/dml/ob_delete_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/resolver/dml/ob_update_stmt.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-class ObDeleteStmtPrinter : public ObDMLStmtPrinter {
+class ObUpdateStmtPrinter : public ObDMLStmtPrinter {
 
 public:
-  ObDeleteStmtPrinter()=delete;
-  ObDeleteStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDeleteStmt *stmt,
+  ObUpdateStmtPrinter()=delete;
+  ObUpdateStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObUpdateStmt *stmt,
                       ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params,
                       const ParamStore *param_store = NULL) :
     ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store) {}
-  virtual ~ObDeleteStmtPrinter() {}
+  virtual ~ObUpdateStmtPrinter() {}
 
-  void init(char *buf, int64_t buf_len, int64_t *pos, ObDeleteStmt *stmt);
+  void init(char *buf, int64_t buf_len, int64_t *pos, ObUpdateStmt *stmt);
   virtual int do_print();
 
 private:
   int print();
   int print_basic_stmt();
 
-  int print_delete();
+  int print_update();
+  int print_set();
+
+  int print_simple_assign(const ObAssignment &assign);
+
+  int print_vector_assign(const ObAssignments &assignments,
+                          ObRawExpr *query_ref_expr);
 
   // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObDeleteStmtPrinter);
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateStmtPrinter);
 private:
   // data members
 
@@ -53,4 +59,5 @@ private:
 
 
 
-#endif /* OCEANBASE_SRC_SQL_OB_DELETE_STMT_PRINTER_H_ */
+
+#endif /* OCEANBASE_SRC_SQL_OB_UPDATE_STMT_PRINTER_H_ */

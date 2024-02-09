@@ -25,7 +25,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_max_id_fetcher.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/udr/ob_udr_sql_service.h"
 
 namespace oceanbase

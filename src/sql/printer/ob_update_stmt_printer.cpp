@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/ob_update_stmt_printer.h"
+#include "sql/printer/ob_update_stmt_printer.h"
 #include "sql/ob_sql_context.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"

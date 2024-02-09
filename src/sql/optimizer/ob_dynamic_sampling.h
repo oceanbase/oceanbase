@@ -13,7 +13,7 @@
 #ifndef _OB_DYNAMIC_SAMPLING_H_
 #define _OB_DYNAMIC_SAMPLING_H_
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_define.h"

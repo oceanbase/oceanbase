@@ -28,7 +28,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
 #include "share/ob_index_builder_util.h"
 #include "share/object/ob_obj_cast.h"
