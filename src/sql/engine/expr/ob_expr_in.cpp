@@ -591,16 +591,16 @@ int ObExprInOrNotIn::cg_expr(ObExprCGCtx &expr_cg_ctx,
   } else if (T_REF_QUERY == raw_expr.get_param_expr(0)->get_expr_type()
              //output column == 1 由subplan filter负责迭代数据
              && raw_expr.get_param_expr(0)->get_output_column() > 1) {
-    ret = cg_expr_with_subquery(*expr_cg_ctx.allocator_, raw_expr, rt_expr);
+    ret = cg_expr_with_subquery(expr_cg_ctx, raw_expr, rt_expr);
   } else if (T_OP_ROW == raw_expr.get_param_expr(0)->get_expr_type()) {
-    ret = cg_expr_with_row(*expr_cg_ctx.allocator_, raw_expr, rt_expr);
+    ret = cg_expr_with_row(expr_cg_ctx, raw_expr, rt_expr);
   } else {
-    ret = cg_expr_without_row(*expr_cg_ctx.allocator_, raw_expr, rt_expr);
+    ret = cg_expr_without_row(expr_cg_ctx, raw_expr, rt_expr);
   }
   return ret;
 }
 
-int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
+int ObExprInOrNotIn::cg_expr_without_row(ObExprCGCtx &expr_cg_ctx,
                                          const ObRawExpr &raw_expr,
                                          ObExpr &rt_expr) const
 {
@@ -616,7 +616,7 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
     rt_expr.inner_func_cnt_ = rt_expr.args_[1]->arg_cnt_;
     void **func_buf = NULL;
     int64_t func_buf_size = sizeof(void *) * rt_expr.inner_func_cnt_;
-    if (OB_ISNULL(func_buf = (void **)allocator.alloc(func_buf_size))) {
+    if (OB_ISNULL(func_buf = (void **)expr_cg_ctx.allocator_->alloc(func_buf_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
@@ -630,14 +630,22 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       ObPrecision prec1 = rt_expr.args_[0]->datum_meta_.precision_;
       ObPrecision prec2 = rt_expr.args_[1]->args_[0]->datum_meta_.precision_;
       rt_expr.inner_functions_ = func_buf;
-      // hash table use self as left, so here right param is left for cmp func
-      DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-        right_type, left_type, scale2, scale1, prec2, prec1, lib::is_oracle_mode(), left_cs,
-        has_lob_header);
+      bool is_reverse_cmp_func = expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
+      DatumCmpFunc func_ptr;
+      if (is_reverse_cmp_func) {
+        // hash table use self as left, so here right param is left for cmp func
+        func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+          right_type, left_type, scale2, scale1, prec2, prec1, lib::is_oracle_mode(), left_cs, has_lob_header);
+      } else {
+        func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+          left_type, right_type, scale1, scale2, prec1, prec2, lib::is_oracle_mode(), left_cs, has_lob_header);
+      }
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void *)func_ptr;
       }
-      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 ||
+      bool is_string_text_cmp = (ob_is_string_tc(left_type) && ob_is_text_tc(right_type)) ||
+                          (ob_is_text_tc(left_type) && ob_is_string_tc(right_type));
+      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 || (!is_reverse_cmp_func && is_string_text_cmp) ||
           (ob_is_json(left_type) || ob_is_json(right_type)) ||
           (ob_is_urowid(left_type) || ob_is_urowid(right_type))) {
         rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_without_row_fallback;
@@ -666,7 +674,7 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
   return ret;
 }
 
-int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
+int ObExprInOrNotIn::cg_expr_with_row(ObExprCGCtx &expr_cg_ctx,
                                       const ObRawExpr &raw_expr,
                                       ObExpr &rt_expr) const
 {
@@ -728,19 +736,31 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
       void **func_buf = NULL;
       int func_buf_size = sizeof(void *) * LEFT_ROW->arg_cnt_ ; //这里初始化row_dimension
       rt_expr.inner_func_cnt_ = LEFT_ROW->arg_cnt_;
-      if (OB_ISNULL(func_buf = (void **)allocator.alloc(func_buf_size))) {
+      if (OB_ISNULL(func_buf = (void **)expr_cg_ctx.allocator_->alloc(func_buf_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
-        // hash table use self as left, so here right param is left for cmp func
+        bool is_reverse_cmp_func = expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
+        bool is_string_text_cmp = false;
         for (int i = 0; i < left_types.count(); i++) {
-          DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-            right_types.at(i), left_types.at(i), right_scales.at(i), left_scales.at(i),
-            rigth_precs.at(i), left_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
-            has_lob_headers.at(i));
+          DatumCmpFunc func_ptr;
+          if (is_reverse_cmp_func) {
+            // hash table use self as left, so here right param is left for cmp func
+            func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+              left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
+              left_precs.at(i), rigth_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
+              has_lob_headers.at(i));
+          } else {
+            func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+              right_types.at(i), left_types.at(i), right_scales.at(i), left_scales.at(i),
+              rigth_precs.at(i), left_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
+              has_lob_headers.at(i));
+          }
           func_buf[i] = (void *)func_ptr;
+          is_string_text_cmp |= (ob_is_string_tc(left_types.at(i)) && ob_is_text_tc(right_types.at(i))) ||
+                                (ob_is_text_tc(left_types.at(i)) && ob_is_string_tc(right_types.at(i)));
         }  // end for
-        if (!is_param_all_const()) {
+        if (!is_param_all_const() || (!is_reverse_cmp_func && is_string_text_cmp)) {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row_fallback;
         } else {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row;
@@ -757,7 +777,7 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
 }
 #undef GET_CS_TYPE
 
-int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
+int ObExprInOrNotIn::cg_expr_with_subquery(ObExprCGCtx &expr_cg_ctx,
                                            const ObRawExpr &raw_expr,
                                            ObExpr &rt_expr) const
 {
@@ -787,14 +807,14 @@ int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operand cnt mismatch",
               K(ret), K(left_types.count()), K(RIGHT_ROW(0)->arg_cnt_));
-    } else if (OB_ISNULL(funcs = (void **)allocator.alloc(
+    } else if (OB_ISNULL(funcs = (void **)expr_cg_ctx.allocator_->alloc(
                 sizeof(void *) * left_types.count()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else {
       rt_expr.inner_func_cnt_ = left_types.count();
       rt_expr.inner_functions_ = funcs;
-
+      bool is_reverse_cmp_func = expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
       for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.inner_func_cnt_; i++) {
         auto &l = left_types.at(i);
         auto &r = RIGHT_ROW_ELE(0, i)->obj_meta_;
@@ -805,11 +825,18 @@ int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
           CK(l.get_collation_type() == r.get_collation_type());
         }
         if (OB_SUCC(ret)) {
-          // hash table use self as left, so here right param is left for cmp func
-          funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-            r.get_type(), l.get_type(), r_datum_meta_.scale_, l.get_scale(), r_datum_meta_.precision_,
-            l.get_precision(), lib::is_oracle_mode(), l.get_collation_type(),
-            has_lob_header);
+          if (is_reverse_cmp_func) {
+            // hash table use self as left, so here right param is left for cmp func
+            funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+              r.get_type(), l.get_type(), r_datum_meta_.scale_, l.get_scale(), r_datum_meta_.precision_,
+              l.get_precision(), lib::is_oracle_mode(), l.get_collation_type(),
+              has_lob_header);
+          } else {
+            funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
+              l.get_type(), r.get_type(), l.get_scale(), r_datum_meta_.scale_, l.get_precision(),
+              r_datum_meta_.precision_, lib::is_oracle_mode(), l.get_collation_type(),
+              has_lob_header);
+          }
           CK(NULL != funcs[i]);
         }
       }
@@ -841,6 +868,7 @@ int ObExprInOrNotIn::eval_in_without_row_fallback(const ObExpr &expr,
   ObDatum *right = NULL;
   bool cnt_null = false;
   bool is_equal = false;
+  bool is_reverse_cmp = ctx.exec_ctx_.get_my_session()->get_exec_min_cluster_version() >= CLUSTER_VERSION_4_3_0_0;
   if (OB_FAIL(expr.args_[0]->eval(ctx, left))) {
     LOG_WARN("failed to eval left", K(ret));
   } else if (left->is_null()) {
@@ -857,7 +885,9 @@ int ObExprInOrNotIn::eval_in_without_row_fallback(const ObExpr &expr,
       } else if (right->is_null()) {
         cnt_null = true;
       } else {
-        if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*right, *left, cmp_ret))) {
+        if (!is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*left, *right, cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*right, *left, cmp_ret))) {
           LOG_WARN("failed to compare", K(ret));
         } else if (0 == cmp_ret) {
           is_equal = true;
@@ -880,6 +910,7 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("eval_batch_in start: batch mode", K(batch_size));
+  bool is_reverse_cmp = ctx.exec_ctx_.get_my_session()->get_exec_min_cluster_version() >= CLUSTER_VERSION_4_3_0_0;
   ObDatum *results = expr.locate_batch_datums(ctx);
   if (OB_ISNULL(results)) {
     ret = OB_ERR_UNEXPECTED;
@@ -958,7 +989,9 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
             for (int64_t j = 0; OB_SUCC(ret) && j < expr.inner_func_cnt_; ++j) {
               right = right_store[j];
               if (!left->is_null() && !right->is_null()) {
-                if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*right, *left, cmp_ret))) {
+                if (is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*right, *left, cmp_ret))) {
+                  LOG_WARN("failed to compare", K(ret));
+                } else if (!is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*left, *right, cmp_ret))) {
                   LOG_WARN("failed to compare", K(ret));
                 } else {
                   is_equal |= !(cmp_ret);
@@ -1796,6 +1829,7 @@ int ObExprInOrNotIn::calc_for_row_static_engine(const ObExpr &expr,
   ObDatum *right = NULL;
   bool set_cnt_null = false;
   bool set_cnt_equal = false;
+  bool is_reverse_cmp = ctx.exec_ctx_.get_my_session()->get_exec_min_cluster_version() >= CLUSTER_VERSION_4_3_0_0;
 #define RIGHT_ROW(i) expr.args_[1]->args_[i]
 #define RIGHT_ROW_ELE(i, j) expr.args_[1]->args_[i]->args_[j]
   for (int i = 0; OB_SUCC(ret) && ! set_cnt_equal && i < expr.args_[1]->arg_cnt_; ++i) {
@@ -1828,7 +1862,9 @@ int ObExprInOrNotIn::calc_for_row_static_engine(const ObExpr &expr,
           row_cnt_null = true;
         } else {
           int cmp_ret = 0;
-          if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[j])(*right, *left, cmp_ret))) {
+          if (is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[j])(*right, *left, cmp_ret))) {
+            LOG_WARN("failed to compare", K(ret));
+          } else if (!is_reverse_cmp && OB_FAIL(((DatumCmpFunc)expr.inner_functions_[j])(*left, *right, cmp_ret))) {
             LOG_WARN("failed to compare", K(ret));
           } else if (0 != cmp_ret) {
             //如果在向量的比较中，有明确的false，表明这个向量不成立，所以应该将has_null置为false
