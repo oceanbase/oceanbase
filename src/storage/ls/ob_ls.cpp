@@ -1323,7 +1323,8 @@ int ObLS::get_replica_status(ObReplicaStatus &replica_status)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is not valid", K(ret), K(migration_status));
   } else if (OB_MIGRATION_STATUS_NONE == migration_status
-      || OB_MIGRATION_STATUS_REBUILD == migration_status) {
+      || OB_MIGRATION_STATUS_REBUILD == migration_status
+      || OB_MIGRATION_STATUS_REBUILD_WAIT == migration_status) {
     replica_status = REPLICA_STATUS_NORMAL;
   } else {
     replica_status = REPLICA_STATUS_OFFLINE;
