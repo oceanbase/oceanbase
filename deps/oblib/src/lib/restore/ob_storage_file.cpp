@@ -45,9 +45,9 @@ int get_file_path(const common::ObString &uri, char *buf, const int64_t buf_size
   int ret = OB_SUCCESS;
   int64_t offset = strlen(OB_FILE_PREFIX);
 
-  if (uri.empty()) {
+  if (uri.empty() || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri));
+    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri), KP(buf));
   } else if (!uri.prefix_match(OB_FILE_PREFIX)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid uri", K(ret), K(uri));
