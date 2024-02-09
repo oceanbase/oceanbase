@@ -77,6 +77,11 @@ const ObTabletID& ObRelativeTable::get_tablet_id() const
   return tablet_id_;
 }
 
+const ObTabletHandle* ObRelativeTable::get_tablet_handle() const
+{
+  return tablet_iter_.get_tablet_handle_ptr();
+}
+
 int64_t ObRelativeTable::get_schema_version() const
 {
   return schema_param_->get_schema_version();
