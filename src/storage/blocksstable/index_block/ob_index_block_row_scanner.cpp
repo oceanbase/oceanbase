@@ -298,6 +298,12 @@ ObIndexBlockIterParam::ObIndexBlockIterParam()
 {
 }
 
+ObIndexBlockIterParam::ObIndexBlockIterParam(const ObSSTable *sstable, const ObTablet *tablet)
+  : sstable_(sstable),
+    tablet_(tablet)
+{
+}
+
 ObIndexBlockIterParam::~ObIndexBlockIterParam()
 {
   reset();
@@ -745,7 +751,8 @@ bool ObRAWIndexBlockRowIterator::is_in_border(bool is_reverse_scan, bool is_left
 int ObRAWIndexBlockRowIterator::get_index_row_count(const ObDatumRange &range,
                                                     const bool is_left_border,
                                                     const bool is_right_border,
-                                                    int64_t &index_row_count)
+                                                    int64_t &index_row_count,
+                                                    int64_t &data_row_count)
 {
   int ret = OB_SUCCESS;
   index_row_count = 0;
@@ -1589,13 +1596,14 @@ int ObIndexBlockRowScanner::get_index_row_count(int64_t &index_row_count) const
 {
   int ret = OB_SUCCESS;
   index_row_count = 0;
+  int64_t data_row_count = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
   } else if (OB_ISNULL(iter_) || OB_ISNULL(range_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is null", K(index_format_), K(ret), KP(iter_), KP(range_));
-  } else if (OB_FAIL(iter_->get_index_row_count(*range_, is_left_border_, is_right_border_, index_row_count))) {
+  } else if (OB_FAIL(iter_->get_index_row_count(*range_, is_left_border_, is_right_border_, index_row_count, data_row_count))) {
     LOG_WARN("get index row count failed", K(ret), KP(range_));
   }
  return ret;

@@ -29,6 +29,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/access/ob_sstable_row_multi_scanner.h"
+#include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
 #include "storage/tablet/ob_tablet_table_store.h"
 
 using namespace oceanbase::common;
@@ -100,6 +101,53 @@ int ObSSTableWrapper::get_sstable(ObSSTable *&table)
   return ret;
 }
 
+int ObSSTableWrapper::get_merge_row_cnt(const ObTableIterParam &iter_param, int64_t &row_cnt)
+{
+  int ret = OB_SUCCESS;
+  row_cnt = 0;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("wrapper not valid", K(ret), KPC(this));
+  } else if (!sstable_->is_ddl_merge_sstable()) {
+    row_cnt = sstable_->get_row_count();
+  } else {
+    ObArenaAllocator allocator("DDL_row_cnt", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    if (OB_UNLIKELY(!iter_param.is_valid()) || OB_ISNULL(iter_param.tablet_handle_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid iter param", K(ret), K(iter_param), K(iter_param.tablet_handle_));
+    } else {
+      ObMicroBlockData root_block;
+      ObIndexBlockIterParam index_iter_param(sstable_, iter_param.tablet_handle_->get_obj());
+      ObDatumRange range;
+      range.set_start_key(ObDatumRowkey::MIN_ROWKEY);
+      range.set_end_key(ObDatumRowkey::MAX_ROWKEY);
+      range.set_left_open();
+      range.set_right_open();
+      int64_t index_row_count = 0;
+      int64_t data_row_count = 0;
+
+
+      blocksstable::ObSSTable *cur_sstable = nullptr;
+      ObDDLMergeBlockRowIterator ddl_merge_iter;
+      if (OB_FAIL(get_sstable(cur_sstable))) {
+        LOG_WARN("fail to get sstable", K(ret), K(*this));
+      } else if (OB_FAIL((cur_sstable->get_index_tree_root(root_block)))) {
+        LOG_WARN("fail to get index tree root", K(ret), K(root_block), K(*this));
+      } else if (OB_FAIL(ddl_merge_iter.init(root_block, &(iter_param.tablet_handle_->get_obj()->get_rowkey_read_info().get_datum_utils()), &allocator, false/*is_reverse_scan*/, index_iter_param))) {
+        LOG_WARN("fail to init ddl_merge_iter", K(ret), K(root_block), K(index_iter_param));
+      } else if (OB_FAIL(ddl_merge_iter.get_index_row_count(range, false/*left border*/, false/*right border*/, index_row_count, data_row_count))) {
+        LOG_WARN("fail to get row cnt", K(ret), K(index_row_count), K(data_row_count));
+      } else if (INT64_MAX == data_row_count) {
+        // INT64_MAX means only one sstable without kv, just get from meta_cache
+        row_cnt = sstable_->get_row_count();
+      } else {
+        row_cnt = data_row_count;
+      }
+    }
+    LOG_INFO("get ddl merge row cnt", K(ret), K(row_cnt));
+  }
+  return ret;
+}
 
 /************************************* ObCOSSTableMeta *************************************/
 int64_t ObCOSSTableMeta::get_serialize_size() const
