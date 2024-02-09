@@ -6648,8 +6648,8 @@ def_table_schema(
 
 # 481 : __all_import_stmt_exec_history
 # 482 : __all_tablet_reorganize_history
-# 483 : __all_storage_ha_error_diagnose
-# 484 : __all_storage_ha_perf_diagnose
+# 483 : __all_storage_ha_error_diagnose_history
+# 484 : __all_storage_ha_perf_diagnose_history
 
 def_table_schema(
   owner = 'chensen.cs',
@@ -6720,13 +6720,13 @@ all_clone_job_history_def = dict(
 )
 def_table_schema(**all_clone_job_history_def)
 
-# 487 : __wr_system_event
-# 488 : __wr_event_name
-# 489 : __all_tenant_scheduler_running_job
-# 490 : __all_routine_privilege
-# 491 : __all_routine_privilege_history
-# 492 : __wr_sqlstat
-# 493 : __all_ncomp_dll
+# 487: __wr_system_event
+# 488: __wr_event_name
+# 489: __all_tenant_scheduler_running_job
+# 490: __all_routine_privilege
+# 491: __all_routine_privilege_history
+# 492: __wr_sqlstat
+# 493: __all_ncomp_dll
 
 def_table_schema(
   owner = 'zhenling.zzg',
@@ -6780,10 +6780,10 @@ def_table_schema(
   ],
 )
 
-# 496 : __all_detect_lock_info
-# 497 : __all_client_to_server_session_info
-# 498 :__all_transfer_partition_task
-# 499 :__all_transfer_partition_task_history
+# 496: __all_detect_lock_info
+# 497: __all_client_to_server_session_info
+# 498: __all_transfer_partition_task
+# 499: __all_transfer_partition_task_history
 
 def_table_schema(
   owner = 'chensen.cs',
@@ -14079,7 +14079,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 # 15425: __all_virtual_wr_sqlstat
 # 15426: __tenant_virtual_statname
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_keywords['__all_aux_stat']))
-# 15428: __all_virtual_sys_variable
+# 15428: __all_sys_variable
 # 15429: __all_virtual_sys_variable_default_value
 # 15430: __all_transfer_partition_task
 # 15431: __all_transfer_partition_task_history
@@ -30537,14 +30537,14 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 #21484: CDB_WR_EVENT_NAME
 #21485: DBA_OB_FORMAT_OUTLINES
 #21486: procs_priv
-#21487: GV$SQLSTAT
-#21488: V$SQLSTAT
+#21487: GV$OB_SQLSTAT
+#21488: V$OB_SQLSTAT
 #21489: DBA_WR_SQLSTAT
 #21490: CDB_WR_SQLSTAT
-#21491: GV$SESS_TIME_MODEL
-#21492: V$SESS_TIME_MODEL
-#21493: GV$SYS_TIME_MODEL
-#21494: V$SYS_TIME_MODEL
+#21491: GV$OB_SESS_TIME_MODEL
+#21492: V$OB_SESS_TIME_MODEL
+#21493: GV$OB_SYS_TIME_MODEL
+#21494: V$OB_SYS_TIME_MODEL
 #21495: DBA_WR_SYS_TIME_MODEL
 #21496: CDB_WR_SYS_TIME_MODEL
 
@@ -57612,12 +57612,14 @@ FROM SYS.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
-# 28203: GV$SQLSTAT
-# 28204: V$SQLSTAT
-# 28205: GV$SESS_TIME_MODEL
-# 28206: V$SESS_TIME_MODEL
-# 28207: GV$SYS_TIME_MODEL
-# 28208: V$SYS_TIME_MODEL
+
+# 28202: DBA_OB_FORMAT_OUTLINES
+# 28203: GV$OB_SQLSTAT
+# 28204: V$OB_SQLSTAT
+# 28205: GV$OB_SESS_TIME_MODEL
+# 28206: V$OB_SESS_TIME_MODEL
+# 28207: GV$OB_SYS_TIME_MODEL
+# 28208: V$OB_SYS_TIME_MODEL
 # 28209: V$STATNAME
 
 def_table_schema(
