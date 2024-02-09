@@ -574,6 +574,7 @@ int ObDDLSStableAllRangeIterator::locate_key(const ObDatumRowkey &rowkey)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid rowkey", K(ret), K(rowkey));
   } else {
+    index_macro_iter_.reset();
     ObDatumRange range;
     range.set_start_key(rowkey);
     range.set_end_key(rowkey);
@@ -601,6 +602,7 @@ int ObDDLSStableAllRangeIterator::locate_range(const ObDatumRange &range,
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = const_cast<ObSSTable *>(iter_param_.sstable_);
+  index_macro_iter_.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
