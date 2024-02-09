@@ -1084,7 +1084,7 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
           ParseNode *start_date = refresh_interval_node->children_[0];
           ParseNode *next_date = refresh_interval_node->children_[1];
           int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
-          int64_t start_time = current_time;
+          int64_t start_time = OB_INVALID_TIMESTAMP;
 
           if (OB_NOT_NULL(start_date)
               && (T_MV_REFRESH_START_EXPR == start_date->type_)
@@ -1102,26 +1102,30 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
             }
           }
 
-          if (OB_SUCC(ret)) {
-            refresh_info.start_time_.set_timestamp(start_time);
-          }
-
           if (OB_SUCC(ret) && OB_NOT_NULL(next_date)) {
-            int64_t next_time = 0;
+            int64_t next_time = OB_INVALID_TIMESTAMP;
             if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
                 *session_info_, *next_date, *allocator_, next_time))) {
               LOG_WARN("fail to resolve date expr to timestamp", KR(ret));
-            } else if (next_time <= current_time) {
+            } else if (next_time < current_time) {
               ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
               LOG_WARN("the parameter next date must evaluate to a time in the future",
                   KR(ret), K(current_time), K(next_time));
               LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
-            } else {
+            } else if (OB_INVALID_TIMESTAMP == start_time) {
+              start_time = next_time;
+            }
+
+            if (OB_SUCC(ret)) {
               ObString next_date_str(next_date->str_len_, next_date->str_value_);
               if (OB_FAIL(ob_write_string(*allocator_, next_date_str, refresh_info.next_time_expr_))) {
                 LOG_WARN("fail to write string", KR(ret));
               }
             }
+          }
+
+          if (OB_SUCC(ret)) {
+            refresh_info.start_time_.set_timestamp(start_time);
           }
         }
       }
