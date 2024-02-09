@@ -176,18 +176,12 @@ int ObAllVirtualTenantSnapshotLSReplicaHistory::get_tenant_snapshot_ls_replica_e
   int ret = OB_SUCCESS;
 
   ObSqlString sql;
-  int64_t user_tenant_id = MTL_ID();
+  uint64_t user_tenant_id = MTL_ID();
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "sql_proxy is null", KR(ret));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT tenant_id, snapshot_id, ls_id, svr_ip, svr_port, "
-                                    "gmt_create, gmt_modified, status, zone, unit_id, "
-                                    "begin_interval_scn, end_interval_scn, ls_meta_package "
-                                    "FROM %s "
-                                    "WHERE tenant_id = %lu",
-                                    OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TNAME,
-                                    user_tenant_id))) {
-    SERVER_LOG(WARN, "fail to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(construct_sql_(sql))) {
+    SERVER_LOG(WARN, "fail to construct sql", KR(ret), K(sql));
   } else if (OB_ISNULL(sql_res_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "sql_res_ is null", KR(ret));
@@ -196,6 +190,29 @@ int ObAllVirtualTenantSnapshotLSReplicaHistory::get_tenant_snapshot_ls_replica_e
   } else if (OB_ISNULL(result_ = sql_res_->get_result())) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "sql result is null", KR(ret));
+  }
+  return ret;
+}
+
+int ObAllVirtualTenantSnapshotLSReplicaHistory::construct_sql_(common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_tenant_id = MTL_ID();
+  if (OB_FAIL(sql.assign("SELECT"))) {
+    SERVER_LOG(WARN, "fail to assign sql", KR(ret));
+  }
+  for (ObTableSchema::const_column_iterator col = table_schema_->column_begin();
+      OB_SUCC(ret) && col != table_schema_->column_end(); ++col) {
+    if(OB_FAIL(sql.append_fmt("%s %s",
+        col == table_schema_->column_begin() ? "" : ",",
+        (*col)->get_column_name()))) {
+      SERVER_LOG(WARN, "fail to append sql", KR(ret));
+    }
+  }
+  if (FAILEDx(sql.append_fmt(" FROM %s WHERE tenant_id = %lu",
+                              OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TNAME,
+                              user_tenant_id))) {
+    SERVER_LOG(WARN, "fail to append sql", KR(ret));
   }
   return ret;
 }
