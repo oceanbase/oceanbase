@@ -2379,14 +2379,14 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
     } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
       LOG_WARN("fail to push macro id into print array", K(tmp_ret));
     } else if (MAX_PRINT_COUNT == print_arr.size()) {
-      FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+      FLOG_INFO("increase tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
       print_arr.reuse();
     }
 #endif
   }
 #ifndef OB_BUILD_RPM
   if (0 != print_arr.count()) {
-    FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+    FLOG_INFO("increase tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
     print_arr.reuse();
   }
 #endif
@@ -2415,14 +2415,14 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
         } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
         } else if (MAX_PRINT_COUNT == print_arr.size()) {
-          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
           print_arr.reuse();
         }
 #endif
       }
 #ifndef OB_BUILD_RPM
       if (0 != print_arr.count()) {
-        FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+        FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
         print_arr.reuse();
       }
 #endif
@@ -2628,7 +2628,7 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
         if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
         } else if (MAX_PRINT_COUNT == print_arr.size()) {
-          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
           print_arr.reuse();
         }
 #endif
@@ -2637,7 +2637,7 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
   }
 #ifndef OB_BUILD_RPM
   if (0 != print_arr.size()) {
-    FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+    FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
     print_arr.reuse();
   }
 #endif
