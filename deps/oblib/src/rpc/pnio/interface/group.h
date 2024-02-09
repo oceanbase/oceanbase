@@ -93,6 +93,7 @@ PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
 void pn_release(pn_comm_t* pn_comm);
+void pn_print_diag_info(pn_comm_t* pn_comm);
 
 #define PNIO_OK                     0
 #define PNIO_ERROR                  (-1)

@@ -203,6 +203,7 @@ public:
     const int64_t start_ts = common::ObTimeUtility::current_time();
     ObRpcMemPool* pool = NULL;
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
     ObTimeGuard timeguard("poc_rpc_post", 10 * 1000);
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
     if (OB_LS_FETCH_LOG2 == pcode) {
@@ -240,7 +241,8 @@ public:
         cb->gtid_ = (pnio_group_id<<32) + thread_id;
         pkt_id_ptr = &cb->pkt_id_;
       }
-      timeguard.click();
+      IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
+      timeguard.click(rpc_timeguard_str);
       if (OB_SUCC(ret)) {
         sockaddr_in sock_addr;
         const pn_pkt_t pkt = {
