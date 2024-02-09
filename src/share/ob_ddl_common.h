@@ -363,11 +363,6 @@ public:
                               const int64_t table_id,
                               int64_t &tablet_count);
 
-  // get all tablets of a table by table_schema
-  static int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids);
-
   // check if the major sstable of a table are exist in all needed replicas
   static int check_major_sstable_complete(
       const uint64_t data_table_id,
@@ -673,7 +668,7 @@ private:
       const uint64_t index_table_id,
       const uint64_t ddl_task_id,
       const int64_t execution_id,
-      ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &tablet_ids,
       bool &tablet_checksum_status);
 
 };
