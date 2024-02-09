@@ -54,7 +54,8 @@ struct ObQueryFlag
 #define OBSF_BIT_IS_NEW_QUERY_RANGE   1
 #define OBSF_BIT_ENABLE_RICH_FORMAT   1
 #define OBSF_BIT_IS_MDS_QUERY         1
-#define OBSF_BIT_RESERVED             27
+#define OBSF_BIT_IS_SELECT_FOLLOWER   1
+#define OBSF_BIT_RESERVED             26
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -82,6 +83,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_FOR_FOREIGN_KEY_CHECK = (0x1UL << OBSF_BIT_FOREIGN_KEY_CHECK) - 1;
   static const uint64_t OBSF_MASK_IS_NEW_QUERY_RANGE = (0x1UL << OBSF_BIT_IS_NEW_QUERY_RANGE) - 1;
   static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
+  static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
 
   enum ScanOrder
   {
@@ -146,6 +148,7 @@ struct ObQueryFlag
       uint64_t for_foreign_key_check_ : OBSF_BIT_FOREIGN_KEY_CHECK;
       uint64_t is_new_query_range_ : OBSF_BIT_IS_NEW_QUERY_RANGE;
       uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
+      uint64_t is_select_follower_ : OBSF_BIT_IS_SELECT_FOLLOWER;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -234,6 +237,8 @@ struct ObQueryFlag
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
   inline bool is_mds_query() const { return is_mds_query_; }
+  inline void set_is_select_follower() { is_select_follower_ = true; }
+  inline bool is_select_follower() const { return is_select_follower_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -269,6 +274,7 @@ struct ObQueryFlag
                "enable_rich_format", enable_rich_format_,
                "is_for_foreign_key_check", for_foreign_key_check_,
                "is_mds_query", is_mds_query_,
+               "is_select_follower", is_select_follower_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };
