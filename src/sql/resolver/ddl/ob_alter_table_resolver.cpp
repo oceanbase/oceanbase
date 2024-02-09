@@ -272,6 +272,8 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(schema_guard->get_database_id(alter_table_stmt->get_tenant_id(), database_name, database_id))) {
               LOG_WARN("fail to get database id", K(ret), K(alter_table_stmt->get_tenant_id()), K(database_name));
+            } else if (OB_INVALID_ID == database_id) {
+              // do nothing
             } else if (OB_FAIL(schema_checker_->get_mock_fk_parent_table_with_name(
                 session_info_->get_effective_tenant_id(), database_id,
                 new_table_name, mock_parent_table_schema))) {
