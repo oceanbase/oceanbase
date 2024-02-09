@@ -38,6 +38,11 @@ class ObNewRow;
 
 namespace table
 {
+
+#define OB_TABLE_OPTION_DEFAULT INT64_C(0)
+#define OB_TABLE_OPTION_RETURNING_ROWKEY (INT64_C(1) << 0)
+#define OB_TABLE_OPTION_USE_PUT (INT64_C(1) << 1)
+
 using common::ObString;
 using common::ObRowkey;
 using common::ObObj;
@@ -469,21 +474,27 @@ public:
   ObIRetryPolicy* retry_policy() { return retry_policy_; }
   void set_returning_affected_rows(bool returning) { returning_affected_rows_ = returning; }
   bool returning_affected_rows() const { return returning_affected_rows_; }
-  void set_returning_rowkey(bool returning) { returning_rowkey_ = returning; }
-  bool returning_rowkey() const { return returning_rowkey_; }
+  void set_returning_rowkey(bool returning)
+  {
+    if (returning) {
+      option_flag_ |= OB_TABLE_OPTION_RETURNING_ROWKEY;
+    }
+  }
+  bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
   void set_returning_affected_entity(bool returning) { returning_affected_entity_ = returning; }
   bool returning_affected_entity() const { return returning_affected_entity_; }
   void set_batch_operation_as_atomic(bool atomic) { batch_operation_as_atomic_ = atomic; }
   bool batch_operation_as_atomic() const { return batch_operation_as_atomic_; }
   void set_binlog_row_image_type(ObBinlogRowImageType type) { binlog_row_image_type_ = type; }
   ObBinlogRowImageType binlog_row_image_type() const { return binlog_row_image_type_; }
+  uint8_t get_option_flag() const { return option_flag_; }
 private:
   ObTableConsistencyLevel consistency_level_;
   int64_t server_timeout_us_;
   int64_t max_execution_time_us_;
   ObIRetryPolicy *retry_policy_;
   bool returning_affected_rows_;  // default: false
-  bool returning_rowkey_;         // default: false
+  uint8_t option_flag_; // default: 0
   bool returning_affected_entity_;  // default: false
   bool batch_operation_as_atomic_;  // default: false
   // int route_policy

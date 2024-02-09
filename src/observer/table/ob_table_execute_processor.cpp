@@ -95,11 +95,11 @@ int ObTableApiExecuteP::check_arg2() const
 
   if (ObTableOperationType::Type::APPEND != op_type &&
       ObTableOperationType::Type::INCREMENT != op_type) {
-    if (arg_.returning_rowkey_ || arg_.returning_affected_entity_) {
+    if (arg_.returning_rowkey() || arg_.returning_affected_entity()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some options not supported yet", K(ret),
-              "returning_rowkey", arg_.returning_rowkey_,
-              "returning_affected_entity", arg_.returning_affected_entity_,
+              "returning_rowkey", arg_.returning_rowkey(),
+              "returning_affected_entity", arg_.returning_affected_entity(),
               "operation_type", op_type);
     }
   }
@@ -127,7 +127,7 @@ int ObTableApiExecuteP::init_tb_ctx()
     switch(op_type) {
       case ObTableOperationType::INSERT: {
         if (tb_ctx_.is_ttl_table()) {
-          if (OB_FAIL(tb_ctx_.init_insert_up())) {
+          if (OB_FAIL(tb_ctx_.init_insert_up(arg_.use_put()))) {
             LOG_WARN("fail to init insert up ctx", K(ret), K(tb_ctx_));
           }
         } else {
@@ -156,21 +156,21 @@ int ObTableApiExecuteP::init_tb_ctx()
         break;
       }
       case ObTableOperationType::INSERT_OR_UPDATE: {
-        if (OB_FAIL(tb_ctx_.init_insert_up())) {
+        if (OB_FAIL(tb_ctx_.init_insert_up(arg_.use_put()))) {
           LOG_WARN("fail to init insert up ctx", K(ret), K(tb_ctx_));
         }
         break;
       }
       case ObTableOperationType::APPEND: {
-        if (OB_FAIL(tb_ctx_.init_append(arg_.returning_affected_entity_,
-                                        arg_.returning_rowkey_))) {
+        if (OB_FAIL(tb_ctx_.init_append(arg_.returning_affected_entity(),
+                                        arg_.returning_rowkey()))) {
           LOG_WARN("fail to init append ctx", K(ret), K(tb_ctx_));
         }
         break;
       }
       case ObTableOperationType::INCREMENT: {
-        if (OB_FAIL(tb_ctx_.init_increment(arg_.returning_affected_entity_,
-                                           arg_.returning_rowkey_))) {
+        if (OB_FAIL(tb_ctx_.init_increment(arg_.returning_affected_entity(),
+                                           arg_.returning_rowkey()))) {
           LOG_WARN("fail to init increment ctx", K(ret), K(tb_ctx_));
         }
         break;
@@ -316,7 +316,7 @@ uint64_t ObTableApiExecuteP::get_request_checksum()
   uint64_t checksum = 0;
   checksum = ob_crc64(checksum, arg_.table_name_.ptr(), arg_.table_name_.length());
   checksum = ob_crc64(checksum, &arg_.consistency_level_, sizeof(arg_.consistency_level_));
-  checksum = ob_crc64(checksum, &arg_.returning_rowkey_, sizeof(arg_.returning_rowkey_));
+  checksum = ob_crc64(checksum, &arg_.option_flag_, sizeof(arg_.option_flag_));
   checksum = ob_crc64(checksum, &arg_.returning_affected_entity_, sizeof(arg_.returning_affected_entity_));
   checksum = ob_crc64(checksum, &arg_.returning_affected_rows_, sizeof(arg_.returning_affected_rows_));
   checksum = ob_crc64(checksum, &arg_.binlog_row_image_type_, sizeof(arg_.binlog_row_image_type_));

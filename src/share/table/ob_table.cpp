@@ -542,7 +542,7 @@ ObTableRequestOptions::ObTableRequestOptions()
      max_execution_time_us_(10*1000*1000),
      retry_policy_(NULL),
      returning_affected_rows_(false),
-     returning_rowkey_(false),
+     option_flag_(OB_TABLE_OPTION_DEFAULT),
      returning_affected_entity_(false),
      batch_operation_as_atomic_(false),
      binlog_row_image_type_(ObBinlogRowImageType::FULL)

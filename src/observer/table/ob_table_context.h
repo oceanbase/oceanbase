@@ -151,6 +151,7 @@ public:
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     is_ttl_table_ = false;
     is_skip_scan_ = false;
+    is_client_set_put_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -184,7 +185,8 @@ public:
                K_(entity_type),
                K_(cur_cluster_version),
                K_(is_ttl_table),
-               K_(is_skip_scan));
+               K_(is_skip_scan),
+               K_(is_client_set_put));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -303,6 +305,8 @@ public:
   // for delete
   OB_INLINE void set_skip_scan(bool skip_scan) { is_skip_scan_ = skip_scan; }
   OB_INLINE bool is_skip_scan() { return is_skip_scan_; }
+  // for put
+  OB_INLINE void set_client_use_put(bool is_client_use_put) { is_client_set_put_ = is_client_use_put; }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -327,7 +331,7 @@ public:
   // 初始化replace相关
   int init_replace();
   // 初始化insert_up相关
-  int init_insert_up();
+  int init_insert_up(bool is_client_set_put);
   // 初始化get相关
   int init_get();
   // 初始化increment相关
@@ -477,6 +481,8 @@ private:
   bool is_ttl_table_;
   // for delete skip scan
   bool is_skip_scan_;
+  // for put
+  bool is_client_set_put_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

@@ -184,7 +184,7 @@ int ObTableQueryAndMutateP::init_tb_ctx(table::ObTableCtx &ctx,
           break;
         }
         case ObTableOperationType::INSERT_OR_UPDATE: {
-          if (OB_FAIL(ctx.init_insert_up())) {
+          if (OB_FAIL(ctx.init_insert_up(false))) {
             LOG_WARN("fail to init insert up ctx", K(ret), K(ctx));
           }
           break;
