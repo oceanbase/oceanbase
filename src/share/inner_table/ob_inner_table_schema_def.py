@@ -12459,7 +12459,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_column_checksum_error_info',
   keywords = all_def_keywords['__all_column_checksum_error_info']))
 
-# 13331: __all_virtual_kvcache_handle_leak_info # abandoned in 4.0
+# 12331: __all_virtual_kvcache_handle_leak_info
 # 12332: abandoned
 # 12333: abandoned
 
@@ -14158,7 +14158,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
 #   * 基表表名占位：# 15009: __all_virtual_sql_audit
-#   * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT_ORA
+#   * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
 ################################################################################
 # End of Oracle Virtual Table(15000,20000]
 ################################################################################
