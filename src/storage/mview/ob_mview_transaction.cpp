@@ -63,6 +63,7 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
       autocommit_ = autocommit;
       session_info->set_inner_session();
       session_info->set_autocommit(false);
+      session_info_->get_ddl_info().set_refreshing_mview(true);
     }
   }
   return ret;
@@ -78,6 +79,7 @@ int ObMViewTransaction::ObSessionParamSaved::restore()
       session_info_->set_user_session();
     }
     session_info_->set_autocommit(autocommit_);
+    session_info_->get_ddl_info().set_refreshing_mview(false);
     session_info_ = nullptr;
   }
   return ret;
