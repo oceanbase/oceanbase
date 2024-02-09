@@ -834,6 +834,16 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
   return ret;
 }
 
+bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
+    const ObMigrationStatus &cur_status)
+{
+  bool allow_gc = false;
+  if (check_migration_status_is_fail_(cur_status)) {
+    allow_gc = true;
+  }
+  return allow_gc;
+}
+
 /******************ObMigrationOpArg*********************/
 ObMigrationOpArg::ObMigrationOpArg()
   : ls_id_(),

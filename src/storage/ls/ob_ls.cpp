@@ -458,7 +458,7 @@ bool ObLS::is_need_gc() const
     bool_ret = true;
   } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
     LOG_WARN("get migration status failed", K(ret), K(ls_meta_.ls_id_));
-  } else if (ObMigrationStatusHelper::check_allow_gc_abandoned_ls(migration_status)) {
+  } else if (ObMigrationStatusHelper::can_gc_ls_without_check_dependency(migration_status)) {
     bool_ret = true;
   }
   if (bool_ret) {
@@ -2510,7 +2510,6 @@ int ObLS::set_ls_migration_gc(
   } else if (OB_FAIL(ls_meta_.set_migration_status(change_status, write_slog))) {
     LOG_WARN("failed to set migration status", K(ret), K(change_status));
   } else {
-    ls_tablet_svr_.disable_to_read();
     allow_gc = true;
   }
   return ret;
