@@ -776,7 +776,9 @@ public:
   bool is_exec_complete_without_lock(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
 private:
   int transfer_op_log_cb_(share::SCN op_scn, NotifyType op_type);
-  int update_tx_data_end_scn_(const share::SCN end_scn, const share::SCN transfer_scn);
+  int update_tx_data_start_and_end_scn_(const share::SCN start_scn,
+                                        const share::SCN end_scn,
+                                        const share::SCN transfer_scn);
 
 protected:
   virtual int post_msg_(const share::ObLSID&receiver, ObTxMsg &msg);

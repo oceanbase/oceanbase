@@ -1481,7 +1481,6 @@ int ObPartTransCtx::check_rs_scheduler_is_alive_(bool &is_alive)
   int64_t trace_time = 0;
   int64_t cur_time = ObTimeUtility::current_time();
   share::ObAliveServerTracer *server_tracer = NULL;
-
   is_alive = true;
   if (OB_ISNULL(trans_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -9198,6 +9197,9 @@ int ObPartTransCtx::collect_tx_ctx(const ObLSID dest_ls_id,
   return ret;
 }
 
+// NB: This function can report a retryable error because the outer while loop
+// will ignore the error and continuously retry until it succeeds within the
+// callback function.
 int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
                                const ObTxCtxMoveArg &arg,
                                const bool is_new_created)
@@ -9231,7 +9233,10 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         ret = OB_OP_NOT_ALLOW;
         TRANS_LOG(WARN, "tx ctx has end", KR(ret), KPC(this));
       }
-    } else if (epoch_ != arg.epoch_ && exec_info_.next_log_entry_no_ == 0 && get_redo_log_no_() == 0 && busy_cbs_.is_empty()) {
+    } else if (epoch_ != arg.epoch_ // ctx created by itself
+               && exec_info_.next_log_entry_no_ == 0 // no log submitted
+               && get_redo_log_no_() == 0 // no log submitted
+               && busy_cbs_.is_empty()) { // no log submitting
       // promise tx log before move log
       if (exec_info_.state_ == ObTxState::INIT) {
         // promise redo log before move log
@@ -9282,9 +9287,22 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       if (arg.last_seq_no_ > last_scn_) {
         last_scn_.atomic_store(arg.last_seq_no_);
       }
-      if (!ctx_tx_data_.get_start_log_ts().is_valid() || arg.tx_start_scn_ < ctx_tx_data_.get_start_log_ts()) {
-        // TODO fix start_scn back
+
+      // start scn in dest ctx is not valid while start scn in previous dest
+      // ctx(has been released) or src ctx is valid, so we need change it
+      if ((!ctx_tx_data_.get_start_log_ts().is_valid() &&
+           (arg.tx_start_scn_.is_valid()))
+          ||
+          // start scn in dest ctx is valid and start scn in src ctx is smaller
+          // than it,, so we need change it
+          (ctx_tx_data_.get_start_log_ts().is_valid() &&
+           arg.tx_start_scn_.is_valid() &&
+           arg.tx_start_scn_ < ctx_tx_data_.get_start_log_ts())) {
         if (!ctx_tx_data_.is_read_only()) {
+          // for merging txn where the start_scn is smaller or refers to a
+          // previously existing txn, we need to replace it with the smallest
+          // start_scn to ensure the proper recycling mechanism is in place.
+          // Otherwise the upper trans version will be calculated incorrectly
           ctx_tx_data_.set_start_log_ts(arg.tx_start_scn_);
         }
       }
@@ -9326,7 +9344,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     // log sequence move_tx --> transfer_in --> commit
     // so when recycle tx_data on dest_ls, we can see transfer in tablet, not to recycle tx_data which end_scn > transfer_scn
     if (OB_SUCC(ret) && exec_info_.state_ >= ObTxState::COMMIT) {
-      if (OB_FAIL(update_tx_data_end_scn_(move_tx_param.op_scn_, move_tx_param.transfer_scn_))) {
+      if (OB_FAIL(update_tx_data_start_and_end_scn_(arg.tx_start_scn_,
+                                                    move_tx_param.op_scn_,
+                                                    move_tx_param.transfer_scn_))) {
         TRANS_LOG(WARN, "update tx data failed", KR(ret), KPC(this));
       }
     }
@@ -9422,7 +9442,9 @@ bool ObPartTransCtx::is_exec_complete_without_lock(ObLSID ls_id,
   return is_complete;
 }
 
-int ObPartTransCtx::update_tx_data_end_scn_(const SCN end_scn, const SCN transfer_scn)
+int ObPartTransCtx::update_tx_data_start_and_end_scn_(const SCN start_scn,
+                                                      const SCN end_scn,
+                                                      const SCN transfer_scn)
 {
   int ret = OB_SUCCESS;
   ObTxTable *tx_table = NULL;
@@ -9438,6 +9460,14 @@ int ObPartTransCtx::update_tx_data_end_scn_(const SCN end_scn, const SCN transfe
     TRANS_LOG(WARN, "copy tx data failed", KR(ret), KPC(this));
   } else {
     ObTxData *tx_data = tmp_tx_data_guard.tx_data();
+    if (start_scn.is_valid()) {
+      share::SCN current_start_scn = get_start_log_ts();
+      if (current_start_scn.is_valid()) {
+        tx_data->start_scn_.atomic_store(MIN(start_scn, current_start_scn));
+      } else {
+        tx_data->start_scn_.atomic_store(start_scn);
+      }
+    }
     tx_data->end_scn_.atomic_store(end_scn);
     if (OB_FAIL(tx_table->insert(tx_data))) {
       TRANS_LOG(WARN, "insert tx data failed", KR(ret), KPC(this));
