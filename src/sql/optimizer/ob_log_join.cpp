@@ -1361,6 +1361,8 @@ int ObLogJoin::check_and_set_use_batch()
       can_use_batch_nlj_ = false;
     } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
       LOG_WARN("failed to check if disable batch", K(ret));
+    } else if (can_use_batch_nlj_ && OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, can_use_batch_nlj_))) {
+      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
     }
   }
   // set use batch
@@ -1371,6 +1373,7 @@ int ObLogJoin::check_and_set_use_batch()
   }
   return ret;
 }
+
 
 int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
 {

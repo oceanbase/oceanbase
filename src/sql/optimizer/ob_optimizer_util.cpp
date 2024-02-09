@@ -27,6 +27,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_order_perserving_encoder.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
+#include "sql/optimizer/ob_log_join.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -9488,4 +9489,29 @@ bool ObOptimizerUtil::find_superset(const ObRelIds &rel_ids,
     bret = (single_table_ids.at(i).is_superset(rel_ids));
   }
   return bret;
+}
+
+int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator* parent = nullptr;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Current operator node is null", K(ret));
+  } else if (OB_ISNULL(parent = op->get_parent())) {
+    // do nothing
+  } else if (can_use_batch_nlj) {
+    if (parent->get_type() == log_op_def::LOG_SUBPLAN_FILTER) {
+      can_use_batch_nlj = false;
+    } else if (parent->get_type() == log_op_def::LOG_JOIN) {
+      ObLogJoin *join = static_cast<ObLogJoin*>(parent);
+      if (IS_SEMI_ANTI_JOIN(join->get_join_type())) {
+        can_use_batch_nlj = false;
+      }
+    }
+    if (can_use_batch_nlj && OB_FAIL(SMART_CALL(check_ancestor_node_support_skip_scan(parent, can_use_batch_nlj)))) {
+      LOG_WARN("failed to check parent node can use batch NLJ", K(ret));
+    }
+  }
+  return ret;
 }

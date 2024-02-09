@@ -562,6 +562,10 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       }
     }
   }
+  if (OB_SUCC(ret) && enable_das_group_rescan_ &&
+      OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, enable_das_group_rescan_))) {
+      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
+  }
   // check if exec params contain sub_query
   for (int64_t i = 0; OB_SUCC(ret) && enable_das_group_rescan_ && i < exec_params_.count(); i++) {
     const ObExecParamRawExpr *exec_param = exec_params_.at(i);
