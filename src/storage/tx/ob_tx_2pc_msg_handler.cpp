@@ -703,6 +703,15 @@ int ObPartTransCtx::handle_tx_2pc_prepare_resp(const Ob2pcPrepareRespMsg &msg)
 
   if (OB_NOT_INIT == ERRSIM_DELAY_TX_COMMIT) {
     return ret;
+  } else if (ERRSIM_DELAY_TX_COMMIT < int(-9999)) {
+    // reject trans_id and tenant id to contorl trans sate
+    ret = process_errsim_for_standby_read_(int(ERRSIM_DELAY_TX_COMMIT),
+                                           OB_NOT_INIT);
+    if (OB_FAIL(ret)) {
+      return ret;
+      TRANS_LOG(INFO, "reject delay tx commit",
+                K(ret), K(ERRSIM_DELAY_TX_COMMIT));
+    }
   }
 
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
@@ -850,6 +859,15 @@ int ObPartTransCtx::handle_tx_2pc_pre_commit_req(const Ob2pcPreCommitReqMsg &msg
 
   if (OB_NOT_SUPPORTED == ERRSIM_DELAY_TX_COMMIT) {
     return ret;
+  } else if (ERRSIM_DELAY_TX_COMMIT < int(-9999)) {
+    // reject trans_id and tenant id to contorl trans sate
+    ret = process_errsim_for_standby_read_(int(ERRSIM_DELAY_TX_COMMIT),
+                                           OB_NOT_SUPPORTED);
+    if (OB_FAIL(ret)) {
+      return ret;
+      TRANS_LOG(INFO, "reject delay tx commit when pre commit",
+                K(ret), K(ERRSIM_DELAY_TX_COMMIT));
+    }
   }
 
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
