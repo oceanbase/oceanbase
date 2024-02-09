@@ -66,7 +66,6 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
   } else {
     ObObj *cells = cur_row_.cells_;
     const int64_t col_count = output_column_ids_.count();
-    int64_t current_time = common::ObTimeUtility::current_time();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       const uint64_t col_id = output_column_ids_.at(i);
@@ -131,25 +130,12 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
         }
         case LOAD_TIME: {//当前导入数据已经花费的秒数
           int64_t current_time = common::ObTimeUtility::current_time();
-          cells[i].set_int((current_time - job_status->start_time_) / 1000000);
+          cells[i].set_int((current_time - job_status->start_time_) / 1000000L);
           break;
         }
         case ESTIMATED_REMAINING_TIME: {
-          int64_t load_time = current_time - job_status->start_time_;
-          int64_t estimated_remaining_time = 0;
-          // in load data local infile, the total_bytes_ is 0 or -1
-          if ((job_status->parsed_bytes_ != 0) && OB_LIKELY(load_time != 0) && job_status->total_bytes_ > 0) {
-            double speed = (double)job_status->parsed_bytes_ / load_time;
-            if (OB_LIKELY(speed != 0)) {
-              int64_t remain_bytes = job_status->total_bytes_ - job_status->parsed_bytes_;
-              estimated_remaining_time = (int64_t)(remain_bytes / speed / 1000000);
-            }
-          }
-          if (estimated_remaining_time < 0) {
-            cells[i].set_int(INT64_MAX);
-          } else {
-            cells[i].set_int(estimated_remaining_time);
-          }
+          int64_t estimated_remaining_time = calc_remaining_time(*job_status);
+          cells[i].set_int(estimated_remaining_time);
           break;
         }
         case TOTAL_BYTES: {
@@ -251,6 +237,31 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
   }
 
   return ret;
+}
+
+int64_t ObAllVirtualLoadDataStat::calc_remaining_time(
+    sql::ObLoadDataStat &job_status) const
+{
+  int64_t current_time = common::ObTimeUtility::current_time();
+  int64_t load_time = (current_time - job_status.start_time_) / 1000000L;
+  int64_t remaining_time = 0;
+  // in load data local infile, the total_bytes_ is 0 or -1
+  if ((load_time > 0)
+      && (job_status.parsed_bytes_ > 0)
+      && (job_status.total_bytes_ > 0)) {
+    const double min_speed = 1.0; // bytes per second
+    double speed = (double)job_status.parsed_bytes_ / load_time;
+    if (OB_LIKELY(speed >= min_speed)) {
+      int64_t remain_bytes = job_status.total_bytes_ - job_status.parsed_bytes_;
+      remaining_time = (int64_t)(remain_bytes / speed);
+      if (remaining_time < 0) {
+        remaining_time = INT64_MAX;
+      }
+    } else {
+      remaining_time = INT64_MAX;
+    }
+  }
+  return remaining_time;
 }
 
 } // namespace observer
