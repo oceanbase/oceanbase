@@ -568,6 +568,30 @@ int ObTabletDDLKvMgr::check_has_effective_ddl_kv(bool &has_ddl_kv)
   return ret;
 }
 
+int ObTabletDDLKvMgr::check_has_freezed_ddl_kv(bool &has_freezed_ddl_kv)
+{
+  int ret = OB_SUCCESS;
+  has_freezed_ddl_kv = false;
+  ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else {
+    for (int64_t pos = head_; !has_freezed_ddl_kv && OB_SUCC(ret) && pos < tail_; ++pos) {
+      const int64_t idx = get_idx(pos);
+      ObDDLKVHandle &cur_kv_handle = ddl_kv_handles_[idx];
+      ObDDLKV *cur_kv = cur_kv_handle.get_obj();
+      if (OB_ISNULL(cur_kv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(cur_kv), K(pos), K(head_), K(tail_));
+      } else if (cur_kv->is_freezed()) {
+        has_freezed_ddl_kv = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletDDLKvMgr::alloc_ddl_kv(
     const share::SCN &start_scn,
     const int64_t snapshot_version,

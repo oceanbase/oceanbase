@@ -2155,7 +2155,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), KPC(this));
   } else if (OB_FAIL(commit(*tablet_handle.get_obj(), start_scn, commit_scn,
-      sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, sqc_build_ctx_.build_param_.runtime_only_param_.task_id_))) {
+      sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, sqc_build_ctx_.build_param_.runtime_only_param_.task_id_, false/*is replay*/))) {
     LOG_WARN("failed to do ddl kv commit", K(ret), KPC(this));
   }
 
@@ -2163,11 +2163,11 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
   } else if (sstable_already_created || is_delay_build_major) {
     LOG_INFO("sstable had already created, skip waiting for major generated and reporting chksum", K(start_scn), K(commit_scn),
         K(sstable_already_created), K(is_delay_build_major));
-  } else if (OB_FAIL(schedule_merge_task(start_scn, commit_scn, true/*wait_major_generate*/))) {
+  } else if (OB_FAIL(schedule_merge_task(start_scn, commit_scn, true/*wait_major_generate*/, false/*is_replay*/))) {
     LOG_WARN("schedule merge task and wait real major generate", K(ret),
         K(is_remote_write), K(sstable_already_created), K(start_scn), K(commit_scn));
   } else if (lob_mgr_handle_.is_valid() &&
-      OB_FAIL(lob_mgr_handle_.get_full_obj()->schedule_merge_task(start_scn, commit_scn, true/*wait_major_generate*/))) {
+      OB_FAIL(lob_mgr_handle_.get_full_obj()->schedule_merge_task(start_scn, commit_scn, true/*wait_major_generate*/, false/*is_replay*/))) {
     LOG_WARN("schedule merge task and wait real major generate for lob failed", K(ret),
         K(is_remote_write), K(sstable_already_created), K(start_scn), K(commit_scn));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id_, new_tablet_handle))) {
@@ -2403,7 +2403,8 @@ int ObTabletFullDirectLoadMgr::commit(
     const share::SCN &start_scn,
     const share::SCN &commit_scn,
     const uint64_t table_id,
-    const int64_t ddl_task_id)
+    const int64_t ddl_task_id,
+    const bool is_replay)
 {
   int ret = OB_SUCCESS;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
@@ -2435,7 +2436,7 @@ int ObTabletFullDirectLoadMgr::commit(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(schedule_merge_task(start_scn, commit_scn, false/*wait_major_generate*/))) {
+      if (OB_FAIL(schedule_merge_task(start_scn, commit_scn, false/*wait_major_generate*/, is_replay))) {
         LOG_WARN("schedule major merge task failed", K(ret));
       }
     }
@@ -2456,22 +2457,26 @@ int ObTabletFullDirectLoadMgr::commit(
       LOG_ERROR("ls should not be null", K(ret));
     } else if (OB_FAIL(ls->get_tablet(lob_tablet_id, lob_tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(lob_tablet_id));
-    } else if (OB_FAIL(lob_mgr_handle_.get_full_obj()->commit(*lob_tablet_handle.get_obj(), start_scn, commit_scn))) {
+    } else if (OB_FAIL(lob_mgr_handle_.get_full_obj()->commit(*lob_tablet_handle.get_obj(), start_scn, commit_scn, table_id, ddl_task_id, is_replay))) {
       LOG_WARN("commit for lob failed", K(ret), K(start_scn), K(commit_scn));
     }
   }
   return ret;
 }
 
-int ObTabletFullDirectLoadMgr::schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated)
+int ObTabletFullDirectLoadMgr::schedule_merge_task(
+    const share::SCN &start_scn,
+    const share::SCN &commit_scn,
+    const bool wait_major_generated,
+    const bool is_replay)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !commit_scn.is_valid_and_not_min())) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !commit_scn.is_valid_and_not_min() || (is_replay && wait_major_generated))) {
     ret = OB_ERR_SYS;
-    LOG_WARN("unknown start scn or commit snc", K(ret), K(start_scn), K(commit_scn));
+    LOG_WARN("unknown start scn or commit snc", K(ret), K(start_scn), K(commit_scn), K(is_replay), K(wait_major_generated));
   } else {
     const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
     while (OB_SUCC(ret)) {
@@ -2492,6 +2497,9 @@ int ObTabletFullDirectLoadMgr::schedule_merge_task(const share::SCN &start_scn, 
             LOG_WARN("schedule ddl merge dag failed", K(ret), K(param));
           } else {
             ret = OB_SUCCESS;
+            if (is_replay) {
+              break;
+            }
           }
         } else if (!wait_major_generated) {
           // schedule successfully and no need to wait physical major generates.

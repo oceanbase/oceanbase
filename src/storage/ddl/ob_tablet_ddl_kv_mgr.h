@@ -55,6 +55,7 @@ public:
       const share::SCN &freeze_scn = share::SCN::min_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
   int release_ddl_kvs(const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
+  int check_has_freezed_ddl_kv(bool &has_freezed_ddl_kv);
   int64_t get_count();
   void set_ddl_kv(const int64_t idx, ObDDLKVHandle &kv_handle); //for unittest
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
