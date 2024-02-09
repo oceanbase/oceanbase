@@ -9259,9 +9259,6 @@ int ObPartTransCtx::check_is_aborted_in_tx_data_(const ObTransID tx_id,
   } else if (ObTxData::ABORT == state) {
     is_aborted = true;
     TRANS_LOG(INFO, "check is aborted in tx data", K(tx_id), K(state), KPC(this));
-  } else if (ObTxData::COMMIT == state) {
-    is_aborted = false;
-    TRANS_LOG(ERROR, "check is committed in tx data", K(tx_id), K(state), KPC(this));
   } else {
     is_aborted = false;
     TRANS_LOG(INFO, "check is not aborted in tx data", K(tx_id), K(state), KPC(this));
