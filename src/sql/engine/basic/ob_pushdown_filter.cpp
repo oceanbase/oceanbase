@@ -2472,14 +2472,24 @@ int ObPushdownOperator::reset_trans_info_datum()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr_spec_.trans_info_expr_)) {
-    if (expr_spec_.trans_info_expr_->is_batch_result()) {
-      ObDatum *datums = expr_spec_.trans_info_expr_->locate_datums_for_update(eval_ctx_, expr_spec_.max_batch_size_);
-      for (int64_t i = 0; i < expr_spec_.max_batch_size_; i++) {
-        datums[i].set_null();
+    if (enable_rich_format_) {
+      if (OB_FAIL(expr_spec_.trans_info_expr_->init_vector(
+                  eval_ctx_,
+                  VectorFormat::VEC_UNIFORM,
+                  expr_spec_.trans_info_expr_->is_batch_result() ? expr_spec_.max_batch_size_ : 1))) {
+        LOG_WARN("Fail to init vector", K(ret), K(expr_spec_.max_batch_size_));
       }
-    } else {
-      ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
-      datum.set_null();
+    }
+    if (OB_SUCC(ret)) {
+      if (expr_spec_.trans_info_expr_->is_batch_result()) {
+        ObDatum *datums = expr_spec_.trans_info_expr_->locate_datums_for_update(eval_ctx_, expr_spec_.max_batch_size_);
+        for (int64_t i = 0; i < expr_spec_.max_batch_size_; i++) {
+          datums[i].set_null();
+        }
+      } else {
+        ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
+        datum.set_null();
+      }
     }
   }
   return ret;
