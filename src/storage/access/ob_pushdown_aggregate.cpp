@@ -1740,7 +1740,10 @@ int ObSumAggCell::init_decimal_int_func()
   const int arg_type = static_cast<int>(get_decimalint_type(arg_prec));
   const bool need_cast = (buffer_prec < MAX_PRECISION_DECIMAL_INT_64) &&
                            get_scale_factor<int64_t>(buffer_prec) < basic_info_.batch_size_;
-  if (ObObjTypeClass::ObNumberTC == res_tc) {
+  if (OB_UNLIKELY(arg_type > 3 || arg_type < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected arg type", K(ret), K(arg_type));
+  } else if (ObObjTypeClass::ObNumberTC == res_tc) {
     eval_func_ = AGG_FUNCS[arg_type][2];
     eval_batch_func_ = AGG_BATCH_FUNCS[arg_type][2][need_cast];
     copy_datum_func_ = COPY_FUNCS[arg_type][2];
