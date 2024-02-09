@@ -62,12 +62,7 @@ int init_s3_env();
 // Thread safe guaranteed by user.
 void fin_s3_env();
 
-// default s3 checksum algorithm
-static ObStorageCRCAlgorithm default_s3_crc_algo = ObStorageCRCAlgorithm::OB_CRC32_ALGO;
-// set checksum algorithm for writing object into s3
-void set_s3_checksum_algorithm(const ObStorageCRCAlgorithm crc_algo);
-// get current checksum algorithm
-ObStorageCRCAlgorithm get_s3_checksum_algorithm();
+bool is_s3_supported_checksum(ObStorageChecksumType checksum_type);
 
 static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
@@ -277,7 +272,6 @@ public:
 
   virtual int open(const ObString &uri, ObObjectStorageInfo *storage_info);
   virtual bool is_inited() const { return is_inited_; }
-  int build_bucket_and_object_name(const ObString &uri);
 
   int get_s3_file_meta(S3ObjectMeta &meta)
   {
@@ -294,6 +288,10 @@ protected:
   ObS3Client *s3_client_;
   ObString bucket_;
   ObString object_;
+  // The default is ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+  // The S3 SDK cannot disable checksum, therefore ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+  // is equivalent to using the SDK's default checksum algorithm, which is md5
+  ObStorageChecksumType checksum_type_;
 
 private:
   bool is_inited_;
@@ -535,7 +533,6 @@ protected:
   char *upload_id_;
   int partnum_;
   int64_t file_length_;
-  Aws::Utils::Crypto::CRC32 *sum_hash_; // for calc the complete crc based on each part's crc.
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3MultiPartWriter);

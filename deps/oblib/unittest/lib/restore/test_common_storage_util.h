@@ -24,7 +24,7 @@ class TestCommonStorageUtil
 public:
   static int build_object_storage_info(const char *bucket, const char *endpoint,
     const char *ak, const char *sk, const char *region, const char *appid,
-    ObObjectStorageInfo &storage_info);
+    const char *checksum_type, ObObjectStorageInfo &storage_info);
 
   static int build_fs_storage_info(ObObjectStorageInfo &storage_info);
 
@@ -47,6 +47,7 @@ int TestCommonStorageUtil::build_object_storage_info(
     const char *sk,
     const char *region,
     const char *appid,
+    const char *checksum_type,
     ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
@@ -68,6 +69,10 @@ int TestCommonStorageUtil::build_object_storage_info(
       if (OB_FAIL(databuff_printf(account, sizeof(account), pos,
           "host=%s&access_id=%s&access_key=%s", endpoint, ak, sk))) {
         OB_LOG(WARN, "fail to databuff printf", K(ret), K(endpoint), K(ak), K(sk));
+      } else if (OB_NOT_NULL(checksum_type) && strlen(checksum_type) > 0
+          && OB_FAIL(databuff_printf(account, sizeof(account), pos,
+                                     "&checksum_type=%s", checksum_type))) {
+        OB_LOG(WARN, "fail to databuff printf", K(ret), K(checksum_type));
       } else if (ObStorageType::OB_STORAGE_COS == storage_type &&
                  databuff_printf(account, sizeof(account), pos, "&appid=%s", appid)) {
         OB_LOG(WARN, "fail to databuff printf", K(ret), K(appid));

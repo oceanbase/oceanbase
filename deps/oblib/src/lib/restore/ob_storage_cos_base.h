@@ -36,6 +36,8 @@ int init_cos_env();
 // Thread safe guaranteed by user.
 void fin_cos_env();
 
+bool is_cos_supported_checksum(ObStorageChecksumType checksum_type);
+
 class ObStorageCosUtil: public ObIStorageUtil
 {
 public:
@@ -95,6 +97,7 @@ private:
 protected:
   bool is_opened_;
   ObCosWrapperHandle handle_;
+  ObStorageChecksumType checksum_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageCosBase);
@@ -167,7 +170,7 @@ public:
   ObStorageCosMultiPartWriter();
   virtual ~ObStorageCosMultiPartWriter();
   int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
-  int write(const char *buf,const int64_t size);
+  int write(const char *buf, const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
   int cleanup();
@@ -191,7 +194,6 @@ private:
   char *upload_id_;
   int partnum_;
   int64_t file_length_;
-  uint64_t total_crc_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageCosMultiPartWriter);
 };

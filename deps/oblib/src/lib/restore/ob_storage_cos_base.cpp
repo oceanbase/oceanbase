@@ -50,6 +50,12 @@ void fin_cos_env()
   qcloud_cos::ObCosEnv::get_instance().destroy();
 }
 
+bool is_cos_supported_checksum(ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
 struct CosListFilesCbArg
 {
   common::ObIAllocator &allocator_;
@@ -503,7 +509,7 @@ int ObStorageCosUtil::del_unmerged_parts(const ObString &uri)
 /*--------------------------------ObStorageCosBase---------------------------*/
 
 ObStorageCosBase::ObStorageCosBase()
-  : is_opened_(false), handle_()
+  : is_opened_(false), handle_(), checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
 {
 }
 
@@ -540,9 +546,13 @@ int ObStorageCosBase::open(
   if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "uri is empty", K(ret), K(uri), KP(storage_info));
+  } else if (FALSE_IT(checksum_type_ = storage_info->get_checksum_type())) {
+  } else if (OB_UNLIKELY(!is_cos_supported_checksum(checksum_type_))) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "that checksum algorithm is not supported for cos", K(ret), K_(checksum_type));
   } else if (OB_FAIL(init_handle(*storage_info))) {
     OB_LOG(WARN, "failed to init cos wrapper handle", K(ret), K(uri));
-  } else if (OB_FAIL(handle_.create_cos_handle())) {
+  } else if (OB_FAIL(handle_.create_cos_handle(checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO))) {
     OB_LOG(WARN, "failed to create cos handle", K(ret), K(uri));
   } else if (OB_FAIL(handle_.build_bucket_and_object_name(uri))) {
     OB_LOG(WARN, "failed to build bucket and object name", K(ret), K(uri));
@@ -1051,8 +1061,7 @@ ObStorageCosMultiPartWriter::ObStorageCosMultiPartWriter()
     base_buf_pos_(0),
     upload_id_(NULL),
     partnum_(0),
-    file_length_(-1),
-    total_crc_(0)
+    file_length_(-1)
 {}
 
 ObStorageCosMultiPartWriter::~ObStorageCosMultiPartWriter()
@@ -1080,6 +1089,7 @@ void ObStorageCosMultiPartWriter::reuse()
 int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_COS_ERROR;
@@ -1100,17 +1110,22 @@ int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     if (OB_FAIL(qcloud_cos::ObCosWrapper::init_multipart_upload(handle_.get_ptr(),
         bucket_name, object_name, upload_id_))) {
       OB_LOG(WARN, "fail to init multipartupload", K(ret), K(bucket_name_str), K(object_name_str));
-    } else if (OB_ISNULL(upload_id_)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "upload_id should not be null", K(ret));
-    } else if (OB_ISNULL(base_buf_ = static_cast<char *>(handle_.alloc_mem(COS_MULTIPART_UPLOAD_BUF_SIZE)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "fail to alloc buffer for cos multipartupload", K(ret));
     } else {
-      is_opened_ = true;
-      base_buf_pos_ = 0;
-      file_length_ = 0;
-      total_crc_ = 0;
+      if (OB_ISNULL(upload_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "upload_id should not be null", K(ret));
+      } else if (OB_ISNULL(base_buf_ = static_cast<char *>(handle_.alloc_mem(COS_MULTIPART_UPLOAD_BUF_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc buffer for cos multipartupload", K(ret));
+      } else {
+        is_opened_ = true;
+        base_buf_pos_ = 0;
+        file_length_ = 0;
+      }
+
+      if (OB_FAIL(ret) && OB_TMP_FAIL(cleanup())) {
+        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), KP_(upload_id));
+      }
     }
   }
   return ret;
@@ -1119,6 +1134,7 @@ int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStora
 int ObStorageCosMultiPartWriter::write(const char * buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   int64_t fill_size = 0;
   int64_t buf_pos = 0;
@@ -1138,6 +1154,10 @@ int ObStorageCosMultiPartWriter::write(const char * buf, const int64_t size)
     if (base_buf_pos_ == COS_MULTIPART_UPLOAD_BUF_SIZE) {
       if (OB_FAIL(write_single_part())) {
         OB_LOG(WARN, "fail to write part into cos", K(ret));
+
+        if (OB_TMP_FAIL(cleanup())) {
+          OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
+        }
       } else {
         base_buf_pos_ = 0;
       }
@@ -1179,11 +1199,8 @@ int ObStorageCosMultiPartWriter::write_single_part()
     qcloud_cos::CosStringBuffer upload_id_str = qcloud_cos::CosStringBuffer(
         upload_id_, strlen(upload_id_));
     if (OB_FAIL(qcloud_cos::ObCosWrapper::upload_part_from_buffer(handle_.get_ptr(), bucket_name,
-        object_name, upload_id_str, partnum_, base_buf_, base_buf_pos_, total_crc_))) {
+        object_name, upload_id_str, partnum_, base_buf_, base_buf_pos_))) {
       OB_LOG(WARN, "fail to upload part to cos", K(ret), KP_(upload_id));
-      if (OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), KP_(upload_id));
-      }
     }
   }
   return ret;
@@ -1202,7 +1219,7 @@ int ObStorageCosMultiPartWriter::close()
     if(OB_SUCCESS != (ret = write_single_part())) {
       OB_LOG(WARN, "fail to write the last size to cos", K(ret), K_(base_buf_pos));
       if (OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), KP_(upload_id));
+        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
       }
       ret = OB_COS_ERROR;
     } else {
@@ -1219,10 +1236,10 @@ int ObStorageCosMultiPartWriter::close()
         upload_id_, strlen(upload_id_));
 
     if (OB_FAIL(qcloud_cos::ObCosWrapper::complete_multipart_upload(handle_.get_ptr(), bucket_name,
-        object_name, upload_id_str, total_crc_))) {
-      OB_LOG(WARN, "fail to complete multipart upload", K(ret), KP_(upload_id));
+        object_name, upload_id_str))) {
+      OB_LOG(WARN, "fail to complete multipart upload", K(ret), K_(upload_id));
       if (OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), KP_(upload_id));
+        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
       }
     }
   }
