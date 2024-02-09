@@ -753,7 +753,9 @@ private:
   static ::oceanbase::lib::ObRateLimiter *default_log_limiter_;
   RLOCAL_STATIC(lib::ObRateLimiter*, tl_log_limiter_);
   static constexpr int N_LIMITER = 4096;
+  static constexpr int N_ERROR_LIMITER = 1024;
   static ObSyslogSampleRateLimiter per_log_limiters_[N_LIMITER];
+  static ObSyslogSampleRateLimiter per_error_log_limiters_[N_ERROR_LIMITER];
   RLOCAL_STATIC(int32_t, tl_type_);
   //used for stat logging time and log dropped
   RLOCAL_STATIC(uint64_t, curr_logging_seq_);
