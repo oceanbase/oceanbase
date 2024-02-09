@@ -11319,6 +11319,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
           //force to use nested loop join in batch update
           //the update target table must be the right table
           path_info.local_methods_ = NESTED_LOOP_JOIN;
+          path_info.force_inner_nl_ = true;
           OPT_TRACE("batch multi stmt force use nested loop join");
         } else {
           //ignore this join path
