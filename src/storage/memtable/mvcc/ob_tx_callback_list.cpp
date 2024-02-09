@@ -729,10 +729,12 @@ void ObTxCallbackList::update_checksum(const uint64_t checksum, const SCN checks
 {
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
   if (checksum_scn.is_max()) {
-    if (checksum == 0) {
+    if (checksum == 0 && id_ > 0) {
+      // only check extends list, because version before 4.3 with 0 may happen
+      // and they will be replayed into first list (id_ equals to 0)
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "checksum should not be 0 if checksum_scn is max", KPC(this));
     }
-    checksum_ = checksum;
+    checksum_ = checksum ?: 1;
   }
   batch_checksum_.set_base(checksum);
   checksum_scn_.atomic_set(checksum_scn);
