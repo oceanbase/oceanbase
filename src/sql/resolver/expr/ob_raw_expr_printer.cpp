@@ -496,6 +496,12 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
     }
     case T_OP_AND:
       SET_SYMBOL_IF_EMPTY("and");
+    case T_OP_XOR:
+      if (lib::is_mysql_mode()) {
+        SET_SYMBOL_IF_EMPTY("xor");
+      } else {
+        SET_SYMBOL_IF_EMPTY("^");
+      }
     case T_OP_OR: {
       SET_SYMBOL_IF_EMPTY("or");
       // 这里孩子不一定为2, 比如a or (b or c) 会被改写为一个or含三个孩子
@@ -570,12 +576,6 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("|");
     case T_OP_BIT_XOR:
       SET_SYMBOL_IF_EMPTY("^");
-    case T_OP_XOR:
-      if (lib::is_mysql_mode()) {
-        SET_SYMBOL_IF_EMPTY("xor");
-      } else {
-        SET_SYMBOL_IF_EMPTY("^");
-      }
     case T_OP_BIT_AND:
       SET_SYMBOL_IF_EMPTY("&");
     case T_OP_REGEXP:
