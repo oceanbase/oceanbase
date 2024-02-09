@@ -2392,6 +2392,8 @@ typedef enum ObItemType
   T_CANCEL_TRANSFER_PARTITION,
   T_CANCEL_BALANCE_JOB,
   T_AUTO_SPLIT_TABLET_SIZE,
+
+  T_DATA_DISK_SIZE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
