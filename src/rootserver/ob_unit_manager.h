@@ -198,8 +198,9 @@ public:
       const lib::Worker::CompatMode compat_mode,
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
       const uint64_t tenant_id,
-      const bool is_bootstrap = false,
-      const uint64_t source_tenant_id = OB_INVALID_TENANT_ID);
+      const bool is_bootstrap,
+      const uint64_t source_tenant_id,
+      const bool check_data_version);
   virtual int revoke_pools(
       common::ObMySQLTransaction &trans,
       common::ObIArray<uint64_t> &new_ug_id_array,
@@ -739,7 +740,8 @@ private:
       const lib::Worker::CompatMode &compat_mode,
       ObNotifyTenantServerResourceProxy &notify_proxy,
       const uint64_t source_tenant_id,
-      ObIArray<share::ObUnit> &pool_units);
+      ObIArray<share::ObUnit> &pool_units,
+      const bool check_data_version);
 
   int construct_unit_group_id_for_unit_(
       const uint64_t source_tenant_id,
@@ -764,7 +766,8 @@ private:
                      const common::ObIArray<share::ObResourcePoolName> &pool_names,
                      const uint64_t tenant_id,
                      const bool is_bootstrap,
-                     const uint64_t source_tenant_id);
+                     const uint64_t source_tenant_id,
+                     const bool check_data_version);
 
   int do_revoke_pools_(common::ObMySQLTransaction &trans,
                       const common::ObIArray<uint64_t> &new_unit_group_id_array,
@@ -852,7 +855,8 @@ private:
       const lib::Worker::CompatMode compat_mode,
       const share::ObUnit &unit,
       const bool if_not_grant,
-      const bool skip_offline_server);
+      const bool skip_offline_server,
+      const bool check_data_version);
   int build_notify_create_unit_resource_rpc_arg_(
       const uint64_t tenant_id,
       const share::ObUnit &unit,
@@ -860,6 +864,8 @@ private:
       const uint64_t unit_config_id,
       const bool if_not_grant,
       obrpc::TenantServerUnitConfig &rpc_arg) const;
+  int check_dest_data_version_is_loaded_(
+      const uint64_t tenant_id, const ObAddr &addr);
   int do_notify_unit_resource_(
     const common::ObAddr server,
     const obrpc::TenantServerUnitConfig &notify_arg,
@@ -960,7 +966,7 @@ private:
   int inner_create_unit_config_(
       const share::ObUnitConfig &unit_config,
       const bool if_not_exist);
-  int inner_create_resource_pool(
+  int inner_create_resource_pool_(
       share::ObResourcePool &resource_pool,
       const share::ObUnitConfigName &config_name,
       const bool if_not_exist,
