@@ -137,7 +137,8 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg::ObRFInFilterRowStore)
   OB_UNIS_DECODE(row_sizes_);
   void *alloc_buf = nullptr;
   ObCompactRow *row = nullptr;
-  if (OB_FAIL(serial_rows_.reserve(row_cnt))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(serial_rows_.reserve(row_cnt))) {
     LOG_WARN("failed to prepare_allocate serial_rows_");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
