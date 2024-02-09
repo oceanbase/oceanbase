@@ -1215,13 +1215,12 @@ int ObTenantCheckpointSlogHandler::inner_replay_create_ls_commit_slog(
   int ret = OB_SUCCESS;
 
   ObLSID ls_id;
-  int64_t create_type = ObLSCreateType::NORMAL;
-  ObCreateLSCommitSLog slog_entry(ls_id, create_type);
+  ObCreateLSCommitSLog slog_entry(ls_id);
   int64_t pos = 0;
   const bool is_replay = true;
   if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
     LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
-  } else if (OB_FAIL(MTL(ObLSService *)->replay_create_ls_commit(ls_id, slog_entry.get_create_type()))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->replay_create_ls_commit(ls_id))) {
     LOG_WARN("fail to replay create ls commit slog", K(ret), K(param), K(pos));
   } else {
     LOG_INFO("successfully replay create ls commit slog");

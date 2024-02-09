@@ -83,8 +83,7 @@ public:
   int replay_create_ls(const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
-  // @param [in] create_type, the create type, it is maybe a normal ls/migrate ls/restore ls
-  int replay_create_ls_commit(const share::ObLSID &ls_id, const int64_t create_type);
+  int replay_create_ls_commit(const share::ObLSID &ls_id);
   // create a LS for replay or update LS's meta
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
   int replay_update_ls(const ObLSMeta &ls_meta);
@@ -187,8 +186,7 @@ private:
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
   int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id,
-                                   const int64_t create_type) const;
+  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
