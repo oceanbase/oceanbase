@@ -15,6 +15,8 @@
 #include "lib/utility/ob_edit_distance.h"
 #include "lib/ob_errno.h"
 
+extern bool get_dblink_reuse_connection_cfg();
+
 namespace oceanbase
 {
 namespace common

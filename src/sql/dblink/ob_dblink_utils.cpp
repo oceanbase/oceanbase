@@ -30,6 +30,14 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 #ifdef OB_BUILD_DBLINK
+
+bool get_dblink_reuse_connection_cfg()
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  // default value of _enable_dblink_reuse_connection is true, if !tenant_config.is_valid() return true
+  return tenant_config.is_valid() ? tenant_config->_enable_dblink_reuse_connection : true;
+}
+
 uint64_t ObDblinkService::get_current_tenant_id()
 {
   return MTL_ID();
