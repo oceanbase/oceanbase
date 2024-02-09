@@ -3967,25 +3967,33 @@ STRING_VALUE
 alter_tenant_stmt:
 ALTER TENANT relation_name opt_set opt_tenant_option_list opt_global_sys_vars_set
 {
-  (void)$4;
-  ParseNode *tenant_options = NULL;
-  merge_nodes(tenant_options, result, T_TENANT_OPTION_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_TENANT, 4,
-                           $3,                   /* tenant name */
-                           tenant_options,       /* tenant opt */
-                           $6,                   /* global sys vars set opt */
-                           NULL);                /* new tenant name */
+  if ($4 == NULL && $5 == NULL && $6 == NULL) {
+    YYERROR;
+  } else {
+    (void)$4;
+    ParseNode *tenant_options = NULL;
+    merge_nodes(tenant_options, result, T_TENANT_OPTION_LIST, $5);
+    malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_TENANT, 4,
+                            $3,                   /* tenant name */
+                            tenant_options,       /* tenant opt */
+                            $6,                   /* global sys vars set opt */
+                            NULL);                /* new tenant name */
+  }
 }
 | ALTER TENANT ALL opt_set opt_tenant_option_list opt_global_sys_vars_set
 {
-  (void)$4;
-  ParseNode *tenant_options = NULL;
-  merge_nodes(tenant_options, result, T_TENANT_OPTION_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_TENANT, 4,
-                           NULL,                 /* tenant name */
-                           tenant_options,       /* tenant opt */
-                           $6,                   /* global sys vars set opt */
-                           NULL);                /* new tenant name */
+  if ($4 == NULL && $5 == NULL && $6 == NULL) {
+    YYERROR;
+  } else {
+    (void)$4;
+    ParseNode *tenant_options = NULL;
+    merge_nodes(tenant_options, result, T_TENANT_OPTION_LIST, $5);
+    malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_TENANT, 4,
+                            NULL,                 /* tenant name */
+                            tenant_options,       /* tenant opt */
+                            $6,                   /* global sys vars set opt */
+                            NULL);                /* new tenant name */
+  }
 }
 | ALTER TENANT relation_name RENAME GLOBAL_NAME TO relation_name // add by xiaonfeng
 {
