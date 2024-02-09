@@ -2433,7 +2433,7 @@ DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY
 
 
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
-
+DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
 ////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)
 ////////////////////////////////////////////////////////////////
