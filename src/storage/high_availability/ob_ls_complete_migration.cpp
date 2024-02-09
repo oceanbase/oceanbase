@@ -362,8 +362,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
   int32_t result = OB_SUCCESS;
-  share::ObTenantBase *tenant_base = MTL_CTX();
-  omt::ObTenant *tenant = nullptr;
+  bool is_tenant_deleted = false;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
 
@@ -376,10 +375,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_ISNULL(tenant_base)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
-  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
   } else {
     while (!is_finish) {
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
@@ -404,7 +399,9 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         ret = OB_SERVER_IS_STOPPING;
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
         break;
-      } else if (tenant->has_stopped()) {
+      } else if (OB_FAIL(ObStorageHAUtils::check_tenant_will_be_deleted(is_tenant_deleted))) {
+        LOG_WARN("failed to check tenant deleted", K(ret), K(ctx_));
+      } else if (is_tenant_deleted) {
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("tenant has been stopped, stop migration dag net", K(ret), K(ctx_));
         break;
