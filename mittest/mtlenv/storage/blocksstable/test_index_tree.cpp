@@ -745,44 +745,6 @@ TEST_F(TestIndexTree, test_macro_writer_bug1)
   OK(data_writer.close());
 }
 
-TEST_F(TestIndexTree, test_micro_block_size)
-{
-  int ret = OB_SUCCESS;
-  ObDatumRow row;
-  OK(row.init(allocator_, TEST_COLUMN_CNT));
-  ObDatumRow multi_row;
-  OK(multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
-  ObDmlFlag dml = DF_INSERT;
-
-  const int64_t micro_block_size = 10; // limit the micro block size
-
-  table_schema_.set_row_store_type(FLAT_ROW_STORE);
-  index_schema_.set_row_store_type(FLAT_ROW_STORE);
-  ObSSTableIndexBuilder sstable_builder;
-
-  ObWholeDataStoreDesc data_desc;
-  prepare_data_desc(data_desc, &sstable_builder);
-  data_desc.get_desc().micro_block_size_ = micro_block_size;
-  OK(sstable_builder.init(data_desc.get_desc()));
-  ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc.get_desc(), 0));
-  ASSERT_EQ(data_writer.builder_->data_store_desc_->get_micro_block_size(), micro_block_size); // ==
-  //TODO:@luahopeng.lhp to adapt this ASSERT
-  // ASSERT_GT(data_writer.builder_->index_store_desc_->micro_block_size_, micro_block_size); // >
-
-
-  OK(row_generate_.get_next_row(0, row));
-  convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
-  OK(data_writer.append_row(multi_row, 2 << 20L));
-  OK(data_writer.close());
-
-  // mock sstable_builder.close()
-  ObSSTableMergeRes res;
-  ASSERT_EQ(sstable_builder.index_store_desc_.get_desc().micro_block_size_, micro_block_size); // ==
-  OK(sstable_builder.sort_roots());
-  ASSERT_EQ(sstable_builder.merge_index_tree(res), OB_NOT_SUPPORTED);
-}
-
 TEST_F(TestIndexTree, test_index_macro_writer)
 {
   int ret = OB_SUCCESS;
@@ -1224,6 +1186,57 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableMergeRes res3;
   sstable_builder3.optimization_mode_ = ObSSTableIndexBuilder::ObSpaceOptimizationMode::ENABLE;
   OK(sstable_builder3.close(res3));
+}
+
+TEST_F(TestIndexTree, test_extend_micro_block_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t test_row_num = 20;
+  ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
+  ObArray<ObMacroBlocksWriteCtx *> index_write_ctxs;
+  ObMacroMetasArray *merge_info_list = nullptr;
+  ObSSTableMergeRes res;
+  IndexTreeRootCtxList *roots = nullptr;
+  ObWholeDataStoreDesc data_desc;
+  char *buf = static_cast<char *> (allocator_.alloc(sizeof(ObSSTableIndexBuilder)));
+  ObSSTableIndexBuilder *sstable_builder = new (buf) ObSSTableIndexBuilder();
+
+  prepare_data_desc(data_desc, sstable_builder);
+  data_desc.get_desc().micro_block_size_ = 248; // only push one index block row will exceed 248.
+  ret = sstable_builder->init(data_desc.get_desc());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObDatumRow multi_row;
+  ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ObDmlFlag dml = DF_INSERT;
+
+  ObMacroDataSeq data_seq(0);
+  ObMacroBlockWriter data_writer;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
+  for(int64_t i = 0; i < test_row_num; ++i){
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
+    convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
+    ASSERT_EQ(OB_SUCCESS, data_writer.append_row(multi_row));
+    ASSERT_EQ(OB_SUCCESS, data_writer.build_micro_block());
+    ASSERT_EQ(OB_SUCCESS, data_writer.try_switch_macro_block());
+  }
+  ObMacroBlock &fir_blk = data_writer.macro_blocks_[0];
+  ObMacroBlock &sec_blk = data_writer.macro_blocks_[1];
+  ASSERT_EQ(fir_blk.original_size_, fir_blk.data_zsize_);
+  ASSERT_EQ(sec_blk.original_size_, sec_blk.data_zsize_);
+  ASSERT_EQ(OB_SUCCESS, data_writer.close());
+  ASSERT_EQ(OB_SUCCESS, sstable_builder->close(res));
+
+  ObSSTableMergeRes tmp_res;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, data_writer.close()); // not re-entrant
+  OK(sstable_builder->close(tmp_res)); // re-entrant
+  ASSERT_EQ(tmp_res.root_desc_.buf_, res.root_desc_.buf_);
+  ASSERT_EQ(tmp_res.data_root_desc_.buf_, res.data_root_desc_.buf_);
+  ASSERT_EQ(tmp_res.data_blocks_cnt_, res.data_blocks_cnt_);
+
+
 }
 
 TEST_F(TestIndexTree, test_data_block_checksum)
