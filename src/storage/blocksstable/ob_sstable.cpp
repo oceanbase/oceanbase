@@ -949,18 +949,23 @@ int ObSSTable::check_row_locked(
   return ret;
 }
 
-int ObSSTable::set_upper_trans_version(const int64_t upper_trans_version)
+int ObSSTable::set_upper_trans_version(
+    const int64_t upper_trans_version,
+    const bool force_update)
 {
   int ret = OB_SUCCESS;
 
   const int64_t old_val = ATOMIC_LOAD(&meta_cache_.upper_trans_version_);
   // only set once
   if (INT64_MAX == old_val && INT64_MAX != upper_trans_version) {
-    const int64_t new_val = std::max(upper_trans_version, meta_cache_.max_merged_trans_version_);
+    int64_t new_val = upper_trans_version;
+    if (OB_LIKELY(!force_update)) {
+      new_val = std::max(new_val, meta_cache_.max_merged_trans_version_);
+    }
     ATOMIC_CAS(&meta_cache_.upper_trans_version_, old_val, new_val);
   }
 
-  LOG_INFO("succeed to set upper trans version", K(key_),
+  LOG_INFO("succeed to set upper trans version", K(force_update), K(key_),
       K(upper_trans_version), K(meta_cache_.upper_trans_version_));
   return ret;
 }
