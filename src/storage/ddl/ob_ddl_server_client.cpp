@@ -288,7 +288,7 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       }
     }
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_))) {
+    if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_, tenant_id))) {
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(arg.task_id_));
     }
   }
@@ -355,7 +355,7 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
     } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, &session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
     }
-    if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_))) {
+    if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_, tenant_id))) {
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
     }
   }
@@ -442,13 +442,13 @@ int ObDDLServerClient::wait_task_reach_pending(
   return ret;
 }
 
-int ObDDLServerClient::heart_beat_clear(const int64_t task_id)
+int ObDDLServerClient::heart_beat_clear(const int64_t task_id, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (task_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id));
-  } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.remove_register_task_id(task_id))) {
+  } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.remove_register_task_id(task_id, tenant_id))) {
     LOG_WARN("failed to remove register task id", K(ret), K(task_id));
   }
   return ret;
