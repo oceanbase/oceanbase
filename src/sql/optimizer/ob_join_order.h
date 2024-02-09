@@ -2183,7 +2183,7 @@ struct NullAwareAntiJoinInfo {
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(ObQueryRange &query_range,
+    int check_has_exec_param(const ObQueryRange &query_range,
                              bool &has_exec_param);
 
     int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
