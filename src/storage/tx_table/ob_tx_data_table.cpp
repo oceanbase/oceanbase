@@ -1318,7 +1318,7 @@ void ObTxDataTable::disable_upper_trans_calculation()
 {
   ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
   {
-    TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
     calc_upper_trans_version_cache_.reset();
   }
   {
@@ -1330,7 +1330,7 @@ void ObTxDataTable::disable_upper_trans_calculation()
 void ObTxDataTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
 {
   {
-    TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
     calc_upper_trans_version_cache_.reset();
   }
   if (latest_transfer_scn_.is_valid()) {
