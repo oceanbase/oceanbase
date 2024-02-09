@@ -119,6 +119,14 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
           if (params_type_.at(i).get_collation_type() == CS_TYPE_ANY) {
             if (types[i].is_string_or_lob_locator_type()) {
               types[i].set_calc_collation_type(types[i].get_collation_type());
+              if (lib::is_oracle_mode() && types[i].get_calc_meta().is_clob()) {
+                ObCollationType dest_collation = ob_is_nstring_type(types[i].get_calc_meta().get_type()) ?
+                                                  type_ctx.get_session()->get_nls_collation_nation()
+                                                : type_ctx.get_session()->get_nls_collation();
+                if (CS_TYPE_INVALID != dest_collation) {
+                  types[i].set_calc_collation_type(dest_collation);
+                }
+              }
             } else {
               types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
             }
