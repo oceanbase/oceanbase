@@ -524,8 +524,8 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
             PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
           }
         } else {
-          // check ls service safe to destroy.
-          is_released = MTL(ObLSService *)->safe_to_destroy();
+          // check ls service is empty.
+          is_released = MTL(ObLSService *)->is_empty();
         }
 
         bool is_tenant_snapshot_released = false;
