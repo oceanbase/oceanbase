@@ -138,7 +138,7 @@ int ObCOSSTableRowsFilter::switch_context(
       iter_params.reuse();
       if (OB_FAIL(construct_cg_iter_params(filter, iter_params))) {
         LOG_WARN("Failed to construct cg scan param", K(ret));
-      } else if (OB_FAIL(switch_context_for_cg_iter(false, false, co_sstable_, context, iter_params, col_cnt_changed, cg_iter))) {
+      } else if (OB_FAIL(switch_context_for_cg_iter(false, false, true, co_sstable_, context, iter_params, col_cnt_changed, cg_iter))) {
         LOG_WARN("Fail to switch context for cg iter", K(ret));
       } else if (ObICGIterator::OB_CG_SCANNER == cg_iter->get_type() &&
                  param.enable_skip_index() &&
@@ -408,7 +408,7 @@ int ObCOSSTableRowsFilter::push_cg_iter(
     } else if (OB_ISNULL(cg_iter = OB_NEWx(ObCGTileScanner, access_ctx_->stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(cg_iter)->init(iter_params, false, *access_ctx_, co_sstable_))) {
+    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(cg_iter)->init(iter_params, false, true, *access_ctx_, co_sstable_))) {
       LOG_WARN("Fail to init cg tile scanner", K(ret), K(iter_params));
     }
     LOG_DEBUG("[COLUMNSTORE] init one cg iter", K(ret), KPC(cg_iter), K(iter_params));
@@ -794,6 +794,7 @@ void ObCOSSTableRowsFilter::clear_filter_state(sql::ObPushdownFilterExecutor *fi
 int ObCOSSTableRowsFilter::switch_context_for_cg_iter(
     const bool is_projector,
     const bool project_single_row,
+    const bool without_filter,
     ObCOSSTableV2 *co_sstable,
     ObTableAccessContext &context,
     common::ObIArray<ObTableIterParam*> &cg_params,
@@ -819,12 +820,14 @@ int ObCOSSTableRowsFilter::switch_context_for_cg_iter(
       LOG_WARN("Fail to get cg sstable wrapper", K(ret));
     } else if (OB_FAIL(cg_iter->switch_context(cg_param, context, cg_wrapper))) {
       LOG_WARN("Failed to switch context for project iter", K(ret));
+    } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_iter->get_type()) {
+      static_cast<ObCGRowScanner *>(cg_iter)->set_project_type(is_projector && without_filter);
     }
   } else if (cg_iter->get_type() != ObICGIterator::OB_CG_TILE_SCANNER) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected iter type", K(ret), KPC(cg_iter));
   } else if (OB_FAIL(static_cast<ObCGTileScanner*>(cg_iter)->switch_context(
-      cg_params, project_single_row, context, co_sstable, col_cnt_changed))) {
+      cg_params, project_single_row, is_projector && without_filter, context, co_sstable, col_cnt_changed))) {
     LOG_WARN("Failed to switch context for project iter", K(ret));
   }
   return ret;

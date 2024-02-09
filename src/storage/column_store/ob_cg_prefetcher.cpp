@@ -24,6 +24,7 @@ void ObCGPrefetcher::reset()
   query_index_range_.reset();
   query_range_.reset();
   is_reverse_scan_ = false;
+  is_project_without_filter_ = false;
   cg_iter_type_ = -1;
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
@@ -37,6 +38,7 @@ void ObCGPrefetcher::reuse()
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   query_index_range_.reset();
   query_range_.reset();
+  is_project_without_filter_ = false;
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
   cur_micro_data_read_idx_ = -1;
@@ -704,7 +706,8 @@ int ObCGPrefetcher::prewarm()
     micro_data_prewarm_idx_ = micro_data_prefetch_idx_;
   }
   if (is_prefetch_end_ &&
-      ObICGIterator::OB_CG_SCANNER == cg_iter_type_ &&
+      (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
+       (ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ && is_project_without_filter_)) &&
       nullptr == cg_agg_cells_ &&
       nullptr == access_ctx_->limit_param_ &&
       (index_tree_height_ - 1) == cur_level_ &&
