@@ -223,7 +223,7 @@ int ObDBMSSchedulerMysql::_generate_job_id(int64_t tenant_id, int64_t &max_job_i
   if (OB_FAIL(storage::ObCommonIDUtils::gen_unique_id(tenant_id, raw_id))) {
     LOG_WARN("gen unique id failed", K(ret), K(tenant_id));
   } else {
-    max_job_id = raw_id.id() + JOB_ID_OFFSET;
+    max_job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
   }
   return ret;
 }
