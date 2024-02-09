@@ -427,12 +427,12 @@ INSERT INTO t1 (g) VALUES
 (ST_GeomFromText('POINT(6 6)', 3294)),
 (ST_GeomFromText('POINT(7 7)', 3294)),
 (ST_GeomFromText('LINESTRING(0 0, 3 3)',3294));
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |345         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
 |2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
 ===============================================================
@@ -448,12 +448,12 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |345         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
 |2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
 ===============================================================
@@ -469,12 +469,12 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |345         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
 |2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
 ===============================================================
@@ -490,12 +490,12 @@ Outputs & filters:
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)
-explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
+explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
 Query Plan
 ===============================================================
 |ID|OPERATOR                     |NAME  |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |NESTED-LOOP JOIN             |      |27      |345         |
+|0 |NESTED-LOOP JOIN             |      |21      |345         |
 |1 |├─TABLE FULL SCAN            |a     |9       |3           |
 |2 |└─DISTRIBUTED TABLE FULL SCAN|b(idx)|3       |38          |
 ===============================================================
