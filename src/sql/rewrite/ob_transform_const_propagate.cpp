@@ -1097,6 +1097,7 @@ int ObTransformConstPropagate::recursive_replace_expr(ObRawExpr *&cur_expr,
   bool found = false;
   bool is_shared = false;
   trans_happened = false;
+  bool can_replace_child = true;
   if (OB_ISNULL(cur_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
@@ -1116,7 +1117,14 @@ int ObTransformConstPropagate::recursive_replace_expr(ObRawExpr *&cur_expr,
                                       used_in_compare,
                                       trans_happened))) {
     LOG_WARN("failed to replace expr internal", K(ret));
-  } else if (!trans_happened && cur_expr->get_param_count() > 0) {
+  } else if (trans_happened || cur_expr->get_param_count() < 1) {
+    // do nothing
+  } else if (cur_expr->get_expr_type() == T_OP_ROW &&
+             OB_FAIL(check_can_replace_child_of_row(const_ctx, cur_expr, can_replace_child))) {
+    LOG_WARN("failed to check can replace in row", K(ret));
+  } else if (!can_replace_child) {
+    // do nothing
+  } else {
     int64_t N = cur_expr->get_param_count();
     if (OB_FAIL(parent_exprs.push_back(cur_expr))) {
       LOG_WARN("failed to push back", K(ret));
@@ -2657,6 +2665,36 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr 
     }
     if (OB_SUCC(ret)) {
       parent_exprs.pop_back();
+    }
+  }
+  return ret;
+}
+
+// Check if all non-consts in T_OP_ROW can be replaced to consts.
+int ObTransformConstPropagate::check_can_replace_child_of_row(ConstInfoContext &const_ctx,
+                                                              ObRawExpr *&cur_expr,
+                                                              bool &can_replace_child)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (cur_expr->is_const_expr() || !const_ctx.allow_trans_) {
+    can_replace_child = false;
+  } else {
+    ObSEArray<ObRawExpr*, 4> const_cols;
+    bool is_const_recursively = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < const_ctx.active_const_infos_.count(); i++) {
+      if (OB_FAIL(const_cols.push_back(const_ctx.active_const_infos_.at(i).column_expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObOptimizerUtil::is_const_expr_recursively(cur_expr,
+                                                                           const_cols,
+                                                                           is_const_recursively))) {
+      LOG_WARN("failed to check const expr recursively", K(ret));
+    } else {
+      can_replace_child &= is_const_recursively;
     }
   }
   return ret;
