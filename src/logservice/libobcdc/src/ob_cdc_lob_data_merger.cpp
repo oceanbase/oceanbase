@@ -215,51 +215,27 @@ int ObCDCLobDataMerger::push_lob_column_(
     const auto seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
     const uint32_t del_seq_no_cnt = lob_data_out_row_ctx->del_seq_no_cnt_;
+    const uint32_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
     LobColumnFragmentCtxList new_lob_col_fra_ctx_list;
     LobColumnFragmentCtxList old_lob_col_fra_ctx_list;
 
     if (is_empty_sql) {
       // do nothing
     } else if (lob_data_get_ctx.is_insert()) {
-      if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(seq_no_cnt, allocator))) {
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      } else if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt),
             K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st, seq_no_cnt, allocator,
-              lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
+          lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
         LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt),
             K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_update()) {
-      const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
-      // NOTICE:
-      // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
-      // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
-      //
-      // 3. Currently, LOB column data is stored in out_row in these cases:
-      // 3.1  Length of column data is larger than 4K
-      // 3.2. Length of column data is less than 4K(even if column data is empty string),
-      //      but was larger than 4K(stored out_row) and not update to NULL until this trans.
-
-      if (del_seq_no_cnt == 0 && insert_seq_no_cnt == del_seq_no_cnt) {
-        // empty out_row update to empty out_row
-        // Under normal circumstances, this scenario should not occur;
-        // Abnormaly circumstances in OBServer version less than 4.2.1 BP2 and 4.1.0 BP4, please refer case t/libobcdc/lob_empty_outrow_udpate.test
-        const uint64_t cluster_version = TCTX.global_info_.get_min_cluster_version();
-        const bool skip_ob_version_exist_known_issues = (cluster_version == 0) // can't get cluster_version, may in direct mode
-            || (cluster_version < CLUSTER_VERSION_4_2_1_2) // ob version less than 4213 and 4102 has known issues will result in this scenario.
-            || (cluster_version <= CLUSTER_VERSION_4_1_0_2);
-        const bool can_ignore_empty_outrow_update = (1 == TCONF.skip_empty_outrow_lob_update) || skip_ob_version_exist_known_issues;
-
-        if (can_ignore_empty_outrow_update) {
-          is_update_outrow_lob_from_empty_to_empty = true;
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_ERROR("[FATAL] [OUTROW_LOB] unexpected update outrow lob from empty to empty, config skip_empty_outrow_lob_update = 1 if necessary",
-              KR(ret), K(can_ignore_empty_outrow_update), K(cluster_version));
-        }
-      }
-
-      if (FAILEDx(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      } else if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(del_seq_no_cnt),
             K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt,
@@ -306,6 +282,46 @@ int ObCDCLobDataMerger::push_lob_column_(
           }
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObCDCLobDataMerger::check_empty_outrow_lob_col_(
+    ObLobDataGetCtx &lob_data_get_ctx,
+    uint32_t seq_no_cnt,
+    uint32_t del_seq_no_cnt,
+    bool &is_update_outrow_lob_from_empty_to_empty)
+{
+  int ret = OB_SUCCESS;
+  const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
+  const bool is_empty_lob = lob_data_get_ctx.is_insert() ? insert_seq_no_cnt == 0 : (insert_seq_no_cnt == 0 && del_seq_no_cnt == 0);
+  // NOTICE:
+  // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
+  // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
+  //
+  // 3. Currently, LOB column data is stored in out_row in these cases:
+  // 3.1  Length of column data is larger than 4K
+  // 3.2. Length of column data is less than 4K(even if column data is empty string),
+  //      but was larger than 4K(stored out_row) and not update to NULL until this trans.
+
+  if (is_empty_lob) {
+    // empty out_row update to empty out_row
+    // Under normal circumstances, this scenario should not occur;
+    // Abnormaly circumstances in OBServer version less than 4.2.1 BP2 and 4.1.0 BP4, please refer case t/libobcdc/lob_empty_outrow_udpate.test
+    const uint64_t cluster_version = TCTX.global_info_.get_min_cluster_version();
+    const bool skip_ob_version_exist_known_issues = (cluster_version == 0) // can't get cluster_version, may in direct mode
+        || (cluster_version < CLUSTER_VERSION_4_2_1_2) // ob version less than 4213 and 4102 has known issues will result in this scenario.
+        || (cluster_version <= CLUSTER_VERSION_4_1_0_2);
+    const bool can_ignore_empty_outrow_update = (1 == TCONF.skip_empty_outrow_lob_update) || skip_ob_version_exist_known_issues;
+
+    if (can_ignore_empty_outrow_update) {
+      is_update_outrow_lob_from_empty_to_empty = true;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("[FATAL] [OUTROW_LOB] unexpected update outrow lob from empty to empty, config skip_empty_outrow_lob_update = 1 if necessary",
+          KR(ret), K(can_ignore_empty_outrow_update), K(cluster_version));
     }
   }
 
