@@ -143,6 +143,7 @@ public:
   int init(const ObDirectLoadInsertTableParam &param);
   int get_tablet_context(const common::ObTabletID &tablet_id,
                          ObDirectLoadInsertTabletContext *&tablet_ctx) const;
+  void cancel();
   TO_STRING_KV(K_(param));
 private:
   int create_all_tablet_contexts();

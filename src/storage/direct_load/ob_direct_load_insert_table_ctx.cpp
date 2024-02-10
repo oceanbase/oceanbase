@@ -610,5 +610,25 @@ int ObDirectLoadInsertTableContext::get_tablet_context(
   return ret;
 }
 
+void ObDirectLoadInsertTableContext::cancel()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else {
+    FOREACH(iter, tablet_ctx_map_) {
+      const ObTabletID &tablet_id = iter->first;
+      ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
+      if (OB_ISNULL(tablet_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected tablet ctx is NULL", KR(ret), K(tablet_id));
+      } else if (OB_FAIL(tablet_ctx->cancel())) {
+        LOG_WARN("fail to cancel tablet ctx", KR(ret), K(tablet_id));
+      }
+    }
+  }
+}
+
 } // namespace storage
 } // namespace oceanbase
