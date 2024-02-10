@@ -258,7 +258,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   return ret;
 }
 
-int ObMViewSchedJobUtils::disable_mview_refresh_job(
+int ObMViewSchedJobUtils::remove_mview_refresh_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const uint64_t table_id)
@@ -274,15 +274,15 @@ int ObMViewSchedJobUtils::disable_mview_refresh_job(
     }
     LOG_WARN("failed to fetch mview info", KR(ret), K(tenant_id), K(table_id));
   } else if (!mview_info.get_refresh_job().empty()
-      && OB_FAIL(ObDBMSSchedJobUtils::disable_dbms_sched_job(
+      && OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
               sql_client, tenant_id, mview_info.get_refresh_job(), true/*if_exists*/))) {
-    LOG_WARN("failed to disable dbms sched job",
+    LOG_WARN("failed to remove dbms sched job",
         KR(ret), K(tenant_id), K(mview_info.get_refresh_job()));
   }
   return ret;
 }
 
-int ObMViewSchedJobUtils::disable_mlog_purge_job(
+int ObMViewSchedJobUtils::remove_mlog_purge_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const uint64_t table_id)
@@ -298,9 +298,9 @@ int ObMViewSchedJobUtils::disable_mlog_purge_job(
     }
     LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id), K(table_id));
   } else if (!mlog_info.get_purge_job().empty()
-      && OB_FAIL(ObDBMSSchedJobUtils::disable_dbms_sched_job(
+      && OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
               sql_client, tenant_id, mlog_info.get_purge_job(), true/*if_exists*/))) {
-    LOG_WARN("failed to disable dbms sched job",
+    LOG_WARN("failed to remove dbms sched job",
         KR(ret), K(tenant_id), K(mlog_info.get_purge_job()));
   }
   return ret;

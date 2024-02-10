@@ -4409,15 +4409,15 @@ int ObDDLOperator::drop_table(
   if (OB_SUCC(ret)) {
     const uint64_t table_id = table_schema.get_table_id();
     if (table_schema.is_materialized_view()) {
-      if (OB_FAIL(ObMViewSchedJobUtils::disable_mview_refresh_job(
+      if (OB_FAIL(ObMViewSchedJobUtils::remove_mview_refresh_job(
           trans, tenant_id, table_id))) {
-        LOG_WARN("failed to disable mview refresh job",
+        LOG_WARN("failed to remove mview refresh job",
             KR(ret), K(tenant_id), K(table_id));
       }
     } else if (table_schema.is_mlog_table()) {
-      if (OB_FAIL(ObMViewSchedJobUtils::disable_mlog_purge_job(
+      if (OB_FAIL(ObMViewSchedJobUtils::remove_mlog_purge_job(
           trans, tenant_id, table_id))) {
-        LOG_WARN("failed to disable mlog purge job",
+        LOG_WARN("failed to remove mlog purge job",
             KR(ret), K(tenant_id), K(table_id));
       }
     }
