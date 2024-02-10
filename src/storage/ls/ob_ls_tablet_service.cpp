@@ -2384,8 +2384,12 @@ int ObLSTabletService::check_read_info_same(const AllowToReadMgr::AllowToReadInf
   return ret;
 }
 
+// ATTENTION!
+// here we pass VALUE rather than REF for tablet id,
+// because tablet id may be from iter, which will be reset in function,
+// thus tablet id will be invalid
 int ObLSTabletService::get_read_tables(
-    const common::ObTabletID &tablet_id,
+    const common::ObTabletID tablet_id,
     const int64_t timeout_us,
     const int64_t snapshot_version,
     ObTabletTableIterator &iter,
