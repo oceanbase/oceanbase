@@ -80,8 +80,7 @@ int ObMViewRefreshStatsMaintenanceTask::start()
   } else {
     is_stop_ = false;
     if (!in_sched_ &&
-        OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                            MVREF_STATS_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
+        OB_FAIL(schedule_task(MVREF_STATS_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
       LOG_WARN("fail to schedule mvref stats maintenance task", KR(ret));
     } else {
       in_sched_ = true;
@@ -94,21 +93,18 @@ void ObMViewRefreshStatsMaintenanceTask::stop()
 {
   is_stop_ = true;
   in_sched_ = false;
-  TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
+  cancel_task();
 }
 
-void ObMViewRefreshStatsMaintenanceTask::wait()
-{
-  TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
-}
+void ObMViewRefreshStatsMaintenanceTask::wait() { wait_task(); }
 
 void ObMViewRefreshStatsMaintenanceTask::destroy()
 {
   is_inited_ = false;
   is_stop_ = true;
   in_sched_ = false;
-  TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
-  TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
+  cancel_task();
+  wait_task();
   cleanup();
   tenant_id_ = OB_INVALID_TENANT_ID;
   mview_ids_.destroy();
@@ -164,8 +160,8 @@ void ObMViewRefreshStatsMaintenanceTask::switch_status(StatusType new_status, in
     status_ = StatusType::FAIL;
     error_code_ = ret_code;
   }
-  if (in_sched_ && OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                                       MVREF_STATS_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
+  if (in_sched_ &&
+      OB_FAIL(schedule_task(MVREF_STATS_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
     LOG_WARN("fail to schedule mvref stats maintenance task", KR(ret));
   }
 }
@@ -270,8 +266,7 @@ int ObMViewRefreshStatsMaintenanceTask::finish()
   // cleanup
   cleanup();
   // schedule next round
-  if (in_sched_ && OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                                       MVREF_STATS_MAINTENANCE_INTERVAL, false /*repeat*/))) {
+  if (in_sched_ && OB_FAIL(schedule_task(MVREF_STATS_MAINTENANCE_INTERVAL, false /*repeat*/))) {
     LOG_WARN("fail to schedule mvref stats maintenance task", KR(ret));
   }
   return ret;

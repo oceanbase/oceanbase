@@ -72,8 +72,7 @@ int ObMLogMaintenanceTask::start()
     LOG_WARN("ObMLogMaintenanceTask not init", KR(ret), KP(this));
   } else {
     is_stop_ = false;
-    if (!in_sched_ && OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                                          MLOG_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
+    if (!in_sched_ && OB_FAIL(schedule_task(MLOG_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
       LOG_WARN("fail to schedule mlog maintenance task", KR(ret));
     } else {
       in_sched_ = true;
@@ -86,18 +85,17 @@ void ObMLogMaintenanceTask::stop()
 {
   is_stop_ = true;
   in_sched_ = false;
-  TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
+  cancel_task();
 }
 
-void ObMLogMaintenanceTask::wait() { TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this); }
-
+void ObMLogMaintenanceTask::wait() { wait_task(); }
 void ObMLogMaintenanceTask::destroy()
 {
   is_inited_ = false;
   is_stop_ = true;
   in_sched_ = false;
-  TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
-  TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), *this);
+  cancel_task();
+  wait_task();
   cleanup();
   tenant_id_ = OB_INVALID_TENANT_ID;
   mlog_ids_.destroy();
@@ -150,8 +148,7 @@ void ObMLogMaintenanceTask::switch_status(StatusType new_status, int ret_code)
     status_ = StatusType::FAIL;
     error_code_ = ret_code;
   }
-  if (in_sched_ && OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                                       MLOG_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
+  if (in_sched_ && OB_FAIL(schedule_task(MLOG_MAINTENANCE_SCHED_INTERVAL, false /*repeat*/))) {
     LOG_WARN("fail to schedule mlog maintenance task", KR(ret));
   }
 }
@@ -249,8 +246,7 @@ int ObMLogMaintenanceTask::finish()
   // cleanup
   cleanup();
   // schedule next round
-  if (in_sched_ && OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(), *this,
-                                       MLOG_MAINTENANCE_INTERVAL, false /*repeat*/))) {
+  if (in_sched_ && OB_FAIL(schedule_task(MLOG_MAINTENANCE_INTERVAL, false /*repeat*/))) {
     LOG_WARN("fail to schedule mlog maintenance task", KR(ret));
   }
   return ret;
