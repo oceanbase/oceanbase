@@ -144,11 +144,11 @@ struct ObQueryFlag
       uint64_t is_show_seed_   : OBSF_BIT_IS_SHOW_SEED;
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
       uint64_t is_lookup_for_4377_ : OBSF_BIT_IS_LOOKUP_FOR_4377;
-      uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
       uint64_t for_foreign_key_check_ : OBSF_BIT_FOREIGN_KEY_CHECK;
       uint64_t is_new_query_range_ : OBSF_BIT_IS_NEW_QUERY_RANGE;
-      uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
       uint64_t is_select_follower_ : OBSF_BIT_IS_SELECT_FOLLOWER;
+      uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
+      uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
