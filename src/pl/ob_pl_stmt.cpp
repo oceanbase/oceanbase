@@ -920,7 +920,7 @@ int ObPLUDTNS::get_user_type(uint64_t type_id,
   const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
   CK (OB_NOT_NULL(allocator));
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info));
-  CK (OB_NOT_NULL(udt_info));
+  OV (OB_NOT_NULL(udt_info), OB_ERR_OBJECT_INVALID, ret, tenant_id, type_id);
   OZ (udt_info->transform_to_pl_type(*allocator, user_type));
   CK (OB_NOT_NULL(user_type));
   return ret;
