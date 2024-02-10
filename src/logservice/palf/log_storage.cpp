@@ -85,11 +85,15 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
 {
   int ret = OB_SUCCESS;
   block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
-  // if last block is full, last_block_id will be the next block id of 'last block'
-  // NB: nowdays, there is no possible which last block is empty but the header of this block is valid.
-  block_id_t last_block_id = (0 == curr_block_writable_size_ ? log_tail_block_id - 1 : log_tail_block_id);
+  block_id_t log_tail_offset = lsn_2_offset(log_tail_, logical_block_size_);
+  // if last block is full or empty, last_block_id will be the next block id of 'last block',
+  // the valid block header is in prev block.
+  block_id_t last_block_id = (0 == log_tail_offset ? log_tail_block_id - 1 : log_tail_block_id);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (0 == log_tail_offset && 0 == log_tail_block_id) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, there is no valid meta at first block", KPC(this));
   // NB: nowdays, we not support switch block when updat manifest failed, therefore, we don't need
   // handle this case.
   //
