@@ -1347,7 +1347,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
   }
 
   if (OB_SUCC(ret)) {
-    if (page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
+    if (!handle.is_disable_page_cache() && page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
       // merge multi page io into one.
       ObMacroBlockHandle mb_handle;
       ObTmpBlockIOInfo info(io_info);
@@ -1375,9 +1375,16 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
         info.offset_ += ObTmpMacroBlock::get_header_padding();
         info.size_ = ObTmpMacroBlock::get_default_page_size();
         info.macro_block_id_ = block->get_macro_block_id();
-        if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
-          STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
+        if (handle.is_disable_page_cache()) {
+          if (OB_FAIL(page_cache_->direct_read(info, mb_handle))) {
+            STORAGE_LOG(WARN, "fail to direct read tmp page", K(ret));
+          }
         } else {
+          if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
+            STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
           char *buf = io_info.buf_ + ObTmpMacroBlock::calculate_offset(
               page_io_infos->at(i).key_.get_page_id(), page_io_infos->at(i).offset_) - io_info.offset_;
           ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, buf, page_io_infos->at(i).offset_,
