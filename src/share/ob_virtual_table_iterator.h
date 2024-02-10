@@ -68,6 +68,7 @@ public:
   inline void set_table_schema(const share::schema::ObTableSchema *table_schema);
   inline void set_index_schema(const share::schema::ObTableSchema *index_schema);
   inline void set_scan_param(const ObVTableScanParam *scan_param) { scan_param_ = scan_param; }
+  inline const ObVTableScanParam *get_scan_param() { return scan_param_; }
   virtual int open();
   virtual int inner_open() { return common::OB_SUCCESS; };
   virtual int get_next_row(common::ObNewRow *&row);
