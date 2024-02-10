@@ -245,24 +245,30 @@ int ObDBMSSchedJobUtils::init_session(
   uint64_t tenant_id,
   const ObString &database_name,
   uint64_t database_id,
-  const ObUserInfo* user_info)
+  const ObUserInfo* user_info,
+  const ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
-  ObObj oracle_sql_mode;
   ObArenaAllocator *allocator = NULL;
   const bool print_info_log = true;
   const bool is_sys_tenant = true;
   ObPCMemPctConf pc_mem_conf;
-  ObObj oracle_mode;
-  oracle_mode.set_int(1);
-  oracle_sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
+  ObObj compatibility_mode;
+  ObObj sql_mode;
+  if (job_info.is_oracle_tenant_) {
+    compatibility_mode.set_int(1);
+    sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
+  } else {
+    compatibility_mode.set_int(0);
+    sql_mode.set_uint(ObUInt64Type, DEFAULT_MYSQL_MODE);
+  }
   OX (session.set_inner_session());
   OZ (session.load_default_sys_variable(print_info_log, is_sys_tenant));
   OZ (session.update_max_packet_size());
   OZ (session.init_tenant(tenant_name.ptr(), tenant_id));
   OZ (session.load_all_sys_vars(schema_guard));
-  OZ (session.update_sys_variable(share::SYS_VAR_SQL_MODE, oracle_sql_mode));
-  OZ (session.update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, oracle_mode));
+  OZ (session.update_sys_variable(share::SYS_VAR_SQL_MODE, sql_mode));
+  OZ (session.update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, compatibility_mode));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_DATE_FORMAT,
                                   ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_TIMESTAMP_FORMAT,
@@ -276,6 +282,17 @@ int ObDBMSSchedJobUtils::init_session(
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
   OX (session.set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT));
+  if (OB_SUCC(ret) && job_info.is_date_expression_job_class()) {
+    // set larger timeout for mview scheduler jobs
+    const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+    const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+    ObObj query_timeout_obj;
+    ObObj trx_timeout_obj;
+    query_timeout_obj.set_int(QUERY_TIMEOUT_US);
+    trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+    OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+    OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+  }
   return ret;
 }
 
@@ -317,7 +334,8 @@ int ObDBMSSchedJobUtils::init_env(
                    job_info.get_tenant_id(),
                    database_schema->get_database_name(),
                    database_schema->get_database_id(),
-                   user_info));
+                   user_info,
+                   job_info));
   OZ (exec_env.store(session));
   return ret;
 }

@@ -165,7 +165,7 @@ public:
   common::ObString &get_job_class() { return job_class_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
-  bool is_date_expression_job_class() { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
+  bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
@@ -286,7 +286,8 @@ public:
       uint64_t tenant_id,
       const common::ObString &database_name,
       uint64_t database_id,
-      const share::schema::ObUserInfo* user_info);
+      const share::schema::ObUserInfo* user_info,
+      const ObDBMSSchedJobInfo &job_info);
   static int init_env(ObDBMSSchedJobInfo &job_info,
                       sql::ObSQLSessionInfo &session);
   static int create_session(const uint64_t tenant_id,
