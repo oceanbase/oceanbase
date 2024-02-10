@@ -570,24 +570,7 @@ int ObTabletCreateMdsHelper::convert_schemas(
     obrpc::ObBatchCreateTabletArg &arg)
 {
   int ret = OB_SUCCESS;
-  // For tenant data version belongs to (, DATA_VERSION_4_3_0_0),
-  // use the schema status to decide whether to create major sstable or not when creating tablet.
-  // For tenant data version belongs to [DATA_VERSION_4_3_0_0, ),
-  // use the original `need_create_empty_major_` in ObCreateTabletSchema to decide it.
   if (arg.create_tablet_schemas_.count() > 0) {
-    const uint64_t tenant_data_version = arg.create_tablet_schemas_[0]->get_tenant_data_version();
-    for (int64_t i = 0; OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_3_0_0
-        && i < arg.table_schemas_.count(); ++i) {
-      ObCreateTabletSchema *create_tablet_schema = nullptr;
-      if (OB_ISNULL(create_tablet_schema = arg.create_tablet_schemas_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(ret), K(i), K(arg));
-      } else {
-        const bool need_create_empty_major =
-          !(create_tablet_schema->is_user_hidden_table() || (create_tablet_schema->is_index_table() && !create_tablet_schema->can_read_index()));
-        create_tablet_schema->set_need_create_empty_major(need_create_empty_major);
-      }
-    }
   }
   // compatibility with DATA_VERSION_4_1_0_0
   else if (arg.tablets_.count() <= 0) {
@@ -599,22 +582,36 @@ int ObTabletCreateMdsHelper::convert_schemas(
       ObTableSchema &table_schema = arg.table_schemas_[i];
       ObCreateTabletSchema *create_tablet_schema = NULL;
       void *create_tablet_schema_ptr = arg.allocator_.alloc(sizeof(ObCreateTabletSchema));
-      const bool need_create_empty_major =
-        !(table_schema.is_user_hidden_table() || (table_schema.is_index_table() && !table_schema.can_read_index()));
+      obrpc::ObCreateTabletExtraInfo create_tablet_extra_info; // placeholder.
       if (OB_ISNULL(create_tablet_schema_ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate storage schema", KR(ret), K(table_schema));
       } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
       } else if (OB_FAIL(create_tablet_schema->init(arg.allocator_, table_schema, compat_mode,
-           false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3,
-           0/*tenant_data_version, default val*/, need_create_empty_major))) {
+           false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
         LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
       } else if (OB_FAIL(arg.create_tablet_schemas_.push_back(create_tablet_schema))) {
         LOG_WARN("failed to push back table schema", KR(ret), K(create_tablet_schema));
+      } else if (OB_FAIL(arg.tablet_extra_infos_.push_back(create_tablet_extra_info))) {
+        LOG_WARN("failed to push back create tablet extra info", K(ret));
       }
     }
   }
   return ret;
+}
+
+bool ObTabletCreateMdsHelper::check_need_create_empty_major_sstable(
+    const ObCreateTabletSchema &create_tablet_schema,
+    const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info)
+{
+  bool need_create_empty_major_sstable = true;
+  if (DATA_VERSION_4_3_0_0 <= create_tablet_extra_info.tenant_data_version_) {
+    need_create_empty_major_sstable = create_tablet_extra_info.need_create_empty_major_;
+  } else {
+    need_create_empty_major_sstable =
+      !(create_tablet_schema.is_user_hidden_table() || (create_tablet_schema.is_index_table() && !create_tablet_schema.can_read_index()));
+  }
+  return need_create_empty_major_sstable;
 }
 
 int ObTabletCreateMdsHelper::build_pure_data_tablet(
@@ -630,6 +627,7 @@ int ObTabletCreateMdsHelper::build_pure_data_tablet(
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
+  const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   ObTabletHandle tablet_handle;
@@ -673,6 +671,8 @@ int ObTabletCreateMdsHelper::build_pure_data_tablet(
     LOG_WARN("invalid args", K(ret), K(info), K(arg));
   } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, data_tablet_id, data_tablet_id,
       scn, snapshot_version, *create_tablet_schemas[info.table_schema_index_[index]], compat_mode,
+      check_need_create_empty_major_sstable(*create_tablet_schemas[info.table_schema_index_[index]],
+          create_tablet_extra_infos[info.table_schema_index_[index]]),
       tablet_handle))) {
     LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
   }
@@ -700,6 +700,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
+  const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   ObTabletHandle data_tablet_handle;
   ObTabletHandle tablet_handle;
@@ -721,6 +722,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
     exist = false;
     const ObTabletID &tablet_id = tablet_ids[i];
     const ObCreateTabletSchema *create_tablet_schema = create_tablet_schemas[info.table_schema_index_[i]];
+    const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info = create_tablet_extra_infos[info.table_schema_index_[i]];
     if (OB_ISNULL(create_tablet_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", K(ret), K(info), K(i));
@@ -752,7 +754,9 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
     } else if (CLICK_FAIL(tablet_id_array.push_back(tablet_id))) {
       LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, data_tablet_id,
-        scn, snapshot_version, *create_tablet_schema, compat_mode, tablet_handle))) {
+        scn, snapshot_version, *create_tablet_schema, compat_mode,
+        check_need_create_empty_major_sstable(*create_tablet_schema, create_tablet_extra_info),
+        tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
     }
 
@@ -797,6 +801,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
+  const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   ObTabletHandle tablet_handle;
   bool exist = false;
@@ -815,6 +820,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
     exist = false;
     const ObTabletID &tablet_id = tablet_ids[i];
     const ObCreateTabletSchema *create_tablet_schema = create_tablet_schemas[info.table_schema_index_[i]];
+    const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info = create_tablet_extra_infos[info.table_schema_index_[i]];
 
     if (for_replay) {
       const ObTabletMapKey key(ls_id, tablet_id);
@@ -840,7 +846,9 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", K(ret), K(info), K(i));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, data_tablet_id,
-        scn, snapshot_version, *create_tablet_schema, compat_mode, tablet_handle))) {
+        scn, snapshot_version, *create_tablet_schema, compat_mode,
+        check_need_create_empty_major_sstable(*create_tablet_schema, create_tablet_extra_info),
+        tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
     }
 
@@ -870,6 +878,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
+  const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos = arg.tablet_extra_infos_;
   const int64_t snapshot_version = arg.major_frozen_scn_.get_val_for_tx();
   ObTabletHandle tablet_handle;
   int64_t aux_info_idx = -1;
@@ -893,6 +902,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
     lob_piece_tablet_id.reset();
     const ObTabletID &tablet_id = tablet_ids[i];
     const ObCreateTabletSchema *create_tablet_schema = create_tablet_schemas[info.table_schema_index_[i]];
+    const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info = create_tablet_extra_infos[info.table_schema_index_[i]];
     bool has_related_aux_info = find_aux_info_for_hidden_tablets(arg, tablet_id, aux_info_idx);
     if (OB_ISNULL(create_tablet_schema)) {
       ret = OB_INVALID_ARGUMENT;
@@ -935,7 +945,9 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
     } else if (CLICK_FAIL(tablet_id_array.push_back(tablet_id))) {
       LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
     } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, tablet_id,
-        scn, snapshot_version, *create_tablet_schema, compat_mode, tablet_handle))) {
+        scn, snapshot_version, *create_tablet_schema, compat_mode,
+        check_need_create_empty_major_sstable(*create_tablet_schema, create_tablet_extra_info),
+        tablet_handle))) {
       LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(orig_tablet_id), "arg", PRETTY_ARG(arg));
     }
 

@@ -192,6 +192,7 @@ public:
       const share::SCN &create_scn,
       const int64_t snapshot_version,
       const ObCreateTabletSchema &storage_schema,
+      const bool need_create_empty_major_sstable,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
   int init_for_merge(
