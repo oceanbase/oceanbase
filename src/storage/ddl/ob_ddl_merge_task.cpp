@@ -110,9 +110,6 @@ int ObDDLTableMergeDag::create_first_task()
       && ddl_param_.start_scn_ < tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_scn", tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_);
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
-      ddl_param_.start_scn_, ddl_param_.snapshot_version_, ddl_param_.data_format_version_))) {
-    LOG_WARN("ddl kv manager try freeze failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(true/*frozen_only*/, ddl_kvs_handle))) {
     LOG_WARN("get freezed ddl kv failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(alloc_task(merge_task))) {
