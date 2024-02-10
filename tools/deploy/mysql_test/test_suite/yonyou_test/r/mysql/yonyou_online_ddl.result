@@ -350,7 +350,7 @@ cExtProps	mediumtext	YES		NULL
 cDesignProps	mediumtext	YES		NULL	
 ytenant_id	varchar(36)	NO		～	
 drop procedure if exists p_aa_updatecolumn;
-DROP PROCEDURE if exists addIndex;;
+DROP PROCEDURE if exists addIndex;
 CREATE PROCEDURE `addIndex`(IN tablename VARCHAR(200), IN indexname VARCHAR(200), IN executeStr VARCHAR(1000),
 IN executeType VARCHAR(50))
 BEGIN
