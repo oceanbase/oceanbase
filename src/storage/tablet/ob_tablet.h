@@ -388,6 +388,7 @@ public:
   // 2. If a tablet may be being accessed, shouldn't call this function.
   int rebuild_memtables(const share::SCN scn);
 
+  void reset_memtable();
   // ATTENTION!!! The following two interfaces only release memtable from memtable manager.
   int release_memtables(const share::SCN scn);
   // force release all memtables
@@ -809,7 +810,6 @@ private:
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
   int assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_count);
-  void reset_memtable();
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObDDLKV **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
   int wait_release_memtables_();
