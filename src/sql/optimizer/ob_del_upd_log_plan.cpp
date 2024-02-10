@@ -2278,6 +2278,40 @@ int ObDelUpdLogPlan::check_update_part_key(const ObTableSchema* index_schema,
   }
   return ret;
 }
+
+int ObDelUpdLogPlan::check_update_primary_key(const ObTableSchema* index_schema,
+                                              IndexDMLInfo*& index_dml_info) const
+{
+  int ret = OB_SUCCESS;
+  const ObDelUpdStmt *stmt = get_stmt();
+  ObSEArray<uint64_t, 8> pk_ids;
+  if (OB_ISNULL(stmt) || OB_ISNULL(index_schema) || OB_ISNULL(index_dml_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(index_schema), K(index_dml_info));
+  } else if (!index_dml_info->is_primary_index_) {
+    // do nothing
+  } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
+    LOG_WARN("failed to get rowkey column ids", K(ret));
+  } else {
+    for (int64_t i = 0; i < index_dml_info->assignments_.count(); ++i) {
+      ObColumnRefRawExpr *column_expr = index_dml_info->assignments_.at(i).column_expr_;
+      ColumnItem *column_item = nullptr;
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column expr", K(ret));
+      } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
+                                                                     column_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column item", K(ret), KPC(column_expr));
+      } else if (has_exist_in_array(pk_ids, column_item->base_cid_)) {
+        index_dml_info->is_update_primary_key_ = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
 {
   int ret = OB_SUCCESS;
