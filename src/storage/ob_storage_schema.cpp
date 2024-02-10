@@ -823,10 +823,6 @@ int ObStorageSchema::deserialize(
         STORAGE_LOG(WARN, "failed to reserve for column group array", K(ret));
       } else if (OB_FAIL(add_column_group(column_group))) {
         STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
-        STORAGE_LOG(WARN, "failed to add column group", K(ret), K(MTL_ID()));
-      } else if (compat_version >= DATA_VERSION_4_3_0_0) {
-        storage_schema_version_ = STORAGE_SCHEMA_VERSION_V3;
       }
     } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &store_column_cnt_))) {
       STORAGE_LOG(WARN, "failed to deserialize store_column_cnt", K(ret), K_(store_column_cnt));
