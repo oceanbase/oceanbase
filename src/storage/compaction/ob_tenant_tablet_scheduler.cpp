@@ -596,7 +596,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
       LOG_WARN("failed to add progress", K(tmp_ret), K(broadcast_version));
     }
     {
-      obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version_ = broadcast_version;
     }
 

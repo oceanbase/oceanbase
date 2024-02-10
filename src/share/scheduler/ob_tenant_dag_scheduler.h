@@ -1386,7 +1386,9 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
          ObDagType::DAG_TYPE_CO_MERGE_FINISH == dag_type ||
          ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type;
+         ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||
+         ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
+         ObDagType::DAG_TYPE_MDS_TABLE_MERGE == dag_type;
 }
 
 inline int dag_yield()
