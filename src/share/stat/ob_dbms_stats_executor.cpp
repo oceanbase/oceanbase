@@ -1200,7 +1200,8 @@ int ObDbmsStatsExecutor::gather_index_stats(ObExecContext &ctx,
                                             ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                             param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
-  } else if (OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
+  } else if (param.need_estimate_block_ &&
+             OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
                                                                  partition_id_block_map))) {
     LOG_WARN("failed to estimate block count", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, INVALID_LEVEL, &partition_id_block_map,

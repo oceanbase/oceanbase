@@ -178,7 +178,7 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
     is_valid = !is_no_stat_virtual_table(table_id);
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
+  } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(!table_schema->is_normal_schema())) {
     //do nothing
   } else {//check user table
     is_valid = table_schema->is_user_table() || table_schema->is_external_table();
