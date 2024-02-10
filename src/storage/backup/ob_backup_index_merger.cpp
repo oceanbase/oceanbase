@@ -827,6 +827,16 @@ int ObBackupMacroBlockIndexMerger::merge_index()
   if (OB_NOT_NULL(fuser)) {
     ObLSBackupFactory::free(fuser);
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
+      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  } else {
+    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+    }
+  }
   if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
     ret = COVER_SUCC(tmp_ret);
     LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
@@ -1336,6 +1346,16 @@ int ObBackupMetaIndexMerger::merge_index()
       } else if (OB_FAIL(flush_index_tree_())) {
         LOG_WARN("failed to flush index tree", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
+      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  } else {
+    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }
   }
   if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {

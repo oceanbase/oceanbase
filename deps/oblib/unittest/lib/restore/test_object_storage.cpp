@@ -1346,11 +1346,22 @@ TEST_F(TestObjectStorage, test_multipart_write)
     write_buf[content_size - 1] = '\0';
 
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_multipart", dir_uri));
+
+    {
+      // test abort
+      ObStorageMultiPartWriter writer;
+      ASSERT_EQ(OB_SUCCESS, writer.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, writer.abort());
+      ASSERT_NE(OB_SUCCESS, writer.complete());
+      ASSERT_EQ(OB_SUCCESS, writer.close());
+    }
+
     ObStorageMultiPartWriter writer;
     // ObStorageWriter writer;
     ASSERT_EQ(OB_SUCCESS, writer.open(uri, &info_base));
     ASSERT_EQ(OB_SUCCESS, writer.write(write_buf, content_size));
     ASSERT_EQ(content_size, writer.get_length());
+    ASSERT_EQ(OB_SUCCESS, writer.complete());
     ASSERT_EQ(OB_SUCCESS, writer.close());
     OB_LOG(INFO, "-----------------------------------------------------------------------------");
 

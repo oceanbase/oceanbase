@@ -276,6 +276,18 @@ public:
   virtual bool is_opened() const = 0;
 };
 
+class ObIStorageMultiPartWriter
+{
+public:
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
+  virtual int write(const char *buf, const int64_t size) = 0;
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) = 0;
+  virtual int complete() = 0;
+  virtual int abort() = 0;
+  virtual int close() = 0;
+  virtual int64_t get_length() const = 0;
+  virtual bool is_opened() const = 0;
+};
 
 }//common
 }//oceanbase

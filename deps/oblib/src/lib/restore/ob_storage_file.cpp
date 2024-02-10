@@ -1173,5 +1173,65 @@ int ObStorageFileMultiPartWriter::pwrite(const char *buf, const int64_t size, co
   return write(buf, size);
 }
 
+int ObStorageFileMultiPartWriter::complete()
+{
+  int ret = OB_SUCCESS;
+  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
+
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret), K(fd_));
+  }
+
+  if (OB_SUCC(ret)) {
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_FILE_SYSTEM_RENAME_ERROR) OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    has_error_ = true;
+  }
+#endif
+    if (has_error_) {
+      STORAGE_LOG(WARN, "multipart writer has error, skip complete",
+          KCSTRING(path_), KCSTRING(real_path_));
+    } else if (0 != ::rename(path_, real_path_)) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "failed to complete", K(ret), KCSTRING(real_path_),
+          KCSTRING(path_), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else {
+      STORAGE_LOG(INFO, "succeed to rename file after complete",
+          KCSTRING(path_), KCSTRING(real_path_));
+    }
+  }
+  return ret;
+}
+
+int ObStorageFileMultiPartWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
+
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret), K(fd_));
+  } else if (0 != ::remove(path_)) {
+    convert_io_error(errno, ret);
+    STORAGE_LOG(WARN, "failed to abort(remove tmp file)", K(ret), KCSTRING(path_),
+        K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+  }
+  return ret;
+}
+
+int ObStorageFileMultiPartWriter::close()
+{
+  int ret = OB_SUCCESS;
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret), K_(fd));
+  } else if (OB_FAIL(ObStorageFileBaseWriter::close())) {
+    STORAGE_LOG(WARN, "failed to do close", K(ret), KCSTRING(path_), KCSTRING(real_path_));
+  }
+  return ret;
+}
+
 }//common
 }//oceanbase

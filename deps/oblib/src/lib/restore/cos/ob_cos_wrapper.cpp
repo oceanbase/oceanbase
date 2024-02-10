@@ -99,9 +99,11 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         } else {
           ob_errcode = OB_COS_ERROR;
         }
+        break;
       }
       default: {
         ob_errcode = OB_COS_ERROR;
+        break;
       }
     }
   }

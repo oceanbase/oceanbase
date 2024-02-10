@@ -5559,7 +5559,16 @@ int ObLSBackupComplementLogTask::transfer_clog_file_(const ObBackupPath &src_pat
         break;
       }
     }
-
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(device_handle->complete(fd))) {
+        LOG_WARN("fail to complete multipart upload", K(ret), K(device_handle), K(fd));
+      }
+    } else {
+      if (OB_TMP_FAIL(device_handle->abort(fd))) {
+        ret = COVER_SUCC(tmp_ret);
+        LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+      }
+    }
     if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
       LOG_WARN("fail to close file", K(ret), K_(backup_dest), K(dst_path));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;

@@ -330,6 +330,8 @@ public:
   //file/dir interfaces
   virtual int open(const char *pathname, const int flags, const mode_t mode,
                     ObIOFd &fd, ObIODOpts *opts= NULL) = 0;
+  virtual int complete(const ObIOFd &fd) = 0;
+  virtual int abort(const ObIOFd &fd) = 0;
   virtual int close(const ObIOFd &fd) = 0;
   virtual int mkdir(const char *pathname, mode_t mode) = 0;
   virtual int rmdir(const char *pathname) = 0;

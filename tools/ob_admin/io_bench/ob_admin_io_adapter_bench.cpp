@@ -139,6 +139,8 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
           config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_READ;
         } else if (0 == STRCMP("del", optarg)) {
           config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_DEL;
+        } else if (0 == STRCMP("is_exist", optarg)) {
+          config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_IS_EXIST;
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "unknown test type", K((char *)optarg), K(ret));
