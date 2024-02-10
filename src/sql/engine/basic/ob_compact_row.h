@@ -33,6 +33,15 @@ struct RowHeader {
 public:
   static const int64_t OFFSET_LEN = 4;
   uint32_t row_size_;
+  union {
+    struct {
+      //TODO shengle support dynamic offset len, no use now, now only use int32_t
+      uint32_t offset_len_    : 3;
+      uint32_t has_null_      : 1;
+      uint32_t reserved_      : 28;
+    };
+    uint32_t flag_;
+  };
 };
 
 struct RowMeta {
@@ -181,6 +190,7 @@ struct ObCompactRow
 
   inline void set_null(const RowMeta &meta, const int64_t col_idx) {
     nulls()->set(col_idx);
+    header_.has_null_ = true;
     if (meta.fixed_expr_reordered()) {
       const int32_t idx = meta.project_idx(col_idx);
       if (idx < meta.fixed_cnt_) {
