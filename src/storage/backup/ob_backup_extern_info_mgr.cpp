@@ -433,6 +433,8 @@ int ObExternTabletMetaWriter::switch_file_()
 int ObExternTabletMetaWriter::close()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet meta writer not inited", K(ret));
@@ -440,6 +442,13 @@ int ObExternTabletMetaWriter::close()
     LOG_WARN("failed to flush trailer", K(ret));
   } else if (OB_FAIL(file_write_ctx_.close())) {
     LOG_WARN("failed to close file writer", K(ret));
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
   }
   return ret;
 }
