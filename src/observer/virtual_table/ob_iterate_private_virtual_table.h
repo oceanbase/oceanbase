@@ -42,7 +42,6 @@ public:
   virtual int do_open() override;
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
   virtual int inner_close() override;
-
 private:
   virtual int init_non_exist_map_item(
       MapItem &item, const share::schema::ObColumnSchemaV2 &col) override;
@@ -53,6 +52,9 @@ private:
   bool check_tenant_in_range_(const uint64_t tenant_id, const common::ObNewRange &range);
   int next_tenant_();
   uint64_t get_exec_tenant_id_(const uint64_t tenant_id);
+  virtual int set_convert_func(convert_func_t &func,
+                               const share::schema::ObColumnSchemaV2 &col,
+                               const share::schema::ObColumnSchemaV2 &base_col) override;
 private:
   int64_t tenant_idx_;
   uint64_t cur_tenant_id_;
