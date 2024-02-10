@@ -156,8 +156,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
     iter_ret = OB_SUCCESS;
     cur_ls_ptr = nullptr;
     while (OB_SUCCESS == (iter_ret = iter_ptr->get_next(cur_ls_ptr))) {
-
-      SCN min_start_scn;
+      SCN min_start_scn = SCN::invalid_scn();
+      SCN max_decided_scn = SCN::invalid_scn();
       MinStartScnStatus status = MinStartScnStatus::UNKOWN;
       common::ObRole role;
       int64_t base_proposal_id, proposal_id;
@@ -173,6 +173,14 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
         //
+
+        // ATTENTION : get_max_decided_scn must before iterating all trans ctx.
+        // set max_decided_scn as default value
+        if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
+          TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
+          max_decided_scn.set_invalid();
+        }
+        min_start_scn = max_decided_scn;
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 
