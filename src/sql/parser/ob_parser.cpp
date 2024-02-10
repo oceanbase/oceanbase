@@ -630,6 +630,7 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
     ParseMode parse_mode = MULTI_MODE;
     int64_t offset = 0;
     int64_t remain = stmt.length();
+    int64_t semicolon_offset = INT64_MIN;
 
     parse_stat.reset();
     // 绕过parser对空查询处理不友好的方法：自己把末尾空格去掉
@@ -640,12 +641,16 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
     if (remain > 0 && '\0' == stmt[remain - 1]) {
       --remain;
     }
-    //再删除末尾空格
+    //再删除末尾空格和分号
     while (remain > 0 && ((ISSPACE(stmt[remain - 1])) ||
-           (lib::is_mysql_mode() && is_prepare && stmt[remain - 1] == ';'))) {
+           (lib::is_mysql_mode() && stmt[remain - 1] == ';'))) {
+      if (stmt[remain - 1] == ';') {
+        semicolon_offset = remain - 1;
+      }
       --remain;
     }
-
+    //留下最多一个分号
+    remain = max(remain, semicolon_offset + 1);
     // 对于空语句的特殊处理
     if (OB_UNLIKELY(0 >= remain)) {
       ObString part; // 空串
