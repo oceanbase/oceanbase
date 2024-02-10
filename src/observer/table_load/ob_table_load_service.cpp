@@ -216,7 +216,7 @@ bool ObTableLoadService::ObGCTask::gc_table_not_exist_ctx(ObTableLoadTableCtx *t
       const ObTableSchema *table_schema = nullptr;
       if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, hidden_table_id, schema_guard,
                                                       table_schema))) {
-        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret)) {
+        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret && OB_TENANT_NOT_EXIST != ret)) {
           LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(hidden_table_id));
         } else {
           LOG_INFO("hidden table not exist, gc table load ctx", K(tenant_id_), K(table_id),
