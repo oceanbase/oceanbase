@@ -270,7 +270,13 @@ int ObColSumAggregator::eval(const ObStorageDatum &datum, const bool is_data)
   } else if (OB_FAIL(choose_eval_func(is_data))) {
     LOG_WARN("fail to choose eval func", K(is_data));
   } else if (OB_FAIL((this->*eval_func_)(datum))) {
-    LOG_WARN("fail to eval sum", K(datum), KPC(result_), K(col_desc_));
+    if (OB_INTEGER_PRECISION_OVERFLOW == ret || OB_DECIMAL_PRECISION_OVERFLOW == ret || OB_NUMERIC_OVERFLOW == ret) {
+      // sum precision overflow set not aggregate.
+      set_not_aggregate();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to eval sum", K(datum), KPC(result_), K(col_desc_));
+    }
   }
   return ret;
 }
