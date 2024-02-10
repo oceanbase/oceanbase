@@ -2820,6 +2820,34 @@ int ObDDLTaskRecordOperator::update_status_and_message(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::update_ret_code_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int ret_code,
+      ObString &message)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  ObSqlString message_string;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(task_id <= 0 || tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id));
+  } else if (OB_FAIL(to_hex_str(message, message_string))) {
+    LOG_WARN("append hex escaped string failed", K(ret));
+  } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET ret_code = %d, message = \"%.*s\"  WHERE task_id = %lu",
+          OB_ALL_DDL_TASK_STATUS_TNAME, ret_code, static_cast<int>(message_string.length()), message_string.ptr(), task_id))) {
+    LOG_WARN("assign sql string failed", K(ret), K(ret_code), K(task_id));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("update status of ddl task record failed", K(ret), K(sql_string));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::delete_record(common::ObMySQLProxy &proxy, const uint64_t tenant_id, const int64_t task_id)
 {
   int ret = OB_SUCCESS;
