@@ -1801,6 +1801,16 @@ int ObMultiTenant::clear_persistent_data(const uint64_t tenant_id)
   } else if (OB_FAIL(FileDirectoryUtils::is_exists(tenant_clog_dir, exist))) {
     LOG_WARN("fail to check exist", K(ret));
   } else if (exist) {
+    // defense code begin
+    int tmp_ret = OB_SUCCESS;
+    bool directory_empty = true;
+    if (OB_TMP_FAIL(FileDirectoryUtils::is_empty_directory(tenant_clog_dir, directory_empty))) {
+      LOG_WARN("fail to check directory whether is empty", KR(tmp_ret), K(tenant_clog_dir));
+    }
+    if (!directory_empty) {
+      LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "msg", "clog directory must be empty when delete tenant", K(tenant_clog_dir));
+    }
+    // defense code end
     if (OB_FAIL(FileDirectoryUtils::delete_directory_rec(tenant_clog_dir))) {
       LOG_WARN("fail to delete clog dir", K(ret), K(tenant_clog_dir));
     }
