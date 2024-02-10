@@ -610,6 +610,8 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
       // do nothing
     } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, single_sel, all_predicate_sel))) {
       LOG_WARN("failed to calculate one qual selectivity", KPC(estimator), K(qual), K(ret));
+    } else if (FALSE_IT(single_sel = revise_between_0_1(single_sel))) {
+      // never reach
     } else if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel, ObExprSelPair(qual, single_sel)))) {
       LOG_WARN("fail ed to add selectivity to plan", K(ret), K(qual), K(selectivity));
     } else {
@@ -630,7 +632,7 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
     } else if (OB_FAIL(estimator->get_sel(table_metas, ctx, tmp_selectivity, all_predicate_sel))) {
       LOG_WARN("failed to get sel", K(ret), KPC(estimator));
     } else {
-      selectivities.at(i) = tmp_selectivity;
+      selectivities.at(i) = revise_between_0_1(tmp_selectivity);
       if (ObSelEstType::RANGE == estimator->get_type()) {
         ObRangeSelEstimator *range_estimator = static_cast<ObRangeSelEstimator *>(estimator);
         if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel,
