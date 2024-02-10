@@ -576,6 +576,9 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+
+  static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
+
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,

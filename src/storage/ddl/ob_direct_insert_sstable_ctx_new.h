@@ -189,7 +189,7 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const bool is_full_direct_load);
-  int gc_tablet_direct_load(ObLS &ls);
+  int gc_tablet_direct_load();
   // remove tablet direct load mgr from hashmap,
   // for full direct load, it will be called when physical major generates,
   // for incremental direct load, it will be called when all KVs dump.
@@ -198,12 +198,13 @@ public:
 private:
   struct GetGcCandidateOp final {
   public:
-    GetGcCandidateOp(ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs) : candidate_mgrs_(candidate_mgrs) {}
+    GetGcCandidateOp(ObIArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>> &candidate_mgrs)
+      : candidate_mgrs_(candidate_mgrs) {}
     ~GetGcCandidateOp() {}
     int operator() (common::hash::HashMapPair<ObTabletDirectLoadMgrKey, ObTabletDirectLoadMgr *> &kv);
   private:
     DISALLOW_COPY_AND_ASSIGN(GetGcCandidateOp);
-    ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs_;
+    ObIArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>> &candidate_mgrs_;
   };
 
   int try_create_tablet_direct_load_mgr(
@@ -246,6 +247,7 @@ private:
   TABLET_EXEC_CONTEXT_MAP tablet_exec_context_map_;
   int64_t slice_id_generator_;
   int64_t context_id_generator_;
+  volatile int64_t last_gc_time_;
 DISALLOW_COPY_AND_ASSIGN(ObTenantDirectLoadMgr);
 };
 
