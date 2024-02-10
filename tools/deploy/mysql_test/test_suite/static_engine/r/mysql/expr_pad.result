@@ -6324,3 +6324,4 @@ select rpad("", cast(c1 as decimal), "123") from t1;
 +--------------------------------------+
 drop table t1;
 
+SET GLOBAL max_allowed_packet = 16777216;

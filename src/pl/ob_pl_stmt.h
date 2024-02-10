@@ -2080,11 +2080,13 @@ public:
   inline const sql::ObRawExpr *get_into_expr(int64_t i) const { return get_expr(into_.at(i));}
   inline int set_into(ObPLSEArray<int64_t> &idxs) { return append(into_, idxs); }
   inline int add_into(int64_t idx) { return into_.push_back(idx); }
+  inline int64_t get_into_count() { return into_.count(); }
   inline const common::ObIArray<int64_t> &get_value() const { return value_;}
   inline int64_t get_value_index(int64_t i) const { return value_.at(i);}
   inline const sql::ObRawExpr *get_value_expr(int64_t i) const { return get_expr(value_.at(i)); }
   inline int set_value(ObPLSEArray<int64_t> &idxs) { return append(value_, idxs); }
   inline int add_value(int64_t idx) { return value_.push_back(idx); }
+  inline int64_t get_value_count() { return value_.count(); }
 private:
   ObPLSEArray<int64_t> into_;
   ObPLSEArray<int64_t> value_;
