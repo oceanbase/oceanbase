@@ -2220,8 +2220,8 @@ DEFINE_ERROR_DEP(OB_BACKUP_META_INDEX_NOT_EXIST, -9076, -1, "HY000", "backup met
 DEFINE_ERROR(OB_ARCHIVE_ROUND_NOT_CONTINUOUS, -9077, -1, "HY000", "log discontinuous between two archive rounds");
 DEFINE_ERROR(OB_ARCHIVE_LOG_TO_END, -9078, -1, "HY000", "archive log is to end");
 DEFINE_ERROR(OB_ARCHIVE_LOG_RECYCLED, -9079, -1, "HY000", "archive log had been recycled");
-DEFINE_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, -9080, -1, "HY000", "the format file does not exist under the destination");
-DEFINE_ERROR(OB_BACKUP_FORMAT_FILE_NOT_MATCH, -9081, -1, "HY000", "the content of the format file at the destination does not match");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_FORMAT_FILE_NOT_EXIST, -9080, -1, "HY000", "format file does not exist", "format file does not exist%s");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_FORMAT_FILE_NOT_MATCH, -9081, -1, "HY000", "format file does not match", "format file does not match%s");
 DEFINE_ERROR_DEP(OB_BACKUP_DEVICE_OUT_OF_SPACE, -9082, -1, "HY000", "backup device out of space");
 DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_OFFSET_NOT_MATCH, -9083, -1, "HY000", "the pwrite offset of the object storage is inconsistent");
 DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the contents of pwrite are inconsistent");

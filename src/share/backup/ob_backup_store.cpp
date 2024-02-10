@@ -441,6 +441,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     } else if (!is_exist) {
       ret = OB_BACKUP_FORMAT_FILE_NOT_EXIST;
       LOG_WARN("format file does not exist", K(ret), K_(backup_dest));
+      LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, ", try to set a new directory.");
     } else {
       share::ObBackupFormatDesc format_desc;
       share::ObBackupFormatDesc dest_format;
@@ -450,6 +451,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
       } else if (dest_format.dest_type_ != dest_type_) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("dest_type not match", K(ret), K(dest_format), K(dest_type_));
+        LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_MATCH, ", try to set a new directory.");
       } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, tenant_id_, backup_dest_, dest_id))) {
         LOG_WARN("fail to get dest id", K(ret), K_(tenant_id), K(backup_dest_));
       } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_type(*sql_proxy_, tenant_id_, backup_dest_, dest_type))) {
@@ -457,14 +459,17 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
       } else if (dest_type != dest_type_) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("dest type is not match", K(ret), K(dest_type), K(dest_type_));
+        LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_MATCH, ",try to set a new directory.");
       } else if (OB_FAIL(generate_format_desc_(dest_id, dest_type, format_desc))) {
         LOG_WARN("fail to generate format desc", K(ret), K(backup_dest_), K(dest_id));
       } else if (format_desc.dest_type_ != dest_type_) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("dest_type not match", K(ret), K(dest_format), K(dest_type_));
+        LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_MATCH, ", try to set a new directory.");
       } else if (!(format_desc.is_format_equal(dest_format))) {
         ret = OB_BACKUP_FORMAT_FILE_NOT_MATCH;
         LOG_WARN("format file is not match", K(ret), K(format_desc), K(dest_format));
+        LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_MATCH, ", try to set a new directory.");
       } 
     }
   } else {
@@ -473,6 +478,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     } else {
       ret = OB_BACKUP_FORMAT_FILE_NOT_EXIST;
       LOG_WARN("format file does not exist", K(ret), K_(backup_dest), K(is_empty));
+      LOG_USER_ERROR(OB_BACKUP_FORMAT_FILE_NOT_EXIST, ", try to set a new directory.");
     }
   }
   return ret;
