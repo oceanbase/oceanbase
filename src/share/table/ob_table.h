@@ -248,6 +248,7 @@ struct ObTableOperationType
     APPEND = 7,
     SCAN = 8,
     TTL = 9, // internal type for ttl executor cache key
+    CHECK_AND_INSERT_UP = 10,
     INVALID = 15
   };
 };
