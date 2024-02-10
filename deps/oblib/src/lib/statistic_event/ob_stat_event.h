@@ -11,6 +11,18 @@
  */
 
 #ifdef STAT_EVENT_ADD_DEF
+/**
+ * STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable)
+ * STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable)
+ * @param def name of this stat
+ * @param name Name of this stat. Display on v$statname.
+ * @param stat_class Every stats belongs to a class on deps/oblib/src/lib/statistic_event/ob_stat_class.h
+ * @param stat_id Identifier of an stat ATTENTION: please add id placeholder on master.
+ * @param summary_in_session Stat recorded for user session process mark this flag true.
+ * @param can_visible Indicate whether this stat can be queried on gv$sysstat and gv$sesstat.
+ * @param enable Indicate whether this stat is enabled. Marked it false it you merely need it as an placeholder.
+*/
+
 // NETWORK
 STAT_EVENT_ADD_DEF(RPC_PACKET_IN, "rpc packet in", ObStatClassIds::NETWORK, 10000, true, true, true)
 STAT_EVENT_ADD_DEF(RPC_PACKET_IN_BYTES, "rpc packet in bytes", ObStatClassIds::NETWORK, 10001, false, true, true)

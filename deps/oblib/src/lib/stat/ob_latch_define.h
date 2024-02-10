@@ -11,8 +11,18 @@
  */
 
 #ifdef LATCH_DEF
-// NOTICE: No need to add wait event when adding latch
-// NOTICE: do not reuse latch id or rename latch!
+/**
+ * LATCH_DEF(def, id, name, policy, max_spin_cnt, max_yield_cnt, enable)
+ * @param def Name of this latch
+ * @param id Identifier of an latch ATTENTION: please add id placeholder on master.
+ * @param name Name for this latch. Display on virtual table v$event_name
+ * @param policy LATCH_READ_PREFER and LATCH_FIFO
+ * @param max_spin_cnt for mutex, spin several times to try to get lock before actually perform an mutex lock.
+ * @param max_yield_cnt times of call to sched_yield() instead of perform an mutex lock.
+ * @param enable Indicate whether this latch is enabled. Marked it false it you merely need it as an placeholder.
+ * NOTICE: No need to add wait event when adding latch
+ * NOTICE: do not reuse latch id or rename latch!
+*/
 LATCH_DEF(LATCH_WAIT_QUEUE_LOCK, 0, "latch wait queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DEFAULT_SPIN_LOCK, 1, "default spin lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DEFAULT_SPIN_RWLOCK, 2, "default spin rwlock", LATCH_FIFO, 2000, 0, true)
