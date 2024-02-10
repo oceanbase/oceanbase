@@ -240,11 +240,10 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  int64_t has_retry_count = 0;
   do {
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_entry_(entry, lsn, buf, buf_size))) {
-      if (need_prepare_buf_(ret, has_retry_count)) {
+      if (need_prepare_buf_(ret)) {
         CLOG_LOG(TRACE, "buf not enough, need read data", K(ret), KPC(this));
       } else {
         CLOG_LOG(WARN, "get entry failed", K(ret), KPC(this));
@@ -260,15 +259,13 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
       }
     }
 
-    if (need_prepare_buf_(ret, has_retry_count)) {
+    if (need_prepare_buf_(ret)) {
       if (OB_FAIL(prepare_buf_())) {
         if (OB_ITER_END != ret) {
           CLOG_LOG(WARN, "prepare buffer failed", K(ret));
         } else {
           CLOG_LOG(TRACE, "prepare buffer to end", K(ret), KPC(this));
         }
-      } else {
-        has_retry_count++;
       }
     }
 
@@ -287,12 +284,9 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 }
 
 template<class LogEntryType>
-bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code,
-                                                          int has_retry_count) const
+bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
 {
-  const int MAX_RETRY_COUNT = 2;
-  return OB_BUF_NOT_ENOUGH == ret_code
-         || (OB_NEED_RETRY == ret_code && has_retry_count < MAX_RETRY_COUNT);
+  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
 }
 
 template<class LogEntryType>
