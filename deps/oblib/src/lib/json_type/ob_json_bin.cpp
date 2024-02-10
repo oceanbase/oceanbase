@@ -3862,9 +3862,15 @@ int ObJsonBin::rebuild_json_value(const char *data,
     }
     case ObJsonNodeType::J_DECIMAL:
     case ObJsonNodeType::J_ODECIMAL: {
-      int64_t pos = 0;
+      ObPrecision prec = -1;
+      ObScale scale = -1;
       number::ObNumber temp_number;
-      if (OB_FAIL(temp_number.deserialize(data, length, pos))) {
+      int64_t pos = 0;
+      if (OB_FAIL(serialization::decode_i16(data, length, pos, &prec))) {
+        LOG_WARN("fail to deserialize decimal precision.", K(ret), K(length));
+      } else if (OB_FAIL(serialization::decode_i16(data, length, pos, &scale))) {
+        LOG_WARN("fail to deserialize decimal scale.", K(ret), K(length), K(prec));
+      } else if (OB_FAIL(temp_number.deserialize(data, length, pos))) {
         LOG_WARN("failed to deserialize decimal data", K(ret));
       } else {
         ret = result.append(data, pos);
