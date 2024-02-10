@@ -3690,9 +3690,14 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     blocksstable::ObBufferReader buffer_reader;
     int64_t macro_block_count = 0;
     int64_t start_time = 0;
+    const int64_t serialize_size = tablet_info.param_.get_serialize_size();
     if (!tablet_info.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tablet meta is invalid", K(ret), K(tablet_info));
+    } else if (MAX_BACKUP_TABLET_META_SERIALIZE_SIZE < serialize_size) {
+      // In case of the tablet meta is too large.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet meta is too large.", K(ret), K(serialize_size), K(tablet_info));
     } else if (OB_FAIL(buffer_writer.ensure_space(backup::OB_BACKUP_READ_BLOCK_SIZE))) {
       LOG_WARN("failed to ensure space");
     } else if (OB_FAIL(buffer_writer.write_serialize(tablet_info.param_))) {

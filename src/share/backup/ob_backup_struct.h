@@ -109,6 +109,9 @@ static constexpr const int64_t OB_COMMENT_LENGTH = 1024;
 static constexpr const int64_t DEFAULT_ARCHIVE_FILE_SIZE = 64 << 20; // 64MB
 static constexpr const int64_t DEFAULT_BACKUP_DATA_FILE_SIZE = 4 * 1024LL * 1024LL * 1024LL; // 4GB
 
+// max ObMigrationTabletParam serialize size during backup.
+static constexpr const int64_t MAX_BACKUP_TABLET_META_SERIALIZE_SIZE = 2 * 1024LL * 1024LL; // 2MB
+
 //add by physical backup and restore
 const char *const OB_STR_INCARNATION = "incarnation";
 const char *const OB_STRING_BACKUP_DATA = "data";
