@@ -289,6 +289,12 @@ int ObDDLTableMergeTask::process()
   } else {
     DEBUG_SYNC(BEFORE_DDL_TABLE_MERGE_TASK);
 #ifdef ERRSIM
+    if (GCONF.errsim_test_tablet_id.get_value() > 0 && merge_param_.tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()) {
+      LOG_INFO("test tablet ddl merge start", K(ret), K(merge_param_));
+      DEBUG_SYNC(BEFORE_LOB_META_TABELT_DDL_MERGE_TASK);
+    }
+#endif
+#ifdef ERRSIM
     static int64_t counter = 0;
     counter++;
     if (counter >= 2) {
