@@ -4078,11 +4078,6 @@ int ObDDLOperator::update_single_column(common::ObMySQLTransaction &trans,
               trans, origin_table_schema, new_table_schema, column_schema,
               true /* record_ddl_operation */))) {
       RS_LOG(WARN, "failed to update single column", K(ret));
-    } else if (OB_ISNULL(orig_column_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      RS_LOG(WARN, "failed to get orig column schema", K(ret), K(origin_table_schema), K(column_schema));
-    } else if (OB_FAIL(update_single_column_group(trans, origin_table_schema, *orig_column_schema, column_schema))) {
-      RS_LOG(WARN, "fail to update single column group", K(ret));
     }
   }
   return ret;
@@ -4090,20 +4085,24 @@ int ObDDLOperator::update_single_column(common::ObMySQLTransaction &trans,
 
 int ObDDLOperator::update_single_column_group(common::ObMySQLTransaction &trans,
                                               const ObTableSchema &origin_table_schema,
-                                              const ObColumnSchemaV2 &origin_column_schema,
                                               const ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
   bool is_each_cg_exist = false;
+  const ObColumnSchemaV2 *orig_column_schema = nullptr;
   char cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
   ObString cg_name_str(OB_MAX_COLUMN_GROUP_NAME_LENGTH, 0, cg_name);
   const uint64_t tenant_id = origin_table_schema.get_tenant_id();
   ObColumnGroupSchema *ori_cg = nullptr;
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
-  if (!origin_table_schema.is_valid() || !origin_column_schema.is_valid() || !column_schema.is_valid()) {
+  orig_column_schema = origin_table_schema.get_column_schema(column_schema.get_column_id());
+  if (!origin_table_schema.is_valid() || !column_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "Invalid arguemnt", K(ret), K(origin_table_schema), K(origin_column_schema), K(column_schema));
-  } else if (origin_column_schema.get_column_name_str() == column_schema.get_column_name_str()) {
+    RS_LOG(WARN, "Invalid arguemnt", K(ret), K(origin_table_schema), K(column_schema));
+  } else if (OB_ISNULL(orig_column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    RS_LOG(WARN, "column should not be null", K(ret), K(column_schema), K(origin_table_schema));
+  } else if (orig_column_schema->get_column_name_str() == column_schema.get_column_name_str()) {
     /* now only rename column will use this func, other skip*/
   } else if (!origin_table_schema.is_column_store_supported()) {
     /* only support table need column group*/
@@ -4113,14 +4112,14 @@ int ObDDLOperator::update_single_column_group(common::ObMySQLTransaction &trans,
     /* if each cg not exist skip*/
   } else if (column_schema.is_virtual_generated_column()) {
     /* skip virtual generated_column*/
-  } else if (OB_FAIL(origin_column_schema.get_each_column_group_name(cg_name_str))) {
+  } else if (OB_FAIL(orig_column_schema->get_each_column_group_name(cg_name_str))) {
     RS_LOG(WARN, "fail to get each column group name", K(ret));
   } else if (OB_FAIL(origin_table_schema.get_column_group_by_name(cg_name_str, ori_cg))) {
     RS_LOG(WARN, "column group cannot get", K(cg_name_str), K(origin_table_schema));
   } else if (OB_ISNULL(ori_cg)) {
     ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "column group should not be null", K(ret), K(cg_name_str),
-           K(origin_column_schema), K(origin_table_schema));
+           KPC(orig_column_schema), K(origin_table_schema));
   } else {
     ObColumnGroupSchema new_cg;
     if (OB_FAIL(new_cg.assign(*ori_cg))) {

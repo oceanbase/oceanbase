@@ -976,7 +976,6 @@ public:
                            share::schema::ObColumnSchemaV2 &column_schema);
   int update_single_column_group(common::ObMySQLTransaction &trans,
                                  const ObTableSchema &origin_table_schema,
-                                 const ObColumnSchemaV2 &origin_column_schema,
                                  const ObColumnSchemaV2 &new_column_schema);
   int update_partition_option(common::ObMySQLTransaction &trans,
                               share::schema::ObTableSchema &table_schema);
