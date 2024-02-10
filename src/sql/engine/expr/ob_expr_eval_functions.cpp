@@ -1120,6 +1120,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIs::json_is_false,                                            /* 676 */
   NULL, //ObExprCurrentRole::eval_current_role                        /* 677 */
   ObExprMod::mod_decimalint,                                          /* 678 */
+  NULL, // ObExprPrivSTGeoHash::eval_priv_st_geohash,                 /* 679 */
+  NULL, // ObExprPrivSTMakePoint::eval_priv_st_makepoint,             /* 680 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
