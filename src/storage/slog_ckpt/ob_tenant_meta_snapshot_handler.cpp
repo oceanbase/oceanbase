@@ -59,30 +59,9 @@ int ObTenantMetaSnapshotHandler::create_tenant_snapshot(const ObTenantSnapshotID
   return ret;
 }
 
-int ObTenantMetaSnapshotHandler::create_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id, const ObLSID &ls_id, share::SCN &clog_max_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(update_single_ls_snapshot(snapshot_id, ls_id, MetaRecordMode::ADD_LS, clog_max_scn))) {
-    LOG_WARN("fail to update single ls snapshot", K(ret), K(snapshot_id), K(ls_id));
-  }
-  return ret;
-}
-
-int ObTenantMetaSnapshotHandler::delete_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id, const ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  share::SCN unused_scn;
-  if (OB_FAIL(update_single_ls_snapshot(snapshot_id, ls_id, MetaRecordMode::DELETE_LS, unused_scn))) {
-    LOG_WARN("fail to update single ls snapshot", K(ret), K(snapshot_id), K(ls_id));
-  }
-  return ret;
-}
-
-int ObTenantMetaSnapshotHandler::update_single_ls_snapshot(
-    const ObTenantSnapshotID &snapshot_id,
-    const ObLSID &ls_id,
-    const MetaRecordMode modify_mode,
-    share::SCN &clog_max_scn)
+int ObTenantMetaSnapshotHandler::create_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id,
+                                                           const ObLSID &ls_id,
+                                                           share::SCN &clog_max_scn)
 {
   int ret = OB_SUCCESS;
   ObTenantStorageCheckpointWriter tenant_storage_meta_writer;
@@ -92,24 +71,26 @@ int ObTenantMetaSnapshotHandler::update_single_ls_snapshot(
   bool inc_ls_blocks_ref_succ = false;
   bool inc_tablet_blocks_ref_succ = false;
 
-  if (OB_UNLIKELY(!snapshot_id.is_valid() || !ls_id.is_valid() || MetaRecordMode::INVALID_MODE == modify_mode)) {
+  if (OB_UNLIKELY(!snapshot_id.is_valid() || !ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(snapshot_id), K(ls_id), K(modify_mode));
+    LOG_WARN("invalid arg", K(ret), K(snapshot_id), K(ls_id));
   } else if (OB_FAIL(get_ls_meta_entry(snapshot_id, orig_ls_meta_entry))) {
     LOG_WARN("fail to get ls meta entry", K(ret), K(snapshot_id));
   } else if (OB_FAIL(tenant_storage_meta_writer.init(ObTenantStorageMetaType::SNAPSHOT))) {
-    LOG_WARN("fail to init tenant storage checkpoint writer", K(ret));
-  } else if (MetaRecordMode::ADD_LS == modify_mode
-      && OB_FAIL(tenant_storage_meta_writer.record_single_ls_meta(orig_ls_meta_entry, ls_id, ls_block_list, snapshot.ls_meta_entry_, clog_max_scn))) {
-    LOG_WARN("fail to record_single_ls_meta", K(ret), K(orig_ls_meta_entry), K(ls_id));
-  } else if (MetaRecordMode::DELETE_LS == modify_mode
-      && OB_FAIL(tenant_storage_meta_writer.delete_single_ls_meta(orig_ls_meta_entry, ls_id, ls_block_list, snapshot.ls_meta_entry_))) {
-    LOG_WARN("fail to delete_single_ls_meta", K(ret), K(orig_ls_meta_entry), K(ls_id));
+    LOG_WARN("fail to init tenant storage checkpoint writer", K(ret), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(tenant_storage_meta_writer.record_single_ls_meta(orig_ls_meta_entry,
+                                                                      ls_id,
+                                                                      ls_block_list,
+                                                                      snapshot.ls_meta_entry_,
+                                                                      clog_max_scn))) {
+    LOG_WARN("fail to record_single_ls_meta", K(ret), K(orig_ls_meta_entry), K(snapshot_id), K(ls_id));
   } else if (FALSE_IT(snapshot.snapshot_id_ = snapshot_id)) {
-  } else if (OB_FAIL(inc_all_linked_block_ref(tenant_storage_meta_writer, inc_ls_blocks_ref_succ, inc_tablet_blocks_ref_succ))) {
-    LOG_WARN("fail to increase ref cnt for all linked blocks", K(ret));
+  } else if (OB_FAIL(inc_all_linked_block_ref(tenant_storage_meta_writer,
+                                              inc_ls_blocks_ref_succ,
+                                              inc_tablet_blocks_ref_succ))) {
+    LOG_WARN("fail to increase ref cnt for all linked blocks", K(ret), K(snapshot_id), K(ls_id));
   } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->swap_snapshot(snapshot))) {
-    LOG_WARN("fail to swap snapshot", K(ret), K(snapshot));
+    LOG_WARN("fail to swap snapshot", K(ret), K(snapshot_id), K(ls_id), K(snapshot));
   }
 
   if (OB_FAIL(ret)) {
@@ -117,7 +98,58 @@ int ObTenantMetaSnapshotHandler::update_single_ls_snapshot(
   } else {
     dec_meta_block_ref(ls_block_list);
   }
-  FLOG_INFO("finish updating snapshot", K(ret), K(ls_id), K(snapshot_id), K(snapshot), K(modify_mode));
+
+  FLOG_INFO("finish create ls snapshot", K(ret), K(snapshot_id), K(ls_id), K(snapshot));
+  return ret;
+}
+
+int ObTenantMetaSnapshotHandler::delete_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id,
+                                                           const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantStorageCheckpointWriter tenant_storage_meta_writer;
+  MacroBlockId orig_ls_meta_entry;
+  MacroBlockId tablet_meta_entry;
+  ObTenantSnapshotMeta snapshot;
+  ObSArray<MacroBlockId> ls_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CreateSnapLS", MTL_ID()));
+  ObSArray<ObMetaDiskAddr> deleted_tablet_addrs(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("DelSnapLS", MTL_ID()));
+  ObSArray<MacroBlockId> tablet_meta_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("DelSnapLS", MTL_ID()));
+  bool inc_ls_blocks_ref_succ = false;
+  bool inc_tablet_blocks_ref_succ = false;
+
+  if (OB_UNLIKELY(!snapshot_id.is_valid() || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(get_ls_meta_entry(snapshot_id, orig_ls_meta_entry))) {
+    LOG_WARN("fail to get ls meta entry", K(ret), K(snapshot_id));
+  } else if (OB_FAIL(find_tablet_meta_entry(orig_ls_meta_entry, ls_id, tablet_meta_entry))) {
+    LOG_WARN("fail to get tablet meta entry", K(ret), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(inner_delete_ls_snapshot(tablet_meta_entry,
+                                              deleted_tablet_addrs,
+                                              tablet_meta_block_list))) {
+    LOG_WARN("fail to exec inner_delete_ls_snapshot", K(ret), K(tablet_meta_entry), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(tenant_storage_meta_writer.init(ObTenantStorageMetaType::SNAPSHOT))) {
+    LOG_WARN("fail to init tenant storage checkpoint writer", K(ret), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(tenant_storage_meta_writer.delete_single_ls_meta(orig_ls_meta_entry, ls_id, ls_block_list, snapshot.ls_meta_entry_))) {
+    LOG_WARN("fail to delete_single_ls_meta", K(ret), K(orig_ls_meta_entry), K(snapshot_id), K(ls_id));
+  } else if (FALSE_IT(snapshot.snapshot_id_ = snapshot_id)) {
+  } else if (OB_FAIL(inc_all_linked_block_ref(tenant_storage_meta_writer, inc_ls_blocks_ref_succ, inc_tablet_blocks_ref_succ))) {
+    LOG_WARN("fail to increase ref cnt for all linked blocks", K(ret), K(snapshot_id), K(ls_id));
+  } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->swap_snapshot(snapshot))) {
+    LOG_WARN("fail to swap snapshot", K(ret), K(snapshot_id), K(ls_id), K(snapshot));
+  }
+
+  if (OB_FAIL(ret)) {
+    rollback_ref_cnt(inc_ls_blocks_ref_succ, inc_tablet_blocks_ref_succ, tenant_storage_meta_writer);
+  } else {
+    dec_meta_block_ref(ls_block_list);
+    dec_meta_block_ref(tablet_meta_block_list);
+    if (OB_FAIL(inner_delete_tablet_by_addrs(deleted_tablet_addrs))) {
+      LOG_WARN("fail to inner_delete_tablet_by_addrs", K(ret), K(snapshot_id), K(ls_id));
+    }
+  }
+
+  FLOG_INFO("finish delete ls snapshot", K(ret), K(snapshot_id), K(ls_id), K(snapshot));
   return ret;
 }
 
@@ -267,33 +299,40 @@ int ObTenantMetaSnapshotHandler::delete_tenant_snapshot(const ObTenantSnapshotID
   } else {
     dec_meta_block_ref(ls_meta_block_list);
     dec_meta_block_ref(tablet_meta_block_list);
-    ObArenaAllocator arena_allocator("DelSnapTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTablet tablet;
-    for (int64_t i = 0; i < deleted_tablet_addrs.count(); i++) {
-      tablet.reset();
-      arena_allocator.reuse();
-      int64_t buf_len = 0;
-      char *buf = nullptr;
-      int64_t pos = 0;
-      do {
-        if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->read_from_disk(
-            deleted_tablet_addrs[i],
-            arena_allocator,
-            buf,
-            buf_len))) {
-          LOG_WARN("fail to read from disk", K(ret), K(deleted_tablet_addrs[i]));
-        }
-      } while (ObTenantStorageCheckpointWriter::ignore_ret(ret));
-      if (OB_SUCC(ret)) {
-        tablet.set_tablet_addr(deleted_tablet_addrs[i]);
-        if (OB_FAIL(tablet.release_ref_cnt(arena_allocator, buf, buf_len, pos))) {
-          LOG_ERROR("fail to decrease macro ref cnt, macro block may leak", K(ret), K(tablet));
-        }
-      }
+    if (OB_FAIL(inner_delete_tablet_by_addrs(deleted_tablet_addrs))) {
+      LOG_WARN("fail to inner_delete_tablet_by_addrs", K(ret), K(snapshot_id));
     }
   }
 
   FLOG_INFO("finish deleting tenant snapshot", K(ret), K(last_super_block));
+  return ret;
+}
+
+int ObTenantMetaSnapshotHandler::inner_delete_ls_snapshot(
+    const blocksstable::MacroBlockId& tablet_meta_entry,
+    ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs,
+    ObIArray<MacroBlockId> &tablet_meta_block_list)
+{
+  int ret = OB_SUCCESS;
+  ObTenantStorageCheckpointReader tablet_snapshot_reader;
+  ObSArray<MacroBlockId> meta_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SnapTablet", MTL_ID()));
+  ObTenantStorageCheckpointReader::ObStorageMetaOp del_tablet_snapshot_op = std::bind(
+      &ObTenantMetaSnapshotHandler::delete_tablet_snapshot,
+      std::placeholders::_1,
+      std::placeholders::_2,
+      std::placeholders::_3,
+      std::ref(deleted_tablet_addrs));
+
+  if (OB_FAIL(tablet_snapshot_reader.iter_read_meta_item(
+      tablet_meta_entry, del_tablet_snapshot_op, meta_block_list))) {
+    LOG_WARN("fail to delete tablet snapshot", K(ret), K(tablet_meta_entry));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < meta_block_list.count(); i++) {
+      if (OB_FAIL(tablet_meta_block_list.push_back(meta_block_list.at(i)))) {
+        LOG_WARN("fail to push back meta block id", K(ret), K(i), K(meta_block_list.at(i)));
+      }
+    }
+  }
   return ret;
 }
 
@@ -308,24 +347,44 @@ int ObTenantMetaSnapshotHandler::delete_ls_snapshot(
   int ret = OB_SUCCESS;
   ObLSCkptMember ls_ckpt_member;
   int64_t pos = 0;
-  ObTenantStorageCheckpointReader tablet_snapshot_reader;
-  ObSArray<MacroBlockId> meta_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SnapTablet", MTL_ID()));
-  ObTenantStorageCheckpointReader::ObStorageMetaOp del_tablet_snapshot_op = std::bind(
-      &ObTenantMetaSnapshotHandler::delete_tablet_snapshot,
-      std::placeholders::_1,
-      std::placeholders::_2,
-      std::placeholders::_3,
-      std::ref(deleted_tablet_addrs));
 
   if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize ls_ckpt_member", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(tablet_snapshot_reader.iter_read_meta_item(
-      ls_ckpt_member.tablet_meta_entry_, del_tablet_snapshot_op, meta_block_list))) {
-    LOG_WARN("fail to delete tablet snapshot", K(ret), K(ls_ckpt_member));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < meta_block_list.count(); i++) {
-      if (OB_FAIL(tablet_meta_block_list.push_back(meta_block_list.at(i)))) {
-        LOG_WARN("fail to push back meta block id", K(ret), K(i), K(meta_block_list.at(i)));
+  } else if (OB_FAIL(inner_delete_ls_snapshot(ls_ckpt_member.tablet_meta_entry_,
+                                              deleted_tablet_addrs,
+                                              tablet_meta_block_list))) {
+    LOG_WARN("fail to exec inner_delete_ls_snapshot", K(ret), K(ls_ckpt_member));
+  }
+
+  return ret;
+}
+
+int ObTenantMetaSnapshotHandler::inner_delete_tablet_by_addrs(
+    const ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator arena_allocator("DelSnapTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTablet tablet;
+  for (int64_t i = 0; i < deleted_tablet_addrs.count(); i++) {
+    tablet.reset();
+    arena_allocator.reuse();
+    int64_t buf_len = 0;
+    char *buf = nullptr;
+    int64_t pos = 0;
+    do {
+      if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->read_from_disk(
+          deleted_tablet_addrs.at(i),
+          arena_allocator,
+          buf,
+          buf_len))) {
+        LOG_WARN("fail to read from disk", K(ret), K(deleted_tablet_addrs.at(i)));
+      }
+    } while (ObTenantStorageCheckpointWriter::ignore_ret(ret));
+    if (OB_SUCC(ret)) {
+      tablet.set_tablet_addr(deleted_tablet_addrs.at(i));
+      if (OB_FAIL(tablet.release_ref_cnt(arena_allocator, buf, buf_len, pos))) {
+        LOG_ERROR("fail to decrease macro ref cnt, macro block may leak", K(ret), K(tablet));
       }
     }
   }

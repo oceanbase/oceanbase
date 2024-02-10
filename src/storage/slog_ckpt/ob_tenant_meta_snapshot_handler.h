@@ -48,7 +48,9 @@ public:
 
   // create snapshot
   static int create_tenant_snapshot(const ObTenantSnapshotID &snapshot_id);
-  static int create_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id, const ObLSID &ls_id, share::SCN &clog_max_scn);
+  static int create_single_ls_snapshot(const ObTenantSnapshotID &snapshot_id,
+                                       const ObLSID &ls_id,
+                                       share::SCN &clog_max_scn);
 
   // delete snapshot
   static int delete_tenant_snapshot(const ObTenantSnapshotID &snapshot_id);
@@ -71,11 +73,6 @@ public:
   static int inc_linked_block_ref(const ObIArray<blocksstable::MacroBlockId> &meta_block_list, bool &inc_success);
 
 private:
-  static int update_single_ls_snapshot(
-      const ObTenantSnapshotID &snapshot_id,
-      const ObLSID &ls_id,
-      const MetaRecordMode modify_mode,
-      share::SCN &clog_max_scn);
   static int find_tablet_meta_entry(
       const blocksstable::MacroBlockId &ls_meta_entry,
       const ObLSID &ls_id,
@@ -90,6 +87,10 @@ private:
       const bool inc_tablet_blocks_ref_succ,
       ObTenantStorageCheckpointWriter &tenant_storage_meta_writer);
   static void dec_meta_block_ref(const ObIArray<blocksstable::MacroBlockId> &meta_block_list);
+  static int inner_delete_tablet_by_addrs(const ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs);
+  static int inner_delete_ls_snapshot(const blocksstable::MacroBlockId& tablet_meta_entry,
+                                      ObIArray<ObMetaDiskAddr> &deleted_tablet_addrs,
+                                      ObIArray<MacroBlockId> &tablet_meta_block_list);
   static int delete_ls_snapshot(
       const ObMetaDiskAddr &addr,
       const char *buf,
