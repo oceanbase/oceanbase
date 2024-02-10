@@ -788,7 +788,7 @@ int ObCOSSTableRowScanner::fetch_output_rows()
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && !batched_row_store_->is_end()) {
     uint64_t count = 0;
-    uint64_t batch_size = iter_param_->op_->get_batch_size();
+    uint64_t batch_size = iter_param_->op_->eval_ctx_.get_batch_size();
     if (nullptr != access_ctx_->limit_param_)  {
       batch_size = MIN(batch_size,
                        access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_);
