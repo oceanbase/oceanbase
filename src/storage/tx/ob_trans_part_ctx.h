@@ -183,6 +183,7 @@ public:
            const int64_t epoch,
            ObLSTxCtxMgr *ls_ctx_mgr,
            const bool for_replay,
+           const PartCtxSource ctx_source,
            ObXATransID xid);
   void reset() { }
   int construct_context(const ObTransMsg &msg);
@@ -289,8 +290,8 @@ private:
                 K(final_log_cb_),
                 K(ctx_tx_data_),
                 K(role_state_),
-                K(start_replay_ts_),
-                K(start_recover_ts_),
+                K(create_ctx_scn_),
+                "ctx_source", ctx_source_,
                 K(epoch_),
                 K(replay_completeness_),
                 K(mt_ctx_),
@@ -665,7 +666,7 @@ private:
   int get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
   int return_log_cb_(ObTxLogCb *log_cb, bool release_final_cb = false);
   int get_max_submitting_log_info_(palf::LSN &lsn, share::SCN &log_ts);
-  int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
+  int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxPrevLogType &prev_log_type, palf::LSN &lsn);
   int set_start_scn_in_commit_log_(ObTxCommitLog &commit_log);
 
   // int init_tx_data_(const share::ObLSID&ls_id, const ObTransID &tx_id);
@@ -1031,8 +1032,8 @@ private:
   } replay_completeness_;
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
-  share::SCN start_replay_ts_; // replay debug
-  share::SCN start_recover_ts_; // recover debug
+  share::SCN create_ctx_scn_; // replay or recover debug
+  PartCtxSource ctx_source_; // For CDC - prev_lsn
 
   share::SCN start_working_log_ts_;
 

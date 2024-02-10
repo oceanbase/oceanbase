@@ -92,7 +92,7 @@ typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
 struct ObTxCreateArg
 {
   ObTxCreateArg(const bool for_replay,
-                const bool for_special_tx,
+                const PartCtxSource ctx_source,
                 const uint64_t tenant_id,
                 const ObTransID &trans_id,
                 const share::ObLSID &ls_id,
@@ -106,7 +106,7 @@ struct ObTxCreateArg
                 int64_t epoch = -1,
                 const ObTxCtxMoveArg *move_arg = NULL)
       : for_replay_(for_replay),
-        for_special_tx_(for_special_tx),
+        ctx_source_(ctx_source),
         tenant_id_(tenant_id),
         tx_id_(trans_id),
         ls_id_(ls_id),
@@ -126,13 +126,13 @@ struct ObTxCreateArg
         && trans_expired_time_ > 0
         && NULL != trans_service_;
   }
-  TO_STRING_KV(K_(for_replay), K_(for_special_tx),
+  TO_STRING_KV(K_(for_replay), "ctx_source_", to_str(ctx_source_),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
                  K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service),
                  K_(epoch), K_(xid));
   bool for_replay_;
-  bool for_special_tx_;
+  PartCtxSource ctx_source_;
   uint64_t tenant_id_;
   ObTransID tx_id_;
   share::ObLSID ls_id_;

@@ -300,7 +300,8 @@ void ObTxLogGenerator::gen_prepare_log()
 {
   share::ObLSArray inc_ls_arr;
   transaction::LogOffSet prev_lsn = last_lsn_();
-  ObTxPrepareLog prepare_log(inc_ls_arr, prev_lsn);
+  ObTxPrevLogType prev_log_type(ObTxPrevLogType::TypeEnum::COMMIT_INFO);
+  ObTxPrepareLog prepare_log(inc_ls_arr, prev_lsn, prev_log_type);
   LOG_DEBUG("gen prepare_log", K(prepare_log));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(prepare_log));
   trans_type_ = transaction::TransType::DIST_TRANS; // dist trans.
@@ -323,6 +324,7 @@ void ObTxLogGenerator::gen_commit_log()
     EXPECT_EQ(OB_SUCCESS, ls_info_arr.push_back(ls_info2));
   }
   ObArray<uint8_t> checksum_signature;
+  ObTxPrevLogType prev_log_type(ObTxPrevLogType::TypeEnum::PREPARE);
   ObTxCommitLog commit_log(
       commit_version,
       checksum,
@@ -331,7 +333,8 @@ void ObTxLogGenerator::gen_commit_log()
       mds_arr,
       trans_type_,
       last_lsn_(),
-      ls_info_arr);
+      ls_info_arr,
+      prev_log_type);
   LOG_DEBUG("gen commit_log", K(commit_log));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(commit_log));
 }

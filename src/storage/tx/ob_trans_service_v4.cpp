@@ -1282,8 +1282,12 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   bool existed = false;
   int64_t epoch = 0;
+  PartCtxSource ctx_source = PartCtxSource::MVCC_WRITE;
+  if(special) {
+    ctx_source = PartCtxSource::REGISTER_MDS;
+  }
   ObTxCreateArg arg(false,  /* for_replay */
-                    special,  /* speclial tx not blocked when in block_normal state */
+                    ctx_source,  /* speclial tx not blocked when in block_normal state */
                     tx.tenant_id_,
                     tx.tx_id_,
                     ls_id,

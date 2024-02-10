@@ -107,7 +107,7 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
   // since 4.3 cluster_version in ctx_info
   uint64_t cluster_version = ctx_info.cluster_version_;
   transaction::ObTxCreateArg arg(true,  /* for_replay */
-                                 false,
+                                 PartCtxSource::RECOVER,
                                  MTL_ID(),
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,
