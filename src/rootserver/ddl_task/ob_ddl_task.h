@@ -227,7 +227,8 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       int64_t &task_status,
-      int64_t &execution_id);
+      int64_t &execution_id,
+      int64_t &ret_code);
 
   static int get_ddl_task_record(
       const uint64_t tenant_id,
