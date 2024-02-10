@@ -881,7 +881,7 @@ int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int
     if (OB_FAIL(macro_block_iter_->get_next_macro_block(block_desc))) {
       LOG_WARN("get next macro block failed", K(ret));
     } else {
-      end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_;
+      end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_ - 1;
     }
   } else {
     if (OB_FAIL(sec_meta_iter_->get_next(data_macro_meta))) {
@@ -951,12 +951,13 @@ int get_sorted_meta_array(
               copied_meta->~ObDataMacroBlockMeta();
             } else {
               FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_));
+                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_),
+                  "end_row_offset", end_row_offset);
             }
           }
         }
         LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
-            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_));
+            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_), "end_row_offset", end_row_offset);
       }
     }
   }
@@ -1004,6 +1005,26 @@ int compact_sstables(
     LOG_WARN("create sstable failed", K(ret), K(ddl_param), K(sstables));
   }
   LOG_DEBUG("compact_sstables", K(ret), K(sstables), K(ddl_param), K(read_info), KPC(sstable_handle.get_table()));
+  return ret;
+}
+
+int ObTabletDDLUtil::get_compact_meta_array(
+    ObTablet &tablet,
+    ObIArray<ObSSTable *> &sstables,
+    const ObTabletDDLParam &ddl_param,
+    const ObITableReadInfo &read_info,
+    const ObStorageSchema *storage_schema,
+    common::ObArenaAllocator &allocator,
+    ObArray<ObDDLBlockMeta> &sorted_metas)
+{
+  int ret = OB_SUCCESS;
+  sorted_metas.reset();
+  ObBlockMetaTree meta_tree;
+  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
+    LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
+  } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, allocator, sorted_metas))) {
+    LOG_WARN("get sorted meta array failed", K(ret), K(read_info), K(sstables));
+  }
   return ret;
 }
 
