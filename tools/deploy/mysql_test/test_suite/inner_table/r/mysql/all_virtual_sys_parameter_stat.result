@@ -59,6 +59,7 @@ datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
+data_disk_write_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
 ddl_thread_score
