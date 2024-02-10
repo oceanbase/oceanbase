@@ -8853,8 +8853,7 @@ value_or_values insert_vals_list opt_insert_row_alias
     ParseNode *values_node = NULL;
     ParseNode *values_list_node = NULL;
     if ($2->type_ == T_LINK_NODE) {
-      $2->type_ = T_VALUES_ROW_LIST;
-      values_list_node = $2;
+      merge_nodes(values_list_node,result, T_VALUES_ROW_LIST, $2);
     } else {
       malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, $2);
     }

@@ -4375,6 +4375,9 @@ int ObDMLResolver::resolve_generate_table(const ParseNode &table_node,
   select_resolver.set_current_level(current_level_);
   select_resolver.set_current_view_level(current_view_level_);
   select_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
+  if (upper_insert_resolver_ != NULL && upper_insert_resolver_->is_mock_for_row_alias()) {
+    select_resolver.set_upper_insert_resolver(upper_insert_resolver_);
+  }
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -7320,7 +7323,7 @@ int ObDMLResolver::try_add_padding_expr_for_column_conv(const ColumnItem *column
     if (OB_SUCC(ret)) {
       ObRawExpr *&ori_child = expr->get_param_expr(4);
       ObRawExpr *real_child = NULL;
-      OZ(ObRawExprUtils::erase_inner_added_exprs(ori_child, real_child));
+      OZ(ObRawExprUtils::erase_inner_cast_exprs(ori_child, real_child));
       CK(OB_NOT_NULL(real_child));
       if (OB_SUCC(ret) && real_child->get_expr_type() != T_FUN_PAD
           && real_child->get_expr_type() != T_FUN_INNER_TRIM) {
@@ -15655,6 +15658,7 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
   ParseNode *alias_node = NULL;
   ObString alias_name;
   uint64_t data_version = 0;
+  bool is_mock = (upper_insert_resolver_ != NULL && upper_insert_resolver_->is_mock_for_row_alias());
   if (OB_ISNULL(dml_stmt) ||  OB_ISNULL(allocator_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -15678,14 +15682,24 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
     int64_t column_cnt = 0;
     ObSEArray<ObExprResType, 8> res_types;
     //common values table: values row(...), row(...),...
-    if (upper_insert_resolver_ == NULL &&
+    /*
+    1.upper_insert_resolver_ != NULL && !is_mock
+      ->insert values table: insert into ....values row(...), row(...),...
+    2. upper_insert_resolver_ == NULL
+      ->select * from (values row(...), row(...))
+    3.is_mock
+      ->insert into ....values (...,...) as alias on duplicate key set ...
+      ->insert into ....select * from (values table) as alias on ...
+      is_mock use to resolve the generated values table
+    */
+    if ((upper_insert_resolver_ == NULL || is_mock) &&
         OB_FAIL(resolve_table_values_for_select(table_node,
                                                 new_table_item->table_values_,
                                                 res_types,
                                                 column_cnt))) {
       LOG_WARN("failed to resolve table values for select", K(ret));
     //insert values table: insert into ....values row(...), row(...),...
-    } else if (upper_insert_resolver_ != NULL &&
+    } else if (upper_insert_resolver_ != NULL && !is_mock &&
                OB_FAIL(resolve_table_values_for_insert(table_node,
                                                        new_table_item->table_values_,
                                                        res_types,
@@ -15719,6 +15733,9 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
   const ParseNode *values_node = NULL;
   ObSEArray<int64_t, 8> value_idxs;
   column_cnt = 0;
+  ObInsertStmt *insert_stmt = NULL;
+  bool is_mock_for_row_alias = (upper_insert_resolver_!= NULL &&
+                                upper_insert_resolver_->is_mock_for_row_alias());
   if (OB_UNLIKELY(T_VALUES_TABLE_EXPRESSION != table_node.type_ || 1 != table_node.num_child_) ||
       OB_ISNULL(table_node.children_) || OB_ISNULL(values_node = table_node.children_[0]) ||
       OB_UNLIKELY(T_VALUES_ROW_LIST != values_node->type_) ||
@@ -15734,7 +15751,8 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
           OB_UNLIKELY(T_VALUE_VECTOR != vector_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid node children", K(i), K(vector_node), K(ret));
-      } else if (OB_UNLIKELY(vector_node->num_child_ > common::OB_USER_ROW_MAX_COLUMNS_COUNT)) {
+      } else if (OB_UNLIKELY(vector_node->num_child_ > common::OB_USER_ROW_MAX_COLUMNS_COUNT) &&
+                !is_mock_for_row_alias) {
         ret = OB_ERR_TOO_MANY_COLUMNS;
         LOG_WARN("too many columns", K(ret));
       } else {
@@ -15763,8 +15781,37 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("fail to resolve sql expr", K(ret), K(expr));
             } else if (expr->get_expr_type() == T_DEFAULT) {
-              ret = OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES;
-              LOG_WARN("A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.", K(ret));
+              if (is_mock_for_row_alias) {
+                insert_stmt = upper_insert_resolver_->get_insert_stmt();
+                ObInsertTableInfo &table_info = insert_stmt->get_insert_table_info();
+                ColumnItem *column_item = NULL;
+                uint64_t column_id = table_info.values_desc_.at(j)->get_column_id();
+                if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_info.table_id_,
+                                                                              column_id))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get column item by id failed", K(table_info.table_id_), K(column_id), K(ret));
+                } else if (table_info.values_desc_.at(j)->is_generated_column()) {
+                  if (OB_FAIL(copy_schema_expr(*params_.expr_factory_,
+                                                column_item->expr_->get_dependant_expr(),
+                                                expr))) {
+                    LOG_WARN("copy expr failed", K(ret));
+                  } else if (expr->has_flag(CNT_COLUMN)) {
+                    if (OB_FAIL(replace_column_ref(cur_values_vector, table_info.values_desc_, expr))) {
+                      LOG_WARN("replace column reference failed", K(ret));
+                    } else {
+                      LOG_TRACE("succeed to replace column ref", KPC(expr), K(cur_values_vector), K(table_info.values_desc_));
+                    }
+                  }
+                } else {
+                  ObDefaultValueUtils utils(insert_stmt, &params_, upper_insert_resolver_);
+                  if (OB_FAIL(utils.resolve_default_expr(*column_item, expr, T_INSERT_SCOPE))) {
+                    LOG_WARN("fail to resolve default value", "table_id", table_info.table_id_, K(column_id), K(ret));
+                  }
+                }
+              } else {
+                ret = OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES;
+                LOG_WARN("A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.", K(ret));
+              }
             }
             if (OB_SUCC(ret)) {
               if (OB_ISNULL(expr)) {
