@@ -2464,6 +2464,11 @@ int ObBackupMacroBlockTaskMgr::init(const share::ObBackupDataType &backup_data_t
   } else {
     backup_data_type_ = backup_data_type;
     batch_size_ = batch_size;
+#ifdef ERRSIM
+    if (0 != GCONF.errsim_backup_task_batch_size) {
+      batch_size_ = GCONF.errsim_backup_task_batch_size;
+    }
+#endif
     max_task_id_ = 0;
     cur_task_id_ = 0;
     is_inited_ = true;
