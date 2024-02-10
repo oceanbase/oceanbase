@@ -151,17 +151,13 @@ int ObLockMemtable::lock_(
   do {
     // retry if there is lock conflict at part trans ctx.
     need_retry = false;
-
     {
       succ_step = STEP_BEGIN;
       lock_exist = false;
       lock_mode_in_same_trans = 0x0;
       conflict_tx_set.reset();
       ObMvccWriteGuard guard;
-      if (ObClockGenerator::getClock() >= param.expired_time_) {
-        ret = (ret == OB_TRY_LOCK_ROW_CONFLICT ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT);
-        LOG_WARN("lock timeout", K(ret), K(lock_op), K(param));
-      } else if (OB_FAIL(guard.write_auth(ctx))) {
+      if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow lock table.", K(ret), K(ctx));
       } else if (OB_FAIL(check_tablet_write_allow_(lock_op))) {
         LOG_WARN("check tablet write allow failed", K(ret), K(lock_op));
@@ -201,26 +197,41 @@ int ObLockMemtable::lock_(
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
         obj_lock_map_.remove_lock_record(lock_op);
       }
-      if (!need_retry &&
-          ret == OB_TRY_LOCK_ROW_CONFLICT) {
-        if (param.is_try_lock_) {
-        } else if (ctx.mvcc_acc_ctx_.tx_ctx_->is_table_lock_killed()) {
-          // trans is killed by deadlock detect or abort because of
-          // something else.
-          ret = OB_TRANS_KILLED;
-        } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
-          // wait at lock wait mgr but not retry at here.
-        } else {
-          // register to deadlock detector.
-          need_retry = true;
-          if (!lock_op.is_dml_lock_op() && !register_to_deadlock) {
-            if (OB_TMP_FAIL(register_into_deadlock_detector_(ctx, lock_op))) {
-              LOG_WARN("register to deadlock detector failed", K(ret), K(lock_op));
-            } else {
-              register_to_deadlock = true;
+      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        if (OB_TMP_FAIL(check_and_set_tx_lock_timeout_(ctx.mvcc_acc_ctx_))) {
+          ret = tmp_ret;
+          LOG_WARN("tx lock timeout", K(ret));
+          break;
+        } else if (!need_retry) {
+          if (param.is_try_lock_) {
+            ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+          } else if (ctx.mvcc_acc_ctx_.tx_ctx_->is_table_lock_killed()) {
+            // trans is killed by deadlock detect or abort because of
+            // something else.
+            ret = OB_TRANS_KILLED;
+          } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
+            // wait at lock wait mgr but not retry at here.
+          } else {
+            // register to deadlock detector.
+            need_retry = true;
+            if (!lock_op.is_dml_lock_op() && !register_to_deadlock) {
+              if (OB_TMP_FAIL(register_into_deadlock_detector_(ctx, lock_op))) {
+                LOG_WARN("register to deadlock detector failed", K(ret), K(lock_op));
+              } else {
+                register_to_deadlock = true;
+              }
             }
           }
         }
+      } else if (OB_SUCCESS == ret) {
+        // lock successfully, reset lock_wait_start_ts
+        ctx.mvcc_acc_ctx_.set_lock_wait_start_ts(0);
+      }
+
+      if (ObClockGenerator::getClock() >= param.expired_time_) {
+        ret = (ret == OB_TRY_LOCK_ROW_CONFLICT ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT);
+        LOG_WARN("lock timeout", K(ret), K(lock_op), K(param));
+        break;
       }
     }
     if (need_retry) {
@@ -262,12 +273,16 @@ int ObLockMemtable::lock_(
     if (!recheck_f.is_valid()) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("recheck function construct failed", K(tmp_ret));
-    } else if (OB_SUCCESS != (tmp_ret = post_obj_lock_conflict_(ctx.mvcc_acc_ctx_,
-                                                                lock_op.lock_id_,
-                                                                lock_op.lock_mode_,
-                                                                *(conflict_tx_set.begin()),
-                                                                recheck_f))) {
-      LOG_WARN("post obj lock conflict failed", K(tmp_ret));
+    } else if (OB_TMP_FAIL(post_obj_lock_conflict_(ctx.mvcc_acc_ctx_,
+                                                   lock_op.lock_id_,
+                                                   lock_op.lock_mode_,
+                                                   *(conflict_tx_set.begin()),
+                                                   recheck_f))) {
+      if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == tmp_ret) {
+        ret = tmp_ret;
+      } else {
+        LOG_WARN("post obj lock conflict failed", K(tmp_ret), K(lock_op));
+      }
     } else {
       // do nothing
     }
@@ -459,12 +474,7 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
     ? mem_ctx->get_lock_wait_start_ts()
     : current_ts;
   int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
-  if (current_ts >= lock_wait_expire_ts) {
-    ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
-    LOG_WARN("exclusive lock conflict", K(ret), K(lock_id),
-             K(conflict_tx_id), K(acc_ctx), K(lock_wait_expire_ts));
-  } else if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr*,
-                                                             mem_ctx->get_tenant_id()))) {
+  if (OB_ISNULL(lock_wait_mgr = MTL_WITH_CHECK_TENANT(ObLockWaitMgr *, mem_ctx->get_tenant_id()))) {
     LOG_WARN("can not get tenant lock_wait_mgr MTL", K(mem_ctx->get_tenant_id()));
   } else {
     int tmp_ret = OB_SUCCESS;
@@ -473,7 +483,7 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
     bool remote_tx = tx_ctx->get_scheduler() != tx_ctx->get_addr();
     // TODO: one thread only can wait at one lock now.
     // this may be not enough.
-    tmp_ret = lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
+    if (OB_TMP_FAIL(lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
                                        LS_LOCK_TABLET,
                                        lock_id,
                                        lock_wait_expire_ts,
@@ -483,15 +493,15 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
                                        tx_id,
                                        conflict_tx_id,
                                        lock_mode,
-                                       recheck_f);
-    if (OB_SUCCESS != tmp_ret) {
+                                       recheck_f))) {
       LOG_WARN("post_lock after tx conflict failed",
                K(tmp_ret), K(tx_id), K(conflict_tx_id));
-    } else if (mem_ctx->get_lock_wait_start_ts() <= 0) {
-      mem_ctx->set_lock_wait_start_ts(lock_wait_start_ts);
     }
   }
-  LOG_DEBUG("ObLockMemtable::post_obj_lock_conflict_", K(ret), K(lock_id), K(conflict_tx_id));
+  LOG_DEBUG("ObLockMemtable::post_obj_lock_conflict_",
+            K(ret),
+            K(lock_id),
+            K(conflict_tx_id));
   return ret;
 }
 
@@ -1098,6 +1108,25 @@ int ObLockMemtable::unregister_from_deadlock_detector_(const ObTableLockOp &lock
     LOG_WARN("unregister trans lock part failed", K(ret), K(tx_lock_part_id));
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObLockMemtable::check_and_set_tx_lock_timeout_(const ObMvccAccessCtx &acc_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
+  int64_t current_ts = common::ObClockGenerator::getClock();
+  if (mem_ctx->get_lock_wait_start_ts() <= 0) {
+    mem_ctx->set_lock_wait_start_ts(current_ts);
+  } else {
+    int64_t lock_wait_start_ts = mem_ctx->get_lock_wait_start_ts();
+    int64_t lock_wait_expire_ts = acc_ctx.eval_lock_expire_ts(lock_wait_start_ts);
+    if (current_ts >= lock_wait_expire_ts) {
+      ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+      LOG_WARN(
+        "exclusive lock conflict", K(ret), K(acc_ctx), K(lock_wait_start_ts), K(lock_wait_expire_ts), K(current_ts));
+    }
   }
   return ret;
 }
