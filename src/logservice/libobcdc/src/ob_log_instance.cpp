@@ -2346,12 +2346,11 @@ void ObLogInstance::reload_config_()
 {
   int ret = OB_SUCCESS;
   ObLogConfig &config = TCONF;
-  const char *default_config_fpath = DEFAULT_CONFIG_FPATN;
 
   _LOG_INFO("====================reload config begin====================");
 
-  if (OB_FAIL(config.load_from_file(default_config_fpath))) {
-    LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
+  if (OB_FAIL(config.load_from_file(config.config_fpath))) {
+    LOG_ERROR("load_from_file fail", KR(ret), K(config.config_fpath));
   } else {
     CDC_CFG_MGR.configure(config);
     const int64_t max_log_file_count = config.max_log_file_count;
