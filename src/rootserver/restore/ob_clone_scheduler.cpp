@@ -1904,6 +1904,10 @@ int ObCloneScheduler::convert_parameters_(
     } else {
       LOG_WARN("fail to get latest key id", KR(ret), K(user_tenant_id));
     }
+  } else if (ObTdeMethodUtil::is_kms(tde_method)
+             && OB_FAIL(ObEncryptionUtil::get_tde_kms_info(source_tenant_id, kms_info))) {
+    LOG_WARN("failed to get tde kms info", KR(ret), K(tde_method), K(source_tenant_id));
+    //TODO: TDE method can change | kms_info may change
   }
 
   /* If the source tenant has encrypt_info,
@@ -1916,25 +1920,9 @@ int ObCloneScheduler::convert_parameters_(
       LOG_WARN("fail to trim master key map", KR(ret), K(user_tenant_id), K(latest_master_key_id));
     } else if (!clone_has_encrypt_info) {
       //do nothing
-    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = '%.*s'",
-                                                tde_method.length(), tde_method.ptr()))) {
-      LOG_WARN("failed to assign fmt", KR(ret), K(tde_method));
-    } else if (OB_FAIL(sql_proxy_->write(user_tenant_id, sql.ptr(), affected_row))) {
-      LOG_WARN("failed to execute", KR(ret), K(user_tenant_id), K(sql));
-    } else if (ObTdeMethodUtil::is_internal(tde_method)) {
-      // do nothing
-    } else if (OB_FAIL(ObEncryptionUtil::get_tde_kms_info(source_tenant_id, kms_info))) {
-      LOG_WARN("failed to get tde kms info", KR(ret), K(source_tenant_id));
-      //TODO: TDE method can change | kms_info may change
-    } else if (OB_UNLIKELY(kms_info.empty())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("kms_info should not be empty", KR(ret));
-    } else if (FALSE_IT(sql.reset())) {
-    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%.*s'",
-                                                    kms_info.length(), kms_info.ptr()))) {
-      LOG_WARN("failed to assign fmt", KR(ret));
-    } else if (OB_FAIL(sql_proxy_->write(user_tenant_id, sql.ptr(), affected_row))) {
-      LOG_WARN("failed to execute", KR(ret), K(user_tenant_id));
+    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, rpc_proxy_,
+                                    user_tenant_id, tde_method, kms_info))) {
+      LOG_WARN("failed to set_tde_parameters", KR(ret), K(user_tenant_id), K(tde_method));
     }
   }
 #endif

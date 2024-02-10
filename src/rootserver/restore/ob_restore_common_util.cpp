@@ -322,3 +322,75 @@ int ObRestoreCommonUtil::check_tenant_is_existed(ObMultiVersionSchemaService *sc
   }
   return ret;
 }
+
+int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
+                                            obrpc::ObCommonRpcProxy *rpc_proxy,
+                                            const uint64_t tenant_id,
+                                            const ObString &tde_method,
+                                            const ObString &kms_info)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  ObSqlString sql;
+  int64_t affected_row = 0;
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id)
+                  || !ObTdeMethodUtil::is_valid(tde_method)
+                  || NULL == sql_proxy
+                  || NULL == rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tde_method), KP(sql_proxy), KP(rpc_proxy));
+  } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = '%.*s'",
+                                                    tde_method.length(), tde_method.ptr()))) {
+    LOG_WARN("failed to assign fmt", KR(ret), K(tde_method));
+  } else if (OB_FAIL(sql_proxy->write(tenant_id, sql.ptr(), affected_row))) {
+    LOG_WARN("failed to execute", KR(ret), K(tenant_id), K(sql));
+  } else if (ObTdeMethodUtil::is_internal(tde_method)) {
+    // do nothing
+  } else if (FALSE_IT(sql.reset())) {
+  } else if (OB_UNLIKELY(kms_info.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("kms_info should not be empty", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%.*s'",
+                                                    kms_info.length(), kms_info.ptr()))) {
+    LOG_WARN("failed to assign fmt", KR(ret));
+  } else if (OB_FAIL(sql_proxy->write(tenant_id, sql.ptr(), affected_row))) {
+    LOG_WARN("failed to execute", KR(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
+    obrpc::ObReloadMasterKeyArg arg;
+    obrpc::ObReloadMasterKeyResult result;
+    arg.tenant_id_ = tenant_id;
+    if (OB_FAIL(rpc_proxy->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
+      LOG_WARN("fail to reload master key", KR(ret), K(arg), K(DEFAULT_TIMEOUT));
+    } else if (result.master_key_id_ > 0 ) {
+      bool is_active = false;
+      const int64_t SLEEP_US = 5 * 1000 * 1000L; // 5s
+      const int64_t MAX_WAIT_US = 60 * 1000 * 1000L; // 60s
+      const int64_t start = ObTimeUtility::current_time();
+      char master_key[OB_MAX_MASTER_KEY_LENGTH] = {'\0'};
+      int64_t master_key_len = 0;
+      uint64_t master_key_id = 0;
+      while (OB_SUCC(ret) && !is_active) {
+        if (ObTimeUtility::current_time() - start > MAX_WAIT_US) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("use too much time", KR(ret), "cost_us", ObTimeUtility::current_time() - start);
+        } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(tenant_id, master_key,
+                                                                OB_MAX_MASTER_KEY_LENGTH,
+                                                                master_key_len, master_key_id))) {
+          if (OB_KEYSTORE_OPEN_NO_MASTER_KEY == ret) {
+            ret = OB_SUCCESS;
+            LOG_INFO("master key is not active, need wait", K(tenant_id));
+            usleep(SLEEP_US);
+          } else {
+            LOG_WARN("fail to get active master key", KR(ret), K(tenant_id));
+          }
+        } else {
+          is_active = true;
+        }
+      }
+    }
+  }
+#endif
+  return ret;
+}
