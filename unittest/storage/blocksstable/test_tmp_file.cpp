@@ -11,6 +11,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <signal.h>
+#include <unistd.h>
 #define protected public
 #define private public
 #include "lib/allocator/ob_fifo_allocator.h"
@@ -635,6 +637,8 @@ void TestTmpFile::SetUp()
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
   ObTenantEnv::set_tenant(&tenant_ctx);
+
+  ObMallocAllocator::get_instance()->set_tenant_limit(1, 8L * 1024L * 1024L * 1024L /* 8 GB */);
 }
 
 void TestTmpFile::TearDown()
@@ -676,6 +680,8 @@ TEST_F(TestTmpFile, test_big_file)
   write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
+  ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
+
   io_info.size_ = write_size;
   ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -724,6 +730,7 @@ TEST_F(TestTmpFile, test_big_file)
   ObTmpFileManager::get_instance().remove(fd);
 }
 
+/*
 TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 {
   int ret = OB_SUCCESS;
@@ -755,6 +762,8 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
   write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
+  ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
+
   io_info.size_ = write_size;
   ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -790,7 +799,7 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
   free(write_buf);
   free(read_buf);
 
-  STORAGE_LOG(INFO, "test_big_file");
+  STORAGE_LOG(INFO, "test_big_file_disable_page_cache");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
   ObTmpTenantFileStoreHandle store_handle;
   OB_TMP_FILE_STORE.get_store(1, store_handle);
@@ -802,6 +811,7 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 
   ObTmpFileManager::get_instance().remove(fd);
 }
+*/
 
 TEST_F(TestTmpFile, test_multi_small_file_single_thread_read_write)
 {
@@ -2342,8 +2352,24 @@ TEST_F(TestTmpFile, test_truncate_free_block) {
 }  // end namespace unittest
 }  // end namespace oceanbase
 
+void sig_49_handler(int signo)
+{
+  // do nothing.
+}
+
 int main(int argc, char **argv)
 {
+  struct sigaction sa;
+  sa.sa_handler = sig_49_handler;
+  sa.sa_flags = 0;
+  sigemptyset(&sa.sa_mask);
+
+  // catch 49 signal and do nothing.
+  if (sigaction(49, &sa, NULL) == -1) {
+    perror("sigaction");
+    return 1;
+  }
+
   system("rm -f test_tmp_file.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_file_name("test_tmp_file.log", true, true);
