@@ -6743,8 +6743,7 @@ int ObSelectLogPlan::init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool 
     }
   }
   if (OB_SUCC(ret)
-      && NULL != win_func_helper.topn_const_
-      && !ob_is_integer_type(win_func_helper.topn_const_->get_result_type().get_type())) {
+      && NULL != win_func_helper.topn_const_) {
     //cast topn expr to int
     ObRawExpr *topn_with_cast = NULL;
     ObRawExpr *topn_without_cast = NULL;
