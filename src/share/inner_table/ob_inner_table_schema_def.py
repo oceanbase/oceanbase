@@ -14939,6 +14939,8 @@ def_table_schema(
                     """.replace("\n", " ")
 )
 
+# 20016: PROFILING
+
 def_table_schema(
   owner = 'yuzhong.zhao',
   tablegroup_id  = 'OB_INVALID_ID',

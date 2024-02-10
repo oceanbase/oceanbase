@@ -113,6 +113,8 @@ namespace share
   static const char* const OB_SV_CTE_MAX_RECURSION_DEPTH = "cte_max_recursion_depth";
   static const char* const OB_SV_REGEXP_STACK_LIMIT = "regexp_stack_limit";
   static const char* const OB_SV_REGEXP_TIME_LIMIT = "regexp_time_limit";
+  static const char* const OB_SV_PROFILING = "profiling";
+  static const char* const OB_SV_PROFILING_HISTORY_SIZE = "profiling_history_size";
   static const char* const OB_SV_INTERM_RESULT_MEM_LIMIT = "ob_interm_result_mem_limit";
   static const char* const OB_SV_PROXY_PARTITION_HIT = "ob_proxy_partition_hit";
   static const char* const OB_SV_LOG_LEVEL = "ob_log_level";
