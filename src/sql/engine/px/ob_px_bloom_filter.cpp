@@ -34,6 +34,7 @@ using namespace obrpc;
 #define FIXED_HASH_COUNT 4
 #define LOG_HASH_COUNT 2        // = log2(FIXED_HASH_COUNT)
 #define WORD_SIZE 64            // WORD_SIZE * FIXED_HASH_COUNT = BF_BLOCK_SIZE
+#define HASH_SHIFT_MASK 63
 
 // before assign, please set allocator for channel_ids_ first
 int BloomFilterIndex::assign(const BloomFilterIndex &other)
@@ -203,11 +204,11 @@ int ObPxBloomFilter::put(uint64_t hash)
     LOG_WARN("the px bloom filter is not inited", K(ret));
   } else {
     uint32_t hash_high = (uint32_t)(hash >> 32);
-  uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
-    (void)set(block_begin, 1L << hash_high);
-    (void)set(block_begin + 1, 1L << (hash_high >> 8));
-    (void)set(block_begin + 2, 1L << (hash_high >> 16));
-    (void)set(block_begin + 3, 1L << (hash_high >> 24));
+    uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
+    (void)set(block_begin, 1L << (hash_high & HASH_SHIFT_MASK));
+    (void)set(block_begin + 1, 1L << ((hash_high >> 8) & HASH_SHIFT_MASK));
+    (void)set(block_begin + 2, 1L << ((hash_high >> 16) & HASH_SHIFT_MASK));
+    (void)set(block_begin + 3, 1L << ((hash_high >> 24) & HASH_SHIFT_MASK));
   }
   return ret;
 }
@@ -228,13 +229,13 @@ int ObPxBloomFilter::might_contain_nonsimd(uint64_t hash, bool &is_match)
   is_match = true;
   uint32_t hash_high = (uint32_t)(hash >> 32);
   uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
-  if (!get(block_begin, 1L << hash_high)) {
+  if (!get(block_begin, 1L << (hash_high & HASH_SHIFT_MASK))) {
     is_match = false;
-  } else if (!get(block_begin + 1, 1L << (hash_high >> 8))) {
+  } else if (!get(block_begin + 1, 1L << ((hash_high >> 8) & HASH_SHIFT_MASK))) {
     is_match = false;
-  } else if (!get(block_begin + 2, 1L << (hash_high >> 16))) {
+  } else if (!get(block_begin + 2, 1L << ((hash_high >> 16) & HASH_SHIFT_MASK))) {
     is_match = false;
-  } else if (!get(block_begin + 3, 1L << (hash_high >> 24))) {
+  } else if (!get(block_begin + 3, 1L << ((hash_high >> 24) & HASH_SHIFT_MASK))) {
     is_match = false;
   }
   return ret;

@@ -1122,6 +1122,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMod::mod_decimalint,                                          /* 678 */
   NULL, // ObExprPrivSTGeoHash::eval_priv_st_geohash,                 /* 679 */
   NULL, // ObExprPrivSTMakePoint::eval_priv_st_makepoint,             /* 680 */
+  NULL, // ObExprGetLock::get_lock,                                   /* 681 */
+  NULL, // ObExprIsFreeLock::is_free_lock,                            /* 682 */
+  NULL, // ObExprIsUsedLock::is_used_lock,                            /* 683 */
+  NULL, // ObExprReleaseLock::release_lock,                           /* 684 */
+  NULL, // ObExprReleaseAllLocks::release_all_locks,                  /* 685 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
