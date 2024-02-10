@@ -62,7 +62,7 @@
 
 - version: 4.2.1.1
   can_be_upgraded_to:
-      - 4.3.0.0
+      - 4.2.1.2
   require_from_binary:
     value: True
     when_come_from: [4.1.0.0, 4.1.0.1, 4.1.0.2, 4.2.0.0]
