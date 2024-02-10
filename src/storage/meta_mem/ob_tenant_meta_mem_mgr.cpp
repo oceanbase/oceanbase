@@ -904,7 +904,18 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
-    LOG_WARN("get tablet status failed", KR(ret), KP(tablet));
+    if (OB_EMPTY_RESULT == ret) {
+      // When OB_EMPTY_RESULT is returned, there are two situations that need to be eaten, as follows:
+      // - The one is that transfer transaction is aborted.
+      // - The second is that the tablet is just been created and the tablet status has been also written.
+      //
+      // In the above two cases, the old version tablet is not allowed and will not exist, and it
+      // is not allowed to be read without being queried, so it is safe to return max scn here.
+      min_end_scn.set_max();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get tablet status failed", KR(ret), KP(tablet));
+    }
   } else if (ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
     /* when tablet transfer with active tx, dest_ls may recycle active transaction tx_data
      * because no uncommitted data depend it, but src_ls's tablet may has uncommitted data depend this tx_data
