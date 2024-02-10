@@ -51,7 +51,7 @@ class ObTxMDSCache
 {
 public:
   ObTxMDSCache(TransModulePageAllocator &allocator) : mds_list_(allocator) { reset(); }
-  int init(int64_t tenant_id);
+  int init(const int64_t tenant_id, const share::ObLSID ls_id, const ObTransID tx_id);
   void reset();
   void destroy();
 
@@ -101,7 +101,14 @@ private:
   ObTxBufferNodeList mds_list_;
   ObTxBufferNodeList::iterator submitted_iterator_;
 
+#ifdef ENABLE_DEBUG_LOG
+  int64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTransID  tx_id_;
+
+  int record_mem_ret_;
   ObTxMDSMemStatHash mem_stat_hash_;
+#endif
 };
 
 class ObTxMDSRange
