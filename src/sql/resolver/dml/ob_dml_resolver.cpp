@@ -5408,7 +5408,7 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(), parent_column_ids, fk_scan_tid))) {
           LOG_WARN("failed to get table id to perform scan task for foreign key check", K(ret));
         } else if (OB_INVALID_ID == fk_scan_tid) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("invalid table id to perform scan task for foregin key check", K(ret));
         } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), fk_scan_tid, resolve_table_schema))) {
           LOG_WARN("failed to get table schema to perform foreign key check", K(ret), K(fk_scan_tid));
