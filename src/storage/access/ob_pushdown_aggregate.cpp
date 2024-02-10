@@ -2835,6 +2835,7 @@ void ObPDAggFactory::release(common::ObIArray<ObAggCell*> &agg_cells)
 
 ObGroupByCell::ObGroupByCell(const int64_t batch_size, common::ObIAllocator &allocator)
   : batch_size_(batch_size),
+    row_capacity_(batch_size),
     group_by_col_offset_(-1),
     group_by_col_expr_(nullptr),
     group_by_col_datum_buf_(nullptr),
@@ -2856,6 +2857,7 @@ ObGroupByCell::ObGroupByCell(const int64_t batch_size, common::ObIAllocator &all
 void ObGroupByCell::reset()
 {
   batch_size_ = 0;
+  row_capacity_ = 0;
   group_by_col_offset_ = -1;
   group_by_col_expr_ = nullptr;
   agg_cell_factory_.release(agg_cells_);
@@ -3104,10 +3106,13 @@ int ObGroupByCell::output_extra_group_by_result(int64_t &count)
   if (OB_UNLIKELY(!group_by_col_datum_buf_->is_use_extra_buf())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state", K(ret), KPC(group_by_col_datum_buf_));
+  } else if (OB_UNLIKELY(0 == projected_cnt_ && row_capacity_ != batch_size_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected row_capacity, must be equal with batch_size at first", K(ret), K(row_capacity_), K(batch_size_));
   } else if (projected_cnt_ >= distinct_cnt_) {
     ret = OB_ITER_END;
   } else {
-    count = MIN(batch_size_, distinct_cnt_ - projected_cnt_);
+    count = MIN(row_capacity_, distinct_cnt_ - projected_cnt_);
     common::ObDatum *result_datum = nullptr;
     common::ObDatum *sql_result_datums = group_by_col_datum_buf_->get_sql_result_datums();
     common::ObDatum *extra_result_datums = group_by_col_datum_buf_->get_extra_result_datums();
@@ -3132,7 +3137,7 @@ int ObGroupByCell::output_extra_group_by_result(int64_t &count)
       ret = OB_ITER_END;
     }
   }
-  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(count), K(projected_cnt_), K(distinct_cnt_));
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(count), K(projected_cnt_), K(distinct_cnt_), K(row_capacity_));
   return ret;
 }
 
@@ -3228,6 +3233,7 @@ int64_t ObGroupByCell::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(batch_size),
+       K_(row_capacity),
        K_(group_by_col_offset),
        KP_(group_by_col_expr),
        K_(agg_cells),

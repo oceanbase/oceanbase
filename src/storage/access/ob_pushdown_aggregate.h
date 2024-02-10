@@ -657,12 +657,14 @@ public:
   OB_INLINE bool is_processing() const { return is_processing_; }
   OB_INLINE void set_is_processing(const bool is_processing) { is_processing_ = is_processing; }
   OB_INLINE void reset_projected_cnt() { projected_cnt_ = 0; }
+  OB_INLINE void set_row_capacity(const int64_t row_capacity) { row_capacity_ = row_capacity; }
   template <typename T>
   int decide_use_group_by(const int64_t row_cnt, const int64_t read_cnt, const int64_t distinct_cnt, const T *bitmap, bool &use_group_by)
   {
     int ret = OB_SUCCESS;
     const bool is_valid_bitmap = nullptr != bitmap && !bitmap->is_all_true();
-    use_group_by = read_cnt * USE_GROUP_BY_READ_CNT_FACTOR > row_cnt &&
+    use_group_by = row_capacity_ == batch_size_ &&
+                   read_cnt * USE_GROUP_BY_READ_CNT_FACTOR > row_cnt &&
                    distinct_cnt < USE_GROUP_BY_MAX_DISTINCT_CNT &&
                    distinct_cnt < row_cnt * USE_GROUP_BY_DISTINCT_RATIO &&
                    (!is_valid_bitmap ||
@@ -674,7 +676,8 @@ public:
         LOG_WARN("Failed to prepare group by datum buf", K(ret));
       }
     }
-    LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(row_cnt), K(read_cnt), K(distinct_cnt), K(is_valid_bitmap), K(use_group_by),
+    LOG_TRACE("[GROUP BY PUSHDOWN]", K(ret), K(row_cnt), K(read_cnt), K(distinct_cnt), K(is_valid_bitmap), K(use_group_by),
+        K_(batch_size), K_(row_capacity),
         "popcnt", is_valid_bitmap ? bitmap->popcnt() : 0,
         "size", is_valid_bitmap ? bitmap->size() : 0);
     return ret;
@@ -692,6 +695,7 @@ private:
   static constexpr double USE_GROUP_BY_DISTINCT_RATIO = 0.5;
   static const int64_t USE_GROUP_BY_FILTER_FACTOR = 2;
   int64_t batch_size_;
+  int64_t row_capacity_;
   int32_t group_by_col_offset_;
   sql::ObExpr *group_by_col_expr_;
   ObAggGroupByDatumBuf *group_by_col_datum_buf_;

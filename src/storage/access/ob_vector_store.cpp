@@ -173,10 +173,13 @@ int ObVectorStore::reuse_capacity(const int64_t capacity)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBlockBatchedRowStore::reuse_capacity(capacity))) {
     LOG_WARN("Fail to reuse capacity", K(ret), K(capacity));
-  } else {
-    if (nullptr != group_by_cell_ && !group_by_cell_->is_processing()) {
+  } else if (nullptr != group_by_cell_) {
+    if (!group_by_cell_->is_processing()) {
       group_by_cell_->reuse();
     }
+    group_by_cell_->set_row_capacity(capacity);
+  }
+  if (OB_SUCC(ret)) {
     count_ = 0;
   }
   return ret;
