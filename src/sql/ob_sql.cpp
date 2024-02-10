@@ -2812,7 +2812,9 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         // be off, we need reset value in pctx and initialize param frame accordingly.
         if (NULL != pc_ctx && NULL != pc_ctx->exec_ctx_.get_physical_plan_ctx()) {
           pc_ctx->exec_ctx_.get_physical_plan_ctx()->set_rich_format(context.session_info_->use_rich_format());
-          pc_ctx->exec_ctx_.get_physical_plan_ctx()->init_datum_param_store();
+          if (OB_FAIL(pc_ctx->exec_ctx_.get_physical_plan_ctx()->init_datum_param_store())) {
+            LOG_WARN("init datum param store failed", K(ret));
+          }
         }
       }
       //add ref obj schema version to PL and ps info
