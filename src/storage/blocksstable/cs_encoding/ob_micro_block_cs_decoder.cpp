@@ -119,26 +119,22 @@ int ObCSDecoderCtxArray::get_ctx_array(ObColumnCSDecoderCtx **&ctxs, int64_t siz
         LOG_WARN("alloc cs decoder ctx block failed", K(ret), K(i), K(need_block_count));
       } else if (OB_FAIL(ctx_blocks_.push_back(ctx_block))) {
         LOG_WARN("cs ctx block array push back failed", K(ret), KP(ctx_block));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(decode_res_pool->free(ctx_block))) {
+          LOG_ERROR("failed to free cs decoder ctx block", K(tmp_ret), KP(ctx_block));
+        } else {
+          ctx_block = NULL;
+        }
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < ObColumnCSDecoderCtxBlock::CS_CTX_NUMS; ++j) {
           if (OB_FAIL(ctxs_.push_back(&ctx_block->ctxs_[j]))) {
-            LOG_WARN("cs ctx array push back failed", K(ret), K(j));
+            LOG_WARN("cs ctx array push back failed", K(ret), K(j), KP(ctx_block));
           }
         }
       }
     }
 
-    if (OB_FAIL(ret)) {
-      if (NULL != ctx_block) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(decode_res_pool->free(ctx_block))) {
-          LOG_ERROR("failed to free decoder cs ctx block", K(tmp_ret), KP(ctx_block));
-        } else {
-          ctx_block = NULL;
-        }
-      }
-      reset();
-    } else {
+    if (OB_SUCC(ret)) {
       ctxs = &ctxs_.at(0);
     }
   } else {
@@ -815,14 +811,15 @@ int ObMicroBlockCSDecoder::acquire(const int64_t store_idx, const ObIColumnCSDec
       LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header));
     } else if (OB_FAIL(need_release_decoders_.push_back(decoder))) {
       LOG_WARN("add decoder failed", K(ret), K(store_idx), K(col_header));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(release_local_funcs_[decoder->get_type()]
+          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(decoder)))) {
+        LOG_ERROR("failed to free decoder", K(tmp_ret), "type", decoder->get_type(), KP(decoder));
+      } else {
+        decoder = nullptr;
+      }
     } else {
       ++need_release_decoder_cnt_;
-    }
-
-    if (OB_FAIL(ret) && decoder != nullptr) {
-      release_local_funcs_[decoder->get_type()]
-          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(decoder));
-      decoder = nullptr;
     }
   }
   return ret;
