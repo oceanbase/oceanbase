@@ -1628,8 +1628,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSqlStmt &s)
     LOG_WARN("failed to generate goto label", K(ret));
   } else {
     ObLLVMValue ret_err;
+    ObLLVMValue stack;
+    OZ (generator_.get_helper().stack_save(stack));
     OZ (generator_.generate_sql(s, ret_err));
     OZ (generator_.generate_after_sql(s, ret_err));
+    OZ (generator_.get_helper().stack_restore(stack));
   }
   return ret;
 }
