@@ -1756,14 +1756,14 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
     }
     if (OB_NOT_NULL(slice_writer)) {
-      if (is_data_direct_load(direct_load_type_) && slice_writer->need_column_store()) {
+      if (OB_SUCC(ret) && is_data_direct_load(direct_load_type_) && slice_writer->need_column_store()) {
         //ignore, free after rescan
       } else {
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_))) {
           LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
         } else {
-          LOG_INFO("erase a slice writer", KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
+          LOG_INFO("erase a slice writer", K(ret), KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
           slice_writer->~ObDirectLoadSliceWriter();
           sqc_build_ctx_.slice_writer_allocator_.free(slice_writer);
           slice_writer = nullptr;
