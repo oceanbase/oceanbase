@@ -584,8 +584,10 @@ int main(int argc, char *argv[])
       ATOMIC_STORE(&palf::election::INIT_TS, palf::election::get_monotonic_ts());
       if (OB_FAIL(observer.init(opts, log_cfg))) {
         LOG_ERROR("observer init fail", K(ret));
+        raise(SIGKILL); // force stop when fail
       } else if (OB_FAIL(observer.start())) {
         LOG_ERROR("observer start fail", K(ret));
+        raise(SIGKILL); // force stop when fail
       } else if (OB_FAIL(observer.wait())) {
         LOG_ERROR("observer wait fail", K(ret));
       }

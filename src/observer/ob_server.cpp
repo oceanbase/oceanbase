@@ -1018,37 +1018,26 @@ int ObServer::start()
       FLOG_INFO("success to refresh server configure");
     }
 
-    bool synced = false;
-    while (OB_SUCC(ret) && !stop_ && !synced) {
-      synced = multi_tenant_.has_synced();
-      if (!synced) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
-
-    bool schema_ready = false;
-    while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-      schema_ready = schema_service_.is_sys_full_schema();
-      if (!schema_ready) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
-
-    bool timezone_usable = false;
-    if (FAILEDx(tenant_timezone_mgr_.start())) {
-      LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+    // check if multi tenant synced
+    if (FAILEDx(check_if_multi_tenant_synced())) {
+      LOG_ERROR("fail to check if multi tenant synced", KR(ret));
     } else {
-      FLOG_INFO("success to start tenant timezone mgr");
+      FLOG_INFO("success to check if multi tenant synced");
     }
-    while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
-      timezone_usable = tenant_timezone_mgr_.is_usable();
-      if (!timezone_usable) {
-        SLEEP(1);
-      }
+
+    // check if schema ready
+    if (FAILEDx(check_if_schema_ready())) {
+      LOG_ERROR("fail to check if schema ready", KR(ret));
+    } else {
+      FLOG_INFO("success to check if schema ready");
     }
-    FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+
+    // check if timezone usable
+    if (FAILEDx(check_if_timezone_usable())) {
+      LOG_ERROR("fail to check if timezone usable", KR(ret));
+    } else {
+      FLOG_INFO("success to check if timezone usable");
+    }
 
     // check log replay and user tenant schema refresh status
     if (OB_SUCC(ret)) {
@@ -1123,6 +1112,52 @@ int ObServer::try_update_hidden_sys()
   return ret;
 }
 
+int ObServer::check_if_multi_tenant_synced()
+{
+  int ret = OB_SUCCESS;
+  bool synced = false;
+  while (OB_SUCC(ret) && !stop_ && !synced) {
+    synced = multi_tenant_.has_synced();
+    if (!synced) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
+  return ret;
+}
+
+int ObServer::check_if_schema_ready()
+{
+  int ret = OB_SUCCESS;
+  bool schema_ready = false;
+  while (OB_SUCC(ret) && !stop_ && !schema_ready) {
+    schema_ready = schema_service_.is_sys_full_schema();
+    if (!schema_ready) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
+  return ret;
+}
+
+int ObServer::check_if_timezone_usable()
+{
+  int ret = OB_SUCCESS;
+  bool timezone_usable = false;
+  if (FAILEDx(tenant_timezone_mgr_.start())) {
+    LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+  } else {
+    FLOG_INFO("success to start tenant timezone mgr");
+  }
+  while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
+    timezone_usable = tenant_timezone_mgr_.is_usable();
+    if (!timezone_usable) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+  return ret;
+}
 void ObServer::prepare_stop()
 {
   prepare_stop_ = true;
