@@ -949,7 +949,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes))) {
+                                                              column_attributes, false))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {

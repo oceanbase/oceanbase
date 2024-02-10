@@ -617,7 +617,8 @@ int ObTableColumns::fill_row_cells(
                                               session_,
                                               column_type_str_,
                                               column_type_str_len_,
-                                              column_attributes))) {
+                                              column_attributes,
+                                              false))) {
     LOG_WARN("failed to deduce column attributes",
              K(select_item), K(ret));
   } else {
@@ -723,7 +724,8 @@ int ObTableColumns::deduce_column_attributes(
     sql::ObSQLSessionInfo *session,
     char *column_type_str,
     int64_t column_type_str_len,
-    ColumnAttributes &column_attributes) {
+    ColumnAttributes &column_attributes,
+    bool skip_type_str) {
   int ret = OB_SUCCESS;
   // nullable = YES:  if some binaryref expr is nullable
   // nullable = NO, other cases
@@ -747,7 +749,7 @@ int ObTableColumns::deduce_column_attributes(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(select_stmt) || OB_ISNULL(expr)
             || OB_ISNULL(session) || OB_ISNULL(schema_guard)
-            || OB_ISNULL(column_type_str)) {
+            || (OB_ISNULL(column_type_str) && !skip_type_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameter is NULL", K(ret), K(expr), K(select_stmt), KP(session), KP(schema_guard), KP(column_type_str));
   } else {
@@ -827,7 +829,7 @@ int ObTableColumns::deduce_column_attributes(
     } else if (result_type.get_udt_id() == T_OBJ_XML) {
       sub_type = T_OBJ_XML;
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
       if (OB_FAIL(ob_sql_type_str(column_type_str,
                                   column_type_str_len,
@@ -848,9 +850,11 @@ int ObTableColumns::deduce_column_attributes(
   if (OB_SUCC(ret)) {
     // set attributes
     column_attributes.field_ = select_item.alias_name_;
-    column_attributes.type_ = ObString(column_type_str_len,
-                                       static_cast<int32_t>(strlen(column_type_str)),
-                                       column_type_str);
+    if(!skip_type_str){
+      column_attributes.type_ = ObString(column_type_str_len,
+                                        static_cast<int32_t>(strlen(column_type_str)),
+                                        column_type_str);
+    }
     column_attributes.null_ = ObString::make_string(nullable ? "YES" : "NO");
     column_attributes.default_ = ObString::make_string(!has_default ? "NULL" : "");
     column_attributes.extra_ = ObString::make_string("");

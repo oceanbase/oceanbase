@@ -25,6 +25,7 @@
 #include "lib/hash/ob_hashset.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
+#include "observer/virtual_table/ob_table_columns.h"
 
 namespace oceanbase
 {
@@ -1223,7 +1224,10 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
   ObColumnSchemaV2 column;
   int64_t cur_column_id = OB_APP_MIN_COLUMN_ID;
   uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+  share::schema::ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
     if (!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count())) {
@@ -1254,6 +1258,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
                  OB_FAIL(resolve_column_default_value(&select_stmt, select_item, column, alloc, session_info))) {
         // oracle mode has default expr value, not support now
         LOG_WARN("add column to table_schema failed", K(ret), K(column));
+      } else if (OB_FAIL(resolve_columns_nullable_value(&select_stmt, select_item, column, alloc, session_info, &schema_guard))){
+        LOG_WARN("failed to add column nullable info", K(ret));
       } else if (OB_FAIL(table_schema.add_column(column))) {
         LOG_WARN("add column to table_schema failed", K(ret), K(column));
       } else {
@@ -1282,7 +1288,6 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
   column.set_collation_type(expr.get_collation_type());
   column.set_accuracy(expr.get_accuracy());
   column.set_zero_fill(expr.get_result_type().has_result_flag(ZEROFILL_FLAG));
-  column.set_nullable(expr.get_result_type().is_not_null_for_read() ? false : true);
   if (OB_FAIL(ret)) {
   } else if (column.is_enum_or_set() && OB_FAIL(column.set_extended_type_info(expr.get_enum_set_values()))) {
     LOG_WARN("set enum or set info failed", K(ret), K(expr));
@@ -1322,6 +1327,31 @@ int ObCreateViewResolver::resolve_column_default_value(const sql::ObSelectStmt *
     if (OB_FAIL(column_schema.set_extended_type_info(select_item.expr_->get_enum_set_values()))) {
       LOG_WARN("failed to set extended type info", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObCreateViewResolver::resolve_columns_nullable_value(const sql::ObSelectStmt *select_stmt,
+                                                         const sql::SelectItem &select_item,
+                                                         ObColumnSchemaV2 &column_schema,
+                                                         ObIAllocator &alloc,
+                                                         ObSQLSessionInfo &session_info,
+                                                         share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  observer::ObTableColumns::ColumnAttributes column_attributes;
+  if (OB_FAIL(observer::ObTableColumns::deduce_column_attributes(is_oracle_mode(),
+                                                                 select_stmt,
+                                                                 select_item,
+                                                                 schema_guard,
+                                                                 &session_info,
+                                                                 NULL,
+                                                                 0,
+                                                                 column_attributes,
+                                                                 true))) {
+    LOG_WARN("failed to resolve nullable value", K(ret));
+  } else {
+    column_schema.set_nullable(column_attributes.null_ == "YES");
   }
   return ret;
 }

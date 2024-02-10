@@ -985,18 +985,24 @@ int ObExprToCharCommon::process_number_sci_value(
   } else {
     if (is_double) {
       double val = input.get_double();
-      if (isnan(fabs(val)) || fabs(val) == INFINITY){
+      if (isnan(fabs(val))){
         str_len = strlen("Nan");
         strncpy(buf, "Nan", str_len);
+      } else if (fabs(val) == INFINITY) {
+        str_len = strlen("Inf");
+        strncpy(buf, "Inf", str_len);
       } else {
         str_len = ob_gcvt_opt(val, OB_GCVT_ARG_DOUBLE,
             static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
       }
     } else if (is_float) {
       float val = input.get_float();
-      if (isnan(fabs(val)) || fabs(val) == INFINITY){
+      if (isnan(fabs(val))){
         str_len = strlen("Nan");
         strncpy(buf, "Nan", str_len);
+      } else if (fabs(val) == INFINITY) {
+        str_len = strlen("Inf");
+        strncpy(buf, "Inf", str_len);
       } else {
         str_len = ob_gcvt_opt(val, OB_GCVT_ARG_FLOAT,
             static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
