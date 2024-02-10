@@ -8664,16 +8664,16 @@ int ObDDLOperator::alter_package(const ObPackageInfo &package_info,
   int64_t new_schema_version = OB_INVALID_VERSION;
   uint64_t package_id = package_info.get_package_id();
   ObPackageInfo new_package_info;
-  ObArray<const ObRoutineInfo *> routine_infos;
-  bool need_create = false;
   OV (OB_NOT_NULL(schema_service_impl), OB_ERR_SYS);
   OV (OB_INVALID_ID != tenant_id && OB_INVALID_ID != package_id, OB_INVALID_ARGUMENT);
-  OZ (schema_guard.get_routine_infos_in_package(tenant_id,
-                                                package_id,
-                                                routine_infos));
-  OX (need_create = (0 == routine_infos.count()));
   if (OB_SUCC(ret)) {
     if (public_routine_infos.count() > 0) {
+      bool need_create = false;
+      ObArray<const ObRoutineInfo *> routine_infos;
+      OZ (schema_guard.get_routine_infos_in_package(tenant_id,
+                                                    public_routine_infos.at(0).get_package_id(),
+                                                    routine_infos));
+      OX (need_create = (0 == routine_infos.count()));
       // update routine route sql
       ARRAY_FOREACH(public_routine_infos, routine_idx) {
         ObRoutineInfo &routine_info = public_routine_infos.at(routine_idx);
