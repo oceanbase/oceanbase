@@ -203,7 +203,7 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
             ms->status = EASY_ERROR;
             LOG_WARN_RET(common::OB_BAD_ADDRESS, "enable bypass connection received other RPC, disconnect", K(pcode));
           } else {
-            const int64_t receive_ts = common::ObClockGenerator::getClock();
+            const int64_t receive_ts = common::ObTimeUtility::current_time();
             const int64_t fly_ts = receive_ts - pkt->get_timestamp();
             if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
               LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
