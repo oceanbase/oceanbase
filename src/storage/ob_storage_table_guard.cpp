@@ -180,7 +180,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
   while (OB_SUCC(ret) && need_to_refresh_table(*iter.table_iter())) {
     const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
     if (OB_UNLIKELY(remain_timeout <= 0)) {
-      ret = OB_TRANS_STMT_TIMEOUT;
+      ret = OB_TIMEOUT;
     } else if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
         remain_timeout,
