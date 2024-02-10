@@ -410,6 +410,8 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                       stmt, origin_trans_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*origin_trans_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(create_single_joined_table_stmt(origin_trans_stmt, joined_table->table_id_,
                                                      view_table, ref_query))) {
     LOG_WARN("failed to create view with table", K(ret));
@@ -529,6 +531,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                       stmt, origin_trans_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*origin_trans_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(create_single_joined_table_stmt(origin_trans_stmt, joined_table->table_id_,
                                                      view_table, ref_query))) {
     LOG_WARN("failed to create view with table", K(ret));
@@ -1224,32 +1228,25 @@ int ObTransformOrExpansion::check_upd_del_stmt_validity(const ObDelUpdStmt &stmt
   } else if (1 != table_infos.count()) {
     is_valid = false;
     OPT_TRACE("multi dml table not support or expansion");
-  } else if (OB_ISNULL(table_infos.at(0)) || OB_ISNULL(query_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret));
-  } else {
-    // TODO following code has been removed on 3.2
-    // ObDmlTableInfo* table_info = table_infos.at(0);
-    // for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < index_infos.count(); ++i) {
-    //   if (NULL != stmt.get_part_expr(index_infos.at(i).loc_table_id_,
-    //                                   index_infos.at(i).index_tid_)) {
-    //     is_valid = false;
-    //   }
-    // }
-    if (NULL != stmt.get_part_expr(table_infos.at(0)->loc_table_id_,
-                                   table_infos.at(0)->ref_table_id_)) {
-      bool is_use_pdml = false;
-      if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
-        is_use_pdml = true;
-      } else if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE) {
-        is_use_pdml = false;
-      } else if (OB_FAIL(ctx_->session_info_->get_enable_parallel_dml(is_use_pdml))) {
-        LOG_WARN("failed to get enable parallel dml", K(ret));
-      }
-      if (OB_SUCC(ret) && is_use_pdml) {
-        is_valid = false;
-        OPT_TRACE("parallel dml table not support or expansion");
-      }
+  }
+  return ret;
+}
+
+// for update/delete stmt, disable pdml after or expansion
+int ObTransformOrExpansion::disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (stmt.is_update_stmt() || stmt.is_delete_stmt()) {
+    ObSEArray<ObDmlTableInfo*, 2> table_infos;
+    if (OB_FAIL(static_cast<ObDelUpdStmt&>(stmt).get_dml_table_infos(table_infos))) {
+      LOG_WARN("failed to get dml table infos", K(ret));
+    } else if (OB_UNLIKELY(table_infos.empty()) || OB_ISNULL(table_infos.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null param", K(ret));
+    } else if (NULL != stmt.get_part_expr(table_infos.at(0)->loc_table_id_,
+                                          table_infos.at(0)->ref_table_id_)) {
+      OPT_TRACE("disable parallel dml after or expansion");
+      static_cast<ObDelUpdStmt&>(stmt).set_pdml_disabled();
     }
   }
   return ret;
@@ -1284,6 +1281,8 @@ int ObTransformOrExpansion::get_trans_view(ObDMLStmt *stmt,
   } else if (OB_ISNULL(upper_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(upper_stmt));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*upper_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, upper_stmt, child_stmt, false))) {
     LOG_WARN("failed to create simple view", K(ret));
   } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(expr_factory, ctx_->session_info_))) {
