@@ -741,10 +741,10 @@ ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
   destroy();
 }
 
-int ObTmpTenantMacroBlockManager::init(common::ObIAllocator &allocator)
+int ObTmpTenantMacroBlockManager::init(const uint64_t tenant_id, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
+  ObMemAttr attr(tenant_id, ObModIds::OB_TMP_BLOCK_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has been inited", K(ret));
@@ -947,7 +947,7 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));
-  } else if (OB_FAIL(tmp_block_manager_.init(allocator_))) {
+  } else if (OB_FAIL(tmp_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init the block manager for ObTmpFileStore", K(ret));
   } else if (OB_FAIL(tmp_mem_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init memory block manager", K(ret));
