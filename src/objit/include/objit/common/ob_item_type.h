@@ -2409,6 +2409,8 @@ typedef enum ObItemType
   T_COALESCE_AGGR,
   T_NO_COALESCE_AGGR,
   T_AUTO_INCREMENT_CACHE_SIZE,
+
+  T_IGNORE_UNKNOWN_USER,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

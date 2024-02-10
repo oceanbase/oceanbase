@@ -115,6 +115,7 @@ enum ObDefaultRoleFlag
   OB_DEFAULT_ROLE_ALL = 2,
   OB_DEFAULT_ROLE_ALL_EXCEPT = 3,
   OB_DEFAULT_ROLE_NONE = 4,
+  OB_DEFAULT_ROLE_DEFAULT = 5,
   OB_DEFAULT_ROLE_MAX,
 };
 struct Bool
@@ -5242,7 +5243,7 @@ struct ObAlterUserProfileArg : public ObDDLArg
 public:
   ObAlterUserProfileArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID),
     user_name_(), host_name_(), profile_name_(), user_id_(common::OB_INVALID_TENANT_ID),
-    default_role_flag_(common::OB_INVALID_TENANT_ID), role_id_array_()
+    default_role_flag_(common::OB_INVALID_TENANT_ID), role_id_array_(), user_ids_()
   { }
   virtual ~ObAlterUserProfileArg() {}
   int assign(const ObAlterUserProfileArg &other);
@@ -5256,6 +5257,7 @@ public:
   uint64_t user_id_;
   uint64_t default_role_flag_;
   common::ObSEArray<uint64_t, 4> role_id_array_;
+  common::ObSEArray<uint64_t, 4> user_ids_; //for set default role to multiple users
 };
 
 struct ObCreateDirectoryArg : public ObDDLArg
@@ -5325,7 +5327,7 @@ public:
                  object_id_(common::OB_INVALID_ID), ins_col_ids_(),
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
-		 sel_col_ids_()
+		         sel_col_ids_(), column_names_priv_()
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -5362,6 +5364,7 @@ public:
   common::ObSArray<common::ObString> remain_roles_;
   bool is_inner_;
   common::ObSEArray<uint64_t, 4> sel_col_ids_;
+  common::ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg
@@ -5435,7 +5438,7 @@ public:
                             priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
                             obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
                             obj_priv_array_(), revoke_all_ora_(false), sel_col_ids_(), ins_col_ids_(),
-			    upd_col_ids_(), ref_col_ids_()
+			    upd_col_ids_(), ref_col_ids_(), column_names_priv_()
   { }
   bool is_valid() const;
 
@@ -5466,6 +5469,7 @@ public:
   common::ObSEArray<uint64_t, 4> ins_col_ids_;
   common::ObSEArray<uint64_t, 4> upd_col_ids_;
   common::ObSEArray<uint64_t, 4> ref_col_ids_;
+  common::ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
 };
 
 struct ObRevokeSysPrivArg : public ObDDLArg

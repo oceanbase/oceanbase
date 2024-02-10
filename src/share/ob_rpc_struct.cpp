@@ -4678,6 +4678,8 @@ int ObAlterUserProfileArg::assign(const ObAlterUserProfileArg &other)
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(role_id_array_.assign(other.role_id_array_))) {
     SHARE_LOG(WARN, "fail to assign role_id_array", K(ret));
+  } else if (OB_FAIL(user_ids_.assign(other.user_ids_))) {
+    SHARE_LOG(WARN, "fail to assign user_ids", K(ret));
   }
   return ret;
 }
@@ -4697,7 +4699,8 @@ OB_SERIALIZE_MEMBER((ObAlterUserProfileArg, ObDDLArg),
                     profile_name_,
                     user_id_,
                     default_role_flag_,
-                    role_id_array_);
+                    role_id_array_,
+                    user_ids_);
 
 bool ObGrantArg::is_valid() const
 {
@@ -4751,6 +4754,8 @@ int ObGrantArg::assign(const ObGrantArg &other)
     SHARE_LOG(WARN, "fail to assign ref_col_ids_", K(ret));
   } else if (OB_FAIL(sel_col_ids_.assign(other.sel_col_ids_))) {
     SHARE_LOG(WARN, "fail to assign sel_col_ids_", K(ret));
+  } else if (OB_FAIL(column_names_priv_.assign(other.column_names_priv_))) {
+    LOG_WARN("fail to assin column_names_priv_", K(ret));
   }
   return ret;
 }
@@ -4781,7 +4786,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               grantor_id_,
               remain_roles_,
               is_inner_,
-              sel_col_ids_
+              sel_col_ids_,
+              column_names_priv_
               );
 return ret;
 }
@@ -4812,7 +4818,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               grantor_id_,
               remain_roles_,
               is_inner_,
-              sel_col_ids_);
+              sel_col_ids_,
+              column_names_priv_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -4852,7 +4859,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               grantor_id_,
               remain_roles_,
               is_inner_,
-              sel_col_ids_);
+              sel_col_ids_,
+              column_names_priv_);
   return len;
 }
 
@@ -4907,6 +4915,8 @@ int ObRevokeTableArg::assign(const ObRevokeTableArg &other)
     LOG_WARN("fail to assign ref_col_ids_", K(ret));
   } else if (OB_FAIL(sel_col_ids_.assign(other.sel_col_ids_))) {
     LOG_WARN("fail to assign sel_col_ids_", K(ret));
+  } else if (OB_FAIL(column_names_priv_.assign(other.column_names_priv_))) {
+    LOG_WARN("fail to assin column_names_priv_", K(ret));
   }
   return ret;
 }
@@ -4932,7 +4942,8 @@ OB_SERIALIZE_MEMBER((ObRevokeTableArg, ObDDLArg),
                     sel_col_ids_,
                     ins_col_ids_,
                     upd_col_ids_,
-                    ref_col_ids_);
+                    ref_col_ids_,
+                    column_names_priv_);
 
 bool ObRevokeSysPrivArg::is_valid() const
 {
