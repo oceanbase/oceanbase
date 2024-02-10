@@ -2233,7 +2233,7 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
         }
       }
     }
-    if (OB_FAIL(ObOptimizerUtil::remove_item(path->filter_, remove_dup))) {
+    if (FAILEDx(ObOptimizerUtil::remove_item(path->filter_, remove_dup))) {
       LOG_WARN("remove dup failed", K(ret));
     }
   }
@@ -13868,7 +13868,7 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                             candi_pushdown_quals,
                                                             helper.pushdown_filters_))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else if (append(helper.filters_, candi_nonpushdown_quals)) {
+  } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));
@@ -14714,7 +14714,7 @@ int ObJoinOrder::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null",K(ret));
     } else if (ObOptimizerUtil::is_lossless_type_conv(to_type_child->get_result_type(),to_type_expr->get_result_type())) {
-      if (ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child)) {
+      if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child))) {
         LOG_WARN("fail to get real child without lossless cast", K(ret));
       } else if (OB_ISNULL(to_type_child) || OB_ISNULL(candi_expr)) {
         ret = OB_ERR_UNEXPECTED;

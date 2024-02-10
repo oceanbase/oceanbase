@@ -1813,7 +1813,7 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
     select_exprs.assign(temp_expr);
     // replace parent_expr_of_query_ref with subquery comparison operator to the one of common comparison operator
     ObItemType value_cmp_type = T_INVALID;
-    if (OB_FAIL(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
+    if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
       LOG_WARN("unexpected root_expr type", K(ret), K(value_cmp_type));
     } else {
       ObOpRawExpr *new_parent_expr = NULL;

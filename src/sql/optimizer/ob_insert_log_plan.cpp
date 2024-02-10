@@ -383,6 +383,7 @@ int ObInsertLogPlan::allocate_insert_values_as_top(ObLogicalOperator *&top)
   const ObInsertStmt *insert_stmt = get_stmt();
   ObSQLSessionInfo *session_info = get_optimizer_context().get_session_info();
   if (OB_ISNULL(insert_stmt) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(insert_stmt), K(session_info), K(ret));
   } else if (OB_ISNULL(values_op = static_cast<ObLogExprValues*>(get_log_op_factory().
                                    allocate(*this, LOG_EXPR_VALUES)))) {

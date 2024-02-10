@@ -5250,6 +5250,7 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       ObRawExpr *child1 = op->get_param_expr(0);
       ObRawExpr *child2 = op->get_param_expr(1);
       if (OB_ISNULL(child1) || OB_ISNULL(child2)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("parameter of EQ expr should not be null", K(ret), K(child1), K(child2));
       } else if (!child1->has_flag(CNT_COLUMN) || !child2->has_flag(CNT_COLUMN)){
         /* do nothing */
@@ -5947,6 +5948,7 @@ int ObTransformUtils::check_relations_containment(ObDMLStmt *stmt,
       TableItem *source_table = source_rels.at(i);
       ObStmtMapInfo stmt_map_info;
       if (OB_ISNULL(source_table)){
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("can not find table item", K(source_rels.at(i)));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && !is_matched && j < target_rels.count(); ++j){
@@ -5955,6 +5957,7 @@ int ObTransformUtils::check_relations_containment(ObDMLStmt *stmt,
           } else {
             TableItem *target_table = target_rels.at(j);
             if (OB_ISNULL(target_table)){
+              ret = OB_ERR_UNEXPECTED;
               LOG_WARN("can not find table item", K(target_rels.at(j)));
             } else if (OB_FAIL(check_table_item_containment(stmt,
                                                             source_table,
