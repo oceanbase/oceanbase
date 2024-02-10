@@ -251,16 +251,20 @@ void ObPxSqcAsyncProxy::fail_process() {
       K(return_cb_count_), K(callbacks_.count()));
   ARRAY_FOREACH_X(callbacks_, idx, count, true) {
     ObSqcAsyncCB &callback = *callbacks_.at(idx);
-    if (!callback.is_visited() &&
-        !(callback.is_processed() || callback.is_timeout() || callback.is_invalid())) {
-      // unregister async callbacks that have not received response.
-      ObAsyncRespCallback *async_cb = static_cast<ObAsyncRespCallback *>(callback.low_level_cb_);
-      uint64_t gtid = async_cb->gtid_;
-      uint32_t pkt_id = async_cb->pkt_id_;
-      int err = 0;
-      if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
-        int ret = tranlate_to_ob_error(err);
-        LOG_WARN("terminate pkt failed", K(ret), K(err));
+    {
+      // avoid rpc thread access the callback currently.
+      ObThreadCondGuard guard(callback.get_cond());
+      if (!callback.is_visited() &&
+          !(callback.is_processed() || callback.is_timeout() || callback.is_invalid())) {
+        // unregister async callbacks that have not received response.
+        ObAsyncRespCallback *async_cb = static_cast<ObAsyncRespCallback *>(callback.low_level_cb_);
+        uint64_t gtid = async_cb->gtid_;
+        uint32_t pkt_id = async_cb->pkt_id_;
+        int err = 0;
+        if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
+          int ret = tranlate_to_ob_error(err);
+          LOG_WARN("terminate pkt failed", K(ret), K(err));
+        }
       }
     }
   }
