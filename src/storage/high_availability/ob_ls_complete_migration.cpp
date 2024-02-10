@@ -329,7 +329,7 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
   bool is_valid_member = true;
   bool is_ls_deleted = false;
   new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  bool is_tenant_dropping_or_dropped = false;
+  bool is_tenant_dropped = false;
   if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status));
@@ -348,12 +348,12 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
       is_ls_deleted = false; // reset value if fail
       LOG_WARN("failed to get ls status from inner table", K(ret), K(tmp_ret), K(ls));
     }
-    if (OB_TMP_FAIL(check_tenant_is_dropping_or_dropped_(is_tenant_dropping_or_dropped))) {
-      is_tenant_dropping_or_dropped = false;
+    if (OB_TMP_FAIL(check_tenant_is_dropped_(is_tenant_dropped))) {
+      is_tenant_dropped = false;
       LOG_WARN("failed to check tenant is droppping or dropped", K(ret), K(tmp_ret), K(ctx_));
     }
     if (FAILEDx(ObMigrationStatusHelper::trans_rebuild_fail_status(
-        current_migration_status, is_valid_member, is_ls_deleted, is_tenant_dropping_or_dropped, new_migration_status))) {
+        current_migration_status, is_valid_member, is_ls_deleted, is_tenant_dropped, new_migration_status))) {
       LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
     }
   }
@@ -522,13 +522,13 @@ int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
   return ret;
 }
 
-int ObLSCompleteMigrationDagNet::check_tenant_is_dropping_or_dropped_(
-    bool &is_tenant_dropping_or_dropped)
+int ObLSCompleteMigrationDagNet::check_tenant_is_dropped_(
+    bool &is_tenant_dropped)
 {
   int ret = OB_SUCCESS;
   schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
   schema::ObSchemaGetterGuard guard;
-  is_tenant_dropping_or_dropped = false;
+  is_tenant_dropped = false;
   const ObTenantSchema *tenant_schema = nullptr;
 
   if (OB_ISNULL(schema_service)) {
@@ -536,18 +536,10 @@ int ObLSCompleteMigrationDagNet::check_tenant_is_dropping_or_dropped_(
     CLOG_LOG(WARN, "schema_service is nullptr", KR(ret));
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(ctx_));
-  } else if (OB_FAIL(guard.get_tenant_info(ctx_.tenant_id_, tenant_schema))) {
-    LOG_WARN("get tenant info failed", KR(ret), K(ctx_));
-  } else if (OB_ISNULL(tenant_schema)) {
-    // Double check the tenant status to avoid any potential problems in the schema module.
-    if (OB_FAIL(guard.check_if_tenant_has_been_dropped(ctx_.tenant_id_, is_tenant_dropping_or_dropped))) {
-      LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(ctx_));
-    } else {
-      LOG_INFO("tenant info is nullptr, check the tenant status",
-          K(ctx_), K(is_tenant_dropping_or_dropped));
-    }
-  } else {
-    is_tenant_dropping_or_dropped = tenant_schema->is_dropping();
+  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(ctx_.tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(ctx_));
+  } else if (is_tenant_dropped) {
+    LOG_INFO("tenant is already dropped", K(ctx_), K(is_tenant_dropped));
   }
   return ret;
 }

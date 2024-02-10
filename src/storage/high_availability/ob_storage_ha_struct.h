@@ -93,7 +93,7 @@ public:
       const ObMigrationStatus &cur_status,
       const bool is_in_member_list,
       const bool is_ls_deleted,
-      const bool is_tenant_dropping_or_dropped,
+      const bool is_tenant_dropped,
       ObMigrationStatus &fail_status);
   static int check_migration_in_final_state(
       const ObMigrationStatus &status,
