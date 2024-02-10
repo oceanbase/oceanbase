@@ -1585,7 +1585,13 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   ObPartTransCtx *ctx = NULL;
-  if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
+  bool is_leader = false;
+  // check ls is leader, to fast fail when lease expired but role change has not armed
+  if (OB_FAIL(check_ls_status_(ls, is_leader))) {
+    TRANS_LOG(WARN, "check ls leader failed", K(ret), K(ls));
+  } else if (!is_leader) {
+    ret = OB_NOT_MASTER;
+  } else if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0 && !for_transfer) {
       int tx_state = ObTxData::RUNNING;
