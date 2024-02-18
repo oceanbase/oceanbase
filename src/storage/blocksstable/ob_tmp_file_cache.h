@@ -104,7 +104,7 @@ public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
   static ObTmpPageCache &get_instance();
   int init(const char *cache_name, const int64_t priority);
-  int direct_read(const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle);
+  int direct_read(const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle, common::ObIAllocator &allocator);
   int prefetch(
       const ObTmpPageCacheKey &key,
       const ObTmpBlockIOInfo &info,
@@ -166,6 +166,17 @@ public:
   private:
     friend class ObTmpPageCache;
     common::ObArray<ObTmpPageIOInfo> page_io_infos_;
+  };
+  class ObTmpDirectReadPageIOCallback final : public ObITmpPageIOCallback
+  {
+  public:
+    ObTmpDirectReadPageIOCallback() {}
+    ~ObTmpDirectReadPageIOCallback() override {}
+    int64_t size() const override;
+    int inner_process(const char *data_buffer, const int64_t size) override;
+    const char *get_data() override;
+    TO_STRING_KV("callback_type:", "ObTmpDirectReadPageIOCallback", KP_(data_buf));
+    DISALLOW_COPY_AND_ASSIGN(ObTmpDirectReadPageIOCallback);
   };
 private:
   ObTmpPageCache();

@@ -1347,18 +1347,25 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
   }
 
   if (OB_SUCC(ret)) {
-    if (!handle.is_disable_page_cache() && page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
+    if (page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
       // merge multi page io into one.
       ObMacroBlockHandle mb_handle;
       ObTmpBlockIOInfo info(io_info);
-      int64_t p_offset = common::lower_align(io_info.offset_, ObTmpMacroBlock::get_default_page_size());
+      const int64_t p_offset = common::lower_align(io_info.offset_, ObTmpMacroBlock::get_default_page_size());
       // just skip header and padding.
       info.offset_ = p_offset + ObTmpMacroBlock::get_header_padding();
       info.size_ = page_nums * ObTmpMacroBlock::get_default_page_size();
       info.macro_block_id_ = block->get_macro_block_id();
-      if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle, io_allocator_))) {
-        STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
+      if (handle.is_disable_page_cache()) {
+        if (OB_FAIL(page_cache_->direct_read(info, mb_handle, io_allocator_))) {
+          STORAGE_LOG(WARN, "fail to direct read multi page", K(ret));
+        }
       } else {
+        if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle, io_allocator_))) {
+          STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
         ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, io_info.buf_,
             io_info.offset_ - p_offset, io_info.size_);
         if (OB_FAIL(handle.get_io_handles().push_back(read_handle))) {
@@ -1376,7 +1383,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
         info.size_ = ObTmpMacroBlock::get_default_page_size();
         info.macro_block_id_ = block->get_macro_block_id();
         if (handle.is_disable_page_cache()) {
-          if (OB_FAIL(page_cache_->direct_read(info, mb_handle))) {
+          if (OB_FAIL(page_cache_->direct_read(info, mb_handle, io_allocator_))) {
             STORAGE_LOG(WARN, "fail to direct read tmp page", K(ret));
           }
         } else {

@@ -147,11 +147,27 @@ int ObTmpPageCache::inner_read_io(const ObTmpBlockIOInfo &io_info,
 }
 
 int ObTmpPageCache::direct_read(const ObTmpBlockIOInfo &info,
-                                ObMacroBlockHandle &mb_handle)
+                                ObMacroBlockHandle &mb_handle,
+                                common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_read_io(info, nullptr, mb_handle))) {
-    STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
+  void *buf = nullptr;
+  ObTmpDirectReadPageIOCallback *callback = nullptr;
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(ObTmpDirectReadPageIOCallback)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "allocate callback memory failed", K(ret));
+  } else {
+    // fill the callback
+    callback = new (buf) ObTmpDirectReadPageIOCallback;
+    callback->cache_ = this;
+    callback->offset_ = info.offset_;
+    callback->allocator_ = &allocator;
+    if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
+      STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
+    }
+    // There is no need to handle error cases (freeing the memory of the
+    // callback) because inner_read_io will handle error cases and free the
+    // memory of the callback.
   }
   return ret;
 }
@@ -182,6 +198,9 @@ int ObTmpPageCache::prefetch(
       if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
         STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
       }
+      // There is no need to handle error cases (freeing the memory of the
+      // callback) because inner_read_io will handle error cases and free the
+      // memory of the callback.
     }
   }
   return ret;
@@ -213,6 +232,9 @@ int ObTmpPageCache::prefetch(
       } else if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
         STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
       }
+      // There is no need to handle error cases (freeing the memory of the
+      // callback) because inner_read_io will handle error cases and free the
+      // memory of the callback.
     }
   }
   return ret;
@@ -381,6 +403,37 @@ const char *ObTmpPageCache::ObTmpMultiPageIOCallback::get_data()
   return data_buf_;
 }
 
+int64_t ObTmpPageCache::ObTmpDirectReadPageIOCallback::size() const
+{
+  return sizeof(*this);
+}
+
+const char * ObTmpPageCache::ObTmpDirectReadPageIOCallback::get_data()
+{
+  return data_buf_;
+}
+
+int ObTmpPageCache::ObTmpDirectReadPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObTimeGuard time_guard("ObTmpDirectReadPageIOCallback", 100000); //100ms
+  if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Invalid tmp page cache callback allocator", KP_(cache), KP_(allocator), K(ret));
+  } else if (OB_UNLIKELY(size <= 0 || data_buffer == nullptr)) {
+    ret = OB_INVALID_DATA;
+    STORAGE_LOG(WARN, "invalid data buffer size", K(ret), K(size), KP(data_buffer));
+  } else if (OB_FAIL(alloc_data_buf(data_buffer, size))) {
+    STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret), K(size));
+  } else if (FALSE_IT(time_guard.click("alloc_data_buf"))) {
+  }
+  if (OB_FAIL(ret) && NULL != allocator_ && NULL != data_buf_) {
+    allocator_->free(data_buf_);
+    data_buf_ = NULL;
+  }
+  return ret;
+}
+
 int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback *callback,
     ObMacroBlockHandle &handle)
 {
@@ -391,11 +444,7 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_desc_ = io_info.io_desc_;
   read_info.macro_block_id_ = io_info.macro_block_id_;
   read_info.io_timeout_ms_ = io_info.io_timeout_ms_;
-  if (callback == nullptr) {
-    read_info.buf_ = io_info.buf_;
-  } else {
-    read_info.io_callback_ = callback;
-  }
+  read_info.io_callback_ = callback;
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
   read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);

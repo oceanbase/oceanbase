@@ -680,6 +680,7 @@ TEST_F(TestTmpFile, test_big_file)
   write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
+  // Flush all held block caches to ensure that subsequent read processes will go through I/O.
   ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
 
   io_info.size_ = write_size;
@@ -730,7 +731,6 @@ TEST_F(TestTmpFile, test_big_file)
   ObTmpFileManager::get_instance().remove(fd);
 }
 
-/*
 TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 {
   int ret = OB_SUCCESS;
@@ -762,6 +762,7 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
   write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
+  // Flush all held block caches to ensure that subsequent read processes will go through I/O.
   ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
 
   io_info.size_ = write_size;
@@ -811,7 +812,6 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 
   ObTmpFileManager::get_instance().remove(fd);
 }
-*/
 
 TEST_F(TestTmpFile, test_multi_small_file_single_thread_read_write)
 {

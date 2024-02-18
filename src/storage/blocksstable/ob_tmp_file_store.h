@@ -111,7 +111,7 @@ struct ObTmpBlockIOInfo final
 public:
   ObTmpBlockIOInfo()
     : block_id_(0), offset_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), tenant_id_(0),
-      buf_(NULL), io_desc_(), macro_block_id_()  {}
+      buf_(NULL), io_desc_(), macro_block_id_() {}
   ObTmpBlockIOInfo(const int64_t block_id, const int64_t offset, const int64_t size,
       const uint64_t tenant_id, const MacroBlockId macro_block_id, char *buf,
       const common::ObIOFlag io_desc)
