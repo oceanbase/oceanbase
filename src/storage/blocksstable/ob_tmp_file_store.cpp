@@ -426,6 +426,7 @@ ObTmpMacroBlock::ObTmpMacroBlock()
     alloc_time_(0),
     access_time_(0)
 {
+  using_extents_.set_attr(ObMemAttr(MTL_ID(), "TMP_US_META"));
 }
 
 ObTmpMacroBlock::~ObTmpMacroBlock()
@@ -1306,7 +1307,9 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
   int32_t page_nums = 0;
   common::ObIArray<ObTmpPageIOInfo> *page_io_infos = nullptr;
 
-  void *buf = ob_malloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>), "TmpReadPage");
+  void *buf =
+      ob_malloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>),
+                ObMemAttr(MTL_ID(), "TmpReadPage"));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc a buf", K(ret));
@@ -1841,6 +1844,7 @@ int ObTmpFileStore::get_macro_block_list(ObIArray<TenantTmpBlockCntPair> &tmp_bl
   } else {
     tmp_block_cnt_pairs.reset();
     common::ObSEArray<MacroBlockId, 64> macro_id_list;
+    macro_id_list.set_attr(ObMemAttr(MTL_ID(), "TMP_MB_LIST"));
     TenantFileStoreMap::iterator iter;
     ObTmpTenantFileStore *tmp = NULL;
     for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end();

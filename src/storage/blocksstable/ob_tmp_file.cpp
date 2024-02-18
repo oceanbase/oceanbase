@@ -1243,6 +1243,7 @@ int ObTmpFile::sync(const int64_t timeout_ms)
       // iter all blocks, execute async wash.
       common::hash::ObHashSet<int64_t>::const_iterator iter;
       common::ObSEArray<ObTmpTenantMemBlockManager::ObIOWaitInfoHandle, 1> handles;
+      handles.set_attr(ObMemAttr(MTL_ID(), "TMP_SYNC_HDL"));
       for (iter = blk_id_set.begin(); OB_SUCC(ret) && iter != blk_id_set.end(); ++iter) {
         const int64_t &blk_id = iter->first;
         ObTmpTenantMemBlockManager::ObIOWaitInfoHandle handle;
@@ -1721,6 +1722,7 @@ int ObTmpFileManager::remove_tenant_file(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<int64_t, 32> fd_list;
+  fd_list.set_attr(ObMemAttr(MTL_ID(), "TMP_FD_LIST"));
   RmTenantTmpFileOp rm_tenant_file_op(tenant_id, &fd_list);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
