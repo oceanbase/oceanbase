@@ -5111,7 +5111,9 @@ public:
   ObRevokeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
                             priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
                             obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
-                            obj_priv_array_(), revoke_all_ora_(false), column_names_priv_()
+                            obj_priv_array_(), revoke_all_ora_(false),
+                            sel_col_ids_(), ins_col_ids_(), upd_col_ids_(), ref_col_ids_(),
+                            column_names_priv_()
   { }
 
   int assign(const ObRevokeTableArg& other);
