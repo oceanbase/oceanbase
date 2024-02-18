@@ -52,4 +52,3 @@ obshell-4.2.2.0-102024011512.el7.x86_64.rpm target=community
 ob-deploy-2.3.0-4.el7.x86_64.rpm target=community
 obclient-2.2.2-1.el7.x86_64.rpm target=community
 libobclient-2.2.2-3.el7.x86_64.rpm target=community
-obshell-4.2.2.0-32024010810.el7.x86_64.rpm target=community
