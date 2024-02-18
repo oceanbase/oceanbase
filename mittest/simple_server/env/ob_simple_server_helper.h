@@ -52,6 +52,13 @@ public:
   static int select_table_tablet(uint64_t tenant_id, const char* table_name, ObTabletID &tablet_id);
   static int do_balance(uint64_t tenant_id);
   static int remove_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id);
+  static int get_tx_ctx(uint64_t tenant_id,
+                        ObLSID ls_id,
+                        ObTransID tx_id,
+                        ObPartTransCtx *&ctx);
+  static int revert_tx_ctx(uint64_t tenant_id,
+                           ObLSID ls_id,
+                           ObPartTransCtx *ctx);
   static int abort_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id);
   static int submit_redo(uint64_t tenant_id, ObLSID ls_id);
   static int find_session(sqlclient::ObISQLConnection *conn, int64_t &session_id);

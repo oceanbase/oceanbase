@@ -3336,6 +3336,24 @@ int ObPartTransCtx::submit_commit_log_()
   }
 
   if (OB_SUCC(ret)) {
+    if (is_local_tx_() &&
+        (exec_info_.participants_.count() > 1 ||
+         exec_info_.intermediate_participants_.count() > 0)) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+      exec_info_.upstream_ = ls_id_;
+      if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+        exec_info_.trans_type_ = TransType::SP_TRANS;
+        exec_info_.upstream_.reset();
+        TRANS_LOG(WARN, "drive self 2pc phase failed", KPC(this));
+      } else {
+        ret = OB_EAGAIN;
+        TRANS_LOG(INFO, "convert trans to dist trans if participants is more than one",
+                  K(ret), KPC(this));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     SCN log_commit_version;
     ObSEArray<uint64_t, 1> checksum_arr;
     ObTxPrevLogType prev_log_type;
@@ -9150,7 +9168,7 @@ int ObPartTransCtx::do_transfer_out_tx_op(const SCN data_end_scn,
       // So we decide to use an seperate scn(max consequent scn) to meet the above
       // requirements. While the scn which decides the state of the relocation of
       // the tree styled 2pc still is transfer_scn.
-      if (get_upstream_state() < ObTxState::COMMIT) {
+      if (get_downstream_state() < ObTxState::COMMIT) {
         if (OB_FAIL(add_intermediate_participants(dest_ls_id, transfer_epoch))) {
           TRANS_LOG(WARN, "fail to add intermediate participants", K(ret), KPC(this));
         }

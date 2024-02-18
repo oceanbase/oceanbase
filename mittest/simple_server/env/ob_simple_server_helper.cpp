@@ -372,6 +372,43 @@ int SimpleServerHelper::remove_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx
   return ret;
 }
 
+int SimpleServerHelper::get_tx_ctx(uint64_t tenant_id,
+                                   ObLSID ls_id,
+                                   ObTransID tx_id,
+                                   ObPartTransCtx *&ctx)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
+                                          ls_handle,
+                                          ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("get ls failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(tx_id, false, ctx))) {
+      LOG_WARN("fail to get tx ctx", KR(ret), K(ls_id));
+    }
+  }
+  return ret;
+}
+
+int SimpleServerHelper::revert_tx_ctx(uint64_t tenant_id,
+                                      ObLSID ls_id,
+                                      ObPartTransCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
+                                          ls_handle,
+                                          ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("get ls failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(ls_handle.get_ls()->revert_tx_ctx(ctx))) {
+      LOG_WARN("fail to revert tx ctx", KR(ret), K(ls_id));
+    }
+  }
+  return ret;
+}
+
 int SimpleServerHelper::abort_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id)
 {
   int ret = OB_SUCCESS;
