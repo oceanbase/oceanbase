@@ -238,6 +238,10 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   if (1 == gid) {
     init_mem_freelists();
   }
+  if (thread_count > MAX_PN_PER_GRP) {
+    err = -EINVAL;
+    rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
+  }
   count = pn_grp->count;
   while(0 == err && count < thread_count) {
     pn_t* pn = pn_create(listen_id, gid, count);
