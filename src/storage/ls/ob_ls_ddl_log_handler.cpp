@@ -411,6 +411,8 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           LOG_INFO("schedule ddl merge dag", K(param));
           if (OB_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
             LOG_WARN("try to freeze ddl kv failed", K(ret), K(param));
+          } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+            LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(ret), K(param));
           }
         }
       }

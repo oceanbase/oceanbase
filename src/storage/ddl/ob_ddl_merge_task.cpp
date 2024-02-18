@@ -1432,6 +1432,12 @@ int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
       && param.start_scn_ < tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(param), "new_start_scn", tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_);
+  // TODO(cangdi): do not freeze when ddl kv's min scn >= rec_scn
+  } else if (!ddl_kv_mgr_handle.get_obj()->can_freeze()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_WARN("cannot freeze now", K(param));
+    }
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
       param.start_scn_, param.snapshot_version_, param.data_format_version_))) {
     LOG_WARN("ddl kv manager try freeze failed", K(ret), K(param));
