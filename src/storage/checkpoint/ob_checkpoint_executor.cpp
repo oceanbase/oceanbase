@@ -33,7 +33,10 @@ ObCheckpointExecutor::ObCheckpointExecutor()
     : rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK),
       update_checkpoint_enabled_(false),
       update_clog_checkpoint_times_(0),
-      last_add_server_history_time_(0)
+      last_add_server_history_time_(0),
+      reuse_recycle_scn_times_(0),
+      prev_clog_checkpoint_lsn_(),
+      prev_recycle_scn_()
 {
   reset();
 }
@@ -52,6 +55,9 @@ void ObCheckpointExecutor::reset()
   loghandler_ = NULL;
   update_clog_checkpoint_times_ = 0;
   last_add_server_history_time_ = 0;
+  reuse_recycle_scn_times_ = 0;
+  prev_clog_checkpoint_lsn_.reset();
+  prev_recycle_scn_.set_invalid();
 }
 
 int ObCheckpointExecutor::register_handler(const ObLogBaseType &type,
@@ -220,68 +226,109 @@ int ObCheckpointExecutor::update_clog_checkpoint()
   return ret;
 }
 
-int ObCheckpointExecutor::advance_checkpoint_by_flush(
-    SCN recycle_scn)
+int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn)
 {
   int ret = OB_SUCCESS;
+  const ObLSID ls_id = ls_->get_ls_id();
+  const LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
+  const SCN clog_checkpoint_scn = ls_->get_clog_checkpoint_scn();
 
   RLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
-    int tmp_ret = OB_SUCCESS;
-    SCN max_decided_scn;
-
-    // calcu recycle_scn according to clog disk situation
-    if (!recycle_scn.is_valid()) {
-      LSN end_lsn;
-      if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
-        STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
-      } else {
-        LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
-        LSN calcu_recycle_lsn = clog_checkpoint_lsn
-              + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
-        if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
-          STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn),
-                        K(recycle_scn), K(ls_->get_ls_id()));
-        } else {
-          STORAGE_LOG(INFO, "advance checkpoint by flush to avoid clog disk full",
-                      K(recycle_scn), K(end_lsn), K(clog_checkpoint_lsn),
-                      K(calcu_recycle_lsn), K(ls_->get_ls_id()));
-        }
-      }
-    } else {
-      if (recycle_scn.is_max()) {
-      } else if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
-        STORAGE_LOG(WARN, "failed to get_max_decided_scn",
-                    K(recycle_scn), K(ls_->get_clog_checkpoint_scn()), K(ls_->get_ls_id()));
-      } else if (recycle_scn > max_decided_scn) {
-        ret = OB_EAGAIN;
-        STORAGE_LOG(WARN, "recycle_scn is more than max_decided_scn",
-                    KR(ret), K(recycle_scn), K(ls_->get_clog_checkpoint_scn()), K(ls_->get_ls_id()), K(max_decided_scn));
-      }
+    // calculate recycle_scn if it is invalid(called by clog disk full situation)
+    if (!recycle_scn.is_valid() &&
+        OB_FAIL(calculate_recycle_scn_(clog_checkpoint_lsn, clog_checkpoint_scn, recycle_scn))) {
+      STORAGE_LOG(WARN, "calculate recycle scn failed", KR(ret));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (recycle_scn < ls_->get_clog_checkpoint_scn()) {
-      ret = OB_NO_NEED_UPDATE;
-      STORAGE_LOG(WARN, "recycle_scn should not smaller than checkpoint_log_scn",
-                  K(recycle_scn), K(ls_->get_clog_checkpoint_scn()), K(ls_->get_ls_id()));
+    } else if (OB_FAIL(check_need_flush_(clog_checkpoint_scn, recycle_scn))) {
+      STORAGE_LOG(WARN, "no need flush");
     } else {
-      STORAGE_LOG(INFO, "start flush",
-                  K(recycle_scn),
-                  K(ls_->get_clog_checkpoint_scn()),
-                  K(ls_->get_ls_id()));
+      STORAGE_LOG(INFO, "start flush", K(recycle_scn), K(clog_checkpoint_scn), K(ls_id));
       for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
-        if (OB_NOT_NULL(handlers_[i])
-            && OB_SUCCESS != (tmp_ret = (handlers_[i]->flush(recycle_scn)))) {
-          STORAGE_LOG(WARN, "handler flush failed", K(recycle_scn), K(tmp_ret),
-                      K(i), K(ls_->get_ls_id()));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_NOT_NULL(handlers_[i]) && OB_TMP_FAIL(handlers_[i]->flush(recycle_scn))) {
+          STORAGE_LOG(WARN, "handler flush failed", KR(tmp_ret), K(recycle_scn), K(tmp_ret), K(i), K(ls_id));
         }
       }
     }
   } else {
-    STORAGE_LOG(WARN, "update_checkpoint is not enabled", K(ls_->get_ls_id()));
+    STORAGE_LOG(WARN, "update_checkpoint is not enabled", K(ls_id));
   }
 
+  return ret;
+}
+
+int ObCheckpointExecutor::calculate_recycle_scn_(const LSN clog_checkpoint_lsn,
+                                                 const SCN clog_checkpoint_scn,
+                                                 SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  LSN end_lsn;
+  // locate_by_lsn_coarsely may return a recycle_scn less than checkpoint_scn
+  // so if prev_recycle_scn_ <= clog_checkpoint_scn, the recycle_scn is still needed to be calculated again
+  if (prev_clog_checkpoint_lsn_.is_valid() && (prev_clog_checkpoint_lsn_ == clog_checkpoint_lsn) &&
+      prev_recycle_scn_.is_valid() && (prev_recycle_scn_ > clog_checkpoint_scn)) {
+    recycle_scn = prev_recycle_scn_;
+    reuse_recycle_scn_times_++;
+    if (reuse_recycle_scn_times_ % 1000 == 0) {
+      STORAGE_LOG_RET(ERROR, 0, "attention! clog checkpiont has not changed for a long time");
+      recycle_scn.set_max();
+    }
+    STORAGE_LOG(INFO,
+                "clog checkpoint has not changed yet. use previous recycle_scn to advance checkpoint",
+                K(reuse_recycle_scn_times_),
+                K(clog_checkpoint_lsn),
+                K(recycle_scn));
+  } else if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
+    STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
+  } else {
+    LSN calcu_recycle_lsn = clog_checkpoint_lsn + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
+    if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
+      STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn), K(recycle_scn), K(ls_->get_ls_id()));
+    } else {
+      prev_clog_checkpoint_lsn_ = clog_checkpoint_lsn;
+      prev_recycle_scn_ = recycle_scn;
+      reuse_recycle_scn_times_ = 0;
+      STORAGE_LOG(INFO,
+                  "advance checkpoint by flush to avoid clog disk full",
+                  K(recycle_scn),
+                  K(end_lsn),
+                  K(clog_checkpoint_lsn),
+                  K(calcu_recycle_lsn),
+                  K(ls_->get_ls_id()));
+    }
+  }
+
+  return ret;
+}
+
+int ObCheckpointExecutor::check_need_flush_(const SCN clog_checkpoint_scn, const SCN recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  SCN max_decided_scn;
+  const ObLSID ls_id = ls_->get_ls_id();
+  if (recycle_scn.is_max()) {
+    // must do flush
+  } else if (recycle_scn < clog_checkpoint_scn) {
+    ret = OB_NO_NEED_UPDATE;
+    STORAGE_LOG(WARN,
+                "recycle_scn should not smaller than checkpoint_log_scn",
+                K(recycle_scn),
+                K(clog_checkpoint_scn),
+                K(ls_id));
+  } else if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
+    STORAGE_LOG(WARN, "failed to get_max_decided_scn", K(recycle_scn), K(clog_checkpoint_scn), K(ls_id));
+  } else if (recycle_scn > max_decided_scn) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(WARN,
+                "recycle_scn is larger than max_decided_scn",
+                K(recycle_scn),
+                K(clog_checkpoint_scn),
+                K(ls_id),
+                K(max_decided_scn));
+  }
   return ret;
 }
 
@@ -307,9 +354,8 @@ int64_t ObCheckpointExecutor::get_cannot_recycle_log_size()
   LSN end_lsn;
   if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
     STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
-  } else if (!ls_->get_data_checkpoint()->is_flushing()) {
-    cannot_recycle_log_size =
-      end_lsn.val_ - ls_->get_clog_base_lsn().val_;
+  } else {
+    cannot_recycle_log_size = end_lsn.val_ - ls_->get_clog_base_lsn().val_;
   }
   return cannot_recycle_log_size;
 }

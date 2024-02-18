@@ -1740,6 +1740,9 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       // 先设置好sub part option, 解析二级分区的定义时依赖
       alter_table_schema.get_sub_part_option() = orig_table_schema.get_sub_part_option();
       alter_table_schema.get_part_option() = orig_table_schema.get_part_option();
+      if (no_subpart && orig_table_schema.is_hash_like_subpart()) {
+        hash_subpart_num_ = 1;
+      }
       /* set subpartition key info */
       OZ (alter_table_schema.assign_subpartiton_key_info(
                             orig_table_schema.get_subpartition_key_info()));

@@ -112,6 +112,7 @@ public:
   }
 
   share::SCN get_rec_scn();
+  share::SCN get_active_rec_scn();
   // if min_rec_scn <= the input rec_scn
   // logstream freeze
   int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);

@@ -39,7 +39,7 @@ class ObDirectLoadTmpFile
 {
 public:
   ObDirectLoadTmpFile(ObDirectLoadTmpFileManager *file_mgr, const ObDirectLoadTmpFileId &file_id)
-    : file_mgr_(file_mgr), file_id_(file_id), ref_count_(0)
+    : file_mgr_(file_mgr), file_id_(file_id), file_size_(0), ref_count_(0)
   {
   }
   bool is_valid() const { return nullptr != file_mgr_ && file_id_.is_valid(); }
@@ -48,10 +48,13 @@ public:
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
   ObDirectLoadTmpFileManager *get_file_mgr() const { return file_mgr_; }
   const ObDirectLoadTmpFileId &get_file_id() const { return file_id_; }
-  TO_STRING_KV(KP_(file_mgr), K_(file_id), K_(ref_count));
+  int64_t get_file_size() const { return file_size_; }
+  void inc_file_size(int64_t size) { file_size_ += size; }
+  TO_STRING_KV(KP_(file_mgr), K_(file_id), K_(file_size), K_(ref_count));
 private:
   ObDirectLoadTmpFileManager *const file_mgr_;
   const ObDirectLoadTmpFileId file_id_;
+  int64_t file_size_;
   int64_t ref_count_ CACHE_ALIGNED;
   DISABLE_COPY_ASSIGN(ObDirectLoadTmpFile);
 };
@@ -94,28 +97,31 @@ private:
 
 class ObDirectLoadTmpFileIOHandle final
 {
+  static const uint64_t MAX_RETRY_CNT = 3;
 public:
   ObDirectLoadTmpFileIOHandle();
   ~ObDirectLoadTmpFileIOHandle();
   void reset();
   bool is_valid() const { return file_handle_.is_valid(); }
   int open(const ObDirectLoadTmpFileHandle &file_handle);
-  int aio_read(char *buf, int64_t size);
+  int pread(char *buf, int64_t size, int64_t offset);
+  int write(char *buf, int64_t size);
   int aio_pread(char *buf, int64_t size, int64_t offset);
-  int read(char *buf, int64_t &size, int64_t timeout_ms);
-  int pread(char *buf, int64_t &size, int64_t offset, int64_t timeout_ms);
   int aio_write(char *buf, int64_t size);
-  int write(char *buf, int64_t size, int64_t timeout_ms);
-  int wait(int64_t timeout_ms);
-  // for aio read to get real read size when ret = OB_ITER_END
-  OB_INLINE int64_t get_data_size() { return file_io_handle_.get_data_size(); }
+  int wait();
+  OB_INLINE void cancel() { is_cancel_ = true; }
   static int seek(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int whence);
   static int sync(const ObDirectLoadTmpFileHandle &file_handle, int64_t timeout_ms);
-  TO_STRING_KV(K_(file_handle));
+  static bool is_retry_err(int ret_code) { return OB_TIMEOUT == ret_code; }
+  TO_STRING_KV(K_(file_handle), K_(io_info));
+private:
+  int check_status();
 private:
   ObDirectLoadTmpFileHandle file_handle_;
+  ObDirectLoadTmpFile *tmp_file_;
   blocksstable::ObTmpFileIOInfo io_info_;
   blocksstable::ObTmpFileIOHandle file_io_handle_;
+  bool is_cancel_;
   DISABLE_COPY_ASSIGN(ObDirectLoadTmpFileIOHandle);
 };
 

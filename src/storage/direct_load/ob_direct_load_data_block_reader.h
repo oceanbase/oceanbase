@@ -46,7 +46,6 @@ protected:
   int64_t buf_capacity_;
   int64_t buf_size_;
   int64_t buf_pos_;
-  int64_t io_timeout_ms_;
   ObDirectLoadDataBlockDecoder<Header> data_block_reader_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
   T curr_item_;
@@ -66,7 +65,6 @@ ObDirectLoadDataBlockReader<Header, T>::ObDirectLoadDataBlockReader()
     buf_capacity_(0),
     buf_size_(0),
     buf_pos_(0),
-    io_timeout_ms_(0),
     offset_(0),
     read_size_(0),
     block_count_(0),
@@ -103,7 +101,6 @@ void ObDirectLoadDataBlockReader<Header, T>::reset()
   buf_capacity_ = 0;
   buf_size_ = 0;
   buf_pos_ = 0;
-  io_timeout_ms_ = 0;
   allocator_.reset();
   data_block_reader_.reset();
   file_io_handle_.reset();
@@ -139,7 +136,6 @@ int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size, int64_
     } else {
       data_block_size_ = data_block_size;
       buf_capacity_ = buf_size;
-      io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       is_inited_ = true;
     }
   }
@@ -191,10 +187,8 @@ int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
     buf_size_ = data_size;
     // read buffer
     const int64_t read_size = MIN(buf_capacity_ - buf_size_, read_size_);
-    if (OB_FAIL(file_io_handle_.aio_pread(buf_ + buf_size_, read_size, offset_))) {
-      STORAGE_LOG(WARN, "fail to do aio read from tmp file", KR(ret));
-    } else if (OB_FAIL(file_io_handle_.wait(io_timeout_ms_))) {
-      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret), K(io_timeout_ms_));
+    if (OB_FAIL(file_io_handle_.pread(buf_ + buf_size_, read_size, offset_))) {
+      STORAGE_LOG(WARN, "fail to do pread from tmp file", KR(ret));
     } else {
       buf_size_ += read_size;
       offset_ += read_size;
