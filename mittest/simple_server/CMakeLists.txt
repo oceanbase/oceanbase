@@ -2,7 +2,6 @@ set(OBSERVER_TEST_SRCS
         env/ob_simple_server.cpp
         env/ob_simple_server_restart_helper.cpp
         env/ob_simple_cluster_test_base.cpp
-        env/ob_simple_server_helper.cpp
         )
 
 add_library(observer_test ${OBSERVER_TEST_SRCS})
@@ -11,6 +10,7 @@ target_include_directories(observer_test PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
 target_link_libraries(observer_test PUBLIC
   oceanbase
+  mit_env
 )
 
 function(ob_unittest_observer case)
