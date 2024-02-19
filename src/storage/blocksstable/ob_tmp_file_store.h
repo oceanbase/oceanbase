@@ -223,6 +223,7 @@ public:
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
   int free_macro_block(const int64_t block_id);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
+  int get_disk_macro_block_count(int64_t &count) const;
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   void print_block_usage();
 
@@ -253,6 +254,7 @@ public:
   void refresh_memory_limit(const uint64_t tenant_id);
   int sync_block(const int64_t block_id, ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
+  int get_disk_macro_block_count(int64_t &count) const;
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
   // use io_allocator_ to allocate tenant extent memory.

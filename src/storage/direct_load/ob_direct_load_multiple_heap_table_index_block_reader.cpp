@@ -30,7 +30,7 @@ ObDirectLoadMultipleHeapTableIndexBlockReader::~ObDirectLoadMultipleHeapTableInd
 int ObDirectLoadMultipleHeapTableIndexBlockReader::init(int64_t data_block_size,
                                                         ObCompressorType compressor_type)
 {
-  return ParentType::init(data_block_size, data_block_size, compressor_type);
+  return ParentType::init(data_block_size, compressor_type);
 }
 
 int ObDirectLoadMultipleHeapTableIndexBlockReader::get_next_index(

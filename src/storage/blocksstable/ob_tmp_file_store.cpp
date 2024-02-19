@@ -823,6 +823,19 @@ int ObTmpTenantMacroBlockManager::free_macro_block(const int64_t block_id)
   return ret;
 }
 
+int ObTmpTenantMacroBlockManager::get_disk_macro_block_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpMacroBlockManager has not been inited", K(ret));
+  } else {
+    count = blocks_.size();
+  }
+
+  return ret;
+}
 
 int ObTmpTenantMacroBlockManager::get_disk_macro_block_list(
                                                 common::ObIArray<MacroBlockId> &macro_id_list)
@@ -1511,6 +1524,19 @@ int ObTmpTenantFileStore::wait_write_finish(const int64_t block_id, const int64_
   return ret;
 }
 
+int ObTmpTenantFileStore::get_disk_macro_block_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
+  } else if (OB_FAIL(tmp_block_manager_.get_disk_macro_block_count(count))) {
+    STORAGE_LOG(WARN, "fail to get disk macro block count from tmp_block_manager_", K(ret));
+  }
+  return ret;
+}
+
 int ObTmpTenantFileStore::get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list)
 {
   int ret = OB_SUCCESS;
@@ -1843,22 +1869,20 @@ int ObTmpFileStore::get_macro_block_list(ObIArray<TenantTmpBlockCntPair> &tmp_bl
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
   } else {
     tmp_block_cnt_pairs.reset();
-    common::ObSEArray<MacroBlockId, 64> macro_id_list;
-    macro_id_list.set_attr(ObMemAttr(MTL_ID(), "TMP_MB_LIST"));
     TenantFileStoreMap::iterator iter;
     ObTmpTenantFileStore *tmp = NULL;
     for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end();
         ++iter) {
+      int64_t macro_id_count = 0;
       TenantTmpBlockCntPair pair;
-      macro_id_list.reset();
       if (OB_ISNULL(tmp = iter->second.get_tenant_store())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
-      } else if (OB_FAIL(tmp->get_disk_macro_block_list(macro_id_list))){
+      } else if (OB_FAIL(tmp->get_disk_macro_block_count(macro_id_count))){
         STORAGE_LOG(WARN, "fail to get list of tenant macro block in disk", K(ret));
-      } else if (OB_FAIL(pair.init(iter->first, macro_id_list.count()))) {
+      } else if (OB_FAIL(pair.init(iter->first, macro_id_count))) {
         STORAGE_LOG(WARN, "fail to init tenant tmp block count pair", K(ret), "tenant id",
-            iter->first, "macro block count", macro_id_list.count());
+            iter->first, "macro block count", macro_id_count);
       } else if (OB_FAIL(tmp_block_cnt_pairs.push_back(pair))) {
         STORAGE_LOG(WARN, "fail to push back tmp_block_cnt_pairs", K(ret), K(pair));
       }
