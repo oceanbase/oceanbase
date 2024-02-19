@@ -227,6 +227,7 @@ public:
   int lock();
   int unlock();
   int get_tenant_id(uint64_t &tenant_id) const;
+  bool has_ddl_participant() const;
 
   // for unittest start
   int set_trans_id(const transaction::ObTransID &trans_id);
