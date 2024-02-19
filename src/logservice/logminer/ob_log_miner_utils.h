@@ -42,7 +42,6 @@ int write_signed_number(const int64_t num, common::ObStringBuffer &buffer);
 int write_unsigned_number(const uint64_t num, common::ObStringBuffer &buffer);
 int write_string_no_escape(const ObString &str, common::ObStringBuffer &buffer);
 int write_string_escape(const ObString &str, common::ObStringBuffer &buffer);
-const char *strchr_array(const char *str, char c_arr[], const int32_t array_size, char &c);
 //record convert tool end
 
 bool is_number(const char *str);

@@ -117,24 +117,6 @@ int write_string_escape(const ObString &str, common::ObStringBuffer &buffer)
   return ret;
 }
 
-const char *strchr_array(const char *str, char c_arr[], const int32_t array_size, char &c){
-  const char *min_pos =  str + strlen(str);
-  int32_t index_num = -1;
-  for(int32_t i=0;i<array_size;i++){
-    const char *data = strchr(str, c_arr[i]);
-    if(nullptr != data && data < min_pos) {
-      min_pos = data;
-      c = c_arr[i];
-      index_num = i;
-    }
-  }
-  if(index_num != -1) {
-    return strchr(str, c_arr[index_num]);
-  } else {
-    return nullptr;
-  }
-}
-
 bool is_number(const char *str)
 {
   bool bool_ret = true;

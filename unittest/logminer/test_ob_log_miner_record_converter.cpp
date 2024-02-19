@@ -272,7 +272,7 @@ TEST(test_ob_log_miner_record_converter, JsonConverterWriteRecord)
   is_written = false;
   EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
   EXPECT_EQ(true, is_written);
-    EXPECT_STREQ(
+  EXPECT_STREQ(
     "{\"TENANT_ID\":1002,\"TRANS_ID\":345,\"PRIMARY_KEY\":\"aaa/bbb\",\"TENANT_NAME\":\"test_tenant\",\"DATABASE_NAME\":\"test\","
     "\"TABLE_NAME\":\"sbtest1\",\"OPERATION\":\"DELETE\",\"OPERATION_CODE\":3,\"COMMIT_SCN\":0,"
     "\"COMMIT_TIMESTAMP\":\"1970-01-01 08:00:00.000000\","
