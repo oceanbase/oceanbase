@@ -1550,7 +1550,8 @@ int ObAggregateProcessor::process_distinct_batch(
     LOG_WARN("distinct set is NULL", K(ret));
   } else {
     // In non-rollup group_id must be 0
-    if (group_id > 0) {
+    if (group_id > 0 && group_id > start_partial_rollup_idx_ &&
+              group_id <= end_partial_rollup_idx_) {
       // Group id greater than zero in sort based group by must be rollup,
       // distinct set is sorted and iterated in rollup_process(), rewind here.
       if (OB_FAIL(extra_info->unique_sort_op_->rewind())) {
