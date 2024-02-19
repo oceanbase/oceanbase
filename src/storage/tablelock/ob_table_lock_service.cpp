@@ -442,6 +442,7 @@ int ObTableLockService::lock_table(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -479,6 +480,7 @@ int ObTableLockService::unlock_table(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -518,6 +520,7 @@ int ObTableLockService::lock_tablet(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -560,6 +563,7 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -599,6 +603,7 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     // is set by user in the 'WAIT n' option.
     // Furthermore, if timeout_us_ is 0, this lock will be judged as a try
     // lock semantics. It meets the actual semantics of 'NOWAIT' option.
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLE, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -627,6 +632,7 @@ int ObTableLockService::unlock_table(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLE, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -653,6 +659,7 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -686,6 +693,7 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -718,6 +726,7 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -752,6 +761,7 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLET, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -784,6 +794,7 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_ALONE_TABLET, arg.table_id_,
                        arg.ls_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -818,6 +829,7 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_ALONE_TABLET, arg.table_id_,
                        arg.ls_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -846,6 +858,7 @@ int ObTableLockService::lock_partition_or_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(get_table_partition_level_(arg.table_id_, part_level))) {
     LOG_WARN("can not get table partition level", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     switch (part_level) {
     case PARTITION_LEVEL_ONE: {
       if (OB_FAIL(lock_partition(tx_desc, tx_param, arg))) {
@@ -886,6 +899,7 @@ int ObTableLockService::lock_partition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_PARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -900,7 +914,7 @@ int ObTableLockService::lock_partition(ObTxDesc &tx_desc,
 
 int ObTableLockService::unlock_partition(ObTxDesc &tx_desc,
                                          const ObTxParam &tx_param,
-                                         const ObLockPartitionRequest &arg)
+                                         const ObUnLockPartitionRequest &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -917,6 +931,7 @@ int ObTableLockService::unlock_partition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_PARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -946,6 +961,7 @@ int ObTableLockService::lock_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_SUBPARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -960,7 +976,7 @@ int ObTableLockService::lock_subpartition(ObTxDesc &tx_desc,
 
 int ObTableLockService::unlock_subpartition(ObTxDesc &tx_desc,
                                             const ObTxParam &tx_param,
-                                            const ObLockPartitionRequest &arg)
+                                            const ObUnLockPartitionRequest &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -977,6 +993,7 @@ int ObTableLockService::unlock_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_SUBPARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -1006,6 +1023,7 @@ int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -1039,6 +1057,7 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -1073,6 +1092,7 @@ int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -1108,6 +1128,7 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -1729,6 +1750,39 @@ int ObTableLockService::batch_pre_check_lock_(ObTableLockCtx &ctx,
   return ret;
 }
 
+template<class RpcProxy, class LockRequest>
+int ObTableLockService::rpc_call_(RpcProxy &proxy_batch,
+                                  const ObAddr &addr,
+                                  const int64_t timeout_us,
+                                  const LockRequest &request)
+{
+  int ret = OB_SUCCESS;
+  int32_t group_id = 0;
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version > CLUSTER_VERSION_4_2_1_3) {
+    group_id = share::OBCG_LOCK;
+    if (request.is_unlock_request()) {
+      group_id = share::OBCG_UNLOCK;
+    }
+    if (OB_FAIL(proxy_batch.call(addr,
+                                 timeout_us,
+                                 GCONF.cluster_id,
+                                 MTL_ID(),
+                                 group_id,
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
+    }
+  } else {
+    if (OB_FAIL(proxy_batch.call(addr,
+                                 timeout_us,
+                                 MTL_ID(),
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
+    }
+  }
+  return ret;
+}
+
 int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
                                                     const ObTableLockMode lock_mode,
                                                     const ObTableLockOwnerID lock_owner,
@@ -1777,12 +1831,11 @@ int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
           } else if (ctx.is_timeout()) {
             ret = (last_ret == OB_TRY_LOCK_ROW_CONFLICT) ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT;
             LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-          } else if (OB_FAIL(proxy_batch.call(addr,
-                                              timeout_us,
-                                              ctx.tx_desc_->get_tenant_id(),
-                                              request))) {
-            LOG_WARN("failed to all async rpc", KR(ret), K(addr),
-                                                K(ctx.abs_timeout_ts_), K(request));
+          } else if (OB_FAIL(rpc_call_(proxy_batch,
+                                       addr,
+                                       timeout_us,
+                                       request))) {
+            LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(request));
           } else {
             retry_ctx.send_rpc_count_++;
             ALLOW_NEXT_LOG();
@@ -2025,10 +2078,10 @@ int ObTableLockService::send_rpc_task_(RpcProxy &proxy_batch,
   } else if (ctx.is_timeout()) {
     ret = OB_TIMEOUT;
     LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-  } else if (OB_FAIL(proxy_batch.call(addr,
-                                      ctx.get_rpc_timeoutus(),
-                                      ctx.tx_desc_->get_tenant_id(),
-                                      request))) {
+  } else if (OB_FAIL(rpc_call_(proxy_batch,
+                               addr,
+                               ctx.get_rpc_timeoutus(),
+                               request))) {
     LOG_WARN("failed to call async rpc", KR(ret), K(addr),
                                         K(ctx.abs_timeout_ts_), K(request));
   } else {
@@ -2162,12 +2215,11 @@ int ObTableLockService::parallel_rpc_handle_(RpcProxy &proxy_batch,
     } else if (ctx.is_timeout()) {
       ret = OB_TIMEOUT;
       LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-    } else if (OB_FAIL(proxy_batch.call(addr,
-                                        timeout_us,
-                                        ctx.tx_desc_->get_tenant_id(),
-                                        request))) {
-      LOG_WARN("failed to all async rpc", KR(ret), K(addr),
-                                          K(ctx.abs_timeout_ts_), K(request));
+    } else if (OB_FAIL(rpc_call_(proxy_batch,
+                                 addr,
+                                 timeout_us,
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
     } else {
       retry_ctx.send_rpc_count_++;
       ALLOW_NEXT_LOG();

@@ -28,6 +28,14 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+namespace tablelock
+{
+class ObLockAloneTabletRequest;
+}
+}
+
 namespace share
 {
 namespace schema
@@ -455,14 +463,13 @@ public:
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       const ObDisplayTabletList &table_lock_tablet_list);
 private:
-  template<typename LockArg>
   static int process_table_lock_on_tablets_(
       ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       const ObDisplayTabletList &table_lock_tablet_list,
-      LockArg &lock_arg);
+      transaction::tablelock::ObLockAloneTabletRequest &lock_arg);
 };
 
 } // end namespace share

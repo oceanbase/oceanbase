@@ -666,8 +666,17 @@ int ObInnerConnectionLockUtil::request_lock_(
         } else if (OB_FAIL(arg.serialize(tmp_str, arg.get_serialize_size(), pos))) {
           LOG_WARN("serialize lock table arg failed", K(ret), K(arg));
         } else {
+          int32_t group_id = 0;
+          const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+          if (min_cluster_version > CLUSTER_VERSION_4_2_1_3) {
+            if (arg.is_unlock_request()) {
+              group_id = share::OBCG_UNLOCK;
+            } else {
+              group_id = share::OBCG_LOCK;
+            }
+          }
           sql.assign_ptr(tmp_str, arg.get_serialize_size());
-          ret = conn->forward_request(tenant_id, operation_type, sql, res);
+          ret = conn->forward_request(tenant_id, operation_type, sql, res, group_id);
         }
 
         if (OB_NOT_NULL(tmp_str)) {
