@@ -930,8 +930,10 @@ int ObLogSchemaGetter::get_tenant_refreshed_schema_version(const uint64_t tenant
   return ret;
 }
 
-int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(const uint64_t tenant_id,
-    bool &is_tenant_dropping_or_dropped)
+int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(
+    const uint64_t tenant_id,
+    bool &is_tenant_dropping_or_dropped,
+    TenantSchemaInfo &tenant_schema_info)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
@@ -952,6 +954,11 @@ int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(const uint64_t ten
     }
   } else {
     is_tenant_dropping_or_dropped = tenant_schema->is_dropping();
+    tenant_schema_info.reset(
+        tenant_id,
+        tenant_schema->get_schema_version(),
+        tenant_schema->get_tenant_name(),
+        tenant_schema->is_restore());
   }
 
   return ret;

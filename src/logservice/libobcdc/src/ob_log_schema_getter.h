@@ -473,8 +473,10 @@ public:
   ///
   /// @retval OB_SUCCESS                   success
   /// @retval other error code             fail
-  virtual int check_if_tenant_is_dropping_or_dropped(const uint64_t tenant_id,
-      bool &is_tenant_dropping_or_dropped) = 0;
+  virtual int check_if_tenant_is_dropping_or_dropped(
+      const uint64_t tenant_id,
+      bool &is_tenant_dropping_or_dropped,
+      TenantSchemaInfo &tenant_schema_info) = 0;
 
   //// NOTE: Note that all subsequent additions to the interface should consider the return value case when the tenant does not exist.
   //// I: requires the schema module to return a specific error code OB_TENANT_HAS_BEEN_DROPPED when a tenant does not exist. libobcdc encounters this error code and only this error code will determine that the tenant has been deleted and exit the retry loop
@@ -617,8 +619,10 @@ public:
   }
   int get_tenant_refreshed_schema_version(const uint64_t tenant_id, int64_t &version);
 
-  int check_if_tenant_is_dropping_or_dropped(const uint64_t tenant_id,
-      bool &is_tenant_dropping_or_dropped);
+  int check_if_tenant_is_dropping_or_dropped(
+      const uint64_t tenant_id,
+      bool &is_tenant_dropping_or_dropped,
+      TenantSchemaInfo &tenant_schema_info);
 
 public:
   int init(common::ObMySQLProxy &mysql_proxy,
