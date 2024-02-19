@@ -222,6 +222,12 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
           CK (OB_NOT_NULL(cursor));
           OX (cursor->set_sync_cursor());
         }
+      } else if (var_type.is_opaque_type()) {
+        if (ser_value->is_null()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("can not sync package opaque type", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "sync package opaque type");
+        }
       } else {
         // sync other server modify for this server! (from porxy or distribute plan)
         OZ (var_type.deserialize(resolve_ctx,
