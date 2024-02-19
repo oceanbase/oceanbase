@@ -10827,8 +10827,10 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (table_item.is_basic_table() || table_item.is_link_table()) {
-    if (OB_FAIL(sql.append_fmt(" FROM %.*s", table_item.table_name_.length(),
-                                             table_item.table_name_.ptr()))) {
+    if (OB_FAIL(sql.append_fmt(" FROM \"%.*s\".\"%.*s\"", table_item.database_name_.length(),
+                                                          table_item.database_name_.ptr(),
+                                                          table_item.table_name_.length(),
+                                                          table_item.table_name_.ptr()))) {
       LOG_WARN("fail to append_fmt", K(table_item.table_name_), K(ret));
     } else if (OB_FAIL(get_partition_for_transpose(table_item, sql))) {
       LOG_WARN("fail to get_partition_for_transpose", K(table_item), K(ret));
