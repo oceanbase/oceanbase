@@ -198,7 +198,9 @@ protected:
 
   int resolve_insert_columns(const ParseNode *node,
                              ObInsertTableInfo& table_info);
-  int resolve_insert_values(const ParseNode *node, ObInsertTableInfo& table_info);
+  int resolve_insert_values(const ParseNode *node,
+                            ObInsertTableInfo& table_info,
+                            common::ObIArray<uint64_t> &label_se_columns);
   int check_column_value_pair(common::ObArray<ObRawExpr*> *value_row,
                               ObInsertTableInfo& table_info,
                               const int64_t row_index,

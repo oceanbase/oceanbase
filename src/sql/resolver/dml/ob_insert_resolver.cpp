@@ -1440,22 +1440,5 @@ int ObInsertResolver::try_expand_returning_exprs()
   return ret;
 }
 
-int ObInsertResolver::resolve_insert_values(const ParseNode *node,
-                                            ObInsertTableInfo& table_info,
-                                            ObIArray<uint64_t>& label_se_columns)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> value_row;
-  if (OB_FAIL(ObDelUpdResolver::resolve_insert_values(node, table_info))) {
-    LOG_WARN("failed to resolve insert values", K(ret));
-  } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(table_info, label_se_columns, value_row))) {
-    LOG_WARN("fail to add new value for oracle label security table", K(ret));
-  } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
-    LOG_WARN("failed to append value row", K(ret));
-  }
-  value_row.reset();
-  return ret;
-}
-
 }  // namespace sql
 }  // namespace oceanbase
