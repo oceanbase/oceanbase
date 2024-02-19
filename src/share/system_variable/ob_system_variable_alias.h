@@ -264,6 +264,17 @@ namespace share
   static const char* const OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN = "activate_all_roles_on_login";
   static const char* const OB_SV__ENABLE_RICH_VECTOR_FORMAT = "_enable_rich_vector_format";
   static const char* const OB_SV_INNODB_STATS_PERSISTENT = "innodb_stats_persistent";
+  static const char* const OB_SV_DEBUG = "debug";
+  static const char* const OB_SV_INNODB_CHANGE_BUFFERING_DEBUG = "innodb_change_buffering_debug";
+  static const char* const OB_SV_INNODB_COMPRESS_DEBUG = "innodb_compress_debug";
+  static const char* const OB_SV_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG = "innodb_disable_resize_buffer_pool_debug";
+  static const char* const OB_SV_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG = "innodb_fil_make_page_dirty_debug";
+  static const char* const OB_SV_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG = "innodb_limit_optimistic_insert_debug";
+  static const char* const OB_SV_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG = "innodb_merge_threshold_set_all_debug";
+  static const char* const OB_SV_INNODB_SAVED_PAGE_NUMBER_DEBUG = "innodb_saved_page_number_debug";
+  static const char* const OB_SV_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG = "innodb_trx_purge_view_update_only_debug";
+  static const char* const OB_SV_INNODB_TRX_RSEG_N_SLOTS_DEBUG = "innodb_trx_rseg_n_slots_debug";
+  static const char* const OB_SV_STORED_PROGRAM_CACHE = "stored_program_cache";
 
 }
 }

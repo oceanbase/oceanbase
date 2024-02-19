@@ -3496,13 +3496,171 @@ static struct VarsInit{
     ObSysVars[247].alias_ = "OB_SV_INNODB_STATS_PERSISTENT" ;
     }();
 
+    [&] (){
+      ObSysVars[248].default_value_ = "d:t:i:o,/tmp/mysqld.trace" ;
+      ObSysVars[248].info_ = "This variable indicates the current debugging settings" ;
+      ObSysVars[248].name_ = "debug" ;
+      ObSysVars[248].data_type_ = ObVarcharType ;
+      ObSysVars[248].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[248].id_ = SYS_VAR_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DEBUG] = 248 ;
+      ObSysVars[248].base_value_ = "d:t:i:o,/tmp/mysqld.trace" ;
+    ObSysVars[248].alias_ = "OB_SV_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[249].default_value_ = "0" ;
+      ObSysVars[249].info_ = "Sets a debug flag for InnoDB change buffering. " ;
+      ObSysVars[249].name_ = "innodb_change_buffering_debug" ;
+      ObSysVars[249].data_type_ = ObIntType ;
+      ObSysVars[249].min_val_ = "0" ;
+      ObSysVars[249].max_val_ = "2" ;
+      ObSysVars[249].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[249].id_ = SYS_VAR_INNODB_CHANGE_BUFFERING_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_CHANGE_BUFFERING_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_CHANGE_BUFFERING_DEBUG] = 249 ;
+      ObSysVars[249].base_value_ = "0" ;
+    ObSysVars[249].alias_ = "OB_SV_INNODB_CHANGE_BUFFERING_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[250].default_value_ = "0" ;
+      ObSysVars[250].info_ = "Compresses all tables using a specified compression algorithm without having to define a COMPRESSION attribute for each table." ;
+      ObSysVars[250].name_ = "innodb_compress_debug" ;
+      ObSysVars[250].data_type_ = ObIntType ;
+      ObSysVars[250].enum_names_ = "[u'NONE', u'ZLIB', u'LZ4', u'LZ4HC']" ;
+      ObSysVars[250].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[250].id_ = SYS_VAR_INNODB_COMPRESS_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_COMPRESS_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_COMPRESS_DEBUG] = 250 ;
+      ObSysVars[250].base_value_ = "0" ;
+    ObSysVars[250].alias_ = "OB_SV_INNODB_COMPRESS_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[251].default_value_ = "1" ;
+      ObSysVars[251].info_ = "Disables resizing of the InnoDB buffer pool" ;
+      ObSysVars[251].name_ = "innodb_disable_resize_buffer_pool_debug" ;
+      ObSysVars[251].data_type_ = ObIntType ;
+      ObSysVars[251].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[251].id_ = SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG] = 251 ;
+      ObSysVars[251].base_value_ = "1" ;
+    ObSysVars[251].alias_ = "OB_SV_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[252].default_value_ = "0" ;
+      ObSysVars[252].info_ = "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored" ;
+      ObSysVars[252].name_ = "innodb_fil_make_page_dirty_debug" ;
+      ObSysVars[252].data_type_ = ObIntType ;
+      ObSysVars[252].min_val_ = "0" ;
+      ObSysVars[252].max_val_ = "4294967295" ;
+      ObSysVars[252].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[252].id_ = SYS_VAR_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG] = 252 ;
+      ObSysVars[252].base_value_ = "0" ;
+    ObSysVars[252].alias_ = "OB_SV_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[253].default_value_ = "0" ;
+      ObSysVars[253].info_ = "Limits the number of records per B-tree page" ;
+      ObSysVars[253].name_ = "innodb_limit_optimistic_insert_debug" ;
+      ObSysVars[253].data_type_ = ObIntType ;
+      ObSysVars[253].min_val_ = "0" ;
+      ObSysVars[253].max_val_ = "4294967295" ;
+      ObSysVars[253].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[253].id_ = SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG] = 253 ;
+      ObSysVars[253].base_value_ = "0" ;
+    ObSysVars[253].alias_ = "OB_SV_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[254].default_value_ = "50" ;
+      ObSysVars[254].info_ = "Defines a page-full percentage value for index pages that overrides the current MERGE_THRESHOLD setting for all indexes that are currently in the dictionary cache" ;
+      ObSysVars[254].name_ = "innodb_merge_threshold_set_all_debug" ;
+      ObSysVars[254].data_type_ = ObIntType ;
+      ObSysVars[254].min_val_ = "1" ;
+      ObSysVars[254].max_val_ = "50" ;
+      ObSysVars[254].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[254].id_ = SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG] = 254 ;
+      ObSysVars[254].base_value_ = "50" ;
+    ObSysVars[254].alias_ = "OB_SV_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[255].default_value_ = "0" ;
+      ObSysVars[255].info_ = "Saves a page number. Setting the innodb_fil_make_page_dirty_debug option dirties the page defined by innodb_saved_page_number_debug" ;
+      ObSysVars[255].name_ = "innodb_saved_page_number_debug" ;
+      ObSysVars[255].data_type_ = ObIntType ;
+      ObSysVars[255].min_val_ = "0" ;
+      ObSysVars[255].max_val_ = "4294967295" ;
+      ObSysVars[255].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[255].id_ = SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG] = 255 ;
+      ObSysVars[255].base_value_ = "0" ;
+    ObSysVars[255].alias_ = "OB_SV_INNODB_SAVED_PAGE_NUMBER_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[256].default_value_ = "0" ;
+      ObSysVars[256].info_ = "Pauses purging of delete-marked records while allowing the purge view to be updated" ;
+      ObSysVars[256].name_ = "innodb_trx_purge_view_update_only_debug" ;
+      ObSysVars[256].data_type_ = ObIntType ;
+      ObSysVars[256].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[256].id_ = SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG] = 256 ;
+      ObSysVars[256].base_value_ = "0" ;
+    ObSysVars[256].alias_ = "OB_SV_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[257].default_value_ = "0" ;
+      ObSysVars[257].info_ = "Sets a debug flag that limits TRX_RSEG_N_SLOTS to a given value for the trx_rsegf_undo_find_free function that looks for free slots for undo log segments" ;
+      ObSysVars[257].name_ = "innodb_trx_rseg_n_slots_debug" ;
+      ObSysVars[257].data_type_ = ObIntType ;
+      ObSysVars[257].min_val_ = "0" ;
+      ObSysVars[257].max_val_ = "1024" ;
+      ObSysVars[257].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[257].id_ = SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG] = 257 ;
+      ObSysVars[257].base_value_ = "0" ;
+    ObSysVars[257].alias_ = "OB_SV_INNODB_TRX_RSEG_N_SLOTS_DEBUG" ;
+    }();
+
+    [&] (){
+      ObSysVars[258].default_value_ = "256" ;
+      ObSysVars[258].info_ = "Sets a soft upper limit for the number of cached stored routines per connection" ;
+      ObSysVars[258].name_ = "stored_program_cache" ;
+      ObSysVars[258].data_type_ = ObIntType ;
+      ObSysVars[258].min_val_ = "16" ;
+      ObSysVars[258].max_val_ = "524288" ;
+      ObSysVars[258].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[258].id_ = SYS_VAR_STORED_PROGRAM_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_STORED_PROGRAM_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_STORED_PROGRAM_CACHE] = 258 ;
+      ObSysVars[258].base_value_ = "256" ;
+    ObSysVars[258].alias_ = "OB_SV_STORED_PROGRAM_CACHE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 248;
+static int64_t var_amount = 259;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
