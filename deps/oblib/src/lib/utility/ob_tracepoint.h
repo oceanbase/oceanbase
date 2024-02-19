@@ -745,7 +745,7 @@ class EventTable
       EN_UNIQ_TASK_QUEUE_GET_GROUP_FAIL = 2106,
 
       // WR && ASH
-      EN_CLOSE_ASH = 2201,
+      EN_CLOSE_ASH = 2301,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };
