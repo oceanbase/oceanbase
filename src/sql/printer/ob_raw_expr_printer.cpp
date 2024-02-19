@@ -3403,8 +3403,6 @@ do { \
   } else if (OB_FAIL(schema_guard_->get_object_info_func(tenant_id, object_id, object_info))) { \
     LOG_WARN("failed to get udt info", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_ISNULL(object_info)) { \
-    ret = OB_ERR_UNEXPECTED; \
-    LOG_WARN("object info is null", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, object_info->get_database_id(), database_schema))) { \
     LOG_WARN("failed to get database schema", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_ISNULL(database_schema)) { \

@@ -2270,7 +2270,7 @@ int ObPLCursorInfo::get_rowid(ObString &rowid) const
     if (!fetched_) {
       ret = OB_ER_SP_CURSOR_NOT_OPEN;
       LOG_WARN("cursor is not fetched", K(*this), K(ret));
-    } else if (!has_hidden_rowid_) {
+    } else if (!has_hidden_rowid_ || nullptr == current_row_.cells_) {
       ret = OB_INVALID_ROWID;
       LOG_WARN("cursor has no rowid", K(*this), K(ret));
     } else {

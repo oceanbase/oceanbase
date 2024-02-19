@@ -8186,8 +8186,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     }
     // check range
     for (int64_t i = 0; OB_SUCC(ret) && i < calc_array->count(); ++i) {
-      OZ (sql::ObExprPLIntegerChecker::check_range(calc_array->at(i),
-          calc_array->at(i).get_type(), pl_integer_ranges[i]));
+      OZ (sql::ObExprPLIntegerChecker::check_range(
+        calc_array->at(i), calc_array->at(i).get_type(), pl_integer_ranges[i]));
     }
   }
   // 向变量赋值

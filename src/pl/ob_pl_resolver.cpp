@@ -4659,15 +4659,16 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
     need_modify = false;
     if (expr->is_obj_access_expr()) {
       ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
-      int64_t collection_index = 0;
+      int64_t collection_index = OB_INVALID_INDEX;
       for (int64_t i = 0; i < obj_access_expr->get_access_idxs().count(); ++i) {
         if (obj_access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
           collection_index = i;
           break;
         }
       }
-      if (obj_access_expr->get_access_idxs().count() > 1
-          && obj_access_expr->get_access_idxs().at(collection_index).elem_type_.is_collection_type()) {
+      if (OB_INVALID_INDEX == collection_index) {
+        can_array_binding = false;
+      } else {
         if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
           int64_t var_idx = obj_access_expr->get_access_idxs().at(collection_index + 1).var_index_;
           if (var_idx < 0 || var_idx >= obj_access_expr->get_var_indexs().count()) {
@@ -4688,17 +4689,21 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
                        K(ret), K(obj_access_expr));
             }
           }
-        } else if (obj_access_expr->get_access_idxs().at(1).is_expr()) {
-          CK (OB_NOT_NULL(obj_access_expr->get_access_idxs().at(1).get_sysfunc_));
+        } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_expr()) {
+          CK (OB_NOT_NULL(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_));
           if (OB_FAIL(ret)) {
-          } else if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_expr->get_access_idxs().at(1).get_sysfunc_->get_expr_type()) {
+          } else if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_->get_expr_type()) {
             ObPLAssocIndexRawExpr *result_expr = static_cast<ObPLAssocIndexRawExpr *>(
-              obj_access_expr->get_access_idxs().at(1).get_sysfunc_);
+              obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_);
             ObConstRawExpr *const_expr = NULL;
             CK (OB_NOT_NULL(result_expr));
             CK (OB_NOT_NULL(result_expr->get_param_expr(1)));
-            if (OB_SUCC(ret) && result_expr->get_param_expr(1)->is_const_raw_expr()) {
+            if (OB_FAIL(ret)) {
+            } else if (result_expr->get_param_expr(1)->is_const_raw_expr()) {
               CK (OB_NOT_NULL(const_expr = static_cast<ObConstRawExpr*>(result_expr->get_param_expr(1))));
+            } else if (OB_FAIL(check_use_idx_illegal(result_expr->get_param_expr(1), idx))) {
+              ret = OB_ERR_BULK_SQL_RESTRICTION;
+              LOG_WARN("Implementation restriction: bulk SQL with associative arrays with VARCHAR2 key is not supported.");
             }
             if (OB_SUCC(ret) && OB_NOT_NULL(const_expr)) {
               const ObObj &const_obj = const_expr->get_value();
@@ -4708,18 +4713,16 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
               }
             }
           } else {
-            OZ (check_use_idx_illegal(obj_access_expr->get_access_idxs().at(1).get_sysfunc_, idx));
+            OZ (check_use_idx_illegal(obj_access_expr->get_access_idxs().at(collection_index + 1).get_sysfunc_, idx));
           }
-        } else if (obj_access_expr->get_access_idxs().at(1).is_const() ||
-                   obj_access_expr->get_access_idxs().at(1).is_pkg()) {
+        } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_const() ||
+                   obj_access_expr->get_access_idxs().at(collection_index + 1).is_pkg()) {
           // do nothing ...
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not supported yet", K(ret), KPC(obj_access_expr));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-urowid type");
         }
-      } else {
-        can_array_binding = false;
       }
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
       ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(expr);
@@ -7259,7 +7262,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
       has_assign_param = true;
       OZ (resolve_cparam_with_assign(exprs.at(i), params_list, func, params, expr_idx));
     } else if (has_assign_param) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
       LOG_WARN("can not set param without assign after param with assign", K(ret));
     } else {
       OZ (resolve_cparam_without_assign(exprs.at(i), i, func, params, expr_idx));
@@ -12149,7 +12152,7 @@ int ObPLResolver::resolve_udf_info(
                                             object_database_id, synonym_id, object_name, exist,
                                             true, // need search public synonym
                                             &is_public));
-      if (OB_FAIL(ret) || !exist) {
+      if (OB_FAIL(ret) || !exist || (routine_info->get_package_id() != synonym_id && routine_info->get_routine_id() != synonym_id)) {
         ret = OB_SUCCESS; // some case may not be synonym.
       } else if (!is_public) {
         if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
@@ -13349,6 +13352,17 @@ int ObPLResolver::resolve_var(ObQualifiedName &q_name, ObPLBlockNS &ns,
                                           &resolve_ctx_.schema_guard_, ns, expr, for_write))) {
     LOG_WARN("failed to make var from access", K(ret), K(q_name), K(access_idxs));
   } else { /*do nothing*/ }
+
+  if (OB_SUCC(ret)
+      && resolve_ctx_.is_sql_scope_
+      && ObObjAccessIdx::get_final_type(access_idxs).is_cursor_type()
+      && !ObObjAccessIdx::get_final_type(access_idxs).is_ref_cursor_type()) {
+    ret = OB_ERR_SP_UNDECLARED_VAR;
+    LOG_WARN("failed to resolve var", K(q_name), K(access_idxs));
+    LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                   access_idxs.at(access_idxs.count()-1).var_name_.length(),
+                   access_idxs.at(access_idxs.count()-1).var_name_.ptr());
+  }
 
   if (OB_SUCC(ret)) {
     if (ObObjAccessIdx::is_package_variable(access_idxs)) {

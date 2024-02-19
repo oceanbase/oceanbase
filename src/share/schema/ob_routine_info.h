@@ -172,6 +172,7 @@ public:
   virtual int64_t get_param_start_idx() const { return 0; }
   virtual const common::ObString &get_routine_name() const = 0;
   virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
+  virtual uint64_t get_routine_id() const = 0;
 
   TO_STRING_EMPTY();
 };

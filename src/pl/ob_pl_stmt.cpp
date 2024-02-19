@@ -984,6 +984,9 @@ int ObPLBlockNS::add_symbol(const ObString &name,
   } else if (is_dup && lib::is_mysql_mode()) {
     ret = OB_ERR_SP_DUP_VAR;
     LOG_USER_ERROR(OB_ERR_SP_DUP_VAR, name.length(), name.ptr());
+  } else if (is_dup && is_formal_param) {
+    ret = OB_ERR_DUPLICATE_FILED;
+    LOG_WARN("duplicate fields in argument list are not permitted", K(ret), K(name), K(is_dup), K(is_formal_param));
   } else {
     OZ (symbols_.push_back(get_symbol_table()->get_count()));
     CK (OB_NOT_NULL(exprs_));
@@ -2946,16 +2949,13 @@ bool ObPLBlockNS::search_routine_local(const ObString &db_name,
     search_local = true;
   } else if (!db_name.empty() && !package_name.empty()) {
     if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && ObCharset::case_compat_mode_equal(package_name_, package_name)) {
+        && ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   } else if (db_name.empty() && !package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(package_name_, package_name)) {
-      search_local = true;
-    }
-  } else if (!db_name.empty() && package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && package_name_.empty()) {
+    if (ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   }
