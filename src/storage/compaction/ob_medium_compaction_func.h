@@ -41,6 +41,18 @@ public:
       ObTablet &tablet,
       const int64_t major_frozen_scn = 0,
       const bool scheduler_called = false);
+  /*
+   * see
+   * standby tenant should catch up broadcast scn when freeze info is recycled
+   */
+  static int decide_standy_tenant_schedule(
+      const ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObMediumCompactionInfo::ObCompactionType &compaction_type,
+      const int64_t schedule_scn,
+      const int64_t major_frozen_snapshot,
+      const ObMediumCompactionInfoList &medium_list,
+      bool &schedule_flag);
   static int read_medium_info_from_list(
       const ObMediumCompactionInfoList &medium_list,
       const int64_t major_frozen_snapshot,

@@ -652,7 +652,7 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
   } else if (broadcast_version <= get_frozen_version()) {
   } else {
     {
-      obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version_ = broadcast_version;
     }
 
