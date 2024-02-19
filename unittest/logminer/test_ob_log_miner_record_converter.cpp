@@ -22,17 +22,27 @@ namespace oceanbase
 namespace oblogminer
 {
 
+TEST(test_ob_log_miner_record_converter, CsvConverterWriteType)
+{
+  ObLogMinerRecordCsvConverter converter;
+  ObConcurrentFIFOAllocator alloc;
+  ObStringBuffer str_buf(&alloc);
+  EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
+  EXPECT_EQ(OB_SUCCESS, converter.write_string_escape_("'aaaa\"\"bbbbb'", str_buf));
+  EXPECT_STREQ("\"'aaaa\"\"\"\"bbbbb'\"", str_buf.ptr());
+  str_buf.reset();
+}
+
 TEST(test_ob_log_miner_record_converter, JsonConverterWriteType)
 {
   ObLogMinerRecordJsonConverter converter;
   ObConcurrentFIFOAllocator alloc;
   ObStringBuffer str_buf(&alloc);
-  KeyArray key_arr;
   EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
   EXPECT_EQ(OB_SUCCESS, converter.write_json_key_("aaa", str_buf));
   EXPECT_STREQ("\"aaa\":", str_buf.ptr());
   str_buf.reset();
-  EXPECT_EQ(OB_SUCCESS, converter.write_json_string_escape_("'aaaa\"\"bbbbb'", str_buf));
+  EXPECT_EQ(OB_SUCCESS, converter.write_string_escape_("'aaaa\"\"bbbbb'", str_buf));
   EXPECT_STREQ("\"'aaaa\\\"\\\"bbbbb'\"", str_buf.ptr());
   str_buf.reset();
 }

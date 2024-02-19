@@ -41,7 +41,6 @@ int write_keys(const KeyArray &key_arr, common::ObStringBuffer &buffer);
 int write_signed_number(const int64_t num, common::ObStringBuffer &buffer);
 int write_unsigned_number(const uint64_t num, common::ObStringBuffer &buffer);
 int write_string_no_escape(const ObString &str, common::ObStringBuffer &buffer);
-int write_string_escape(const ObString &str, common::ObStringBuffer &buffer);
 //record convert tool end
 
 bool is_number(const char *str);

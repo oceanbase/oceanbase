@@ -52,7 +52,7 @@ public:
   ~ObLogMinerRecordCsvConverter() {}
 private:
   ObTimeZoneInfo tz_info_;
-
+  int write_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
 };
 
 class ObLogMinerRecordRedoSqlConverter: public ILogMinerRecordConverter
@@ -86,7 +86,7 @@ public:
   ~ObLogMinerRecordJsonConverter() {}
 private:
   int write_json_key_(const ObString &str, common::ObStringBuffer &buffer);
-  int write_json_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
+  int write_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
   ObTimeZoneInfo tz_info_;
 };
 

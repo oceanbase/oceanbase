@@ -101,22 +101,6 @@ int write_string_no_escape(const ObString &str, common::ObStringBuffer &buffer)
   return ret;
 }
 
-int write_string_escape(const ObString &str, common::ObStringBuffer &buffer)
-{
-  int ret = OB_SUCCESS;
-  const char *data = str.ptr(), *prev_ptr = data;
-  APPEND_STR(buffer, "\"");
-  while (OB_SUCC(ret) && nullptr != prev_ptr && nullptr != (data = strchr(prev_ptr, '"'))) {
-    APPEND_STR(buffer, prev_ptr, data - prev_ptr + 1);
-    APPEND_STR(buffer, "\"");
-    prev_ptr = data + 1;
-  }
-
-  APPEND_STR(buffer, prev_ptr);
-  APPEND_STR(buffer, "\"");
-  return ret;
-}
-
 bool is_number(const char *str)
 {
   bool bool_ret = true;

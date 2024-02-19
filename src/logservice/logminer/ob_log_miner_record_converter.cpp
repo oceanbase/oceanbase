@@ -171,14 +171,14 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
       }
 
       case ColType::SQL_REDO: {
-        if (OB_FAIL(write_string_escape(record.get_redo_stmt().string(),buffer))) {
+        if (OB_FAIL(write_string_escape_(record.get_redo_stmt().string(),buffer))) {
           LOG_ERROR("write redo_stmt failed", K(record));
         } // redo_stmt
         break;
       }
 
       case ColType::SQL_UNDO: {
-        if (OB_FAIL(write_string_escape(record.get_undo_stmt().string(), buffer))) {
+        if (OB_FAIL(write_string_escape_(record.get_undo_stmt().string(), buffer))) {
           LOG_ERROR("write undo_stmt failed", K(record));
         } // undo_stmt
         break;
@@ -208,6 +208,22 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
     LOG_TRACE("ObLogMinerRecordCsvConverter write record succ", K(record));
   }
 
+  return ret;
+}
+
+int ObLogMinerRecordCsvConverter::write_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  const char *data = str.ptr(), *prev_ptr = data;
+  APPEND_STR(buffer, "\"");
+  while (OB_SUCC(ret) && nullptr != prev_ptr && nullptr != (data = strchr(prev_ptr, '"'))) {
+    APPEND_STR(buffer, prev_ptr, data - prev_ptr + 1);
+    APPEND_STR(buffer, "\"");
+    prev_ptr = data + 1;
+  }
+
+  APPEND_STR(buffer, prev_ptr);
+  APPEND_STR(buffer, "\"");
   return ret;
 }
 
@@ -383,7 +399,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
       case ColType::SQL_REDO: {
         if (OB_FAIL(write_json_key_("SQL_REDO", buffer))) {
           LOG_ERROR("write json_key SQL_REDO failed", K(record));
-        } else if (OB_FAIL(write_json_string_escape_(record.get_redo_stmt().string(), buffer))) {
+        } else if (OB_FAIL(write_string_escape_(record.get_redo_stmt().string(), buffer))) {
           LOG_ERROR("write redo_stmt failed", K(record));
         } // redo_stmt
         break;
@@ -392,7 +408,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
       case ColType::SQL_UNDO: {
         if (OB_FAIL(write_json_key_("SQL_UNDO", buffer))) {
           LOG_ERROR("write json_key SQL_UNDO failed", K(record));
-        } else if (OB_FAIL(write_json_string_escape_(record.get_undo_stmt().string(), buffer))) {
+        } else if (OB_FAIL(write_string_escape_(record.get_undo_stmt().string(), buffer))) {
           LOG_ERROR("write undo_stmt failed", K(record));
         } // undo_stmt
         break;
@@ -436,7 +452,7 @@ int ObLogMinerRecordJsonConverter::write_json_key_(const ObString &str, common::
   return ret;
 }
 
-int ObLogMinerRecordJsonConverter::write_json_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+int ObLogMinerRecordJsonConverter::write_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   const char *data = str.ptr(), *prev_ptr = data;
