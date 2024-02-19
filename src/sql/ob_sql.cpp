@@ -5502,15 +5502,27 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
                  || plan->is_contain_oracle_trx_level_temporary_table()) {
         // access temp table
       } else {
-        fixed_route = false;
+        // check passed: special query which can not be reroute
+        //
+        // check txn free route is disabled, if so, when on txn start
+        // node, can not reroute
+        if (OB_FAIL(session.calc_txn_free_route())) {
+          LOG_WARN("cal txn free route failed", K(ret), K(session));
+        } else if (session.can_txn_free_route()) {
+          fixed_route = false;
+        } else if (session.is_txn_free_route_temp()) {
+          fixed_route = false;
+        } else {
+          // fixed route if txn started on this node
+        }
       }
       if (fixed_route) {
-        // multi-stmt or stmt disallow on other node, can not be rerouted
         should_reroute = false;
       }
     }
 
-    if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
     } else if (should_reroute) {
