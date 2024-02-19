@@ -33,7 +33,6 @@ ObDirectLoadSSTableScanner::ObDirectLoadSSTableScanner()
     column_count_(0),
     buf_(nullptr),
     large_buf_(nullptr),
-    io_timeout_ms_(0),
     curr_idx_(0),
     start_idx_(0),
     end_idx_(0),
@@ -84,7 +83,6 @@ int ObDirectLoadSSTableScanner::init(ObDirectLoadSSTable *sstable,
       assign(buf_size, buf_);
       rowkey_column_num_ = sstable->get_meta().rowkey_column_count_;
       column_count_ = sstable->get_meta().column_count_;
-      io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
     }
     if (OB_SUCC(ret)) {
       if (!sstable_->is_empty()) {
@@ -377,7 +375,7 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
   int ret = OB_SUCCESS;
   int64_t read_size = size;
   if (size <= sstable_data_block_size_) {
-    if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     }
   } else {
@@ -389,7 +387,7 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
         LOG_WARN("fail to allocate buffer", KR(ret), K(large_buf_size));
       }
     }
-    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     }
   }
@@ -405,7 +403,7 @@ int ObDirectLoadSSTableScanner::get_large_buffer(int64_t buf_size)
   } else {
     int64_t read_size = buf_size;
     data_block_reader_.reset();
-    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset_, io_timeout_ms_))) {
+    if (OB_FAIL(file_io_handle_.pread(large_buf_, read_size, offset_))) {
       LOG_WARN("fail to do pread from data file", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(buf_size, large_buf_, column_count_))) {
       LOG_WARN("fail to init data block reader", KR(ret));
@@ -565,7 +563,6 @@ int ObDirectLoadSSTableScanner::get_next_row(const ObDatumRow *&datum_row)
 ObDirectLoadIndexBlockMetaIterator::ObDirectLoadIndexBlockMetaIterator()
   : buf_pos_(0),
     buf_size_(0),
-    io_timeout_ms_(0),
     buf_(nullptr),
     curr_fragment_idx_(0),
     curr_block_idx_(0),
@@ -624,7 +621,6 @@ int ObDirectLoadIndexBlockMetaIterator::init(ObDirectLoadSSTable *sstable)
           sstable_->get_meta().index_block_size_);
         total_index_block_count_ = sstable->get_meta().index_block_count_;
         assign(0, buf_size, buf_);
-        io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
         is_inited_ = true;
       }
     }
@@ -724,7 +720,7 @@ int ObDirectLoadIndexBlockMetaIterator::read_buffer(uint64_t offset, uint64_t si
 {
   int ret = OB_SUCCESS;
   int64_t read_size = size;
-  if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset, io_timeout_ms_))) {
+  if (OB_FAIL(file_io_handle_.pread(buf_, read_size, offset))) {
     LOG_WARN("fail to do pread from data file", KR(ret));
   } else {
     buf_pos_ = 0;

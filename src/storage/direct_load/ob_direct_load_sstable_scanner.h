@@ -67,7 +67,6 @@ private:
   int64_t column_count_;
   char *buf_;
   char *large_buf_;
-  int64_t io_timeout_ms_;
   int64_t curr_idx_;
   int64_t start_idx_;
   int64_t end_idx_;
@@ -110,7 +109,6 @@ private:
 private:
   int64_t buf_pos_;
   int64_t buf_size_;
-  int64_t io_timeout_ms_;
   char *buf_;
   ObDirectLoadExternalRow row_;
   int64_t curr_fragment_idx_;

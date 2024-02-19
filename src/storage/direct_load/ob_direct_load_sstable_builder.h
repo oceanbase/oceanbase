@@ -213,7 +213,6 @@ private:
   int64_t header_length_;
   int64_t item_size_;
   int64_t index_item_num_per_block_;
-  int64_t io_timeout_ms_;
   ObDirectLoadIndexBlockHeader header_;
   common::ObArenaAllocator allocator_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
