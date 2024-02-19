@@ -713,7 +713,8 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
       table_assign = &assigns.at(assigns.count() - 1);
     }
   }
-  if (OB_SUCC(ret) && (is_mysql_mode() || assign.column_expr_->is_generated_column())) {
+  if (OB_SUCC(ret) && !params_.is_prepare_stage_
+      && (is_mysql_mode() || assign.column_expr_->is_generated_column())) {
     //in MySQL:
     //The second assignment in the following statement sets col2 to the current (updated) col1 value,
     //not the original col1 value.
