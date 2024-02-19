@@ -67,12 +67,8 @@ void ObScalarAggregateOp::destroy()
 int ObScalarAggregateOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
-  hp_infras_mgr_.destroy();
   if (OB_FAIL(ObGroupByOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
-  } else if (MY_SPEC.enable_hash_base_distinct_
-    && OB_FAIL(init_hp_infras_group_mgr())) {
-    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {
     LOG_WARN("failed to init one group",  K(ret));
   } else {
@@ -84,12 +80,8 @@ int ObScalarAggregateOp::inner_switch_iterator()
 int ObScalarAggregateOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  hp_infras_mgr_.destroy();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
-  } else if (MY_SPEC.enable_hash_base_distinct_
-    && OB_FAIL(init_hp_infras_group_mgr())) {
-    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {
     LOG_WARN("failed to init one group",  K(ret));
   } else {

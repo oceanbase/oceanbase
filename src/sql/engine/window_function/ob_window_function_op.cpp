@@ -1503,7 +1503,6 @@ int ObWindowFunctionOp::inner_open()
 int ObWindowFunctionOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  hp_infras_mgr_.destroy();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("rescan child operator failed", K(ret));
   } else if (OB_ISNULL(ctx_.get_my_session())) {
@@ -1511,13 +1510,6 @@ int ObWindowFunctionOp::inner_rescan()
     LOG_WARN("NULL ptr", K(ret));
   } else if (OB_FAIL(reset_for_scan(ctx_.get_my_session()->get_effective_tenant_id()))) {
     LOG_WARN("reset_for_scan failed", K(ret));
-  } else if (MY_SPEC.enable_hash_base_distinct_
-    && distinct_aggr_count_ > 0) {
-    if (OB_FAIL(init_hp_infras_group_mgr())) {
-      LOG_WARN("failed to init hp infras group manager", K(ret));
-    } else if (OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_aggr_count_))) {
-      LOG_WARN("failed to init hp infras group", K(ret), K(distinct_aggr_count_));
-    }
   }
   stat_ = ProcessStatus::PARTIAL;
   restore_row_cnt_ = 0;

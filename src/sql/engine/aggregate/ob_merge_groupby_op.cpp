@@ -104,7 +104,6 @@ void ObMergeGroupByOp::reset()
   use_sort_data_ = false;
   inner_sort_.reset();
   global_rollup_key_.reset();
-  hp_infras_mgr_.destroy();
 }
 
 int ObMergeGroupByOp::init_rollup_distributor()
@@ -335,6 +334,7 @@ void ObMergeGroupByOp::destroy()
   distinct_col_idx_in_output_.reset();
   inner_sort_exprs_.reset();
   reset();
+  hp_infras_mgr_.destroy();
   ObGroupByOp::destroy();
 }
 
@@ -344,9 +344,6 @@ int ObMergeGroupByOp::inner_switch_iterator()
   reset();
   if (OB_FAIL(ObGroupByOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
-  } else if (MY_SPEC.enable_hash_base_distinct_
-    && OB_FAIL(init_hp_infras_group_mgr())) {
-    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   }
@@ -359,9 +356,6 @@ int ObMergeGroupByOp::inner_rescan()
   reset();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
-  } else if (MY_SPEC.enable_hash_base_distinct_
-    && OB_FAIL(init_hp_infras_group_mgr())) {
-    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   }
