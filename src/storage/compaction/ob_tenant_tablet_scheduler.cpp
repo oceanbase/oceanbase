@@ -1942,7 +1942,7 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
     ret = OB_LEADER_NOT_EXIST;
     LOG_WARN("not ls leader, can't schedule medium", K(ret), K(ls_id), K(tablet_id), K(is_election_leader));
   } else if (!could_major_merge_start()) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_MAJOR_FREEZE_NOT_ALLOW;
     LOG_WARN("major compaction is suspended", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
@@ -1967,11 +1967,11 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
       const int64_t last_major_snapshot_version = tablet_handle.get_obj()->get_last_major_snapshot_version();
 
       if (OB_UNLIKELY(last_major_snapshot_version <= 0 || last_major_snapshot_version < merge_version)) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_MAJOR_FREEZE_NOT_FINISHED;
         LOG_WARN("no major sstable or not finish tenant major compaction, can't schedule another medium",
           K(ret), K(ls_id), K(tablet_id), K(last_major_snapshot_version), K(merge_version));
       } else if (medium_info_list->need_check_finish()) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_MAJOR_FREEZE_NOT_FINISHED;
         LOG_WARN("tablet need check finish, can't schedule another medium", K(ret), K(ls_id), K(tablet_id),
           "wait_check_medium_scn", medium_info_list->get_wait_check_medium_scn());
       } else if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(0/*major_snapshot*/))) {
