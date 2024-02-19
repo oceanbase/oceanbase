@@ -2746,7 +2746,7 @@ int ObDmlCgService::generate_fk_check_ctdef(const ObLogDelUpd &op,
   if (get_fk_check_scan_table_id(name_table_id, name_column_ids, schema_guard, index_tid)) {
     LOG_WARN("failed to get foreign key check scan table id", K(name_table_id), K(ret));
   } else if (OB_INVALID_ID == index_tid) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_CANNOT_ADD_FOREIGN;
     LOG_WARN("invalid index table id to build das scan task for foreign key check", K(ret));
   } else if (OB_FAIL(generate_fk_scan_ctdef(schema_guard, index_tid, fk_ctdef.das_scan_ctdef_))) {
     LOG_WARN("failed to generate das scan ctdef for foreign key check", K(ret));
