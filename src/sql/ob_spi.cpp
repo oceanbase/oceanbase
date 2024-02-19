@@ -7986,7 +7986,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     } else if (!(obj.is_pl_extend()
                  || obj.is_user_defined_sql_type()
                  || obj.is_geometry()
-                 || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
+                 || (obj.is_null() && !current_type.at(i).get_meta_type().is_xml_sql_type()))
                && result_types[i].get_meta_type().is_ext()
                && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
       // sql udt or oracle gis can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
@@ -8269,6 +8269,9 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                    var_type.get_data_type()->get_meta_type().is_null() &&
                    calc_array->at(0).is_pl_extend()) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
+        } else if (is_schema_object) {
+          ret =OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("expr is wrong type", K(ret));
         } else {
           OZ (deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
         }
