@@ -1986,6 +1986,15 @@ int ObLogPlanHint::check_status() const
   return ret;
 }
 
+bool ObLogPlanHint::is_spm_evolution() const
+{
+  bool bret = false;
+#ifdef OB_BUILD_SPM
+  bret = is_spm_evolution_;
+#endif
+  return bret;
+}
+
 int LogLeadingHint::init_leading_info(const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint,
                                       const ObHint *hint)
