@@ -925,7 +925,7 @@ void ObDDLScheduler::run1()
       }
       if (do_idle) {
         first_retry_task = nullptr;
-        idler_.idle(10 * 1000L);
+        idler_.idle(ObDDLTask::DEFAULT_TASK_IDLE_TIME_US);
       }
     }
   }
