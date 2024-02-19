@@ -11361,7 +11361,7 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
       OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
                                               *params_.schema_checker_->get_schema_guard(),
                                               *expr,
-                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
+                                              *stmt_->get_query_ctx()));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
       OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
       if (OB_SUCC(ret) &&

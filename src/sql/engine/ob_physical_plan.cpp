@@ -136,7 +136,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_rich_format_(false),
     subschema_ctx_(allocator_),
     disable_auto_memory_mgr_(false),
-    all_local_session_vars_(&allocator_)
+    all_local_session_vars_(&allocator_),
+    udf_has_dml_stmt_(false)
 {
 }
 
@@ -234,6 +235,7 @@ void ObPhysicalPlan::reset()
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
+  udf_has_dml_stmt_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -793,7 +795,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     gtt_trans_scope_ids_,
                     subschema_ctx_,
                     use_rich_format_,
-                    disable_auto_memory_mgr_);
+                    disable_auto_memory_mgr_,
+                    udf_has_dml_stmt_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1122,7 +1125,7 @@ void ObPhysicalPlan::calc_whether_need_trans()
     }
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
-  if (!bool_ret && contain_pl_udf_or_trigger() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;

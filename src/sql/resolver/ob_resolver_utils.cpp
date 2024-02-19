@@ -6881,7 +6881,7 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       bool &contain_select_stmt)
+                                       ObQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6918,7 +6918,10 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
         enable_parallel = false;
       }
       if (routine_info->is_reads_sql_data()) {
-        contain_select_stmt = true;
+        ctx.udf_has_select_stmt_ = true;
+      }
+      if (routine_info->is_modifies_sql_data()) {
+        ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
     }
