@@ -1682,7 +1682,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
     }
   } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::UPDATE_TABLET_REPORT_STATUS))){
   }
-  LOG_INFO("schedule tablet medium", K(ret), K(ls_id), K(tablet_id),
+  LOG_TRACE("schedule tablet medium", K(ret), K(ls_id), K(tablet_id),
             K(tablet_merge_finish), K(last_major_snapshot_version), K(merge_version), K(is_leader),
             K(could_major_merge), K(enable_adaptive_compaction), K(tablet_could_schedule_merge));
   if (OB_FAIL(ret) || !is_leader || 0 >= last_major_snapshot_version) {
