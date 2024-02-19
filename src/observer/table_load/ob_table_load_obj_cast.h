@@ -256,7 +256,7 @@ private:
         }
         // scale<0时，小数部分被舍去且精度限制在小数点前-scale位
       } else {
-        if (n2 > 0 || n1 % ROUND_POWS[-scale] == 0) {
+        if (n2 > 0 || -scale >= number::ObNumber::DIGIT_LEN || n1 % ROUND_POWS[-scale] == 0) {
           return OB_EAGAIN;
         }
       }
