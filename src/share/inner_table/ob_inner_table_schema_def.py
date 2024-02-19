@@ -5337,7 +5337,7 @@ def_table_schema(**all_column_group_mapping)
 
 def_table_schema(**gen_history_table_def(422, all_column_group_mapping))
 
-all_transfer_task_def = dict(
+def_table_schema(
     owner = 'wangzhennan.wzn',
     table_name    = '__all_transfer_task',
     table_id = '423',
@@ -5369,11 +5369,47 @@ all_transfer_task_def = dict(
         ('comment', 'longtext', 'true'),
         ('balance_task_id', 'int', 'false'),
         ('table_lock_owner_id', 'int', 'true'),
+        ('data_version', 'uint', 'true'),
     ],
 )
-def_table_schema(**all_transfer_task_def)
 
-def_table_schema(**gen_history_table_def_of_task(424, all_transfer_task_def))
+def_table_schema(
+    owner = 'wangzhennan.wzn',
+    table_name    = '__all_transfer_task_history',
+    table_id = '424',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('task_id', 'int'),
+    ],
+
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('src_ls', 'int', 'false'),
+        ('dest_ls', 'int', 'false'),
+        ('part_list', 'longtext', 'true'),
+        ('part_count', 'int', 'true'),
+        ('not_exist_part_list', 'longtext', 'true'),
+        ('lock_conflict_part_list', 'longtext', 'true'),
+        ('table_lock_tablet_list', 'longtext', 'true'),
+        ('tablet_list', 'longtext', 'true'),
+        ('tablet_count', 'int', 'true'),
+        ('start_scn', 'uint', 'true'),
+        ('finish_scn', 'uint', 'true'),
+        ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+        ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+        ('result', 'int', 'true'),
+        ('comment', 'longtext', 'true'),
+        ('balance_task_id', 'int', 'false'),
+        ('table_lock_owner_id', 'int', 'true'),
+        ('create_time', 'timestamp', 'false'),
+        ('finish_time', 'timestamp', 'false'),
+        ('data_version', 'uint', 'true'),
+    ],
+)
 
 all_balance_job_def= dict(
   owner = 'msy164651',
