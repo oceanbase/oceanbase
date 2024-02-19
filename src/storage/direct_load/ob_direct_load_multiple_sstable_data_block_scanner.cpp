@@ -63,7 +63,6 @@ int ObDirectLoadMultipleSSTableDataBlockScanner::init(
                                         table_data_desc.compressor_type_))) {
       LOG_WARN("fail to index block reader", KR(ret));
     } else if (OB_FAIL(data_block_reader.init(table_data_desc.sstable_data_block_size_,
-                                              sstable->get_meta().max_data_block_size_,
                                               table_data_desc.compressor_type_))) {
       LOG_WARN("fail to data block reader", KR(ret));
     } else if (OB_FAIL(locate_left_border(index_block_reader, data_block_reader))) {
