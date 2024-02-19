@@ -89,7 +89,6 @@ private:
                                   common::ObIArray<AccessPath*> &paths,
                                   const bool is_inner_path,
                                   const ObIArray<ObRawExpr*> &filter_exprs,
-                                  ObBaseTableEstMethod &valid_methods,
                                   ObBaseTableEstMethod &method);
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
