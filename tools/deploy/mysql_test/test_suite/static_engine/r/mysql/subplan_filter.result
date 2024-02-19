@@ -394,23 +394,23 @@ select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
 +---------------------------------------+---------------------------+
 EXPLAIN select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
 Query Plan
-=================================================
-|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SUBPLAN FILTER   |    |3       |65          |
-|1 |├─TABLE FULL SCAN|t1  |3       |4           |
-|2 |└─TABLE GET      |t2  |1       |21          |
-=================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |3       |65          |
+|1 |├─TABLE FULL SCAN      |t1  |3       |4           |
+|2 |└─DISTRIBUTED TABLE GET|t2  |1       |21          |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([cast(t1.c1, DECIMAL(11, 0)) + subquery(1)]), filter(nil), rowset=16
-      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= :0]), rowset=16
-      access([t2.c3], [t2.c2]), partitions(p0)
+      access([GROUP_ID], [t2.c3], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])
@@ -424,23 +424,23 @@ select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
 +-----------------------------------------------------------+
 EXPLAIN select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
 Query Plan
-=================================================
-|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SUBPLAN FILTER   |    |1       |65          |
-|1 |├─TABLE FULL SCAN|t1  |3       |5           |
-|2 |└─TABLE GET      |t2  |1       |21          |
-=================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |65          |
+|1 |├─TABLE FULL SCAN      |t1  |3       |5           |
+|2 |└─DISTRIBUTED TABLE GET|t2  |1       |21          |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([cast(t1.c1, DECIMAL(11, 0)) + subquery(1) < cast(10, DECIMAL(2, 0))]), rowset=16
-      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= :0]), rowset=16
-      access([t2.c3], [t2.c2]), partitions(p0)
+      access([GROUP_ID], [t2.c3], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])
@@ -675,23 +675,23 @@ select c2 > (select c1 from t2 where c3 is not null) from t1;
 +-----------------------------------------------+
 EXPLAIN select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
 Query Plan
-=================================================
-|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SUBPLAN FILTER   |    |1       |65          |
-|1 |├─TABLE FULL SCAN|t1  |3       |5           |
-|2 |└─TABLE GET      |t2  |1       |21          |
-=================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |65          |
+|1 |├─TABLE FULL SCAN      |t1  |3       |5           |
+|2 |└─DISTRIBUTED TABLE GET|t2  |1       |21          |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([t1.c2 + cast(subquery(1), DECIMAL(11, 0)) < cast(10, DECIMAL(2, 0))]), rowset=16
-      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   1 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   2 - output([t2.c1]), filter(nil), rowset=16
-      access([t2.c1]), partitions(p0)
+      access([GROUP_ID], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([cast(t2.c1, DECIMAL(11, 0)) = :0])

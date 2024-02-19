@@ -11273,17 +11273,23 @@ int ObLogPlan::get_source_table_info(ObLogicalOperator &top,
   return ret;
 }
 
-
 int ObLogPlan::collect_subq_pushdown_filter_table_relids(const ObIArray<ObRawExpr*> &conditions)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
+  ObSEArray<ObColumnRefRawExpr*, 4> pushdown_col_exprs;
+  ObSEArray<ObColumnRefRawExpr*, 4> all_pushdown_col_exprs;
+  ObSEArray<uint64_t, 4> table_ids;
+  bool contribute_query_range = false;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid stmt", K(ret));
   } else {
     for (int64_t i = 0; i < conditions.count(); ++i) {
       ObRawExpr *expr = conditions.at(i);
+      column_exprs.reuse();
+      table_ids.reuse();
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid expr", K(expr));
@@ -11294,40 +11300,53 @@ int ObLogPlan::collect_subq_pushdown_filter_table_relids(const ObIArray<ObRawExp
                  expr->has_flag(CNT_ROWNUM) ||
                  T_OP_NE == expr->get_expr_type()) {
         // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
       } else {
-        for (int64_t j = 0; j < expr->get_children_count(); ++j) {
-          ObRawExpr *child = expr->get_param_expr(j);
-          if (OB_ISNULL(child)) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+          ObColumnRefRawExpr *col_expr = NULL;
+          if (OB_ISNULL(column_exprs.at(j)) ||
+              !column_exprs.at(j)->is_column_ref_expr()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid child", K(child));
-          } else if (!child->is_column_ref_expr()) {
-            // do nothing
-          } else {
-            ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(child);
-            ObSEArray<ObColumnRefRawExpr*, 4> pushdown_col_exprs;
-            bool contribute_query_range = false;
-            if (OB_FAIL(ObTransformUtils::get_simple_filter_column(stmt,
-                                                                   expr,
-                                                                   col_expr->get_table_id(),
-                                                                   pushdown_col_exprs))) {
-              LOG_WARN("failed to get simple filter column", K(ret));
-            } else if (!ObOptimizerUtil::find_item(pushdown_col_exprs, col_expr)) {
-              // do nothing
-            } else if (OB_FAIL(ObTransformUtils::is_match_index(get_optimizer_context().get_sql_schema_guard(),
-                                                                stmt,
-                                                                col_expr,
-                                                                contribute_query_range))) {
-              LOG_WARN("failed to check is match index", K(ret));
-            } else if (!contribute_query_range) {
-              // do nothing
-            } else {
-              int64_t table_index = stmt->get_table_bit_index(col_expr->get_table_id());
-              if (OB_FAIL(subq_pushdown_filter_table_set_.add_member(table_index))) {
-                LOG_WARN("failed to add members", K(ret));
-              }
-            }
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(j)))) {
+          } else if (OB_FAIL(add_var_to_array_no_dup(table_ids, col_expr->get_table_id()))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
           }
         }
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_ids.count(); ++j) {
+          pushdown_col_exprs.reuse();
+          if (OB_FAIL(ObTransformUtils::get_simple_filter_column(stmt,
+                                                                 expr,
+                                                                 table_ids.at(j),
+                                                                 pushdown_col_exprs))) {
+            LOG_WARN("failed to get simple filter column", K(ret));
+          } else if (OB_FAIL(append_array_no_dup(all_pushdown_col_exprs,
+                                                 pushdown_col_exprs))) {
+            LOG_WARN("failed to append array no dup", K(ret));
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_pushdown_col_exprs.count(); ++i) {
+      ObColumnRefRawExpr *col_expr = all_pushdown_col_exprs.at(i);
+      int64_t table_index = OB_INVALID_ID;
+      contribute_query_range = false;
+      if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FALSE_IT(table_index = stmt->get_table_bit_index(col_expr->get_table_id()))) {
+      } else if (subq_pushdown_filter_table_set_.has_member(table_index)) {
+        // do nothing
+      } else if (OB_FAIL(ObTransformUtils::is_match_index(get_optimizer_context().get_sql_schema_guard(),
+                                                          stmt,
+                                                          col_expr,
+                                                          contribute_query_range))) {
+        LOG_WARN("failed to check is match index", K(ret));
+      } else if (!contribute_query_range) {
+        // do nothing
+      } else if (OB_FAIL(subq_pushdown_filter_table_set_.add_member(table_index))) {
+        LOG_WARN("failed to add members", K(ret));
       }
     }
   }
