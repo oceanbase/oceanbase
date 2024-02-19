@@ -298,6 +298,11 @@ int ObMPStmtPrexecute::before_process()
             if (OB_FAIL(request_params(session, pos, ps_stmt_checksum, *allocator_, params_num_))) {
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
+              const bool enable_sql_audit =
+              GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+              if (!is_pl_stmt(stmt_type_) && enable_sql_audit) {
+                OZ (store_params_value_to_str(*allocator_, *session));
+              }
               PS_DEFENSE_CHECK(4) // exec_mode
               {
                 ObMySQLUtil::get_uint4(pos, exec_mode_);
