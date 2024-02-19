@@ -11705,7 +11705,9 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
     ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
-    if (coll_type->get_element_type().is_obj_type()) {
+    OZ (formalize_expr(*child));
+    if (OB_FAIL(ret)) {
+    } else if (coll_type->get_element_type().is_obj_type()) {
       const ObDataType *data_type = coll_type->get_element_type().get_data_type();
       CK (OB_NOT_NULL(data_type));
       OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
