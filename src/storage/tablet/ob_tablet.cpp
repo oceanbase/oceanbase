@@ -3811,12 +3811,12 @@ int ObTablet::build_migration_tablet_param(
     if (!is_empty_shell()) {
       if (OB_FAIL(load_storage_schema(arena_allocator, storage_schema))) {
         LOG_WARN("fail to load storage schema", K(ret));
-      } else if (OB_FAIL(get_medium_info_list(mig_tablet_param.allocator_, mig_tablet_param.medium_info_list_))) {
-        LOG_WARN("failed to get medium info list", K(ret));
       } else if (OB_FAIL(mig_tablet_param.storage_schema_.init(mig_tablet_param.allocator_, *storage_schema))) {
         LOG_WARN("failed to copy storage schema", K(ret), KPC(storage_schema));
       } else if (OB_FAIL(mig_tablet_param.mds_data_.init(mig_tablet_param.allocator_, mds_data_))) {
         LOG_WARN("failed to assign mds data", K(ret), K_(mds_data));
+      } else {
+        mig_tablet_param.total_medium_info_size_ = mig_tablet_param.mds_data_.medium_info_list_.medium_info_list_.medium_info_list_.count();
       }
     } else {
       const ObTabletCreateDeleteMdsUserData &user_data = mds_data_.tablet_status_cache_;
@@ -3829,6 +3829,7 @@ int ObTablet::build_migration_tablet_param(
       } else if (OB_FAIL(user_data.serialize(buffer, serialize_size, pos))) {
         LOG_WARN("user data serialize failed", K(ret), K(user_data));
       } else {
+        mig_tablet_param.total_medium_info_size_ = 0;
         mig_tablet_param.mds_data_.tablet_status_committed_kv_.v_.user_data_.assign_ptr(buffer, serialize_size);
       }
     }
@@ -4906,8 +4907,6 @@ int ObTablet::build_transfer_tablet_param(
     LOG_WARN("failed to get lastest tablet status", K(ret), KPC(this), K(tablet_meta_));
   } else if (OB_FAIL(get_storage_schema_for_transfer_in(mig_tablet_param.allocator_, mig_tablet_param.storage_schema_))) {
     LOG_WARN("failed to get storage schema", K(ret), KPC(this));
-  } else if (OB_FAIL(get_medium_info_list(mig_tablet_param.allocator_, mig_tablet_param.medium_info_list_))) {
-    LOG_WARN("failed to get_medium_info_list", K(ret), KPC(this));
   } else {
     //TODO(lingchuan) need split it into slog, mds data, ddl data
     mig_tablet_param.ls_id_ = dest_ls_id;
@@ -4956,6 +4955,7 @@ int ObTablet::build_transfer_tablet_param(
     } else if (OB_FAIL(mig_tablet_param.mds_data_.init(mig_tablet_param.allocator_, new_mds_data))) {
       LOG_WARN("failed to assign mds data", K(ret), K(new_mds_data), K(mds_data_), K(mds_table_data));
     } else {
+      mig_tablet_param.total_medium_info_size_ = mig_tablet_param.mds_data_.medium_info_list_.medium_info_list_.medium_info_list_.count();
       LOG_INFO("succeed build_transfer_tablet_param_mds", K(user_data), K(max_data_scn),
           K(new_mds_data), K(mds_table_data), K(mds_data_), K(mig_tablet_param), KPC(this));
     }

@@ -2522,6 +2522,21 @@ int ObCopyLSViewInfoObReader::get_next_tablet_info(
   } else if (!tablet_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet meta", K(ret), K(tablet_info));
+  } else if (0 < tablet_info.param_.total_medium_info_size_
+             && tablet_info.param_.mds_data_.medium_info_list_.medium_info_list_.medium_info_list_.empty()) {
+    LOG_INFO("large tablet meta with too many medium info, need to reassemble the medium info list.", K(tablet_info));
+    const int64_t total_medium_info_size = tablet_info.param_.total_medium_info_size_;
+    ObTabletDumpedMediumInfo &dumped_medium_info = tablet_info.param_.mds_data_.medium_info_list_.medium_info_list_;
+    ObArenaAllocator allocator;
+    compaction::ObMediumCompactionInfo one_medium_info;
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_medium_info_size; i++) {
+      one_medium_info.reset();
+      if (OB_FAIL(rpc_reader_.fetch_and_decode(allocator, one_medium_info))) {
+        LOG_WARN("fail to fetch and decode one medium info", K(ret), K(tablet_info));
+      } else if (OB_FAIL(dumped_medium_info.append(one_medium_info))) {
+        LOG_WARN("fail to append one medium info", K(ret), K(tablet_info), K(dumped_medium_info), K(one_medium_info));
+      }
+    }
   }
 
   return ret;

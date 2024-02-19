@@ -251,9 +251,10 @@ public:
                K_(mds_checkpoint_scn),
                K_(mds_data),
                K_(transfer_info),
-               K_(create_schema_version));
+               K_(create_schema_version),
+               K_(total_medium_info_size));
 private:
-  int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_latest(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
 
   // magic_number_ is added to support upgrade from old format(without version and length compatibility)
@@ -261,6 +262,8 @@ private:
   const static int64_t MAGIC_NUM = -20230111;
   const static int64_t PARAM_VERSION = 1;
   const static int64_t PARAM_VERSION_V2 = 2;
+  // For new member total_medium_info_size_
+  const static int64_t PARAM_VERSION_V3 = 3;
 
 public:
   int64_t magic_number_;
@@ -294,6 +297,7 @@ public:
   ObTabletFullMemoryMdsData mds_data_;
   ObTabletTransferInfo transfer_info_;
   int64_t create_schema_version_;
+  int64_t total_medium_info_size_;// the medium info number in mds_data_, for migration.
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

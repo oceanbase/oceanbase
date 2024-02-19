@@ -836,7 +836,7 @@ SCN ObTabletMeta::get_max_replayed_scn() const
 
 ObMigrationTabletParam::ObMigrationTabletParam()
   : magic_number_(MAGIC_NUM),
-    version_(PARAM_VERSION_V2),
+    version_(PARAM_VERSION_V3),
     is_empty_shell_(false),
     ls_id_(),
     tablet_id_(),
@@ -865,6 +865,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     mds_data_(),
     transfer_info_(),
     create_schema_version_(0),
+    total_medium_info_size_(0),
     allocator_()
 {
 }
@@ -875,7 +876,7 @@ bool ObMigrationTabletParam::is_valid() const
 
   if (bool_ret) {
     bool_ret = MAGIC_NUM == magic_number_
-      && PARAM_VERSION_V2 == version_
+      && PARAM_VERSION_V3 == version_
       && ls_id_.is_valid()
       && tablet_id_.is_valid()
       && data_tablet_id_.is_valid()
@@ -1012,6 +1013,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize transfer info", K(ret), K(len), K(new_pos), K_(transfer_info));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_schema_version_))) {
     LOG_WARN("failed to serialize create schema version", K(ret), K(len), K(new_pos), K_(create_schema_version));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, total_medium_info_size_))) {
+    LOG_WARN("failed to serialize total medium info size", K(ret), K(len), K(new_pos), K_(total_medium_info_size));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -1022,19 +1025,21 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
   return ret;
 }
 
-int ObMigrationTabletParam::deserialize_v2(const char *buf, const int64_t len, int64_t &pos)
+int ObMigrationTabletParam::deserialize_latest(const char *buf, const int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
-  int64_t length = 0;
+  int64_t total_length = 0; // total serialize size
+  int64_t length = 0; // total serialize size expect for the first 2 fields.
 
-  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &length))) {
+  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &total_length))) {
     LOG_WARN("failed to deserialize length", K(ret), K(len), K(new_pos));
-  } else if (OB_UNLIKELY(length - 24 > len - pos)) {
+  } else if (OB_UNLIKELY(total_length - 24 > len - new_pos)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
+    LOG_WARN("buffer's length is not enough", K(ret), K(total_length), K(len - new_pos));
+  } else if (FALSE_IT(length = total_length - 16)) {
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &is_empty_shell_))) {
     LOG_WARN("failed to serialize is empty shell", K(ret), K(len), K(new_pos), K(is_empty_shell_));
   } else if (new_pos - pos < length && OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
@@ -1091,10 +1096,16 @@ int ObMigrationTabletParam::deserialize_v2(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize transfer info", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &create_schema_version_))) {
     LOG_WARN("failed to deserialize create schema version", K(ret), K(len));
-  } else if (OB_UNLIKELY(length - 16 != new_pos - pos)) {
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &total_medium_info_size_))) {
+    LOG_WARN("failed to deserialize total medium info size", K(ret), K(len));
+  } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
   } else {
+    if (PARAM_VERSION_V2 == version_) {
+      total_medium_info_size_ = mds_data_.medium_info_list_.medium_info_list_.medium_info_list_.count();
+      version_ = PARAM_VERSION_V3;
+    }
     compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
     pos = new_pos;
   }
@@ -1186,7 +1197,8 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
   } else {
     is_empty_shell_ = false;
     compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
-    version_ = PARAM_VERSION_V2;
+    total_medium_info_size_ = mds_data_.medium_info_list_.medium_info_list_.medium_info_list_.count();
+    version_ = PARAM_VERSION_V3;
     pos = new_pos;
   }
 
@@ -1210,11 +1222,12 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
   } else if (MAGIC_NUM == magic_number_) {
     if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &version_))) {
       LOG_WARN("failed to deserialize version", K(ret), K(len), K(new_pos));
-    } else if (PARAM_VERSION != version_ && PARAM_VERSION_V2 != version_) {
+    } else if (PARAM_VERSION != version_ && PARAM_VERSION_V2 != version_ && PARAM_VERSION_V3 != version_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param version_", K(ret), K(version_));
-    } else if (PARAM_VERSION_V2 == version_ && OB_FAIL(deserialize_v2(buf, len, new_pos))) {
-      LOG_WARN("failed to deserialize v2", K(ret), K(len), K(new_pos));
+    } else if ((PARAM_VERSION_V3 == version_ || PARAM_VERSION_V2 == version_)
+                && OB_FAIL(deserialize_latest(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize lastest", K(ret), K(len), K(new_pos));
     } else if (PARAM_VERSION == version_ && OB_FAIL(deserialize_v1(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize v1", K(ret), K(len), K(new_pos));
     } else {
@@ -1260,6 +1273,7 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
   size += mds_data_.get_serialize_size();
   size += transfer_info_.get_serialize_size();
   size += serialization::encoded_length_i64(create_schema_version_);
+  size += serialization::encoded_length_i64(total_medium_info_size_);
   return size;
 }
 
@@ -1293,6 +1307,7 @@ void ObMigrationTabletParam::reset()
   mds_data_.reset();
   transfer_info_.reset();
   create_schema_version_ = 0;
+  total_medium_info_size_ = 0;
   allocator_.reset();
 }
 
@@ -1333,6 +1348,7 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ddl_commit_scn_ = param.ddl_commit_scn_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
+    total_medium_info_size_ = param.total_medium_info_size_;
 
     if (OB_FAIL(mds_data_.assign(param.mds_data_, allocator_))) {
       LOG_WARN("failed to assign mds data", K(ret), K(param));

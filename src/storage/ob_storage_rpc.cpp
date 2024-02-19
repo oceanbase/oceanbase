@@ -286,6 +286,7 @@ int ObCopyTabletInfo::assign(const ObCopyTabletInfo &info)
   } else if (OB_FAIL(param_.assign(info.param_))) {
     LOG_WARN("failed to assign copy info param", K(ret), K(info));
   } else {
+    tablet_id_ = info.tablet_id_;
     status_ = info.status_;
     data_size_ = info.data_size_;
     version_ = info.version_;
@@ -3014,7 +3015,7 @@ int ObStorageFetchLSViewP::process()
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(fill_data(tablet_info))) {
+      } else if (OB_FAIL(fill_copy_tablet_info(tablet_info))) {
         STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tablet_info));
       } else {
         ++filled_tablet_count;
@@ -3062,6 +3063,51 @@ int ObStorageFetchLSViewP::process()
   }
   return ret;
 }
+
+int ObStorageFetchLSViewP::fill_copy_tablet_info(const obrpc::ObCopyTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t serialize_size = tablet_info.get_serialize_size();
+  bool solo_send_medium_info = false;
+#ifdef ERRSIM
+  solo_send_medium_info = GCONF.errsim_migration_solo_send_medium_info;
+#endif
+  if (serialize_size <= this->result_.get_capacity() && !solo_send_medium_info) {
+    // The buffer can hold at least one tablet.
+    if (OB_FAIL(fill_data(tablet_info))) {
+      STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tablet_info));
+    }
+  } else {
+    obrpc::ObCopyTabletInfo tmp_tablet_info;
+    if (OB_FAIL(tmp_tablet_info.assign(tablet_info))) {
+      STORAGE_LOG(WARN, "failed to assign tablet info", K(ret), K(tablet_info));
+    } else {
+      const ObTabletDumpedMediumInfo &dumped_medium_info = tablet_info.param_.mds_data_.medium_info_list_.medium_info_list_;
+      ObTabletDumpedMediumInfo &tmp_dumped_medium_info = tmp_tablet_info.param_.mds_data_.medium_info_list_.medium_info_list_;
+      // remove the medium info list.
+      tmp_dumped_medium_info.reset();
+      const int64_t medium_info_serialize_size = dumped_medium_info.get_serialize_size();
+      const int64_t medium_info_cnt = dumped_medium_info.medium_info_list_.count();
+      STORAGE_LOG(INFO, "large tablet meta with too many medium info", K(serialize_size), K(medium_info_serialize_size), K(medium_info_cnt), K(tmp_tablet_info));
+
+      // send tablet without medium info list.
+      if (OB_FAIL(fill_data(tmp_tablet_info))) {
+        STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tmp_tablet_info));
+      }
+
+      // follow by N medium infos.
+      for (int64_t i = 0; OB_SUCC(ret) && i < medium_info_cnt; ++i) {
+        const compaction::ObMediumCompactionInfo *medium_info = dumped_medium_info.medium_info_list_.at(i);
+        if (OB_FAIL(fill_data(*medium_info))) {
+          STORAGE_LOG(WARN, "failed to fill medium info", K(ret), KPC(medium_info));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 
 ObStorageLockConfigChangeP::ObStorageLockConfigChangeP(
     common::ObInOutBandwidthThrottle *bandwidth_throttle)

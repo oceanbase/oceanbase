@@ -918,6 +918,8 @@ TEST_F(TestLSTabletService, test_migrate_param)
   ret = old_tablet_handle.get_obj()->build_migration_tablet_param(tablet_meta);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  tablet_meta.total_medium_info_size_ = 100;
+
   int64_t serialize_size = tablet_meta.get_serialize_size();
   char *buf = static_cast<char*>(allocator.alloc(serialize_size));
   int64_t pos = 0;
@@ -932,6 +934,7 @@ TEST_F(TestLSTabletService, test_migrate_param)
   ASSERT_TRUE(de_tablet_meta.storage_schema_.is_valid());
   ASSERT_TRUE(de_tablet_meta.is_valid());
   ASSERT_FALSE(de_tablet_meta.is_empty_shell());
+  ASSERT_EQ(de_tablet_meta.total_medium_info_size_, 100);
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, de_tablet_meta.serialize(buf, serialize_size, pos));
 
