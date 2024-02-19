@@ -3515,5 +3515,22 @@
     "info_cn": "在向量化引擎中, 开启/关闭使用多种列格式描述功能",
     "background_cn": "",
     "ref_url": ""
+  },
+  "innodb_stats_persistent": {
+    "id": 10163,
+    "name": "innodb_stats_persistent",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "enum",
+    "info": "Specifies whether InnoDB index statistics are persisted to disk.",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "ON"
+    ],
+    "publish_version": "430",
+    "info_cn": "指定InnoDB索引统计信息是否持久化到磁盘",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

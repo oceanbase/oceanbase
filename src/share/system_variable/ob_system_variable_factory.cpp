@@ -126,6 +126,11 @@ const char *ObSysVarParallelDegreePolicy::PARALLEL_DEGREE_POLICY_NAMES[] = {
   "AUTO",
   0
 };
+const char *ObSysVarInnodbStatsPersistent::INNODB_STATS_PERSISTENT_NAMES[] = {
+  "OFF",
+  "ON",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -209,6 +214,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "hostname",
   "identity",
   "init_connect",
+  "innodb_stats_persistent",
   "innodb_strict_mode",
   "interactive_timeout",
   "is_result_accurate",
@@ -459,6 +465,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_HOSTNAME,
   SYS_VAR_IDENTITY,
   SYS_VAR_INIT_CONNECT,
+  SYS_VAR_INNODB_STATS_PERSISTENT,
   SYS_VAR_INNODB_STRICT_MODE,
   SYS_VAR_INTERACTIVE_TIMEOUT,
   SYS_VAR_IS_RESULT_ACCURATE,
@@ -874,7 +881,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_enable_storage_cardinality_estimation",
   "lc_time_names",
   "activate_all_roles_on_login",
-  "_enable_rich_vector_format"
+  "_enable_rich_vector_format",
+  "innodb_stats_persistent"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1290,6 +1298,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarLcTimeNames)
         + sizeof(ObSysVarActivateAllRolesOnLogin)
         + sizeof(ObSysVarEnableRichVectorFormat)
+        + sizeof(ObSysVarInnodbStatsPersistent)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3519,6 +3528,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_RICH_VECTOR_FORMAT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableRichVectorFormat));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsPersistent())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsPersistent", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_STATS_PERSISTENT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbStatsPersistent));
       }
     }
 
@@ -6245,6 +6263,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableRichVectorFormat())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableRichVectorFormat", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_STATS_PERSISTENT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbStatsPersistent)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbStatsPersistent)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbStatsPersistent())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbStatsPersistent", K(ret));
       }
       break;
     }

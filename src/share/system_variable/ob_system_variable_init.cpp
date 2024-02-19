@@ -3482,13 +3482,27 @@ static struct VarsInit{
     ObSysVars[246].alias_ = "OB_SV__ENABLE_RICH_VECTOR_FORMAT" ;
     }();
 
+    [&] (){
+      ObSysVars[247].default_value_ = "1" ;
+      ObSysVars[247].info_ = "Specifies whether InnoDB index statistics are persisted to disk." ;
+      ObSysVars[247].name_ = "innodb_stats_persistent" ;
+      ObSysVars[247].data_type_ = ObIntType ;
+      ObSysVars[247].enum_names_ = "[u'OFF', u'ON']" ;
+      ObSysVars[247].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[247].id_ = SYS_VAR_INNODB_STATS_PERSISTENT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STATS_PERSISTENT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STATS_PERSISTENT] = 247 ;
+      ObSysVars[247].base_value_ = "1" ;
+    ObSysVars[247].alias_ = "OB_SV_INNODB_STATS_PERSISTENT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 247;
+static int64_t var_amount = 248;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
