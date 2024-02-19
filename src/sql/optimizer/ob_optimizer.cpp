@@ -420,6 +420,9 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
              static_cast< const ObInsertStmt &>(pdml_stmt).is_insert_up()) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_UP);
+  } else if (pdml_stmt.is_pdml_disabled()) {
+    is_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_TRANSFORMATIONS);
   } else if (ctx_.has_dblink()) {
     is_use_pdml = false;
   } else if (ctx_.contain_user_nested_sql()) {
