@@ -145,15 +145,17 @@ int ObRawExprCanonicalizerImpl::remove_duplicate_conds(ObRawExpr *&expr)
             if (param_conds.at(i)->same_as(*param_conds.at(j), &cmp_ctx)) {
               if (OB_FAIL(param_conds.remove(i))) {
                 LOG_WARN("failed to remove", K(ret));
-              } else if (cmp_ctx.equal_pairs_.empty()) {
-                /* do nothing */
-              } else if (OB_FAIL(append(ctx_.stmt_->get_query_ctx()->all_equal_param_constraints_,
-                                        cmp_ctx.equal_pairs_))) {
-                LOG_WARN("failed to append expr", K(ret));
-              } else {
-                cmp_ctx.equal_pairs_.reset();
+              } else if (!cmp_ctx.equal_pairs_.empty()) {
+                if (OB_FAIL(append(ctx_.stmt_->get_query_ctx()->all_equal_param_constraints_,
+                                   cmp_ctx.equal_pairs_))) {
+                  LOG_WARN("failed to append expr", K(ret));
+                } else {
+                  cmp_ctx.equal_pairs_.reset();
+                }
               }
               break;
+            } else if (!cmp_ctx.equal_pairs_.empty()) {
+              cmp_ctx.equal_pairs_.reset();
             }
           }
         }

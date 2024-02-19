@@ -9331,9 +9331,9 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr *> &subquer
                                              tmp,
                                              for_on_condition))) {
       LOG_WARN("failed to extract onetime exprs", K(ret));
-    } else if (OB_FAIL(append(onetime_query_refs, tmp))) {
+    } else if (OB_FAIL(append_array_no_dup(onetime_query_refs, tmp))) {
       LOG_WARN("failed to append onetime query refs", K(ret));
-    } else if (OB_FAIL(append(candi_query_refs, tmp))) {
+    } else if (OB_FAIL(append_array_no_dup(candi_query_refs, tmp))) {
       LOG_WARN("failed to append query refs", K(ret));
     }
   }
