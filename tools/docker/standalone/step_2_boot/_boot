@@ -3,6 +3,7 @@ CWD=$(cd `dirname $0`;pwd)
 cd "${CWD}"
 source _env
 export HOST_IP_MODE=1
+export ENV_TELEMETRY_REPORTER="docker_${OB_CLUSTER_NAME}"
 
 STAMP="$(date +%s)"
 STEP=1

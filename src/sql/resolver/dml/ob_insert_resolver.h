@@ -60,7 +60,6 @@ protected:
   virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref) override;
   virtual int resolve_order_item(const ParseNode &sort_node, OrderItem &order_item) override;
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr) override;
-  int resolve_insert_values(const ParseNode *node, ObInsertTableInfo& table_info, ObIArray<uint64_t>& label_se_columns);
 private:
   int resolve_insert_clause(const ParseNode &node);
   int resolve_insert_field(const ParseNode &insert_into, TableItem*& table_item);

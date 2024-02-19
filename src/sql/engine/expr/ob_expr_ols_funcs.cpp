@@ -1296,7 +1296,7 @@ int ObExprOLSSessionLabel::eval_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
       } else if (OB_FAIL(session->replace_new_session_label(policy_id, session_label))) {
         LOG_WARN("fail to replace new session label", K(ret));
       }
-      LOG_DEBUG("load default session label", K(ret));
+      LOG_DEBUG("load default session label", K(ret), K(session_label));
     }
   }
 
@@ -1592,7 +1592,7 @@ int ObExprOLSLabelCheck::eval_label_check(const ObExpr &expr, ObEvalCtx &ctx, Ob
                                                                        ols_label_schema))) {
         LOG_WARN("get label schema failed", K(ret));
       } else if (OB_FAIL(LABEL_SCHEMA_CHECKER.validate(ols_label_schema))) {
-        LOG_WARN("label schema not exist", K(ret));
+        LOG_WARN("label schema not exist", K(ret), K(label_tag_value), K(tenant_id));
       } else if (ols_label_schema->get_flag() != 1) {
         ret = OB_ERR_POLICY_WITH_CHECK_OPTION_VIOLATION;
         LOG_WARN("data label is false for write dml", K(ret));

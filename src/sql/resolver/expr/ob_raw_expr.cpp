@@ -793,6 +793,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
+      || T_FUN_LABEL_SE_SESSION_LABEL == type_
+      || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
      is_const_inherit = false;
@@ -836,6 +838,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_USERENV == type_
           || T_FUN_SYS_REGEXP_REPLACE == type_
           || T_FUN_GET_TEMP_TABLE_SESSID == type_
+          || T_FUN_LABEL_SE_SESSION_LABEL == type_
+          || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
           || T_FUN_SYS_USER_CAN_ACCESS_OBJ == type_) {
       is_non_pure = true;
     } else if (T_FUN_SYS_TO_DATE == type_ || T_FUN_SYS_TO_TIMESTAMP == type_ ||

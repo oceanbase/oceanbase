@@ -3268,7 +3268,8 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
 }
 
 int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
-                                            ObInsertTableInfo& table_info)
+                                            ObInsertTableInfo& table_info,
+                                            ObIArray<uint64_t> &label_se_columns)
 {
   int ret = OB_SUCCESS;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
@@ -3497,6 +3498,8 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(add_new_value_for_oracle_temp_table(value_row))) {
           LOG_WARN("failed to add __session_id value");
+        } else if (OB_FAIL(add_new_value_for_oracle_label_security_table(table_info, label_se_columns, value_row))) {
+          LOG_WARN("fail to add new value for oracle label security table", K(ret));
         } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
           LOG_WARN("failed to append value row", K(ret));
         }
