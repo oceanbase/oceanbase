@@ -236,6 +236,8 @@ int ObRpcProcessorBase::deserialize()
           if (OB_FAIL(common::serialization::decode(ez_buf, len, pos, *OBTRACE))) {
             RPC_OBRPC_LOG(WARN, "decode trace info failed", K(ret), K(len), K(pos));
           }
+        } else if (OBTRACE->is_inited()) {
+          OBTRACE->reset();
         }
       }
       if (OB_FAIL(ret)) {
