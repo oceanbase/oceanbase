@@ -5777,6 +5777,7 @@ int ObCreateRoutineArg::assign(const ObCreateRoutineArg &other)
     db_name_ = other.db_name_;
     is_or_replace_ = other.is_or_replace_;
     is_need_alter_ = other.is_need_alter_;
+    with_if_not_exist_ = other.with_if_not_exist_;
   }
   return ret;
 }
@@ -5784,7 +5785,7 @@ int ObCreateRoutineArg::assign(const ObCreateRoutineArg &other)
 OB_SERIALIZE_MEMBER((ObCreateRoutineArg, ObDDLArg),
                     routine_info_, db_name_,
                     is_or_replace_, is_need_alter_,
-                    error_info_, dependency_infos_);
+                    error_info_, dependency_infos_, with_if_not_exist_);
 
 bool ObDropRoutineArg::is_valid() const
 {
