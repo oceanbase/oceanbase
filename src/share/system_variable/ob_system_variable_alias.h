@@ -275,6 +275,9 @@ namespace share
   static const char* const OB_SV_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG = "innodb_trx_purge_view_update_only_debug";
   static const char* const OB_SV_INNODB_TRX_RSEG_N_SLOTS_DEBUG = "innodb_trx_rseg_n_slots_debug";
   static const char* const OB_SV_STORED_PROGRAM_CACHE = "stored_program_cache";
+  static const char* const OB_SV_COMPATIBILITY_CONTROL = "ob_compatibility_control";
+  static const char* const OB_SV_COMPATIBILITY_VERSION = "ob_compatibility_version";
+  static const char* const OB_SV_SECURITY_VERSION = "ob_security_version";
 
 }
 }

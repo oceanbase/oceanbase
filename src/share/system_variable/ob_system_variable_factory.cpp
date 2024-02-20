@@ -138,6 +138,11 @@ const char *ObSysVarInnodbCompressDebug::INNODB_COMPRESS_DEBUG_NAMES[] = {
   "LZ4HC",
   0
 };
+const char *ObSysVarObCompatibilityControl::OB_COMPATIBILITY_CONTROL_NAMES[] = {
+  "MYSQL5.7",
+  "MYSQL8.0",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -274,7 +279,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_bnl_join_cache_size",
   "ob_capability_flag",
   "ob_check_sys_variable",
+  "ob_compatibility_control",
   "ob_compatibility_mode",
+  "ob_compatibility_version",
   "ob_default_lob_inrow_threshold",
   "ob_early_lock_release",
   "ob_enable_aggregation_pushdown",
@@ -307,6 +314,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_reserved_meta_memory_percentage",
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
+  "ob_security_version",
   "ob_sql_audit_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
@@ -536,7 +544,9 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_BNL_JOIN_CACHE_SIZE,
   SYS_VAR_OB_CAPABILITY_FLAG,
   SYS_VAR_OB_CHECK_SYS_VARIABLE,
+  SYS_VAR_OB_COMPATIBILITY_CONTROL,
   SYS_VAR_OB_COMPATIBILITY_MODE,
+  SYS_VAR_OB_COMPATIBILITY_VERSION,
   SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD,
   SYS_VAR_OB_EARLY_LOCK_RELEASE,
   SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,
@@ -569,6 +579,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE,
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
+  SYS_VAR_OB_SECURITY_VERSION,
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
@@ -922,7 +933,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_saved_page_number_debug",
   "innodb_trx_purge_view_update_only_debug",
   "innodb_trx_rseg_n_slots_debug",
-  "stored_program_cache"
+  "stored_program_cache",
+  "ob_compatibility_control",
+  "ob_compatibility_version",
+  "ob_security_version"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1350,6 +1364,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbTrxPurgeViewUpdateOnlyDebug)
         + sizeof(ObSysVarInnodbTrxRsegNSlotsDebug)
         + sizeof(ObSysVarStoredProgramCache)
+        + sizeof(ObSysVarObCompatibilityControl)
+        + sizeof(ObSysVarObCompatibilityVersion)
+        + sizeof(ObSysVarObSecurityVersion)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3687,6 +3704,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_STORED_PROGRAM_CACHE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarStoredProgramCache));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObCompatibilityControl())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObCompatibilityControl", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_CONTROL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObCompatibilityControl));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObCompatibilityVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObCompatibilityVersion", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_VERSION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObCompatibilityVersion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSecurityVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSecurityVersion", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SECURITY_VERSION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObSecurityVersion));
       }
     }
 
@@ -6545,6 +6589,39 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarStoredProgramCache())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarStoredProgramCache", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_CONTROL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObCompatibilityControl)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObCompatibilityControl)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObCompatibilityControl())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObCompatibilityControl", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_VERSION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObCompatibilityVersion)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObCompatibilityVersion)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObCompatibilityVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObCompatibilityVersion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_SECURITY_VERSION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObSecurityVersion)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObSecurityVersion)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSecurityVersion())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSecurityVersion", K(ret));
       }
       break;
     }

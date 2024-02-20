@@ -3695,5 +3695,48 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_compatibility_control": {
+    "id": 10175,
+    "name": "ob_compatibility_control",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "enum_names": [
+      "MYSQL5.7",
+      "MYSQL8.0"
+    ],
+    "info": "specifies the compatible mode when the behaviors of MySQL 5.7 and MySQL 8.0 are different",
+    "flags": "GLOBAL | READONLY",
+    "publish_version": "423",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_compatibility_version": {
+    "id": 10176,
+    "name": "ob_compatibility_version",
+    "default_value": "17180000512",
+    "base_value": "17180000512",
+    "data_type": "uint",
+    "info": "specifies the compatible verision when the behaviors of different release version are different",
+    "flags": "GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "publish_version": "423",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_security_version": {
+    "id": 10177,
+    "name": "ob_security_version",
+    "default_value": "17180000512",
+    "base_value": "17180000512",
+    "data_type": "uint",
+    "info": "specifies the security verision when the behaviors of different release version are different",
+    "flags": "GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "publish_version": "423",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

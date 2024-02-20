@@ -3654,13 +3654,53 @@ static struct VarsInit{
     ObSysVars[258].alias_ = "OB_SV_STORED_PROGRAM_CACHE" ;
     }();
 
+    [&] (){
+      ObSysVars[259].default_value_ = "0" ;
+      ObSysVars[259].info_ = "specifies the compatible mode when the behaviors of MySQL 5.7 and MySQL 8.0 are different" ;
+      ObSysVars[259].name_ = "ob_compatibility_control" ;
+      ObSysVars[259].data_type_ = ObIntType ;
+      ObSysVars[259].enum_names_ = "[u'MYSQL5.7', u'MYSQL8.0']" ;
+      ObSysVars[259].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[259].id_ = SYS_VAR_OB_COMPATIBILITY_CONTROL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_CONTROL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_COMPATIBILITY_CONTROL] = 259 ;
+      ObSysVars[259].base_value_ = "0" ;
+    ObSysVars[259].alias_ = "OB_SV_COMPATIBILITY_CONTROL" ;
+    }();
+
+    [&] (){
+      ObSysVars[260].default_value_ = "17180000512" ;
+      ObSysVars[260].info_ = "specifies the compatible verision when the behaviors of different release version are different" ;
+      ObSysVars[260].name_ = "ob_compatibility_version" ;
+      ObSysVars[260].data_type_ = ObUInt64Type ;
+      ObSysVars[260].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[260].id_ = SYS_VAR_OB_COMPATIBILITY_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_COMPATIBILITY_VERSION] = 260 ;
+      ObSysVars[260].base_value_ = "17180000512" ;
+    ObSysVars[260].alias_ = "OB_SV_COMPATIBILITY_VERSION" ;
+    }();
+
+    [&] (){
+      ObSysVars[261].default_value_ = "17180000512" ;
+      ObSysVars[261].info_ = "specifies the security verision when the behaviors of different release version are different" ;
+      ObSysVars[261].name_ = "ob_security_version" ;
+      ObSysVars[261].data_type_ = ObUInt64Type ;
+      ObSysVars[261].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[261].id_ = SYS_VAR_OB_SECURITY_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SECURITY_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SECURITY_VERSION] = 261 ;
+      ObSysVars[261].base_value_ = "17180000512" ;
+    ObSysVars[261].alias_ = "OB_SV_SECURITY_VERSION" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 259;
+static int64_t var_amount = 262;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

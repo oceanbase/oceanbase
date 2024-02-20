@@ -13681,6 +13681,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12470: __all_virtual_ls_compaction_status
 # 12471: __all_virtual_tablet_compaction_status
 # 12472: __all_virtual_tablet_checksum_error_info
+# 12473: __all_virtual_compatibility_control
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -31742,6 +31743,7 @@ def_table_schema(
 # 21542: V$OB_SESSION_PS_INFO
 # 21543: GV$OB_TRACEPOINT_INFO
 # 21544: V$OB_TRACEPOINT_INFO
+# 21545: V$OB_COMPATIBILITY_CONTROL
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
