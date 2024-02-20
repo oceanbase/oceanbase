@@ -497,14 +497,16 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
   return ret;
 }
 
-int ObLSTabletService::do_remove_tablet(const ObTabletMapKey &key)
+int ObLSTabletService::do_remove_tablet(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("RmTabletLock", 1_s);
-  ObBucketHashWLockGuard lock_guard(bucket_lock_, key.tablet_id_.hash());
+  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
-  if (OB_FAIL(inner_remove_tablet(key.ls_id_, key.tablet_id_))) {
-    LOG_WARN("fail to remove tablet with lock", K(ret), K(key));
+  if (OB_FAIL(inner_remove_tablet(ls_id, tablet_id))) {
+    LOG_WARN("fail to remove tablet with lock", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }
@@ -2116,8 +2118,8 @@ int ObLSTabletService::create_transfer_in_tablet(
     LOG_WARN("old tablet is not empty shell", K(ret), K(old_tablet_hdl));
   } else if (FALSE_IT(cover_empty_shell = true)) {
   // Called in mds trans callback, slog won't be written.
-  } else if (OB_FAIL(do_remove_tablet(key))) {
-    LOG_WARN("failed to remove tablet", K(ret), K(key));
+  } else if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
+    LOG_WARN("failed to remove tablet", K(ret), K(ls_id), K(tablet_id));
   }
 
   time_guard.click("Prepare");
@@ -5941,7 +5943,7 @@ int ObLSTabletService::remove_ls_inner_tablet(
   } else if (OB_UNLIKELY(ls_id != ls_->get_ls_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls id is unexpected", K(ret), "arg_ls_id", ls_id, "ls_id", ls_->get_ls_id());
-  } else if (OB_FAIL(do_remove_tablet(ObTabletMapKey(ls_id, tablet_id)))) {
+  } else if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
     LOG_WARN("failed to remove tablet", K(ret), K(ls_id), K(tablet_id));
   }
 
@@ -6401,7 +6403,8 @@ int ObLSTabletService::check_parts_tx_state_in_transfer_for_4377_(transaction::O
 int ObLSTabletService::offline_gc_tablet_for_create_or_transfer_in_abort_()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("start offline_gc_tablet_for_create_or_transfer_in_abort", K(ls_->get_ls_id()));
+  const share::ObLSID &ls_id = ls_->get_ls_id();
+  LOG_INFO("start offline_gc_tablet_for_create_or_transfer_in_abort", K(ret), K(ls_id));
   ObTabletIDArray deleted_tablets;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   bool tablet_status_is_written = false;
@@ -6451,11 +6454,11 @@ int ObLSTabletService::offline_gc_tablet_for_create_or_transfer_in_abort_()
   // gc deleted_tablets
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablets.count(); ++i) {
-      const ObTabletID tablet_id = deleted_tablets.at(i);
-      if (OB_FAIL(inner_remove_tablet(ls_->get_ls_id(), tablet_id))) {
-        LOG_WARN("failed to remove tablet", K(ret), K(tablet_id));
+      const common::ObTabletID &tablet_id = deleted_tablets.at(i);
+      if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
+        LOG_WARN("failed to remove tablet", K(ret), K(ls_id), K(tablet_id));
       } else {
-        LOG_INFO("gc tablet finish", K(ret), K(tablet_id));
+        LOG_INFO("gc tablet finish", K(ret), K(ls_id), K(tablet_id));
       }
     }
   }
