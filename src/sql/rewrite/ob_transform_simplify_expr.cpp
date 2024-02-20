@@ -2473,7 +2473,9 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
     //do nothing
   } else if (OB_FAIL(push_not(conditions, push_not_happend))) {
     LOG_WARN("push not expr failed", K(ret));
-  } else if (OB_FAIL(remove_duplicate_exprs(conditions, remove_duplicate_happend))) {
+  } else if (OB_FAIL(remove_duplicate_exprs(stmt->get_query_ctx(),
+                                            conditions,
+                                            remove_duplicate_happend))) {
     LOG_WARN("remove_duplicate_exprs failed", K(ret));
   } else if (OB_FAIL(pull_similar_expr(stmt, conditions, pull_similar_happend))) {
     LOG_WARN("pull_similar_expr failed", K(ret));
@@ -2817,14 +2819,17 @@ int ObTransformSimplifyExpr::get_opposite_op(ObItemType type, ObItemType& opposi
   return ret;
 }
 
-int ObTransformSimplifyExpr::remove_duplicate_exprs(ObIArray<ObRawExpr*> &conditions, bool &trans_happened)
+int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
+                                                    ObIArray<ObRawExpr*> &conditions,
+                                                    bool &trans_happened)
 {
   /* basic case
   * A and A -> A
   * A or A -> A
   */
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); i++) {
+  const int64_t param_count = conditions.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; i++) {
     if (OB_ISNULL(conditions.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null pointer error", K(conditions.at(i)), K(ret));
@@ -2832,18 +2837,45 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObIArray<ObRawExpr*> &condit
       LOG_WARN("do_remove fail", K(conditions.at(i)), K(ret));
     }
   }
-  if (OB_SUCC(ret) && conditions.count() > 1) {
+  if (OB_SUCC(ret) && param_count > 1 && param_count <= 100) {
     //select * from t1 where c1 > 1 and c1 > 1
     //like above stmt, and expr in level 0 is process here
     ObSEArray<ObRawExpr *, 4> param_conds;
-    if (OB_FAIL(append_array_no_dup(param_conds, conditions))) {
-      LOG_WARN("fail to append_array_no_dup", K(ret));
-    } else if (param_conds.count() == conditions.count()) {
-      //do nothing
-    } else if (OB_FAIL(conditions.assign(param_conds))) {
-      LOG_WARN("assign array failed", K(ret));
+    ObQuestionmarkEqualCtx cmp_ctx(true);
+
+    if (OB_ISNULL(query_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null pointer error", K(ret));
+    } else if (OB_FAIL(param_conds.assign(conditions))) {
+      LOG_WARN("failed to assign array", K(ret));
     } else {
-      trans_happened = true;
+      for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
+          if (param_conds.at(i)->same_as(*param_conds.at(j), &cmp_ctx)) {
+            if (OB_FAIL(param_conds.remove(i))) {
+              LOG_WARN("failed to remove", K(ret));
+            } else if (!cmp_ctx.equal_pairs_.empty()) {
+              if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
+                                 cmp_ctx.equal_pairs_))) {
+                LOG_WARN("failed to append expr", K(ret));
+              } else {
+                cmp_ctx.equal_pairs_.reset();
+              }
+            }
+            break;
+          } else if (!cmp_ctx.equal_pairs_.empty()) {
+            cmp_ctx.equal_pairs_.reset();
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (param_conds.count() == conditions.count()) {
+        //do nothing
+      } else if (OB_FAIL(conditions.assign(param_conds))) {
+        LOG_WARN("assign array failed", K(ret));
+      } else {
+        trans_happened = true;
+      }
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
@@ -2902,11 +2934,11 @@ int ObTransformSimplifyExpr::pull_similar_expr(ObDMLStmt *stmt,
 {
   /*
   * example1:
-  * c1 and c5 or (c1 and c2) or (c1 and c3 and c4)
+  * (c1 and c5) or (c1 and c2) or (c1 and c3 and c4)
   * param_sets<<c1,c5>,<c1,c2>,<c1,c3,c4>>
   * intersection : <c1>
   * param_sets after remove intersection: <<c5>,<c2>,<c3,c4>>
-  * build new expr : c1 and (c5 or or c2 c3 and c4)
+  * build new expr : c1 and (c5 or c2 or (c3 and c4))
   *
   * example2:
   * c1  or (c1 and c2) or (c1 and c3 and c4)
@@ -3095,17 +3127,12 @@ int ObTransformSimplifyExpr::get_intersection(ObDMLStmt *stmt,
     } else if (OB_FAIL(params.assign(temp_result))) {
       LOG_WARN("fail to assign array", K(ret));
     }
-  }
-  if (OB_SUCC(ret) && is_valid) {
-    if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
-      context.equal_param_info_.reset();
-      ret = OB_SIZE_OVERFLOW == context.error_code_;
-      LOG_WARN("append equal param info failed", K(ret));
-    } else if (OB_FAIL(intersection.assign(params))) {
-      LOG_WARN("fail to assign array", K(ret));
-    } else {
+    if (OB_SUCC(ret)) {
       context.equal_param_info_.reset();
     }
+  }
+  if (OB_SUCC(ret) && is_valid && OB_FAIL(intersection.assign(params))) {
+    LOG_WARN("fail to assign array", K(ret));
   }
   return ret;
 }
@@ -3114,16 +3141,25 @@ int ObTransformSimplifyExpr::remove_intersect_item(ObIArray<ObSEArray<ObRawExpr 
                                                   ObIArray<ObRawExpr *> &intersection)
 {
   int ret = OB_SUCCESS;
+  ObStmtCompareContext context;
   for (int64_t i = 0; OB_SUCC(ret) && i < params_sets.count(); i++) {
     ObSEArray<ObRawExpr *, 4> temp_result;
     for (int64_t j = 0; OB_SUCC(ret) && j < params_sets.at(i).count(); j++) {
       bool find = false;
-      if (OB_FAIL(ObTransformUtils::find_expr(intersection, params_sets.at(i).at(j), find))) {
+      if (OB_FAIL(ObTransformUtils::find_expr(intersection, params_sets.at(i).at(j), find, &context))) {
         LOG_WARN("failed to find expr", K(ret));
       } else if (find) {
-        // do nothing
+        if (!context.equal_param_info_.empty()) {
+          if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
+            ret = OB_SIZE_OVERFLOW == context.error_code_;
+            LOG_WARN("append equal param info failed", K(ret));
+          }
+          context.equal_param_info_.reset();
+        }
       } else if (OB_FAIL(temp_result.push_back(params_sets.at(i).at(j)))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else if (!context.equal_param_info_.empty()) {
+        context.equal_param_info_.reset();
       }
     }
     if (OB_FAIL(ret)) {

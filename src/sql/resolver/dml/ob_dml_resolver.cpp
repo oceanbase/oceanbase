@@ -1555,7 +1555,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         !params_.is_resolve_table_function_expr_ &&
         !expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
       bool is_new = false;
-      if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new))) {
+      bool dummp_bool = false;
+      if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new, dummp_bool))) {
         LOG_WARN("failed to get shared instance", K(ret));
       }
     }
