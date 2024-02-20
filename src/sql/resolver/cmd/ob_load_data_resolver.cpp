@@ -515,7 +515,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
     LOG_WARN("invalid node", "child", file_name_node);
   } else {
     ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
-    if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
+    if (OB_UNLIKELY(file_name.empty())) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("file not exist", K(ret), K(file_name));
+    } else if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
       load_args.file_name_ = file_name;
       const char *p = nullptr;
       ObString sub_file_name;
