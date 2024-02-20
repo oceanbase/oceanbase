@@ -252,7 +252,7 @@ get_methods 0: 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,(MAX,MIN;MIN,MAX)"}]
+[{"range":"table_id:3003,({"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":0})"}]
 
 [26] (a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) > (?{2}, ?{0}, ?{0})
 query range need to deep copy
@@ -2044,7 +2044,7 @@ get_methods 0: 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,({"BIGINT":50},{"BIGINT":55},{"BIGINT":60};{"BIGINT":50},{"BIGINT":70},{"BIGINT":80})"}]
+[{"range":"table_id:3003,({"BIGINT":50},{"BIGINT":70},{"NULL":"NULL"};{"BIGINT":50},{"BIGINT":70},{"BIGINT":80})"}]
 
 [181] a=50 and b=70 and c<80 or c < 90 or b > 60 and (a, b, c) > (50, 55, 60) 
 query range need to deep copy

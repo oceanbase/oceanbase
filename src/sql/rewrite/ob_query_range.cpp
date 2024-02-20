@@ -369,6 +369,16 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
       state_ = NEED_PREPARE_PARAMS;
     } else {
       state_ = CAN_READ;
+      // If query range need final extract, final stage will perform FINAL_EXTRACT() to merge
+      // duplicate range. If final extract doesn't needed, or_range_graph is needed here to
+      // merge duplicate range.
+      ObKeyPartList or_array;
+      if (!or_array.add_last(temp_result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Add query graph to list failed", K(ret));
+      } else if (OB_FAIL(or_range_graph(or_array, params, temp_result, dtc_params))) {
+        LOG_WARN("Do OR of range graph failed", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2185,12 +2195,30 @@ int ObQueryRange::intersect_border_from(const ObKeyPart* l_key_part, const ObKey
       e_need_continue = true;
     } else if (l_key_part->has_intersect(r_key_part)) {
       // incase here is last
-      if (NULL == l_key_part->and_next_) {
-        start_border_type = left_is_equal ? OB_FROM_LEFT : OB_FROM_RIGHT;
+      if (l_key_part->is_equal_condition() && r_key_part->is_equal_condition()) {
+        if (NULL == l_key_part->and_next_ || NULL == r_key_part->and_next_) {
+        start_border_type = (NULL == l_key_part->and_next_) ? OB_FROM_RIGHT : OB_FROM_LEFT;
         end_border_type = start_border_type;
+        } else {
+          s_need_continue = true;
+          e_need_continue = true;
+        }
       } else {
-        s_need_continue = true;
-        e_need_continue = true;
+        const ObKeyPart *equal_key = left_is_equal ? l_key_part : r_key_part;
+        const ObKeyPart *other_key = left_is_equal ? r_key_part : l_key_part;
+        if ((0 == equal_key->normal_keypart_->start_.compare(other_key->normal_keypart_->start_) && other_key->normal_keypart_->include_start_) ||
+            (0 == equal_key->normal_keypart_->start_.compare(other_key->normal_keypart_->end_) && other_key->normal_keypart_->include_end_)) {
+          if (NULL == equal_key->and_next_) {
+            start_border_type = left_is_equal ? OB_FROM_LEFT : OB_FROM_RIGHT;
+            end_border_type = start_border_type;
+          } else {
+            s_need_continue = true;
+            e_need_continue = true;
+          }
+        } else {
+          start_border_type = left_is_equal ? OB_FROM_LEFT : OB_FROM_RIGHT;
+          end_border_type = start_border_type;
+        }
       }
     } else {
       is_always_false = true;
@@ -2484,7 +2512,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart* l_gt, ObKeyPart* r_gt, ObKeyPart*& re
             LOG_WARN("Find row border failed", K(ret));
           } else if (is_always_false) {
             result->normal_keypart_->always_false_ = true;
-            result->normal_keypart_->always_true_ = true;
+            result->normal_keypart_->always_true_ = false;
             result->normal_keypart_->start_.set_max_value();
             result->normal_keypart_->end_.set_min_value();
             find_false = result;
