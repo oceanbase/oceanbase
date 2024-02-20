@@ -81,10 +81,6 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
     } else if (OB_FAIL((update_replaying_log_no_(timestamp, part_log_no)))) {
       TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
     }
-  } else if (exec_info_.need_checksum_ && !has_replay_serial_final_()) {
-    ret = OB_EAGAIN;
-    TRANS_LOG(INFO, "branch savepoint should wait replay serial final because of calc checksum",
-              K(ret), K(timestamp), KP(this), K(trans_id_), K(ls_id_), K(exec_info_));
   } else if (!ctx_tx_data_.get_start_log_ts().is_valid() && OB_FAIL(ctx_tx_data_.set_start_log_ts(timestamp))) {
     // update start_log_ts for branch savepoint, because it may replayed before first log in txn queue
     TRANS_LOG(WARN, "set tx data start log ts fail", K(ret), K(timestamp), KPC(this));
