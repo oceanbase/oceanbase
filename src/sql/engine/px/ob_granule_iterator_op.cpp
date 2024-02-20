@@ -923,43 +923,32 @@ int ObGranuleIteratorOp::set_dml_op(const ObTableModifySpec *dml_op)
 //    table
 //
 int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
-                                                   ObOperator *&child) const
+                                                   ObOperator *&consumer) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObOperator *, 16> op_queue;
-  ObOperator *cur_op = nullptr;
-  int64_t cur_idx = 0;
-  if (OB_FAIL(op_queue.push_back(cur))) {
-    LOG_WARN("failed to push back cur op", K(spec_.id_));
-  }
-  // Find the consumer node by level order traversal.
-  while (cur_idx < op_queue.count() && OB_SUCC(ret) && OB_ISNULL(child)) {
-    int64_t now_cnt = op_queue.count();
-    // traverse this level
-    for (; cur_idx < now_cnt && OB_SUCC(ret); ++cur_idx) {
-      cur_op = op_queue.at(cur_idx);
-      if (OB_ISNULL(cur_op)) {
+  int64_t child_cnt = cur->get_child_cnt();
+  if (0 == child_cnt) {
+    if (PHY_TABLE_SCAN == cur->get_spec().type_
+        || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
+        || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
+      consumer = cur;
+      LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
+                K(cur->get_spec().type_));
+    }
+  } else {
+    ObOperator *child = nullptr;
+    for (int64_t i = 0; i < child_cnt && OB_SUCC(ret) && OB_ISNULL(consumer); ++i) {
+      if (OB_ISNULL(child = cur->get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("op is null", K(ret));
-        break;
-      } else if (PHY_TABLE_SCAN == cur_op->get_spec().type_
-                || PHY_BLOCK_SAMPLE_SCAN == cur_op->get_spec().type_
-                || PHY_ROW_SAMPLE_SCAN == cur_op->get_spec().type_) {
-        child = cur_op;
-        LOG_TRACE("find the gi_task consumer node", K(cur_op->get_spec().id_),
-                  K(cur_op->get_spec().type_));
-        break;
-      } else {
-        for (int64_t child_idx = 0; child_idx < cur_op->get_child_cnt() && OB_SUCC(ret);
-            ++child_idx) {
-          if (OB_FAIL(op_queue.push_back(cur_op->get_child(child_idx)))) {
-            LOG_WARN("failed to pushback child", K(cur_op->get_spec().id_));
-          }
-        }
+        LOG_WARN("child is null", K(ret));
+      } else if (OB_FAIL(get_gi_task_consumer_node(child, consumer))) {
+        LOG_WARN("failed to get gi task consumer node", K(ret));
       }
     }
   }
-  if (OB_SUCC(ret) && OB_ISNULL(child)) {
+
+  // cur == this means only check the output stack
+  if (OB_SUCC(ret) && OB_ISNULL(consumer) && cur == this) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't find the tsc phy op", K(ret));
   }
