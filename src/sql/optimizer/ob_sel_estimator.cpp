@@ -1726,7 +1726,7 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
       } else {
         // not op.
         // if can calculate null_sel, sel = 1.0 - null_sel - op_sel
-        selectivity = 1.0 - null_sel - tmp_selectivity;
+        selectivity = ObOptSelectivity::revise_between_0_1(1.0 - null_sel - tmp_selectivity);
       }
     } else {
       // for other condition, it's is too hard to consider null_sel, so ignore it.
