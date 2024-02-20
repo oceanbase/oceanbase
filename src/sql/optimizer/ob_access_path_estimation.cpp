@@ -45,7 +45,7 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
     LOG_WARN("failed to get valid est methods", K(ret));
   } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
-  } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
+  } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to do estimate rowcount", K(ret), K(method), K(valid_methods));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); i ++) {
@@ -63,6 +63,7 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
                                                  common::ObIArray<AccessPath*> &paths,
                                                  const bool is_inner_path,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
+                                                 ObBaseTableEstMethod &valid_methods,
                                                  ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
@@ -82,9 +83,11 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
         ctx, paths, is_inner_path, filter_exprs, only_ds_basic_stat, is_success))) {
       LOG_WARN("failed to process statistics estimation", K(ret));
     } else if (!is_success) {
-      method &= ~EST_DS_BASIC;
-      method &= ~EST_DS_FULL;
-      method |= EST_DEFAULT;
+      valid_methods &= ~EST_DS_BASIC;
+      valid_methods &= ~EST_DS_FULL;
+      if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
+        LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
+      }
     }
   }
 
@@ -210,7 +213,6 @@ int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &c
   bool specify_ds = false;
   bool has_invalid_ds_filters = false;
   const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
-  int64_t max_ds_timeout = -1;
   if (OB_FAIL(ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(
       ctx.get_session_info(),
       log_plan.get_log_plan_hint().get_dynamic_sampling_hint(table_meta.get_table_id()),
@@ -219,9 +221,8 @@ int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &c
       sample_block_cnt,
       specify_ds))) {
     LOG_WARN("failed to get valid dynamic sampling level", K(ret));
-  } else if (OB_FAIL(ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ctx, max_ds_timeout))) {
-    LOG_WARN("failed to get dynamic sampling max timeout", K(ret));
-  } else if (ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING == ds_level || max_ds_timeout <= 0) {
+  } else if (ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING == ds_level ||
+             ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ctx) <= 0) {
     valid_methods &= ~EST_DS_METHODS;
   } else if (ObDynamicSamplingUtils::check_is_failed_ds_table(table_meta.get_ref_table_id(),
                                                               table_meta.get_all_used_parts(),
@@ -1700,8 +1701,7 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                 ds_table_param, specify_ds))) {
     LOG_WARN("failed to get ds table param", K(ret), K(ds_table_param));
   } else if (!ds_table_param.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid ds table param", K(ret), K(ds_table_param));
+    is_success = false;
   } else if (OB_FAIL(add_ds_result_items(paths, filter_exprs, specify_ds,
                                          ds_result_items, only_ds_basic_stat))) {
     LOG_WARN("failed to init ds result items", K(ret));
