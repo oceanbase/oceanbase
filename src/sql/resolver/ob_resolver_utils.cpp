@@ -8576,6 +8576,11 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
       // supported operations
+    } else if (!arg.is_alter_columns_
+        && ((ObAlterTableArg::ADD_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::DROP_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::ALTER_CONSTRAINT_STATE == arg.alter_constraint_type_))) {
+      // add/drop constraint is supported
     } else {
       // unsupported operations
       ret = OB_NOT_SUPPORTED;
