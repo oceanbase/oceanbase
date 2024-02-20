@@ -260,8 +260,7 @@ TEST_F(TestLSTabletService, test_create_tablet_without_index)
   valid_tablet_num(inner_tablet_count);
   ASSERT_EQ(1 + inner_tablet_count, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -325,7 +324,7 @@ TEST_F(TestLSTabletService, test_serialize_tablet)
 
 
   ob_free(buf);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -557,12 +556,9 @@ TEST_F(TestLSTabletService, test_create_tablet_with_index)
   valid_tablet_num(inner_tablet_count);
   ASSERT_EQ(2 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
 
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id_;
-  key.tablet_id_ = data_tablet_id;
-  ret = ls_tablet_service_->do_remove_tablet(key);
-  key.tablet_id_ = index_tablet_id;
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, data_tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, index_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -607,12 +603,9 @@ TEST_F(TestLSTabletService, test_create_index_tablet)
   valid_tablet_num(inner_tablet_count);
   ASSERT_EQ(2 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
 
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id_;
-  key.tablet_id_ = data_tablet_id;
-  ret = ls_tablet_service_->do_remove_tablet(key);
-  key.tablet_id_ = index_tablet_id;
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, data_tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, index_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -659,7 +652,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
 
   tablet_handle.get_obj()->tablet_meta_.clog_checkpoint_scn_ = orig_scn; // set orig_scn to del tablet
 
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -718,8 +711,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
   ASSERT_EQ(nullptr, wrapper.get_member()->get_major_sstables().get_boundary_table(true));
   ASSERT_EQ(tablet_addr, test_tablet_handle.get_obj()->tablet_addr_);
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObLogCursor replay_start_cursor_;
@@ -747,7 +739,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
   ObTablet *empty_shell_tablet = tablet_handle.get_obj();
   ASSERT_EQ(true, empty_shell_tablet->is_empty_shell());
 
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -799,8 +791,7 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), user_data));
   ASSERT_EQ(ObTabletStatus::NORMAL, user_data.tablet_status_);
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -838,8 +829,7 @@ TEST_F(TestLSTabletService, test_migrate_empty_shell)
   ASSERT_EQ(OB_SUCCESS, tablet_meta.serialize(buf, 4096, pos));
   ASSERT_EQ(pos, tablet_meta.get_serialize_size());
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObMigrationTabletParam new_tablet_meta;
@@ -858,7 +848,7 @@ TEST_F(TestLSTabletService, test_migrate_empty_shell)
   ObTablet *empty_shell_tablet = tablet_handle.get_obj();
   ASSERT_EQ(true, empty_shell_tablet->is_empty_shell());
 
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -948,8 +938,7 @@ TEST_F(TestLSTabletService, test_migrate_param)
   ASSERT_EQ(OB_SUCCESS, tablet_meta.build_deleted_tablet_info(ls_id_, tablet_id));
   */
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1006,8 +995,7 @@ TEST_F(TestLSTabletService, test_migrate_param_empty_shell)
   ASSERT_EQ(OB_SUCCESS, tablet_meta.build_deleted_tablet_info(ls_id_, tablet_id));
   */
 
-  ObTabletMapKey key(ls_id_, tablet_id);
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1026,14 +1014,13 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_tablet_service_->update_tablet_to_empty_shell(tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObTabletMapKey key(ls_id_, tablet_id);
   ObTabletHandle tablet_handle;
   ret = ls_tablet_service_->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *empty_shell_tablet = tablet_handle.get_obj();
   ASSERT_TRUE(empty_shell_tablet->is_empty_shell());
 
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1067,10 +1054,7 @@ TEST_F(TestLSTabletService, update_tablet_release_memtable_for_offline)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->update_tablet_release_memtable_for_offline(data_tablet_id, SCN::max_scn()));
   ASSERT_EQ(OB_TABLET_NOT_EXIST, ls_handle.get_ls()->get_tablet_svr()->update_tablet_release_memtable_for_offline(data_tablet_id, SCN::max_scn()));
 
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id_;
-  key.tablet_id_ = data_tablet_id;
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, data_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1116,7 +1100,7 @@ TEST_F(TestLSTabletService, update_tablet_ddl_commit_scn)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
   ASSERT_EQ(ddl_commit_scn, tablet_handle.get_obj()->tablet_meta_.ddl_commit_scn_);
 
-  ret = ls_tablet_service_->do_remove_tablet(key);
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, data_tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
