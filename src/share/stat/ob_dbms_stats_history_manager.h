@@ -24,9 +24,21 @@ using namespace sql;
 namespace common {
 
 struct ObOptTableStatHandle;
-
 static int64_t MAX_HISTORY_RETENTION = 365001;
-
+static int64_t BATCH_DELETE_MAX_ROWCNT = 10000;
+static int64_t BATCH_DELETE_MAX_QUERY_TIMEOUT = 43200000000;//12 * 60 * 60 * 1000000LL
+enum ObOptStatsDeleteFlags
+{
+  DELETE_NONE                = 0,
+  DELETE_TAB_STAT_HISTORY    = 1,
+  DELETE_COL_STAT_HISTORY    = 1 << 1,
+  DELETE_HIST_STAT_HISTORY   = 1 << 2,
+  DELETE_TASK_GATHER_HISTORY = 1 << 3,
+  DELETE_TAB_GATHER_HISTORY  = 1 << 4,
+  DELETE_USELESS_COL_STAT    = 1 << 5,
+  DELETE_USELESS_HIST_STAT   = 1 << 6,
+  DELETE_ALL                 = (1 << 7) - 1
+};
 class ObDbmsStatsHistoryManager
 {
 public:
@@ -87,8 +99,20 @@ private:
   static int gen_partition_list(const ObTableStatParam &param,
                                 ObSqlString &partition_list);
 
-  static int remove_useless_column_stats(ObMySQLTransaction &trans, uint64_t tenant_id);
+  static int remove_useless_column_stats(ObMySQLTransaction &trans,
+                                         uint64_t tenant_id,
+                                         const uint64_t start_time,
+                                         const uint64_t max_duration_time,
+                                         int64_t &delete_flags);
 
+  static int do_delete_expired_stat_history(ObMySQLTransaction &trans,
+                                            const uint64_t tenant_id,
+                                            const uint64_t start_time,
+                                            const uint64_t max_duration_time,
+                                            const char* specify_time_str,
+                                            const char* process_table_name,
+                                            ObOptStatsDeleteFlags cur_delete_flag,
+                                            int64_t &delete_flags);
 };
 
 
