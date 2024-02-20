@@ -64,6 +64,10 @@ ObDirectLoadMultipleHeapTableCompactor::ObDirectLoadMultipleHeapTableCompactor()
     is_stop_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  index_scanners_.set_tenant_id(MTL_ID());
+  base_data_fragment_idxs_.set_tenant_id(MTL_ID());
+  data_fragments_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleHeapTableCompactor::~ObDirectLoadMultipleHeapTableCompactor()
@@ -127,7 +131,6 @@ int ObDirectLoadMultipleHeapTableCompactor::init(
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
     is_inited_ = true;
   }
   return ret;

@@ -100,6 +100,7 @@ public:
       index_block_count_(0),
       row_count_(0)
   {
+    fragments_.set_tenant_id(MTL_ID());
   }
   bool is_valid() const
   {

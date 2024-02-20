@@ -46,6 +46,9 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     enable_heart_beat_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  idx_array_.set_tenant_id(MTL_ID());
+  commited_trans_ctx_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
@@ -104,7 +107,6 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), KPC(exec_ctx));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                K(ctx_->ddl_param_.dest_table_id_));

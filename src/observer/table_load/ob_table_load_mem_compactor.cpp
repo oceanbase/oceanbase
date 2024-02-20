@@ -240,6 +240,7 @@ ObTableLoadMemCompactor::ObTableLoadMemCompactor()
     task_scheduler_(nullptr),
     parallel_merge_cb_(this)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadMemCompactor::~ObTableLoadMemCompactor()
@@ -270,7 +271,6 @@ int ObTableLoadMemCompactor::inner_init()
   const uint64_t tenant_id = MTL_ID();
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &(store_ctx_->ctx_->param_);
-  allocator_.set_tenant_id(tenant_id);
   if (OB_FAIL(init_scheduler())) {
     LOG_WARN("fail to init_scheduler", KR(ret));
   } else {
@@ -333,7 +333,8 @@ int ObTableLoadMemCompactor::start()
 int ObTableLoadMemCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+  ObArray<ObTableLoadTransStore *> trans_store_array;
+  trans_store_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   }

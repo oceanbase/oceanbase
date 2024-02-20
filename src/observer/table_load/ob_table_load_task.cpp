@@ -22,10 +22,11 @@ using namespace common;
 
 ObTableLoadTask::ObTableLoadTask(uint64_t tenant_id)
   : trace_id_(*ObCurTraceId::get_trace_id()),
-    allocator_("TLD_Task", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+    allocator_("TLD_Task"),
     processor_(nullptr),
     callback_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTask::~ObTableLoadTask()

@@ -67,6 +67,7 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     ignore_row_num_(-1),
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE)
 {
+  store_column_idxs_.set_tenant_id(MTL_ID());
 }
 
 bool ObLoadDataDirectImpl::LoadExecuteParam::is_valid() const
@@ -233,6 +234,7 @@ int ObLoadDataDirectImpl::Logger::log_error_line(const ObString &file_name, int6
 ObLoadDataDirectImpl::DataDescIterator::DataDescIterator()
   : pos_(0)
 {
+  data_descs_.set_tenant_id(MTL_ID());
 }
 
 ObLoadDataDirectImpl::DataDescIterator::~DataDescIterator()
@@ -443,6 +445,7 @@ ObLoadDataDirectImpl::DataReader::DataReader()
       is_iter_end_(false),
       is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObLoadDataDirectImpl::DataReader::~DataReader()
@@ -796,7 +799,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
       LOG_WARN("fail to push back", KR(ret));
     }
   } else {
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("TLD_Tmp");
     allocator.set_tenant_id(MTL_ID());
 
     int64_t end_offset = data_desc.end_;
@@ -900,6 +903,7 @@ ObLoadDataDirectImpl::FileLoadExecutor::FileLoadExecutor()
     total_line_count_(0),
     is_inited_(false)
 {
+  handle_resource_.set_tenant_id(MTL_ID());
 }
 
 ObLoadDataDirectImpl::FileLoadExecutor::~FileLoadExecutor()
@@ -1958,7 +1962,8 @@ int ObLoadDataDirectImpl::init_store_column_idxs(ObIArray<int64_t> &store_column
   const uint64_t table_id = load_args.table_id_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ObSEArray<ObColDesc, 64> column_descs;
+  ObArray<ObColDesc> column_descs;
+  column_descs.set_tenant_id(MTL_ID());
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
                                                                                   schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));

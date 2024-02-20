@@ -25,7 +25,11 @@ namespace table
 struct ObTableLoadDmlStat
 {
 public:
-  ObTableLoadDmlStat() : allocator_("TLD_Dmlstat") { allocator_.set_tenant_id(MTL_ID()); }
+  ObTableLoadDmlStat() : allocator_("TLD_Dmlstat")
+  {
+    dml_stat_array_.set_tenant_id(MTL_ID());
+    allocator_.set_tenant_id(MTL_ID());
+  }
   ~ObTableLoadDmlStat() { reset(); }
   void reset()
   {
@@ -62,7 +66,7 @@ public:
   }
   TO_STRING_KV(K_(dml_stat_array));
 public:
-  common::ObSEArray<ObOptDmlStat *, 64, common::ModulePageAllocator, true> dml_stat_array_;
+  common::ObArray<ObOptDmlStat *> dml_stat_array_;
   common::ObArenaAllocator allocator_;
 };
 

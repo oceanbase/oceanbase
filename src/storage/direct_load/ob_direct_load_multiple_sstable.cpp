@@ -72,6 +72,7 @@ ObDirectLoadMultipleSSTableCreateParam::ObDirectLoadMultipleSSTableCreateParam()
     row_count_(0),
     max_data_block_size_(0)
 {
+  fragments_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableCreateParam::~ObDirectLoadMultipleSSTableCreateParam()
@@ -126,6 +127,8 @@ void ObDirectLoadMultipleSSTableMeta::reset()
 ObDirectLoadMultipleSSTable::ObDirectLoadMultipleSSTable()
   : allocator_("TLD_MSSTable"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  fragments_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTable::~ObDirectLoadMultipleSSTable()
@@ -151,7 +154,6 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     meta_.rowkey_column_num_ = param.rowkey_column_num_;
     meta_.column_count_ = param.column_count_;
     meta_.index_block_size_ = param.index_block_size_;
@@ -181,7 +183,6 @@ int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)
     LOG_WARN("invalid args", KR(ret), K(other));
   } else {
     reset();
-    allocator_.set_tenant_id(MTL_ID());
     meta_ = other.meta_;
     if (OB_FAIL(start_key_.deep_copy(other.start_key_, allocator_))) {
       LOG_WARN("fail to deep copy rowkey", KR(ret));

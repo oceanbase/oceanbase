@@ -124,6 +124,8 @@ ObDirectLoadMemChunk<T, Compare>::ObDirectLoadMemChunk()
     allocator_("TLD_MemChunk"),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  item_list_.set_attr(ObMemAttr(MTL_ID(), "TLD_MemChunk"));
 }
 
 template <typename T, typename Compare>
@@ -138,8 +140,6 @@ int ObDirectLoadMemChunk<T, Compare>::init(uint64_t tenant_id, int64_t mem_limit
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K(mem_limit));
   } else {
     buf_mem_limit_ = mem_limit;
-    allocator_.set_tenant_id(tenant_id);
-    item_list_.set_attr(ObMemAttr(tenant_id, "TLD_MemChunk"));
     is_inited_ = true;
   }
   return ret;

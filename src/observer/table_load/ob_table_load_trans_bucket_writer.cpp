@@ -40,6 +40,8 @@ using namespace table;
 ObTableLoadTransBucketWriter::SessionContext::SessionContext()
   : session_id_(0), allocator_("TLD_TB_SessCtx"), last_receive_sequence_no_(0)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  load_bucket_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransBucketWriter::SessionContext::~SessionContext()
@@ -62,13 +64,14 @@ ObTableLoadTransBucketWriter::ObTableLoadTransBucketWriter(ObTableLoadTransCtx *
   : trans_ctx_(trans_ctx),
     coordinator_ctx_(trans_ctx_->ctx_->coordinator_ctx_),
     param_(trans_ctx_->ctx_->param_),
-    allocator_("TLD_TBWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
+    allocator_("TLD_TBWriter"),
     is_partitioned_(false),
     session_ctx_array_(nullptr),
     ref_count_(0),
     is_flush_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransBucketWriter::~ObTableLoadTransBucketWriter()
@@ -212,7 +215,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
 {
   int ret = OB_SUCCESS;
   const int64_t row_count = obj_rows.count();
-  ObArenaAllocator autoinc_allocator("TLD_Autoinc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
+  ObArenaAllocator autoinc_allocator("TLD_Autoinc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObDataTypeCastParams cast_params(coordinator_ctx_->partition_calc_.session_info_->get_timezone_info());
   ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, CM_NONE,
                       ObCharset::get_system_collation());
@@ -317,14 +320,17 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
                                                         const ObTableLoadObjRowArray &obj_rows)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("TLD_Misc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
+  ObArenaAllocator allocator("TLD_Misc");
   const int64_t part_key_obj_count = coordinator_ctx_->partition_calc_.get_part_key_obj_count();
   ObArray<ObTableLoadPartitionId> partition_ids;
   ObArray<ObNewRow> part_keys;
   ObArray<int64_t> row_idxs;
   ObTableLoadErrorRowHandler *error_row_handler =
         coordinator_ctx_->error_row_handler_;
+  allocator.set_tenant_id(MTL_ID());
   partition_ids.set_block_allocator(common::ModulePageAllocator(allocator));
+  part_keys.set_block_allocator(common::ModulePageAllocator(allocator));
+  row_idxs.set_block_allocator(common::ModulePageAllocator(allocator));
   for (int64_t i = 0; OB_SUCC(ret) && i < obj_rows.count(); ++i) {
     ObNewRow part_key;
     part_key.count_ = part_key_obj_count;

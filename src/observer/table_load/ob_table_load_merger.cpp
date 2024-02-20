@@ -233,6 +233,7 @@ int ObTableLoadMerger::build_merge_ctx()
       // for optimize split range is too slow
       ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
       ObDirectLoadMultipleMergeRangeSplitter range_splitter;
+      multiple_sstable_array.set_tenant_id(MTL_ID());
       for (int64_t i = 0; OB_SUCC(ret) && i < table_array->count(); ++i) {
         ObDirectLoadMultipleSSTable *sstable = nullptr;
         if (OB_ISNULL(sstable = dynamic_cast<ObDirectLoadMultipleSSTable *>(table_array->at(i)))) {
@@ -317,6 +318,7 @@ int ObTableLoadMerger::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
   if (store_ctx_->is_fast_heap_table_) {
     ObDirectLoadMultiMap<ObTabletID, ObDirectLoadFastHeapTable *> tables;
     ObArray<ObTableLoadTransStore *> trans_store_array;
+    trans_store_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(tables.init())) {
       LOG_WARN("fail to init table", KR(ret));
     } else if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
@@ -343,7 +345,8 @@ int ObTableLoadMerger::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
       }
       for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
         ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
-        ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
+        ObArray<ObDirectLoadFastHeapTable *> heap_table_array;
+        heap_table_array.set_tenant_id(MTL_ID());
         if (OB_FAIL(tables.get(tablet_ctx->get_tablet_id(), heap_table_array))) {
           LOG_WARN("get heap sstable failed", KR(ret));
         } else if (OB_FAIL(tablet_ctx->collect_dml_stat(heap_table_array, dml_stats))) {
@@ -354,8 +357,8 @@ int ObTableLoadMerger::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
   } else {
     for (int i = 0; OB_SUCC(ret) && i < merge_ctx_.get_tablet_merge_ctxs().count(); ++i) {
       ObDirectLoadTabletMergeCtx *tablet_ctx = merge_ctx_.get_tablet_merge_ctxs().at(i);
-      ObArray<ObDirectLoadFastHeapTable *> heap_table_array ;
-      if (OB_FAIL(tablet_ctx->collect_dml_stat(heap_table_array, dml_stats))) {
+      ObArray<ObDirectLoadFastHeapTable *> empty_heap_table_array;
+      if (OB_FAIL(tablet_ctx->collect_dml_stat(empty_heap_table_array, dml_stats))) {
         LOG_WARN("fail to collect sql statics", KR(ret));
       }
     }

@@ -75,6 +75,8 @@ bool ObDirectLoadMergeParam::is_valid() const
 ObDirectLoadMergeCtx::ObDirectLoadMergeCtx()
   : allocator_("TLD_MergeCtx"), ctx_(nullptr), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  tablet_merge_ctx_array_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMergeCtx::~ObDirectLoadMergeCtx()
@@ -104,7 +106,6 @@ int ObDirectLoadMergeCtx::init(ObTableLoadTableCtx *ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     ctx_ = ctx;
     param_ = param;
     if (OB_FAIL(create_all_tablet_ctxs(ls_partition_ids, target_ls_partition_ids))) {
@@ -155,6 +156,12 @@ int ObDirectLoadMergeCtx::create_all_tablet_ctxs(
 ObDirectLoadTabletMergeCtx::ObDirectLoadTabletMergeCtx()
   : allocator_("TLD_MegTbtCtx"), task_finish_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  sstable_array_.set_tenant_id(MTL_ID());
+  multiple_sstable_array_.set_tenant_id(MTL_ID());
+  multiple_heap_table_array_.set_tenant_id(MTL_ID());
+  range_array_.set_tenant_id(MTL_ID());
+  task_array_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadTabletMergeCtx::~ObDirectLoadTabletMergeCtx()
@@ -191,7 +198,6 @@ int ObDirectLoadTabletMergeCtx::init(ObTableLoadTableCtx *ctx,
     if (OB_FAIL(origin_table_.init(origin_table_param))) {
       LOG_WARN("fail to init origin sstable", KR(ret));
     } else {
-      allocator_.set_tenant_id(MTL_ID());
       ctx_ = ctx;
       param_ = param;
       tablet_id_ = ls_partition_id.part_tablet_id_.tablet_id_;

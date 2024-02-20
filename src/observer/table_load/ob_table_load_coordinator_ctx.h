@@ -174,7 +174,7 @@ private:
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
-  common::ObSEArray<ObTableLoadTransCtx *, 64> commited_trans_ctx_array_;
+  common::ObArray<ObTableLoadTransCtx *> commited_trans_ctx_array_;
   bool enable_heart_beat_;
   bool is_inited_;
 };

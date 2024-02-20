@@ -45,7 +45,7 @@ using namespace share;
 
 ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
-    allocator_("TLD_StoreCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
+    allocator_("TLD_StoreCtx"),
     task_scheduler_(nullptr),
     merger_(nullptr),
     insert_table_ctx_(nullptr),
@@ -62,6 +62,10 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     enable_heart_beat_check_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  ls_partition_ids_.set_tenant_id(MTL_ID());
+  target_ls_partition_ids_.set_tenant_id(MTL_ID());
+  committed_trans_store_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadStoreCtx::~ObTableLoadStoreCtx()

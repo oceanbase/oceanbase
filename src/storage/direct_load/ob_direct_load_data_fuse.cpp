@@ -286,6 +286,7 @@ int ObDirectLoadDataFuse::get_next_row(const ObDatumRow *&datum_row)
 ObDirectLoadSSTableDataFuse::ObDirectLoadSSTableDataFuse()
   : allocator_("TLD_DataFuse"), origin_iter_(nullptr), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableDataFuse::~ObDirectLoadSSTableDataFuse()
@@ -310,7 +311,6 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), KP(origin_table), K(range));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     // construct iters
     if (OB_FAIL(origin_table->scan(range, allocator_, origin_iter_))) {
       LOG_WARN("fail to scan origin table", KR(ret));
@@ -354,6 +354,7 @@ int ObDirectLoadSSTableDataFuse::get_next_row(const ObDatumRow *&datum_row)
 ObDirectLoadMultipleSSTableDataFuse::ObDirectLoadMultipleSSTableDataFuse()
   : allocator_("TLD_DataFuse"), origin_iter_(nullptr), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableDataFuse::~ObDirectLoadMultipleSSTableDataFuse()
@@ -379,7 +380,6 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), KP(origin_table), K(range));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(range_.assign(param.tablet_id_, range))) {
       LOG_WARN("fail to assign range", KR(ret));
     }

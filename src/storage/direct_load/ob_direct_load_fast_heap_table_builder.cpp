@@ -66,6 +66,8 @@ ObDirectLoadFastHeapTableBuilder::ObDirectLoadFastHeapTableBuilder()
     is_closed_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  slice_writer_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadFastHeapTableBuilder::~ObDirectLoadFastHeapTableBuilder()
@@ -88,8 +90,6 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
-    slice_writer_allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(param_.fast_heap_table_ctx_->get_tablet_context(
                  param_.tablet_id_, fast_heap_table_tablet_ctx_))) {
       LOG_WARN("fail to get tablet context", KR(ret));

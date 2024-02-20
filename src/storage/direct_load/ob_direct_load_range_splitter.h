@@ -96,7 +96,7 @@ private:
   int construct_rowkey_iters(const common::ObIArray<ObDirectLoadSSTable *> &sstable_array);
 private:
   common::ObArenaAllocator allocator_;
-  ObSEArray<ObIDirectLoadDatumRowkeyIterator *, 64> rowkey_iters_;
+  ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
   int64_t total_block_count_;
   ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
   bool is_inited_;
@@ -118,7 +118,7 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   blocksstable::ObDatumRange scan_range_;
-  ObSEArray<ObIDirectLoadDatumRowkeyIterator *, 64> rowkey_iters_;
+  ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
   int64_t total_block_count_;
   ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
   bool is_inited_;
@@ -149,7 +149,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObTabletID tablet_id_;
   blocksstable::ObDatumRange scan_range_;
-  ObSEArray<ObIDirectLoadDatumRowkeyIterator *, 64> rowkey_iters_;
+  ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
   int64_t total_block_count_;
   ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
   bool is_inited_;
@@ -223,7 +223,7 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  ObSEArray<ObIDirectLoadMultipleDatumRowkeyIterator *, 64> rowkey_iters_;
+  ObArray<ObIDirectLoadMultipleDatumRowkeyIterator *> rowkey_iters_;
   int64_t total_block_count_;
   ObDirectLoadMultipleDatumRowkeyCompare compare_;
   RowkeyMerger rowkey_merger_;

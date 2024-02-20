@@ -45,6 +45,8 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  column_names_.set_tenant_id(MTL_ID());
+  column_idxs_.set_tenant_id(MTL_ID());
   free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
 }
 
@@ -156,7 +158,8 @@ int ObTableLoadClientTask::create_session_info(uint64_t user_id, uint64_t databa
   } else if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info, free_session_ctx))) {
     LOG_WARN("create session id failed", KR(ret));
   } else {
-    common::ObArenaAllocator allocator;
+    ObArenaAllocator allocator("TLD_Tmp");
+    allocator.set_tenant_id(MTL_ID());
     ObStringBuffer buffer(&allocator);
     buffer.append("DIRECT LOAD_");
     buffer.append(table_schema->get_table_name());

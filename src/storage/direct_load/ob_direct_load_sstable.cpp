@@ -110,6 +110,8 @@ void ObDirectLoadSSTableMeta::reset()
 ObDirectLoadSSTable::ObDirectLoadSSTable()
   : allocator_("TLD_SSTable"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  fragments_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTable::~ObDirectLoadSSTable() {}
@@ -131,7 +133,6 @@ int ObDirectLoadSSTable::init(ObDirectLoadSSTableCreateParam &param)
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadSSTable init twice", KR(ret), KP(this));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     meta_.tablet_id_ = param.tablet_id_;
     meta_.rowkey_column_count_ = param.rowkey_column_count_;
     meta_.column_count_ = param.column_count_;
@@ -167,7 +168,6 @@ int ObDirectLoadSSTable::copy(const ObDirectLoadSSTable &other)
     LOG_WARN("invalid args", KR(ret), K(other));
   } else {
     reset();
-    allocator_.set_tenant_id(MTL_ID());
     meta_ = other.meta_;
     if (meta_.row_count_ > 0) {
       if (OB_FAIL(other.start_key_.deep_copy(start_key_, allocator_))) {

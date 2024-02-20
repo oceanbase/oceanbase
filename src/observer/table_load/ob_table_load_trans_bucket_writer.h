@@ -83,7 +83,7 @@ private:
     ObTableLoadBucket load_bucket_;
     // for partitioned table
     common::hash::ObHashMap<common::ObAddr, ObTableLoadBucket *> load_bucket_map_;
-    common::ObSEArray<ObTableLoadBucket *, 64> load_bucket_array_;
+    common::ObArray<ObTableLoadBucket *> load_bucket_array_;
     // 以下参数加锁访问
     lib::ObMutex mutex_;
     uint64_t last_receive_sequence_no_;

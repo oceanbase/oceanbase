@@ -769,6 +769,7 @@ void ObTableLoadClientService::purge_client_task()
     LOG_WARN("ObTableLoadClientService not init", KR(ret), KP(this));
   } else {
     ObArray<ObTableLoadClientTask *> client_task_array;
+    client_task_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(get_all_client_task(client_task_array))) {
       LOG_WARN("fail to get all client task", KR(ret));
     }

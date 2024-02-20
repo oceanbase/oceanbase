@@ -53,8 +53,6 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
   } else {
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
-    allocator_.set_tenant_id(tenant_id);
-    rowkey_allocator_.set_tenant_id(tenant_id);
     start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     int64_t dir_id = -1;
@@ -269,6 +267,7 @@ ObDirectLoadDataBlockWriter2::ObDirectLoadDataBlockWriter2()
     is_inited_(false),
     is_closed_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadDataBlockWriter2::~ObDirectLoadDataBlockWriter2() { reset(); }
@@ -305,7 +304,6 @@ int ObDirectLoadDataBlockWriter2::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
@@ -343,7 +341,8 @@ int ObDirectLoadDataBlockWriter2::write_large_item(const ObDirectLoadExternalRow
   int ret = OB_SUCCESS;
   char *new_buf;
   const int64_t align_buf_size = upper_align(new_buf_size, DIO_ALIGN_SIZE);
-  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size, ObModIds::OB_SQL_LOAD_DATA)))) {
+  ObMemAttr attr(MTL_ID(), "TLD_LargeBuf");
+  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size, attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", KR(ret), K(align_buf_size));
   } else {
@@ -463,6 +462,7 @@ ObDirectLoadIndexBlockWriter::ObDirectLoadIndexBlockWriter()
     is_inited_(false),
     is_closed_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadIndexBlockWriter::~ObDirectLoadIndexBlockWriter() { reset(); }
@@ -498,7 +498,6 @@ int ObDirectLoadIndexBlockWriter::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
@@ -607,6 +606,7 @@ ObDirectLoadIndexBlockReader::ObDirectLoadIndexBlockReader()
     allocator_("TLD_IBReader"),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 int ObDirectLoadIndexBlockReader::init(uint64_t tenant_id, int64_t buf_size,
@@ -622,7 +622,6 @@ int ObDirectLoadIndexBlockReader::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));

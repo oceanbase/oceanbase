@@ -51,9 +51,7 @@ public:
     assert_in_own_thread();
     T *t = nullptr;
     void *buf = nullptr;
-    ObMemAttr attr;
-    attr.label_ = "TLD_TB_Alloc";
-    attr.tenant_id_ = MTL_ID();
+    ObMemAttr attr(MTL_ID(), "TLD_TB_Alloc");
     if (OB_NOT_NULL(buf = ob_malloc(sizeof(Item) + sizeof(T), attr))) {
       Item *item = new (buf) Item;
       t = new (item->buf_) T(args...);

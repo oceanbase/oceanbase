@@ -37,6 +37,7 @@ ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
     heap_table_array_(nullptr),
     heap_table_allocator_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleHeapTableSorter::~ObDirectLoadMultipleHeapTableSorter()
@@ -46,7 +47,6 @@ ObDirectLoadMultipleHeapTableSorter::~ObDirectLoadMultipleHeapTableSorter()
 int ObDirectLoadMultipleHeapTableSorter::init()
 {
   int ret = OB_SUCCESS;
-  allocator_.set_tenant_id(MTL_ID());
   if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(mem_ctx_->table_data_desc_.extra_buf_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate extra buf", KR(ret));
@@ -78,6 +78,7 @@ int ObDirectLoadMultipleHeapTableSorter::close_chunk(ObDirectLoadMultipleHeapTab
   ObArray<common::ObTabletID> keys;
   ObDirectLoadMultipleHeapTableBuilder table_builder;
   ObDirectLoadMultipleHeapTableBuildParam table_builder_param;
+  keys.set_tenant_id(MTL_ID());
   table_builder_param.table_data_desc_ = mem_ctx_->table_data_desc_;
   table_builder_param.file_mgr_ = mem_ctx_->file_mgr_;
   table_builder_param.extra_buf_size_ = mem_ctx_->table_data_desc_.extra_buf_size_;
@@ -105,6 +106,7 @@ int ObDirectLoadMultipleHeapTableSorter::close_chunk(ObDirectLoadMultipleHeapTab
 
   for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); i ++) {
     ObArray<const ObDirectLoadConstExternalMultiPartitionRow *> bag;
+    bag.set_tenant_id(MTL_ID());
     if (OB_FAIL(chunk->get(keys.at(i), bag))) {
       LOG_WARN("fail to get bag", KR(ret));
     }
@@ -137,6 +139,7 @@ int ObDirectLoadMultipleHeapTableSorter::get_tables(
 {
   int ret = OB_SUCCESS;
   ObArray<ObIDirectLoadPartitionTable *> table_array;
+  table_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(table_builder.get_tables(table_array, *heap_table_allocator_))) {
     LOG_WARN("fail to get tables", KR(ret));
   }

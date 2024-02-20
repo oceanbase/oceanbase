@@ -162,7 +162,7 @@ public:
   void reuse();
 private:
   common::ObArenaAllocator allocator_;
-  common::ObSEArray<ExternalIterator *, 64> iters_;
+  common::ObArray<ExternalIterator *> iters_;
   ObDirectLoadExternalMerger<T, Compare> merger_;
   bool is_inited_;
 };
@@ -171,6 +171,8 @@ template <typename T, typename Compare>
 ObDirectLoadExternalSortScanner<T, Compare>::ObDirectLoadExternalSortScanner()
   : allocator_("TLD_ESScanner"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  iters_.set_tenant_id(MTL_ID());
 }
 
 template <typename T, typename Compare>
@@ -209,7 +211,6 @@ int ObDirectLoadExternalSortScanner<T, Compare>::init(
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K(compressor_type), K(fragments),
                 KP(compare));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     for (int64_t i = 0; OB_SUCC(ret) && i < fragments.count(); ++i) {
       const ObDirectLoadExternalFragment &fragment = fragments.at(i);
       ExternalReader *reader = nullptr;

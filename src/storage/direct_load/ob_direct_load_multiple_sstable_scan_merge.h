@@ -71,7 +71,7 @@ private:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   const ObDirectLoadMultipleDatumRange *range_;
-  common::ObSEArray<ObDirectLoadMultipleSSTableScanner *, 64> scanners_;
+  common::ObArray<ObDirectLoadMultipleSSTableScanner *> scanners_;
   int64_t *consumers_;
   int64_t consumer_cnt_;
   LoserTreeCompare compare_;

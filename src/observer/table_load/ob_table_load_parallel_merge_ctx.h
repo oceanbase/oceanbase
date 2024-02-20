@@ -58,8 +58,8 @@ public:
   int64_t range_sstable_count_;
   lib::ObMutex mutex_; // for alloc range sstable
   common::ObArenaAllocator range_allocator_; // for alloc range and range sstable
-  common::ObSEArray<ObDirectLoadMultipleDatumRange, 64> ranges_;
-  common::ObSEArray<storage::ObDirectLoadMultipleSSTable *, 64> range_sstables_;
+  common::ObArray<ObDirectLoadMultipleDatumRange> ranges_;
+  common::ObArray<storage::ObDirectLoadMultipleSSTable *> range_sstables_;
 };
 
 class ObTableLoadParallelMergeCb

@@ -44,6 +44,7 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     is_inited_(false)
 {
   free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCtx::~ObTableLoadTableCtx()
@@ -64,7 +65,6 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
   } else {
     param_ = param;
     ddl_param_ = ddl_param;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(param_.tenant_id_),
                K(param_.table_id_));

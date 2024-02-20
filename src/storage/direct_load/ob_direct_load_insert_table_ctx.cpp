@@ -87,6 +87,7 @@ int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &oth
 ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext()
   : allocator_("TLD_SqlStat"), safe_allocator_(allocator_), tablet_finish_count_(0), table_row_count_(0), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadInsertTableContext::~ObDirectLoadInsertTableContext()

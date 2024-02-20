@@ -30,6 +30,7 @@ ObDirectLoadMultipleHeapTableIndexScanMerge::ObDirectLoadMultipleHeapTableIndexS
     rows_merger_(nullptr),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleHeapTableIndexScanMerge::~ObDirectLoadMultipleHeapTableIndexScanMerge()
@@ -47,7 +48,6 @@ int ObDirectLoadMultipleHeapTableIndexScanMerge::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(scanners.count()));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (scanners.count() > 1) {
       // init consumers
       if (OB_ISNULL(consumers_ = static_cast<int64_t *>(

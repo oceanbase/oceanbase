@@ -122,6 +122,7 @@ int ObTableLoadCoordinator::abort_active_trans(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTransId> trans_id_array;
+  trans_id_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(ctx->coordinator_ctx_->get_active_trans_ids(trans_id_array))) {
     LOG_WARN("fail to get active trans ids", KR(ret));
   }
@@ -160,6 +161,8 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
     int64_t tries = 0;
     ObDirectLoadControlAbortArg arg;
     ObDirectLoadControlAbortRes res;
+    addr_array1.set_tenant_id(MTL_ID());
+    addr_array2.set_tenant_id(MTL_ID());
     arg.table_id_ = ctx->param_.table_id_;
     arg.task_id_ = ctx->ddl_param_.task_id_;
     for (int64_t i = 0; i < all_addr_array.count(); ++i) {
@@ -277,6 +280,8 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
     int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
     int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * server_count);
     int64_t remain_session_count = total_session_count;
+    partitions.set_tenant_id(MTL_ID());
+    min_unsort_memory.set_tenant_id(MTL_ID());
     for (int64_t i = 0; i < server_count; i++) {
       total_partitions += all_leader_info_array[i].partition_id_array_.count();
       if (coordinator_addr == all_leader_info_array[i].addr_) {
@@ -962,10 +967,12 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
-  ObSEArray<ObOptColumnStat *, 64> global_column_stats;
-  ObSEArray<ObOptTableStat *, 64> global_table_stats;
+  ObArray<ObOptColumnStat *> global_column_stats;
+  ObArray<ObOptTableStat *> global_table_stats;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
+  global_column_stats.set_tenant_id(MTL_ID());
+  global_table_stats.set_tenant_id(MTL_ID());
   if (OB_UNLIKELY(sql_statistics.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(sql_statistics));

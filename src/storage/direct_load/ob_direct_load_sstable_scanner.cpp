@@ -47,6 +47,7 @@ ObDirectLoadSSTableScanner::ObDirectLoadSSTableScanner()
     allocator_("TLD_SSTScanner"),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadSSTableScanner::~ObDirectLoadSSTableScanner() {}
@@ -74,7 +75,6 @@ int ObDirectLoadSSTableScanner::init(ObDirectLoadSSTable *sstable,
     sstable_ = sstable;
     query_range_ = &range;
     datum_utils_ = datum_utils;
-    allocator_.set_tenant_id(MTL_ID());
     const int64_t buf_size = sstable_data_block_size_;
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -382,7 +382,8 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
     int64_t read_size = size;
     if (large_buf_ == nullptr) {
       int64_t large_buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-      if (OB_ISNULL(large_buf_ = static_cast<char *>(ob_malloc(large_buf_size, ObModIds::OB_SQL_LOAD_DATA)))) {
+      ObMemAttr attr(MTL_ID(), "TLD_LargeBuf");
+      if (OB_ISNULL(large_buf_ = static_cast<char *>(ob_malloc(large_buf_size, attr)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate buffer", KR(ret), K(large_buf_size));
       }
@@ -397,7 +398,8 @@ int ObDirectLoadSSTableScanner::read_buffer(uint64_t offset, uint64_t size)
 int ObDirectLoadSSTableScanner::get_large_buffer(int64_t buf_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(large_buf_ = static_cast<char *>(ob_malloc(buf_size, ObModIds::OB_SQL_LOAD_DATA)))) {
+  ObMemAttr attr(MTL_ID(), "TLD_LargeBuf");
+  if (OB_ISNULL(large_buf_ = static_cast<char *>(ob_malloc(buf_size, attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
   } else {
@@ -572,6 +574,7 @@ ObDirectLoadIndexBlockMetaIterator::ObDirectLoadIndexBlockMetaIterator()
     allocator_("TLD_IDBMeta"),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadIndexBlockMetaIterator::~ObDirectLoadIndexBlockMetaIterator() {}
@@ -611,7 +614,6 @@ int ObDirectLoadIndexBlockMetaIterator::init(ObDirectLoadSSTable *sstable)
     }
     if (OB_SUCC(ret)) {
       int64_t buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-      allocator_.set_tenant_id(tenant_id);
       if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));

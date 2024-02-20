@@ -301,6 +301,7 @@ int ObTableLoadResourceManager::update_resource(ObDirectLoadResourceUpdateArg &a
     const int64_t bucket_num = 1024;
     typedef common::hash::ObHashMap<ObAddr, bool, common::hash::NoPthreadDefendMode> AddrMap;
     AddrMap addrs_map;
+    new_addrs.set_tenant_id(MTL_ID());
     if (OB_FAIL(addrs_map.create(bucket_num, "TLD_ResourceMgr", "TLD_ResourceMgr", arg.tenant_id_))) {
       LOG_INFO("fail to create hashmap", KR(ret), K(bucket_num));
     } else {
@@ -474,7 +475,8 @@ void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoa
   UniqueKeyMap refreshed_assigned_tasks;
   common::ObArray<int64_t> need_track_array;
   common::ObArray<ObTableLoadUniqueKey> need_release_array;
-
+  need_track_array.set_tenant_id(MTL_ID());
+  need_release_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(refreshed_assigned_tasks.create(bucket_num, "TLD_ResourceMgr", "TLD_ResourceMgr", tenant_id))) {
     LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
   } else {
@@ -559,6 +561,7 @@ int ObTableLoadResourceManager::refresh_and_check(bool first_check)
   int ret = OB_SUCCESS;
   ObDirectLoadResourceUpdateArg update_arg;
   common::ObArray<ObDirectLoadResourceOpRes> check_res;
+  check_res.set_tenant_id(MTL_ID());
   if (OB_FAIL(gen_update_arg(update_arg))) {
     LOG_WARN("fail to gen_update_arg", KR(ret), K(MTL_ID()));
   } else if (OB_UNLIKELY(!update_arg.is_valid())) {

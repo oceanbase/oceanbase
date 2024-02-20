@@ -235,7 +235,6 @@ int ObDirectLoadTableStore::init(const ObDirectLoadTableStoreParam &param)
   } else {
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
-    allocator_.set_tenant_id(tenant_id);
     if (OB_FAIL(tablet_index_.create(64, "TLD_TS_PartMap", "TLD_TS_PartMap", tenant_id))) {
       LOG_WARN("fail to create hashmap", KR(ret));
     } else {
@@ -343,7 +342,8 @@ int ObDirectLoadTableStore::get_tables(ObIArray<ObIDirectLoadPartitionTable *> &
     LOG_WARN("ObDirectLoadTableStore not init", KR(ret), KP(this));
   } else {
     table_array.reset();
-    ObSEArray<ObIDirectLoadPartitionTable *, 16> bucket_table_array;
+    ObArray<ObIDirectLoadPartitionTable *> bucket_table_array;
+    bucket_table_array.set_tenant_id(MTL_ID());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_ptr_array_.count(); ++i) {
       bucket_table_array.reset();
       if (OB_FAIL(bucket_ptr_array_.at(i)->get_tables(bucket_table_array, allocator))) {

@@ -74,6 +74,7 @@ int ObDirectLoadTmpFileHandle::set_file(ObDirectLoadTmpFile *tmp_file)
 
 ObDirectLoadTmpFilesHandle::ObDirectLoadTmpFilesHandle()
 {
+  tmp_file_list_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadTmpFilesHandle::~ObDirectLoadTmpFilesHandle()

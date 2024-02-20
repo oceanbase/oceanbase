@@ -39,6 +39,8 @@ ObDirectLoadMemDump::Context::Context()
     sub_dump_count_(0)
 {
   allocator_.set_tenant_id(MTL_ID());
+  mem_chunk_array_.set_tenant_id(MTL_ID());
+  all_tables_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMemDump::Context::~Context()
@@ -88,6 +90,7 @@ ObDirectLoadMemDump::ObDirectLoadMemDump(ObTableLoadTableCtx *ctx,
     extra_buf_(nullptr),
     extra_buf_size_(0)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMemDump::~ObDirectLoadMemDump() {}
@@ -220,8 +223,8 @@ int ObDirectLoadMemDump::dump_tables()
   ObDatumRow datum_row;
 
   ObIDirectLoadPartitionTableBuilder *table_builder = nullptr;
-
-  allocator_.set_tenant_id(MTL_ID());
+  iters.set_tenant_id(MTL_ID());
+  chunk_iters.set_tenant_id(MTL_ID());
   extra_buf_size_ = mem_ctx_->table_data_desc_.extra_buf_size_;
   if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(extra_buf_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -374,6 +377,7 @@ int ObDirectLoadMemDump::compact_tables()
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> keys;
+  keys.set_tenant_id(MTL_ID());
   if (OB_FAIL(context_ptr_->tables_.get_all_key(keys))) {
     LOG_WARN("fail to get all keys", KR(ret));
   }
@@ -394,6 +398,7 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
   ObIDirectLoadTabletTableCompactor *compactor = nullptr;
 
   ObArray<std::pair<int64_t, ObIDirectLoadPartitionTable *>> table_array;
+  table_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(context_ptr_->tables_.get(tablet_id, table_array))) {
     LOG_WARN("fail to get table array", K(tablet_id), KR(ret));
   } else {

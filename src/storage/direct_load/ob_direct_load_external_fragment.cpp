@@ -65,6 +65,7 @@ int ObDirectLoadExternalFragment::assign(const ObDirectLoadExternalFragment &oth
 
 ObDirectLoadExternalFragmentArray::ObDirectLoadExternalFragmentArray()
 {
+  fragments_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadExternalFragmentArray::~ObDirectLoadExternalFragmentArray()
