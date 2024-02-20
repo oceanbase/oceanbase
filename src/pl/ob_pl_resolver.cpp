@@ -10315,7 +10315,7 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                             NULL,/*parent ns*/
                             params.is_prepare_protocol_,
                             false, /*check mode*/
-                            true, /*sql mode*/
+                            false, /*sql mode*/
                             params.param_list_);
       if (NULL == params.package_guard_) {
         OZ (package_guard->init());
@@ -12154,12 +12154,8 @@ int ObPLResolver::resolve_udf_info(
                                             object_database_id, synonym_id, object_name, exist,
                                             true, // need search public synonym
                                             &is_public));
-      if (OB_FAIL(ret) || !exist || (routine_info->get_package_id() != synonym_id && routine_info->get_routine_id() != synonym_id)) {
+      if (OB_FAIL(ret) || !exist) {
         ret = OB_SUCCESS; // some case may not be synonym.
-      } else if (!is_public) {
-        if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
-          db_name = resolve_ctx_.session_info_.get_database_name();
-        }
       } else {
         db_name = OB_SYS_DATABASE_NAME;
       }

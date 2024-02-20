@@ -1109,7 +1109,7 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         }
       }
       if (OB_SUCC(ret)) {
-        if (!database_name.empty()) {
+        if (!database_name.empty() && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0) {
           DATA_PRINTF("%.*s.", LEN_AND_PTR(database_name));
         }
         if (!package_name.empty()) {
@@ -3589,7 +3589,7 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
           }
         }
         if (OB_SUCC(ret)) {
-          if(!database.empty()){
+          if(!database.empty() && database.case_compare(OB_SYS_DATABASE_NAME) != 0) {
             PRINT_IDENT_WITH_QUOT(database);
             DATA_PRINTF(".");
           }
