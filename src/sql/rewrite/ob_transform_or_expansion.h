@@ -169,6 +169,9 @@ private:
                                    StmtUniqueKeyProvider &unique_key_provider,
                                    ObSqlBitSet<> &left_unique_pos,
                                    ObSqlBitSet<> &right_flag_pos);
+  int remove_temp_table_select_item(ObSelectStmt *stmt,
+                                    const uint64_t flag_table_id,
+                                    ObSqlBitSet<> &right_flag_pos);
 
   int create_row_number_window_function(ObIArray<ObRawExpr *> &partition_exprs,
                                         ObIArray<ObRawExpr *> &order_exprs,

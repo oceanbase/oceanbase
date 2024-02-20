@@ -598,6 +598,10 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     if (OB_FAIL(ret)) {
     } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
       LOG_WARN("failed to recover params", K(ret));
+    } else if (!trans_happened && OB_FAIL(remove_temp_table_select_item(ref_query,
+                                                                  not_null_side_table->table_id_,
+                                                                  right_flag_pos))) {
+      LOG_WARN("failed to remove temp table select item", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -726,7 +730,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
   ObSEArray<ObRawExpr*, 4> right_flag_exprs;
   ObSEArray<ObRawExpr*, 4> select_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)
-      || OB_ISNULL(ctx_->allocator_)) {
+      || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
   } else if (OB_UNLIKELY(1 != stmt->get_from_item_size()) ||
@@ -758,6 +762,8 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_, ObNumberType,
                                               number::ObNumber::get_positive_one(), const_expr))) {
       LOG_WARN("failed to build const expr", K(ret));
+    } else if (OB_FAIL(const_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize const number expr", K(ret));
     } else if (OB_FAIL(select_list.push_back(const_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *flag_table, stmt,
@@ -814,6 +820,33 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
         LOG_WARN("failed to create select item", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::remove_temp_table_select_item(ObSelectStmt *stmt,
+                                                          const uint64_t flag_table_id,
+                                                          ObSqlBitSet<> &right_flag_pos)
+{
+  int ret = OB_SUCCESS;
+  TableItem *flag_table = NULL;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt));
+  } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
+  } else if (!flag_table->is_temp_table()) {
+    // do nothing
+  } else if (OB_UNLIKELY(right_flag_pos.num_members() != 1)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected right flag pos count", K(ret), K(right_flag_pos));
+  } else if (OB_ISNULL(view_stmt = flag_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view_stmt is null", K(ret), K(view_stmt));
+  } else if (ObTransformUtils::remove_select_items(ctx_, flag_table_id, *view_stmt,
+                                                   *stmt, right_flag_pos)) {
+    LOG_WARN("failed to remove select items", K(ret));
   }
   return ret;
 }

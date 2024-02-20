@@ -159,6 +159,8 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
     LOG_WARN("failed to add pre calc constraints", K(ret));
   } else if (OB_FAIL(adjust_global_dependency_tables(stmt))) {
     LOG_WARN("failed to adjust global depency", K(ret));
+  } else if (OB_FAIL(verify_all_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify all stmt exprs", K(ret));
   }
   return ret;
 }
@@ -644,6 +646,44 @@ int ObTransformerImpl::adjust_global_dependency_tables(ObDMLStmt *stmt)
           global_tables->at(i).is_existed_ = false;
         } else { /* do nothing. */ }
       } else { /* do nothing. */ }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::verify_all_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(verify_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify stmt exprs", K(ret));
+  } else {
+    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
+    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
+      if (OB_FAIL(verify_stmt_exprs(temp_table_infos.at(i).temp_table_query_))) {
+        LOG_WARN("failed to verify temp table query exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::verify_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else {
+    ObStmtExprChecker checker;
+    checker.set_relation_scope();
+    if (OB_FAIL(stmt->iterate_stmt_expr(checker))) {
+      LOG_WARN("failed to check stmt expr", K(ret), KPC(stmt));
     }
   }
   return ret;

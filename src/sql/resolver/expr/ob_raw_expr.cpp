@@ -789,6 +789,17 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_VALUES == type_
+      || T_OP_GET_PACKAGE_VAR == type_
+      || T_OP_GET_SUBPROGRAM_VAR == type_
+      || T_FUN_SYS_JSON_VALUE == type_
+      || T_FUN_SYS_JSON_QUERY == type_
+      || (T_FUN_SYS_JSON_EXISTS == type_ && lib::is_oracle_mode())
+      || T_FUN_SYS_JSON_EQUAL == type_
+      || T_FUN_SYS_IS_JSON == type_
+      || (T_FUN_SYS_JSON_MERGE_PATCH == type_ && lib::is_oracle_mode())
+      || T_FUN_SYS_JSON_OBJECT == type_
+      || IS_LABEL_SE_POLICY_FUNC(type_)
       || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())

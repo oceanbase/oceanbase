@@ -236,6 +236,15 @@ public:
 
 };
 
+class ObStmtExprChecker : public ObStmtExprVisitor
+{
+public:
+  ObStmtExprChecker() {}
+  virtual int do_visit(ObRawExpr *&expr) override;
+  int check_expr(const ObRawExpr *expr) const;
+  int check_const_flag(const ObRawExpr *expr) const;
+};
+
 }
 }
 
