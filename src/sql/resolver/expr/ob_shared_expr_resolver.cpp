@@ -137,7 +137,8 @@ int ObSharedExprResolver::add_new_instance(ObRawExprEntry &entry)
 
 int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
                                               ObRawExpr *&shared_expr,
-                                              bool &is_new)
+                                              bool &is_new,
+                                              bool &disable_share_expr)
 {
   int ret = OB_SUCCESS;
   shared_expr = NULL;
@@ -146,34 +147,36 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (!expr->is_aggr_expr() && !expr->is_win_func_expr() &&
-             T_OP_CASE != expr->get_expr_type()) {
+  } else if (is_blacklist_share_const(*expr)) {
+    disable_share_const_level_++;
+  }
+  if (OB_FAIL(ret) || is_blacklist_share_child(*expr)) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *old_param_expr = expr->get_param_expr(i);
       ObRawExpr *new_param_expr = NULL;
       bool is_param_new = false;
-      if (old_param_expr->get_expr_type() == T_QUESTIONMARK ||
-          (expr->get_expr_type() == T_FUN_SYS_CAST && i == 1)) {
+      bool disable_share_child = false;
+      if (old_param_expr->get_expr_type() == T_QUESTIONMARK) {
+        if (old_param_expr->has_flag(IS_STATIC_PARAM) && disable_share_const_level_ > 0) {
+          disable_share_expr = true;
+        }
+      } else if (expr->get_expr_type() == T_FUN_SYS_CAST && i == 1) {
         // skip exec var and question mark
       } else if (OB_FAIL(SMART_CALL(get_shared_instance(old_param_expr,
                                                         new_param_expr,
-                                                        is_param_new)))) {
+                                                        is_param_new,
+                                                        disable_share_child)))) {
         LOG_WARN("failed to get shared instance", K(ret));
       } else {
         expr->get_param_expr(i) = new_param_expr;
         has_new_param = has_new_param || is_param_new;
+        disable_share_expr |= disable_share_child;
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (expr->is_column_ref_expr() ||
-        expr->is_aggr_expr() ||
-        expr->is_win_func_expr() ||
-        expr->is_query_ref_expr() ||
-        expr->is_exec_param_expr() ||
-        expr->is_pseudo_column_expr() ||
-        expr->get_expr_type() == T_OP_ROW ||
-        expr->get_expr_type() == T_QUESTIONMARK) {
+    if (is_blacklist_share_expr(*expr) || disable_share_expr) {
       shared_expr = expr;
     } else {
       ObRawExprEntry entry(expr, get_scope_id(), hash_expr_tree(expr, get_scope_id()));
@@ -189,6 +192,9 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
         shared_expr = entry.expr_;
         is_new = true;
       }
+    }
+    if (is_blacklist_share_const(*expr)) {
+      disable_share_const_level_--;
     }
   }
   return ret;

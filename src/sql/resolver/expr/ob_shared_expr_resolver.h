@@ -54,14 +54,16 @@ public:
   ObSharedExprResolver(ObQueryCtx *query_ctx)
     : allocator_("MergeSharedExpr"),
       scope_id_(0),
-      query_ctx_(query_ctx)
+      query_ctx_(query_ctx),
+      disable_share_const_level_(0)
   {}
 
   virtual ~ObSharedExprResolver();
 
   int get_shared_instance(ObRawExpr *expr,
                           ObRawExpr *&shared_expr,
-                          bool &is_new);
+                          bool &is_new,
+                          bool &disable_share_expr);
 
   int add_new_instance(ObRawExprEntry &entry);
 
@@ -77,7 +79,25 @@ private:
 
   int inner_get_shared_expr(ObRawExprEntry &entry,
                             ObRawExpr *&new_expr);
-
+  inline bool is_blacklist_share_expr(const ObRawExpr &expr)
+  {
+    return expr.is_column_ref_expr() ||
+           expr.is_aggr_expr() ||
+           expr.is_win_func_expr() ||
+           expr.is_query_ref_expr() ||
+           expr.is_exec_param_expr() ||
+           expr.is_pseudo_column_expr() ||
+           expr.get_expr_type() == T_OP_ROW ||
+           expr.get_expr_type() == T_QUESTIONMARK;
+  }
+  inline bool is_blacklist_share_child(const ObRawExpr &expr)
+  {
+    return expr.is_aggr_expr() || expr.is_win_func_expr() || T_OP_CASE == expr.get_expr_type();
+  }
+  inline bool is_blacklist_share_const(const ObRawExpr &expr)
+  {
+    return T_OP_OR == expr.get_expr_type() || T_OP_AND == expr.get_expr_type();
+  }
 private:
   typedef ObSEArray<ObRawExprEntry, 1> SharedExprs;
 
@@ -87,6 +107,7 @@ private:
   uint64_t scope_id_;
 
   ObQueryCtx *query_ctx_;
+  int64_t disable_share_const_level_;
 };
 
 }
