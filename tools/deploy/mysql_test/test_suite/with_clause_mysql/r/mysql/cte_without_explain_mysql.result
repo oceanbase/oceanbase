@@ -264,7 +264,7 @@ FROM qn;
 
 # Qualified name is not allowed after with RECURSIVE:
 with RECURSIVE cte_st.qn as (select 'with RECURSIVE') select * from cte_st.qn;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '.qn as (select 'with RECURSIVE') select * from cte_st.qn' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'cte_st.qn as (select 'with RECURSIVE') select * from cte_st.qn' at line 1
 
 # OTOH, db. prefix in FROM doesnot resolve to QN, which is good
 with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn;
