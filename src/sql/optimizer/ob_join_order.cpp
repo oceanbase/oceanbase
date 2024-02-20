@@ -1574,6 +1574,14 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_cursor_expression() ||
                     (get_plan()->get_optimizer_context().has_var_assign() && enable_var_assign_use_das && !is_virtual_table(ref_id)) ||
                     is_batch_update_table;
+    if (!force_das_tsc
+        && table_item->for_update_
+        && table_item->skip_locked_
+        && NULL != get_plan()->get_optimizer_context().get_session_info()
+        && NULL != get_plan()->get_optimizer_context().get_session_info()->get_pl_context()) {
+      // select for update skip locked stmt in PL use das force
+      force_das_tsc = true;
+    }
     if (EXTERNAL_TABLE == table_item->table_type_) {
       create_das_path = false;
       create_basic_path = true;
