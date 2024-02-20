@@ -253,7 +253,8 @@ public:
                K_(mds_checkpoint_scn),
                K_(mds_data),
                K_(transfer_info),
-               K_(create_schema_version));
+               K_(create_schema_version),
+               K_(space_usage));
 private:
   int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -296,6 +297,7 @@ public:
   ObTabletFullMemoryMdsData mds_data_;
   ObTabletTransferInfo transfer_info_;
   int64_t create_schema_version_;
+  ObTabletSpaceUsage space_usage_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

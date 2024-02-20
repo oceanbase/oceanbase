@@ -7027,6 +7027,8 @@ wash_score	bigint(20)	NO		NULL
 tablet_ptr	varchar(128)	NO		NULL	
 initial_state	tinyint(4)	NO		NULL	
 old_chain	varchar(128)	NO		NULL	
+occupy_size	bigint(20)	NO		0	
+required_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_pointer_status;
 IF(count(*) >= 0, 1, 0)
 1

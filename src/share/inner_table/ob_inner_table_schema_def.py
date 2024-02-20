@@ -12321,6 +12321,8 @@ def_table_schema(
       ('tablet_ptr', 'varchar:128'),
       ('initial_state', 'bool'),
       ('old_chain', 'varchar:128'),
+      ('occupy_size', 'bigint', 'false', '0'),
+      ('required_size', 'bigint', 'false', '0'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
