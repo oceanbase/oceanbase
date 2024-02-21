@@ -6258,6 +6258,24 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObNotifyArchiveArg, tenant_id_);
+
+bool ObNotifyArchiveArg::is_valid() const
+{
+  return is_user_tenant(tenant_id_);
+}
+
+int ObNotifyArchiveArg::assign(const ObNotifyArchiveArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if(!arg.is_valid()){
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER(ObDeletePolicyArg, initiator_tenant_id_, type_, policy_name_, recovery_window_,
     redundancy_, backup_copies_, clean_tenant_ids_);

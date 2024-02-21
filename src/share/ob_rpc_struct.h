@@ -7494,6 +7494,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanArg);
 };
 
+struct ObNotifyArchiveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyArchiveArg() : 
+      tenant_id_(common::OB_INVALID_TENANT_ID)
+  {
+  }
+public:
+  bool is_valid() const;
+  int assign(const ObNotifyArchiveArg &arg);
+  TO_STRING_KV(K_(tenant_id));
+public:
+  uint64_t tenant_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyArchiveArg);
+};
+
 struct ObLSBackupCleanArg
 {
   OB_UNIS_VERSION(1);

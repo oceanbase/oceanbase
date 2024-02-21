@@ -195,12 +195,7 @@ int ObArchiveService::get_ls_archive_speed(const ObLSID &id,
   return persist_mgr_.get_ls_archive_speed(id, speed, force_wait, ignore);
 }
 
-void ObArchiveService::process_start_archive()
-{
-  cond_.signal();
-}
-
-void ObArchiveService::process_stop_archive()
+void ObArchiveService::wakeup()
 {
   cond_.signal();
 }
