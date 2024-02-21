@@ -357,6 +357,8 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->is_hierarchical_query()) {
+    OPT_TRACE("can not pullup predicates for hierarchical query");
   } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -1372,7 +1374,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !stmt->is_hierarchical_query()) {
     ObArray<ObRawExpr *> dummy_expr;
     ObIArray<ObQueryRefRawExpr *> &subquery_exprs = stmt->get_subquery_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
