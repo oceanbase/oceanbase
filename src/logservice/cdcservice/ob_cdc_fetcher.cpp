@@ -932,22 +932,20 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
                 LOG_TRACE("LS fetch a missing log", K(tenant_id_), K(ls_id), K(fetched_log_count), K(frt));
               }
             }
+          } else if (! (log_fetched_in_palf || log_fetched_in_archive)) {
+            ret = OB_ERR_OUT_OF_LOWER_BOUND;
+            LOG_WARN("no log fetched from palf or archive, lower bound", K(log_fetched_in_palf),
+                K(log_fetched_in_archive), K(missing_lsn), K(idx));
+          } else {
+            // failed
           }
         }
       } // for
     } // else
 
-    if (OB_SUCCESS == ret) {
-      // do nothing
-    } else if (OB_ITER_END == ret) {
+    if (OB_ITER_END == ret) {
       // has iterated to the end of block.
       ret = OB_SUCCESS;
-    } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-      // log not exists
-      ret = OB_SUCCESS;
-      if (OB_FAIL(handle_log_not_exist_(ls_id, resp))) {
-        LOG_WARN("handle log_not_exist error", K(ret));
-      }
     } else {
       // other error code
     }
