@@ -645,7 +645,7 @@ int ObITabletMdsInterface::obj_to_string_holder_(const T &obj, ObStringHolder &h
   int64_t pos = 0;
   if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(obj)))) {// try hard to fill buffer, it's ok if buffer not enough
   } else if (OB_FAIL(holder.assign(ObString(pos, stack_buffer)))) {
-    MDS_LOG(WARN, "fatil to assign to holder");
+    MDS_LOG(WARN, "fail to assign to holder");
   }
   return ret;
 }
@@ -667,16 +667,16 @@ int ObITabletMdsInterface::fill_virtual_info_by_complex_addr_(const ObTabletComp
   } else if (FALSE_IT(cur_virtual_info = &mds_node_info_array.at(mds_node_info_array.count() - 1))) {
   } else {
     if (CLICK_FAIL(ObTabletMdsData::load_mds_dump_kv(allocator, addr, dump_kv))) {
-      MDS_LOG_GET(WARN, "fatil to read tablet_status_addr");
+      MDS_LOG_GET(WARN, "fail to read tablet_status_addr");
     } else if (nullptr == dump_kv || (nullptr != dump_kv && !dump_kv->is_valid())) {
       ret = OB_ENTRY_NOT_EXIST;
       MDS_LOG_GET(INFO, "dump kv not exist");
     } else if (CLICK_FAIL(obj_to_string_holder_(dump_kv->k_, cur_virtual_info->user_key_))) {
-      MDS_LOG_GET(WARN, "fatil to fill string holder");
+      MDS_LOG_GET(WARN, "fail to fill string holder");
     } else if (CLICK_FAIL(dump_kv->v_.convert_to_user_mds_node(user_mds_node, get_tablet_meta_().ls_id_, get_tablet_meta_().tablet_id_))) {
-      MDS_LOG_GET(WARN, "fatil to convert tablet_status_node");
+      MDS_LOG_GET(WARN, "fail to convert tablet_status_node");
     } else if (CLICK_FAIL(user_mds_node.fill_virtual_info(*cur_virtual_info))) {
-      MDS_LOG_GET(WARN, "fatil to fill virtual info");
+      MDS_LOG_GET(WARN, "fail to fill virtual info");
     } else {
       cur_virtual_info->ls_id_ = get_tablet_meta_().ls_id_;
       cur_virtual_info->tablet_id_ = get_tablet_meta_().tablet_id_;
@@ -708,11 +708,11 @@ int ObITabletMdsInterface::fill_virtual_info_by_obj_(const T &obj,
   if (!obj.is_valid()) {
     MDS_LOG_GET(INFO, "obj is not valid");
   } else if (CLICK_FAIL(mds_node_info_array.push_back(mds::MdsNodeInfoForVirtualTable()))) {
-    MDS_LOG_GET(WARN, "fatil to push_back");
+    MDS_LOG_GET(WARN, "fail to push_back");
   } else if (FALSE_IT(cur_virtual_info = &mds_node_info_array.at(mds_node_info_array.count() - 1))) {
   } else {
     if (CLICK_FAIL(obj_to_string_holder_(obj, cur_virtual_info->user_data_))) {
-      MDS_LOG_GET(WARN, "fatil to fill string holder");
+      MDS_LOG_GET(WARN, "fail to fill string holder");
     } else {
       cur_virtual_info->ls_id_ = get_tablet_meta_().ls_id_;
       cur_virtual_info->tablet_id_ = get_tablet_meta_().tablet_id_;
@@ -741,15 +741,15 @@ inline int ObITabletMdsInterface::fill_virtual_info(ObIArray<mds::MdsNodeInfoFor
   if (CLICK_FAIL(get_mds_data_from_tablet<share::ObTabletAutoincSeq>([&allocator, &seq_on_tablet](const share::ObTabletAutoincSeq &seq) {
     return seq_on_tablet.assign(allocator, seq);
   }))) {
-    MDS_LOG_GET(WARN, "fatil to get seq from disk");
+    MDS_LOG_GET(WARN, "fail to get seq from disk");
   } else if (CLICK_FAIL(fill_virtual_info_by_obj_(seq_on_tablet, mds::NodePosition::DISK, mds_node_info_array))) {
-    MDS_LOG_GET(WARN, "fatil to fill seq from disk");
+    MDS_LOG_GET(WARN, "fail to fill seq from disk");
   } else if (CLICK_FAIL(fill_virtual_info_by_obj_(get_mds_data_().tablet_status_cache_, mds::NodePosition::TABLET, mds_node_info_array))) {
-    MDS_LOG_GET(WARN, "fatil to fill tablet_status_ from cache");
+    MDS_LOG_GET(WARN, "fail to fill tablet_status_ from cache");
   } else if (CLICK_FAIL(fill_virtual_info_by_complex_addr_<ObTabletCreateDeleteMdsUserData>(get_mds_data_().tablet_status_.committed_kv_, mds_node_info_array))) {
-    MDS_LOG_GET(WARN, "fatil to fill tablet_status_");
+    MDS_LOG_GET(WARN, "fail to fill tablet_status_");
   } else if (CLICK_FAIL(fill_virtual_info_by_complex_addr_<ObTabletBindingMdsUserData>(get_mds_data_().aux_tablet_info_.committed_kv_, mds_node_info_array))) {
-    MDS_LOG_GET(WARN, "fatil to fill aux_tablet_info_");
+    MDS_LOG_GET(WARN, "fail to fill aux_tablet_info_");
   }
 
   return ret;
