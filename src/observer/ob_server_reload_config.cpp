@@ -18,6 +18,7 @@
 #include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
+#include "lib/signal/ob_signal_handlers.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "share/ob_cluster_version.h"
@@ -318,6 +319,10 @@ int ObServerReloadConfig::operator()()
 
   {
     ObMallocAllocator::get_instance()->force_malloc_for_absent_tenant_ = GCONF._force_malloc_for_absent_tenant;
+  }
+
+  {
+    ObSigFaststack::get_instance().set_min_interval(GCONF._faststack_min_interval.get_value());
   }
   return ret;
 }

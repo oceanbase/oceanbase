@@ -67,8 +67,6 @@ using namespace oceanbase::obrpc;
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
 
-int64_t FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD = INT64_MAX;
-
 extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
 int ob_pthread_tryjoin_np(void *ptr);
@@ -1521,7 +1519,8 @@ int ObTenant::recv_request(ObRequest &req)
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
 
-  if (OB_SIZE_OVERFLOW == ret || req_queue_.size() >= FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD) {
+  if (OB_SIZE_OVERFLOW == ret || (GCONF._faststack_req_queue_size_threshold.get_value() > 0 &&
+      req_queue_.size() >= GCONF._faststack_req_queue_size_threshold.get_value())) {
     IGNORE_RETURN faststack();
   }
 
