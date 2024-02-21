@@ -2417,6 +2417,7 @@ typedef enum ObItemType
   T_ALTER_TABLE_FORCE,
   T_SHOW_PROCEDURE_CODE,
   T_SHOW_FUNCTION_CODE,
+  T_CHANGE_EXTERNAL_STORAGE_DEST,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
