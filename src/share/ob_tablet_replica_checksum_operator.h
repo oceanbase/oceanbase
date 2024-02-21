@@ -115,14 +115,9 @@ public:
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items,
       int64_t &tablet_items_cnt,
-      const bool include_larger_than = false,
-      const int32_t group_id = 0);
-  static int batch_get(
-      const uint64_t tenant_id,
-      const common::ObIArray<ObTabletLSPair> &pairs,
-      const SCN &compaction_scn,
-      common::ObISQLClient &sql_proxy,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+      const bool include_larger_than,
+      const int32_t group_id,
+      const bool with_order_by_field);
   static int batch_update_with_trans(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -156,12 +151,6 @@ public:
       common::ObString &column_meta_hex_str);
 
 private:
-  static int batch_get(
-    const uint64_t tenant_id,
-    const ObIArray<compaction::ObTabletCheckInfo> &pairs,
-    ObISQLClient &sql_proxy,
-    ObIArray<ObTabletReplicaChecksumItem> &items,
-    int64_t &tablet_items_cnt);
   static int batch_insert_or_update_with_trans_(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
@@ -200,7 +189,8 @@ private:
       const int64_t end_idx,
       common::ObSqlString &sql,
       const bool include_larger_than,
-      const bool with_compaction_scn);
+      const bool with_compaction_scn,
+      const bool with_order_by_field);
 
   static int construct_tablet_replica_checksum_items_(
       common::sqlclient::ObMySQLResult &res,
@@ -234,7 +224,8 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
     const int64_t end_idx,
     ObSqlString &sql,
     const bool include_larger_than,
-    const bool with_compaction_scn)
+    const bool with_compaction_scn,
+    const bool with_order_by_field)
 {
   int ret = OB_SUCCESS;
   const int64_t pairs_cnt = pairs.count();
@@ -271,7 +262,8 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
         SHARE_LOG(WARN, "fail to assign sql", KR(ret), K(tenant_id), K(compaction_scn));
       }
     }
-    if (FAILEDx(sql.append_fmt(" ORDER BY FIELD(tablet_id%s)", order_by_sql.string().ptr()))) {
+    if (OB_FAIL(ret) || !with_order_by_field) {
+    } else if (OB_FAIL(sql.append_fmt(" ORDER BY FIELD(tablet_id%s)", order_by_sql.string().ptr()))) {
       SHARE_LOG(WARN, "fail to assign sql string", KR(ret), K(tenant_id), K(compaction_scn), K(pairs_cnt));
     }
   }

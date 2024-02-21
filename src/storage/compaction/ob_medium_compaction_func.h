@@ -128,7 +128,6 @@ protected:
       int64_t &item_idx,
       int &check_ret);
   static int batch_check_medium_checksum(
-      const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
       const ObIArray<ObTabletReplicaChecksumItem> &checksum_items);
   int choose_medium_snapshot(
       const int64_t max_sync_medium_scn,

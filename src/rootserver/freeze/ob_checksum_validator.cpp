@@ -878,7 +878,8 @@ int ObChecksumValidator::get_replica_ckm(const bool include_larger_than/* = fals
 {
   ++statistics_.query_ckm_sql_cnt_;
   return ObTabletReplicaChecksumOperator::batch_get(tenant_id_, cur_tablet_ls_pair_array_, compaction_scn_,
-      *sql_proxy_, replica_ckm_items_.array_, replica_ckm_items_.tablet_cnt_, include_larger_than);
+      *sql_proxy_, replica_ckm_items_.array_, replica_ckm_items_.tablet_cnt_, include_larger_than,
+      share::OBCG_DEFAULT, true/*with_order_by_field*/);
 }
 
 } // end namespace rootserver

@@ -1118,7 +1118,6 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum(
 }
 
 int ObMediumCompactionScheduleFunc::batch_check_medium_checksum(
-    const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<ObTabletReplicaChecksumItem> &checksum_items)
 {
   int ret = OB_SUCCESS;
@@ -1126,18 +1125,14 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_checksum(
   int check_ret = OB_SUCCESS;
   int64_t pair_idx = 0;
   int64_t item_idx = 0;
-  int64_t pairs_cnt = tablet_ls_infos.count();
   int64_t items_cnt = checksum_items.count();
   int64_t affected_rows = 0;
   ObSEArray<ObTabletLSPair, 64> error_pairs;
-  while (OB_SUCC(ret) && pair_idx < pairs_cnt && item_idx < items_cnt) {
+  while (OB_SUCC(ret) && item_idx < items_cnt) {
     const ObTabletReplicaChecksumItem &tmp_item = checksum_items.at(item_idx);
-    const ObTabletID &tablet_id = tablet_ls_infos.at(pair_idx).get_tablet_id();
-    const ObLSID &ls_id = tablet_ls_infos.at(pair_idx).get_ls_id();
-    if (tmp_item.tablet_id_ != tablet_id || tmp_item.ls_id_ != ls_id) {
-      LOG_TRACE("tablet replica checksum item not exist in tablet replica checksum table",
-          KR(ret), K(tablet_id), K(ls_id));
-    } else if (OB_FAIL(check_medium_checksum(checksum_items, error_pairs, item_idx, check_ret))) {
+    const ObTabletID &tablet_id = tmp_item.tablet_id_;
+    const ObLSID &ls_id = tmp_item.ls_id_;
+    if (OB_FAIL(check_medium_checksum(checksum_items, error_pairs, item_idx, check_ret))) {
       LOG_WARN("failed to check medium checksum", K(ret), K(item_idx));
     } else if (OB_SUCCESS == check_ret) {
       ObLSHandle ls_handle;
@@ -1192,11 +1187,12 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
           MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
         LOG_WARN("failed to get tablet checksum", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
-      } else if (OB_FAIL(batch_check_medium_checksum(finish_tablet_ls_infos, checksum_items))) {
+      } else if (OB_FAIL(batch_check_medium_checksum(checksum_items))) {
         LOG_WARN("failed to check medium tablets checksum", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
       }
     }
+    // TODO, sort tablet ls pair first
   }
   return ret;
 }
