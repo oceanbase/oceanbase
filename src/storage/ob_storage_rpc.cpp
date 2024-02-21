@@ -3298,7 +3298,7 @@ int ObStorageRpc::check_start_transfer_tablets(
     } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
-                                  .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+                                  .group_id(share::OBCG_STORAGE_STREAM)
                                   .check_start_transfer_tablets(arg))) {
       LOG_WARN("failed to check src transfer tablets", K(ret), K(src_info), K(arg));
     }
@@ -3328,7 +3328,7 @@ int ObStorageRpc::get_ls_active_trans_count(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
-                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+                           .group_id(share::OBCG_STORAGE_STREAM)
                            .get_ls_active_trans_count(arg, res))) {
       LOG_WARN("failed to get ls active trans count", K(ret), K(src_info), K(arg));
     } else {
@@ -3370,7 +3370,7 @@ int ObStorageRpc::get_transfer_start_scn(
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
                                   .timeout(get_transfer_start_scn_timeout)
-                                  .group_id(share::OBCG_STORAGE_HA_LEVEL1)
+                                  .group_id(share::OBCG_TRANSFER)
                                   .get_transfer_start_scn(arg, res))) {
       LOG_WARN("failed to get transfer start scn", K(ret), K(src_info), K(arg));
     } else {
@@ -3402,7 +3402,7 @@ int ObStorageRpc::fetch_ls_replay_scn(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
-                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+                           .group_id(share::OBCG_STORAGE_STREAM)
                            .fetch_ls_replay_scn(arg, res))) {
       LOG_WARN("failed to fetch ls replay scn", K(ret), K(src_info), K(arg));
     } else {
@@ -3436,7 +3436,7 @@ int ObStorageRpc::check_tablets_logical_table_replaced(
     } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                                   .by(tenant_id)
                                   .dst_cluster_id(src_info.cluster_id_)
-                                  .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+                                  .group_id(share::OBCG_STORAGE_STREAM)
                                   .check_transfer_tablet_backfill_completed(arg, res))) {
       LOG_WARN("failed to check tablets backfill completed", K(ret), K(src_info), K(arg));
     } else {
@@ -3612,7 +3612,7 @@ int ObStorageRpc::wakeup_transfer_service(
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
                            .dst_cluster_id(src_info.cluster_id_)
-                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
+                           .group_id(share::OBCG_STORAGE_STREAM)
                            .wakeup_transfer_service(arg))) {
       LOG_WARN("failed to wakeup transfer service", K(ret), K(src_info), K(arg));
     }
