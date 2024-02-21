@@ -89,7 +89,7 @@ int ObCreateRoleResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("invalid role", K(ret));
         } else {
           OZ (resolve_user_host(cur_role, user_name, host_name));
-          user_name.trim_space_only();
+          user_name = user_name.trim_space_only();
           if (OB_SUCC(ret) && user_name.empty()) {
             ret = OB_CANNOT_USER;
             LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("CREATE ROLE"), "CREATE ROLE",
