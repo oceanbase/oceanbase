@@ -737,9 +737,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             break;
           }
           case OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_TID: {
+            const bool meta_record_in_sys = false;
             ObAllVirtualTenantSnapshotLSReplica *all_vtsnap_ls_replica = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSnapshotLSReplica, all_vtsnap_ls_replica))) {
               SERVER_LOG(ERROR, "ObAllVirtualTenantSnapshotLSReplica construct failed", K(ret));
+            } else if (OB_FAIL(all_vtsnap_ls_replica->init(
+                    OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_TID, meta_record_in_sys, index_schema, params))) {
+              SERVER_LOG(WARN, "ObAllVirtualTenantSnapshotLSReplica init failed", KR(ret));
+              all_vtsnap_ls_replica->~ObAllVirtualTenantSnapshotLSReplica();
+              allocator.free(all_vtsnap_ls_replica);
+              all_vtsnap_ls_replica = NULL;
             } else {
               all_vtsnap_ls_replica->set_allocator(&allocator);
               vt_iter = static_cast<ObAllVirtualTenantSnapshotLSReplica *>(all_vtsnap_ls_replica);
@@ -747,9 +754,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             break;
           }
           case OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID: {
+            const bool meta_record_in_sys = false;
             ObAllVirtualTenantSnapshotLSReplicaHistory *vtsnap_ls_replica_history = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSnapshotLSReplicaHistory, vtsnap_ls_replica_history))) {
-              SERVER_LOG(ERROR, "ObAllVirtualTenantSnapshotLSReplica construct failed", K(ret));
+              SERVER_LOG(ERROR, "ObAllVirtualTenantSnapshotLSReplicaHistory construct failed", K(ret));
+            } else if (OB_FAIL(vtsnap_ls_replica_history->init(
+                    OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
+              SERVER_LOG(WARN, "ObAllVirtualTenantSnapshotLSReplicaHistory init failed", KR(ret));
+              vtsnap_ls_replica_history->~ObAllVirtualTenantSnapshotLSReplicaHistory();
+              allocator.free(vtsnap_ls_replica_history);
+              vtsnap_ls_replica_history = NULL;
             } else {
               vtsnap_ls_replica_history->set_allocator(&allocator);
               vt_iter = static_cast<ObAllVirtualTenantSnapshotLSReplicaHistory *>(vtsnap_ls_replica_history);
