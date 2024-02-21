@@ -196,7 +196,6 @@ public:
            ObLogApplyService *apply_service,
            ObLogReplayService *replay_service,
            ObRoleChangeService *rc_service,
-           palf::PalfHandle &palf_handle,
            palf::PalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
            obrpc::ObLogServiceRpcProxy *rpc_proxy);

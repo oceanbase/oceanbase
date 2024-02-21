@@ -2364,3 +2364,6 @@ int ObRFInFilterMsg::try_extract_query_range(bool &has_extract, ObIArray<ObNewRa
 }
 
 //end ObRFInFilterMsg
+
+
+

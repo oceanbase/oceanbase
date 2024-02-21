@@ -281,7 +281,6 @@ public:
       const int64_t buf_len,
       const ObTabletID &tablet_id,
       ObTabletTransferInfo &tablet_transfer_info);
-  int do_remove_tablet(const ObTabletMapKey &key);
 
   int create_memtable(
       const common::ObTabletID &tablet_id,
@@ -542,6 +541,9 @@ private:
       const common::ObTabletID &tablet_id,
       const ObUpdateTabletPointerParam &param,
       ObTabletHandle &tablet_handle);
+  int do_remove_tablet(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id);
   int inner_remove_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);

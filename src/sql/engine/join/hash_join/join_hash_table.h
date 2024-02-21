@@ -35,9 +35,13 @@ public:
   };
   int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info);
   void reset() {
-    // TODO shengle
+    if (NULL != hash_table_) {
+      hash_table_->reset();
+    }
   };
-  int64_t get_bucket_mem_size() const { return hash_table_->get_bucket_mem_size(); }
+  int64_t get_mem_used() const {
+    return hash_table_->get_mem_used();
+  }
   void free(ObIAllocator *allocator) {
     if (NULL != hash_table_) {
       hash_table_->free(allocator);

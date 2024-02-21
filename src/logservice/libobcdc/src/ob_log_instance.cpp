@@ -867,10 +867,19 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
-        mysql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
-          LOG_ERROR("init timezone_info_getter failed", KR(ret));
+    if (is_tenant_sync_mode()) {
+      if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
+          mysql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
+            LOG_ERROR("init timezone_info_getter failed", KR(ret));
+      }
     } else {
+      if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
+          tenant_sql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
+            LOG_ERROR("init timezone_info_getter failed", KR(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       timezone_info_getter_ = &ObCDCTimeZoneInfoGetter::get_instance();
       // init interface for getting tenant timezone map
       // get_tenant_tz_map_function is defined in ob_log_timezone_info_getter file

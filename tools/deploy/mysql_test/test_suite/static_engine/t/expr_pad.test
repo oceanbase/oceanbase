@@ -54,6 +54,7 @@ while ($left <= $cnt)
 }
 
 --disable_query_log
+let $max_allowed_packet=`select @@global.max_allowed_packet`;
 SET GLOBAL max_allowed_packet = 4194304;
 connection default;
 disconnect conn_admin;
@@ -130,3 +131,4 @@ select rpad("", cast(c1 as decimal), "123") from t1;
 drop table t1;
 
 --sleep 2
+eval SET GLOBAL max_allowed_packet = $max_allowed_packet;

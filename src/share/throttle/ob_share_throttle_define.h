@@ -77,6 +77,26 @@ namespace share {
 //                                                         ObTenantMdsAllocator>;
 DEFINE_SHARE_THROTTLE(TxShare, ObMemstoreAllocator, ObTenantTxDataAllocator, ObTenantMdsAllocator)
 
+
+class ObThrottleInfoGuard;
+
+class PrintThrottleUtil {
+public:
+  static void pirnt_throttle_info(const int err_code,
+                                  const char *throttle_unit_name,
+                                  const int64_t sleep_time,
+                                  const int64_t left_interval,
+                                  const int64_t expected_wait_time,
+                                  const int64_t abs_expire_time,
+                                  const ObThrottleInfoGuard &share_ti_guard,
+                                  const ObThrottleInfoGuard &module_ti_guard,
+                                  bool &has_printed_lbt);
+
+  static void print_throttle_statistic(const int err_code,
+                                       const char *throttle_unit_name,
+                                       const int64_t sleep_time);
+};
+
 }  // namespace share
 
 }  // namespace oceanbase

@@ -254,6 +254,7 @@ int ObMemtableScanIterator::prepare_scan()
   ObMemtableKey* start_key = NULL;
   ObMemtableKey* end_key = NULL;
   const ObColDescIArray *out_cols = nullptr;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else if (is_scan_start_) {
@@ -273,6 +274,9 @@ int ObMemtableScanIterator::prepare_scan()
   } else if (OB_FAIL(ObMemtableKey::build(
               end_key, *out_cols, &range.get_end_key().get_store_rowkey(), *context_->get_range_allocator()))) {
     TRANS_LOG(WARN, "end key build fail", K(param_->table_id_), K(range));
+  } else if (OB_ISNULL(memtable_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get memtable", K(ret));
   } else {
     ObMvccEngine& mvcc_engine = ((ObMemtable*)memtable_)->get_mvcc_engine();
     ObMvccScanRange mvcc_scan_range;
@@ -283,6 +287,7 @@ int ObMemtableScanIterator::prepare_scan()
     if (OB_FAIL(mvcc_engine.scan(context_->store_ctx_->mvcc_acc_ctx_,
                                  context_->query_flag_,
                                  mvcc_scan_range,
+                                 memtable_->get_ls_id(),
                                  row_iter_))) {
       TRANS_LOG(WARN, "mvcc engine scan fail", K(ret), K(mvcc_scan_range));
     } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count()))) {

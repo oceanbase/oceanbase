@@ -1034,12 +1034,10 @@ int ObTableQueryAndMutateP::try_process()
   }
   #ifndef NDEBUG
     // debug mode
-    LOG_INFO("[TABLE] execute query_and_mutate", K(ret), K_(arg), K(rpc_timeout),
-             K_(retry_count));
+    LOG_INFO("[TABLE] execute query_and_mutate", K(ret), K(rpc_timeout), K_(retry_count));
   #else
     // release mode
-    LOG_TRACE("[TABLE] execute query_and_mutate", K(ret), K_(arg),
-              K(rpc_timeout), K_(retry_count),
+    LOG_TRACE("[TABLE] execute query_and_mutate", K(ret), K(rpc_timeout), K_(retry_count),
               "receive_ts", get_receive_timestamp());
   #endif
   return ret;

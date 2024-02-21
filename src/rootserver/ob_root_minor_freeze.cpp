@@ -111,46 +111,6 @@ bool ObRootMinorFreeze::is_server_alive(const ObAddr &server) const
   return is_alive;
 }
 
-int ObRootMinorFreeze::get_tenant_server_list(uint64_t tenant_id,
-                                              ObIArray<ObAddr> &target_server_list) const
-{
-  int ret = OB_SUCCESS;
-
-  target_server_list.reset();
-  ObSEArray<uint64_t, 2> pool_ids;
-  if (OB_FAIL(unit_manager_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
-    LOG_WARN("fail to get pool ids of tenant", K(tenant_id), K(ret));
-  } else {
-    ObSEArray<share::ObUnitInfo, 4> units;
-
-    for (int i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {
-      units.reset();
-      if (OB_FAIL(unit_manager_->get_unit_infos_of_pool(pool_ids.at(i), units))) {
-        LOG_WARN("fail to get unit infos of pool", K(pool_ids.at(i)), K(ret));
-      } else {
-        for (int j = 0; j < units.count(); ++j) {
-          if (OB_LIKELY(units.at(j).is_valid())) {
-            const share::ObUnit &unit = units.at(j).unit_;
-            if (is_server_alive(unit.migrate_from_server_)) {
-              if (OB_FAIL(target_server_list.push_back(unit.migrate_from_server_))) {
-                LOG_WARN("fail to push server, ", K(ret));
-              }
-            }
-
-            if (is_server_alive(unit.server_)) {
-              if (OB_FAIL(target_server_list.push_back(unit.server_))) {
-                LOG_WARN("fail to push server, ", K(ret));
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObRootMinorFreeze::try_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg) const
 {
   int ret = OB_SUCCESS;
@@ -334,7 +294,10 @@ int ObRootMinorFreeze::init_params_by_tenant(const ObIArray<uint64_t> &tenant_id
       }
     } else {
       // TODO: filter servers according to tenant_id
-      if (OB_FAIL(get_tenant_server_list(tenant_ids.at(i), target_server_list))) {
+      if (OB_ISNULL(unit_manager_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit_manager_ is null", KR(ret), KP(unit_manager_));
+      } else if (OB_FAIL(unit_manager_->get_tenant_alive_servers_non_block(tenant_ids.at(i), target_server_list))) {
         LOG_WARN("fail to get tenant server list, ", K(ret));
       } else {
         bool server_in_zone = false;

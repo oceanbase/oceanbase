@@ -1332,6 +1332,17 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
 
+      if (brs_.end_ && 0 == brs_.size_) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          if (UINT32_MAX != (*e)->vector_header_off_) {
+            if (OB_FAIL((*e)->init_vector(eval_ctx_, (*e)->is_batch_result()
+                                          ? VEC_UNIFORM : VEC_UNIFORM_CONST, brs_.size_))) {
+              LOG_WARN("failed to init vector", K(ret));
+            }
+          }
+        }
+      }
+
       if (OB_SUCC(ret)) {
         if (brs_.end_ && brs_.size_ >= 0) {
           batch_reach_end_ = true; // prepare to be end

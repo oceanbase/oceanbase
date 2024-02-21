@@ -246,7 +246,7 @@ int ObLogWindowFunction::inner_est_cost(double child_card, double child_width, d
     LOG_WARN("plan is null", K(ret));
   } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret)); 
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else if (OB_FAIL(ObOptEstCost::cost_window_function(child_card / parallel,
                                                         child_width,
                                                         win_exprs_.count(),

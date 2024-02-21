@@ -44,10 +44,12 @@ public:
   TO_STRING_KV(K_(header), K_(compressor_type), KP_(compressor), KP_(buf), K_(buf_size), K_(pos),
                KP_(decompress_buf), KP_(decompress_buf_size));
 protected:
+  int realloc_decompress_buf(const int64_t size);
+protected:
   Header header_;
   common::ObCompressorType compressor_type_;
   common::ObCompressor *compressor_;
-  common::ObArenaAllocator allocator_;
+  int64_t data_block_size_;
   char *buf_;
   int64_t buf_size_;
   int64_t pos_;
@@ -61,7 +63,7 @@ template <typename Header>
 ObDirectLoadDataBlockDecoder<Header>::ObDirectLoadDataBlockDecoder()
   : compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     compressor_(nullptr),
-    allocator_("TLD_DBDecoder"),
+    data_block_size_(0),
     buf_(nullptr),
     buf_size_(0),
     pos_(0),
@@ -92,12 +94,15 @@ void ObDirectLoadDataBlockDecoder<Header>::reset()
   header_.reset();
   compressor_type_ = common::ObCompressorType::INVALID_COMPRESSOR;
   compressor_ = nullptr;
+  data_block_size_ = 0;
   buf_ = nullptr;
   buf_size_ = 0;
   pos_ = 0;
-  decompress_buf_ = nullptr;
+  if (decompress_buf_ != nullptr) {
+    ob_free(decompress_buf_);
+    decompress_buf_ = nullptr;
+  }
   decompress_buf_size_ = 0;
-  allocator_.reset();
   is_inited_ = false;
 }
 
@@ -114,23 +119,36 @@ int ObDirectLoadDataBlockDecoder<Header>::init(int64_t data_block_size,
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", KR(ret), K(data_block_size), K(compressor_type));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (common::ObCompressorType::NONE_COMPRESSOR != compressor_type) {
-      char *buf = nullptr;
-      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(data_block_size)))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to alloc buf", KR(ret), K(data_block_size));
-      } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+      if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
                                                                                  compressor_))) {
         STORAGE_LOG(WARN, "fail to get compressor, ", KR(ret), K(compressor_type));
-      } else {
-        decompress_buf_ = buf;
-        decompress_buf_size_ = data_block_size;
       }
     }
     if (OB_SUCC(ret)) {
       compressor_type_ = compressor_type;
+      data_block_size_ = data_block_size;
       is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+template <typename Header>
+int ObDirectLoadDataBlockDecoder<Header>::realloc_decompress_buf(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (decompress_buf_size_ != size) {
+    if (decompress_buf_ != nullptr) {
+      ob_free(decompress_buf_);
+      decompress_buf_ = nullptr;
+    }
+    decompress_buf_ = (char *)ob_malloc(size, ObMemAttr(MTL_ID(), "TLD_DBDecoder"));
+    if (decompress_buf_ == nullptr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc mem", KR(ret), K(size));
+    } else {
+      decompress_buf_size_ = size;
     }
   }
   return ret;
@@ -175,7 +193,18 @@ int ObDirectLoadDataBlockDecoder<Header>::prepare_data_block(char *buf, int64_t 
     // do decompress
     if (OB_SUCC(ret) && header_.occupy_size_ != header_.data_size_) {
       int64_t decompress_size = 0;
-      if (OB_UNLIKELY(common::ObCompressorType::NONE_COMPRESSOR == compressor_type_)) {
+      if (header_.data_size_ > data_block_size_) {
+        if (OB_FAIL(realloc_decompress_buf(header_.data_size_))) {
+          STORAGE_LOG(WARN, "fail to realloc_decompress_buf", KR(ret));
+        }
+      } else {
+        if (OB_FAIL(realloc_decompress_buf(data_block_size_))) {
+          STORAGE_LOG(WARN, "fail to realloc_decompress_buf", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //pass
+      } else if (OB_UNLIKELY(common::ObCompressorType::NONE_COMPRESSOR == compressor_type_)) {
         ret = common::OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected compressor type", KR(ret));
       } else if (OB_FAIL(compressor_->decompress(buf + pos_, header_.occupy_size_ - pos_,

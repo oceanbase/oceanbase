@@ -2686,13 +2686,10 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
     } else if (OB_FAIL(unit_manager_.alter_resource_pool(
             pool, arg.unit_, arg.delete_unit_id_array_))) {
       LOG_WARN("alter_resource_pool failed", K(pool), K(arg), "resource unit", arg.unit_, K(ret));
-      int mysql_error = -common::ob_mysql_errno(ret);
-      if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          if (OB_CANCELED != tmp_ret) {
-            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
-          }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {//ensure submit task all case
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), K(tmp_ret));
         }
       }
     }

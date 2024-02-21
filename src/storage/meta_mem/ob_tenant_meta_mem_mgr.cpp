@@ -116,6 +116,59 @@ void ObTenantMetaMemMgr::RefreshConfigTask::runTimerTask()
   }
 }
 
+ObTablet *ObTenantMetaMemMgr::TabletGCQueue::pop()
+{
+  SpinWLockGuard lock(queue_lock_);
+  ObTablet *tablet = gc_head_;
+  const int64_t tablet_cnt = count();
+  OB_ASSERT(tablet_cnt >= 0);
+  if (0 == tablet_cnt) {
+    OB_ASSERT(nullptr == gc_head_);
+    OB_ASSERT(nullptr == gc_tail_);
+  } else if (tablet_cnt > 1) {
+    OB_ASSERT(nullptr != gc_head_);
+    OB_ASSERT(nullptr != gc_tail_);
+    OB_ASSERT(gc_head_ != gc_tail_);
+    gc_head_ = gc_head_->get_next_tablet();
+  } else if (tablet_cnt == 1) {
+    OB_ASSERT(gc_head_ == gc_tail_);
+    OB_ASSERT(gc_head_ != nullptr);
+    gc_head_ = gc_tail_ = nullptr;
+  }
+  if (OB_NOT_NULL(tablet)) {
+    tablet->set_next_tablet(nullptr);
+    ATOMIC_DEC(&tablet_count_);
+  }
+  return tablet;
+}
+
+int ObTenantMetaMemMgr::TabletGCQueue::push(ObTablet *tablet)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet is nullptr", K(ret), KP(tablet));
+  } else {
+    SpinWLockGuard lock(queue_lock_);
+    const int64_t tablet_cnt = count();
+    OB_ASSERT(tablet_cnt >= 0);
+    tablet->set_next_tablet(nullptr);
+    if (0 == tablet_cnt) {
+      OB_ASSERT(nullptr == gc_head_);
+      OB_ASSERT(nullptr == gc_tail_);
+      gc_head_ = gc_tail_ = tablet;
+    } else if (tablet_cnt >= 1) {
+      OB_ASSERT(nullptr != gc_head_);
+      OB_ASSERT(nullptr != gc_tail_);
+      OB_ASSERT(1 == tablet_cnt ? gc_head_ == gc_tail_ : gc_head_ != gc_tail_);
+      gc_tail_->set_next_tablet(tablet);
+      gc_tail_ = tablet;
+    }
+    ATOMIC_INC(&tablet_count_);
+  }
+  return ret;
+}
+
 ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
   : wash_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
     wash_func_(*this),
@@ -127,8 +180,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     table_gc_task_(this),
     refresh_config_task_(),
     tablet_gc_task_(this),
-    gc_head_(nullptr),
-    wait_gc_tablets_cnt_(0),
+    tablet_gc_queue_(),
     free_tables_queue_(),
     gc_queue_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
     memtable_pool_(tenant_id, get_default_memtable_pool_count(), "MemTblObj", ObCtxIds::DEFAULT_CTX_ID),
@@ -501,13 +553,13 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
     }
 
     if (recycled_cnt > 0) {
-      FLOG_INFO("Successfully finish table gc", K(sstable_cnt), K(data_memtable_cnt),
+      FLOG_INFO("gc tables in queue", K(sstable_cnt), K(data_memtable_cnt),
         K(tx_data_memtable_cnt), K(tx_ctx_memtable_cnt), K(lock_memtable_cnt), K(pending_cnt), K(recycled_cnt),
         K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem), K(tablets_mem_limit),
         K(ddl_kv_pool_), K(memtable_pool_), "wait_gc_count", free_tables_queue_.size(),
         "tablet count", tablet_map_.count());
     } else if (REACH_COUNT_INTERVAL(100)) {
-      FLOG_INFO("Recycle 0 table", K(ret),
+      FLOG_INFO("gc tables in queue: recycle 0 table", K(ret),
           K(tablet_buffer_pool_), K(large_tablet_buffer_pool_), K(full_tablet_creator_), K(tablets_mem), K(tablets_mem_limit),
           K(ddl_kv_pool_), K(memtable_pool_), K(pending_cnt), "wait_gc_count", free_tables_queue_.size(),
           "tablet count", tablet_map_.count());
@@ -666,41 +718,23 @@ int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtabl
   return ret;
 }
 
-int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
+int ObTenantMetaMemMgr::inner_push_tablet_into_gc_queue(ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
+  ObTabletHandle empty_handle;
   if (OB_UNLIKELY(nullptr == tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to push invalid tablet into gc queue", K(ret), KP(tablet));
+  } else if (FALSE_IT(tablet->set_next_tablet_guard(empty_handle))) { // release the ref_cnt of next_tablet_guard_
+  } else if (OB_FAIL(tablet_gc_queue_.push(tablet))) {
+    LOG_WARN("fail to push tablet into gc queue", K(ret), KP(tablet));
   } else {
-    ObTabletHandle empty_handle;
-    tablet->set_next_tablet_guard(empty_handle); // release the ref_cnt of next_tablet_guard_
-    do {
-      tablet->set_next_tablet(ATOMIC_LOAD(&gc_head_));
-    } while (tablet->get_next_tablet() != ATOMIC_VCAS(&gc_head_, tablet->get_next_tablet(), tablet));
-    ATOMIC_INC(&wait_gc_tablets_cnt_);
-    // can't do anything to tablet as long as tablet has been pushed into gc queue.
-    LOG_DEBUG("push tablet into gc queue", K(ret), KP(tablet));
+    LOG_DEBUG("inner push tablet into gc queue", K(ret), KP(tablet));
   }
   return ret;
 }
 
-void ObTenantMetaMemMgr::push_tablet_list_into_gc_queue(ObTablet *tablet)
-{
-  ObTablet *head = tablet;
-  ObTablet *tail = head;
-  while (OB_NOT_NULL(tail) && OB_NOT_NULL(tail->get_next_tablet())) {
-    tail = tail->get_next_tablet();
-  }
-  if (OB_NOT_NULL(tail)) {
-    do {
-      tail->set_next_tablet(ATOMIC_LOAD(&gc_head_));
-    } while (tail->get_next_tablet() != ATOMIC_VCAS(&gc_head_, tail->get_next_tablet(), head));
-    // no need to update wait_gc_tablets_cnt_
-  }
-}
-
-int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
+int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -709,8 +743,11 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   } else if (OB_UNLIKELY(nullptr == tablet || tablet->get_ref() != 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("push invalid tablet into gc queue", K(ret), KPC(tablet));
-  } else if (!tablet->is_valid()) { // push invalid tablet into gc queue directly
-    LOG_INFO("gc invalid tablet", KP(tablet));
+  } else if (!tablet->is_valid()) {
+    // If a tablet is invalid, it is not expensive to recycle it. Recycle it directly, to avoid asynchronous
+    // tablet gc queue backlog。
+    LOG_INFO("release an invalid tablet", KP(tablet));
+    release_tablet(tablet, false/*return tablet buffer ptr after release*/);
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     const ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
@@ -723,32 +760,15 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
       LOG_WARN("unexpected null tablet pointer", K(ret), K(key), K(ptr_handle));
     } else if (OB_FAIL(tablet_ptr->remove_tablet_from_old_version_chain(tablet))) {
       LOG_WARN("fail to remove tablet from old version chain", K(ret), K(key), KPC(tablet));
+    } else if (FALSE_IT(tablet->reset_memtable())) {
+    } else if (OB_FAIL(inner_push_tablet_into_gc_queue(tablet))) {
+      LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
     }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
-    LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
 #ifndef OB_BUILD_RPM
   FLOG_INFO("push tablet into gc queue", K(ret), KP(tablet), K(common::lbt()));
 #endif
   return ret;
-}
-
-void ObTenantMetaMemMgr::destroy_gc_tablets_queue()
-{
-  // only release memory of tablets
-  while (OB_NOT_NULL(gc_head_)) {
-    ObTablet *tablet = gc_head_;
-    gc_head_ = gc_head_->get_next_tablet();
-    ObIAllocator *allocator = tablet->get_allocator();
-    if (OB_ISNULL(allocator)) {
-      tablet_buffer_pool_.free_obj(tablet);
-    } else {
-      tablet->~ObTablet();
-      allocator->~ObIAllocator();
-    }
-  }
-  wait_gc_tablets_cnt_ = 0;
 }
 
 int ObTenantMetaMemMgr::gc_tablets_in_queue(bool &all_tablet_cleaned)
@@ -763,24 +783,20 @@ int ObTenantMetaMemMgr::gc_tablets_in_queue(bool &all_tablet_cleaned)
     int64_t err_tablets_cnt = 0;
     int64_t left_recycle_cnt = ONE_ROUND_TABLET_GC_COUNT_THRESHOLD;
     ObTablet *tablet = nullptr;
-    do {
-      tablet = ATOMIC_LOAD(&gc_head_);
-    } while (tablet != ATOMIC_VCAS(&gc_head_, tablet, nullptr));
 
-    while(OB_SUCC(ret) && OB_NOT_NULL(tablet) && left_recycle_cnt > 0) {
-      ObTablet *next_tablet = static_cast<ObTablet *>(tablet->get_next_tablet());
-      ATOMIC_DEC(&wait_gc_tablets_cnt_);
-      --left_recycle_cnt;
-      if (OB_UNLIKELY(tablet->get_ref() != 0)) {
+    while(OB_SUCC(ret) && left_recycle_cnt > 0) {
+      if (OB_ISNULL(tablet = tablet_gc_queue_.pop())) {
+        break; // tablet gc queue is empty.
+      } else if (OB_UNLIKELY(tablet->get_ref() != 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected tablet in gc queue", K(ret), KPC(tablet));
       } else {
-        recycle_tablet(tablet);
+        release_tablet(tablet, false/* return tablet buffer ptr after release*/);
       }
       if (OB_FAIL(ret)) {
         ++err_tablets_cnt;
         FLOG_INFO("fail to gc tablet", K(ret), KP(tablet), KPC(tablet));
-        if (OB_FAIL(push_tablet_into_gc_queue(tablet))) {
+        if (OB_FAIL(inner_push_tablet_into_gc_queue(tablet))) {
           LOG_ERROR("fail to push tablet into gc queue, tablet may be leaked", K(ret), KP(tablet));
         }
         ret = OB_SUCCESS; // continue to gc other tablet
@@ -788,18 +804,16 @@ int ObTenantMetaMemMgr::gc_tablets_in_queue(bool &all_tablet_cleaned)
         ++gc_tablets_cnt;
         FLOG_INFO("succeed to gc tablet", K(ret), KP(tablet));
       }
-      tablet = static_cast<ObTablet *>(next_tablet);
-    }
-    if (OB_NOT_NULL(tablet)) {
-      push_tablet_list_into_gc_queue(tablet);
+      --left_recycle_cnt;
     }
     if (left_recycle_cnt < ONE_ROUND_TABLET_GC_COUNT_THRESHOLD) {
-      FLOG_INFO("Finish tablets gc task one round", K(gc_tablets_cnt), K(err_tablets_cnt), K_(wait_gc_tablets_cnt));
+      FLOG_INFO("gc tablets in queue", K(gc_tablets_cnt), K(err_tablets_cnt), K(tablet_gc_queue_.count()));
     }
-    all_tablet_cleaned = (0 == ATOMIC_LOAD(&wait_gc_tablets_cnt_));
+    all_tablet_cleaned = tablet_gc_queue_.is_empty();
   }
   return ret;
 }
+
 int ObTenantMetaMemMgr::has_meta_wait_gc(bool &is_wait)
 {
   int ret = OB_SUCCESS;
@@ -807,7 +821,7 @@ int ObTenantMetaMemMgr::has_meta_wait_gc(bool &is_wait)
     ret = OB_NOT_INIT;
     LOG_WARN("t3m has not been inited", K(ret));
   } else {
-    const int64_t wait_gc_tablets_cnt = ATOMIC_LOAD(&wait_gc_tablets_cnt_);
+    const int64_t wait_gc_tablets_cnt = tablet_gc_queue_.count();
     int64_t wait_gc_tables_cnt = 0;
     {
       lib::ObLockGuard<common::ObSpinLock> lock_guard(gc_queue_lock_);
@@ -819,20 +833,18 @@ int ObTenantMetaMemMgr::has_meta_wait_gc(bool &is_wait)
   return ret;
 }
 
-void *ObTenantMetaMemMgr::recycle_tablet(ObTablet *tablet, TabletBufferList *header)
+void *ObTenantMetaMemMgr::release_tablet(ObTablet *tablet, const bool return_buf_ptr_after_release)
 {
   void *free_obj = nullptr;
-  const bool need_free_obj = nullptr != header ? true : false;
   tablet->dec_macro_ref_cnt();
   ObIAllocator *allocator = tablet->get_allocator();
   if (OB_ISNULL(allocator)) {
-    if (need_free_obj) {
+    if (return_buf_ptr_after_release) {
       ObMetaObjBufferHelper::del_meta_obj(tablet);
       free_obj = ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char*>(tablet));
-      SpinWLockGuard guard(wash_lock_);
-      header->remove(static_cast<ObMetaObjBufferNode *>(free_obj));
+      release_tablet_from_pool(tablet, false/*give_back_tablet_into_pool*/);
     } else {
-      release_tablet(tablet);
+      release_tablet_from_pool(tablet, true/*give_back_tablet_into_pool*/);
     }
   } else {
     full_tablet_creator_.free_tablet(tablet);
@@ -2009,7 +2021,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
   return ret;
 }
 
-void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
+void ObTenantMetaMemMgr::release_tablet_from_pool(ObTablet *tablet, const bool give_back_buf_into_pool)
 {
   if (OB_NOT_NULL(tablet)) {
     ObMetaObjBufferNode &linked_node = ObMetaObjBufferHelper::get_linked_node(reinterpret_cast<char *>(tablet));
@@ -2021,10 +2033,14 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTablet reference count may be leak", KP(tablet));
     } else if (NORMAL_TABLET_POOL_SIZE == buf_header.buf_len_) {
       normal_tablet_header_.remove(&linked_node);
-      tablet_buffer_pool_.free_obj(buf);
+      if (give_back_buf_into_pool) {
+        tablet_buffer_pool_.free_obj(buf);
+      }
     } else if (LARGE_TABLET_POOL_SIZE == buf_header.buf_len_) {
       large_tablet_header_.remove(&linked_node);
-      large_tablet_buffer_pool_.free_obj(buf);
+      if (give_back_buf_into_pool) {
+        large_tablet_buffer_pool_.free_obj(buf);
+      }
     }
   }
 }
@@ -2069,7 +2085,7 @@ int ObTenantMetaMemMgr::check_all_meta_mem_released(bool &is_released, const cha
     } else {
       is_released = true;
     }
-    const int64_t wait_gc_tablets_cnt = ATOMIC_LOAD(&wait_gc_tablets_cnt_);
+    const int64_t wait_gc_tablets_cnt = tablet_gc_queue_.count();
     const int64_t wait_gc_tables_cnt = free_tables_queue_.size();
     const int64_t tablet_cnt_in_map = tablet_map_.count();
     LOG_INFO("check all meta mem in t3m", K(module), K(is_released), K(memtable_cnt), K(ddl_kv_cnt),
@@ -2228,34 +2244,32 @@ int ObTenantMetaMemMgr::try_wash_tablet_from_gc_queue(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  do {
-    tablet = ATOMIC_LOAD(&gc_head_);
-  } while (tablet != ATOMIC_VCAS(&gc_head_, tablet, nullptr));
-  while (OB_ISNULL(free_obj) && OB_SUCC(ret) && OB_NOT_NULL(tablet)) {
-    ObTablet *next_tablet = static_cast<ObTablet *>(tablet->get_next_tablet());
-    ATOMIC_DEC(&wait_gc_tablets_cnt_);
+  const int64_t loop_cnt_limit = LARGE_TABLET_POOL_SIZE == buf_len ? 1 : INT64_MAX;
+  int64_t loop_cnt = 0;
+  free_obj = nullptr;
+  while (loop_cnt < loop_cnt_limit
+      && OB_ISNULL(free_obj)
+      && OB_SUCC(ret)
+      && OB_NOT_NULL(tablet = tablet_gc_queue_.pop())) {
     if (OB_UNLIKELY(tablet->get_ref() != 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tablet in gc queue", K(ret), KPC(tablet));
     } else {
-      TabletBufferList *h = nullptr;
       if (OB_ISNULL(tablet->get_allocator())
           && buf_len == ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(tablet)).buf_len_) {
-        h = &header;
+        free_obj = release_tablet(tablet, true/*return tablet buffer ptr after release*/);
+      } else {
+        release_tablet(tablet, false/*return tablet buffer ptr after release*/);
       }
-      free_obj = recycle_tablet(tablet, h);
     }
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(push_tablet_into_gc_queue(tablet))) {
+      if (OB_TMP_FAIL(inner_push_tablet_into_gc_queue(tablet))) {
         LOG_ERROR("fail to push tablet into gc queue, tablet may be leaked", K(tmp_ret), KP(tablet));
       }
       tablet = nullptr;
     }
-    tablet = static_cast<ObTablet *>(next_tablet);
-  }
-  if (OB_NOT_NULL(tablet)) {
-    push_tablet_list_into_gc_queue(tablet);
+    ++loop_cnt;
   }
   return ret;
 }
@@ -2293,7 +2307,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init ObTenantMetaMemMgr", K(ret));
-  } else if (!is_large && OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
+  } else if (OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
     LOG_WARN("fail to try wash tablet from gc queue", K(ret), K(buf_len), K(header));
   } else if (FALSE_IT(time_guard.click("wash_queue"))) {
   } else if (OB_NOT_NULL(free_obj)) {

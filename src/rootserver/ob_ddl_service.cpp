@@ -8039,7 +8039,17 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
         ObExprResType dst_type;
         dst_type.set_meta(generated_column.get_meta_type());
         dst_type.set_accuracy(generated_column.get_accuracy());
-        if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+        ObSQLMode sql_mode = default_session.get_sql_mode();
+        if (NULL != local_session_var) {
+          share::schema::ObSessionSysVar *sys_var = NULL;
+          if (OB_FAIL(local_session_var->get_local_var(share::SYS_VAR_SQL_MODE, sys_var))) {
+            LOG_WARN("fail to get sys var", K(ret));
+          } else if (NULL != sys_var) {
+            sql_mode = sys_var->val_.get_uint64();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
           LOG_WARN("erase implicit cast failed", K(ret));
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -8061,7 +8071,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
                                                                               OB_INVALID_INDEX_INT64))) {
           LOG_WARN("expr formalize failed", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(expr_with_implicit_cast,
-                                                                         default_session.get_sql_mode(),
+                                                                         sql_mode,
                                                                          generated_column))) {
           LOG_WARN("extract sysvar from expr failed", K(ret));
         }
@@ -9065,6 +9075,8 @@ int ObDDLService::alter_table_update_aux_column(
                     new_aux_column_schema))) {
             RS_LOG(WARN, "schema service update aux column failed failed",
                 "table schema", *aux_table_schema, K(ret));
+          } else if (OB_FAIL(ddl_operator.update_single_column_group(trans, *aux_table_schema, new_aux_column_schema))) {
+            RS_LOG(WARN, "fail to update column group schema name ", K(ret));
           } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
                   trans,
                   *aux_table_schema))) {
@@ -10145,6 +10157,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             } else if (OB_FAIL(ddl_operator.update_single_column(
                          trans, origin_table_schema, new_table_schema, new_column_schema))) {
               RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+            } else if (OB_FAIL(ddl_operator.update_single_column_group(trans, origin_table_schema, new_column_schema))) {
+              RS_LOG(WARN, "failed to update column group", K(ret));
             } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
               RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
@@ -23622,12 +23636,6 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
       }
     }
 
-    if (OB_SUCC(ret) && arg.task_id_ > 0) {
-      if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id, arg.task_id_, arg.error_code_))) {
-        LOG_WARN("update ret code failed", K(ret));
-      }
-    }
-
     if (trans.is_started()) {
       int commit_ret = trans.end(OB_SUCC(ret));
       if (OB_SUCCESS != commit_ret) {
@@ -32644,7 +32652,7 @@ int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(ddl_operator.alter_package(package_info, trans, public_routine_infos,
+    } else if (OB_FAIL(ddl_operator.alter_package(package_info, schema_guard, trans, public_routine_infos,
                                                   error_info, ddl_stmt_str))) {
       LOG_WARN("alter package failed", K(package_info), K(ret));
     }
@@ -37221,6 +37229,8 @@ int ObDDLService::pre_rename_mysql_columns_online(
     for (int i = 0; OB_SUCC(ret) && i < new_col_schemas.count(); i++) {
       if (OB_FAIL(ddl_operator.update_single_column(trans, origin_table_schema, new_table_schema,
                                                     new_col_schemas.at(i)))) {
+        LOG_WARN("failed to alter column", K(ret), K(new_col_schemas.at(i)));
+      }  else if (OB_FAIL(ddl_operator.update_single_column_group(trans, origin_table_schema, new_col_schemas.at(i)))) {
         LOG_WARN("failed to alter column", K(ret), K(new_col_schemas.at(i)));
       } else if (OB_FAIL(alter_table_update_index_and_view_column(
                    new_table_schema, new_col_schemas.at(i), ddl_operator, trans,

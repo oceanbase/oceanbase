@@ -1388,6 +1388,7 @@ constexpr int OB_TABLE_LOCK_SPLIT_TWICE = -6326;
 constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
 constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
 constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
+constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1536,8 +1537,6 @@ constexpr int OB_ESI_IO_ERROR = -9075;
 constexpr int OB_ARCHIVE_ROUND_NOT_CONTINUOUS = -9077;
 constexpr int OB_ARCHIVE_LOG_TO_END = -9078;
 constexpr int OB_ARCHIVE_LOG_RECYCLED = -9079;
-constexpr int OB_BACKUP_FORMAT_FILE_NOT_EXIST = -9080;
-constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
 constexpr int OB_CLOG_RECYCLE_BEFORE_ARCHIVE = -9087;
@@ -3480,6 +3479,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_IS_SPLITTING__USER_ERROR_MSG "table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
+#define OB_USER_OUTOF_DATA_DISK_SPACE__USER_ERROR_MSG "user data disk is almost full"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3744,8 +3744,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARCHIVE_ROUND_NOT_CONTINUOUS__USER_ERROR_MSG "log discontinuous between two archive rounds"
 #define OB_ARCHIVE_LOG_TO_END__USER_ERROR_MSG "archive log is to end"
 #define OB_ARCHIVE_LOG_RECYCLED__USER_ERROR_MSG "archive log had been recycled"
-#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__USER_ERROR_MSG "the format file does not exist under the destination"
-#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__USER_ERROR_MSG "the content of the format file at the destination does not match"
+#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__USER_ERROR_MSG "format file does not exist%s"
+#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__USER_ERROR_MSG "format file does not match%s"
 #define OB_BACKUP_DEVICE_OUT_OF_SPACE__USER_ERROR_MSG "backup device out of space"
 #define OB_BACKUP_PWRITE_OFFSET_NOT_MATCH__USER_ERROR_MSG "the pwrite offset of the object storage is inconsistent"
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
@@ -5703,6 +5703,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_IS_SPLITTING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6327, table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
+#define OB_USER_OUTOF_DATA_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6330, user data disk is almost full"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -5967,8 +5968,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARCHIVE_ROUND_NOT_CONTINUOUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9077, log discontinuous between two archive rounds"
 #define OB_ARCHIVE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9078, archive log is to end"
 #define OB_ARCHIVE_LOG_RECYCLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9079, archive log had been recycled"
-#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9080, the format file does not exist under the destination"
-#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9081, the content of the format file at the destination does not match"
+#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9080, format file does not exist%s"
+#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9081, format file does not match%s"
 #define OB_BACKUP_DEVICE_OUT_OF_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9082, backup device out of space"
 #define OB_BACKUP_PWRITE_OFFSET_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9083, the pwrite offset of the object storage is inconsistent"
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9084, the contents of pwrite are inconsistent"
@@ -6306,7 +6307,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2219];
+extern int g_all_ob_errnos[2220];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -11,6 +11,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <signal.h>
+#include <unistd.h>
 #define protected public
 #define private public
 #include "lib/allocator/ob_fifo_allocator.h"
@@ -635,6 +637,8 @@ void TestTmpFile::SetUp()
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
   ObTenantEnv::set_tenant(&tenant_ctx);
+
+  ObMallocAllocator::get_instance()->set_tenant_limit(1, 8L * 1024L * 1024L * 1024L /* 8 GB */);
 }
 
 void TestTmpFile::TearDown()
@@ -676,6 +680,9 @@ TEST_F(TestTmpFile, test_big_file)
   write_time = ObTimeUtility::current_time() - write_time;
   io_info.buf_ = read_buf;
 
+  // Flush all held block caches to ensure that subsequent read processes will go through I/O.
+  ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
+
   io_info.size_ = write_size;
   ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -712,6 +719,88 @@ TEST_F(TestTmpFile, test_big_file)
   free(read_buf);
 
   STORAGE_LOG(INFO, "test_big_file");
+  STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
+
+  ObTmpFileManager::get_instance().remove(fd);
+}
+
+TEST_F(TestTmpFile, test_big_file_disable_page_cache)
+{
+  int ret = OB_SUCCESS;
+  int64_t dir = -1;
+  int64_t fd = -1;
+  const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  ObTmpFileIOInfo io_info;
+  ObTmpFileIOHandle handle;
+  ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTmpFileManager::get_instance().open(fd, dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  int64_t write_size = macro_block_size * 512;
+  char *write_buf = (char *)malloc(write_size);
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = static_cast<char>(i % 256);
+  }
+  char *read_buf = (char *)malloc(write_size);
+  io_info.fd_ = fd;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.disable_page_cache_ = true;
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = ObTmpFileManager::get_instance().write(io_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  write_time = ObTimeUtility::current_time() - write_time;
+  io_info.buf_ = read_buf;
+
+  // Flush all held block caches to ensure that subsequent read processes will go through I/O.
+  ObKVGlobalCache::get_instance().erase_cache(1, "tmp_block_cache");
+
+  io_info.size_ = write_size;
+  ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(handle.size_ < handle.expect_read_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.wait());
+  ASSERT_EQ(write_size, handle.get_data_size());
+  int cmp = memcmp(handle.get_buffer(), write_buf, handle.get_data_size());
+  ASSERT_EQ(0, cmp);
+
+  io_info.size_ = macro_block_size;
+  ret = ObTmpFileManager::get_instance().pread(io_info, 100, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(macro_block_size, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
+  ASSERT_EQ(0, cmp);
+
+  io_info.size_ = write_size;
+  int64_t read_time = ObTimeUtility::current_time();
+  ret = ObTmpFileManager::get_instance().pread(io_info, 0, handle);
+  read_time = ObTimeUtility::current_time() - read_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(write_size, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf, write_size);
+  ASSERT_EQ(0, cmp);
+
+  io_info.size_ = 200;
+  ret = ObTmpFileManager::get_instance().pread(io_info, 200, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(200, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + 200, 200);
+  ASSERT_EQ(0, cmp);
+
+  free(write_buf);
+  free(read_buf);
+
+  STORAGE_LOG(INFO, "test_big_file_disable_page_cache");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
   ObTmpTenantFileStoreHandle store_handle;
   OB_TMP_FILE_STORE.get_store(1, store_handle);
@@ -2263,8 +2352,24 @@ TEST_F(TestTmpFile, test_truncate_free_block) {
 }  // end namespace unittest
 }  // end namespace oceanbase
 
+void sig_49_handler(int signo)
+{
+  // do nothing.
+}
+
 int main(int argc, char **argv)
 {
+  struct sigaction sa;
+  sa.sa_handler = sig_49_handler;
+  sa.sa_flags = 0;
+  sigemptyset(&sa.sa_mask);
+
+  // catch 49 signal and do nothing.
+  if (sigaction(49, &sa, NULL) == -1) {
+    perror("sigaction");
+    return 1;
+  }
+
   system("rm -f test_tmp_file.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_file_name("test_tmp_file.log", true, true);

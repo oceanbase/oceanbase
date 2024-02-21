@@ -805,7 +805,7 @@ int64_t ObBlockMetaTree::get_memory_used() const
 /******************             ObDDLKV              **********************/
 
 ObDDLMemtable::ObDDLMemtable()
-  : is_inited_(false), allocator_("ddl_mem_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), block_meta_tree_()
+  : is_inited_(false), block_meta_tree_()
 {
 
 }
@@ -816,6 +816,7 @@ ObDDLMemtable::~ObDDLMemtable()
 }
 
 int ObDDLMemtable::init(
+    ObArenaAllocator &allocator,
     ObTablet &tablet,
     const ObITable::TableKey &table_key,
     const share::SCN &ddl_start_scn,
@@ -841,7 +842,7 @@ int ObDDLMemtable::init(
       LOG_WARN("init mem index sstable failed", K(ret), K(table_key), K(ddl_start_scn));
     } else if (OB_FAIL(init_sstable_param(tablet, table_key, ddl_start_scn, sstable_param))) {
       LOG_WARN("init sstable param failed", K(ret));
-    } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator_))) {
+    } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator))) {
       LOG_WARN("init sstable failed", K(ret));
     } else {
       is_inited_ = true;
@@ -856,7 +857,6 @@ void ObDDLMemtable::reset()
   is_inited_ = false;
   ObSSTable::reset();
   block_meta_tree_.destroy();
-  allocator_.reset();
 }
 
 void ObDDLMemtable::set_scn_range(
@@ -982,7 +982,7 @@ int ObDDLKV::create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &tab
     LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDDLMemtable)));
   } else {
     ddl_memtable = new (buf) ObDDLMemtable;
-    if (OB_FAIL(ddl_memtable->init(tablet, table_key, ddl_start_scn_, data_format_version_))) {
+    if (OB_FAIL(ddl_memtable->init(arena_allocator_, tablet, table_key, ddl_start_scn_, data_format_version_))) {
       LOG_WARN("init ddl memtable failed", K(ret), K(table_key));
     } else if (OB_FAIL(ddl_memtables_.push_back(ddl_memtable))) {
       LOG_WARN("push back ddl memtable failed", K(ret));

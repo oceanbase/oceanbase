@@ -63,6 +63,7 @@ ObMultipleMerge::ObMultipleMerge()
       get_table_param_(nullptr),
       read_memtable_only_(false),
       block_row_store_(nullptr),
+      group_by_cell_(nullptr),
       skip_bit_(nullptr),
       out_project_cols_(),
       lob_reader_(),
@@ -86,6 +87,13 @@ ObMultipleMerge::~ObMultipleMerge()
       access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
+  }
+  if (nullptr != group_by_cell_) {
+    group_by_cell_->~ObGroupByCell();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
+    }
+    group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
     if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
@@ -370,6 +378,11 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
             OB_FAIL(access_param_->get_op()->write_trans_info_datum(unprojected_row_))) {
           LOG_WARN("write trans_info to expr datum failed", K(ret), K(unprojected_row_));
         } else if (nullptr != row) {
+          if (OB_UNLIKELY(nullptr != group_by_cell_)) {
+            if (OB_FAIL(group_by_cell_->copy_single_output_row(access_param_->get_op()->get_eval_ctx()))) {
+              LOG_WARN("Failed to copy single output row", K(ret));
+            }
+          }
           break;
         }
       }
@@ -733,14 +746,14 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   } else if (need_fill_virtual_columns_ && OB_FAIL(fill_virtual_columns(cur_row_))) {
     LOG_WARN("Fail to fill virtual columns, ", K(ret));
   }
-  if (OB_FAIL(ret) || need_skip) {
+  if (OB_FAIL(ret)) {
   } else if (0 == (++scan_cnt_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
     // check if timeout or if transaction status every 10000 rows, which should be within 10ms
     if (OB_FAIL(THIS_WORKER.check_status())) {
       STORAGE_LOG(WARN, "query interrupt, ", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !need_skip) {
     if (in_row.fast_filter_skipped_) {
       in_row.fast_filter_skipped_ = false;
     } else if (OB_FAIL(check_filtered(cur_row_, is_filter_filtered))) {
@@ -783,6 +796,13 @@ void ObMultipleMerge::reset()
       access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
+  }
+  if (nullptr != group_by_cell_) {
+    group_by_cell_->~ObGroupByCell();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
+    }
+    group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
     if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
@@ -935,6 +955,15 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
   if (OB_SUCC(ret) && nullptr != block_row_store_) {
     if (OB_FAIL(block_row_store_->init(param))) {
       LOG_WARN("fail to init block row store", K(ret), K(block_row_store_));
+    }
+  }
+  if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by() && !param.iter_param_.vectorized_enabled_) {
+    if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObGroupByCell)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc aggregated store", K(ret));
+    } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(0, *context.stmt_allocator_))) {
+    } else if (OB_FAIL(group_by_cell_->init_for_single_row(param, param.get_op()->get_eval_ctx()))) {
+      LOG_WARN("Failed to init group by cell for single row", K(ret));
     }
   }
   return ret;

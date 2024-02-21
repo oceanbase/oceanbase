@@ -6762,7 +6762,7 @@ struct ObCreateRoutineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateRoutineArg(): routine_info_(), db_name_(), is_or_replace_(false), is_need_alter_(false), error_info_() {}
+  ObCreateRoutineArg(): routine_info_(), db_name_(), is_or_replace_(false), is_need_alter_(false), error_info_(), with_if_not_exist_(false) {}
   virtual ~ObCreateRoutineArg() {}
   bool is_valid() const;
   int assign(const ObCreateRoutineArg &other);
@@ -6771,7 +6771,8 @@ public:
                K_(is_or_replace),
                K_(is_need_alter),
                K_(error_info),
-               K_(dependency_infos));
+               K_(dependency_infos),
+               K_(with_if_not_exist));
 
   share::schema::ObRoutineInfo routine_info_;
   common::ObString db_name_;
@@ -6779,6 +6780,7 @@ public:
   bool is_need_alter_; // used in mysql mode
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+  bool with_if_not_exist_;
 };
 
 struct ObDropRoutineArg : public ObDDLArg

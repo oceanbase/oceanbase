@@ -716,8 +716,6 @@ int ObTenantDirectLoadMgr::get_tablet_cache_interval(
     ObTabletCacheInterval &interval)
 {
   int ret = OB_SUCCESS;
-  ObTabletDirectLoadMgrKey mgr_key(tablet_id, true/*full direct load*/);  // only support in ddl, which is full direct load
-  ObBucketHashWLockGuard guard(bucket_lock_, mgr_key.hash());
   ObTabletAutoincrementService &autoinc_service = ObTabletAutoincrementService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -728,6 +726,8 @@ int ObTenantDirectLoadMgr::get_tablet_cache_interval(
   } else if (OB_FAIL(autoinc_service.get_tablet_cache_interval(MTL_ID(), interval))) {
     LOG_WARN("failed to get tablet cache intervals", K(ret));
   } else {
+    ObTabletDirectLoadMgrKey mgr_key(tablet_id, true/*full direct load*/);  // only support in ddl, which is full direct load
+    ObBucketHashWLockGuard guard(bucket_lock_, mgr_key.hash());
     ObTabletDirectLoadExecContext exec_context;
     ObTabletDirectLoadExecContextId exec_id;
     exec_id.tablet_id_ = tablet_id;
@@ -2198,7 +2198,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
       ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
       if (OB_FAIL(direct_load_mgr_handle.set_obj(this))) {
         LOG_WARN("set direct load mgr handle failed", K(ret));
-      } else if (OB_FAIL(redo_writer.write_commit_log(true, table_key_,
+      } else if (OB_FAIL(redo_writer.write_commit_log_with_retry(true, table_key_,
           start_scn, direct_load_mgr_handle, tablet_handle, commit_scn, is_remote_write, lock_tid))) {
         LOG_WARN("fail write ddl commit log", K(ret), K(table_key_), K(sqc_build_ctx_));
       }

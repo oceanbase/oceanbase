@@ -432,7 +432,6 @@ int ObSelectStmtPrinter::print_select()
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
           const SelectItem &select_item = select_stmt->get_select_item(i);
-          OZ (set_synonym_name_recursively(select_item.expr_, stmt_));
           if (select_item.is_implicit_added_ || select_item.implicit_filled_) {
             continue;
           }

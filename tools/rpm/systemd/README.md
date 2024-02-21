@@ -12,6 +12,10 @@ Now systemd only support RPM platform and you can install and run oceanbase serv
 yum install oceanbase-ce
 systemctl start oceanbase
 ```
+You can set the OceanBase service to start automatically on boot using the following command:
+```bash
+systemctl enable oceanbase
+```
 
 ## Overview of systemd
 Systemd provides automatic oceanbase startup and shutdown. It also enables manual server management using the systemctl command. For example:

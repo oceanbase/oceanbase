@@ -924,7 +924,7 @@ void ObDDLScheduler::run1()
       }
       if (do_idle) {
         first_retry_task = nullptr;
-        idler_.idle(10 * 1000L);
+        idler_.idle(ObDDLTask::DEFAULT_TASK_IDLE_TIME_US);
       }
     }
   }
@@ -1291,6 +1291,7 @@ int ObDDLScheduler::modify_redef_task(const ObDDLTaskID &task_id, ObRedefCallbac
   int ret = OB_SUCCESS;
   int64_t table_task_status = 0;
   int64_t table_execution_id = 0;
+  int64_t table_ret_code = OB_SUCCESS;
   ObMySQLTransaction trans;
   common::ObArenaAllocator allocator(lib::ObLabel("task_info"));
   if (OB_UNLIKELY(!task_id.is_valid())) {
@@ -1304,7 +1305,8 @@ int ObDDLScheduler::modify_redef_task(const ObDDLTaskID &task_id, ObRedefCallbac
                                                                 task_id.tenant_id_,
                                                                 task_id.task_id_,
                                                                 table_task_status,
-                                                                table_execution_id))) {
+                                                                table_execution_id,
+                                                                table_ret_code))) {
     LOG_WARN("select for update failed", K(ret), K(task_id.tenant_id_), K(task_id.task_id_));
   } else {
     bool need_reschedule = false;
@@ -1942,6 +1944,7 @@ int ObDDLScheduler::recover_task()
       int64_t tenant_schema_version = 0;
       int64_t table_task_status = 0;
       int64_t execution_id = -1;
+      int64_t ret_code = OB_SUCCESS;
       bool is_recover_table_aux_tenant = false;
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
@@ -1963,7 +1966,8 @@ int ObDDLScheduler::recover_task()
                                                                     cur_record.tenant_id_,
                                                                     cur_record.task_id_,
                                                                     table_task_status,
-                                                                    execution_id))) {
+                                                                    execution_id,
+                                                                    ret_code))) {
         LOG_WARN("select for update failed", K(ret), K(cur_record));
       } else if (OB_FAIL(schedule_ddl_task(cur_record))) {
         LOG_WARN("failed to schedule ddl task", K(ret), K(cur_record));

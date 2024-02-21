@@ -91,12 +91,14 @@ public:
   int get(ObMvccAccessCtx &ctx,
           const ObQueryFlag &query_flag,
           const ObMemtableKey *parameter_key,
+          const share::ObLSID memtable_ls_id,
           ObMemtableKey *internal_key,
           ObMvccValueIterator &value_iter,
           storage::ObStoreRowLockState &lock_state);
   int scan(ObMvccAccessCtx &ctx,
            const ObQueryFlag &query_flag,
            const ObMvccScanRange &range,
+           const share::ObLSID memtable_ls_id,
            ObMvccRowIterator &row_iter);
   int scan(ObMvccAccessCtx &ctx,
            const ObMvccScanRange &range,

@@ -24,7 +24,9 @@ namespace blocksstable
 {
 
 ObTmpFileIOInfo::ObTmpFileIOInfo()
-  : fd_(0), dir_id_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), tenant_id_(OB_INVALID_TENANT_ID), buf_(NULL), io_desc_()
+    : fd_(0), dir_id_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
+      tenant_id_(OB_INVALID_TENANT_ID), buf_(NULL), io_desc_(),
+      disable_page_cache_(false)
 {
 }
 
@@ -61,6 +63,7 @@ ObTmpFileIOHandle::ObTmpFileIOHandle()
     is_read_(false),
     has_wait_(false),
     is_finished_(false),
+    disable_page_cache_(false),
     ret_code_(OB_SUCCESS),
     expect_read_size_(0),
     last_read_offset_(-1),
@@ -86,7 +89,8 @@ int ObTmpFileIOHandle::prepare_read(
     char *read_buf,
     int64_t fd,
     int64_t dir_id,
-    uint64_t tenant_id)
+    uint64_t tenant_id,
+    bool disable_page_cache)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(read_buf)) {
@@ -103,6 +107,7 @@ int ObTmpFileIOHandle::prepare_read(
     expect_read_size_ = read_size;
     last_read_offset_ = read_offset;
     io_flag_ = io_flag;
+    disable_page_cache_ = disable_page_cache;
     if (last_fd_ != fd_) {
       last_fd_ = fd_;
       last_extent_id_ = 0;
@@ -812,7 +817,8 @@ int ObTmpFile::aio_read_without_lock(const ObTmpFileIOInfo &io_info,
                                          io_info.buf_,
                                          file_meta_.get_fd(),
                                          file_meta_.get_dir_id(),
-                                         io_info.tenant_id_))){
+                                         io_info.tenant_id_,
+                                         io_info.disable_page_cache_))) {
     STORAGE_LOG(WARN, "fail to prepare read io handle", K(ret), K(io_info), K(offset));
   } else if (OB_UNLIKELY(io_info.size_ > 0 && offset >= tmp->get_global_end())) {
     ret = OB_ITER_END;
@@ -1237,6 +1243,7 @@ int ObTmpFile::sync(const int64_t timeout_ms)
       // iter all blocks, execute async wash.
       common::hash::ObHashSet<int64_t>::const_iterator iter;
       common::ObSEArray<ObTmpTenantMemBlockManager::ObIOWaitInfoHandle, 1> handles;
+      handles.set_attr(ObMemAttr(MTL_ID(), "TMP_SYNC_HDL"));
       for (iter = blk_id_set.begin(); OB_SUCC(ret) && iter != blk_id_set.end(); ++iter) {
         const int64_t &blk_id = iter->first;
         ObTmpTenantMemBlockManager::ObIOWaitInfoHandle handle;
@@ -1715,6 +1722,7 @@ int ObTmpFileManager::remove_tenant_file(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<int64_t, 32> fd_list;
+  fd_list.set_attr(ObMemAttr(MTL_ID(), "TMP_FD_LIST"));
   RmTenantTmpFileOp rm_tenant_file_op(tenant_id, &fd_list);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

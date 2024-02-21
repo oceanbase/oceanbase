@@ -110,9 +110,6 @@ int ObDDLTableMergeDag::create_first_task()
       && ddl_param_.start_scn_ < tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_scn", tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_);
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
-      ddl_param_.start_scn_, ddl_param_.snapshot_version_, ddl_param_.data_format_version_))) {
-    LOG_WARN("ddl kv manager try freeze failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(true/*frozen_only*/, ddl_kvs_handle))) {
     LOG_WARN("get freezed ddl kv failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(alloc_task(merge_task))) {
@@ -291,6 +288,12 @@ int ObDDLTableMergeTask::process()
     LOG_WARN("get ddl sstable handles failed", K(ret));
   } else {
     DEBUG_SYNC(BEFORE_DDL_TABLE_MERGE_TASK);
+#ifdef ERRSIM
+    if (GCONF.errsim_test_tablet_id.get_value() > 0 && merge_param_.tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()) {
+      LOG_INFO("test tablet ddl merge start", K(ret), K(merge_param_));
+      DEBUG_SYNC(BEFORE_LOB_META_TABELT_DDL_MERGE_TASK);
+    }
+#endif
 #ifdef ERRSIM
     static int64_t counter = 0;
     counter++;
@@ -878,7 +881,7 @@ int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int
     if (OB_FAIL(macro_block_iter_->get_next_macro_block(block_desc))) {
       LOG_WARN("get next macro block failed", K(ret));
     } else {
-      end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_;
+      end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_ - 1;
     }
   } else {
     if (OB_FAIL(sec_meta_iter_->get_next(data_macro_meta))) {
@@ -948,12 +951,13 @@ int get_sorted_meta_array(
               copied_meta->~ObDataMacroBlockMeta();
             } else {
               FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_));
+                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_),
+                  "end_row_offset", end_row_offset);
             }
           }
         }
         LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
-            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_));
+            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_), "end_row_offset", end_row_offset);
       }
     }
   }
@@ -1001,6 +1005,26 @@ int compact_sstables(
     LOG_WARN("create sstable failed", K(ret), K(ddl_param), K(sstables));
   }
   LOG_DEBUG("compact_sstables", K(ret), K(sstables), K(ddl_param), K(read_info), KPC(sstable_handle.get_table()));
+  return ret;
+}
+
+int ObTabletDDLUtil::get_compact_meta_array(
+    ObTablet &tablet,
+    ObIArray<ObSSTable *> &sstables,
+    const ObTabletDDLParam &ddl_param,
+    const ObITableReadInfo &read_info,
+    const ObStorageSchema *storage_schema,
+    common::ObArenaAllocator &allocator,
+    ObArray<ObDDLBlockMeta> &sorted_metas)
+{
+  int ret = OB_SUCCESS;
+  sorted_metas.reset();
+  ObBlockMetaTree meta_tree;
+  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
+    LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
+  } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, allocator, sorted_metas))) {
+    LOG_WARN("get sorted meta array failed", K(ret), K(read_info), K(sstables));
+  }
   return ret;
 }
 
@@ -1408,6 +1432,12 @@ int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
       && param.start_scn_ < tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(param), "new_start_scn", tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_);
+  // TODO(cangdi): do not freeze when ddl kv's min scn >= rec_scn
+  } else if (!ddl_kv_mgr_handle.get_obj()->can_freeze()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_WARN("cannot freeze now", K(param));
+    }
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(
       param.start_scn_, param.snapshot_version_, param.data_format_version_))) {
     LOG_WARN("ddl kv manager try freeze failed", K(ret), K(param));

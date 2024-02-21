@@ -6881,7 +6881,7 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       bool &contain_select_stmt)
+                                       ObQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6918,7 +6918,10 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
         enable_parallel = false;
       }
       if (routine_info->is_reads_sql_data()) {
-        contain_select_stmt = true;
+        ctx.udf_has_select_stmt_ = true;
+      }
+      if (routine_info->is_modifies_sql_data()) {
+        ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
     }
@@ -7835,9 +7838,9 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 {
   int ret = OB_SUCCESS;
 
-  const char *access_denied_notice_message = 
+  const char *access_denied_notice_message =
     "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'";
-  
+
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
     FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
@@ -8573,6 +8576,11 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
       // supported operations
+    } else if (!arg.is_alter_columns_
+        && ((ObAlterTableArg::ADD_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::DROP_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::ALTER_CONSTRAINT_STATE == arg.alter_constraint_type_))) {
+      // add/drop constraint is supported
     } else {
       // unsupported operations
       ret = OB_NOT_SUPPORTED;

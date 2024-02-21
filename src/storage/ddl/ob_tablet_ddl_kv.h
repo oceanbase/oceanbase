@@ -168,6 +168,7 @@ public:
   ObDDLMemtable();
   virtual ~ObDDLMemtable();
   int init(
+      ObArenaAllocator &allocator,
       ObTablet &tablet,
       const ObITable::TableKey &table_key,
       const share::SCN &ddl_start_scn,
@@ -194,7 +195,6 @@ private:
       ObTabletCreateSSTableParam &sstable_param);
 private:
   bool is_inited_;
-  ObArenaAllocator allocator_;
   ObBlockMetaTree block_meta_tree_;
 };
 

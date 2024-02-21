@@ -16,6 +16,7 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -885,17 +886,15 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
 
-  if (is_lob_storage(obj.get_type()) && (obj.has_lob_header() != expr.obj_meta_.has_lob_header())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to check lob header", K(ret), K(expr), K(obj));
+  ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
+  if (OB_FAIL(datum.from_obj(obj))) {
+    LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+  } else if (is_lob_storage(obj.get_type()) && OB_FAIL(ob_adjust_lob_datum(datum, obj.get_meta(), expr.obj_meta_, allocator))) {
+    // `ob_adjust_lob_datum()` will try to adjust datum form in_meta into out_meta
+    LOG_WARN("fail to adjust lob datum", K(ret), K(datum), K(obj));
   } else {
-    ObDatum &datum = expr.locate_datum_for_write(eval_ctx);
-    if (OB_FAIL(datum.from_obj(obj))) {
-      LOG_WARN("fail to convert object from datum", K(ret), K(obj));
-    } else {
-      expr.get_eval_info(eval_ctx).evaluated_ = true;
-      expr.get_eval_info(eval_ctx).projected_ = true;
-    }
+    expr.get_eval_info(eval_ctx).evaluated_ = true;
+    expr.get_eval_info(eval_ctx).projected_ = true;
   }
 
   return ret;

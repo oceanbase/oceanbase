@@ -1874,6 +1874,8 @@ int ObCancelTaskExecutor::parse_task_id(
 int ObSetDiskValidExecutor::execute(ObExecContext &ctx, ObSetDiskValidStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  const ObZone null_zone;
+  ObArray<ObAddr> server_list;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
   ObAddr server = stmt.server_;
@@ -1886,6 +1888,11 @@ int ObSetDiskValidExecutor::execute(ObExecContext &ctx, ObSetDiskValidStmt &stmt
   } else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get srv rpc proxy failed");
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret), K(null_zone));
+  } else if (!has_exist_in_array(server_list, server)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("server does not exist in the alive server list", K(ret), K(null_zone), K(server_list), K(server));
   } else if (OB_FAIL(srv_rpc_proxy->to(server).set_disk_valid(arg))) {
     LOG_WARN("rpc proxy set_disk_valid failed", K(ret));
   } else {
@@ -2602,6 +2609,8 @@ int ObClearRestoreSourceExecutor::execute(ObExecContext &ctx, ObClearRestoreSour
 int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  const ObZone null_zone;
+  ObArray<ObAddr> server_list;
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy = NULL;
   const ObAddr server = stmt.server_;
@@ -2614,6 +2623,11 @@ int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &
   } else if (OB_ISNULL(srv_rpc_proxy = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get srv rpc proxy failed");
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret), K(null_zone));
+  } else if (!has_exist_in_array(server_list, server)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("server does not exist in the alive server list", K(ret), K(null_zone), K(server_list), K(server));
   } else if (OB_FAIL(srv_rpc_proxy->to(server).timeout(THIS_WORKER.get_timeout_remain()).checkpoint_slog(arg))) {
     LOG_WARN("rpc proxy checkpoint slog failed", K(ret));
   }

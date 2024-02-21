@@ -199,6 +199,7 @@ static T *copy_ds_stat_item(ObIAllocator &allocator, const T &src)
 
 const int64_t OB_DS_BASIC_SAMPLE_MICRO_CNT = 32;
 const int64_t OB_DS_MAX_FILTER_EXPR_COUNT = 10000;
+const int64_t OB_DS_MIN_QUERY_TIMEOUT = 1000;//Dynamic sampling requires a minimum timeout of 1ms.
 //const int64_t OB_OPT_DS_ADAPTIVE_SAMPLE_MICRO_CNT = 200;
 //const int64_t OB_OPT_DS_MAX_TIMES = 7;
 
@@ -366,8 +367,7 @@ public:
                                                   uint64_t index_id,
                                                   const ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
-                                              int64_t &max_ds_timeout);
+  static int64_t get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx);
 
   static int add_failed_ds_table_list(const uint64_t table_id,
                                       const common::ObIArray<int64_t> &used_part_id,

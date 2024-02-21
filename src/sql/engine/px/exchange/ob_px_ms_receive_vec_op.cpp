@@ -154,7 +154,7 @@ int ObPxMSReceiveVecOp::inner_open()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for selector", K(ret));
       } else if (OB_ISNULL(stored_compact_rows_ = static_cast<const ObCompactRow **>(
-                      ctx_.get_allocator().alloc(spec_.max_batch_size_ * sizeof(ObCompactRow))))) {
+                      ctx_.get_allocator().alloc(spec_.max_batch_size_ * sizeof(ObCompactRow *))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for stored compact rows", K(ret));
       } else {

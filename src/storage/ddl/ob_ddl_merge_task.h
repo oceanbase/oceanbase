@@ -114,6 +114,14 @@ public:
       const ObStorageSchema *storage_schema,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
+  static int get_compact_meta_array(
+      ObTablet &tablet,
+      ObIArray<blocksstable::ObSSTable *> &sstables,
+      const ObTabletDDLParam &ddl_param,
+      const ObITableReadInfo &read_info,
+      const ObStorageSchema *storage_schema,
+      common::ObArenaAllocator &allocator,
+      ObArray<ObDDLBlockMeta> &sorted_metas);
   static int create_ddl_sstable(
       ObTablet &tablet,
       const ObTabletDDLParam &ddl_param,

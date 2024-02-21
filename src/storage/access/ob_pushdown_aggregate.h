@@ -218,7 +218,7 @@ struct ObAggCellBasicInfo
   }
   OB_INLINE bool is_valid() const
   {
-    return col_offset_ >= 0 && nullptr != agg_expr_ && batch_size_ > 0;
+    return col_offset_ >= 0 && nullptr != agg_expr_ && batch_size_ >= 0;
   }
   TO_STRING_KV(K_(col_offset), K_(col_index), KPC_(col_param), K_(agg_expr), K_(batch_size));
   int32_t col_offset_; // offset in projector
@@ -256,6 +256,7 @@ public:
       const bool is_default_datum = false) = 0;
   virtual int copy_output_row(const int32_t datum_offset);
   virtual int copy_output_rows(const int32_t datum_offset);
+  virtual int copy_single_output_row(sql::ObEvalCtx &ctx);
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding);
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt);
   virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg, bool &can_agg);
@@ -339,6 +340,7 @@ public:
       const bool is_default_datum = false) override;
   virtual int copy_output_row(const int32_t datum_offset) override;
   virtual int copy_output_rows(const int32_t datum_offset) override;
+  virtual int copy_single_output_row(sql::ObEvalCtx &ctx) override;
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding) override;
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt) override;
   virtual bool need_access_data() const override { return exclude_null_; }
@@ -429,6 +431,7 @@ public:
       const bool is_default_datum = false) override;
   virtual int copy_output_row(const int32_t datum_offset) override;
   virtual int copy_output_rows(const int32_t datum_offset) override;
+  virtual int copy_single_output_row(sql::ObEvalCtx &ctx) override;
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding) override;
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt) override;
   virtual int reserve_group_by_buf(const int64_t size) override;
@@ -556,6 +559,11 @@ public:
     UNUSED(datum_offset);
     return OB_SUCCESS;
   }
+  virtual int copy_single_output_row(sql::ObEvalCtx &ctx) override
+  {
+    UNUSED(ctx);
+    return OB_SUCCESS;
+  }
   virtual int collect_result(sql::ObEvalCtx &ctx, bool need_padding) override;
   virtual int collect_batch_result_in_group_by(const int64_t distinct_cnt) override;
   virtual bool need_access_data() const override { return !finished(); }
@@ -607,6 +615,7 @@ public:
   void reset();
   void reuse();
   int init(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ctx);
+  int init_for_single_row(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ctx);
   // do group by for aggregate cell indicated by 'agg_idx'
   // datums: batch of datums of this column
   // count: batch size
@@ -625,6 +634,7 @@ public:
   // in the case where can not do batch scan or can not do group by pushdown
   int copy_output_row(const int64_t batch_idx);
   int copy_output_rows(const int64_t batch_idx);
+  int copy_single_output_row(sql::ObEvalCtx &ctx);
   int collect_result();
   int add_distinct_null_value();
   // for micro with bitmap, should extract distinct values according bitmap
@@ -690,6 +700,7 @@ public:
       const bool init_output = true);
   DECLARE_TO_STRING;
 private:
+  int init_agg_cells(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ctx, const bool is_for_single_row);
   static const int64_t DEFAULT_AGG_CELL_CNT = 2;
   static const int64_t USE_GROUP_BY_READ_CNT_FACTOR = 2;
   static constexpr double USE_GROUP_BY_DISTINCT_RATIO = 0.5;

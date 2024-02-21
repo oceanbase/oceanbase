@@ -5337,7 +5337,7 @@ def_table_schema(**all_column_group_mapping)
 
 def_table_schema(**gen_history_table_def(422, all_column_group_mapping))
 
-all_transfer_task_def = dict(
+def_table_schema(
     owner = 'wangzhennan.wzn',
     table_name    = '__all_transfer_task',
     table_id = '423',
@@ -5369,11 +5369,47 @@ all_transfer_task_def = dict(
         ('comment', 'longtext', 'true'),
         ('balance_task_id', 'int', 'false'),
         ('table_lock_owner_id', 'int', 'true'),
+        ('data_version', 'uint', 'true'),
     ],
 )
-def_table_schema(**all_transfer_task_def)
 
-def_table_schema(**gen_history_table_def_of_task(424, all_transfer_task_def))
+def_table_schema(
+    owner = 'wangzhennan.wzn',
+    table_name    = '__all_transfer_task_history',
+    table_id = '424',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('task_id', 'int'),
+    ],
+
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('src_ls', 'int', 'false'),
+        ('dest_ls', 'int', 'false'),
+        ('part_list', 'longtext', 'true'),
+        ('part_count', 'int', 'true'),
+        ('not_exist_part_list', 'longtext', 'true'),
+        ('lock_conflict_part_list', 'longtext', 'true'),
+        ('table_lock_tablet_list', 'longtext', 'true'),
+        ('tablet_list', 'longtext', 'true'),
+        ('tablet_count', 'int', 'true'),
+        ('start_scn', 'uint', 'true'),
+        ('finish_scn', 'uint', 'true'),
+        ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+        ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+        ('result', 'int', 'true'),
+        ('comment', 'longtext', 'true'),
+        ('balance_task_id', 'int', 'false'),
+        ('table_lock_owner_id', 'int', 'true'),
+        ('create_time', 'timestamp', 'false'),
+        ('finish_time', 'timestamp', 'false'),
+        ('data_version', 'uint', 'true'),
+    ],
+)
 
 all_balance_job_def= dict(
   owner = 'msy164651',
@@ -8167,7 +8203,9 @@ def_table_schema(
     ('plsql_exec_time', 'int'),
     ('network_wait_time', 'uint', 'true'),
     ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
-    ('seq_num', 'int')
+    ('seq_num', 'int'),
+    ('total_memstore_read_row_count', 'int'),
+    ('total_ssstore_read_row_count', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12283,6 +12321,8 @@ def_table_schema(
       ('tablet_ptr', 'varchar:128'),
       ('initial_state', 'bool'),
       ('old_chain', 'varchar:128'),
+      ('occupy_size', 'bigint', 'false', '0'),
+      ('required_size', 'bigint', 'false', '0'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13641,6 +13681,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12470: __all_virtual_ls_compaction_status
 # 12471: __all_virtual_tablet_compaction_status
 # 12472: __all_virtual_tablet_checksum_error_info
+# 12473: __all_virtual_compatibility_control
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15371,7 +15412,9 @@ def_table_schema(
                          case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -31700,6 +31743,7 @@ def_table_schema(
 # 21542: V$OB_SESSION_PS_INFO
 # 21543: GV$OB_TRACEPOINT_INFO
 # 21544: V$OB_TRACEPOINT_INFO
+# 21545: V$OB_COMPATIBILITY_CONTROL
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -51632,7 +51676,9 @@ def_table_schema(
                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -57404,7 +57450,8 @@ SELECT svr_ip AS SVR_IP,
        status AS STATUS,
        latch_wait AS LATCH_WAIT,
        latch_hold AS LATCH_HOLD,
-       trace_id AS TRACE_ID
+       trace_id AS TRACE_ID,
+       cgroup_path AS CGROUP_PATH
 FROM SYS.ALL_VIRTUAL_THREAD
 """.replace("\n", " "),
 )

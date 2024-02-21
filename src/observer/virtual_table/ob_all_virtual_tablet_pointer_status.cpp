@@ -207,6 +207,12 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
             cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;
+        case DATA_OCCUPIED:
+          cur_row_.cells_[i].set_int(0);
+          break;
+        case DATA_REQUIRED:
+          cur_row_.cells_[i].set_int(0);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

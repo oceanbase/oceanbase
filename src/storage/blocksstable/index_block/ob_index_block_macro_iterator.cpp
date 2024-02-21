@@ -314,8 +314,6 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     ret = OB_ITER_END;
   } else if (OB_FAIL(tree_cursor_.get_macro_block_id(macro_id))) {
     LOG_WARN("Fail to get macro row block id", K(ret), K(macro_id));
-  } else if (OB_FAIL(tree_cursor_.get_start_row_offset(start_row_offset))) {
-    LOG_WARN("Fail to get prev row offset", K(ret), K(start_row_offset));
   } else if (OB_FAIL(tree_cursor_.get_idx_parser(idx_row_parser))) {
     LOG_WARN("Fail to get idx row parser", K(ret), K_(tree_cursor));
   } else if (OB_ISNULL(idx_row_parser)) {
@@ -330,9 +328,7 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     if ((macro_id == begin_ && is_reverse_scan_) || (macro_id == end_ && !is_reverse_scan_)) {
       is_iter_end_ = true;
     }
-    if (sstable_->is_normal_cg_sstable()) {
-      start_row_offset = idx_row_parser->get_row_offset() - idx_row_header->get_row_count() + 1;
-    }
+    start_row_offset = idx_row_parser->get_row_offset() - idx_row_header->get_row_count() + 1;
   }
 
   if (OB_SUCC(ret)) {

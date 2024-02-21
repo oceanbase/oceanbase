@@ -1674,6 +1674,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       } else {
         trans_ctx.buf_size_ = sql.length();
         trans_ctx.p_list_ = parse_result.param_nodes_;
+        CK (OB_NOT_NULL(parse_result.result_tree_));
         CK (T_STMT_LIST == parse_result.result_tree_->type_ && 1 == parse_result.result_tree_->num_child_);
         CK (OB_NOT_NULL(block_node = parse_result.result_tree_->children_[0]));
         CK (T_SP_ANONYMOUS_BLOCK == block_node->type_);

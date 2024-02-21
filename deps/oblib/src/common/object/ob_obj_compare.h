@@ -355,8 +355,7 @@ OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(const ObObjMeta& meta1,
     need_no_cast = false;
   } else if (OB_UNLIKELY(ob_is_string_type(type1)
                          && ob_is_string_type(type2)
-                         && ((meta1.get_collation_type() != meta2.get_collation_type())
-                             || tc1 != tc2))) { // string tc and text tc cannot compare directly
+                         && ((meta1.get_collation_type() != meta2.get_collation_type())))) {
     need_no_cast = false;
   } else if (OB_FAIL(get_cmp_func(tc1, tc2, cmp_op, cmp_func))) {
     COMMON_LOG(ERROR, "get cmp func failed", K(type1), K(type2), K(tc1), K(tc2), K(cmp_op));

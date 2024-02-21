@@ -169,6 +169,9 @@ private:
                                    StmtUniqueKeyProvider &unique_key_provider,
                                    ObSqlBitSet<> &left_unique_pos,
                                    ObSqlBitSet<> &right_flag_pos);
+  int remove_temp_table_select_item(ObSelectStmt *stmt,
+                                    const uint64_t flag_table_id,
+                                    ObSqlBitSet<> &right_flag_pos);
 
   int create_row_number_window_function(ObIArray<ObRawExpr *> &partition_exprs,
                                         ObIArray<ObRawExpr *> &order_exprs,
@@ -206,6 +209,7 @@ private:
   bool reached_max_times_for_or_expansion() { return try_times_ >= MAX_TIMES_FOR_OR_EXPANSION; }
 
   int check_upd_del_stmt_validity(const ObDelUpdStmt &stmt, bool &is_valid);
+  int disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt);
 
   int has_odd_function(const ObDMLStmt &stmt, bool &has);
 
@@ -390,6 +394,7 @@ private:
                               TableItem *rel_table,
                               TableItem *table,
                               bool &left_bottom);
+  int check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid);
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 private:
   int64_t try_times_;

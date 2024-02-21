@@ -286,7 +286,7 @@ struct IHashTable {
   virtual int64_t get_used_buckets() const = 0;
   virtual int64_t get_nbuckets() const = 0;
   virtual int64_t get_collisions() const = 0;
-  virtual int64_t get_bucket_mem_size() const = 0;
+  virtual int64_t get_mem_used() const = 0;
   virtual int64_t get_one_bucket_size() const = 0;
   virtual int64_t get_normalized_key_size() const = 0;
   virtual void set_diag_info(int64_t used_buckets, int64_t collisions) = 0;
@@ -349,7 +349,17 @@ struct HashTable : public IHashTable
   int64_t get_used_buckets() const override { return used_buckets_; }
   int64_t get_nbuckets() const override { return nbuckets_; }
   int64_t get_collisions() const override { return collisions_; }
-  int64_t get_bucket_mem_size() const override { return NULL == buckets_ ? 0 : buckets_->mem_used(); }
+  int64_t get_mem_used() const override {
+    int64_t size = 0;
+    size = sizeof(*this);
+    if (NULL != buckets_) {
+      size += buckets_->mem_used();
+    }
+    if (NULL != items_) {
+      size += items_->mem_used();
+    }
+    return size;
+  }
   int64_t get_one_bucket_size() const { return sizeof(Bucket); };
   int64_t get_normalized_key_size() const {
     return Prober::get_normalized_key_size();

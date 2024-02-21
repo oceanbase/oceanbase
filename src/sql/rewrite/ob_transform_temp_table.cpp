@@ -163,6 +163,8 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     OPT_TRACE("stmt containt oversize set stmt");
   } else if (!enable_temp_table_transform || force_temp_table_inline) {
     OPT_TRACE("session variable disable temp table transform");
+  } else if (stmt->has_for_update()) {
+    OPT_TRACE("stmt has for update, can not extract CTE");
   } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
     LOG_WARN("failed to init stmt map", K(ret));
   } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map))) {
@@ -208,6 +210,7 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     bool force_materia = false;
     bool force_inline = false;
     bool is_oversize_stmt = false;
+    bool has_for_update = false;
     int64_t stmt_size = 0;
     bool need_expand = false;
     bool can_expand = true;
@@ -219,6 +222,8 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
       LOG_WARN("check stmt size failed", K(ret));
     } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(helper.temp_table_query_, can_expand))) {
       LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (OB_FAIL(check_has_for_update(helper, has_for_update))) {
+      LOG_WARN("failed to check has for update", K(ret));
     } else if (!can_expand) {
       // do nothing
       OPT_TRACE("CTE can not be expanded");
@@ -229,6 +234,9 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     } else if (force_inline) {
       need_expand = true;
       OPT_TRACE("hint force inline CTE");
+    } else if (lib::is_oracle_mode() && has_for_update) {
+      need_expand = true;
+      OPT_TRACE("stmt has FOR UPDATE, force inline CTE");
     } else if (force_materia) {
       //do nothing
       OPT_TRACE("hint force materialize CTE");
@@ -295,7 +303,7 @@ int ObTransformTempTable::check_stmt_can_materialize(ObSelectStmt *stmt, bool is
       ObAggFunRawExpr *dummy = NULL;
       bool can_use_fast_min_max = false;
       STOP_OPT_TRACE;
-      if (ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max)) {
+      if (OB_FAIL(ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max))) {
         LOG_WARN("failed to check fast min max", K(ret));
       }
       RESUME_OPT_TRACE;
@@ -405,6 +413,24 @@ int ObTransformTempTable::check_stmt_has_cross_product(ObSelectStmt *stmt, bool 
                                                                  has_cross_product)))) {
         LOG_WARN("failed to check stmt condition", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_has_for_update(const ObDMLStmt::TempTableInfo &helper,
+                                               bool &has_for_update)
+{
+  int ret = OB_SUCCESS;
+  has_for_update = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < helper.upper_stmts_.count(); ++i) {
+    const ObDMLStmt *upper_stmt = helper.upper_stmts_.at(i);
+    if (OB_ISNULL(upper_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("upper stmt is NULL", K(ret), K(i));
+    } else if (upper_stmt->has_for_update()) {
+      has_for_update = true;
+      break;
     }
   }
   return ret;
@@ -1672,7 +1698,7 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
     if (OB_SUCC(ret) && !find) {
       ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
       ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-      if (ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select)) {
+      if (OB_FAIL(ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select))) {
         LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(new_select_list.push_back(view_select))) {
         LOG_WARN("failed to push back expr", K(ret));
