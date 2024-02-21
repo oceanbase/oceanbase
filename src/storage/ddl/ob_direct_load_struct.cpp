@@ -1123,15 +1123,10 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
                 LOG_WARN("get next row failed", K(ret));
               }
             } else {
-              if (OB_NOT_NULL(insert_monitor)) {
-                insert_monitor->inserted_cg_row_cnt_ += 1;
-              }
               if (OB_FAIL(cur_writer->append_row(stored_row))) {
                 LOG_WARN("append row failed", K(ret), KPC(stored_row));
-              } else {
-                if (OB_NOT_NULL(insert_monitor)) {
-                  insert_monitor->inserted_cg_row_cnt_ += 1;
-                }
+              } else if (OB_NOT_NULL(insert_monitor)) {
+                insert_monitor->inserted_cg_row_cnt_ += 1;
               }
             }
           }

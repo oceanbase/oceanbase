@@ -123,17 +123,17 @@ public:
   virtual void reuse() override;
   virtual void reset() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLSStableAllRangeIterator", K(is_iter_start_), K(is_iter_finish_),
-      KPC(rowkey_read_info_), K(index_macro_iter_), K(iter_param_), KP(cur_rowkey_), KP(cur_header_));
+      KPC(rowkey_read_info_), K(index_macro_iter_), K(iter_param_), K(cur_index_info_));
 
 private:
   bool is_iter_start_;
   bool is_iter_finish_;
   const ObITableReadInfo *rowkey_read_info_;
-  const blocksstable::ObDatumRowkey *cur_rowkey_;
-  const blocksstable::ObIndexBlockRowHeader *cur_header_;
   ObIndexBlockMacroIterator index_macro_iter_;
   ObIndexBlockIterParam iter_param_;
+  ObMicroIndexRowItem cur_index_info_;
   ObArenaAllocator macro_iter_allocator_;
+  ObArenaAllocator idx_row_allocator_;
 };
 
 // for empty ddl_merge_sstable

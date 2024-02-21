@@ -496,11 +496,11 @@ ObDDLSStableAllRangeIterator::ObDDLSStableAllRangeIterator()
   : is_iter_start_(false),
     is_iter_finish_(true),
     rowkey_read_info_(nullptr),
-    cur_rowkey_(nullptr),
-    cur_header_(nullptr),
     index_macro_iter_(),
     iter_param_(),
-    macro_iter_allocator_("DDLMerge_Iter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    cur_index_info_(),
+    macro_iter_allocator_("DDLMerge_Iter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    idx_row_allocator_("DDL_IdxRow", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
 }
 
@@ -515,10 +515,10 @@ void ObDDLSStableAllRangeIterator::reset()
   is_iter_finish_ = true;
   is_iter_start_ = false;
   rowkey_read_info_ = nullptr;
-  cur_rowkey_ = nullptr;
-  cur_header_ = nullptr;
   index_macro_iter_.reset();
+  cur_index_info_.reset();
   macro_iter_allocator_.reset();
+  idx_row_allocator_.reset();
   iter_param_.reset();
 }
 
@@ -527,10 +527,10 @@ void ObDDLSStableAllRangeIterator::reuse()
   is_iter_finish_ = true;
   is_iter_start_ = false;
   rowkey_read_info_ = nullptr;
-  cur_rowkey_ = nullptr;
-  cur_header_ = nullptr;
   index_macro_iter_.reset();
+  cur_index_info_.reset();
   macro_iter_allocator_.reset();
+  idx_row_allocator_.reset();
   iter_param_.reset();
 }
 
@@ -633,8 +633,8 @@ int ObDDLSStableAllRangeIterator::check_blockscan(const ObDatumRowkey &rowkey, b
 int ObDDLSStableAllRangeIterator::get_current(const ObIndexBlockRowHeader *&idx_row_header,
                                               const ObDatumRowkey *&endkey)
 {
-  endkey = cur_rowkey_;
-  idx_row_header = cur_header_;
+  endkey = cur_index_info_.endkey_;
+  idx_row_header = cur_index_info_.idx_row_header_;
   return OB_SUCCESS;
 }
 
@@ -660,24 +660,21 @@ int ObDDLSStableAllRangeIterator::get_next(const ObIndexBlockRowHeader *&idx_row
   bool is_start_key = false;
   bool is_end_key = false;
   bool reach_cursor_end = false;
-  ObMicroIndexInfo tmp_idx_block_row;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
-  } else if (OB_FAIL(index_macro_iter_.get_next_idx_row(tmp_idx_block_row, row_offset, reach_cursor_end))) {
-    LOG_WARN("fail to get next idx info", K(ret), KP(endkey), KP(idx_row_header), K(reach_cursor_end), K(index_macro_iter_));
-  } else if (OB_UNLIKELY(nullptr == tmp_idx_block_row.row_header_ || nullptr == tmp_idx_block_row.endkey_)) {
+  } else if (OB_FAIL(index_macro_iter_.get_next_idx_row(idx_row_allocator_, cur_index_info_, row_offset, reach_cursor_end))) {
+    LOG_WARN("fail to get next idx info", K(ret), K(cur_index_info_), K(reach_cursor_end), K(index_macro_iter_));
+  } else if (OB_UNLIKELY(nullptr == cur_index_info_.idx_row_header_ || nullptr == cur_index_info_.endkey_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null index block row header/endkey", K(ret), K(tmp_idx_block_row));
+    LOG_WARN("Unexpected null index block row endkey", K(ret), K(cur_index_info_));
   } else {
-    idx_row_header = tmp_idx_block_row.row_header_;
-    endkey = tmp_idx_block_row.endkey_;
-    idx_minor_info = tmp_idx_block_row.minor_meta_info_;
-    agg_row_buf = tmp_idx_block_row.agg_row_buf_;
-    agg_buf_size = tmp_idx_block_row.agg_buf_size_;
-    cur_header_ = idx_row_header;
-    cur_rowkey_ = endkey;
+    idx_row_header = cur_index_info_.idx_row_header_;
+    endkey = cur_index_info_.endkey_;
+    idx_minor_info = cur_index_info_.idx_minor_info_;
+    agg_row_buf = cur_index_info_.agg_row_buf_;
+    agg_buf_size = cur_index_info_.agg_buf_size_;
     if (is_iter_start_) {
       is_start_key = true;
       is_iter_start_ = false;
@@ -722,12 +719,12 @@ int ObDDLSStableAllRangeIterator::get_index_row_count(const ObDatumRange &range,
     LOG_WARN("tmp all range iter locate range failed", K(ret), K(range));
   } else {
     bool tmp_reach_cursor_end = false;
-    ObMicroIndexInfo tmp_idx_block_row;
+    ObMicroIndexRowItem tmp_index_item;
     int64_t tmp_row_offset = 0;
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(tmp_index_macro_iter.get_next_idx_row(tmp_idx_block_row, tmp_row_offset, tmp_reach_cursor_end))) {
+      if (OB_FAIL(tmp_index_macro_iter.get_next_idx_row(idx_row_allocator_, tmp_index_item, tmp_row_offset, tmp_reach_cursor_end))) {
         if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next idx info", K(ret), K(tmp_idx_block_row), K(tmp_reach_cursor_end), K(tmp_index_macro_iter));
+        LOG_WARN("fail to get next idx info", K(ret), K(tmp_index_item), K(tmp_reach_cursor_end), K(tmp_index_macro_iter));
         } else {
           ret = OB_SUCCESS;
           break;
@@ -1842,20 +1839,20 @@ int ObDDLMergeBlockRowIterator::MergeIndexItem::init(ObIAllocator *allocator,
     }
 
     if (OB_FAIL(ret) || OB_ISNULL(idx_minor_info)) {
-    } else if (OB_ISNULL(minor_info_buf = item_allocator_->alloc(sizeof(agg_row_buf)))) {
+    } else if (OB_ISNULL(minor_info_buf = item_allocator_->alloc(sizeof(ObIndexBlockRowMinorMetaInfo)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIndexBlockRowMinorMetaInfo)));
-    } else if (FALSE_IT(idx_minor_info = new (minor_info_buf) ObIndexBlockRowMinorMetaInfo())) {
+    } else if (FALSE_IT(idx_minor_info_ = new (minor_info_buf) ObIndexBlockRowMinorMetaInfo())) {
     } else {
       *idx_minor_info_ = *idx_minor_info;
     }
 
     if (OB_FAIL(ret) || OB_ISNULL(agg_row_buf)) {
-    } else if (OB_ISNULL(agg_buf = item_allocator_->alloc(STRLEN(agg_row_buf) + 1))) { //+1 for null
+    } else if (OB_ISNULL(agg_buf = item_allocator_->alloc(agg_buf_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(STRLEN(agg_row_buf)));
+      LOG_WARN("allocate memory failed", K(ret), K(agg_buf_size));
     } else {
-      MEMCPY(agg_buf, agg_row_buf, STRLEN(agg_row_buf) + 1);
+      MEMCPY(agg_buf, agg_row_buf, agg_buf_size);
       agg_row_buf_ = reinterpret_cast<char *>(agg_buf);
     }
   }
