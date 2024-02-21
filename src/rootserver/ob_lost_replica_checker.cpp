@@ -24,6 +24,7 @@
 #include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
 #include "share/ob_all_server_tracer.h"
+#include "share/ob_unit_table_operator.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 
@@ -266,10 +267,16 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
 int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost_server) const
 {
   int ret = OB_SUCCESS;
+  share::ObUnitTableOperator ut_operator;
   is_lost_server = false;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("init unit table operator failed", K(ret));
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server", K(server), K(ret));
@@ -286,6 +293,16 @@ int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost
       LOG_INFO("server not exist", K(server));
     } else if (server_info.is_permanent_offline()) {
       is_lost_server = true;
+      LOG_INFO("server is permanent offline", K(server));
+    } else if (server_info.is_deleting() && server_info.is_temporary_offline()) {
+      bool is_empty = false;
+      if (OB_FAIL(ut_operator.check_server_empty(server, is_empty))) {
+        // being empty means that the given server is not in both server list and migrate_from_server list
+        LOG_WARN("fail to check server empty", KR(ret), K(server));
+      } else if (is_empty) {
+        is_lost_server = true;
+        LOG_INFO("Deleting server is temporary offline and empty", K(server));
+      }
     }
   }
   return ret;
