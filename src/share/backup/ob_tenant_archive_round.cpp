@@ -137,8 +137,8 @@ bool ObArchiveRoundHandler::can_stop_archive(const ObTenantArchiveRoundAttr &rou
 
 bool ObArchiveRoundHandler::can_suspend_archive(const ObTenantArchiveRoundAttr &round) const
 {
-  // only tenant with archive state of DOING or INTERRUPTED can defer archive.
-  return round.state_.is_doing() || round.state_.is_interrupted();
+  // only tenant with archive state of DOING can defer archive.
+  return round.state_.is_doing();
 }
 
 int ObArchiveRoundHandler::decide_start_scn_(SCN &start_scn)
