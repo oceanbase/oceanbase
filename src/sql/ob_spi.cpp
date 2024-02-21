@@ -336,8 +336,9 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, const ObStr
       ret = OB_ERR_CANNOT_PERFORM_DDL_COMMIT_OR_ROLLBACK_INSIDE_QUERY_OR_DML_TIPS;
       LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
                K(ret), K(stmt_type), K(lbt()));
-    } else {
-      // do nothing ...
+    } else if (exec_ctx.get_my_session()->is_in_user_scope() && ObStmt::is_dml_write_stmt(stmt_type)) {
+      ret = OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT;
+      LOG_WARN("Can't update table while ctas is being created.", K(ret));
     }
   }
   return ret;
@@ -2180,7 +2181,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
                                                 schema_guard,
                                                 prepare_result))) { //resolve ref object
             LOG_WARN("failed to resolve_ref_objects", K(ret));
-          } else { /*do nothing*/ }
+          }
         }
       }
     }
@@ -8393,6 +8394,19 @@ int ObSPIService::resolve_into_params(const ParseResult &parse_result,
       || OB_ISNULL(parse_result.result_tree_->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("result tree is NULL or invalid result tree", K(ret));
+  } else if (T_CREATE_VIEW == parse_result.result_tree_->children_[0]->type_) {
+    if (parse_result.result_tree_->children_[0]->num_child_ <= 4
+        || OB_ISNULL(parse_result.result_tree_->children_[0]->children_[4])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result tree is NULL or invalid result tree", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::get_select_into_node(*parse_result.result_tree_->children_[0]->children_[4],
+                                                             into_node,
+                                                             true))) {
+      LOG_WARN("wrong usage of into clause", K(ret));
+    } else if (OB_NOT_NULL(into_node)) {
+      ret = OB_ERR_VIEW_SELECT_CONTAIN_INTO;
+      LOG_WARN("View's SELECT contains a 'INTO' clause.", K(ret));
+    }
   } else if (OB_FAIL(ObResolverUtils::get_select_into_node(*parse_result.result_tree_->children_[0],
                                                            into_node,
                                                            true))) {
