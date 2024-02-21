@@ -210,76 +210,10 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
   if (OB_UNLIKELY(!ctx.is_valid() || !res.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid merge ctx", K(ret), K(ctx), K(res));
-  } else {
-    ObITable::TableKey table_key;
-    table_key.table_type_ = ctx.get_merged_table_type();
-    table_key.tablet_id_ = ctx.param_.tablet_id_;
-    if (is_major_merge_type(ctx.param_.merge_type_) || is_meta_major_merge(ctx.param_.merge_type_)) {
-      table_key.version_range_.snapshot_version_ = ctx.sstable_version_range_.snapshot_version_;
-    } else {
-      table_key.scn_range_ = ctx.scn_range_;
-    }
-    param.table_key_ = table_key;
-    param.sstable_logic_seq_ = ctx.sstable_logic_seq_;
-    param.filled_tx_scn_ = ctx.merge_scn_;
-
-    param.table_mode_ = ctx.get_schema()->get_table_mode_struct();
-    param.index_type_ = ctx.get_schema()->get_index_type();
-    param.rowkey_column_cnt_ = ctx.get_schema()->get_rowkey_column_num()
-        + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.latest_row_store_type_ = ctx.get_schema()->get_row_store_type();
-    if (is_minor_merge_type(ctx.param_.merge_type_)) {
-      param.recycle_version_ = ctx.sstable_version_range_.base_version_;
-    } else {
-      param.recycle_version_ = 0;
-    }
-    param.schema_version_ = ctx.schema_ctx_.schema_version_;
-    param.create_snapshot_version_ = ctx.create_snapshot_version_;
-    param.progressive_merge_round_ = ctx.progressive_merge_round_;
-    param.progressive_merge_step_ = std::min(
-            ctx.progressive_merge_num_, ctx.progressive_merge_step_ + 1);
-
-    ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-        param.root_block_addr_, param.root_block_data_);
-    ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-        param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
-    param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
-    param.root_row_store_type_ = res.root_row_store_type_;
-    param.data_index_tree_height_ = res.root_desc_.height_;
-    param.index_blocks_cnt_ = res.index_blocks_cnt_;
-    param.data_blocks_cnt_ = res.data_blocks_cnt_;
-    param.micro_block_cnt_ = res.micro_block_cnt_;
-    param.use_old_macro_block_count_ = res.use_old_macro_block_count_;
-    param.row_count_ = res.row_count_;
-    param.column_cnt_ = res.data_column_cnt_;
-    param.data_checksum_ = res.data_checksum_;
-    param.occupy_size_ = res.occupy_size_;
-    param.original_size_ = res.original_size_;
-    if (0 == res.row_count_ && 0 == res.max_merged_trans_version_) {
-      // empty mini table merged forcely
-      param.max_merged_trans_version_ = ctx.sstable_version_range_.snapshot_version_;
-    } else {
-      param.max_merged_trans_version_ = res.max_merged_trans_version_;
-    }
-    param.contain_uncommitted_row_ = res.contain_uncommitted_row_;
-    param.compressor_type_ = res.compressor_type_;
-    param.encrypt_id_ = res.encrypt_id_;
-    param.master_key_id_ = res.master_key_id_;
-    param.nested_size_ = res.nested_size_;
-    param.nested_offset_ = res.nested_offset_;
-    param.data_block_ids_ = res.data_block_ids_;
-    param.other_block_ids_ = res.other_block_ids_;
-    param.ddl_scn_.set_min();
-    MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    if (is_major_merge_type(ctx.param_.merge_type_)) {
-      if (OB_FAIL(param.column_checksums_.assign(res.data_column_checksums_))) {
-        LOG_WARN("fail to fill column checksum", K(ret), K(res));
-      }
-    }
-
-    if (OB_SUCC(ret) && ctx.param_.tablet_id_.is_ls_tx_data_tablet()) {
-      ret = record_start_tx_scn_for_tx_data(ctx, param);
-    }
+  } else if (OB_FAIL(param.init_for_merge(ctx, res))) {
+    LOG_WARN("fail to init create sstable param for merge", K(ret), K(ctx), K(res));
+  } else if (ctx.param_.tablet_id_.is_ls_tx_data_tablet()) {
+    ret = record_start_tx_scn_for_tx_data(ctx, param);
   }
   return ret;
 }

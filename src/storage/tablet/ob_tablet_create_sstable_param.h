@@ -23,8 +23,23 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+struct ObSSTableMergeRes;
+struct ObBlockInfo;
+class ObSSTableMeta;
+class ObMigrationSSTableParam;
+class ObSSTable;
+class ObSSTableIndexBuilder;
+}
+namespace compaction
+{
+struct ObTabletMergeCtx;
+}
 namespace storage
 {
+struct ObTabletDDLParam;
+
 struct ObTabletCreateSSTableParam final
 {
 public:
@@ -36,6 +51,30 @@ public:
   bool is_valid() const;
   bool is_block_meta_valid(const ObMetaDiskAddr &addr,
                            const blocksstable::ObMicroBlockData &data) const;
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_small_sstable(const blocksstable::ObSSTableMergeRes &res,
+                             const ObITable::TableKey &table_key,
+                             const blocksstable::ObSSTableMeta &sstable_meta,
+                             const blocksstable::ObBlockInfo &block_info);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_merge(const compaction::ObTabletMergeCtx &ctx,
+                     const blocksstable::ObSSTableMergeRes &res);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_ddl(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
+                   const ObTabletDDLParam &ddl_param,
+                   const blocksstable::ObSSTable *first_ddl_sstable,
+                   const ObStorageSchema &storage_schema,
+                   const int64_t create_schema_version_on_tablet);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param,
+                  const blocksstable::ObSSTableMergeRes &res);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
 
   TO_STRING_KV(K_(table_key),
       K_(sstable_logic_seq),
@@ -77,6 +116,7 @@ public:
       KPHEX_(encrypt_key, sizeof(encrypt_key_)));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
+  int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
 public:
   ObITable::TableKey table_key_;
   int16_t sstable_logic_seq_;
