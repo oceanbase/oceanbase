@@ -6920,7 +6920,22 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       if (routine_info->is_reads_sql_data()) {
         ctx.udf_has_select_stmt_ = true;
       }
-      if (routine_info->is_modifies_sql_data()) {
+      /*
+      create table t1(c0 int);
+      create function f1() returns int deterministic
+      begin
+      insert into t1 value(2);
+      insert into t1 value('dd');
+      return 1;
+      end
+
+      create function f2() returns int deterministic
+      begin
+      set @a = f1();
+      return 2;
+      end
+      f2 can not know whether f1 has dml, so if external_state is true, we assume f2 has dml */
+      if (routine_info->is_modifies_sql_data() || routine_info->is_external_state()) {
         ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
