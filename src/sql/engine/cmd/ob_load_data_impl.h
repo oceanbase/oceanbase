@@ -349,6 +349,7 @@ public:
   int64_t get_remain_len() { return buffer_size_ - pos_; }
   int64_t get_data_len() { return pos_; }
   int64_t get_buffer_size() { return buffer_size_; }
+  int64_t get_struct_size() { return sizeof(ObLoadFileBuffer) + buffer_size_; }
   int64_t *get_pos() { return &pos_; }
   void reset() { pos_ = 0; }
   TO_STRING_KV(K_(pos), K_(buffer_size));
@@ -398,6 +399,7 @@ public:
   int64_t get_lines_count() const { return lines_cnt_; }
   void commit_line_cnt(int64_t line_cnt) { lines_cnt_ += line_cnt; }
   int expand_buf(common::ObIAllocator &allocator);
+  int64_t get_buffer_size() const { return incomplate_data_buf_len_; }
 private:
   ObCSVFormats formats_;
   char *incomplate_data_;
@@ -495,7 +497,7 @@ struct ObShuffleTaskHandle {
                       uint64_t tenant_id);
   ~ObShuffleTaskHandle();
 
-  int expand_buf(const int64_t max_size);
+  int expand_buf(const int64_t max_size, const int64_t to_buffer_size);
 
   ObArenaAllocator allocator;
   ObDesExecContext exec_ctx;
