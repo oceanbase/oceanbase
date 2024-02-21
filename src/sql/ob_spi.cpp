@@ -2919,7 +2919,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           ret = OB_ERR_DDL_IN_ILLEGAL_CONTEXT;
           LOG_WARN("DDL statement is executed in an illegal context",
                     K(ret), K(into_count), K(param_count), K(is_returning));
-        } else if (ObStmt::is_select_stmt(stmt_type) && 0 >= into_count) {
+        } else if (ObStmt::is_select_stmt(stmt_type) && !for_update && 0 >= into_count) {
           /* If dynamic_sql_statement is a SELECT statement, and you omit both
             * into_clause and bulk_collect_into_clause, then
             * execute_immediate_statement never executes.
