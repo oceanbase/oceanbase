@@ -398,6 +398,7 @@ _transfer_service_wakeup_interval
 _transfer_start_retry_count
 _transfer_start_rpc_timeout
 _transfer_start_trans_timeout
+_transfer_task_retry_interval
 _transfer_task_tablet_count_threshold
 _tx_result_retention
 _upgrade_stage

@@ -1487,18 +1487,23 @@ DEF_INT(_transfer_start_retry_count, OB_TENANT_PARAMETER, "3", "[0,64]",
 
 
 DEF_TIME(_transfer_service_wakeup_interval, OB_TENANT_PARAMETER, "5m", "[1s,5m]",
-        "transfer service wakeup interval in errsim mode"
+        "transfer service wakeup interval in errsim mode. "
         "Range: [1s, 5m]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_transfer_process_lock_tx_timeout, OB_TENANT_PARAMETER, "100s", "[30s,)",
-        "transaction timeout for locking and unlocking transfer task"
+        "transaction timeout for locking and unlocking transfer task. "
         "Range: [30s, +∞)",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_transfer_task_tablet_count_threshold, OB_TENANT_PARAMETER, "100", "(0,100]",
-        "Threshold for the count of tablets that can be processed by a transfer task"
+        "Threshold for the count of tablets that can be processed by a transfer task. "
         "Range: (0, 100]",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
+        "Retry interval after transfer task failure. "
+        "Range: [0s, +∞). Default: 1m",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // end of transfer

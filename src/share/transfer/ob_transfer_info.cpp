@@ -423,6 +423,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Task canceled",
   "Unable to process task due to transaction timeout",
   "Unable to process task due to inactive server in member list",
+  "Wait to retry due to the last failure",
   "Unknow"/*MAX_COMMENT*/
 };
 

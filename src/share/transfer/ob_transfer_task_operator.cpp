@@ -76,8 +76,8 @@ int ObTransferTaskOperator::get_task_with_time(
       ObSqlString sql;
       common::sqlclient::ObMySQLResult *res = NULL;
       const bool with_time = true;
-      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, "
-          "time_to_usec(gmt_modified) AS finish_time, * FROM %s WHERE task_id = %ld%s",
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time_int64, "
+          "time_to_usec(gmt_modified) AS finish_time_int64, * FROM %s WHERE task_id = %ld%s",
           OB_ALL_TRANSFER_TASK_TNAME, task_id.id(), for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id), K(for_update));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -830,8 +830,8 @@ int ObTransferTaskOperator::parse_sql_result_(
   common::ObCurTraceId::TraceId trace_id;
 
   if (with_time) {
-    (void)GET_COL_IGNORE_NULL(res.get_int, "create_time", create_time);
-    (void)GET_COL_IGNORE_NULL(res.get_int, "finish_time", finish_time);
+    (void)GET_COL_IGNORE_NULL(res.get_int, "create_time_int64", create_time);
+    (void)GET_COL_IGNORE_NULL(res.get_int, "finish_time_int64", finish_time);
   }
   (void)GET_COL_IGNORE_NULL(res.get_int, "task_id", task_id);
   (void)GET_COL_IGNORE_NULL(res.get_int, "src_ls", src_ls);
@@ -981,8 +981,8 @@ int ObTransferTaskOperator::get_history_task(
       ObSqlString sql;
       bool with_time = true;
       common::sqlclient::ObMySQLResult *res = NULL;
-      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, "
-          "time_to_usec(gmt_modified) AS finish_time, * FROM %s WHERE task_id = %ld",
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
+          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s WHERE task_id = %ld",
           OB_ALL_TRANSFER_TASK_HISTORY_TNAME, task_id.id()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -1043,6 +1043,54 @@ int ObTransferTaskOperator::get_max_task_id_from_history(
       } else {
         max_task_id = max_task_id_int64;
         LOG_TRACE("get max transfer task_id from history success", KR(ret), K(tenant_id), K(max_task_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::get_last_task_by_balance_task_id(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObBalanceTaskID &balance_task_id,
+    ObTransferTask &last_task,
+    int64_t &finish_time)
+{
+  int ret = OB_SUCCESS;
+  last_task.reset();
+  finish_time = OB_INVALID_TIMESTAMP;
+  int64_t create_time = OB_INVALID_TIMESTAMP;
+  const bool with_time = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !balance_task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_task_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
+          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s "
+          "WHERE balance_task_id = %ld order by task_id desc limit 1",
+          OB_ALL_TRANSFER_TASK_HISTORY_TNAME,
+          balance_task_id.id()))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(balance_task_id));
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_TRACE("task not found", KR(ret), K(tenant_id), K(balance_task_id));
+        } else {
+          LOG_WARN("next failed", KR(ret), K(sql));
+        }
+      } else if (OB_FAIL(parse_sql_result_(*res, with_time, last_task, create_time, finish_time))) {
+        LOG_WARN("parse sql result failed", KR(ret), K(with_time), K(sql));
+      } else {
+        LOG_TRACE("get last task by balance task id from history", KR(ret),
+            K(tenant_id), K(balance_task_id), K(last_task), K(create_time), K(finish_time));
       }
     }
   }
