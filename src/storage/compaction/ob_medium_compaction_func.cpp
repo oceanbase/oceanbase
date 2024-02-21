@@ -272,7 +272,8 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_for_leader(
 #endif
     ret = schedule_next_medium_primary_cluster(major_snapshot, schedule_stat);
   } else {
-    LOG_TRACE("not leader", K(ret), K(role), K(ls_.get_ls_id()));
+    LOG_TRACE("not leader", K(ret), K(role), K(ls_.get_ls_id()),
+      "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_);
   }
   return ret;
 }
@@ -379,6 +380,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   int64_t min_reserved_snapshot = INT64_MAX;
   ObTablet *tablet = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  ObITable *last_major = NULL;
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
@@ -391,7 +393,10 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   } else if (0 == ls_.get_min_reserved_snapshot()) {
     ret = OB_NO_NEED_MERGE;
     // not sync reserved snapshot yet, should not schedule now
-  } else if (FALSE_IT(max_merged_snapshot = wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)->get_snapshot_version())) {
+  } else if (OB_ISNULL(last_major = wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("last major is null", KR(ret), KPC(wrapper.get_member()));
+  } else if (FALSE_IT(max_merged_snapshot = last_major->get_snapshot_version())) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
       tablet->get_tablet_meta().tablet_id_, max_merged_snapshot, min_reserved_snapshot))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet->get_tablet_meta().tablet_id_));
