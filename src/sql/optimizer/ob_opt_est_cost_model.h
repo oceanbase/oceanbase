@@ -656,6 +656,7 @@ public:
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
 										double &cost,
+                    double &filter_selectivity,
 										common::ObIArray<ObExprSelPair> &all_predicate_sel);
 
   int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
@@ -804,6 +805,9 @@ public:
                       int64_t range_count,
                       double range_sel,
                       double &cost);
+  int calc_pred_cost_per_row(const ObRawExpr *expr,
+                            double card,
+                            double &cost);
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,

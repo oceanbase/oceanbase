@@ -186,10 +186,10 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter([t1.c1 + cast(cast(2, DECIMAL_INT(10, 0)), DECIMAL_INT(10, 0)) < cast(10, DECIMAL_INT(11,
-       0))], [t1.c4 > t1.c3]), rowset=16
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), filter([t1.c4 > t1.c3], [t1.c1 + cast(cast(2, DECIMAL_INT(10, 0)), DECIMAL_INT(10, 0)) < cast(10,
+       DECIMAL_INT(11, 0))]), rowset=16
       access([t1.c1], [t1.c2], [t1.c4], [t1.c3], [t1.c5]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true,false], 
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
       range_key([t1.c2], [t1.c1]), range(2,MIN ; 2,MAX), 
       range_cond([t1.c2 = cast(2, DECIMAL_INT(10, 0))])
 select * from t1 where c2  = 2 and c1 + c2 < 10 and c4 > c3;

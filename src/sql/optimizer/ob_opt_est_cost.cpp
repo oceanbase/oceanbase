@@ -51,6 +51,7 @@ const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
+                                double &filter_selectivity,
                                 ObIArray<ObExprSelPair> &all_predicate_sel,
                                 const ObOptimizerContext &opt_ctx)
 {
@@ -58,6 +59,7 @@ int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
   GET_COST_MODEL();
   if (OB_FAIL(model->cost_nestloop(est_cost_info,
                                   cost,
+                                  filter_selectivity,
                                   all_predicate_sel))) {
     LOG_WARN("failed to est cost for nestloop join", K(ret));
   }
@@ -756,3 +758,11 @@ int ObOptEstCost::stat_estimate_single_range_rc(const ObCostTableScanInfo &est_c
   return ret;
 }
 
+double ObOptEstCost::calc_pred_cost_per_row(const ObRawExpr *expr,
+                                            double card,
+                                            double &cost,
+                                            const ObOptimizerContext &opt_ctx)
+{
+  GET_COST_MODEL();
+  return model->calc_pred_cost_per_row(expr, card, cost);
+}

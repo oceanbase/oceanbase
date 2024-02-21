@@ -69,6 +69,9 @@ public:
     const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
     const double DEFAULT_SPATIAL_PER_ROW_COST,
     const double DEFAULT_RANGE_COST,
+    const double DEFAULT_CMP_UDF_COST,
+    const double DEFAULT_CMP_LOB_COST,
+    const double DEFAULT_CMP_ERR_HANDLE_EXPR_COST,
     const double (&comparison_params)[common::ObMaxTC + 1],
 		const double (&hash_params)[common::ObMaxTC + 1],
 		const double (&project_params)[2][2][MAX_PROJECT_TYPE]
@@ -109,6 +112,9 @@ public:
       DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
       SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST),
       RANGE_COST(DEFAULT_RANGE_COST),
+      CMP_UDF_COST(DEFAULT_CMP_UDF_COST),
+      CMP_LOB_COST(DEFAULT_CMP_LOB_COST),
+      CMP_ERR_HANDLE_EXPR_COST(DEFAULT_CMP_ERR_HANDLE_EXPR_COST),
       comparison_params_(comparison_params),
 		  hash_params_(hash_params),
 			project_params_(project_params)
@@ -157,6 +163,9 @@ public:
   double get_range_cost(const OptSystemStat& stat) const;
   double get_comparison_cost(const OptSystemStat& stat, int64_t type) const;
   double get_hash_cost(const OptSystemStat& stat, int64_t type) const;
+  double get_cmp_lob_cost(const OptSystemStat& stat) const;
+  double get_cmp_udf_cost(const OptSystemStat& stat) const;
+  double get_cmp_err_handle_expr_cost(const OptSystemStat& stat) const;
 
 protected:
   /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
@@ -229,6 +238,12 @@ protected:
   double SPATIAL_PER_ROW_COST;
   //存储层切换一次range的代价
   double RANGE_COST;
+  //计算一个UDF的代价
+  double CMP_UDF_COST;
+  //计算一个返回值为LOB的表达式的代价
+  double CMP_LOB_COST;
+  //计算一个需处理异常的表达式的代价
+  double CMP_ERR_HANDLE_EXPR_COST;
 
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];  /*

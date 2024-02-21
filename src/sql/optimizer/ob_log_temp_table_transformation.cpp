@@ -149,3 +149,15 @@ int ObLogTempTableTransformation::do_re_est_cost(EstimateCostInfo &param, double
   }
   return ret;
 }
+
+int ObLogTempTableTransformation::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_NOT_NULL(child_op = get_child(get_num_of_child() - 1))) {
+    card = child_op->get_card();
+  } else {
+    card = get_card();
+  }
+  return ret;
+}

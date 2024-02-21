@@ -975,7 +975,7 @@ Outputs & filters:
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter(nil), rowset=16
       limit(1), offset(nil)
-  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))], [T_FUN_COUNT(t2.a) > 0]), rowset=16
+  3 - output(nil), filter([T_FUN_COUNT(t2.a) > 0], [T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))]), rowset=16
       group([t2.a]), agg_func([T_FUN_SUM(t2.a)], [T_FUN_COUNT(t2.a)])
   4 - output([t2.a]), filter(nil), rowset=16
       access([t2.a]), partitions(p0)
@@ -1131,7 +1131,7 @@ Outputs & filters:
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter(nil), rowset=16
       limit(1), offset(nil)
-  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))], [T_FUN_COUNT(t2.a) > 0]), rowset=16
+  3 - output(nil), filter([T_FUN_COUNT(t2.a) > 0], [T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))]), rowset=16
       group([t2.a]), agg_func([T_FUN_SUM(t2.a)], [T_FUN_COUNT(t2.a)])
   4 - output([t2.a]), filter(nil), rowset=16
       access([t2.a]), partitions(p0)

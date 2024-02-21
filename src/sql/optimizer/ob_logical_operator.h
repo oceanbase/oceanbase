@@ -279,6 +279,17 @@ struct FilterCompare
   common::ObIArray<ObExprSelPair> &predicate_selectivities_;
 };
 
+typedef std::pair<double, ObRawExpr *> ObExprRankPair;
+
+struct ObExprRankPairCompare
+{
+  ObExprRankPairCompare() {};
+  bool operator()(ObExprRankPair &left, ObExprRankPair &right)
+  {
+    return left.first < right.first;
+  }
+};
+
 class AdjustSortContext
 {
  public:
@@ -1634,6 +1645,8 @@ public:
    *  be evaluated earlier.
    */
   int reorder_filter_exprs();
+  int reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                            ObIArray<ObRawExpr *> &filters_exprs);
 
   int find_shuffle_join_filter(bool &find) const;
   int has_window_function_below(bool &has_win_func) const;
@@ -1849,6 +1862,7 @@ private:
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
+  virtual int get_card_without_filter(double &card);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator

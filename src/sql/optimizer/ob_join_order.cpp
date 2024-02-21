@@ -7020,7 +7020,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                    false,
                                    right_sort_keys_,
                                    server_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost,
+    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost, other_cond_sel_,
                                             plan->get_predicate_selectivities(),
                                             opt_ctx))) {
       LOG_WARN("failed to estimate nest loop join cost", K(est_join_info), K(ret));

@@ -2130,3 +2130,10 @@ ObRawExpr * ObLogTableScan::get_real_expr(const ObRawExpr *col) const
   }
   return ret;
 }
+
+int ObLogTableScan::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = NULL != est_cost_info_ ? est_cost_info_->phy_query_range_row_count_ : 1.0;
+  return ret;
+}

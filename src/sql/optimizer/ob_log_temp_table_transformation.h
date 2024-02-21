@@ -35,6 +35,7 @@ public:
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int get_temp_table_exprs(ObIArray<ObRawExpr *> &set_exprs) const;
   int allocate_startup_expr_post() override;
+  virtual int get_card_without_filter(double &card) override;
 };
 
 } // end of namespace sql

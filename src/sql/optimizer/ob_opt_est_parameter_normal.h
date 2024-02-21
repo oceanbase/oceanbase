@@ -86,6 +86,11 @@ const static double NORMAL_HASH_NUMBER_COST = 0.02702563229230158730158730158 * 
 const static double NORMAL_HASH_CHAR_COST = 0.2306996323278174603174603175 * DEFAULT_CPU_SPEED;
 const static double NORMAL_INVALID_HASH_COST = -1;
 
+//mock complex expr cost
+const static double NORMAL_CMP_UDF_COST = 100.0 * DEFAULT_CPU_SPEED;
+const static double NORMAL_CMP_LOB_COST = 9.707028746051587301587301588 * DEFAULT_CPU_SPEED; //NORMAL_CMP_CHAR_COST * 100
+const static double NORMAL_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539 * DEFAULT_CPU_SPEED; //NORMAL_CMP_INT_COST * 100
+
 const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_INT_COST,            // null
   NORMAL_CMP_INT_COST,            // int8, int16, int24, int32, int64.
@@ -209,6 +214,9 @@ const static ObOptCostModelParameter cost_params_normal(
     NORMAL_DELETE_CHECK_PER_ROW_COST,
     NORMAL_SPATIAL_PER_ROW_COST,
     NORMAL_RANGE_COST,
+    NORMAL_CMP_UDF_COST,
+    NORMAL_CMP_LOB_COST,
+    NORMAL_CMP_ERR_HANDLE_EXPR_COST,
     comparison_params_normal,
     hash_params_normal,
     project_params_normal

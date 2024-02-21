@@ -164,6 +164,7 @@ namespace sql
                                 ObSqlPlanItem &plan_item) override;
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+    virtual int get_card_without_filter(double &card) override;
 
   private:
     int set_use_batch(ObLogicalOperator* root);

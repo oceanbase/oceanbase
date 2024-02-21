@@ -479,6 +479,7 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  virtual int get_card_without_filter(double &card) override;
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
