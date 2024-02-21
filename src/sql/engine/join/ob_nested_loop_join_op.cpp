@@ -349,6 +349,7 @@ int ObNestedLoopJoinOp::join_end_func_end()
 int ObNestedLoopJoinOp::read_left_operate()
 {
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   if (MY_SPEC.group_rescan_ || MY_SPEC.enable_px_batch_rescan_) {
     if (OB_FAIL(group_read_left_operate()) && OB_ITER_END != ret) {
       LOG_WARN("failed to read left group", K(ret));
@@ -578,10 +579,9 @@ int ObNestedLoopJoinOp::read_left_func_end()
 int ObNestedLoopJoinOp::read_right_operate()
 {
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   if (OB_FAIL(get_next_right_row()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next right row", K(ret));
-  } else {
-    clear_evaluated_flag();
   }
 
   return ret;
