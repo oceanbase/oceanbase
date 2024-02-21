@@ -15413,6 +15413,8 @@ def_table_schema(
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
+                         pl_trace_id as PL_TRACE_ID,
+                         plsql_exec_time as PLSQL_EXEC_TIME,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
@@ -51643,6 +51645,8 @@ def_table_schema(
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
+                         pl_trace_id as PL_TRACE_ID,
+                         plsql_exec_time as PLSQL_EXEC_TIME,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT

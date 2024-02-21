@@ -394,7 +394,9 @@ public:
         temp_table_id_(common::OB_INVALID_ID),
         interm_result_ids_(),
         fb_info_(),
-        err_msg_() {}
+        err_msg_(),
+        sqc_memstore_row_read_count_(0),
+        sqc_ssstore_row_read_count_(0) {}
   virtual ~ObPxFinishSqcResultMsg() = default;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -409,8 +411,10 @@ public:
     dml_row_info_.reset();
     fb_info_.reset();
     err_msg_.reset();
+    sqc_memstore_row_read_count_ = 0;
+    sqc_ssstore_row_read_count_ = 0;
   }
-  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(das_retry_rc), K_(sqc_affected_rows));
+  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(das_retry_rc), K_(sqc_affected_rows), K_(sqc_memstore_row_read_count), K_(sqc_ssstore_row_read_count));
 public:
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -424,6 +428,8 @@ public:
   ObSEArray<uint64_t, 8> interm_result_ids_;
   ObExecFeedbackInfo fb_info_;
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
+  int64_t sqc_memstore_row_read_count_; // the total memstore read row count of this sqc
+  int64_t sqc_ssstore_row_read_count_; // the total ssstore read row count of this sqc
 };
 
 class ObPxFinishTaskResultMsg
