@@ -548,6 +548,7 @@ public:
   bool is_query_killed() const;
   bool is_valid() const { return is_valid_; };
   uint64_t get_user_id() const { return user_id_; }
+  uint64_t get_proxy_user_id() const { return proxy_user_id_; }
   bool is_auditor_user() const { return is_ora_auditor_user(user_id_); };
   bool is_lbacsys_user() const { return is_ora_lbacsys_user(user_id_); };
   bool is_oracle_sys_user() const { return is_ora_sys_user(user_id_); };
@@ -744,6 +745,7 @@ public:
 
   /// @{ thread_data_ related: }
   int set_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
+  inline void set_proxy_user_id(const uint64_t proxy_user_id) { proxy_user_id_ = proxy_user_id; }
   int set_real_client_ip_and_port(const common::ObString &client_ip, int32_t client_addr_port);
   const common::ObString &get_user_name() const { return thread_data_.user_name_;}
   const common::ObString &get_host_name() const { return thread_data_.host_name_;}
@@ -1485,7 +1487,9 @@ protected:
                          is_shadow_(false),
                          is_in_retry_(SESS_NOT_IN_RETRY),
                          client_addr_port_(0),
-                         is_mark_killed_(false)
+                         is_mark_killed_(false),
+                         proxy_user_name_(),
+                         proxy_host_name_()
     {
       CHAR_CARRAY_INIT(database_name_);
     }
@@ -1524,6 +1528,8 @@ protected:
       is_in_retry_ = SESS_NOT_IN_RETRY;
       client_addr_port_ = 0;
       is_mark_killed_ = false;
+      proxy_user_name_.reset();
+      proxy_host_name_.reset();
     }
     ~MultiThreadData ()
     {
@@ -1559,6 +1565,8 @@ protected:
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
     int32_t client_addr_port_; // Record client address port.
     bool is_mark_killed_; // Mark the current session as delayed kill
+    common::ObString proxy_user_name_;
+    common::ObString proxy_host_name_;
   };
 
 public:
@@ -2118,6 +2126,7 @@ private:
   uint64_t proxy_sessid_;
   int64_t global_vars_version_; // used for obproxy synchronize variables
   int64_t sys_var_base_version_;
+  uint64_t proxy_user_id_;              // current proxy user id
   /*******************************************
    * transaction ctrl relative for session
    *******************************************/

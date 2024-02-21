@@ -127,6 +127,7 @@ lb_vport	bigint(20)	YES		NULL
 in_bytes	bigint(20)	NO		NULL	
 out_bytes	bigint(20)	NO		NULL	
 user_client_port	bigint(20)	NO		0	
+proxy_user	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_processlist;
 IF(count(*) >= 0, 1, 0)
 1
@@ -787,6 +788,7 @@ stmt_type	varchar(128)	YES		NULL
 seq_num	bigint(20)	NO		NULL	
 total_memstore_read_row_count	bigint(20)	NO		NULL	
 total_ssstore_read_row_count	bigint(20)	NO		NULL	
+proxy_user	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1802,6 +1804,7 @@ priv_repl_client	bigint(20)	NO		0
 priv_drop_database_link	bigint(20)	NO		0	
 priv_create_database_link	bigint(20)	NO		0	
 priv_others	bigint(20)	NO		0	
+flags	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user;
 IF(count(*) >= 0, 1, 0)
 1

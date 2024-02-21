@@ -2418,6 +2418,7 @@ typedef enum ObItemType
   T_SHOW_PROCEDURE_CODE,
   T_SHOW_FUNCTION_CODE,
   T_CHANGE_EXTERNAL_STORAGE_DEST,
+  T_ALTER_USER_PROXY,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

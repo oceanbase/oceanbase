@@ -4118,8 +4118,76 @@ enum ObUserType
   OB_TYPE_MAX,
 };
 
+struct ObProxyInfo
+{
+  OB_UNIS_VERSION(1);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
+public:
+  ObProxyInfo(common::ObIAllocator *allocator) : allocator_(allocator), user_id_(OB_INVALID_ID), proxy_flags_(0),
+                                credential_type_(0), role_ids_(NULL), role_id_cnt_(0), role_id_capacity_(0) {}
+  inline int64_t get_convert_size() const
+  {
+    int64_t convert_size = sizeof(*this);
+    convert_size += role_id_cnt_ * sizeof(uint64_t);
+    return convert_size;
+  }
+  void reset();
+  int assign(const ObProxyInfo &other);
+  uint64_t get_role_id_by_idx(const int64_t idx) const;
+
+  TO_STRING_KV(K_(user_id), K_(proxy_flags), K(ObArrayWrap<uint64_t>(role_ids_, role_id_cnt_)), K_(role_id_cnt));
+
+  common::ObIAllocator *allocator_;
+  uint64_t user_id_;
+  uint64_t proxy_flags_;
+  uint64_t credential_type_;
+  uint64_t *role_ids_;
+  uint64_t role_id_cnt_;
+  uint64_t role_id_capacity_;
+};
+
 #define ADMIN_OPTION_SHIFT 0
 #define DISABLE_FLAG_SHIFT 1
+
+enum ObProxyActivatedFlag
+{
+  PROXY_NERVER_BEEN_ACTIVATED = 0,
+  PROXY_BEEN_ACTIVATED_BEFORE = 1,
+  PROXY_ACTIVATED_MAX,
+};
+
+//In user schema def, flag is a int column.
+//int is int64_t, not uint64_t. So only 63 bit can be used.
+struct ObUserFlags
+{
+  OB_UNIS_VERSION_V(1);
+private:
+  static const int32_t F_PROXY_INFO_OFFSET = 0;
+  static const int32_t F_PROXY_INFO_BITS = 1;
+  static const int32_t F_RESERVED = 63;
+  static const uint32_t F_PROXY_INFO_MASK = (((1L << F_PROXY_INFO_BITS) - 1) << F_PROXY_INFO_OFFSET);
+public:
+  ObUserFlags() { reset(); }
+  virtual ~ObUserFlags() { reset(); }
+  void reset() { flags_ = 0; }
+  bool operator ==(const ObUserFlags &other) const
+  {
+    return flags_ == other.flags_;
+  }
+  int assign(const ObUserFlags &other);
+  ObUserFlags &operator=(const ObUserFlags &other);
+  bool is_valid() const;
+
+  TO_STRING_KV("proxy_activated_flag", proxy_activated_flag_);
+  union {
+    int64_t flags_;
+    struct {
+      uint64_t proxy_activated_flag_ :F_PROXY_INFO_BITS;
+      uint64_t reserved_ :F_RESERVED;
+    };
+  };
+};
 
 class ObUserInfo : public ObSchema, public ObPriv
 {
@@ -4133,12 +4201,13 @@ public:
      type_(OB_USER), grantee_id_array_(), role_id_array_(), profile_id_(common::OB_INVALID_ID), password_last_changed_timestamp_(common::OB_INVALID_TIMESTAMP),
      role_id_option_array_(),
      max_connections_(0),
-     max_user_connections_(0)
+     max_user_connections_(0),
+     proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
+     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
-  ObUserInfo(const ObUserInfo &other);
-  ObUserInfo& operator=(const ObUserInfo &other);
+  int assign(const ObUserInfo &other);
   static bool cmp(const ObUserInfo *lhs, const ObUserInfo *rhs)
   { return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_user_id() < rhs->get_tenant_user_id() : false; }
   static bool equal(const ObUserInfo *lhs, const ObUserInfo *rhs)
@@ -4215,11 +4284,25 @@ public:
                K_(info), K_(locked),
                K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
                K_(type), K_(grantee_id_array), K_(role_id_array),
-               K_(profile_id)
+               K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
+               "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
+               "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
+               K_(user_flags)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
 private:
+  int assign_proxy_info_array_(ObProxyInfo **src_arr,
+                              const uint64_t src_cnt,
+                              const uint64_t src_capacity,
+                              ObProxyInfo **&tar_arr,
+                              uint64_t &tar_cnt,
+                              uint64_t &tar_capacity);
+
+  int deserialize_proxy_info_array_(ObProxyInfo **&arr, uint64_t &cnt, uint64_t &capacity,
+                                            const char *buf, const int64_t data_len, int64_t &pos);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
   common::ObString user_name_;
   common::ObString host_name_;
   common::ObString passwd_;
@@ -4238,6 +4321,14 @@ private:
   common::ObSEArray<uint64_t, 8> role_id_option_array_; // Record which roles the user/role has
   uint64_t max_connections_;
   uint64_t max_user_connections_;
+  ObProxyInfo** proxied_user_info_; //record users who can proxy the user
+  uint64_t proxied_user_info_capacity_;
+  uint64_t proxied_user_info_cnt_;
+  ObProxyInfo** proxy_user_info_; //recode users whom the user can proxy
+  uint64_t proxy_user_info_capacity_;
+  uint64_t proxy_user_info_cnt_;
+  ObUserFlags user_flags_;
+  DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 
 struct ObDBPrivSortKey

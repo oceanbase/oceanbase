@@ -454,6 +454,7 @@ all_user_def = dict(
       ('priv_drop_database_link', 'int', 'false', '0'),
       ('priv_create_database_link', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
+      ('flags', 'int', 'false', '0'),
     ],
 )
 
@@ -6895,7 +6896,11 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 509 : __all_ls_compaction_status
 # 510 : __all_tablet_compaction_status
 # 511 : __all_tablet_checksum_error_info
-#
+# 512 : __all_user_proxy_info
+# 513 : __all_user_proxy_info_history
+# 514 : __all_user_proxy_role_info
+# 515 : __all_user_proxy_role_info_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -7146,7 +7151,8 @@ def_table_schema(
   ('lb_vport', 'int', 'true'),
   ('in_bytes', 'bigint'),
   ('out_bytes', 'bigint'),
-  ('user_client_port', 'int', 'false', '0')
+  ('user_client_port', 'int', 'false', '0'),
+  ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8205,7 +8211,8 @@ def_table_schema(
     ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
     ('seq_num', 'int'),
     ('total_memstore_read_row_count', 'int'),
-    ('total_ssstore_read_row_count', 'int')
+    ('total_ssstore_read_row_count', 'int'),
+    ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13682,6 +13689,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12471: __all_virtual_tablet_compaction_status
 # 12472: __all_virtual_tablet_checksum_error_info
 # 12473: __all_virtual_compatibility_control
+# 12474: __all_virtual_user_proxy_info
+# 12475: __all_virtual_user_proxy_info_history
+# 12476: __all_virtual_user_proxy_role_info
+# 12477: __all_virtual_user_proxy_role_info_history
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14146,6 +14158,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15443: __all_virtual_ls_replica_task_history
 # 15444: __all_virtual_session_ps_info
 # 15445: __all_virtual_tracepoint_info
+# 15446: __all_user_proxy_info
+# 15447: __all_user_proxy_role_info
+# 15448: idx_user_proxy_info_proxy_user_id_real_agent
+
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -51498,6 +51514,8 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+#25301 PROXY_USERS
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -57795,7 +57813,7 @@ def_table_schema(
 # 28220: V$OB_SESSION_PS_INFO
 # 28221: GV$OB_TRACEPOINT_INFO
 # 28222: V$OB_TRACEPOINT_INFO
-#
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -58664,6 +58682,10 @@ def_sys_index_table(
 # 101098: __all_transfer_partition_task
 # 101099: __all_client_to_server_session_info
 # 101100: __all_column_privilege
+# 101101: __all_user_proxy_info
+# 101102: __all_user_proxy_info_history
+# 101103: __all_user_proxy_role_info_history
+
 #
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

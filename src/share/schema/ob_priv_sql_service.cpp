@@ -970,11 +970,8 @@ int ObPrivSqlService::grant_revoke_role(
         } else if (NULL == role) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("role is null", K(ret), K(role_id));
-        } else {
-          const ObUserInfo role_info_tmp = *role;
-          if (OB_FAIL(role_infos.push_back(role_info_tmp))) {
-            LOG_WARN("fail to push back", K(ret), K(role_info_tmp));
-          }
+        } else if (OB_FAIL(role_infos.push_back(*role))) {
+          LOG_WARN("fail to push back", K(ret), KPC(role));
         }
       }
     }

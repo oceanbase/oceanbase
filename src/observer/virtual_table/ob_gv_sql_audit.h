@@ -174,7 +174,8 @@ private:
     STMT_TYPE,
     SEQ_NUM,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
-    TOTAL_SSSTORE_READ_ROW_COUNT
+    TOTAL_SSSTORE_READ_ROW_COUNT,
+    PROXY_USER_NAME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

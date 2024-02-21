@@ -1633,6 +1633,21 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("PROXY_USER", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      OB_MAX_USER_NAME_LENGTH_STORE, //column_length
+      2, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -3484,7 +3499,24 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 105);
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("PROXY_USER", //column_name
+      column_id + 106, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      OB_MAX_USER_NAME_LENGTH_STORE, //column_length
+      2, //column_precision
+      -1, //column_scale
+      true,//is_nullable
+      false,//is_autoincrement
+      false,//is_hidden
+      true);//is_storing_column
+  }
+
+  table_schema.set_max_used_column_id(column_id + 106);
   return ret;
 }
 
@@ -8937,6 +8969,21 @@ int ObInnerTableSchema::all_virtual_processlist_ora_schema(ObTableSchema &table_
       38, //column_precision
       0, //column_scale
       false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("PROXY_USER", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      OB_MAX_USER_NAME_LENGTH_STORE, //column_length
+      2, //column_precision
+      -1, //column_scale
+      true, //is_nullable
       false); //is_autoincrement
   }
   if (OB_SUCC(ret)) {

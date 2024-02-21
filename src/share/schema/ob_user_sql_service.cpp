@@ -172,11 +172,8 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(
       } else if (NULL == tmp_user) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user info is null", K(ret), K(id));
-      } else {
-        const ObUserInfo user_info = *tmp_user;
-        if (OB_FAIL(user_infos.push_back(user_info))) {
-          LOG_WARN("fail to push back", K(ret), K(user_info));
-        }
+      } else if (OB_FAIL(user_infos.push_back(*tmp_user))) {
+        LOG_WARN("fail to push back", K(ret), KPC(tmp_user));
       }
 
       // generate delete sql stmt
