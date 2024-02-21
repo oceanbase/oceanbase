@@ -115,7 +115,7 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
   } else {
     config.region = account.region_;
     config.scheme = Aws::Http::Scheme::HTTP; // if change to HTTPS, be careful about checksum logic.
-    config.verifySSL = false;
+    config.verifySSL = true;
     config.connectTimeoutMs = S3_CONNECT_TIMEOUT_MS;
     config.requestTimeoutMs = S3_REQUEST_TIMEOUT_MS;
     config.maxConnections = MAX_S3_CONNECTIONS_PER_CLIENT;
@@ -1002,7 +1002,6 @@ static int init_put_object_request(const char *bucket, const char *object,
     data_stream->write(buf, size);
     data_stream->flush();
     request.SetBody(data_stream);
-    request.SetAdditionalCustomHeaderValue("Connection", "keep-alive");
     request.SetContentLength(static_cast<long>(request.GetBody()->tellp()));
   }
   return ret;
@@ -1154,10 +1153,11 @@ int ObStorageS3Reader::pread_(char *buf,
     } else {
       Aws::S3::Model::GetObjectRequest request;
       Aws::S3::Model::GetObjectOutcome outcome;
-      request.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
+      if (get_data_size == file_length_) {
+        request.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
+      }
       char range_read[64] = { 0 };
       request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
-      request.SetAdditionalCustomHeaderValue("Connection", "keep-alive");
 
       if (OB_FAIL(databuff_printf(range_read, sizeof(range_read),
                                   "bytes=%ld-%ld", offset, offset + get_data_size - 1))) {
@@ -1331,7 +1331,16 @@ int ObStorageS3Util::del_file_(const ObString &uri)
     const int64_t delete_mode = s3_base.s3_account_.delete_mode_;
     if (ObIStorageUtil::DELETE == delete_mode) {
       if (OB_FAIL(delete_object_(s3_base))) {
-        OB_LOG(WARN, "failed to delete s3 object", K(ret), K(uri));
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          // Uniform handling of 'object not found' scenarios across different object storage services:
+          // GCS returns the OB_BACKUP_FILE_NOT_EXIST error when an object does not exist,
+          // whereas other object storage services may not report an error.
+          // Therefore, to maintain consistency,
+          // no error code is returned when attempting to delete a non-existent object
+          ret = OB_SUCCESS;
+        } else {
+          OB_LOG(WARN, "failed to delete s3 object", K(ret), K(uri));
+        }
       }
     } else if (ObIStorageUtil::TAGGING == delete_mode) {
       if (OB_FAIL(tagging_object_(s3_base))) {
