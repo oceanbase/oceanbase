@@ -459,16 +459,11 @@ int ObTransferPartitionCommand::execute_cancel_transfer_partition_all_(const ObT
       }
     }
     if (OB_SUCC(ret) && init_task.count() > 0) {
-      //set balance job cancel and set task to canceled
-      if (doing_task.count() > 0) {
-        //如果存在doing状态的任务，需要挨个清理part_list，防止多创建出来的日志流不能回收掉
-        if (OB_FAIL(cancel_all_init_transfer_partition_(tenant_id, init_task, trans))) {
-          LOG_WARN("failed to cancel all init transfer partition", KR(ret), K(tenant_id), K(init_task));
-        }
-      } else if (OB_FAIL(cancel_balance_job_in_trans_(tenant_id, trans))) {
-        LOG_WARN("failed to cancel balance job", KR(ret), K(arg));
-      }
-      if (FAILEDx(ObTransferPartitionTaskTableOperator::finish_task(
+      //存在init状态的任务，不管有没有doing状态的任务，为了保证新创建出来的日志流都可以回收掉
+      //都要挨个处理balance_task的part_list，不能简单的把balance_job给cancel掉。
+      if (OB_FAIL(cancel_all_init_transfer_partition_(tenant_id, init_task, trans))) {
+        LOG_WARN("failed to cancel all init transfer partition", KR(ret), K(tenant_id), K(init_task));
+      } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::finish_task(
               tenant_id, init_task, max_task_id, status,
               "Canceled in INIT status", trans))) {
         LOG_WARN("failed to finish task", KR(ret), K(tenant_id), K(init_task), K(max_task_id));
@@ -569,11 +564,16 @@ int ObTransferPartitionCommand::cancel_all_init_transfer_partition_(const uint64
         }
       }//end for j
       if (OB_SUCC(ret) && 0 == new_part_list.count()) {
+        //如果存在current_transfer_task，则这个balance_task肯定有part处于doing状态
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("part list can not be empty", KR(ret), K(balance_task), K(init_list));
+        LOG_ERROR("part list can not be empty", KR(ret), K(balance_task), K(init_list));
       }
     }
-    if (FAILEDx(ObBalanceTaskTableOperator::update_task_part_list(tenant_id,
+    if (OB_FAIL(ret)) {
+    } else if (balance_task.get_part_list().count() == new_part_list.count()) {
+      //个数相等应该part_list就是相等的，不去做其他的校验了
+      LOG_INFO("part list no change, no need update", K(balance_task), K(new_part_list), K(init_list));
+    } else if (OB_FAIL(ObBalanceTaskTableOperator::update_task_part_list(tenant_id,
             balance_task.get_balance_task_id(), new_part_list, trans))) {
       LOG_WARN("failed to update task part list", KR(ret), K(tenant_id), K(balance_task),
           K(new_part_list));
