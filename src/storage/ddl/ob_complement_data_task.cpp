@@ -1476,9 +1476,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
           append_row_time += t3 - t2;
           context_->row_inserted_++;
         }
-        if (lob_cnt % 128 == 0) {
-          lob_allocator.reuse(); // reuse after append_row to macro block to save memory
-        }
+        lob_allocator.reuse(); // reuse after append_row to macro block to save memory
       }
     }
     if (OB_ITER_END == ret) {
