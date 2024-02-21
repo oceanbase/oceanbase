@@ -73,7 +73,7 @@ private:
       const int64_t memtable_create_timestamp,
       int64_t &adaptive_threshold);
 private:
-  static const int64_t FAST_FREEZE_INTERVAL_US = 120 * 1000 * 1000L;  //120s
+  static const int64_t FAST_FREEZE_INTERVAL_US = 300 * 1000 * 1000L;  //300s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t TOMBSTONE_DEFAULT_ROW_COUNT = 250000;
   static const int64_t TOMBSTONE_MAX_ROW_COUNT = 500000;

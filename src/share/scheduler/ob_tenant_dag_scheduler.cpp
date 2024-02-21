@@ -1578,6 +1578,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     function_type_(0),
     group_id_(0),
     tg_id_(-1),
+    hold_by_compaction_dag_(false),
     is_inited_(false)
 {
 }
@@ -1710,14 +1711,15 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   return flag;
 }
 
-bool ObTenantDagWorker::hold_by_compaction_dag()
+void ObTenantDagWorker::set_task(ObITask *task)
 {
-  bool bret = false;
+  task_ = task;
+  hold_by_compaction_dag_ = false;
+
   ObIDag *dag = nullptr;
   if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
-    bret = is_compaction_dag(dag->get_type());
+    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type());
   }
-  return bret;
 }
 
 void ObTenantDagWorker::run1()
