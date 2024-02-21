@@ -99,6 +99,8 @@ public:
   int transform_json_column(ObObj &json);
   int mvt_pack(ObString &blob_res);
   void set_tmp_allocator(common::ObIAllocator *temp_allocator) { temp_allocator_ = temp_allocator;}
+  static bool is_upper_char_exist(const ObString &str);
+
 private:
   int get_key_id(ObString col_name, uint32_t &key_id);
 

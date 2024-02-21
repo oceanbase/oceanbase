@@ -8305,6 +8305,9 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
           }
         } else if (OB_FAIL(tmp_obj[i].get_string(content))) {
           LOG_WARN("get lay name string failed", K(ret));
+        } else if (mvt_agg_result::is_upper_char_exist(content)) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
         } else if (OB_FAIL(ob_write_string(allocator, content, mvt_res.lay_name_, true))) {
           LOG_WARN("write string failed", K(ret), K(content));
         }
@@ -8341,6 +8344,9 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         } else if (tmp_obj[i].get_string().empty()) {
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("invalid column name", K(ret), K(type));
+        } else if (mvt_agg_result::is_upper_char_exist(tmp_obj[i].get_string())) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
         } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
           LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
         }
@@ -8349,6 +8355,9 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         if (!ob_is_string_tc(type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (mvt_agg_result::is_upper_char_exist(tmp_obj[i].get_string())) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("column name can't be upper case", K(ret), K(type));
         } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
           LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
         } else if (mvt_res.feature_id_name_.empty()) {

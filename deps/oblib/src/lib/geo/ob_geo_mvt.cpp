@@ -368,6 +368,8 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         value.test_oneof_case = VECTOR_TILE__TILE__VALUE__TEST_ONEOF_DOUBLE_VALUE;
         tile_value.ptr_ = &value.double_value;
         tile_value.len_ = sizeof(value.double_value);
+      } else if (ob_is_enum_or_set_type(type)) {
+        // do nothing, enum/set type mvt encode isn't supported
       } else {
         // other type cast to varchar
         ObObj obj;
@@ -486,7 +488,18 @@ int mvt_agg_result::mvt_pack(ObString &blob_res)
     }
   }
   return ret;
+}
 
+bool mvt_agg_result::is_upper_char_exist(const ObString &str)
+{
+  bool res = false;
+  const char *ptr = str.ptr();
+  for (int32_t i = 0; i < str.length() && !res; i++) {
+    if (isupper(static_cast<unsigned char>(ptr[i]))) {
+      res = true;
+    }
+  }
+  return res;
 }
 
 } // namespace common

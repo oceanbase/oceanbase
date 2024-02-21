@@ -3071,11 +3071,7 @@ STRING_VALUE { $$ = $1; }
   $$ = $2;
 }
 | NULLX { $$ = $1; }
-| NAME_OB { $$ = $1; }
-| unreserved_keyword
-{
-  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
-}
+| column_ref { $$ = $1; }
 ;
 
 sys_interval_func:
