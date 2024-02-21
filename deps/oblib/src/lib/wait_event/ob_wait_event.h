@@ -11,7 +11,18 @@
  */
 
 #ifdef WAIT_EVENT_DEF
-// symbol, id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy, enable
+/**
+ * WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable)
+ * @param def Name of this wait event
+ * @param id Identifier of an wait event. ATTENTION: please add id placeholder on master.
+ * @param name Name for this wait event. Display on virtual table v$event_name
+ * @param param1 Additional showing param 1. Display on gv$active_session_history and gv$session_wait
+ * @param prarm2 Additional showing param 2. Display on gv$active_session_history and gv$session_wait
+ * @param param3 Additional showing param 3. Display on gv$active_session_history and gv$session_wait
+ * @param class Every wait event belongs to a class of wait event on deps/oblib/src/lib/wait_event/ob_wait_class.h
+ * @param is_phy Indicate whether this wait event can be nested. true for most cases.
+ * @param enable Means whether this wait event is enabled. Marked it false it you merely need it as an placeholder.
+*/
 // USER_IO & SYSTEM_IO
 WAIT_EVENT_DEF(NULL_EVENT, 10000, "", "", "", "", OTHER, true, true)
 WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "fd", "offset", "size", USER_IO, true, true)

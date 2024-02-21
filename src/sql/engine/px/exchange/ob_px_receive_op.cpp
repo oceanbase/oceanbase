@@ -824,6 +824,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
         }
       } else {
         LOG_WARN("fail get row from channels", K(ret));
+        break;
       }
     } while (OB_EAGAIN == ret);
   }

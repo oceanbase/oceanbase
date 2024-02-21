@@ -215,7 +215,7 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     transaction::ObPartTransCtx *tx_ctx = NULL;
     int64_t pos = 0;
     bool tx_ctx_existed = true;
-
+    ctx_info_.set_compatible_version(curr_meta.get_version());
     if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
     } else if (FALSE_IT(ctx_info_.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {

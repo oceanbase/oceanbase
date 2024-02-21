@@ -5684,10 +5684,10 @@ int ObTransformPreProcess::create_equal_expr_for_case_expr(ObRawExprFactory &exp
       cmp_type.set_type(obj_type);
       cmp_type.set_collation_type(case_res_type.get_calc_collation_type());
       cmp_type.set_collation_level(case_res_type.get_calc_collation_level());
-      if (ObRawExprUtils::try_add_cast_expr_above(&expr_factory, &session,
-                                                  *arg_expr, cmp_type, new_arg_expr) ||
-          ObRawExprUtils::try_add_cast_expr_above(&expr_factory, &session,
-                                                  *when_expr, cmp_type, new_when_expr)) {
+      if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, &session,
+                                                          *arg_expr, cmp_type, new_arg_expr)) ||
+          OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, &session,
+                                                          *when_expr, cmp_type, new_when_expr))) {
         LOG_WARN("failed to add_cast", K(ret), KP(new_arg_expr), KP(new_when_expr));
       }
     } else {

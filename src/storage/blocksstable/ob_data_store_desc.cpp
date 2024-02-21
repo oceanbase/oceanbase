@@ -954,7 +954,7 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid index store descriptor", K(ret), K(desc_), K(data_desc));
   } else {
-    STORAGE_LOG(INFO, "success to gen index desc", K(ret), K(desc_), K(data_desc));
+    STORAGE_LOG(TRACE, "success to gen index desc", K(ret), K(desc_), K(data_desc));
   }
   return ret;
 }

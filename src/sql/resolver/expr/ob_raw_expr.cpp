@@ -789,10 +789,23 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_VALUES == type_
+      || T_OP_GET_PACKAGE_VAR == type_
+      || T_OP_GET_SUBPROGRAM_VAR == type_
+      || T_FUN_SYS_JSON_VALUE == type_
+      || T_FUN_SYS_JSON_QUERY == type_
+      || (T_FUN_SYS_JSON_EXISTS == type_ && lib::is_oracle_mode())
+      || T_FUN_SYS_JSON_EQUAL == type_
+      || T_FUN_SYS_IS_JSON == type_
+      || (T_FUN_SYS_JSON_MERGE_PATCH == type_ && lib::is_oracle_mode())
+      || T_FUN_SYS_JSON_OBJECT == type_
+      || IS_LABEL_SE_POLICY_FUNC(type_)
       || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
+      || T_FUN_LABEL_SE_SESSION_LABEL == type_
+      || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
      is_const_inherit = false;
@@ -836,6 +849,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_USERENV == type_
           || T_FUN_SYS_REGEXP_REPLACE == type_
           || T_FUN_GET_TEMP_TABLE_SESSID == type_
+          || T_FUN_LABEL_SE_SESSION_LABEL == type_
+          || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
           || T_FUN_SYS_USER_CAN_ACCESS_OBJ == type_) {
       is_non_pure = true;
     } else if (T_FUN_SYS_TO_DATE == type_ || T_FUN_SYS_TO_TIMESTAMP == type_ ||

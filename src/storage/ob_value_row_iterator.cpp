@@ -28,7 +28,7 @@ ObValueRowIterator::ObValueRowIterator()
     : ObNewRowIterator(),
       is_inited_(false),
       unique_(false),
-      allocator_(ObModIds::OB_VALUE_ROW_ITER),
+      allocator_("ObValueRowAlloc"),
       rows_(),
       cur_idx_(0)
 {
@@ -45,6 +45,7 @@ int ObValueRowIterator::init(bool unique)
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObValueRowIterator is already initialized", K(ret));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     is_inited_ = true;
     unique_ = unique;
     cur_idx_ = 0;

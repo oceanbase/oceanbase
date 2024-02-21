@@ -63,6 +63,9 @@ public:
 
   int check_trigger_constraint(const ObTableSchema *table_schema);
 private:
+  int pattern_match(const ObString& str, const ObString& pattern, bool &matched);
+  bool exist_wildcard(const ObString& str);
+private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,
     ENUM_FILE_NAME,

@@ -2839,7 +2839,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           bool in_pl = NULL != resolver_ctx.secondary_namespace_
             || (resolver_ctx.is_dynamic_sql_ && OB_NOT_NULL(result.get_session().get_pl_context()))
             || resolver_ctx.is_dbms_sql_;
-          bool need_rebuild = lib::is_mysql_mode() ?  false : resolver_ctx.is_prepare_stage_ && in_pl;
+          bool need_rebuild = (lib::is_mysql_mode() ? (resolver_ctx.is_dynamic_sql_ &&
+          OB_NOT_NULL(result.get_session().get_pl_context()) && resolver_ctx.is_prepare_stage_) : resolver_ctx.is_prepare_stage_ && in_pl);
           bool is_returning_into = false;
           if (stmt->is_insert_stmt() || stmt->is_update_stmt() || stmt->is_delete_stmt()) {
             ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(*stmt);
@@ -5501,15 +5502,27 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
                  || plan->is_contain_oracle_trx_level_temporary_table()) {
         // access temp table
       } else {
-        fixed_route = false;
+        // check passed: special query which can not be reroute
+        //
+        // check txn free route is disabled, if so, when on txn start
+        // node, can not reroute
+        if (OB_FAIL(session.calc_txn_free_route())) {
+          LOG_WARN("cal txn free route failed", K(ret), K(session));
+        } else if (session.can_txn_free_route()) {
+          fixed_route = false;
+        } else if (session.is_txn_free_route_temp()) {
+          fixed_route = false;
+        } else {
+          // fixed route if txn started on this node
+        }
       }
       if (fixed_route) {
-        // multi-stmt or stmt disallow on other node, can not be rerouted
         should_reroute = false;
       }
     }
 
-    if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
     } else if (should_reroute) {

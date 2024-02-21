@@ -130,6 +130,7 @@ struct ObThrottleInfoGuard
   }
 
   ObThrottleInfo *throttle_info() { return throttle_info_; }
+  const ObThrottleInfo *throttle_info() const { return throttle_info_; }
 
   TO_STRING_KV(KP(throttle_info_), KP(throttle_info_map_));
 };

@@ -161,7 +161,11 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
       if (OB_FAIL(ret)) {
         (void)location_service->renew_tablet_location(param.tenant_id_, tablet_id, ret, !is_block_renew_location(ret)/*is_nonblock*/);
         if (is_retryable(ret)) {
-          if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
+          // overwrite ret
+          if (OB_UNLIKELY(rpc_timeout <= 0)) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("timeout", K(ret), K(rpc_timeout));
+          } else if (OB_FAIL(THIS_WORKER.check_status())) {
             LOG_WARN("failed to check status", K(ret));
           } else {
             res.reset();

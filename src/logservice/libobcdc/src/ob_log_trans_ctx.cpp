@@ -765,6 +765,20 @@ int TransCtx::get_tenant_id(uint64_t &tenant_id) const
   return ret;
 }
 
+bool TransCtx::has_ddl_participant() const
+{
+  bool has_ddl_part = false;
+  PartTransTask* participant = ready_participant_objs_;
+
+  while (! has_ddl_part && OB_NOT_NULL(participant)) {
+    PartTransTask* next = participant->next_task();
+    has_ddl_part = participant->is_ddl_trans();
+    participant = next;
+  }
+
+  return has_ddl_part;
+}
+
 int TransCtx::init_participant_array_(const int64_t part_count)
 {
   int ret = OB_SUCCESS;

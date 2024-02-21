@@ -9031,7 +9031,7 @@ int ObOptimizerUtil::replace_column_with_select_for_partid(const ObInsertStmt *s
         LOG_WARN("failed to add replace pair", K(ret));
       }
     }
-    if (OB_FAIL(copier.copy_on_replace(calc_part_id_expr,
+    if (FAILEDx(copier.copy_on_replace(calc_part_id_expr,
                                        calc_part_id_expr))) {
       LOG_WARN("failed to copy on replace expr", K(ret));
     }

@@ -4215,6 +4215,19 @@ int ObRawExprUtils::erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out
   return ret;
 }
 
+int ObRawExprUtils::erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(src_expr));
+  OX(out_expr = src_expr);
+  if (OB_SUCC(ret) && src_expr->has_flag(IS_INNER_ADDED_EXPR) &&
+      T_FUN_SYS_CAST == src_expr->get_expr_type()) {
+      CK(2 == src_expr->get_param_count());
+      OZ(erase_inner_added_exprs(src_expr->get_param_expr(0), out_expr));
+  }
+  return ret;
+}
+
 int ObRawExprUtils::erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out)
 {
   int ret = OB_SUCCESS;
@@ -9067,10 +9080,16 @@ int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
     }
     if (has_char_dep_col) {
       //add sql mode
-      ObSessionSysVar *local_var = NULL;
-      if (OB_FAIL(gen_col.get_local_session_var().get_local_var(SYS_VAR_SQL_MODE, local_var))) {
-        LOG_WARN("get local var failed", K(ret));
-      } else if (NULL == local_var) {
+      bool is_sql_mode_solidified = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_sql_mode_solidified && i < var_array.count(); ++i) {
+        if (OB_ISNULL(var_array.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (share::SYS_VAR_SQL_MODE == var_array.at(i)->type_) {
+          is_sql_mode_solidified = true;
+        }
+      }
+      if (OB_SUCC(ret) && !is_sql_mode_solidified) {
         local_sql_mode.type_ = SYS_VAR_SQL_MODE;
         local_sql_mode.val_.set_uint64(sql_mode);
         if (OB_FAIL(var_array.push_back(&local_sql_mode))) {

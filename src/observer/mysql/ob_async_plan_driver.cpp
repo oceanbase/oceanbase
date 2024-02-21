@@ -74,6 +74,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     int cli_ret = OB_SUCCESS;
     retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
     if (retry_ctrl_.need_retry()) {
+      result.set_will_retry();
       result.set_end_trans_async(false);
     }
     // close背后的故事：
@@ -118,7 +119,8 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
       if (stmt::T_SELECT == result.get_stmt_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select stmt do not use async plan in prexecute.", K(ret));
-      } else {
+      } else if (!result.is_async_end_trans_submitted()) {
+        // is_async_end_trans_submitted 表示异步回包准备好了
         ObOKPParam ok_param;
         ok_param.affected_rows_ = result.get_affected_rows();
         ok_param.is_partition_hit_ = session_.partition_hit().get_bool();

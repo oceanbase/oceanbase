@@ -271,7 +271,6 @@
 # 422: __all_column_group_mapping  # BASE_TABLE_NAME
 # 423: __all_transfer_task
 # 424: __all_transfer_task_history
-# 424: __all_transfer_task  # BASE_TABLE_NAME
 # 425: __all_balance_job
 # 426: __all_balance_job_history
 # 426: __all_balance_job  # BASE_TABLE_NAME
@@ -903,8 +902,7 @@
 # 12342: __all_virtual_transfer_task
 # 12342: __all_transfer_task  # BASE_TABLE_NAME
 # 12343: __all_virtual_transfer_task_history
-# 12343: __all_transfer_task  # BASE_TABLE_NAME
-# 12343: __all_transfer_task_history  # BASE_TABLE_NAME1
+# 12343: __all_transfer_task_history  # BASE_TABLE_NAME
 # 12344: __all_virtual_balance_job
 # 12344: __all_balance_job  # BASE_TABLE_NAME
 # 12345: __all_virtual_balance_job_history
@@ -1565,8 +1563,7 @@
 # 15381: ALL_VIRTUAL_TRANSFER_TASK_REAL_AGENT
 # 15381: __all_transfer_task  # BASE_TABLE_NAME
 # 15382: ALL_VIRTUAL_TRANSFER_TASK_HISTORY_REAL_AGENT
-# 15382: __all_transfer_task  # BASE_TABLE_NAME
-# 15382: __all_transfer_task_history  # BASE_TABLE_NAME1
+# 15382: __all_transfer_task_history  # BASE_TABLE_NAME
 # 15383: ALL_VIRTUAL_RESOURCE_POOL_SYS_AGENT
 # 15383: __all_resource_pool  # BASE_TABLE_NAME
 # 15384: ALL_VIRTUAL_PX_P2P_DATAHUB

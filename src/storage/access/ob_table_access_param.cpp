@@ -266,8 +266,7 @@ int ObTableAccessParam::init(
       iter_param_.set_use_iter_pool_flag();
     }
 
-    if (OB_UNLIKELY(iter_param_.enable_pd_group_by() &&
-        (!iter_param_.vectorized_enabled_ || scan_param.use_index_skip_scan()))) {
+    if (OB_UNLIKELY(iter_param_.enable_pd_group_by() && scan_param.use_index_skip_scan())) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "Invalid argument for group by pushdown, vectorize must be enabled and not skip scan",
           K(ret), K(iter_param_.vectorized_enabled_), K(scan_param.use_index_skip_scan()));

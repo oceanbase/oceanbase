@@ -12,9 +12,9 @@
 
 #ifdef __x86_64__
 #include "lib/signal/ob_libunwind.h"
-#include "lib/signal/safe_snprintf.h"
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#include "util/easy_string.h"
 
 static const int MAX_BT_ADDRESS_CNT = 100;
 static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len, int64_t *pos);
@@ -48,7 +48,7 @@ static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
   } else {
     for (int i = 0; i < n; i++) {
       int64_t addr = get_rel_offset_c(addrs[i]);
-      int count = safe_snprintf(buf + *pos, len - *pos, "0x%lx", addr);
+      int count = lnprintf(buf + *pos, len - *pos, "0x%lx", addr);
       count++; // for space
       if (count > 0 && *pos + count < len) {
         *pos += count;

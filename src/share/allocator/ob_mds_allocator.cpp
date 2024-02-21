@@ -174,6 +174,11 @@ void ObTenantBufferCtxAllocator::free(void *ptr)
 ObMdsThrottleGuard::ObMdsThrottleGuard(const bool for_replay, const int64_t abs_expire_time) : for_replay_(for_replay), abs_expire_time_(abs_expire_time)
 {
   throttle_tool_ = &(MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool());
+  if (0 == abs_expire_time) {
+    abs_expire_time_ =
+        ObClockGenerator::getClock() + ObThrottleUnit<ObMdsThrottleGuard>::DEFAULT_MAX_THROTTLE_TIME;
+  }
+  share::mds_throttled_alloc() = 0;
 }
 
 ObMdsThrottleGuard::~ObMdsThrottleGuard()
@@ -184,22 +189,15 @@ ObMdsThrottleGuard::~ObMdsThrottleGuard()
   if (OB_ISNULL(throttle_tool_)) {
     MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "throttle tool is unexpected nullptr", KP(throttle_tool_));
   } else if (throttle_tool_->is_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
-    if (MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+    (void)TxShareMemThrottleUtil::do_throttle<ObTenantMdsAllocator>(
+        for_replay_, abs_expire_time_, *throttle_tool_, share_ti_guard, module_ti_guard);
+
+    if (throttle_tool_->still_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
       (void)throttle_tool_->skip_throttle<ObTenantMdsAllocator>(
           share::mds_throttled_alloc(), share_ti_guard, module_ti_guard);
 
       if (module_ti_guard.is_valid()) {
         module_ti_guard.throttle_info()->reset();
-      }
-    } else {
-      uint64_t timeout = 10000;  // 10s
-      int64_t left_interval = abs_expire_time_ - ObClockGenerator::getClock();
-      common::ObWaitEventGuard wait_guard(
-          common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
-      (void)throttle_tool_->do_throttle<ObTenantMdsAllocator>(abs_expire_time_);
-
-      if (for_replay_) {
-        get_replay_is_writing_throttling() = true;
       }
     }
 

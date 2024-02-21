@@ -382,10 +382,11 @@ int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(const palf::LogC
       //set invalid config version
       SpinWLockGuard guard(lock_);
       config_version_in_inner_.reset();
+    } else {
+      SpinWLockGuard guard(lock_);
+      readable_scn_in_inner_ = readable_scn;
+      config_version_in_inner_ = current_version;
     }
-    SpinWLockGuard guard(lock_);
-    readable_scn_in_inner_ = readable_scn;
-    config_version_in_inner_ = current_version;
   }
   return ret;
 }

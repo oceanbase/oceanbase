@@ -30,7 +30,7 @@ public:
   virtual ~ObDirectLoadDataBlockReader();
   void reuse();
   void reset();
-  int init(int64_t data_block_size, int64_t buf_size, common::ObCompressorType compressor_type);
+  int init(int64_t data_block_size, common::ObCompressorType compressor_type);
   int open(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int64_t size);
   int get_next_item(const T *&item) override;
   OB_INLINE int64_t get_block_count() const { return block_count_; }
@@ -39,8 +39,8 @@ protected:
 private:
   int read_next_buffer();
   int switch_next_block();
+  int realloc_buf(int64_t size);
 protected:
-  common::ObArenaAllocator allocator_;
   int64_t data_block_size_;
   char *buf_;
   int64_t buf_capacity_;
@@ -60,8 +60,7 @@ protected:
 
 template <typename Header, typename T>
 ObDirectLoadDataBlockReader<Header, T>::ObDirectLoadDataBlockReader()
-  : allocator_("TLD_DBReader"),
-    data_block_size_(0),
+  : data_block_size_(0),
     buf_(nullptr),
     buf_capacity_(0),
     buf_size_(0),
@@ -99,12 +98,14 @@ template <typename Header, typename T>
 void ObDirectLoadDataBlockReader<Header, T>::reset()
 {
   data_block_size_ = 0;
-  buf_ = nullptr;
+  if (buf_ != nullptr) {
+    ob_free(buf_);
+    buf_ = nullptr;
+  }
   buf_capacity_ = 0;
   buf_size_ = 0;
   buf_pos_ = 0;
   io_timeout_ms_ = 0;
-  allocator_.reset();
   data_block_reader_.reset();
   file_io_handle_.reset();
   curr_item_.reset();
@@ -116,7 +117,7 @@ void ObDirectLoadDataBlockReader<Header, T>::reset()
 }
 
 template <typename Header, typename T>
-int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size, int64_t buf_size,
+int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size,
                                                  common::ObCompressorType compressor_type)
 {
   int ret = common::OB_SUCCESS;
@@ -124,21 +125,14 @@ int ObDirectLoadDataBlockReader<Header, T>::init(int64_t data_block_size, int64_
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObDirectLoadDataBlockReader init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(data_block_size <= 0 || data_block_size % DIO_ALIGN_SIZE != 0 ||
-                         buf_size <= 0 || buf_size % DIO_ALIGN_SIZE != 0 ||
-                         data_block_size > buf_size ||
                          compressor_type <= common::ObCompressorType::INVALID_COMPRESSOR)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", KR(ret), K(data_block_size), K(buf_size), K(compressor_type));
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(data_block_size), K(compressor_type));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
-    if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to allocate memory", KR(ret), K(buf_size));
-    } else if (OB_FAIL(data_block_reader_.init(buf_size, compressor_type))) {
+    if (OB_FAIL(data_block_reader_.init(data_block_size, compressor_type))) {
       STORAGE_LOG(WARN, "fail to init data block reader", KR(ret));
     } else {
       data_block_size_ = data_block_size;
-      buf_capacity_ = buf_size;
       io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       is_inited_ = true;
     }
@@ -167,7 +161,7 @@ int ObDirectLoadDataBlockReader<Header, T>::open(const ObDirectLoadTmpFileHandle
     if (OB_FAIL(file_io_handle_.open(file_handle))) {
       STORAGE_LOG(WARN, "fail to open file handle", KR(ret));
     } else if (OB_FAIL(switch_next_block())) {
-      STORAGE_LOG(WARN, "fail to switch next block", KR(ret));
+      STORAGE_LOG(WARN, "fail to switch next block", KR(ret), K(offset), K(size));
     } else {
       is_opened_ = true;
     }
@@ -191,10 +185,8 @@ int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
     buf_size_ = data_size;
     // read buffer
     const int64_t read_size = MIN(buf_capacity_ - buf_size_, read_size_);
-    if (OB_FAIL(file_io_handle_.aio_pread(buf_ + buf_size_, read_size, offset_))) {
-      STORAGE_LOG(WARN, "fail to do aio read from tmp file", KR(ret));
-    } else if (OB_FAIL(file_io_handle_.wait())) {
-      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret), K(io_timeout_ms_));
+    if (OB_FAIL(file_io_handle_.pread(buf_ + buf_size_, read_size, offset_))) {
+      STORAGE_LOG(WARN, "fail to do pread from tmp file", KR(ret));
     } else {
       buf_size_ += read_size;
       offset_ += read_size;
@@ -205,30 +197,69 @@ int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
 }
 
 template <typename Header, typename T>
+int ObDirectLoadDataBlockReader<Header, T>::realloc_buf(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  int64_t align_size = ALIGN_UP(size, DIO_ALIGN_SIZE);
+  if (buf_capacity_ != align_size && buf_size_ - buf_pos_ <= align_size) {
+    char *tmp_buf = (char *)ob_malloc(align_size, ObMemAttr(MTL_ID(), "TLD_DBReader"));
+    if (tmp_buf == nullptr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc mem", K(align_size), KR(ret));
+    } else {
+      if (buf_ != nullptr) {
+        MEMCPY(tmp_buf, buf_ + buf_pos_, buf_size_ - buf_pos_);
+        ob_free(buf_);
+        buf_ = nullptr;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      buf_ = tmp_buf;
+      buf_size_ = buf_size_ - buf_pos_;
+      buf_pos_ = 0;
+      buf_capacity_ = align_size;
+    }
+  }
+  return ret;
+}
+
+template <typename Header, typename T>
 int ObDirectLoadDataBlockReader<Header, T>::switch_next_block()
 {
   int ret = common::OB_SUCCESS;
   int64_t data_size = 0;
-  if (buf_size_ - buf_pos_ < data_block_size_ && OB_FAIL(read_next_buffer())) {
+  if (OB_FAIL(realloc_buf(data_block_size_))) {
+    STORAGE_LOG(WARN, "fail to realloc buf", K(data_block_size_), KR(ret));
+  } else if (buf_size_ - buf_pos_ < DIO_ALIGN_SIZE && OB_FAIL(read_next_buffer())) {
     if (OB_UNLIKELY(common::OB_ITER_END != ret)) {
       STORAGE_LOG(WARN, "fail to read next buffer", KR(ret));
     }
   } else if (OB_FAIL(data_block_reader_.prepare_data_block(buf_ + buf_pos_, buf_size_ - buf_pos_,
                                                            data_size))) {
+
     if (OB_UNLIKELY(common::OB_BUF_NOT_ENOUGH != ret)) {
       STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_));
     } else {
-      if (OB_FAIL(read_next_buffer())) {
+      ret = OB_SUCCESS;
+      if (data_size > buf_capacity_) {
+        if (OB_FAIL(realloc_buf(data_size))) {
+          STORAGE_LOG(WARN, "fail to alloc buf", KR(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        //pass
+      } else if (OB_FAIL(read_next_buffer())) {
         STORAGE_LOG(WARN, "fail to read next buffer", KR(ret));
       } else if (OB_FAIL(data_block_reader_.prepare_data_block(buf_ + buf_pos_,
                                                                buf_size_ - buf_pos_, data_size))) {
-        STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_));
+        STORAGE_LOG(WARN, "fail to prepare data block", KR(ret), K(buf_pos_), K(buf_size_), K(data_size));
       }
     }
   }
   if (OB_SUCC(ret)) {
     const int64_t data_block_size = ALIGN_UP(data_size, DIO_ALIGN_SIZE);
-    buf_pos_ += MAX(data_block_size_, data_block_size);
+    buf_pos_ += data_block_size;
     ++block_count_;
     if (OB_FAIL(prepare_read_block())) {
       STORAGE_LOG(WARN, "fail to prepare read block", KR(ret));

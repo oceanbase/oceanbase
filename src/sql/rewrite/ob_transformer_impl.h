@@ -158,6 +158,8 @@ private:
    * 为pl收集依赖表的schema version信息
    */
   int adjust_global_dependency_tables(ObDMLStmt *stmt);
+  int verify_all_stmt_exprs(ObDMLStmt *stmt);
+  int verify_stmt_exprs(ObDMLStmt *stmt);
 
   template<typename T>
   int transform_one_rule(ObDMLStmt *&stmt,

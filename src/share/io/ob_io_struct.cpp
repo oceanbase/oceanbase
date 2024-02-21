@@ -2173,7 +2173,7 @@ void ObAsyncIOChannel::get_events()
             }
           }
         } else { // io failed
-          LOG_ERROR("io request failed", K(*req), K(system_errno), K(complete_size));
+          LOG_ERROR_RET(OB_ERR_SYS, "io request failed", "error", strerror(system_errno), K(complete_size), K(*req));
           if (-EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
               LOG_WARN("retry io request failed", K(ret), K(system_errno), K(*req));

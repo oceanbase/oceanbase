@@ -313,7 +313,7 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
 int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece cache is null.", K(ret), K(stmt_id_));
@@ -369,22 +369,23 @@ int ObPiece::piece_init(ObSQLSessionInfo &session,
                         int32_t stmt_id, 
                         uint16_t param_id) {
   int ret = OB_SUCCESS;
+  lib::ContextParam param;
+  ObPieceCache* piece_cache = nullptr;
   set_stmt_id(stmt_id);
   set_param_id(param_id);
-  lib::MemoryContext entity = NULL;
-  lib::ContextParam param;
-  param.set_mem_attr(session.get_effective_tenant_id(),
-                      ObModIds::OB_PL_TEMP, ObCtxIds::DEFAULT_CTX_ID);
-  param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-  if (OB_FAIL((static_cast<ObPieceCache*>(session.get_piece_cache()))
-                    ->mem_context_->CREATE_CONTEXT(entity_, param))) {
-    LOG_WARN("failed to create ref cursor entity", K(ret));
+  param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE)
+      .set_mem_attr(session.get_effective_tenant_id(), "SendPieceProto", ObCtxIds::DEFAULT_CTX_ID);
+  if (OB_ISNULL(piece_cache = session.get_piece_cache())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece cache is null", K(ret));
+  } else if (OB_FAIL(piece_cache->mem_context_->CREATE_CONTEXT(entity_, param))) {
+    LOG_WARN("failed to create piece memory context", K(ret));
   } else if (OB_ISNULL(entity_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc ref cursor entity", K(ret));
+    LOG_WARN("failed to alloc piece memory context", K(ret));
   } else {
-    void *buf = NULL;
-    ObPieceBufferArray *buf_array = NULL;
+    void *buf = nullptr;
+    ObPieceBufferArray *buf_array = nullptr;
     ObIAllocator *alloc = &entity_->get_arena_allocator();
     OV (OB_NOT_NULL(buf = alloc->alloc(sizeof(ObPieceBufferArray))),
         OB_ALLOCATE_MEMORY_FAILED, sizeof(ObPieceBufferArray));
@@ -392,7 +393,7 @@ int ObPiece::piece_init(ObSQLSessionInfo &session,
     OV (OB_NOT_NULL(buf_array = new (buf) ObPieceBufferArray(alloc)));
     OZ (buf_array->reserve(OB_MAX_PIECE_BUFFER_COUNT));
     if (OB_SUCC(ret)) {
-        set_buffer_array(buf_array);
+      set_buffer_array(buf_array);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc buffer array fail.", K(ret), K(stmt_id), K(param_id));

@@ -36,7 +36,12 @@ int ObTransformOrExpansion::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
+  bool is_stmt_valid = false;
+  if (OB_FAIL(check_stmt_valid_for_expansion(stmt, is_stmt_valid))) {
+    LOG_WARN("failed to check stmt valid for expansion", K(ret));
+  } else if (!is_stmt_valid) {
+    /* do nothing */
+  } else if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
     LOG_WARN("failed to do or expansion in joined condition", K(ret));
   } else if (trans_happened) {
     /* do nothing */
@@ -410,6 +415,8 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                       stmt, origin_trans_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*origin_trans_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(create_single_joined_table_stmt(origin_trans_stmt, joined_table->table_id_,
                                                      view_table, ref_query))) {
     LOG_WARN("failed to create view with table", K(ret));
@@ -529,6 +536,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                       stmt, origin_trans_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*origin_trans_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(create_single_joined_table_stmt(origin_trans_stmt, joined_table->table_id_,
                                                      view_table, ref_query))) {
     LOG_WARN("failed to create view with table", K(ret));
@@ -589,6 +598,10 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     if (OB_FAIL(ret)) {
     } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
       LOG_WARN("failed to recover params", K(ret));
+    } else if (!trans_happened && OB_FAIL(remove_temp_table_select_item(ref_query,
+                                                                  not_null_side_table->table_id_,
+                                                                  right_flag_pos))) {
+      LOG_WARN("failed to remove temp table select item", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -717,7 +730,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
   ObSEArray<ObRawExpr*, 4> right_flag_exprs;
   ObSEArray<ObRawExpr*, 4> select_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)
-      || OB_ISNULL(ctx_->allocator_)) {
+      || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
   } else if (OB_UNLIKELY(1 != stmt->get_from_item_size()) ||
@@ -749,6 +762,8 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_, ObNumberType,
                                               number::ObNumber::get_positive_one(), const_expr))) {
       LOG_WARN("failed to build const expr", K(ret));
+    } else if (OB_FAIL(const_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize const number expr", K(ret));
     } else if (OB_FAIL(select_list.push_back(const_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *flag_table, stmt,
@@ -805,6 +820,33 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
         LOG_WARN("failed to create select item", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::remove_temp_table_select_item(ObSelectStmt *stmt,
+                                                          const uint64_t flag_table_id,
+                                                          ObSqlBitSet<> &right_flag_pos)
+{
+  int ret = OB_SUCCESS;
+  TableItem *flag_table = NULL;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt));
+  } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
+  } else if (!flag_table->is_temp_table()) {
+    // do nothing
+  } else if (OB_UNLIKELY(right_flag_pos.num_members() != 1)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected right flag pos count", K(ret), K(right_flag_pos));
+  } else if (OB_ISNULL(view_stmt = flag_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view_stmt is null", K(ret), K(view_stmt));
+  } else if (ObTransformUtils::remove_select_items(ctx_, flag_table_id, *view_stmt,
+                                                   *stmt, right_flag_pos)) {
+    LOG_WARN("failed to remove select items", K(ret));
   }
   return ret;
 }
@@ -1224,32 +1266,25 @@ int ObTransformOrExpansion::check_upd_del_stmt_validity(const ObDelUpdStmt &stmt
   } else if (1 != table_infos.count()) {
     is_valid = false;
     OPT_TRACE("multi dml table not support or expansion");
-  } else if (OB_ISNULL(table_infos.at(0)) || OB_ISNULL(query_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret));
-  } else {
-    // TODO following code has been removed on 3.2
-    // ObDmlTableInfo* table_info = table_infos.at(0);
-    // for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < index_infos.count(); ++i) {
-    //   if (NULL != stmt.get_part_expr(index_infos.at(i).loc_table_id_,
-    //                                   index_infos.at(i).index_tid_)) {
-    //     is_valid = false;
-    //   }
-    // }
-    if (NULL != stmt.get_part_expr(table_infos.at(0)->loc_table_id_,
-                                   table_infos.at(0)->ref_table_id_)) {
-      bool is_use_pdml = false;
-      if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
-        is_use_pdml = true;
-      } else if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE) {
-        is_use_pdml = false;
-      } else if (OB_FAIL(ctx_->session_info_->get_enable_parallel_dml(is_use_pdml))) {
-        LOG_WARN("failed to get enable parallel dml", K(ret));
-      }
-      if (OB_SUCC(ret) && is_use_pdml) {
-        is_valid = false;
-        OPT_TRACE("parallel dml table not support or expansion");
-      }
+  }
+  return ret;
+}
+
+// for update/delete stmt, disable pdml after or expansion
+int ObTransformOrExpansion::disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (stmt.is_update_stmt() || stmt.is_delete_stmt()) {
+    ObSEArray<ObDmlTableInfo*, 2> table_infos;
+    if (OB_FAIL(static_cast<ObDelUpdStmt&>(stmt).get_dml_table_infos(table_infos))) {
+      LOG_WARN("failed to get dml table infos", K(ret));
+    } else if (OB_UNLIKELY(table_infos.empty()) || OB_ISNULL(table_infos.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null param", K(ret));
+    } else if (NULL != stmt.get_part_expr(table_infos.at(0)->loc_table_id_,
+                                          table_infos.at(0)->ref_table_id_)) {
+      OPT_TRACE("disable parallel dml after or expansion");
+      static_cast<ObDelUpdStmt&>(stmt).set_pdml_disabled();
     }
   }
   return ret;
@@ -1284,6 +1319,8 @@ int ObTransformOrExpansion::get_trans_view(ObDMLStmt *stmt,
   } else if (OB_ISNULL(upper_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(upper_stmt));
+  } else if (OB_FAIL(disable_pdml_for_upd_del_stmt(*upper_stmt))) {
+    LOG_WARN("failed to disable pdml for upd_del_stmt", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, upper_stmt, child_stmt, false))) {
     LOG_WARN("failed to create simple view", K(ret));
   } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(expr_factory, ctx_->session_info_))) {
@@ -3337,6 +3374,26 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     }
   } else if (rel_table == table){
     left_bottom = true;
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid)
+{
+  int ret = OB_SUCCESS;
+  is_stmt_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_stmt_valid && i < stmt->get_table_size(); i++) {
+    TableItem *table_item = stmt->get_table_items().at(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (table_item->is_fake_cte_table()) {
+      is_stmt_valid = false;
+    }
   }
   return ret;
 }

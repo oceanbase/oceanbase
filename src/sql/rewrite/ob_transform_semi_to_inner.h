@@ -94,8 +94,8 @@ private:
     // for AGGR INNER form, filter conditions on right table should be left in the view
     ObSEArray<ObRawExpr*, 4> filter_conds_on_right_;
 
-    // for INNER GBY form, a column group with "unique" property on left tables is needed in group by clause
-    ObSEArray<ObSEArray<ObRawExpr*, 4>, 4> unique_column_groups_;
+    // for INNER GBY form, a column group with "unique" property on from items is needed in group by clause
+    ObSEArray<ObRawExpr*, 4> unique_column_groups_;
 
     // for INNER GBY form, spj view is needed for adding group by clause
     bool need_spj_view_;
@@ -128,14 +128,6 @@ private:
                            TransformParam& trans_param);
 
   int check_query_from_dual(ObSelectStmt *stmt, bool& query_from_dual);
-
-  int collect_unique_property_of_from_items(ObTransformerCtx* ctx,
-                                             ObDMLStmt* stmt,
-                                             ObIArray<ObSEArray<ObRawExpr*, 4>>& unique_column_group);
-
-  int check_from_item_unique_property(ObTransformerCtx* ctx,
-                                      ObDMLStmt* stmt,
-                                      bool& is_valid);
 
   bool is_less_or_greater_expr(ObItemType expr_type);
 

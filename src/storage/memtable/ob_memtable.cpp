@@ -682,6 +682,7 @@ int ObMemtable::exist(
   } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
                                       query_flag,
                                       &parameter_mtk,
+                                      ls_id_,
                                       NULL,
                                       value_iter,
                                       lock_state))) {
@@ -814,6 +815,7 @@ int ObMemtable::get(
     } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
                                         context.query_flag_,
                                         &parameter_mtk,
+                                        ls_id_,
                                         &returned_mtk,
                                         value_iter,
                                         lock_state))) {

@@ -17,6 +17,8 @@
 #include "share/allocator/ob_tx_data_allocator.h"
 #include "share/allocator/ob_mds_allocator.h"
 #include "share/throttle/ob_share_resource_throttle_tool.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase {
 namespace share {
@@ -76,6 +78,78 @@ private:
   ObMemstoreAllocator memstore_allocator_;
   ObTenantTxDataAllocator tx_data_allocator_;
   ObTenantMdsAllocator mds_allocator_;
+};
+
+class TxShareMemThrottleUtil
+{
+public:
+  static const int64_t SLEEP_INTERVAL_PER_TIME = 20 * 1000; // 20ms;
+  template <typename ALLOCATOR>
+  static int do_throttle(const bool for_replay,
+                         const int64_t abs_expire_time,
+                         TxShareThrottleTool &throttle_tool,
+                         ObThrottleInfoGuard &share_ti_guard,
+                         ObThrottleInfoGuard &module_ti_guard)
+  {
+    int ret = OB_SUCCESS;
+    bool has_printed_lbt = false;
+    int64_t sleep_time = 0;
+    int64_t left_interval = share::ObThrottleUnit<ALLOCATOR>::DEFAULT_MAX_THROTTLE_TIME;
+
+    if (!for_replay) {
+      left_interval = min(left_interval, abs_expire_time - ObClockGenerator::getClock());
+    }
+
+    uint64_t timeout = 10000;  // 10s
+    common::ObWaitEventGuard wait_guard(
+        common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
+
+    while (throttle_tool.still_throttling<ALLOCATOR>(share_ti_guard, module_ti_guard) &&
+           (left_interval > 0)) {
+      int64_t expected_wait_time = 0;
+      if (for_replay && MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+        // skip throttle if ls freeze exists
+        break;
+      } else if ((expected_wait_time =
+                      throttle_tool.expected_wait_time<ALLOCATOR>(share_ti_guard, module_ti_guard)) <= 0) {
+        if (expected_wait_time < 0) {
+          SHARE_LOG(ERROR,
+                    "expected wait time should not smaller than 0",
+                    K(expected_wait_time),
+                    KPC(share_ti_guard.throttle_info()),
+                    KPC(module_ti_guard.throttle_info()),
+                    K(clock),
+                    K(left_interval));
+        }
+        break;
+      }
+
+      // do sleep when expected_wait_time and left_interval are not equal to 0
+      int64_t sleep_interval = min(SLEEP_INTERVAL_PER_TIME, expected_wait_time);
+      if (0 < sleep_interval) {
+        sleep_time += sleep_interval;
+        left_interval -= sleep_interval;
+        ::usleep(sleep_interval);
+      }
+
+      PrintThrottleUtil::pirnt_throttle_info(ret,
+                                             ALLOCATOR::throttle_unit_name(),
+                                             sleep_time,
+                                             left_interval,
+                                             expected_wait_time,
+                                             abs_expire_time,
+                                             share_ti_guard,
+                                             module_ti_guard,
+                                             has_printed_lbt);
+    }
+    PrintThrottleUtil::print_throttle_statistic(ret, ALLOCATOR::throttle_unit_name(), sleep_time);
+
+    if (for_replay && sleep_time > 0) {
+      // avoid print replay_timeout
+      get_replay_is_writing_throttling() = true;
+    }
+    return ret;
+  }
 };
 
 }  // namespace share

@@ -41,7 +41,7 @@ template <typename FakeAllocator, typename ...Args>
 class ObShareResourceThrottleTool
 {
 private:
-  static const uint32_t DEFAULT_THROTTLE_SLEEP_INTERVAL = 20 * 1000;
+  static const int64_t DEFAULT_THROTTLE_SLEEP_INTERVAL = 20 * 1000;
 private: // Functors for ShareResourceThrottleTool
   struct SumModuleHoldResourceFunctor {
     int64_t sum_;

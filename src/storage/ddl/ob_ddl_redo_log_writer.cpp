@@ -944,6 +944,11 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
   return ret;
 }
 
+bool ObDDLRedoLogWriter::need_retry(int ret_code)
+{
+  return OB_NOT_MASTER == ret_code;
+}
+
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
   : cb_(nullptr), scn_(SCN::min_scn())
 {
@@ -1220,6 +1225,37 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
     LOG_WARN("ddl redo callback executed failed", K(ret));
   }
   ddl_redo_handle_.reset();
+  return ret;
+}
+
+int ObDDLRedoLogWriter::write_commit_log_with_retry(
+    const bool allow_remote_write,
+    const ObITable::TableKey &table_key,
+    const share::SCN &start_scn,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletHandle &tablet_handle,
+    SCN &commit_scn,
+    bool &is_remote_write,
+    uint32_t &lock_tid)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
+  const int64_t timeout_us = ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US;
+  int64_t retry_count = 0;
+  do {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_FAIL(write_commit_log(allow_remote_write, table_key, start_scn, direct_load_mgr_handle, tablet_handle, commit_scn, is_remote_write, lock_tid))) {
+      LOG_WARN("write ddl commit log failed", K(ret));
+    }
+    if (ObDDLRedoLogWriter::need_retry(ret)) {
+      usleep(1000L * 1000L); // 1s
+      ++retry_count;
+      LOG_INFO("retry write ddl commit log", K(ret), K(table_key), K(retry_count));
+    } else {
+      break;
+    }
+  } while (ObTimeUtility::fast_current_time() - start_ts < timeout_us);
   return ret;
 }
 
@@ -1514,6 +1550,14 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     }
     if (OB_FAIL(ddl_writer_->write_macro_block_log(redo_info_, macro_block_id_, true/*allow remote write*/, task_id_))) {
       LOG_WARN("fail to write ddl redo log", K(ret));
+      if (ObDDLRedoLogWriter::need_retry(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(retry(ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US))) {
+          LOG_WARN("retry wirte ddl macro redo log failed", K(ret), K(tmp_ret), K(task_id_), K(table_key_));
+        } else {
+          ret = OB_SUCCESS; // overwrite the return code
+        }
+      }
     }
   }
   return ret;
@@ -1527,6 +1571,51 @@ int ObDDLRedoLogWriterCallback::wait()
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
   } else if (OB_FAIL(ddl_writer_->wait_macro_block_log_finish(redo_info_, macro_block_id_))) {
     LOG_WARN("fail to wait redo log finish", K(ret));
+    if (ObDDLRedoLogWriter::need_retry(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(retry(ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US))) {
+        LOG_WARN("retry wirte ddl macro redo log failed", K(ret), K(tmp_ret), K(task_id_), K(table_key_));
+      } else {
+        ret = OB_SUCCESS; // overwrite the return code
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedoLogWriterCallback::retry(const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_count = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
+  } else if (timeout_us <= 0) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout less than 0", K(ret), K(timeout_us));
+  } else if (OB_UNLIKELY(!macro_block_id_.is_valid() || !redo_info_.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("macro block id or redo info not valid", K(ret), K(macro_block_id_), K(redo_info_));
+  } else {
+    int64_t start_ts = ObTimeUtility::fast_current_time();
+    while (ObTimeUtility::fast_current_time() - start_ts < timeout_us) { // ignore ret
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(ddl_writer_->write_macro_block_log(redo_info_, macro_block_id_, true/*allow remote write*/, task_id_))) {
+        LOG_WARN("fail to write ddl redo log", K(ret));
+      } else if (OB_FAIL(ddl_writer_->wait_macro_block_log_finish(redo_info_, macro_block_id_))) {
+        LOG_WARN("wait ddl redo log finish failed", K(ret));
+      } else {
+        FLOG_INFO("retry write ddl macro redo success", K(ret), K(table_key_), K(macro_block_id_));
+      }
+      if (ObDDLRedoLogWriter::need_retry(ret)) {
+        usleep(1000L * 1000L); // 1s
+        ++retry_count;
+        LOG_INFO("retry write ddl macro redo log", K(ret), K(table_key_), K(retry_count));
+      } else {
+        break;
+      }
+    }
   }
   return ret;
 }

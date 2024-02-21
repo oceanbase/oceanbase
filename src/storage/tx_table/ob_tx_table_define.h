@@ -74,6 +74,9 @@ public:
                   ObTxDataTable &tx_data_table);
   int64_t get_serialize_size() const;
 
+  void set_compatible_version(const int32_t version) {
+    compatible_version_ = version;
+  }
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(const char *buf,
@@ -95,6 +98,7 @@ public:
     tx_data_guard_.reset();
     exec_info_.reset();
     table_lock_info_.reset();
+    compatible_version_ = -1;
   }
   void destroy() { reset(); }
   TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard),
@@ -102,10 +106,13 @@ public:
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t cluster_id_;
-  int64_t cluster_version_;
+  uint64_t cluster_version_;
   ObTxDataGuard tx_data_guard_;
   transaction::ObTxExecInfo exec_info_;
   transaction::tablelock::ObTableLockInfo table_lock_info_;
+  // used to handle compatible issue when deserialize,
+  // not serialized, set from ObTxCtxTableMeta
+  int32_t compatible_version_;
 };
 
 struct ObTxCtxTableMeta
@@ -124,6 +131,7 @@ public:
 
   void reset()
   {
+    version_ = VERSION_1;
     tx_id_.reset();
     ls_id_.reset();
     tx_ctx_serialize_size_ = 0;
@@ -133,6 +141,7 @@ public:
   void destroy() { reset(); }
   ObTxCtxTableMeta &operator=(const ObTxCtxTableMeta &r)
   {
+    version_ = r.version_;
     tx_id_ = r.tx_id_;
     ls_id_ = r.ls_id_;
     tx_ctx_serialize_size_ = r.tx_ctx_serialize_size_;
@@ -190,14 +199,24 @@ public:
   {
     return tx_ctx_serialize_size_;
   }
-
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(tx_ctx_serialize_size), K_(row_num), K_(row_idx));
+  int32_t get_version() const
+  {
+    return version_;
+  }
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(tx_ctx_serialize_size), K_(row_num), K_(row_idx), K_(version));
 private:
   int serialize_(char* buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(const char* buf, const int64_t buf_len, int64_t &pos);
   int64_t get_serialize_size_() const;
-
+public:
+  static constexpr int VERSION_0 = 0;
+  // V1, fix bug:
+  //   ctx serialized size record in header not equals to real serialized size
+  //   it is because of the CommonID's get serialize_size always return 8
+  //   but it use variant encoding
+  static constexpr int VERSION_1 = 1;
 private:
+  int32_t version_;
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t tx_ctx_serialize_size_;

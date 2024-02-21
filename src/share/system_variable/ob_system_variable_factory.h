@@ -1784,6 +1784,117 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ENABLE_RICH_VECTOR_FORMAT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(246); }
 };
+class ObSysVarInnodbStatsPersistent : public ObEnumSysVar
+{
+public:
+  const static char * INNODB_STATS_PERSISTENT_NAMES[];
+public:
+  ObSysVarInnodbStatsPersistent() : ObEnumSysVar(INNODB_STATS_PERSISTENT_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_STATS_PERSISTENT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(247); }
+};
+class ObSysVarDebug : public ObVarcharSysVar
+{
+public:
+  ObSysVarDebug() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(248); }
+};
+class ObSysVarInnodbChangeBufferingDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbChangeBufferingDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_CHANGE_BUFFERING_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(249); }
+};
+class ObSysVarInnodbCompressDebug : public ObEnumSysVar
+{
+public:
+  const static char * INNODB_COMPRESS_DEBUG_NAMES[];
+public:
+  ObSysVarInnodbCompressDebug() : ObEnumSysVar(INNODB_COMPRESS_DEBUG_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_COMPRESS_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(250); }
+};
+class ObSysVarInnodbDisableResizeBufferPoolDebug : public ObBoolSysVar
+{
+public:
+  ObSysVarInnodbDisableResizeBufferPoolDebug() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(251); }
+};
+class ObSysVarInnodbFilMakePageDirtyDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbFilMakePageDirtyDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_FIL_MAKE_PAGE_DIRTY_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(252); }
+};
+class ObSysVarInnodbLimitOptimisticInsertDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbLimitOptimisticInsertDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(253); }
+};
+class ObSysVarInnodbMergeThresholdSetAllDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbMergeThresholdSetAllDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(254); }
+};
+class ObSysVarInnodbSavedPageNumberDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbSavedPageNumberDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(255); }
+};
+class ObSysVarInnodbTrxPurgeViewUpdateOnlyDebug : public ObBoolSysVar
+{
+public:
+  ObSysVarInnodbTrxPurgeViewUpdateOnlyDebug() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(256); }
+};
+class ObSysVarInnodbTrxRsegNSlotsDebug : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbTrxRsegNSlotsDebug() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(257); }
+};
+class ObSysVarStoredProgramCache : public ObIntSysVar
+{
+public:
+  ObSysVarStoredProgramCache() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_STORED_PROGRAM_CACHE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(258); }
+};
+class ObSysVarObCompatibilityControl : public ObEnumSysVar
+{
+public:
+  const static char * OB_COMPATIBILITY_CONTROL_NAMES[];
+public:
+  ObSysVarObCompatibilityControl() : ObEnumSysVar(OB_COMPATIBILITY_CONTROL_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_COMPATIBILITY_CONTROL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(259); }
+};
+class ObSysVarObCompatibilityVersion : public ObIntSysVar
+{
+public:
+  ObSysVarObCompatibilityVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_COMPATIBILITY_VERSION; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(260); }
+};
+class ObSysVarObSecurityVersion : public ObIntSysVar
+{
+public:
+  ObSysVarObSecurityVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_SECURITY_VERSION; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(261); }
+};
 
 
 class ObSysVarFactory
@@ -1804,7 +1915,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 148;
+  const static int64_t OB_SYS_VARS_COUNT = 163;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

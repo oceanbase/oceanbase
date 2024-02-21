@@ -496,6 +496,7 @@ public:
                                         ObExprResType &utf8_type);
 
   static int erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
+  static int erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
 
   // erase implicit cast which added for operand casting.
   static int erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out);

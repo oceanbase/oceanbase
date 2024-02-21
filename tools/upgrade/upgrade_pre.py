@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.0.0"
-#current_data_version = "4.3.0.0"
+#current_cluster_version = "4.3.0.1"
+#current_data_version = "4.3.0.1"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #

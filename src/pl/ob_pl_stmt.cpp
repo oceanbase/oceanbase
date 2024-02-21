@@ -920,7 +920,7 @@ int ObPLUDTNS::get_user_type(uint64_t type_id,
   const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
   CK (OB_NOT_NULL(allocator));
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info));
-  CK (OB_NOT_NULL(udt_info));
+  OV (OB_NOT_NULL(udt_info), OB_ERR_OBJECT_INVALID, ret, tenant_id, type_id);
   OZ (udt_info->transform_to_pl_type(*allocator, user_type));
   CK (OB_NOT_NULL(user_type));
   return ret;
@@ -1794,6 +1794,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         LOG_WARN("self or resolve package not exist", K(ret));
       } else {
         if (OB_NOT_NULL(parent_ns_)
+            && parent_ns_->get_database_id() == package_info_resolve->get_database_id()
             && ObCharset::case_compat_mode_equal(parent_ns_->get_package_name(), package_info_resolve->get_package_name())) {
           if (OB_FAIL(
               SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
@@ -1828,7 +1829,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               type = ObPLExternalNS::PKG_TYPE;
             }
           } else {
-            OX (data_type = var->get_type());
+            data_type = var->get_type();
+            type = ObPLExternalNS::PKG_VAR;
           }
           if (OB_SUCC(ret) && type != ObPLExternalNS::INVALID_VAR) {
             if (OB_NOT_NULL(dependency_table_)) {

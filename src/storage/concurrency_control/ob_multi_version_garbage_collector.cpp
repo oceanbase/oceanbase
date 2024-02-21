@@ -600,7 +600,7 @@ void ObMultiVersionGarbageCollector::decide_reserved_snapshot_version_(
                  K(transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID())));
       } else if ((global_reserved_snapshot_.get_val_for_tx() -
                   reserved_snapshot.get_val_for_tx()) / 1000 > 100 * 1_min) {
-        MVCC_LOG(ERROR, "update a too too smaller reserved snapshot!!!", K(ret), KPC(this),
+        MVCC_LOG(WARN, "update a too too smaller reserved snapshot!!!", K(ret), KPC(this),
                  K(global_reserved_snapshot_), K(reserved_snapshot));
       } else {
         MVCC_LOG(WARN, "update a too smaller reserved snapshot!", K(ret), KPC(this),

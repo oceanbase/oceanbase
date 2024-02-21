@@ -2233,7 +2233,7 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
         }
       }
     }
-    if (OB_FAIL(ObOptimizerUtil::remove_item(path->filter_, remove_dup))) {
+    if (FAILEDx(ObOptimizerUtil::remove_item(path->filter_, remove_dup))) {
       LOG_WARN("remove dup failed", K(ret));
     }
   }
@@ -4744,6 +4744,10 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(first_path), K(second_path), K(stmt), K(ret));
+  } else if (first_path.contain_fake_cte() && second_path.contain_fake_cte() &&
+             first_path.contain_match_all_fake_cte() != second_path.contain_match_all_fake_cte()) {
+    relation = DominateRelation::OBJ_UNCOMPARABLE;
+    OPT_TRACE("sharding can not compare for fake cte");
   } else if (first_path.is_join_path() &&
              second_path.is_join_path() &&
              static_cast<const JoinPath&>(first_path).contain_normal_nl() &&
@@ -9281,8 +9285,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   distributed_methods = path_info.distributed_methods_;
   bool use_shared_hash_join = right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL;
   ObSQLSessionInfo *session = NULL;
-  const ObLogPlanHint *log_hint = NULL;
-  const LogJoinHint *log_join_hint = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
       OB_ISNULL(right_sharding = right_path.get_sharding()) ||
@@ -9292,20 +9294,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                 K(right_sharding), K(left_path.parent_), K(ret));
   } else if (use_shared_hash_join && OB_FAIL(session->get_px_shared_hash_join( use_shared_hash_join))) {
     LOG_WARN("get force parallel ddl dop failed", K(ret));
-  } else if (left_path.contain_fake_cte_ || right_path.contain_fake_cte_) {
-    distributed_methods &= ~DIST_HASH_HASH;
-    distributed_methods &= ~DIST_BROADCAST_NONE;
-    distributed_methods &= ~DIST_NONE_BROADCAST;
-    distributed_methods &= ~DIST_NONE_ALL;
-    distributed_methods &= ~DIST_ALL_NONE;
-    distributed_methods &= ~DIST_BC2HOST_NONE;
-    distributed_methods &= ~DIST_PARTITION_NONE;
-    distributed_methods &= ~DIST_HASH_NONE;
-    distributed_methods &= ~DIST_NONE_PARTITION;
-    distributed_methods &= ~DIST_NONE_HASH;
-    distributed_methods &= ~DIST_PARTITION_WISE;
-    distributed_methods &= ~DIST_EXT_PARTITION_WISE;
-    OPT_TRACE("fake cte table will use basic or pull to local");
   } else if (HASH_JOIN == join_algo && is_naaj) {
     distributed_methods &= ~DIST_PARTITION_WISE;
     distributed_methods &= ~DIST_EXT_PARTITION_WISE;
@@ -9322,8 +9310,6 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
 
   if (OB_SUCC(ret)) {
-    log_hint = &get_plan()->get_log_plan_hint();
-    log_join_hint = log_hint->get_join_hint(right_path.parent_->get_tables());
     if (HASH_JOIN == join_algo) {
       if (use_shared_hash_join) {
         distributed_methods &= ~DIST_BROADCAST_NONE;
@@ -9408,9 +9394,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
 
   // check if match none_all sharding info
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_ALL)) {
-    if (left_sharding->is_distributed() && right_sharding->is_match_all() &&
-        // exclude cte path whose sharding is match all
-        !right_path.is_cte_path()) {
+    if (left_sharding->is_distributed() && right_sharding->is_match_all()) {
       distributed_methods = DIST_NONE_ALL;
     } else {
       distributed_methods &= ~DIST_NONE_ALL;
@@ -9419,7 +9403,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   // check if match all_none sharding info
   if (OB_SUCC(ret) && (distributed_methods & DIST_ALL_NONE)) {
     if (right_sharding->is_distributed() && left_sharding->is_match_all() &&
-        !left_path.contain_das_op() && !left_path.is_cte_path()) {
+        !left_path.contain_das_op()) {
       // all side is allowed for only EXPRESSION
       distributed_methods = DIST_ALL_NONE;
     } else {
@@ -11357,6 +11341,7 @@ int ObJoinOrder::create_onetime_expr(const ObRelIds &ignore_relids, ObRawExpr* &
 
 int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
                                                bool both_access,
+                                               bool contain_fake_cte,
                                                ValidPathInfo &path_info)
 {
   int ret = OB_SUCCESS;
@@ -11366,18 +11351,23 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
   } else {
     const ObLogPlanHint &log_hint = get_plan()->get_log_plan_hint();
     const LogJoinHint *log_join_hint = log_hint.get_join_hint(table_set);
-    if (NULL != log_join_hint && !log_join_hint->dist_method_hints_.empty()) {
+    const bool ignore_dist_hint = contain_fake_cte && !log_hint.is_spm_evolution();
+    if (ignore_dist_hint) {
+      // do nothing.
+      // When a join contains a fake CTE table, only the basic and pull-to-local distributed methods can be used.
+      // Additionally, there is only one distributed method path that can be utilized to generate a valid plan
+      // when allocating recursive UNION ALL. Therefore, for joins including a fake CTE,
+      // we can directly ignore the distributed method hint to avoid the inability to generate a valid plan.
+      // For SPM evolution, we will throw an error when a valid plan cannot be generated using the hint.
+    } else if (NULL != log_join_hint && !log_join_hint->dist_method_hints_.empty()) {
       path_info.distributed_methods_ &= log_join_hint->dist_methods_;
-      if (log_join_hint->dist_methods_ & DIST_NONE_ALL) {
-        path_info.distributed_methods_ = DIST_NONE_ALL;
-      } else if (log_join_hint->dist_methods_ & DIST_ALL_NONE) {
-        path_info.distributed_methods_ = DIST_ALL_NONE;
-      }
     } else if (log_hint.is_outline_data_) {
       // outline data has no pq distributed hint
       path_info.distributed_methods_ &= DIST_BASIC_METHOD;
     }
-    if (NULL != log_join_hint && both_access && NULL != log_join_hint->slave_mapping_) {
+
+    if (NULL != log_join_hint && both_access && !ignore_dist_hint
+        && NULL != log_join_hint->slave_mapping_) {
       path_info.force_slave_mapping_ = true;
       path_info.distributed_methods_ &= ~DIST_PULL_TO_LOCAL;
       path_info.distributed_methods_ &= ~DIST_HASH_HASH;
@@ -11426,9 +11416,12 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
   int ret = OB_SUCCESS;
   path_info.join_type_ = join_type;
   path_info.ignore_hint_ = ignore_hint;
-  if (OB_ISNULL(get_plan())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected null", K(get_plan()), K(ret));
+  const ObIArray<Path*> &left_paths = left_tree.get_interesting_paths();
+  const ObIArray<Path*> &right_paths = right_tree.get_interesting_paths();
+  if (OB_ISNULL(get_plan()) || OB_UNLIKELY(left_paths.empty() || right_paths.empty())
+      || OB_ISNULL(left_paths.at(0)) || OB_ISNULL(right_paths.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(get_plan()), K(left_paths.count()), K(right_paths.count()));
   } else {
     if (ignore_hint) {
       OPT_TRACE("start generate join method without hint");
@@ -11440,11 +11433,16 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     }
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     const bool both_access = ACCESS == left_tree.get_type() && ACCESS == right_tree.get_type();
+    const bool contain_fake_cte = left_paths.at(0)->contain_fake_cte() || right_paths.at(0)->contain_fake_cte();
     if (CONNECT_BY_JOIN == path_info.join_type_) {
       path_info.local_methods_ = NESTED_LOOP_JOIN;
       path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
       OPT_TRACE("connect by will use nl join");
       OPT_TRACE("connect by will use pull to local / basic method");
+    } else if (contain_fake_cte) {
+      path_info.local_methods_ = NESTED_LOOP_JOIN | MERGE_JOIN | HASH_JOIN;
+      path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
+      OPT_TRACE("fake cte table will use basic or pull to local");
     } else {
       path_info.local_methods_ = NESTED_LOOP_JOIN | MERGE_JOIN | HASH_JOIN ;
       path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_HASH_HASH |
@@ -11457,6 +11455,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     }
     if (!ignore_hint && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
                                                               both_access,
+                                                              contain_fake_cte,
                                                               path_info))) {
       LOG_WARN("failed to get valid path info from hint", K(ret));
     } else if (RIGHT_OUTER_JOIN == path_info.join_type_ ||
@@ -12333,19 +12332,19 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
     } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
                                                            subquery_filters))) {
       LOG_WARN("failed to create subplan filter for join path", K(ret));
-    } else if (OB_FAIL(add_path(join_path))) {
-      LOG_WARN("failed to add path", K(ret));
-    } else {
-      LOG_TRACE("succeed to create a nested loop join path", K(join_type),
-          K(join_dist_algo), K(need_mat), K(on_conditions), K(where_conditions));
     }
-    // Trace point to force use NLJ as possible
+
     if (OB_SUCC(ret)) {
       bool force_use_nlj = false;
+      // Trace point to force use NLJ as possible
       force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
       if (force_use_nlj && !join_path->contain_normal_nl_) {
-        LOG_TRACE("trigger trace point to generate nest-loop join");
-        if (OB_FAIL(interesting_paths_.push_back(join_path))) {
+        // If the tracepoint is triggered, the nlj path is forced to add into interesting_paths,
+        // and other paths of different join types are removed
+        LOG_TRACE("trigger trace point to generate nest-loop join paths");
+        if (join_path->join_algo_ != NESTED_LOOP_JOIN) {
+          LOG_WARN("generated join type is not NLJ", K(ret));
+        } else if (OB_FAIL(interesting_paths_.push_back(join_path))) {
           LOG_WARN("failed to push back nlj path");
         } else {
           for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
@@ -12357,6 +12356,11 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
             }
           }
         }
+      } else if (OB_FAIL(add_path(join_path))) {
+        LOG_WARN("failed to add path", K(ret));
+      } else {
+        LOG_TRACE("succeed to create a nested loop join path", K(join_type),
+            K(join_dist_algo), K(need_mat), K(on_conditions), K(where_conditions));
       }
     }
   }
@@ -13869,7 +13873,7 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                             candi_pushdown_quals,
                                                             helper.pushdown_filters_))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
-  } else if (append(helper.filters_, candi_nonpushdown_quals)) {
+  } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));
@@ -14715,7 +14719,7 @@ int ObJoinOrder::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null",K(ret));
     } else if (ObOptimizerUtil::is_lossless_type_conv(to_type_child->get_result_type(),to_type_expr->get_result_type())) {
-      if (ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child)) {
+      if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child))) {
         LOG_WARN("fail to get real child without lossless cast", K(ret));
       } else if (OB_ISNULL(to_type_child) || OB_ISNULL(candi_expr)) {
         ret = OB_ERR_UNEXPECTED;

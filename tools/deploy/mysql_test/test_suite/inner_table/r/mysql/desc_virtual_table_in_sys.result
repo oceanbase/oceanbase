@@ -858,6 +858,8 @@ plsql_exec_time	bigint(20)	NO		NULL
 network_wait_time	bigint(20) unsigned	YES		NULL	
 stmt_type	varchar(128)	YES		NULL	
 seq_num	bigint(20)	NO		NULL	
+total_memstore_read_row_count	bigint(20)	NO		NULL	
+total_ssstore_read_row_count	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7025,6 +7027,8 @@ wash_score	bigint(20)	NO		NULL
 tablet_ptr	varchar(128)	NO		NULL	
 initial_state	tinyint(4)	NO		NULL	
 old_chain	varchar(128)	NO		NULL	
+occupy_size	bigint(20)	NO		0	
+required_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_pointer_status;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7390,6 +7394,7 @@ result	bigint(20)	YES		NULL
 comment	longtext	YES		NULL	
 balance_task_id	bigint(20)	NO		NULL	
 table_lock_owner_id	bigint(20)	YES		NULL	
+data_version	bigint(20) unsigned	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7418,6 +7423,7 @@ balance_task_id	bigint(20)	NO		NULL
 table_lock_owner_id	bigint(20)	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
+data_version	bigint(20) unsigned	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_task_history;
 IF(count(*) >= 0, 1, 0)
 1

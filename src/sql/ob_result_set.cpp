@@ -39,6 +39,7 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "share/ob_cluster_version.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_trans_event.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
 #include "observer/ob_server_struct.h"
@@ -839,6 +840,7 @@ int ObResultSet::do_close(int *client_ret)
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
 
   FLTSpanGuard(close);
+  const bool is_tx_active = my_session_.is_in_transaction();
   int do_close_plan_ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
   if (OB_LIKELY(NULL != physical_plan_)) {
@@ -935,7 +937,7 @@ int ObResultSet::do_close(int *client_ret)
         }
       }
     }
-    ret = auto_end_plan_trans(*physical_plan_, ret, async);
+    ret = auto_end_plan_trans(*physical_plan_, ret, is_tx_active, async);
   }
 
   if (is_user_sql_ && my_session_.need_reset_package()) {
@@ -965,6 +967,7 @@ int ObResultSet::do_close(int *client_ret)
 // 2. TODO:对于commit/rollback这个cmd，后面也需要走这个路径。现在还是走同步Callback。
 OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
                                                int ret,
+                                               bool is_tx_active,
                                                bool &async)
 {
   NG_TRACE(auto_end_plan_begin);
@@ -1005,6 +1008,11 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
     } else {
       //bool is_rollback = (OB_FAIL(ret) || plan_ctx->is_force_rollback());
       is_rollback = need_rollback(OB_SUCCESS, ret, plan_ctx->is_error_ignored());
+      // if txn will be rollbacked and it may has been rollbacked in end-stmt phase
+      // we need account this for stat
+      if (is_rollback && !is_will_retry_() && is_tx_active && !in_trans) {
+        ObTransStatistic::get_instance().add_rollback_trans_count(MTL_ID(), 1);
+      }
       // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
       if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
         // 如果没有设置end_trans_cb，就走同步接口。这个主要是为了InnerSQL提供的。

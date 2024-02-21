@@ -2,7 +2,6 @@ set(OBSERVER_TEST_SRCS
         env/ob_simple_server.cpp
         env/ob_simple_server_restart_helper.cpp
         env/ob_simple_cluster_test_base.cpp
-        env/ob_simple_server_helper.cpp
         )
 
 add_library(observer_test ${OBSERVER_TEST_SRCS})
@@ -11,6 +10,7 @@ target_include_directories(observer_test PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
 target_link_libraries(observer_test PUBLIC
   oceanbase
+  mit_env
 )
 
 function(ob_unittest_observer case)
@@ -109,6 +109,7 @@ ob_unittest_observer(test_tenant_snapshot_service test_tenant_snapshot_service.c
 ob_unittest_observer(test_callbacks_with_reverse_order test_callbacks_with_reverse_order.cpp)
 ob_unittest_observer(test_transfer_tx_data test_transfer_with_smaller_tx_data.cpp)
 ob_unittest_observer(test_transfer_in_after_abort test_transfer_in_after_abort.cpp)
+ob_unittest_observer(test_transfer_commit_action test_transfer_with_commit_action.cpp)
 # TODO(muwei.ym): open later
 ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)
 ob_ha_unittest_observer(test_transfer_and_restart_basic storage_ha/test_transfer_and_restart_basic.cpp)

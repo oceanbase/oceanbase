@@ -426,8 +426,8 @@ int ObDDLServerClient::wait_task_reach_pending(
             int64_t forward_user_msg_len = 0;
             ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
             if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
-                              tenant_id, task_id, -1 /* target_object_id */,
-                              unused_addr, true /* is_ddl_retry_task */,
+                              tenant_id, task_id, -1 /*target_object_id*/,
+                              unused_addr, false/*is_ddl_retry_task*/,
                               *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
               if (OB_SUCCESS != error_message.ret_code_) {
                 ret = error_message.ret_code_;
