@@ -2383,6 +2383,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_ALTER_USER_PROFILE;
       }
       break;
+      case T_SP_CALL_STMT: {
+        type = stmt::T_CALL_PROCEDURE;
+      }
+      break;
       default: {
         type = stmt::T_NONE;
       }

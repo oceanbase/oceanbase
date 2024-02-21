@@ -4666,7 +4666,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         && !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
       if (ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)) {
         bret = true;
-      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_) {
+      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                 || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_) {
         /* anonymous block in a store procedure will be send to sql engine as sql, which will make new obexeccontext.
            consider follow scene:
             dml1(exec_ctx1)->udf/trigger->procedure->anonymous block(exec_ctx2)->dml2
@@ -4675,7 +4676,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         do {
           parent_ctx = parent_ctx->get_parent_ctx();
         } while (OB_NOT_NULL(parent_ctx) && OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
-                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_));
+                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                  || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_));
 
         if (OB_NOT_NULL(parent_ctx) &&
             OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
