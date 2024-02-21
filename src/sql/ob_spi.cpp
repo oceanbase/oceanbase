@@ -1649,8 +1649,8 @@ struct ObPLSPITraceIdGuard {
     }
   }
   ObCurTraceId::TraceId origin_trace_id_;
-  const ObString &sql_;
-  const ObString &ps_sql_;
+  const ObString sql_;
+  const ObString ps_sql_;
 };
 
 //todo:@hr351303 确认sql 和 ps sql是否可以合一

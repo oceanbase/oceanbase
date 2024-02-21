@@ -444,7 +444,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
         bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() &&
-            (cg.get_debug_mode() || !func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
+            !cg.get_debug_mode() && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
         OZ (cg.init());
         // Step 4: try to obtain dll from disk
         if (need_read_dll) {
