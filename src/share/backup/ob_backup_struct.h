@@ -1536,7 +1536,8 @@ struct ObLogArchiveDestState final
 public:
   enum State {
     ENABLE = 0,
-    DEFER,
+    DEFER = 1,
+    DISABLE,
     MAX
   };
   ObLogArchiveDestState(): state_(State::MAX) {}
@@ -1580,6 +1581,7 @@ public:
 
   PROPERTY_DECLARE_STATUS(enable, State::ENABLE);
   PROPERTY_DECLARE_STATUS(defer, State::DEFER);
+  PROPERTY_DECLARE_STATUS(disable, State::DISABLE);
 
 #undef PROPERTY_DECLARE_STATUS
 

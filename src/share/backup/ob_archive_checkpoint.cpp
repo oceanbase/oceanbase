@@ -261,6 +261,19 @@ int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_rou
   ObArray<ObTenantArchivePieceAttr> pieces;
   if (OB_FAIL(generate_pieces_(old_round_info, summary, result))) {
     LOG_WARN("failed to generate pieces", K(ret), K(old_round_info), K(summary));
+    if(old_round_info.state_.status_ == ObArchiveRoundState::Status::SUSPENDING 
+        && result.new_round_info_.state_.status_ == ObArchiveRoundState::Status::SUSPEND) {
+      ObTenantArchiveRoundAttr new_round_info;
+      if (OB_FAIL(new_round_info.deep_copy_from(old_round_info))) {
+        LOG_WARN("failed to deep copy round info", K(ret), K(old_round_info));
+      } else {
+        new_round_info.state_.status_ = ObArchiveRoundState::Status::SUSPEND;
+        if (OB_FAIL(round_handler_->checkpoint_to(old_round_info, new_round_info))) {
+          LOG_WARN("failed to checkpoint", K(ret), K(old_round_info), K(new_round_info));
+        }
+        LOG_INFO("only switch old round's state from suspending to suspend", K(old_round_info), K(new_round_info));
+      }
+    }
   } else if (OB_FAIL(round_checkpoint_cb_(round_handler_->get_sql_proxy(), old_round_info, result.new_round_info_))) {
     LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
   } else if (OB_FAIL(fill_generated_pieces_(result, pieces))){

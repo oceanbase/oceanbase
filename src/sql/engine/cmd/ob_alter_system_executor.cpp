@@ -1111,6 +1111,103 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
     LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
   }
+  ARRAY_FOREACH_X(stmt.get_rpc_arg().items_, i, cnt, OB_SUCC(ret)) {
+    const obrpc::ObAdminSetConfigItem &item = stmt.get_rpc_arg().items_.at(i);
+    if (0 == item.name_.str().case_compare("log_archive_dest_state") && 0 == item.value_.str().case_compare("disable"))
+    {
+      if (item.exec_tenant_id_ == 1) {
+        share::schema::ObSchemaGetterGuard schema_guard;
+        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+                  ctx.get_my_session()->get_effective_tenant_id(),
+                  schema_guard))) {
+          LOG_WARN("get_schema_guard failed", K(ret));
+        } else {
+          uint64_t tenant_id = OB_INVALID_ID;
+          if (OB_FAIL(schema_guard.get_tenant_id(item.tenant_name_.str(), tenant_id)) || OB_INVALID_ID == tenant_id) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("tenant not found", K(ret));
+          } else if (OB_FAIL(wait_close_archive_finish_(ctx, tenant_id))) {
+            LOG_WARN("failed to sync wait close archive finish", K(ret));
+          }
+        }
+      } else {
+        if (OB_FAIL(wait_close_archive_finish_(ctx, item.exec_tenant_id_))) {
+          LOG_WARN("failed to sync wait close archive finish", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSetConfigExecutor::wait_close_archive_finish_(ObExecContext &ctx, const uint64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t timeout = 10 * 1000 * 1000; // 10s
+  const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
+  const int64_t cur_time_us = ObTimeUtility::current_time();
+  ObTimeoutCtx timeout_ctx;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
+  LOG_INFO("sync wait archive status stop", K(timeout), K(abs_timeout), K(tenant_id));
+  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not be null", K(ret));
+  } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
+  } else {
+    while(OB_SUCC(ret)) {
+      if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait archive stop status timeout", K(ret), K(tenant_id), K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
+      } else if (OB_FAIL(ctx.check_status())) {
+        LOG_WARN("check exec ctx failed", K(ret));
+      } else {
+        bool is_stop = false;
+        if (OB_FAIL(check_tenant_archive_status_stop_(*sql_proxy, tenant_id, is_stop))) {
+          LOG_WARN("failed to check archive status stop", K(ret), K(tenant_id));
+        } else if (!is_stop) {
+          sleep(1);
+          LOG_INFO("archive not stop, wait later");
+          LOG_DEBUG("archive not stop, wait later", K(ret), K(tenant_id));
+        } else {
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_INFO("sync wait archive status switch to stop", K(cost_ts));
+    }
+  }
+  return ret;
+}
+
+int ObSetConfigExecutor::check_tenant_archive_status_stop_(common::ObISQLClient &proxy, const uint64_t &tenant_id, bool &is_stop)
+{
+  int ret = OB_SUCCESS;
+  is_stop = false;
+  ObSqlString sql;
+  char status_str[OB_DEFAULT_STATUS_LENTH] = "";
+  int64_t real_length = 0;
+  HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt("select status from CDB_OB_ARCHIVELOG where tenant_id=%lu", tenant_id))) {
+      LOG_WARN("failed to assign fmt", K(ret));
+    } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+      LOG_WARN("failed to exec sql", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null null", K(ret));
+    } else {
+      EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
+      is_stop = 0 == STRCMP(status_str, "STOP");
+    }
+  }
   return ret;
 }
 
@@ -1959,6 +2056,175 @@ int ObArchiveLogExecutor::execute(ObExecContext &ctx, ObArchiveLogStmt &stmt)
       LOG_WARN("failed to assign archive tenant ids", K(ret), K(stmt));
     } else if (OB_FAIL(common_rpc_proxy->archive_log(arg))) {
       LOG_WARN("archive_tenant rpc failed", K(ret), K(arg), "dst", common_rpc_proxy->get_server());
+    }
+    if (!stmt.is_enable()) {
+      if (OB_FAIL(wait_close_archive_finish_(ctx, arg))) {
+        LOG_WARN("failed to sync wait close archive finish", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObArchiveLogExecutor::wait_close_archive_finish_(ObExecContext &ctx, const obrpc::ObArchiveLogArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout = 10 * 1000 * 1000; // 10s
+  const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
+  const int64_t cur_time_us = ObTimeUtility::current_time();
+  ObTimeoutCtx timeout_ctx;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
+  LOG_INFO("sync wait archive status stop", K(timeout), K(abs_timeout), K(arg));
+  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not be null", K(ret));
+  } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+    LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
+  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+    LOG_WARN("failed to set abs timeout", K(ret));
+  } else {
+    while(OB_SUCC(ret)) {
+      if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("wait archive stop status timeout", K(ret), K(arg), K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
+      } else if (OB_FAIL(ctx.check_status())) {
+        LOG_WARN("check exec ctx failed", K(ret));
+      } else {
+        bool is_finish = false;
+        if (OB_FAIL(check_close_archive_finish_(*sql_proxy, arg, is_finish))) {
+          LOG_WARN("failed to check archive status stop", K(ret), K(arg));
+        } else if (!is_finish) {
+          sleep(1);
+          LOG_INFO("archive not stop, wait later");
+          LOG_DEBUG("archive not stop, wait later", K(ret), K(arg));
+        } else {
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int cost_ts = (ObTimeUtility::current_time() - cur_time_us) / 1000000;
+      LOG_INFO("sync wait archive status switch to stop", K(cost_ts));
+    }
+  }
+  return ret;
+}
+
+int ObArchiveLogExecutor::check_close_archive_finish_(common::ObISQLClient &proxy, const obrpc::ObArchiveLogArg &arg, bool &is_finish) {
+  int ret = OB_SUCCESS;
+  is_finish = false;
+  bool is_stop = false;
+  ObSArray<uint64_t> tenant_not_stop_array;
+  if (OB_SYS_TENANT_ID == arg.tenant_id_) {
+    // If archive_tenant_ids is empty, then stop archive for all tenants. Otherwise, just
+    // stop archive for these tenants in archive_tenant_ids.
+    if (arg.archive_tenant_ids_.empty()) {
+      // No tenants indicated, stop archive all tenants.
+      ObSArray<uint64_t> tenant_array;
+      if (OB_FAIL(get_all_archive_tenant_ids_(tenant_array))) {
+        LOG_WARN("failed to get all tenant ids", K(ret), K(arg.tenant_id_));
+      } else {
+        ARRAY_FOREACH_N(tenant_array, i, cnt) {
+          const uint64_t &tenant_id = tenant_array.at(i);
+          if (OB_FAIL(check_tenant_archive_status_stop_(proxy, tenant_id, is_stop))) {
+            LOG_WARN("failed to check tenant archive status stop", K(tenant_id));
+          } else if (!is_stop) {
+            if(OB_FAIL(tenant_not_stop_array.push_back(tenant_id))) {
+              LOG_WARN("failed to push back tenant_id", K(ret));
+            }
+          }
+        }
+      }
+    } else {
+      // Tenants are indicated.
+      ARRAY_FOREACH_N(arg.archive_tenant_ids_, i, cnt) {
+        const uint64_t &tenant_id = arg.archive_tenant_ids_.at(i);
+        if (OB_FAIL(check_tenant_archive_status_stop_(proxy, tenant_id, is_stop))) {
+          LOG_WARN("failed to check tenant archive status stop", K(tenant_id));
+        } else if (!is_stop) {
+          if(OB_FAIL(tenant_not_stop_array.push_back(tenant_id))) {
+            LOG_WARN("failed to push back tenant_id", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_finish = 0 == tenant_not_stop_array.count();
+    }
+  } else {
+    // If close archive is lauched by normal tenant, then archive_tenant_ids must be empty.
+    if (!arg.archive_tenant_ids_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("normal tenant can only close archive mode for itself.", K(ret), K(arg));
+    } else {
+      if (OB_FAIL(check_tenant_archive_status_stop_(proxy, arg.tenant_id_, is_stop))) {
+        LOG_WARN("failed to check tenant archive status stop", K(arg.tenant_id_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_finish = is_stop;
+    }
+  }
+  return ret;
+}
+
+int ObArchiveLogExecutor::get_all_archive_tenant_ids_(common::ObIArray<uint64_t> &tenant_array) {
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObSArray<uint64_t> tmp_tenant_array;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid GCTX", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("failed to get tenant info", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(tmp_tenant_array))) {
+    LOG_WARN("fail to get tenant ids", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_array.count(); ++i) {
+    const uint64_t &tenant_id = tmp_tenant_array.at(i);
+    const ObTenantSchema *tenant_info = nullptr;
+    if (tenant_id < OB_USER_TENANT_ID) {
+      // do nothing
+    } else if (is_meta_tenant(tenant_id)) {
+      // do nothing
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+      LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+    } else if (tenant_info->is_restore()) {
+      // skip restoring tenant
+      LOG_INFO("skip tenant which is doing restore", K(tenant_id));
+    } else if (tenant_info->is_creating()) {
+      LOG_INFO("skip tenant which is creating", K(tenant_id));
+    } else if (tenant_info->is_dropping()) {
+      LOG_INFO("skip tenant which is dropping", K(tenant_id));
+    } else if (tenant_info->is_in_recyclebin()) {
+      LOG_INFO("skip tenant which is recyclebin", K(tenant_id));
+    } else if (OB_FAIL(tenant_array.push_back(tenant_id))) {
+      LOG_WARN("failed to push back tenant id", K(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObArchiveLogExecutor::check_tenant_archive_status_stop_(common::ObISQLClient &proxy, const uint64_t &tenant_id, bool &is_stop) {
+  int ret = OB_SUCCESS;
+  is_stop = false;
+  ObSqlString sql;
+  char status_str[OB_DEFAULT_STATUS_LENTH] = "";
+  int64_t real_length = 0;
+  HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt("select status from CDB_OB_ARCHIVELOG where tenant_id=%lu", tenant_id))) {
+      LOG_WARN("failed to assign fmt", K(ret));
+    } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+      LOG_WARN("failed to exec sql", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null null", K(ret));
+    } else {
+      EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
+      is_stop = 0 == STRCMP(status_str, "STOP");
     }
   }
   return ret;
