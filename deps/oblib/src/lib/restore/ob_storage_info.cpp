@@ -135,11 +135,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else {
   }
 
-
-  if (OB_SUCC(ret)) {
-    LOG_INFO("succ to parse storage info",
-        K_(device_type), K_(endpoint), K_(access_id), K_(extension));
-  } else {
+  if (OB_FAIL(ret)) {
     reset();
   }
   return ret;
