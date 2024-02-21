@@ -2654,6 +2654,10 @@ int ObFastParserMysql::process_identifier(bool is_number_begin)
       int64_t next_idf_pos = raw_sql_.cur_pos_;
       while (-1 != (next_idf_pos = is_identifier_flags(next_idf_pos))) {
         raw_sql_.cur_pos_ = next_idf_pos;
+        if ('.' == raw_sql_.char_at(raw_sql_.cur_pos_)) {
+          raw_sql_.scan();
+          next_idf_pos++;
+        }
       }
     }
   }

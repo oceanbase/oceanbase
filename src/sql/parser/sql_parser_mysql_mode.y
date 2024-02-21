@@ -72,7 +72,8 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %token <node> REMAP_TABLE_NAME
 %token <node> REMAP_DATABASE_TABLE_NAME
 %token <node> OUTLINE_DEFAULT_TOKEN/*use for outline parser to just filter hint of query_sql*/
-
+%token <node> ID_DOT_ID_DOT_ID
+%token <node> ID_DOT_ID
 /*empty_query::
 // (1) 对于只有空格或者;的查询语句需要报错：如："" 或者 "   " 或者 ";" 或者 " ;  " 都需要报错：err_msg:Query was empty  errno:1065
 // (2) 对于只含有注释或者空格或者;的查询语句则需要返回成功：如："#fadfadf " 或者"/**\/" 或者 "/**\/  ;" 返回成功
@@ -533,6 +534,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tenant_snapshot_stmt snapshot_name drop_tenant_snapshot_stmt clone_tenant_stmt clone_snapshot_option clone_tenant_option clone_tenant_option_list
 
 %type <node> ttl_definition ttl_expr ttl_unit
+%type <node> id_dot_id id_dot_id_dot_id
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -870,6 +872,21 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
 }
+| id_dot_id
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $1->children_[0];
+  ParseNode* col_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+  #ifndef SQL_PARSER_COMPILATION
+  if (3 == tb_node->str_len_) {
+    if (0 == strcasecmp("NEW", tb_node->str_value_) || 0 == strcasecmp("OLD", tb_node->str_value_)) {
+      lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, true, false, false);
+    }
+  }
+  #endif
+}
 | relation_name '.' '*'
 {
   ParseNode *node = NULL;
@@ -898,11 +915,28 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, $1, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
 }
+| id_dot_id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = $1->children_[2];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+}
 | relation_name '.' relation_name '.' '*'
 {
   ParseNode *node = NULL;
   malloc_terminal_node(node, result->malloc_pool_, T_STAR);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, $1, $3, node);
+  $$->value_ = 0;
+}
+| id_dot_id '.' '*'
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = NULL;
+  malloc_terminal_node(col_node, result->malloc_pool_, T_STAR);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
   $$->value_ = 0;
 }
 | '.' relation_name '.' column_name
@@ -925,6 +959,14 @@ column_name
   get_non_reserved_node(col_name, result->malloc_pool_, @4.first_column, @4.last_column);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
+}
+| '.' id_dot_id
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $2->children_[0];
+  ParseNode* col_node = $2->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
 }
 | FORCE
 {
@@ -1679,6 +1721,28 @@ simple_expr collation %prec NEG
     dblink_node->type_ = T_DBLINK_NAME;
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_REMOTE_SEQUENCE, 4, $1, $3, $5, $6);
+}
+| id_dot_id USER_VARIABLE
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $1->children_[0];
+  ParseNode* col_node = $1->children_[1];
+  ParseNode *dblink_node = $2;
+  if (NULL != dblink_node) {
+    dblink_node->type_ = T_DBLINK_NAME;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOTE_SEQUENCE, 4, db_node, tb_node, col_node, $2);
+}
+| id_dot_id_dot_id USER_VARIABLE
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = $1->children_[2];
+  ParseNode *dblink_node = $2;
+  if (NULL != dblink_node) {
+    dblink_node->type_ = T_DBLINK_NAME;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOTE_SEQUENCE, 4, db_node, tb_node, col_node, dblink_node);
 }
 ;
 expr:
@@ -2836,6 +2900,23 @@ MOD '(' expr ',' expr ')'
   malloc_non_terminal_node(sub_obj_access_ref, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, function, NULL);
   malloc_non_terminal_node($$, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, $1, sub_obj_access_ref);
   malloc_non_terminal_node(udf_node, result->malloc_pool_, T_FUN_UDF, 4, $3, params, $1, NULL);
+  store_pl_ref_object_symbol(udf_node, result, REF_FUNC);
+}
+| id_dot_id '(' opt_expr_as_list ')'
+{
+  ParseNode *params = NULL;
+  ParseNode *function = NULL;
+  ParseNode *sub_obj_access_ref = NULL;
+  ParseNode *udf_node = NULL;
+  ParseNode *id_node = $1;
+  if (NULL != $3)
+  {
+    merge_nodes(params, result, T_EXPR_LIST, $3);
+  }
+  malloc_non_terminal_node(function, result->malloc_pool_, T_FUN_SYS, 2, id_node->children_[1], params);
+  malloc_non_terminal_node(sub_obj_access_ref, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, function, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_OBJ_ACCESS_REF, 2, id_node->children_[0], sub_obj_access_ref);
+  malloc_non_terminal_node(udf_node, result->malloc_pool_, T_FUN_UDF, 4, $3, params, id_node->children_[0], NULL);
   store_pl_ref_object_symbol(udf_node, result, REF_FUNC);
 }
 | sys_interval_func
@@ -5287,6 +5368,22 @@ column_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, $1, $3, $5);
   dup_node_string($5, $$, result->malloc_pool_);
+}
+| id_dot_id
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $1->children_[0];
+  ParseNode* col_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+}
+| id_dot_id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = $1->children_[2];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
 }
 ;
 
@@ -9007,6 +9104,14 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
 }
+| id_dot_id
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $1->children_[0];
+  ParseNode* col_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+}
 | relation_name '.' '*'
 {
   ParseNode *node = NULL;
@@ -9035,11 +9140,28 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, $1, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
 }
+| id_dot_id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = $1->children_[2];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+}
 | relation_name '.' relation_name '.' '*'
 {
   ParseNode *node = NULL;
   malloc_terminal_node(node, result->malloc_pool_, T_STAR);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, $1, $3, node);
+  $$->value_ = 0;
+}
+| id_dot_id '.' '*'
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = NULL;
+  malloc_terminal_node(col_node, result->malloc_pool_, T_STAR);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
   $$->value_ = 0;
 }
 | '.' relation_name '.' column_name
@@ -9062,6 +9184,14 @@ column_name
   get_non_reserved_node(col_name, result->malloc_pool_, @4.first_column, @4.last_column);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, table_name, col_name);
   dup_node_string(col_name, $$, result->malloc_pool_);
+}
+| '.' id_dot_id
+{
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $2->children_[0];
+  ParseNode* col_node = $2->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
 }
 ;
 
@@ -11812,6 +11942,14 @@ relation_name opt_with_star
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, $3);
   dup_node_string($3, $$, result->malloc_pool_);
 }
+| id_dot_id opt_with_star
+{
+  (void)($2);
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, db_node, tb_node);
+  dup_node_string(tb_node, $$, result->malloc_pool_);
+}
 ;
 
 opt_with_star:
@@ -11842,6 +11980,13 @@ relation_name opt_dblink
   get_non_reserved_node(table_name, result->malloc_pool_, @3.first_column, @3.last_column);
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, table_name);
   dup_node_string(table_name, $$, result->malloc_pool_);
+}
+| id_dot_id opt_dblink
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, db_node, tb_node, $2);
+  dup_node_string(tb_node, $$, result->malloc_pool_);
 }
 ;
 
@@ -14489,6 +14634,12 @@ priv_level:
 | relation_name '.' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PRIV_LEVEL, 2, $1, $3);
+}
+| id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIV_LEVEL, 2, db_node, tb_node);
 }
 ;
 
@@ -17231,6 +17382,12 @@ recover_table_relation_name:
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, $1, $3, NULL);
 }
+| id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, db_node, tb_node, NULL);
+}
 | relation_name '.' '*'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, $1, NULL, NULL);
@@ -17331,9 +17488,21 @@ relation_name REMAP_TABLE_NAME
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, NULL, NULL, $4);
 }
+| id_dot_id REMAP_TABLE_NAME
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, NULL, NULL, $2);
+}
 | relation_name '.' relation_name ':' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, NULL, NULL, $5);
+}
+| id_dot_id ':' relation_name
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, NULL, NULL, $3);
 }
 | relation_name '.' relation_name REMAP_DATABASE_TABLE_NAME
 {
@@ -17344,9 +17513,28 @@ relation_name REMAP_TABLE_NAME
     malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, NULL, $4->children_[0], $4->children_[1]);
   }
 }
+| id_dot_id REMAP_DATABASE_TABLE_NAME
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  if ($2->type_ != T_LINK_NODE || $2->num_child_ != 2) {
+    yyerror(&@1, result, "get unexpected error in remap table");
+    YYABORT_PARSE_SQL_ERROR;
+  } else {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, NULL, $2->children_[0], $2->children_[1]);
+  }
+}
 | relation_name '.' relation_name ':' relation_name '.' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, NULL, $5, $7);
+}
+| id_dot_id ':' id_dot_id
+{
+  ParseNode* db_node1 = $1->children_[0];
+  ParseNode* tb_node1 = $1->children_[1];
+  ParseNode* db_node2 = $3->children_[0];
+  ParseNode* tb_node2 = $3->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node1, tb_node1, NULL, db_node2, tb_node2);
 }
 | relation_name '.' '*' REMAP_TABLE_NAME '.' '*'
 {
@@ -17360,9 +17548,21 @@ relation_name REMAP_TABLE_NAME
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, $4, NULL, $5);
 }
+| id_dot_id REMAP_TABLE_NAME REMAP_TABLE_NAME
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, $2, NULL, $3);
+}
 | relation_name '.' relation_name ':' relation_name ':' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, $5, NULL, $7);
+}
+| id_dot_id ':' relation_name ':' relation_name
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, $3, NULL, $5);
 }
 | relation_name '.' relation_name REMAP_TABLE_NAME REMAP_DATABASE_TABLE_NAME
 {
@@ -17373,9 +17573,28 @@ relation_name REMAP_TABLE_NAME
     malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, $4, $5->children_[0], $5->children_[1]);
   }
 }
+| id_dot_id REMAP_TABLE_NAME REMAP_DATABASE_TABLE_NAME
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  if ($3->type_ != T_LINK_NODE || $3->num_child_ != 2) {
+    yyerror(&@1, result, "get unexpected error in remap table");
+    YYABORT_PARSE_SQL_ERROR;
+  } else {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node, tb_node, $2, $3->children_[0], $3->children_[1]);
+  }
+}
 | relation_name '.' relation_name ':' relation_name ':' relation_name '.' relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, $1, $3, $5, $7, $9);
+}
+| id_dot_id ':' relation_name ':' id_dot_id
+{
+  ParseNode* db_node1 = $1->children_[0];
+  ParseNode* tb_node1 = $1->children_[1];
+  ParseNode* db_node2 = $5->children_[0];
+  ParseNode* tb_node2 = $5->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 5, db_node1, tb_node1, $3, db_node2, tb_node2);
 }
 ;
 
@@ -18601,6 +18820,21 @@ new_or_old_column_ref:
   lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false, false);
 #endif
 }
+| id_dot_id
+{
+  if (!result->is_for_trigger_) {
+    yyerror(&@1, result, "");
+    YYERROR;
+  }
+  ParseNode* db_node = NULL;
+  ParseNode* tb_node = $1->children_[0];
+  ParseNode* col_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, db_node, tb_node, col_node);
+  dup_node_string(col_node, $$, result->malloc_pool_);
+#ifndef SQL_PARSER_COMPILATION
+  lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, true, false, false);
+#endif
+}
 
 column_name:
 NAME_OB
@@ -18617,6 +18851,13 @@ NAME_OB { $$ = $1; }
 {
   get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
 }
+;
+
+id_dot_id:
+ID_DOT_ID { $$ = $1; }
+;
+id_dot_id_dot_id:
+ID_DOT_ID_DOT_ID { $$ = $1; }
 ;
 
 function_name:

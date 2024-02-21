@@ -60,6 +60,7 @@ common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
+start_identifier        (([A-Za-z0-9$_]*[A-Za-z$_][A-Za-z0-9$_]*|{NOTASCII_GB_CHAR})+)
 identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
@@ -1615,6 +1616,65 @@ BEGIN(in_c_comment);
     REPUT_NEG_SIGN(p);
   }
   return USER_VARIABLE;
+}
+
+{start_identifier}"."{identifier}"."{identifier} {
+  ParseResult *result = (ParseResult *)yyextra;
+  check_value(yylval);
+  if (IS_FAST_PARAMETERIZE) {
+    REPUT_NEG_SIGN(result);
+    return ID_DOT_ID_DOT_ID;
+  } else {
+    ParseNode *node = NULL, *db_node = NULL, *tb_node = NULL, *col_node = NULL;
+    malloc_new_node(db_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(tb_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(col_node, result->malloc_pool_, T_IDENT, 0);
+
+    char *db_name = yytext;
+    char *tb_name = strstr(db_name, ".") + 1;
+    char *col_name = strstr(tb_name, ".") + 1;
+    size_t db_len = tb_name - db_name - 1;
+    size_t tb_len = col_name - tb_name - 1;
+    size_t col_len = strlen(col_name);
+
+    gen_expr_node(db_node, db_name, db_len, result, yylloc->first_column - 1);
+    gen_expr_node(tb_node, tb_name, tb_len, result, yylloc->first_column + db_len);
+    gen_expr_node(col_node, col_name, col_len, result, yylloc->first_column + db_len + tb_len + 1);
+    malloc_new_node(node, result->malloc_pool_, T_IDENT, 3);
+    node->children_[0] = db_node;
+    node->children_[1] = tb_node;
+    node->children_[2] = col_node;
+    node->str_value_ = parse_strdup(col_node->str_value_, result->malloc_pool_, &(node->str_len_));
+    yylval->node = node;
+    return ID_DOT_ID_DOT_ID;
+  }
+}
+
+{start_identifier}"."{identifier} {
+  ParseResult *result = (ParseResult *)yyextra;
+  check_value(yylval);
+  if (IS_FAST_PARAMETERIZE) {
+    REPUT_NEG_SIGN(result);
+    return ID_DOT_ID;
+  } else {
+    ParseNode *node = NULL, *tb_node = NULL, *col_node = NULL;
+    malloc_new_node(tb_node, result->malloc_pool_, T_IDENT, 0);
+    malloc_new_node(col_node, result->malloc_pool_, T_IDENT, 0);
+
+    char *tb_name = yytext;
+    char *col_name = strstr(tb_name, ".") + 1;
+    size_t tb_len = col_name - tb_name - 1;
+    size_t col_len = strlen(col_name);
+
+    gen_expr_node(tb_node, tb_name, tb_len, result, yylloc->first_column - 1);
+    gen_expr_node(col_node, col_name, col_len, result, yylloc->first_column + tb_len);
+    malloc_new_node(node, result->malloc_pool_, T_IDENT, 2);
+    node->children_[0] = tb_node;
+    node->children_[1] = col_node;
+    node->str_value_ = parse_strdup(col_node->str_value_, result->malloc_pool_, &(node->str_len_));
+    yylval->node = node;
+    return ID_DOT_ID;
+  }
 }
 
 {identifier} {
