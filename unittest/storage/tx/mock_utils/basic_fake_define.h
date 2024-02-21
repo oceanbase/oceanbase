@@ -472,7 +472,8 @@ public:
                  const int64_t size,
                  const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
-                 const bool need_nonblock)
+                 const bool need_nonblock,
+                 const int64_t retry_timeout_us)
   {
     int ret = OB_SUCCESS;
     logservice::ObLogBaseHeader base_header;
