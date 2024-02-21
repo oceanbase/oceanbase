@@ -27,6 +27,7 @@ using namespace oceanbase::palf;
 
 namespace cdc
 {
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_RESP_ERROR);
 
 ObCdcFetcher::ObCdcFetcher()
   : is_inited_(false),
@@ -124,8 +125,9 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
       }
 
       if (OB_NOT_NULL(ls_ctx)) {
-        if (OB_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
-          LOG_WARN("failed to revert client ls ctx", K(req));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
+          LOG_WARN_RET(tmp_ret, "failed to revert client ls ctx", K(req));
         } else {
           ls_ctx = nullptr;
         }
@@ -325,6 +327,10 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   // update_monitor(frt.fetch_status_);
   if (OB_FAIL(ret)) {
     LOG_WARN("fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
+        K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
         K(req), K(resp));
   }
 
@@ -1209,6 +1215,13 @@ int ObCdcFetcher::do_fetch_raw_log_(const obrpc::ObCdcFetchRawLogReq &req,
   if (retry_count > 1) {
     LOG_INFO("retry multiple times to read log", KR(ret), K(req), K(resp), K(retry_count),
         K(need_retry), K(fetch_log_succ));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fetch raw log fail", K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch raw log fail", K(req), K(resp));
   }
 
   return ret;
