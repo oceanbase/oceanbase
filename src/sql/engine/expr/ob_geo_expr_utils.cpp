@@ -318,7 +318,7 @@ int ObGeoExprUtils::parse_axis_order(const ObString option_str,
           axis_order_key.assign_ptr(option_str.ptr()+str_start_pos, pos-str_start_pos);
           if (axis_order_key.case_compare(ObString("axis-order"))) {
             ret = OB_ERR_INVALID_OPTION_KEY;
-            strncpy(err_str, axis_order_key.ptr(), axis_order_key.length() < STR_LEN_MAX ? axis_order_key.length() : STR_LEN_MAX);
+            strncpy(err_str, axis_order_key.ptr(), axis_order_key.length() < (STR_LEN_MAX - 1) ? axis_order_key.length() : (STR_LEN_MAX - 1));
             LOG_USER_ERROR(OB_ERR_INVALID_OPTION_KEY, err_str, func_name);
             LOG_WARN("failed to parse axis-order, the key must be axis-order", K(ret));
           }
@@ -351,12 +351,12 @@ int ObGeoExprUtils::parse_axis_order(const ObString option_str,
         }
       }
       if (OB_FAIL(ret)) {
-        strncpy(err_str, axis_order_key.ptr(), axis_order_key.length() < STR_LEN_MAX ? axis_order_key.length() : STR_LEN_MAX);
+        strncpy(err_str, axis_order_key.ptr(), axis_order_key.length() < (STR_LEN_MAX - 1) ? axis_order_key.length() : (STR_LEN_MAX - 1));
         LOG_USER_ERROR(OB_ERR_INVALID_OPTION_VALUE, axis_order_val.ptr(), err_str, func_name);
       }
     } else if (ret == OB_INVALID_OPTION) {
       ret = OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR;
-      strncpy(err_str, option_str.ptr(), option_str.length() < STR_LEN_MAX ? option_str.length() : STR_LEN_MAX);
+      strncpy(err_str, option_str.ptr(), option_str.length() < (STR_LEN_MAX - 1) ? option_str.length() : (STR_LEN_MAX - 1));
       LOG_USER_ERROR(OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR, err_str, '=', func_name);
     }
   }
