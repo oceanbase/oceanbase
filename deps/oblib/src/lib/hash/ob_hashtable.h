@@ -1005,6 +1005,8 @@ private:
       node->magic_ = hashnode::MAGIC;
       if (OB_FAIL(copy_assign(node->data, value))) {
         HASH_WRITE_LOG(HASH_FATAL, "failed to copy data, ret = %d", ret);
+        allocer_->free(node);
+        node = NULL;
       } else {
         node->is_fake = is_fake;
         node->next = bucket.node;
