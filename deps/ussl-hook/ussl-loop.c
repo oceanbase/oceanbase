@@ -155,6 +155,7 @@ static void handle_server_timeout_event(acceptfd_sk_t *accept_sk)
                    accept_sk->fd, accept_sk->ep->fd, errno);
   }
   close(accept_sk->fd);
+  accept_sk->fd = -1;
   acceptfd_fty->destroy(acceptfd_fty, (ussl_sock_t *)accept_sk);
 }
 
