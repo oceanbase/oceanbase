@@ -418,7 +418,6 @@ int ObLogService::add_ls(const ObLSID &id,
                          ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
-  PalfHandle palf_handle;
   PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
@@ -426,15 +425,13 @@ int ObLogService::add_ls(const ObLSID &id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));
-  } else if (OB_FAIL(palf_env_->open(id.id(), palf_handle))) {
-    CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id));
   } else if (OB_FAIL(apply_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for apply_service", K(ret), K(id));
   } else if (OB_FAIL(replay_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
-    CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_), K(palf_handle));
+          &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
+    CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
@@ -445,12 +442,6 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "set_locality_cb failed", K(ret), K(id));
   } else {
     FLOG_INFO("add_ls success", K(ret), K(id), KP(this));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
-      palf_env_->close(palf_handle);
-    }
   }
 
   if (OB_ENTRY_NOT_EXIST == ret) {
@@ -669,37 +660,52 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   PalfLocalityInfoCb *locality_cb = &locality_adapter_;
   const bool is_arb_replica = (replica_type == REPLICA_TYPE_ARBITRATION);
   PalfHandle &log_handler_palf_handle = log_handler.palf_handle_;
+  bool palf_exist = true;
   if (false == id.is_valid() ||
       INVALID_TENANT_ROLE == tenant_role ||
       false == palf_base_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(id), K(tenant_role), K(palf_base_info));
-  } else if (!is_arb_replica &&
-      OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info, palf_handle))) {
-    CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type));
-  } else if (false == allow_log_sync && OB_FAIL(palf_handle.disable_sync())) {
-    CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));
-  } else if (OB_FAIL(apply_service_.add_ls(id))) {
-    CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
-  } else if (OB_FAIL(replay_service_.add_ls(id))) {
-    CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
-  } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
-    CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
-  } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
-    CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
-  } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
-    CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
-  } else if (OB_FAIL(log_handler_palf_handle.set_location_cache_cb(loc_cache_cb))) {
-    CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
-  } else if (OB_FAIL(log_handler_palf_handle.set_locality_cb(locality_cb))) {
-    CLOG_LOG(WARN, "set_locality_cb failed", K(ret), K(id));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(tenant_role), K(palf_base_info));
+  } else if (OB_FAIL(check_palf_exist(id, palf_exist))) {
+    CLOG_LOG(WARN, "check_palf_exist failed", K(ret), K(id), K(tenant_role), K(palf_base_info));
+  } else if (palf_exist) {
+    ret = OB_ENTRY_EXIST;
+    CLOG_LOG(WARN, "palf has eixst", K(ret), K(id), K(tenant_role), K(palf_base_info));
   } else {
-    CLOG_LOG(INFO, "ObLogService create_ls success", K(ret), K(id), K(log_handler));
-  }
-  if (OB_FAIL(ret)) {
-    if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
+    if (!is_arb_replica &&
+        OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info, palf_handle))) {
+      CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type));
+    } else if (false == allow_log_sync && OB_FAIL(palf_handle.disable_sync())) {
+      CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));
+    } else if (OB_FAIL(apply_service_.add_ls(id))) {
+      CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
+    } else if (OB_FAIL(replay_service_.add_ls(id))) {
+      CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
+    } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
+            &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
+      CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
+    } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
+      CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
+    } else if (OB_FAIL(log_handler_palf_handle.register_role_change_cb(rc_cb))) {
+      CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
+    } else if (OB_FAIL(log_handler_palf_handle.set_location_cache_cb(loc_cache_cb))) {
+      CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
+    } else if (OB_FAIL(log_handler_palf_handle.set_locality_cb(locality_cb))) {
+      CLOG_LOG(WARN, "set_locality_cb failed", K(ret), K(id));
+    } else {
+      CLOG_LOG(INFO, "ObLogService create_ls success", K(ret), K(id), K(log_handler));
+    }
+    if (palf_handle.is_valid() && nullptr != palf_env_) {
       palf_env_->close(palf_handle);
+    }
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(ERROR, "create_ls failed!!!", KR(ret), K(id));
+      restore_handler.destroy();
+      replay_service_.remove_ls(id);
+      apply_service_.remove_ls(id);
+      log_handler.destroy();
+      palf_env_->close(palf_handle);
+      palf_env_->remove(id.id());
     }
   }
   return ret;
