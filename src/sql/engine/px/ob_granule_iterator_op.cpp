@@ -340,7 +340,7 @@ int ObGranuleIteratorOp::rescan()
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
     }
-  } else if (!MY_SPEC.full_partition_wise()) {
+  } else {
     if (GI_UNINITIALIZED == state_) {
       // NJ call rescan before iterator rows, need to nothing for the first scan.
     } else if (GI_PREPARED == state_) {
@@ -362,25 +362,15 @@ int ObGranuleIteratorOp::rescan()
       pruning_partition_ids_.reset();
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
-      if (OB_ISNULL(real_child_)) {
+      is_rescan_ = true;
+      if (MY_SPEC.full_partition_wise()) {
+        // do nothing.
+      } else if (OB_ISNULL(real_child_)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (PHY_BLOCK_SAMPLE_SCAN == real_child_->get_spec().type_ ||
           PHY_ROW_SAMPLE_SCAN == real_child_->get_spec().type_) {
         OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
-      } else {
-        is_rescan_ = true;
       }
-    }
-  } else {
-    // 在partition_wise_join的情况, 按woker第一次完整执行所抢占的任务执行.
-    // 在执行过程中缓存住了自己的任务队列.
-    if (GI_UNINITIALIZED == state_ || GI_PREPARED == state_) {
-      /*do nothing*/
-    } else {
-      pruning_partition_ids_.reset();
-      is_rescan_ = true;
-      rescan_task_idx_ = 0;
-      state_ = GI_GET_NEXT_GRANULE_TASK;
     }
   }
 
