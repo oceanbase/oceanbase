@@ -1143,9 +1143,19 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
 {
   int ret = OB_SUCCESS;
   is_ttl_table = false;
-  if (table_schema.is_user_table() && !table_schema.is_in_recyclebin() &&
-    (!table_schema.get_kv_attributes().empty() || !table_schema.get_ttl_definition().empty())) {
-    is_ttl_table = true;
+  if (table_schema.is_user_table() && !table_schema.is_in_recyclebin()) {
+    if (!table_schema.get_ttl_definition().empty()) {
+      is_ttl_table = true;
+    } else if (!table_schema.get_kv_attributes().empty()) {
+      // htable ttl table should have at least one of max_version and time_to_live
+      int32_t time_to_live = 0;
+      int32_t max_version = 0;
+      if (OB_FAIL(parse_kv_attributes(table_schema.get_kv_attributes(), max_version, time_to_live))) {
+        LOG_WARN("fail to parse kv attributes", KR(ret), "kv_attributes", table_schema.get_kv_attributes());
+      } else if (time_to_live > 0 || max_version > 0) {
+        is_ttl_table = true;
+      }
+    }
   }
   return ret;
 }
@@ -1178,8 +1188,8 @@ int ObTTLUtil::check_task_status_from_sys_table(uint64_t tenant_id, common::ObIS
         } else {
           LOG_WARN("fail to get next row", K(ret));
         }
-      } else {
-        int64_t temp_status = 0;
+        } else {
+          int64_t temp_status = 0;
         EXTRACT_INT_FIELD_MYSQL(*result, "STATUS", temp_status, int64_t);
         status = EVAL_TASK_PURE_STATUS(temp_status);
         if (OB_SUCCESS == result->next()) {
