@@ -1809,14 +1809,20 @@ int ObPartitionLogService::receive_archive_log(const ObLogEntry& log_entry, cons
           CLOG_LOG(WARN, "follower active receive log failed", K_(partition_key), K(ret), K(log_entry));
         } else if (is_accum_checksum_valid
                     && OB_FAIL(sw_.set_log_archive_accum_checksum(log_id, accum_checksum))) {
-          CLOG_LOG(WARN, "sw_ set_log_archive_accum_checksum failed", K(ret), K_(partition_key),
-              K(is_accum_checksum_valid), K(accum_checksum), K(log_entry));
+          if (OB_ERROR_OUT_OF_RANGE != ret) {
+            CLOG_LOG(WARN, "sw_ set_log_archive_accum_checksum failed", K(ret), K_(partition_key),
+                     K(is_accum_checksum_valid), K(accum_checksum), K(log_entry));
+          } else {
+            // Its role may switch to LEADER during fetching log,
+            //this log was received and slided out before, so we need to avoid reporting error here
+            ret = OB_SUCCESS;
+          }
         } else if (OB_FAIL(sw_.set_log_confirmed(log_id, is_batch_committed))) {
           if (OB_ERROR_OUT_OF_RANGE != ret) {
             CLOG_LOG(WARN, "sw_.set_log_confirmed failed", K_(partition_key), K(ret), K(log_entry));
           } else {
             // Its role may switch to LEADER during fetching log,
-            // it may alredy received this log and slide it out, so we need avoid reporting error here
+            //this log was received and slided out before, so we need to avoid reporting error here
             ret = OB_SUCCESS;
           }
         } else {
