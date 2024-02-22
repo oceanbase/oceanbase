@@ -11557,13 +11557,14 @@ int ObPLResolver::resolve_udf_without_brackets(
   OX (udf_info.udf_name_ = access_ident.access_name_);
   OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast),
     K(access_idxs), K(q_name));
-  OV (access_idxs.at(access_idxs.count() - 1).is_udf_type());
+  OV (access_idxs.at(access_idxs.count() - 1).is_udf_type(), OB_ERR_UNEXPECTED, K(access_idxs));
   OX (expr = access_idxs.at(access_idxs.count() - 1).get_sysfunc_);
   CK (OB_NOT_NULL(expr));
   if ((OB_FAIL(ret) && ret != OB_ERR_INSUFFICIENT_PRIVILEGE)
       || (OB_NOT_NULL(expr) && T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type())
       || (OB_NOT_NULL(expr) && T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type())) {
     ret = OB_ERR_SP_UNDECLARED_VAR;
+    LOG_WARN("failed to resolve udt without brackets", K(ret), KPC(expr));
   }
   return ret;
 }
@@ -14279,13 +14280,14 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
                || (ObPLExternalNS::DB_NS == type && is_routine)
+               || (ObPLExternalNS::PKG_NS == type && is_routine)
                || (ObPLExternalNS::DBLINK_PKG_NS == type && is_routine)) {
       if (is_routine) {
         OZ (resolve_routine(access_ident, ns, access_idxs, func),
           K(access_ident), K(access_idxs));
       } else { // [self.]element, user can access element without self prefix, handle it in here.
         OZ (resolve_self_element_access(access_ident, ns, access_idxs, func),
-          K(access_ident), K(access_idxs));
+          K(access_ident), K(access_idxs), K(type), K(is_routine));
       }
     } else { // current symbol resolve success!
       ObObjAccessIdx access_idx;
