@@ -52554,7 +52554,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-#25301 PROXY_USERS
+# 25301: PROXY_USERS
 
 #
 # 余留位置（此行之前占位）
