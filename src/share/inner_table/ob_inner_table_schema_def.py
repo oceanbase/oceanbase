@@ -13693,7 +13693,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12475: __all_virtual_user_proxy_info_history
 # 12476: __all_virtual_user_proxy_role_info
 # 12477: __all_virtual_user_proxy_role_info_history
-
+# 12478: __all_virtual_tablet_reorganize_history
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -60594,7 +60594,7 @@ def_sys_index_table(
 # 101101: __all_user_proxy_info
 # 101102: __all_user_proxy_info_history
 # 101103: __all_user_proxy_role_info_history
-
+# 101104: __all_tablet_reorganize_history
 #
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
