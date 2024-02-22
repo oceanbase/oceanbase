@@ -189,7 +189,9 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         } else {
           ObObj temp_value;
           temp_value.set_string(ObUserDefinedSQLType, xml_value_data);
-          value_vec.push_back(temp_value);
+          if (OB_FAIL(value_vec.push_back(temp_value))) {
+            LOG_WARN("failed to push back value.", K(ret), K(temp_value));
+          }
         }
       } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
                                                               xml_arg->datum_meta_,
@@ -320,8 +322,8 @@ int ObExprXmlElement::construct_value_array(ObIAllocator &allocator, const ObStr
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      res_value.push_back(temp_value);
+    if (OB_SUCC(ret) && OB_FAIL(res_value.push_back(temp_value))) {
+      LOG_WARN("failed to push back value.", K(ret), K(temp_value));
     }
   }
   return ret;
