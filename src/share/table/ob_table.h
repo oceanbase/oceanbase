@@ -928,15 +928,15 @@ public:
   ObTableQueryResult affected_entity_;
 };
 
-class ObTableQuerySyncResult: public ObTableQueryResult
+class ObTableQueryAsyncResult: public ObTableQueryResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableQuerySyncResult()
+  ObTableQueryAsyncResult()
     : is_end_(false),
       query_session_id_(0)
   {}
-  virtual ~ObTableQuerySyncResult() {}
+  virtual ~ObTableQueryAsyncResult() {}
 public:
   bool     is_end_;
   uint64_t  query_session_id_; // from server gen

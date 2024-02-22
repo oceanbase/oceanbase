@@ -48,8 +48,8 @@ public:
   int execute_query(const ObTableQuery &query, const ObTableRequestOptions &request_options, ObTableEntityIterator *&result) override;
   int execute_query_and_mutate(const ObTableQueryAndMutate &query_and_mutate, const ObTableRequestOptions &request_options, ObTableQueryAndMutateResult &result) override;
   /// execute a sync query on a table
-  int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) override;
-  int query_next(const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) override;
+  int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) override;
+  int query_next(const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) override;
 private:
   friend class ObTableServiceClientImpl;
   ObTableImpl();

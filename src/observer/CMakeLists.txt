@@ -133,7 +133,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_and_mutate_processor.cpp
   table/ob_table_query_processor.cpp
   table/ob_table_rpc_processor.cpp
-  table/ob_table_query_sync_processor.cpp
+  table/ob_table_query_async_processor.cpp
   table/ob_table_service.cpp
   table/ob_htable_lock_mgr.cpp
   table/ob_table_context.cpp

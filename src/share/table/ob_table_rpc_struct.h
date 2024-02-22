@@ -252,15 +252,15 @@ public:
   ObBinlogRowImageType binlog_row_image_type_;
 };
 
-class ObTableQuerySyncRequest : public ObTableQueryRequest
+class ObTableQueryAsyncRequest : public ObTableQueryRequest
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableQuerySyncRequest()
+  ObTableQueryAsyncRequest()
       :query_session_id_(0),
        query_type_(ObQueryOperationType::QUERY_MAX)
   {}
-  virtual ~ObTableQuerySyncRequest(){}
+  virtual ~ObTableQueryAsyncRequest(){}
   INHERIT_TO_STRING_KV("ObTableQueryRequest", ObTableQueryRequest,
                K_(query_session_id),
                K_(query_type));

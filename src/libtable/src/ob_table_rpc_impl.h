@@ -33,8 +33,8 @@ public:
   int execute_query(const ObTableQuery &query, const ObTableRequestOptions &request_options, ObTableEntityIterator *&result) override;
   int execute_query_and_mutate(const ObTableQueryAndMutate &query_and_mutate, const ObTableRequestOptions &request_options, ObTableQueryAndMutateResult &result) override;
   /// executes a sync query on a table
-  int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) override;
-  int query_next(const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) override;
+  int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) override;
+  int query_next(const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) override;
 private:
   friend class ObTableServiceClientImpl;
   typedef ObSEArray<int64_t, 3> IdxArray;
@@ -63,13 +63,13 @@ private:
     DISALLOW_COPY_AND_ASSIGN(QueryMultiResult);
   };
 
-  class QuerySyncMultiResult: public ObTableEntityIterator
+  class QueryAsyncMultiResult: public ObTableEntityIterator
   {
   public:
-    QuerySyncMultiResult()
+    QueryAsyncMultiResult()
         :result_packet_count_(0)
     {}
-    virtual ~QuerySyncMultiResult() { reset(); }
+    virtual ~QueryAsyncMultiResult() { reset(); }
     virtual int get_next_entity(const ObITableEntity *&entity) override
     {
       int ret = OB_NOT_IMPLEMENT;
@@ -84,16 +84,16 @@ private:
       result_packet_count_ = 0;
       server_pkt_ts_ = -1;
     }
-    ObTableQuerySyncResult &get_one_result() { return one_result_; }
+    ObTableQueryAsyncResult &get_one_result() { return one_result_; }
     int64_t get_result_count() const { return result_packet_count_; }
   public:
-    ObTableQuerySyncResult one_result_;
+    ObTableQueryAsyncResult one_result_;
     int64_t result_packet_count_;
     int64_t server_pkt_ts_; // for packet validation
     common::ObAddr server_addr_;
     int64_t session_id_;
     bool has_more_;
-    DISALLOW_COPY_AND_ASSIGN(QuerySyncMultiResult);
+    DISALLOW_COPY_AND_ASSIGN(QueryAsyncMultiResult);
   };
 
 private:
@@ -118,7 +118,7 @@ private:
   common::ObArenaAllocator arena_;
   obrpc::ObTableRpcProxy *rpc_proxy_;
   QueryMultiResult query_multi_result_;
-  QuerySyncMultiResult query_sync_multi_result_;
+  QueryAsyncMultiResult query_async_multi_result_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableRpcImpl);
 };

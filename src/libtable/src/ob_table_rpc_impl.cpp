@@ -536,7 +536,7 @@ int ObTableRpcImpl::execute_query_and_mutate(const ObTableQueryAndMutate &query_
   return ret;
 }
 
-int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result)
+int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -558,7 +558,7 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
     } else if (OB_FAIL(tablet_loc.get_leader(leader_loc))) {
       LOG_WARN("failed to find leader location", K(ret), K(tablet_loc));
     } else {
-      ObTableQuerySyncRequest request;
+      ObTableQueryAsyncRequest request;
       request.query_ = query;
       request.table_name_ = table_name_;
       request.table_id_ = table_id_;
@@ -568,17 +568,17 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
       request.consistency_level_ = request_options.consistency_level();
       request.query_session_id_ = 0;
       request.query_type_ = ObQueryOperationType::QUERY_START;
-      query_sync_multi_result_.reset();
-      result = &query_sync_multi_result_.get_one_result();
+      query_async_multi_result_.reset();
+      result = &query_async_multi_result_.get_one_result();
       ret = rpc_proxy_->
             timeout(request_options.server_timeout())
             .to(leader_loc.get_server())
-            .execute_query_sync(request, *result);
+            .execute_query_async(request, *result);
       if (OB_SUCC(ret)) {
-        query_sync_multi_result_.server_addr_ = leader_loc.get_server();
-        query_sync_multi_result_.has_more_ = !result->is_end_;
-        query_sync_multi_result_.session_id_ = result->query_session_id_;
-        query_sync_multi_result_.result_packet_count_++;
+        query_async_multi_result_.server_addr_ = leader_loc.get_server();
+        query_async_multi_result_.has_more_ = !result->is_end_;
+        query_async_multi_result_.session_id_ = result->query_session_id_;
+        query_async_multi_result_.result_packet_count_++;
         if (result->is_end_ && result->get_row_count() == 0) {
           ret = OB_ITER_END;
         }
@@ -590,31 +590,31 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
   return ret;
 }
 
-int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) {
+int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) {
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init already", K(ret));
-  } else if(!query_sync_multi_result_.has_more_) {
+  } else if(!query_async_multi_result_.has_more_) {
     ret = OB_ITER_END;
     LOG_DEBUG("no more result or query_start hasn't been executed yet", K(ret));
   } else {
-    ObTableQuerySyncRequest request;
+    ObTableQueryAsyncRequest request;
     request.credential_ = client_->get_credential();
     request.entity_type_ = this->entity_type_;
     request.consistency_level_ = request_options.consistency_level();
-    request.query_session_id_ = query_sync_multi_result_.session_id_;
+    request.query_session_id_ = query_async_multi_result_.session_id_;
     request.query_type_ = ObQueryOperationType::QUERY_NEXT;
-    query_sync_multi_result_.has_more_ = false;
-    result = &query_sync_multi_result_.get_one_result();
+    query_async_multi_result_.has_more_ = false;
+    result = &query_async_multi_result_.get_one_result();
     result->reset();
     ret = rpc_proxy_->
           timeout(request_options.server_timeout())
-          .to(query_sync_multi_result_.server_addr_)
-          .execute_query_sync(request, *result);
+          .to(query_async_multi_result_.server_addr_)
+          .execute_query_async(request, *result);
     if (OB_SUCC(ret)) {
-      query_sync_multi_result_.has_more_ = !result->is_end_;
-      query_sync_multi_result_.result_packet_count_++;
+      query_async_multi_result_.has_more_ = !result->is_end_;
+      query_async_multi_result_.result_packet_count_++;
       if (result->is_end_ && result->get_row_count() == 0) {
         ret = OB_ITER_END;
       }

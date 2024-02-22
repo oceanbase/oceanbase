@@ -30,7 +30,7 @@ public:
   RPC_S(PR5 batch_execute, obrpc::OB_TABLE_API_BATCH_EXECUTE, (table::ObTableBatchOperationRequest), table::ObTableBatchOperationResult);
   RPC_SS(PR5 execute_query, obrpc::OB_TABLE_API_EXECUTE_QUERY, (table::ObTableQueryRequest), table::ObTableQueryResult);
   RPC_S(PR5 query_and_mutate, obrpc::OB_TABLE_API_QUERY_AND_MUTATE, (table::ObTableQueryAndMutateRequest), table::ObTableQueryAndMutateResult);
-  RPC_S(PR5 execute_query_sync, obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC, (table::ObTableQuerySyncRequest), table::ObTableQuerySyncResult);
+  RPC_S(PR5 execute_query_async, obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC, (table::ObTableQueryAsyncRequest), table::ObTableQueryAsyncResult);
   RPC_S(PR5 direct_load, obrpc::OB_TABLE_API_DIRECT_LOAD, (table::ObTableDirectLoadRequest), table::ObTableDirectLoadResult);
 };
 

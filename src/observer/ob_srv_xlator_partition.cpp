@@ -45,7 +45,7 @@
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
-#include "observer/table/ob_table_query_sync_processor.h"
+#include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "storage/ob_storage_rpc.h"
 
@@ -201,7 +201,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableBatchExecuteP, gctx_);
   RPC_PROCESSOR(ObTableQueryP, gctx_);
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
-  RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
+  RPC_PROCESSOR(ObTableQueryAsyncP, gctx_);
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
   RPC_PROCESSOR(ObTenantTTLP, gctx_);
 

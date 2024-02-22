@@ -88,7 +88,8 @@ int ObHTableFilterParser::parse_filter(const ObString &filter_string, hfilter::F
     filter = result_filter_;
   } else {
     if (1 == ret) {  // syntax error
-      ret = OB_ERR_PARSER_SYNTAX;
+      ret = OB_KV_FILTER_PARSE_ERROR;
+      LOG_USER_ERROR(OB_KV_FILTER_PARSE_ERROR, filter_string.length(), filter_string.ptr());
     }
     LOG_WARN("failed to parse filter", K(ret), K_(error_msg), K(filter_string), K_(error_code));
   }

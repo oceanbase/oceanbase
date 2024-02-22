@@ -1700,7 +1700,7 @@ OB_SERIALIZE_MEMBER(ObTableQueryAndMutateResult,
                     affected_rows_,
                     affected_entity_);
 
-OB_SERIALIZE_MEMBER((ObTableQuerySyncResult, ObTableQueryResult),
+OB_SERIALIZE_MEMBER((ObTableQueryAsyncResult, ObTableQueryResult),
   is_end_,
   query_session_id_
 );

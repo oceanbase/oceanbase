@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_TABLE_QUERY_SYNC_PROCESSOR_H
-#define _OB_TABLE_QUERY_SYNC_PROCESSOR_H 1
+#ifndef _OB_TABLE_QUERY_ASYNC_PROCESSOR_H
+#define _OB_TABLE_QUERY_ASYNC_PROCESSOR_H 1
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
@@ -30,17 +30,17 @@ namespace observer
 {
 
 /**
- * ---------------------------------------- ObTableQuerySyncCtx ----------------------------------------
+ * ---------------------------------------- ObTableQueryAsyncCtx ----------------------------------------
  */
-struct ObTableQuerySyncCtx
+struct ObTableQueryAsyncCtx
 {
-  explicit ObTableQuerySyncCtx(common::ObIAllocator &allocator)
+  explicit ObTableQueryAsyncCtx(common::ObIAllocator &allocator)
       : tb_ctx_(allocator),
         expr_frame_info_(allocator),
         spec_(nullptr),
         executor_(nullptr)
   {}
-  virtual ~ObTableQuerySyncCtx()
+  virtual ~ObTableQueryAsyncCtx()
   {
     row_iter_.close();
     if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
@@ -55,14 +55,14 @@ struct ObTableQuerySyncCtx
 };
 
 /**
- * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------
+ * ---------------------------------------- ObTableQueryAsyncSession ----------------------------------------
  */
-class ObTableQuerySyncSession final
+class ObTableQueryAsyncSession final
 {
-  friend class ObQuerySyncMgr;
+  friend class ObQueryAsyncMgr;
 
 public:
-  explicit ObTableQuerySyncSession()
+  explicit ObTableQueryAsyncSession()
     : in_use_(true),
       timeout_ts_(10000000),
       tenant_id_(MTL_ID()),
@@ -72,7 +72,7 @@ public:
       query_ctx_(allocator_),
       iterator_mementity_(nullptr)
   {}
-  ~ObTableQuerySyncSession();
+  ~ObTableQueryAsyncSession();
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
   table::ObTableQueryResultIterator *get_result_iter() { return result_iterator_; };
@@ -85,7 +85,7 @@ public:
   ObArenaAllocator *get_allocator() {return &allocator_;}
   common::ObObjectID get_tenant_id() { return tenant_id_; }
   table::ObTableQuery &get_query() { return query_; }
-  ObTableQuerySyncCtx &get_query_ctx() { return query_ctx_; }
+  ObTableQueryAsyncCtx &get_query_ctx() { return query_ctx_; }
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
@@ -97,7 +97,7 @@ private:
   table::ObTableQuery query_; // deep copy from arg_.query_
   table::ObTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
-  ObTableQuerySyncCtx query_ctx_;
+  ObTableQueryAsyncCtx query_ctx_;
   lib::MemoryContext iterator_mementity_;
 
 private:
@@ -107,33 +107,33 @@ private:
 };
 
 /**
- * ------------------------------------ ObQuerySyncSessionRecycle ------------------------------------
+ * ------------------------------------ ObQueryAsyncSessionRecycle ------------------------------------
  */
-class ObQuerySyncSessionRecycle : public common::ObTimerTask
+class ObQueryAsyncSessionRecycle : public common::ObTimerTask
 {
 public:
-  ObQuerySyncSessionRecycle(){}
-  virtual ~ObQuerySyncSessionRecycle(){}
+  ObQueryAsyncSessionRecycle(){}
+  virtual ~ObQueryAsyncSessionRecycle(){}
   virtual void runTimerTask();
 
 private:
   void query_session_recycle();
-  DISALLOW_COPY_AND_ASSIGN(ObQuerySyncSessionRecycle);
+  DISALLOW_COPY_AND_ASSIGN(ObQueryAsyncSessionRecycle);
 };
 
 /**
- * -----------------------------------Singleton ObQuerySyncMgr -------------------------------------
+ * -----------------------------------Singleton ObQueryAsyncMgr -------------------------------------
  */
-class ObQuerySyncMgr final
+class ObQueryAsyncMgr final
 {
-  friend class ObTableQuerySyncP;
+  friend class ObTableQueryAsyncP;
 
 public:
   using ObQueryHashMap =
-    common::hash::ObHashMap<uint64_t, ObTableQuerySyncSession *, common::hash::SpinReadWriteDefendMode>;
-  using QuerySessionPair = common::hash::HashMapPair<uint64_t, ObTableQuerySyncSession*>;
-  ~ObQuerySyncMgr() {}
-  static ObQuerySyncMgr &get_instance();
+    common::hash::ObHashMap<uint64_t, ObTableQueryAsyncSession *, common::hash::SpinReadWriteDefendMode>;
+  using QuerySessionPair = common::hash::HashMapPair<uint64_t, ObTableQueryAsyncSession*>;
+  ~ObQueryAsyncMgr() {}
+  static ObQueryAsyncMgr &get_instance();
 
   struct ObGetAllSessionIdOp {
     explicit ObGetAllSessionIdOp(common::ObIArray<uint64_t>& session_id_array) : session_id_array_(session_id_array)
@@ -143,21 +143,21 @@ public:
   };
 
 public:
-  int get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_sess_ctx);
-  int set_query_session(uint64_t sessid, ObTableQuerySyncSession *query_sess_ctx);
+  int get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_sess_ctx);
+  int set_query_session(uint64_t sessid, ObTableQueryAsyncSession *query_sess_ctx);
   void clean_timeout_query_session();
 
 public:
   ObQueryHashMap *get_query_session_map();
-  ObTableQuerySyncSession *alloc_query_session();
+  ObTableQueryAsyncSession *alloc_query_session();
   uint64_t generate_query_sessid();
   lib::ObMutex& get_locker(uint64_t sessid) { return locker_arr_[sessid % DEFAULT_LOCK_ARR_SIZE];}
 
 private:
   int init();
-  int rollback_trans(ObTableQuerySyncSession &query_session);
-  ObQuerySyncMgr();
-  DISALLOW_COPY_AND_ASSIGN(ObQuerySyncMgr);
+  int rollback_trans(ObTableQueryAsyncSession &query_session);
+  ObQueryAsyncMgr();
+  DISALLOW_COPY_AND_ASSIGN(ObQueryAsyncMgr);
 
 private:
   static const uint64_t INVALID_SESSION_ID = 0;
@@ -167,25 +167,25 @@ private:
 
 private:
   static int64_t once_;  // for creating singleton instance
-  static ObQuerySyncMgr *instance_;
+  static ObQueryAsyncMgr *instance_;
   int64_t session_id_;
   ObQueryHashMap query_session_map_;
   lib::ObMutex locker_arr_[DEFAULT_LOCK_ARR_SIZE];
-  ObQuerySyncSessionRecycle query_session_recycle_;
+  ObQueryAsyncSessionRecycle query_session_recycle_;
   common::ObTimer timer_;
 };
 
 /**
- * -------------------------------------- ObTableQuerySyncP ----------------------------------------
+ * -------------------------------------- ObTableQueryAsyncP ----------------------------------------
 */
-class ObTableQuerySyncP :
-  public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC> >
+class ObTableQueryAsyncP :
+  public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC> >
 {
-  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC>>
+  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC>>
     ParentType;
 public:
-  explicit ObTableQuerySyncP(const ObGlobalContext &gctx);
-  virtual ~ObTableQuerySyncP() {}
+  explicit ObTableQueryAsyncP(const ObGlobalContext &gctx);
+  virtual ~ObTableQueryAsyncP() {}
   virtual int deserialize() override;
 protected:
   virtual int check_arg() override;
@@ -200,11 +200,11 @@ private:
   int process_query_start();
   int process_query_next();
   int destory_query_session(bool need_rollback_trans);
-  DISALLOW_COPY_AND_ASSIGN(ObTableQuerySyncP);
+  DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 
 private:
   int get_session_id(uint64_t &real_sessid, uint64_t arg_sessid);
-  int get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_session);
+  int get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session);
   int query_scan_with_init();
   int query_scan_without_init();
 
@@ -217,7 +217,7 @@ private:
   int64_t result_row_count_;
   uint64_t query_session_id_;
   ObArenaAllocator allocator_;
-  ObTableQuerySyncSession *query_session_;
+  ObTableQueryAsyncSession *query_session_;
   int64_t timeout_ts_;
   bool is_full_table_scan_;
 };
@@ -225,4 +225,4 @@ private:
 } // end namespace observer
 } // end namespace oceanbase
 
-#endif /* _OB_TABLE_QUERY_SYNC_PROCESSOR_H */
+#endif /* _OB_TABLE_QUERY_ASYNC_PROCESSOR_H */

@@ -131,7 +131,7 @@ class ObTableQueryResultIterator
 public:
   ObTableQueryResultIterator(const ObTableQuery *query = nullptr)
       : query_(query),
-        is_query_sync_(false)
+        is_query_async_(false)
   {
   }
   virtual ~ObTableQueryResultIterator() {}
@@ -141,10 +141,10 @@ public:
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) = 0;
   virtual ObTableQueryResult *get_one_result() { return nullptr; }
   virtual void set_query(const ObTableQuery *query) { query_ = query; };
-  virtual void set_query_sync() { is_query_sync_ = true; }
+  virtual void set_query_async() { is_query_async_ = true; }
 protected:
   const ObTableQuery *query_;
-  bool is_query_sync_;
+  bool is_query_async_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryResultIterator);
 };
