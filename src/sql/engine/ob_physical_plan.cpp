@@ -984,6 +984,13 @@ void ObPhysicalPlan::dec_pre_expr_ref_count()
 
 void ObPhysicalPlan::set_pre_calc_expr_handler(PreCalcExprHandler* handler)
 {
+  // Concurrent scenarios may nest calls to add_cache_obj. the implementation of add_cache_obj must
+  // ensure reentrancy. if pre_cal_expr_handler_ has been set in the previous call, the reference count
+  // needs to be decremented before setting it again.
+  if (nullptr != stat_.pre_cal_expr_handler_) {
+    dec_pre_expr_ref_count();
+    stat_.pre_cal_expr_handler_ = nullptr;
+  }
   stat_.pre_cal_expr_handler_ = handler;
 }
 
