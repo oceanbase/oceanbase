@@ -179,9 +179,9 @@ private:
  * -------------------------------------- ObTableQuerySyncP ----------------------------------------
 */
 class ObTableQuerySyncP :
-  public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC> >
+  public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC> >
 {
-  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC>>
+  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_ASYNC>>
     ParentType;
 public:
   explicit ObTableQuerySyncP(const ObGlobalContext &gctx);
