@@ -25,6 +25,18 @@ namespace oceanbase
 namespace storage
 {
 
+static int check_write_length(ObLobAccessParam& param, int64_t expected_len)
+{
+  int ret = OB_SUCCESS;
+  if (ObLobDataOutRowCtx::OpType::SQL != param.op_type_) {
+    // skip not full write
+  } else if (param.byte_size_ != expected_len) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("size not match", K(ret), K(expected_len), K(param.byte_size_));
+  }
+  return ret;
+}
+
 const ObLobCommon ObLobManager::ZERO_LOB = ObLobCommon();
 
 int ObLobManager::mtl_new(ObLobManager *&m) {
@@ -1594,6 +1606,10 @@ int ObLobManager::append(
       if (OB_NOT_NULL(buf)) {
         param.allocator_->free(buf);
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_write_length(param, append_lob_len))) {
+        LOG_WARN("check_write_length fail", K(ret), K(param), K(lob), K(append_lob_len));
+      }
     }
   }
   return ret;
@@ -1900,6 +1916,10 @@ int ObLobManager::append(
             }
           }
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_write_length(param, data.length()))) {
+        LOG_WARN("check_write_length fail", K(ret), K(param), K(data.length()));
       }
     }
   }
