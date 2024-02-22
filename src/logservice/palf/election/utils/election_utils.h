@@ -102,7 +102,7 @@ inline int64_t count_if(const common::ObArray<T> &array, ObFunction<bool(const T
 }
 
 template <typename T>
-inline void bubble_sort_desc(common::ObArray<T> &array)
+inline void bubble_sort_desc(common::ObIArray<T> &array)
 {
   if(array.count() >= 2 ) {
     for (int64_t i = 0; i < array.count() - 1; ++i) {
@@ -120,7 +120,7 @@ inline int get_sorted_majority_one_desc(const common::ObArray<T> &array, T &majo
 {
   ELECT_TIME_GUARD(500_ms);
   int ret = common::OB_SUCCESS;
-  common::ObArray<T> temp_array;
+  common::ObSEArray<T, 7> temp_array;
   for (int64_t idx = 0; idx < array.count() && OB_SUCC(ret); ++idx) {
     if (CLICK_FAIL(temp_array.push_back(array.at(idx)))) {
       ELECT_LOG(ERROR, "assign temp array failed", KR(ret));
@@ -172,9 +172,6 @@ inline const char *obj_to_string<RoleChangeReason>(const RoleChangeReason &v)
     break;
   case RoleChangeReason::StopToRevoke:
     ret = "election stopped to revoke";
-    break;
-  case RoleChangeReason::AskToRevoke:
-    ret = "someone asking election to revoke";
     break;
   default:
     break;

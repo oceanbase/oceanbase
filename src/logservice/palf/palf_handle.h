@@ -441,7 +441,9 @@ public:
   // - OB_NOT_INIT
   int get_arbitration_member(common::ObMember &arb_member) const;
 #endif
-  int revoke_leader(const int64_t proposal_id);
+  int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                    const int64_t downgrade_priority_time_us,
+                                                    const char *reason);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.
   // @param[in] const int64_t &proposal_id: current proposal_id of leader

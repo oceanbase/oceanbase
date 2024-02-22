@@ -195,7 +195,7 @@ int ElectionImpl::change_leader_to(const common::ObAddr &dest_addr)
   if (CLICK_FAIL(proposer_.change_leader_to(dest_addr))) {
     LOG_CHANGE_LEADER(WARN, "change leader to failed");
   } else {
-    LOG_CHANGE_LEADER(INFO, "change leader to");
+    LOG_CHANGE_LEADER(INFO, "change leader to", K(lbt()));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -438,14 +438,19 @@ int ElectionImpl::send_(const ElectionChangeLeaderMsg &msg) const
   #undef PRINT_WRAPPER
 }
 
-int ElectionImpl::revoke(const RoleChangeReason &reason)
+int ElectionImpl::temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason)
 {
+  #define PRINT_WRAPPER KR(ret), K(*this), K(time_us), K(reason)
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
   LockGuard lock_guard(lock_);
   CHECK_ELECTION_INIT();
-  ret = proposer_.revoke(reason);
+  temporarily_downgrade_priority_info_.downgrade_expire_ts_ = get_monotonic_ts() + time_us;
+  temporarily_downgrade_priority_info_.interval_ = time_us;
+  temporarily_downgrade_priority_info_.reason_ = reason;
+  LOG_NONE(WARN, "temporarily downgrade protocol priority");
   return ret;
+  #undef PRINT_WRAPPER
 }
 
 int ElectionImpl::add_inner_priority_seed_bit(const PRIORITY_SEED_BIT new_bit)
@@ -515,6 +520,15 @@ uint64_t ElectionImpl::get_ls_biggest_min_cluster_version_ever_seen_() const
   }
   return ls_biggest_min_cluster_version_ever_seen;
   #undef PRINT_WRAPPER
+}
+
+uint64_t ElectionImpl::generate_inner_priority_seed_() const
+{
+  uint64_t priority_seed = inner_priority_seed_;
+  if (get_monotonic_ts() < temporarily_downgrade_priority_info_.downgrade_expire_ts_) {
+    priority_seed |= (uint64_t)PRIORITY_SEED_BIT::SEED_TEMORARILY_DOWNGRADE_PRIORIY_BIT;
+  }
+  return priority_seed;
 }
 
 }

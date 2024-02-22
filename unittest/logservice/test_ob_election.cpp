@@ -595,6 +595,92 @@ TEST_F(TestElection, set_inner_priority_seed) {
   ASSERT_EQ(stop_to_be_follower_count, 1);
 }
 
+TEST_F(TestElection, advance_ballot) {
+  // 创建paxos group
+  auto election_list = create_election_group(3, {(uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED}, [](){});
+  // 建立网络连接
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+
+  this_thread::sleep_for(chrono::seconds(7));// 等待第一轮选举结果，为election[0]
+  ObRole role;
+  int64_t old_epoch;
+  election_list[0]->get_role(role, old_epoch);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  // 推大leader的ballot number之后，leader将会重新进行paxos两阶段确定新的epoch值
+  ASSERT_EQ(OB_SUCCESS, election_list[0]->change_leader_to(election_list[0]->get_self_addr()));
+  this_thread::sleep_for(chrono::seconds(5));// wait for advance prepare_success_ballot
+  int64_t new_epoch;
+  election_list[0]->get_role(role, new_epoch);
+  ASSERT_EQ(role, ObRole::LEADER);
+  ASSERT_EQ(old_epoch + 1, new_epoch);
+
+  // 析构+清理动作
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  // 测试过程中发生的事件数量断言
+  ASSERT_EQ(leader_takeover_times, 2);
+  ASSERT_EQ(leader_revoke_times, 2);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, temporarily_downgrade_protocol_priority) {
+  // 创建paxos group，初始场景下，election[0]的优先级为默认，election[1]/[2]的优先级被默认降低
+  auto election_list = create_election_group(3, {(uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED,
+                                                 (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED | (uint64_t)PRIORITY_SEED_BIT::TEST_BIT,
+                                                 (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED | (uint64_t)PRIORITY_SEED_BIT::TEST_BIT}, [](){});
+  // 建立网络连接
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));// 等待第一轮选举结果，为election[0]
+  ObRole role;
+  int64_t _;
+  election_list[0]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  // 临时降低election[0]的优先级2s，此时发生切主：election[0] -> election[1]
+  ASSERT_EQ(OB_SUCCESS, election_list[0]->temporarily_downgrade_protocol_priority(2_s, "test"));
+  this_thread::sleep_for(chrono::seconds(2));
+  election_list[1]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  // 等待2s后，election[0]的优先级恢复，此时发生切主：election[1] -> election[0]
+  this_thread::sleep_for(chrono::seconds(2));
+  election_list[0]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  // 析构+清理动作
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  // 测试过程中发生的事件数量断言
+  ASSERT_EQ(leader_takeover_times, 3);
+  ASSERT_EQ(leader_revoke_times, 3);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 2);
+  ASSERT_EQ(change_leader_to_be_follower_count, 2);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
 }
 }
 

@@ -48,10 +48,11 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
   return ret;
 }
 
-int ObLogHandlerBase::revoke_leader()
+int ObLogHandlerBase::advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us,
+                                                                    const char *reason)
 {
   RLockGuard guard(lock_);
-  return palf_handle_.revoke_leader(proposal_id_);
+  return palf_handle_.advance_election_epoch_and_downgrade_priority(proposal_id_, downgrade_priority_time_us, reason);
 }
 
 int ObLogHandlerBase::change_leader_to(const common::ObAddr &dst_addr)
