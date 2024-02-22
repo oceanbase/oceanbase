@@ -141,7 +141,7 @@ STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_COUNT, "dblink trans commit total count",
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_USED_TIME, "dblink trans commit total used time", ObStatClassIds::TRANS, 30236, false, true, true)
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_FAIL_COUNT, "failed dblink trans commit total count", ObStatClassIds::TRANS, 30237, false, true, true)
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_COUNT, "dblink trans rollback total count", ObStatClassIds::TRANS, 30238, false, true, true)
-STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_USED_TIME, "dblink trans rollback total count", ObStatClassIds::TRANS, 30239, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_USED_TIME, "dblink trans rollback total used time", ObStatClassIds::TRANS, 30239, false, true, true)
 STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_FAIL_COUNT, "failed dblink trans rollback total count", ObStatClassIds::TRANS, 30240, false, true, true)
 
 // SQL
