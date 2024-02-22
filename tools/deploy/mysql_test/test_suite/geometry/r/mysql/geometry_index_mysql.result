@@ -220,3 +220,7 @@ st_astext(g)
 POINT(0 0)
 POINT(0 0)
 POINT(0 0)
+drop table if exists spatial_index;
+CREATE TABLE spatial_index (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i),  SPATIAL KEY (g))with column group ( each column);
+select i, st_astext(g) from spatial_index where ST_Intersects(g, ST_GEOMFROMTEXT('POINT(2 2)', 4326));
+i	st_astext(g)

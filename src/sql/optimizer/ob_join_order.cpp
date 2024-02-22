@@ -1963,8 +1963,7 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
     }
     if (OB_FAIL(ret) || filter_columns.empty()) {
     } else if (max_pos < 0 || max_pos >= column_group_infos.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can not find column group info for filter", K(ret));
+      //table filter with index column group
     } else if (OB_FAIL(column_group_infos.at(max_pos).filters_.push_back(filter))) {
       LOG_WARN("failed to push back filter", K(ret));
     } else if (use_filter_sel) {
