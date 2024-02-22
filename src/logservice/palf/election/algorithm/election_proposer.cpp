@@ -294,12 +294,17 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
     int ret = OB_SUCCESS;
     LockGuard lock_guard(p_election_->lock_);
     if (check_leader()) {// Leader不应该靠定时任务主动做Prepare，只能被动触发Prepare
-      LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large", K(*this));
+      if (prepare_success_ballot_ == ballot_number_) {
+        LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large", K(*this));
+      } else {// 需要进行leader prepare推大用于续约的ballot number
+        LOG_RENEW_LEASE(INFO, "prepare_success_ballot_ not same as ballot_number_, do leader prepare to advance it");
+        this->prepare(role_);
+      }
     } else {
       if (role_ == ObRole::LEADER) {
         role_ = ObRole::FOLLOWER;
       }
-      this->prepare(role_);// 只有Follower可以走到这里
+      this->prepare(role_);
     }
     return false;
   }))) {
@@ -334,7 +339,7 @@ void ElectionProposer::stop()
   if (leader_revoke_if_lease_expired_(RoleChangeReason::StopToRevoke)) {
     LOG_DESTROY(INFO, "leader revoke because election is stopped");
   }
-   #undef PRINT_WRAPPER
+  #undef PRINT_WRAPPER
 }
 
 void ElectionProposer::prepare(const ObRole role)
@@ -368,7 +373,7 @@ void ElectionProposer::prepare(const ObRole role)
                                           restart_counter_,
                                           ballot_number_,
                                           p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
-                                          p_election_->inner_priority_seed_,
+                                          p_election_->generate_inner_priority_seed_(),
                                           p_election_->get_membership_version_());
     (void) p_election_->refresh_priority_();
     if (CLICK_FAIL(prepare_req.set(p_election_->get_priority_(),
@@ -430,7 +435,7 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
                                                      restart_counter_,
                                                      ballot_number_,
                                                      p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
-                                                     p_election_->inner_priority_seed_,
+                                                     p_election_->generate_inner_priority_seed_(),
                                                      p_election_->get_membership_version_());
       if (CLICK_FAIL(prepare_followed_req.set(p_election_->get_priority_(),
                                               role_))) {
@@ -576,7 +581,7 @@ void ElectionProposer::on_accept_response(const ElectionAcceptResponseMsg &accep
     ObStringHolder higher_than_cached_msg_reason;
     (void) p_election_->refresh_priority_();
     ElectionAcceptResponseMsg mock_self_accept_response_msg(p_election_->self_addr_,
-                                                            p_election_->inner_priority_seed_,
+                                                            p_election_->generate_inner_priority_seed_(),
                                                             p_election_->get_membership_version_(),
                                                             p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                                             ElectionAcceptRequestMsg(p_election_->id_,
@@ -743,7 +748,7 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
     common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:%s",
                                                   to_cstring(switch_source_leader_addr_));
   }
-  common::databuff_printf(buf, buf_len, pos, ", priority_seed:0x%lx", (unsigned long)p_election_->inner_priority_seed_);
+  common::databuff_printf(buf, buf_len, pos, ", priority_seed:0x%lx", (unsigned long)p_election_->generate_inner_priority_seed_());
   common::databuff_printf(buf, buf_len, pos, ", restart_counter:%ld", restart_counter_);
   common::databuff_printf(buf, buf_len, pos, ", last_do_prepare_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_do_prepare_ts_));
   if (OB_NOT_NULL(p_election_)) {
@@ -751,23 +756,6 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;
-}
-
-int ElectionProposer::revoke(const RoleChangeReason &reason)
-{
-  ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER K(*this)
-  int ret = OB_SUCCESS;
-  if (!check_leader()) {
-    ret = OB_NOT_MASTER;
-    LOG_NONE(WARN, "i am not leader, but someone ask me to revoke", K(lbt()));
-  }
-  leader_lease_and_epoch_.reset();
-  if (!leader_revoke_if_lease_expired_(reason)) {
-    LOG_NONE(WARN, "somethig wrong when revoke", K(lbt()));
-  }
-  return ret;
-  #undef PRINT_WRAPPER
 }
 
 bool ElectionProposer::is_self_in_memberlist_() const

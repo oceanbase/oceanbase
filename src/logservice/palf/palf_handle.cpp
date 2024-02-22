@@ -703,10 +703,14 @@ int PalfHandle::reset_election_priority()
   return ret;
 }
 
-int PalfHandle::revoke_leader(const int64_t proposal_id)
+int PalfHandle::advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                              const int64_t downgrade_priority_time_us,
+                                                              const char *reason)
 {
   CHECK_VALID;
-  return palf_handle_impl_->revoke_leader(proposal_id);
+  return palf_handle_impl_->advance_election_epoch_and_downgrade_priority(proposal_id,
+                                                                          downgrade_priority_time_us,
+                                                                          reason);
 }
 
 int PalfHandle::stat(PalfStat &palf_stat) const

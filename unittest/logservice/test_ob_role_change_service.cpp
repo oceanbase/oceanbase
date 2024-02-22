@@ -144,8 +144,9 @@ public:
     UNUSED(dst_addr);
     return OB_SUCCESS;
   }
-  virtual int revoke_leader()
+  virtual int advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us, const char *reason)
   {
+    UNUSED(downgrade_priority_time_us, reason);
     curr_role_ = FOLLOWER;
     new_role_ = FOLLOWER;
     new_proposal_id_++;

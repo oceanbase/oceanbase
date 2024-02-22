@@ -59,7 +59,7 @@ public:
     if (OB_UNLIKELY(msg.get_ballot_number() < p_acceptor->ballot_number_)) {
       using T = typename ResponseType<RequestMsg>::type;
       T reject_msg = create_reject_message_(p_acceptor->p_election_->get_self_addr(),
-                                            p_acceptor->p_election_->inner_priority_seed_,
+                                            p_acceptor->p_election_->generate_inner_priority_seed_(),
                                             p_acceptor->p_election_->get_membership_version_(),
                                             p_acceptor->p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                             msg);
@@ -321,7 +321,7 @@ void ElectionAcceptor::on_accept_request(const ElectionAcceptRequestMsg &accept_
     *us_to_expired = lease_.get_lease_end_ts() - get_monotonic_ts();
     // 3. 构造accept ok消息
     ElectionAcceptResponseMsg accept_res_accept(p_election_->get_self_addr(),
-                                                p_election_->inner_priority_seed_,
+                                                p_election_->generate_inner_priority_seed_(),
                                                 p_election_->get_membership_version_(),
                                                 p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
                                                 accept_req);

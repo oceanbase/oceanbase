@@ -65,11 +65,11 @@ public:
                      const int64_t restart_counter,
                      const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
                      const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &cb = DefaultRoleChangeCallBack());
-  int revoke(const RoleChangeReason &reason) override;
   virtual void stop() override final;
   virtual int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
   virtual int change_leader_to(const common::ObAddr &dest_addr) override final;
+  virtual int temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason) override final;
   /**
    * @description: 返回选举对象当前的角色和epoch
    * @param {ObRole} &role 当前的角色，取LEADER或者FOLLOWER
@@ -131,7 +131,7 @@ public:
   int clear_inner_priority_seed_bit(const PRIORITY_SEED_BIT old_bit);
   int set_inner_priority_seed(const uint64_t seed);
   TO_STRING_KV(K_(is_inited), K_(is_running), K_(proposer), K_(acceptor),
-               K_(ls_biggest_min_cluster_version_ever_seen), KPC_(priority));
+               K_(ls_biggest_min_cluster_version_ever_seen), KPC_(priority), K_(temporarily_downgrade_priority_info));
 private:// 定向暴露给友元类
   void handle_message_base_(const ElectionMsgBase &message_base);
   void refresh_priority_();
@@ -279,6 +279,7 @@ private:// 定向暴露给友元类
   int send_(const ElectionChangeLeaderMsg &msg) const;
   uint64_t get_ls_biggest_min_cluster_version_ever_seen_() const;
   const char *print_version_pretty_(const uint64_t version) const;
+  uint64_t generate_inner_priority_seed_() const;
 private:
   bool is_inited_;
   bool is_running_;
@@ -292,6 +293,18 @@ private:
   ObFunction<int(const int64_t, const ObAddr &)> prepare_change_leader_cb_;// 切主回调
   ObFunction<void(ElectionImpl *,common::ObRole,common::ObRole,RoleChangeReason)> role_change_cb_;// 角色状态变更回调
   uint64_t inner_priority_seed_;// 协议内选举优先级
+  struct TemporarilyDowngradePriorityInfo {
+    TemporarilyDowngradePriorityInfo()
+    : downgrade_expire_ts_(0),
+    interval_(0),
+    reason_(nullptr) {}
+    int64_t downgrade_expire_ts_;// 触发临时降低选举优先级的结束时间
+    int64_t interval_;// 临时降低选举优先级的持续时长
+    const char *reason_; // 临时降低选举优先级的原因
+    TO_STRING_KV("downgrade_expire_ts", TimeSpanWrapper(downgrade_expire_ts_),
+                 "interval", ObTimeLiteralPrettyPrinter(interval_),
+                 K_(reason));
+  } temporarily_downgrade_priority_info_;
   common::ObOccamTimer *timer_;// 选举定时任务的定时器
   LsBiggestMinClusterVersionEverSeen ls_biggest_min_cluster_version_ever_seen_;// 为仲裁副本维护的日志流级别的min_cluster_version值，用于处理选举兼容性升级相关问题
   EventRecorder event_recorder_;// 事件汇报模块
