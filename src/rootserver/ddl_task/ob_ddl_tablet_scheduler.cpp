@@ -142,14 +142,13 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
           if (OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
           }
-        } else {
-          for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
-            is_running_status = false;
-            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), allocator_, is_running_status))) {
-              LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(0)), K(is_running_status));
-            } else if (is_running_status) {
-              break;
-            }
+        }
+        for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
+          is_running_status = false;
+          if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), allocator_, is_running_status))) {
+            LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(0)), K(is_running_status));
+          } else if (is_running_status) {
+            break;
           }
         }
         if (OB_SUCC(ret)) {
@@ -169,10 +168,11 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
             } else if (OB_FAIL(ls_location_map_.set_refactored(ls_ids.at(i), leader_addr, true /* overwrite */))) {
               LOG_WARN("ls location map set fail", K(ret), K(ls_ids.at(i)), K(leader_addr));
             } else if (is_running_status) {
-              if (OB_FAIL(running_task_ls_ids_before_.push_back(ls_ids.at(i)))) {
-                LOG_WARN("fail to push back", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(ls_ids.at(i)));
-              } else if (OB_FAIL(ObDDLUtil::construct_ls_tablet_id_map(tenant_id, ls_ids.at(i), tablets.at(i), running_ls_to_tablets_map_))) {
+              if (OB_FAIL(ObDDLUtil::construct_ls_tablet_id_map(tenant_id, ls_ids.at(i), tablets.at(i), running_ls_to_tablets_map_))) {
                 LOG_WARN("fail to create running lsid to tablet id map", K(ret), K(tenant_id), K(ls_ids.at(i)), K(tablets.at(i)), K(table_id), K(ref_data_table_id), K(running_ls_to_tablets_map_.size()));
+              } else if (common::is_contain(running_task_ls_ids_before_, ls_ids.at(i))) {
+              } else if (OB_FAIL(running_task_ls_ids_before_.push_back(ls_ids.at(i)))) {
+                LOG_WARN("fail to push back", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(ls_ids.at(i)), K(is_finished_status));
               }
             }
             if (OB_SUCC(ret)) {
@@ -196,9 +196,9 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     snapshot_version_ = snapshot_version;
     trace_id_ = trace_id;
     is_inited_ = true;
-    LOG_INFO("success to init", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets), K(all_ls_to_tablets_map_.size()), K(running_ls_to_tablets_map_.size()));
+    LOG_INFO("success to init", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets), K(all_ls_to_tablets_map_.size()), K(running_ls_to_tablets_map_.size()), K(running_task_ls_ids_before_.count()));
   } else {
-    LOG_INFO("fail to init", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets), K(all_ls_to_tablets_map_.size()), K(running_ls_to_tablets_map_.size()));
+    LOG_INFO("fail to init", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(task_id), K(parallelism), K(snapshot_version), K(trace_id), K(tablets), K(all_ls_to_tablets_map_.size()), K(running_ls_to_tablets_map_.size()), K(running_task_ls_ids_before_.count()));
     destroy();
   }
   return ret;
@@ -539,21 +539,23 @@ int ObDDLTabletScheduler::get_session_running_lsid(ObIArray<share::ObLSID> &runn
       if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, ref_data_table_id_, table_id_, tablet_queue, allocator_, partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id_), K(ref_data_table_id_), K(table_id_), K(tablet_queue), K(partition_names));
       } else {
-        ObString sql_partitions_name;
         bool is_running_status = false;
-        if (OB_FAIL(ObDDLUtil::generate_partition_names(partition_names, allocator_, sql_partitions_name))) {
-          LOG_WARN("fail to generate sql partitions name", K(ret), K(partition_names), K(sql_partitions_name));
-        } else {
-          for (int64_t i = 0; i < running_sql_info.count() && OB_SUCC(ret); i++) {
-            if (0 != ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN, running_sql_info[i].ptr(), running_sql_info[i].length(), sql_partitions_name.ptr(), sql_partitions_name.length())) {
-              is_running_status = true;
+        for (int64_t i = 0; i < partition_names.count() && OB_SUCC(ret); i++) {
+          is_running_status = false;
+          for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
+            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(i), allocator_, is_running_status))) {
+              LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(i)), K(is_running_status));
+            } else if (is_running_status) {
               break;
             }
           }
-          if (OB_LIKELY(is_running_status)) {
-            if (OB_FAIL(running_ls_ids.push_back(ls_id))) {
-              LOG_WARN("ObArray assign failed", K(ret), K(ls_id));
-            }
+          if (is_running_status) {
+            break;
+          }
+        }
+        if (is_running_status && OB_SUCC(ret)) {
+          if (OB_FAIL(running_ls_ids.push_back(ls_id))) {
+            LOG_WARN("ObArray assign failed", K(ret), K(ls_id));
           }
         }
       }
@@ -716,7 +718,7 @@ int ObTabletIdUpdater::operator() (common::hash::HashMapPair<share::ObLSID, ObAr
       }
     }
   }
-  LOG_INFO("remove tablet ids from hash map", K(entry), K(tablets_));
+  LOG_INFO("remove tablet ids from hash map", K(entry), KP(tablets_));
   return ret;
 }
 
