@@ -757,7 +757,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         if (OB_NOT_NULL(pl_label) && OB_INVALID_INDEX != label_idx) {
           for (int64_t i = 0; OB_SUCC(ret) && i < lbls_cnt; ++i) {
             CK (0 <= (label_idx - i));
-            OX (stmt->set_label_idx(label_idx - i));
+            OZ (stmt->set_label_idx(label_idx - i));
             OX (pl_label->set_end_flag(label_idx - i, true));
           }
         }
@@ -16922,11 +16922,7 @@ int ObPLResolver::check_goto(ObPLGotoStmt *stmt)
       } else if (OB_FAIL(check_goto_cursor_stmts(*stmt, *ls))) {
         LOG_WARN("failed to check goto cursor stmts", K(ret));
       } else if (RESTRICTION_NO_RESTRICT == restrict_type) {
-        pl_label->set_is_goto_dst(label_idx ,true);
-        // 多标签的场景下，在resolve函数中给goto 目的stmt赋值的可能是其它标签，所以这里需要更新一下
-        // <<lab1>> <<lab2>> stmt; goto lab2 类似这种，stmt的标签idx指向lab1，所以这里更新为lab2的idx.
-        // 但是lab1 和lab2的关联stmt都是一样的，所以能通过lab2找到对应的stmt.
-        ls->update_label_index(label_idx);
+        pl_label->set_is_goto_dst(label_idx, true);
         stmt->set_dst_stmt(ls);
       } else {
         ret = OB_ERR_UNEXPECTED;

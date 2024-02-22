@@ -4161,25 +4161,33 @@ const ObIArray<ObPLCursor *>* ObPLStmt::get_cursors() const
   return NULL == get_cursor_table() ? NULL : &(get_cursor_table()->get_cursors());
 }
 
-const ObString *ObPLStmt::get_label() const
+const ObString* ObPLStmt::get_label(int64_t idx) const
 {
-  return NULL == get_label_table() ? NULL : get_label_table()->get_label(label_);
+  return NULL == get_label_table() ? NULL : get_label_table()->get_label(idx);
 }
 
 int ObPLStmt::set_label_idx(int64_t idx)
 {
   int ret = OB_SUCCESS;
+
   if (OB_ISNULL(get_label_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null label table", K(ret));
+  } else if (label_cnt_ >= FUNC_MAX_LABELS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected label_cnt count, out of range", K(ret), K(label_cnt_));
   } else {
     ObPLLabelTable *pl_label = const_cast<ObPLLabelTable *>(get_label_table());
     if (0 <= idx && idx < pl_label->get_count()) {
       const ObPLStmt *ls = pl_label->get_next_stmt(idx);
-      if (OB_ISNULL(ls)) {
+      if (OB_NOT_NULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set label idx", K(ret));
+      } else {
         pl_label->set_next_stmt(idx, this);
+        labels_[label_cnt_] = idx;
+        label_cnt_++;
       }
-      label_ = idx;
     }
   }
 
