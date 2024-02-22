@@ -488,6 +488,10 @@ private:
   int build_column_info_(const ObDictTableMeta &src_table_meta);
   int build_column_id_arr_(const share::schema::ObTableSchema &table_schema);
 
+  void free_index_info_();
+  void free_rowkey_info_();
+  void free_column_info_();
+
 private:
   ObIAllocator *allocator_;
   // Won't serialize tenant_id in dict.
