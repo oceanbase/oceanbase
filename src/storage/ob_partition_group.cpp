@@ -4138,6 +4138,7 @@ int ObPartitionGroup::get_curr_clog_info_(
         clog_info.set_last_replay_log_id(0);
         clog_info.set_accumulate_checksum(0);
         clog_info.set_submit_timestamp(0);
+        log_info_usable = true;
       } else if (is_mandatory) {
         ret = OB_EAGAIN;
         STORAGE_LOG(WARN,
