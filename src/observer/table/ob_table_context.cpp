@@ -2062,6 +2062,8 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
   check insert up operation can use put implement or not
   1. can not have any index.
   2. all column must be filled.
+  3. ob-hbase use put cause CDC has supported
+  4. tableapi with full binlog image can not use put
 */
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
@@ -2077,7 +2079,7 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   } else if (has_global_index()) {
     // cannot use put: the global index table will insert a new row insert of covering the old row
     // when the assign value of index column is new.
-    use_put = false;
+    can_use_put = false;
   } else if (is_htable()) { // htable has no index and alway full filled.
     can_use_put = true;
   } else if (is_client_set_put_ && !related_index_ids_.empty()) {
@@ -2107,8 +2109,11 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
     }
   }
 
-  if (OB_SUCC(ret) && can_use_put && !is_total_quantity_log()) {
+  if (OB_SUCC(ret) && can_use_put) {
     use_put = true;
+    if (!is_htable() && is_total_quantity_log()) { // tableapi with full binlog image can not use put
+      use_put = false;
+    }
   }
 
   return ret;
