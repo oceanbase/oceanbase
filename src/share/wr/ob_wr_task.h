@@ -191,6 +191,7 @@ private:
   int tg_id_;
   int64_t timeout_ts_;
   bool is_running_task_;
+  bool is_inited_;
 };
 
 }//end namespace share

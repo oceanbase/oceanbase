@@ -44,7 +44,8 @@ WorkloadRepositoryTask::WorkloadRepositoryTask()
       snapshot_interval_(DEFAULT_SNAPSHOT_INTERVAL),
       tg_id_(-1),
       timeout_ts_(0),
-      is_running_task_(false)
+      is_running_task_(false),
+      is_inited_(false)
 {}
 
 int WorkloadRepositoryTask::schedule_one_task(int64_t interval)
@@ -88,6 +89,7 @@ int WorkloadRepositoryTask::start()
   } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_WARN("failed to start wr task", K(ret));
   } else {
+    is_inited_ = true;
     LOG_INFO("init wr task thread finished", K_(tg_id));
   }
   return ret;
@@ -95,22 +97,46 @@ int WorkloadRepositoryTask::start()
 
 void WorkloadRepositoryTask::stop()
 {
-  TG_STOP(tg_id_);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("wr task not init", K(ret));
+  } else {
+    TG_STOP(tg_id_);
+  }
 }
 
 void WorkloadRepositoryTask::wait()
 {
-  TG_WAIT(tg_id_);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("wr task not init", K(ret));
+  } else {
+    TG_WAIT(tg_id_);
+  }
 }
 
 void WorkloadRepositoryTask::destroy()
 {
-  TG_DESTROY(tg_id_);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("wr task not init", K(ret));
+  } else {
+    TG_DESTROY(tg_id_);
+  }
 }
 
 void WorkloadRepositoryTask::cancel_current_task()
 {
-  TG_CANCEL(tg_id_, *this);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("wr task not init", K(ret));
+  } else {
+    TG_CANCEL(tg_id_, *this);
+  }
 }
 
 // execute a deletion task every six snapshots completed
