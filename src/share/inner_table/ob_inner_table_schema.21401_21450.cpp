@@ -60,7 +60,7 @@ int ObInnerTableSchema::v_ob_locks_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM oceanbase.GV$OB_LOCKS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     TENANT_ID,     TRANS_ID,     TYPE,     ID1,     ID2,     LMODE,     REQUEST,     CTIME,     BLOCK     FROM oceanbase.GV$OB_LOCKS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1010,7 +1010,7 @@ int ObInnerTableSchema::v_ob_px_p2p_datahub_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT * FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT SVR_IP,               SVR_PORT,               TRACE_ID,               DATAHUB_ID,               MESSAGE_TYPE,               TENANT_ID,               HOLD_SIZE,               TIMEOUT_TS,               START_TIME FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1110,7 +1110,7 @@ int ObInnerTableSchema::v_sql_join_filter_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM OCEANBASE.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     QC_SESSION_ID,     QC_INSTANCE_ID,     SQL_PLAN_HASH_VALUE,     FILTER_ID,     BITS_SET,     FILTERED,     PROBED,     ACTIVE,     CON_ID,     TRACE_ID FROM OCEANBASE.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -60,7 +60,7 @@ int ObInnerTableSchema::dict_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.DICTIONARY )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TABLE_NAME,       COMMENTS FROM SYS.DICTIONARY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

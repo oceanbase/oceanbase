@@ -15235,7 +15235,22 @@ def_table_schema(
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """
-  SELECT  * FROM OCEANBASE.GV$SESSION_EVENT
+  SELECT CON_ID,
+         SVR_IP,
+         SVR_PORT,
+         SID,
+         EVENT,
+         TOTAL_WAITS,
+         TOTAL_TIMEOUTS,
+         TIME_WAITED,
+         AVERAGE_WAIT,
+         MAX_WAIT,
+         TIME_WAITED_MICRO,
+         CPU,
+         EVENT_ID,
+         WAIT_CLASS_ID,
+         `WAIT_CLASS#`,
+         WAIT_CLASS FROM OCEANBASE.GV$SESSION_EVENT
   WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15251,7 +15266,25 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM OCEANBASE.GV$SESSION_WAIT
+  view_definition = """
+   SELECT SID,
+          CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          EVENT,
+          P1TEXT,
+          P1,
+          P2TEXT,
+          P2,
+          P3TEXT,
+          P3,
+          WAIT_CLASS_ID,
+          `WAIT_CLASS#`,
+          WAIT_CLASS,
+          STATE,
+          WAIT_TIME_MICRO,
+          TIME_REMAINING_MICRO,
+          TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT
                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15267,7 +15300,23 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM OCEANBASE.GV$SESSION_WAIT_HISTORY
+  view_definition = """SELECT
+    SID,
+    CON_ID,
+    SVR_IP,
+    SVR_PORT,
+    `SEQ#`,
+    `EVENT#`,
+    EVENT,
+    P1TEXT,
+    P1,
+    P2TEXT,
+    P2,
+    P3TEXT,
+    P3,
+    WAIT_TIME,
+    WAIT_TIME_MICRO,
+    TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT_HISTORY
                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15283,7 +15332,12 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM OCEANBASE.GV$SESSTAT
+  view_definition = """SELECT SID,
+    CON_ID,
+    SVR_IP,
+    SVR_PORT,
+    `STATISTIC#`,
+    VALUE FROM OCEANBASE.GV$SESSTAT
                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15299,7 +15353,15 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM OCEANBASE.GV$SYSSTAT
+  view_definition = """SELECT CON_ID,
+    SVR_IP,
+    SVR_PORT,
+    `STATISTIC#`,
+    NAME,
+    CLASS,
+    VALUE,
+    VALUE_TYPE,
+    STAT_ID FROM OCEANBASE.GV$SYSSTAT
                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15315,7 +15377,19 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM OCEANBASE.GV$SYSTEM_EVENT
+  view_definition = """SELECT CON_ID,
+    SVR_IP,
+    SVR_PORT,
+    EVENT_ID,
+    EVENT,
+    WAIT_CLASS_ID,
+    `WAIT_CLASS#`,
+    WAIT_CLASS,
+    TOTAL_WAITS,
+    TOTAL_TIMEOUTS,
+    TIME_WAITED,
+    AVERAGE_WAIT,
+    TIME_WAITED_MICRO FROM OCEANBASE.GV$SYSTEM_EVENT
                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15508,7 +15582,14 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  *
+  TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    CTX_NAME,
+    MOD_NAME,
+    COUNT,
+    HOLD,
+    USED
 FROM
     oceanbase.GV$OB_MEMORY
 WHERE
@@ -15554,7 +15635,14 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-    *
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    ACTIVE_SPAN,
+    FREEZE_TRIGGER,
+    FREEZE_CNT,
+    MEMSTORE_USED,
+    MEMSTORE_LIMIT
 FROM
     OCEANBASE.GV$OB_MEMSTORE
 WHERE
@@ -15602,7 +15690,15 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-    *
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    IS_ACTIVE,
+    START_SCN,
+    END_SCN,
+    FREEZE_TS
 FROM
     OCEANBASE.GV$OB_MEMSTORE_INFO
 WHERE
@@ -15622,7 +15718,8 @@ def_table_schema(
   in_tenant_space = True,
   rowkey_columns = [],
   view_definition = """
-  SELECT *
+  SELECT TENANT_ID,SVR_IP,SVR_PORT,SQL_NUM,MEM_USED,MEM_HOLD,ACCESS_COUNT,
+  HIT_COUNT,HIT_RATE,PLAN_NUM,MEM_LIMIT,HASH_BUCKET,STMTKEY_NUM
   FROM oceanbase.GV$OB_PLAN_CACHE_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15639,7 +15736,15 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,SVR_IP,SVR_PORT,PLAN_ID,SQL_ID,TYPE,IS_BIND_SENSITIVE,IS_BIND_AWARE,
+    DB_ID,STATEMENT,QUERY_SQL,SPECIAL_PARAMS,PARAM_INFOS, SYS_VARS, CONFIGS, PLAN_HASH,
+    FIRST_LOAD_TIME,SCHEMA_VERSION,LAST_ACTIVE_TIME,AVG_EXE_USEC,SLOWEST_EXE_TIME,SLOWEST_EXE_USEC,
+    SLOW_COUNT,HIT_COUNT,PLAN_SIZE,EXECUTIONS,DISK_READS,DIRECT_WRITES,BUFFER_GETS,APPLICATION_WAIT_TIME,
+    CONCURRENCY_WAIT_TIME,USER_IO_WAIT_TIME,ROWS_PROCESSED,ELAPSED_TIME,CPU_TIME,LARGE_QUERYS,
+    DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,
+    TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,
+    TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,
+    IS_BATCHED_MULTI_STMT, RULE_NAME
   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -15683,7 +15788,17 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT * FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           PLAN_ID,
+           PLAN_DEPTH,
+           PLAN_LINE_ID,
+           OPERATOR,
+           NAME,
+           ROWS,
+           COST,
+           PROPERTY FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 
 
@@ -15700,7 +15815,104 @@ def_table_schema(
     rowkey_columns = [],
     table_type     = 'SYSTEM_VIEW',
     in_tenant_space = True,
-    view_definition = """SELECT * FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+    view_definition = """SELECT SVR_IP,
+    SVR_PORT,
+    REQUEST_ID,
+    SQL_EXEC_ID,
+    TRACE_ID,
+    SID,
+    CLIENT_IP,
+    CLIENT_PORT,
+    TENANT_ID,
+    TENANT_NAME,
+    EFFECTIVE_TENANT_ID,
+    USER_ID,
+    USER_NAME,
+    USER_GROUP,
+    USER_CLIENT_IP,
+    DB_ID,
+    DB_NAME,
+    SQL_ID,
+    QUERY_SQL,
+    PLAN_ID,
+    AFFECTED_ROWS,
+    RETURN_ROWS,
+    PARTITION_CNT,
+    RET_CODE,
+    QC_ID,
+    DFO_ID,
+    SQC_ID,
+    WORKER_ID,
+    EVENT,
+    P1TEXT,
+    P1,
+    P2TEXT,
+    P2,
+    P3TEXT,
+    P3,
+    `LEVEL`,
+    WAIT_CLASS_ID,
+    `WAIT_CLASS#`,
+    WAIT_CLASS,
+    STATE,
+    WAIT_TIME_MICRO,
+    TOTAL_WAIT_TIME_MICRO,
+    TOTAL_WAITS,
+    RPC_COUNT,
+    PLAN_TYPE,
+    IS_INNER_SQL,
+    IS_EXECUTOR_RPC,
+    IS_HIT_PLAN,
+    REQUEST_TIME,
+    ELAPSED_TIME,
+    NET_TIME,
+    NET_WAIT_TIME,
+    QUEUE_TIME,
+    DECODE_TIME,
+    GET_PLAN_TIME,
+    EXECUTE_TIME,
+    APPLICATION_WAIT_TIME,
+    CONCURRENCY_WAIT_TIME,
+    USER_IO_WAIT_TIME,
+    SCHEDULE_TIME,
+    ROW_CACHE_HIT,
+    BLOOM_FILTER_CACHE_HIT,
+    BLOCK_CACHE_HIT,
+    DISK_READS,
+    RETRY_CNT,
+    TABLE_SCAN,
+    CONSISTENCY_LEVEL,
+    MEMSTORE_READ_ROW_COUNT,
+    SSSTORE_READ_ROW_COUNT,
+    DATA_BLOCK_READ_CNT,
+    DATA_BLOCK_CACHE_HIT,
+    INDEX_BLOCK_READ_CNT,
+    INDEX_BLOCK_CACHE_HIT,
+    BLOCKSCAN_BLOCK_CNT,
+    BLOCKSCAN_ROW_CNT,
+    PUSHDOWN_STORAGE_FILTER_ROW_CNT,
+    REQUEST_MEMORY_USED,
+    EXPECTED_WORKER_COUNT,
+    USED_WORKER_COUNT,
+    SCHED_INFO,
+    FUSE_ROW_CACHE_HIT,
+    PS_CLIENT_STMT_ID,
+    PS_INNER_STMT_ID,
+    TX_ID,
+    SNAPSHOT_VERSION,
+    REQUEST_TYPE,
+    IS_BATCHED_MULTI_STMT,
+    OB_TRACE_INFO,
+    PLAN_HASH,
+    LOCK_FOR_READ_TIME,
+    PARAMS_VALUE,
+    RULE_NAME,
+    PARTITION_HIT,
+    TX_INTERNAL_ROUTING,
+    TX_STATE_VERSION,
+    FLT_TRACE_ID,
+    TOTAL_MEMSTORE_READ_ROW_COUNT,
+    TOTAL_SSSTORE_READ_ROW_COUNT FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
     normal_columns = [
@@ -15717,7 +15929,21 @@ def_table_schema(
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """
-  SELECT * FROM OCEANBASE.GV$LATCH WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  SELECT CON_ID,
+    SVR_IP,
+    SVR_PORT,
+    ADDR,
+    `LATCH#`,
+    `LEVEL#`,
+    NAME,
+    HASH,
+    GETS,
+    MISSES,
+    SLEEPS,
+    IMMEDIATE_GETS,
+    IMMEDIATE_MISSES,
+    SPIN_GETS,
+    WAIT_TIME FROM OCEANBASE.GV$LATCH WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
   normal_columns  = [],
@@ -15764,7 +15990,19 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-    *
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    PCODE,
+    PCODE_NAME,
+    COUNT,
+    TOTAL_TIME,
+    TOTAL_SIZE,
+    FAILURE,
+    TIMEOUT,
+    SYNC,
+    ASYNC,
+    LAST_TIMESTAMP
 FROM
     oceanbase.GV$OB_RPC_OUTGOING
 WHERE
@@ -15817,7 +16055,19 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-    *
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    PCODE,
+    PCODE_NAME,
+    COUNT,
+    TOTAL_SIZE,
+    NET_TIME,
+    WAIT_TIME,
+    QUEUE_TIME,
+    PROCESS_TIME,
+    LAST_TIMESTAMP,
+    DCOUNT
 FROM
     oceanbase.GV$OB_RPC_INCOMING
 WHERE
@@ -15945,7 +16195,92 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT  *  FROM OCEANBASE.GV$SQL_PLAN_MONITOR
+    SELECT  CON_ID,
+    REQUEST_ID,
+    `KEY`,
+    STATUS,
+    SVR_IP,
+    SVR_PORT,
+    TRACE_ID,
+    DB_TIME,
+    USER_IO_WAIT_TIME,
+    OTHER_WAIT_TIME,
+    FIRST_REFRESH_TIME,
+    LAST_REFRESH_TIME,
+    FIRST_CHANGE_TIME,
+    LAST_CHANGE_TIME,
+    REFRESH_COUNT,
+    SID,
+    PROCESS_NAME,
+    SQL_ID,
+    SQL_EXEC_START,
+    SQL_EXEC_ID,
+    SQL_PLAN_HASH_VALUE,
+    SQL_CHILD_ADDRESS,
+    PLAN_PARENT_ID,
+    PLAN_LINE_ID,
+    PLAN_OPERATION,
+    PLAN_OPTIONS,
+    PLAN_OBJECT_OWNER,
+    PLAN_OBJECT_NAME,
+    PLAN_OBJECT_TYPE,
+    PLAN_DEPTH,
+    PLAN_POSITION,
+    PLAN_COST,
+    PLAN_CARDINALITY,
+    PLAN_BYTES,
+    PLAN_TIME,
+    PLAN_PARTITION_START,
+    PLAN_PARTITION_STOP,
+    PLAN_CPU_COST,
+    PLAN_IO_COST,
+    PLAN_TEMP_SPACE,
+    STARTS,
+    OUTPUT_ROWS,
+    IO_INTERCONNECT_BYTES,
+    PHYSICAL_READ_REQUESTS,
+    PHYSICAL_READ_BYTES,
+    PHYSICAL_WRITE_REQUESTS,
+    PHYSICAL_WRITE_BYTES,
+    WORKAREA_MEM,
+    WORKAREA_MAX_MEM,
+    WORKAREA_TEMPSEG,
+    WORKAREA_MAX_TEMPSEG,
+    OTHERSTAT_GROUP_ID,
+    OTHERSTAT_1_ID,
+    OTHERSTAT_1_TYPE,
+    OTHERSTAT_1_VALUE,
+    OTHERSTAT_2_ID,
+    OTHERSTAT_2_TYPE,
+    OTHERSTAT_2_VALUE,
+    OTHERSTAT_3_ID,
+    OTHERSTAT_3_TYPE,
+    OTHERSTAT_3_VALUE,
+    OTHERSTAT_4_ID,
+    OTHERSTAT_4_TYPE,
+    OTHERSTAT_4_VALUE,
+    OTHERSTAT_5_ID,
+    OTHERSTAT_5_TYPE,
+    OTHERSTAT_5_VALUE,
+    OTHERSTAT_6_ID,
+    OTHERSTAT_6_TYPE,
+    OTHERSTAT_6_VALUE,
+    OTHERSTAT_7_ID,
+    OTHERSTAT_7_TYPE,
+    OTHERSTAT_7_VALUE,
+    OTHERSTAT_8_ID,
+    OTHERSTAT_8_TYPE,
+    OTHERSTAT_8_VALUE,
+    OTHERSTAT_9_ID,
+    OTHERSTAT_9_TYPE,
+    OTHERSTAT_9_VALUE,
+    OTHERSTAT_10_ID,
+    OTHERSTAT_10_TYPE,
+    OTHERSTAT_10_VALUE,
+    OTHER_XML,
+    PLAN_OPERATION_INACTIVE,
+    OUTPUT_BATCHES,
+    SKIPPED_ROWS_COUNT  FROM OCEANBASE.GV$SQL_PLAN_MONITOR
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -16195,7 +16530,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$SESSION_LONGOPS
+    SELECT SID,
+    TRACE_ID,
+    OPNAME,
+    TARGET,
+    SVR_IP,
+    SVR_PORT,
+    START_TIME,
+    ELAPSED_SECONDS,
+    TIME_REMAINING,
+    LAST_UPDATE_TIME,
+    MESSAGE FROM OCEANBASE.GV$SESSION_LONGOPS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16300,7 +16645,16 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SESSION_ID,
+      TENANT_ID,
+      SVR_IP,
+      SVR_PORT,
+      TRACE_ID,
+      QC_ID,
+      SQC_ID,
+      WORKER_ID,
+      DFO_ID,
+      START_TIME
     FROM oceanbase.GV$OB_PX_WORKER_STAT
     where svr_ip = host_ip() AND svr_port = rpc_port()
 """.replace("\n", " ")
@@ -16346,7 +16700,13 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    STMT_COUNT,
+    HIT_COUNT,
+    ACCESS_COUNT,
+    MEM_HOLD
   FROM oceanbase.GV$OB_PS_STAT
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -16384,7 +16744,9 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID, SVR_IP, SVR_PORT, STMT_ID,
+         DB_ID, PS_SQL, PARAM_COUNT, STMT_ITEM_REF_COUNT,
+         STMT_INFO_REF_COUNT, MEM_HOLD, STMT_TYPE, CHECKSUM, EXPIRED
   FROM oceanbase.GV$OB_PS_ITEM_INFO
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -16443,7 +16805,29 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$SQL_WORKAREA
+    SELECT ADDRESS,
+    HASH_VALUE,
+    SQL_ID,
+    CHILD_NUMBER,
+    WORKAREA_ADDRESS,
+    OPERATION_TYPE,
+    OPERATION_ID,
+    POLICY,
+    ESTIMATED_OPTIMAL_SIZE,
+    ESTIMATED_ONEPASS_SIZE,
+    LAST_MEMORY_USED,
+    LAST_EXECUTION,
+    LAST_DEGREE,
+    TOTAL_EXECUTIONS,
+    OPTIMAL_EXECUTIONS,
+    ONEPASS_EXECUTIONS,
+    MULTIPASSES_EXECUTIONS,
+    ACTIVE_TIME,
+    MAX_TEMPSEG_SIZE,
+    LAST_TEMPSEG_SIZE,
+    CON_ID,
+    SVR_IP,
+    SVR_PORT FROM OCEANBASE.GV$SQL_WORKAREA
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16497,7 +16881,30 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$SQL_WORKAREA_ACTIVE
+    SELECT SQL_HASH_VALUE,
+    SQL_ID,
+    SQL_EXEC_START,
+    SQL_EXEC_ID,
+    WORKAREA_ADDRESS,
+    OPERATION_TYPE,
+    OPERATION_ID,
+    POLICY,
+    SID,
+    QCINST_ID,
+    QCSID,
+    ACTIVE_TIME,
+    WORK_AREA_SIZE,
+    EXPECT_SIZE,
+    ACTUAL_MEM_USED,
+    MAX_MEM_USED,
+    NUMBER_PASSES,
+    TEMPSEG_SIZE,
+    TABLESPACE,
+    `SEGRFNO#`,
+    `SEGBLK#`,
+    CON_ID,
+    SVR_IP,
+    SVR_PORT FROM OCEANBASE.GV$SQL_WORKAREA_ACTIVE
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16536,7 +16943,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$SQL_WORKAREA_HISTOGRAM
+    SELECT LOW_OPTIMAL_SIZE,
+      HIGH_OPTIMAL_SIZE,
+      OPTIMAL_EXECUTIONS,
+      ONEPASS_EXECUTIONS,
+      MULTIPASSES_EXECUTIONS,
+      TOTAL_EXECUTIONS,
+      CON_ID,
+      SVR_IP,
+      SVR_PORT FROM OCEANBASE.GV$SQL_WORKAREA_HISTOGRAM
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16578,7 +16993,19 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$OB_SQL_WORKAREA_MEMORY_INFO
+    SELECT MAX_WORKAREA_SIZE,
+      WORKAREA_HOLD_SIZE,
+      MAX_AUTO_WORKAREA_SIZE,
+      MEM_TARGET,
+      TOTAL_MEM_USED,
+      GLOBAL_MEM_BOUND,
+      DRIFT_SIZE,
+      WORKAREA_COUNT,
+      MANUAL_CALC_COUNT,
+      TENANT_ID,
+      SVR_IP,
+      SVR_PORT
+    FROM OCEANBASE.GV$OB_SQL_WORKAREA_MEMORY_INFO
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16645,7 +17072,45 @@ normal_columns  = [],
 gm_columns      = [],
 in_tenant_space = True,
 view_definition = """
-SELECT * FROM oceanbase.GV$OB_PLAN_CACHE_REFERENCE_INFO
+SELECT SVR_IP,
+SVR_PORT,
+TENANT_ID,
+PC_REF_PLAN_LOCAL,
+PC_REF_PLAN_REMOTE,
+PC_REF_PLAN_DIST,
+PC_REF_PLAN_ARR,
+PC_REF_PL,
+PC_REF_PL_STAT,
+PLAN_GEN,
+CLI_QUERY,
+OUTLINE_EXEC,
+PLAN_EXPLAIN,
+ASYN_BASELINE,
+LOAD_BASELINE,
+PS_EXEC,
+GV_SQL,
+PL_ANON,
+PL_ROUTINE,
+PACKAGE_VAR,
+PACKAGE_TYPE,
+PACKAGE_SPEC,
+PACKAGE_BODY,
+PACKAGE_RESV,
+GET_PKG,
+INDEX_BUILDER,
+PCV_SET,
+PCV_RD,
+PCV_WR,
+PCV_GET_PLAN_KEY,
+PCV_GET_PL_KEY,
+PCV_EXPIRE_BY_USED,
+PCV_EXPIRE_BY_MEM,
+LC_REF_CACHE_NODE,
+LC_NODE,
+LC_NODE_RD,
+LC_NODE_WR,
+LC_REF_CACHE_OBJ_STAT
+FROM oceanbase.GV$OB_PLAN_CACHE_REFERENCE_INFO
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """
 )
@@ -16698,7 +17163,22 @@ normal_columns  = [],
 gm_columns      = [],
 in_tenant_space = True,
 view_definition = """
-SELECT * FROM OCEANBASE.GV$OB_SSTABLES
+SELECT M.SVR_IP,
+ M.SVR_PORT,
+ M.TABLE_TYPE,
+ M.TENANT_ID,
+ M.LS_ID,
+ M.TABLET_ID,
+ M.CG_IDX,
+ M.START_LOG_SCN,
+ M.END_LOG_SCN,
+ M.DATA_CHECKSUM,
+ M.SIZE,
+ M.REF,
+ M.UPPER_TRANS_VERSION,
+ M.IS_ACTIVE,
+ M.CONTAIN_UNCOMMITTED_ROW
+FROM OCEANBASE.GV$OB_SSTABLES M
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -16919,7 +17399,15 @@ def_table_schema(
  gm_columns      = [],
  in_tenant_space = True,
  view_definition = """
-SELECT *
+SELECT
+  SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  REFRESHED_SCHEMA_VERSION,
+  RECEIVED_SCHEMA_VERSION,
+  SCHEMA_COUNT,
+  SCHEMA_SIZE,
+  MIN_SSTABLE_SCHEMA_VERSION
 FROM
   oceanbase.GV$OB_SERVER_SCHEMA_INFO
 WHERE
@@ -16992,7 +17480,19 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT
+        SVR_IP,
+        SVR_PORT,
+        TENANT_ID,
+        LS_ID,
+        TABLET_ID,
+        ACTION,
+        COMPACTION_SCN,
+        START_TIME,
+        END_TIME,
+        MACRO_BLOCK_COUNT,
+        REUSE_PCT,
+        PARALLEL_DEGREE
     FROM OCEANBASE.GV$OB_MERGE_INFO
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -17304,7 +17804,11 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-SELECT *
+SELECT TENANT_ID,
+       SVR_IP,
+       SVR_PORT,
+       HOLD,
+       FREE
 FROM
     oceanbase.GV$OB_TENANT_MEMORY
 WHERE
@@ -17349,7 +17853,18 @@ def_table_schema(
     normal_columns  = [],
     gm_columns      = [],
     in_tenant_space = True,
-    view_definition = """SELECT *
+    view_definition = """SELECT
+                          SVR_IP,
+                          SVR_PORT,
+                          TENANT_ID,
+                          IS_LEADER,
+                          VERSION,
+                          PEER_IP,
+                          PEER_PORT,
+                          PEER_TARGET,
+                          PEER_TARGET_USED,
+                          LOCAL_TARGET_USED,
+                          LOCAL_PARALLEL_SESSION_COUNT
         FROM oceanbase.GV$OB_PX_TARGET_MONITOR
         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " ")
@@ -17640,7 +18155,45 @@ def_table_schema(
   gm_columns = [],
   rowkey_columns = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM oceanbase.__all_virtual_files""".replace("\n", " "),
+  view_definition = """SELECT FILE_ID,
+                              FILE_NAME,
+                              FILE_TYPE,
+                              TABLESPACE_NAME,
+                              TABLE_CATALOG,
+                              TABLE_SCHEMA,
+                              TABLE_NAME,
+                              LOGFILE_GROUP_NAME,
+                              LOGFILE_GROUP_NUMBER,
+                              ENGINE,
+                              FULLTEXT_KEYS,
+                              DELETED_ROWS,
+                              UPDATE_COUNT,
+                              FREE_EXTENTS,
+                              TOTAL_EXTENTS,
+                              EXTENT_SIZE,
+                              INITIAL_SIZE,
+                              MAXIMUM_SIZE,
+                              AUTOEXTEND_SIZE,
+                              CREATION_TIME,
+                              LAST_UPDATE_TIME,
+                              LAST_ACCESS_TIME,
+                              RECOVER_TIME,
+                              TRANSACTION_COUNTER,
+                              VERSION,
+                              ROW_FORMAT,
+                              TABLE_ROWS,
+                              AVG_ROW_LENGTH,
+                              DATA_LENGTH,
+                              MAX_DATA_LENGTH,
+                              INDEX_LENGTH,
+                              DATA_FREE,
+                              CREATE_TIME,
+                              UPDATE_TIME,
+                              CHECK_TIME,
+                              CHECKSUM,
+                              STATUS,
+                              EXTRA
+                   FROM oceanbase.__all_virtual_files""".replace("\n", " "),
   normal_columns = [
   ],
 )
@@ -22050,7 +22603,26 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = False, # sys tenant only
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+  SVR_PORT,
+  ZONE,
+  SQL_PORT,
+  CPU_CAPACITY,
+  CPU_CAPACITY_MAX,
+  CPU_ASSIGNED,
+  CPU_ASSIGNED_MAX,
+  MEM_CAPACITY,
+  MEM_ASSIGNED,
+  LOG_DISK_CAPACITY,
+  LOG_DISK_ASSIGNED,
+  LOG_DISK_IN_USE,
+  DATA_DISK_CAPACITY,
+  DATA_DISK_IN_USE,
+  DATA_DISK_HEALTH_STATUS,
+  MEMORY_LIMIT,
+  DATA_DISK_ALLOCATED,
+  DATA_DISK_ABNORMAL_TIME,
+  SSL_CERT_EXPIRED_TIME
     FROM oceanbase.GV$OB_SERVERS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -22100,7 +22672,24 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+           SVR_PORT,
+           UNIT_ID,
+           TENANT_ID,
+           ZONE,
+           ZONE_TYPE,
+           REGION,
+           MAX_CPU,
+           MIN_CPU,
+           MEMORY_SIZE,
+           MAX_IOPS,
+           MIN_IOPS,
+           IOPS_WEIGHT,
+           LOG_DISK_SIZE,
+           LOG_DISK_IN_USE,
+           DATA_DISK_IN_USE,
+           STATUS,
+           CREATE_TIME
     FROM oceanbase.GV$OB_UNITS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -22142,7 +22731,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+    SVR_PORT,
+    ZONE,
+    SCOPE,
+    TENANT_ID,
+    NAME,
+    DATA_TYPE,
+    VALUE,
+    INFO,
+    SECTION,
+    EDIT_LEVEL
     FROM oceanbase.GV$OB_PARAMETERS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -22208,7 +22807,41 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP, SVR_PORT, SQL_PORT,
+    ID,
+    USER,
+    HOST,
+    DB,
+    TENANT,
+    COMMAND,
+    TIME,
+    TOTAL_TIME,
+    STATE,
+    INFO,
+    PROXY_SESSID,
+    MASTER_SESSID,
+    USER_CLIENT_IP,
+    USER_HOST,
+    RETRY_CNT,
+    RETRY_INFO,
+    SQL_ID,
+    TRANS_ID,
+    THREAD_ID,
+    SSL_CIPHER,
+    TRACE_ID,
+    TRANS_STATE,
+    ACTION,
+    MODULE,
+    CLIENT_INFO,
+    LEVEL,
+    SAMPLE_PERCENTAGE,
+    RECORD_POLICY,
+    LB_VID,
+    LB_VIP,
+    LB_VPORT,
+    IN_BYTES,
+    OUT_BYTES,
+    USER_CLIENT_PORT
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -22249,7 +22882,16 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    CACHE_NAME,
+    PRIORITY,
+    CACHE_SIZE,
+    HIT_RATIO,
+    TOTAL_PUT_CNT,
+    TOTAL_HIT_CNT,
+    TOTAL_MISS_CNT
     FROM oceanbase.GV$OB_KVCACHE
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -22331,7 +22973,27 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    SESSION_ID,
+    SCHEDULER_ADDR,
+    TX_TYPE,
+    TX_ID,
+    LS_ID,
+    PARTICIPANTS,
+    CTX_CREATE_TIME,
+    TX_EXPIRED_TIME,
+    STATE,
+    ACTION,
+    PENDING_LOG_SIZE,
+    FLUSHED_LOG_SIZE,
+    ROLE,
+    COORD,
+    LAST_REQUEST_TIME,
+    FORMATID,
+    GLOBALID,
+    BRANCHID
     FROM OCEANBASE.GV$OB_TRANSACTION_PARTICIPANTS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
@@ -22377,7 +23039,21 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      ZONE,
+      COMPACTION_SCN,
+      STATUS,
+      TOTAL_TABLET_COUNT,
+      UNFINISHED_TABLET_COUNT,
+      DATA_SIZE,
+      UNFINISHED_DATA_SIZE,
+      COMPRESSION_RATIO,
+      START_TIME,
+      ESTIMATED_FINISH_TIME,
+      COMMENTS
     FROM oceanbase.GV$OB_COMPACTION_PROGRESS
     WHERE
         SVR_IP=HOST_IP()
@@ -22428,7 +23104,23 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      COMPACTION_SCN,
+      TASK_ID,
+      STATUS,
+      DATA_SIZE,
+      UNFINISHED_DATA_SIZE,
+      PROGRESSIVE_COMPACTION_ROUND,
+      CREATE_TIME,
+      START_TIME,
+      ESTIMATED_FINISH_TIME,
+      START_CG_ID,
+      END_CG_ID
     FROM oceanbase.GV$OB_TABLET_COMPACTION_PROGRESS
     WHERE
         SVR_IP=HOST_IP()
@@ -22492,7 +23184,36 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      LS_ID,
+      TABLET_ID,
+      TYPE,
+      COMPACTION_SCN,
+      START_TIME,
+      FINISH_TIME,
+      TASK_ID,
+      OCCUPY_SIZE,
+      MACRO_BLOCK_COUNT,
+      MULTIPLEXED_MACRO_BLOCK_COUNT,
+      NEW_MICRO_COUNT_IN_NEW_MACRO,
+      MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,
+      TOTAL_ROW_COUNT,
+      INCREMENTAL_ROW_COUNT,
+      COMPRESSION_RATIO,
+      NEW_FLUSH_DATA_RATE,
+      PROGRESSIVE_COMPACTION_ROUND,
+      PROGRESSIVE_COMPACTION_NUM,
+      PARALLEL_DEGREE,
+      PARALLEL_INFO,
+      PARTICIPANT_TABLE,
+      MACRO_ID_LIST,
+      COMMENTS,
+      START_CG_ID,
+      END_CG_ID,
+      KEPT_SNAPSHOT,
+      MERGE_LEVEL
     FROM oceanbase.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -22541,7 +23262,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      STATUS,
+      CREATE_TIME,
+      DIAGNOSE_INFO
     FROM oceanbase.GV$OB_COMPACTION_DIAGNOSE_INFO
     WHERE
         SVR_IP=HOST_IP()
@@ -22584,7 +23313,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      START_TIME,
+      FINISH_TIME,
+      SUGGESTION
     FROM oceanbase.GV$OB_COMPACTION_SUGGESTIONS
     WHERE
         SVR_IP=HOST_IP()
@@ -22636,7 +23373,25 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT * FROM OCEANBASE.GV$OB_DTL_INTERM_RESULT_MONITOR
+    SELECT SVR_IP,
+          SVR_PORT,
+          TENANT_ID,
+          TRACE_ID,
+          OWNER,
+          START_TIME,
+          EXPIRE_TIME,
+          HOLD_MEMORY,
+          DUMP_SIZE,
+          DUMP_COST,
+          DUMP_TIME,
+          DUMP_FD,
+          DUMP_DIR_ID,
+          CHANNEL_ID,
+          QC_ID,
+          DFO_ID,
+          SQC_ID,
+          BATCH_ID,
+          MAX_HOLD_MEMORY FROM OCEANBASE.GV$OB_DTL_INTERM_RESULT_MONITOR
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -22672,7 +23427,12 @@ def_table_schema(
   rowkey_columns    = [],
   normal_columns    = [],
   view_definition   = """
-    SELECT * FROM oceanbase.GV$OB_IO_CALIBRATION_STATUS
+    SELECT SVR_IP,
+        SVR_PORT,
+        STORAGE_NAME,
+        STATUS,
+        START_TIME,
+        FINISH_TIME FROM oceanbase.GV$OB_IO_CALIBRATION_STATUS
     WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
   """.replace("\n", " "),
 )
@@ -22710,7 +23470,14 @@ def_table_schema(
   rowkey_columns    = [],
   normal_columns    = [],
   view_definition   = """
-    SELECT * FROM oceanbase.GV$OB_IO_BENCHMARK
+    SELECT SVR_IP,
+        SVR_PORT,
+        STORAGE_NAME,
+        MODE,
+        SIZE,
+        IOPS,
+        MBPS,
+        LATENCY FROM oceanbase.GV$OB_IO_BENCHMARK
     WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
   """.replace("\n", " "),
 )
@@ -23994,7 +24761,45 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  view_definition = """SELECT SVR_IP,
+    SVR_PORT,
+    SAMPLE_ID,
+    SAMPLE_TIME,
+    CON_ID,
+    USER_ID,
+    SESSION_ID,
+    SESSION_TYPE,
+    SESSION_STATE,
+    SQL_ID,
+    PLAN_ID,
+    TRACE_ID,
+    EVENT,
+    EVENT_NO,
+    P1TEXT,
+    P1,
+    P2TEXT,
+    P2,
+    P3TEXT,
+    P3,
+    WAIT_CLASS,
+    WAIT_CLASS_ID,
+    TIME_WAITED,
+    SQL_PLAN_LINE_ID,
+    IN_PARSE,
+    IN_PL_PARSE,
+    IN_PLAN_CACHE,
+    IN_SQL_OPTIMIZE,
+    IN_SQL_EXECUTION,
+    IN_PX_EXECUTION,
+    IN_SEQUENCE_LOAD,
+    IN_COMMITTING,
+    IN_STORAGE_READ,
+    IN_STORAGE_WRITE,
+    IN_REMOTE_DAS_EXECUTION,
+    MODULE,
+    ACTION,
+    CLIENT_ID,
+    BACKTRACE FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -24036,7 +24841,19 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT * FROM oceanbase.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+    SELECT SVR_IP,
+    SVR_PORT,
+    INST_ID,
+    OBJN,
+    INS,
+    UPD,
+    DEL,
+    DROPSEG,
+    CURROWS,
+    PAROBJN,
+    LASTUSED,
+    FLAGS,
+    CON_ID FROM oceanbase.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -25526,7 +26343,27 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    ROLE,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    IN_SYNC,
+    BASE_LSN,
+    BEGIN_LSN,
+    BEGIN_SCN,
+    END_LSN,
+    END_SCN,
+    MAX_LSN,
+    MAX_SCN,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST,
+    LEARNER_LIST
   FROM oceanbase.GV$OB_LOG_STAT
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -27673,7 +28510,25 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    SESSION_ID,
+    TX_ID,
+    STATE,
+    CLUSTER_ID,
+    COORDINATOR,
+    PARTICIPANTS,
+    ISOLATION_LEVEL,
+    SNAPSHOT_VERSION,
+    ACCESS_MODE,
+    TX_OP_SN,
+    ACTIVE_TIME,
+    EXPIRE_TIME,
+    CAN_EARLY_LOCK_RELEASE,
+    FORMATID,
+    GLOBALID,
+    BRANCHID
     FROM OCEANBASE.GV$OB_TRANSACTION_SCHEDULERS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
@@ -28135,7 +28990,22 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM OCEANBASE.GV$OB_TABLET_STATS
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      LS_ID,
+      TABLET_ID,
+      QUERY_CNT,
+      MINI_MERGE_CNT,
+      SCAN_OUTPUT_ROW_CNT,
+      SCAN_TOTAL_ROW_CNT,
+      PUSHDOWN_MICRO_BLOCK_CNT,
+      TOTAL_MICRO_BLOCK_CNT,
+      EXIST_ITER_TABLE_CNT,
+      EXIST_TOTAL_TABLE_CNT,
+      INSERT_ROW_CNT,
+      UPDATE_ROW_CNT,
+      DELETE_ROW_CNT FROM OCEANBASE.GV$OB_TABLET_STATS
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -28259,7 +29129,21 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT * FROM oceanbase.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+    SELECT TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    SESSION_ID,
+    TRACE_ID,
+    TASK_ID,
+    TYPE,
+    TASK_START_TIME,
+    TASK_DURATION_TIME,
+    TASK_TABLE_COUNT,
+    COMPLETED_TABLE_COUNT,
+    RUNNING_TABLE_OWNER,
+    RUNNING_TABLE_NAME,
+    RUNNING_TABLE_DURATION_TIME,
+    RUNNING_TABLE_PROGRESS FROM oceanbase.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -28381,7 +29265,16 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  *
+  SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TID,
+    TNAME,
+    STATUS,
+    LATCH_WAIT,
+    LATCH_HOLD,
+    TRACE_ID,
+    CGROUP_PATH
 FROM oceanbase.GV$OB_THREAD
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
@@ -28423,7 +29316,17 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
   FROM oceanbase.GV$OB_ARBITRATION_MEMBER_INFO
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -28462,7 +29365,10 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT SVR_IP,
+    SVR_PORT,
+    ARBITRATION_SERVICE_ADDRESS,
+    STATUS
   FROM oceanbase.GV$OB_ARBITRATION_SERVICE_STATUS
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -28780,7 +29686,15 @@ def_table_schema(
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
   view_definition = """
-  SELECT * FROM oceanbase.GV$OB_KV_CONNECTIONS
+  SELECT TENANT_ID,
+    USER_ID,
+    DB_ID,
+    SVR_IP,
+    SVR_PORT,
+    CLIENT_IP,
+    CLIENT_PORT,
+    FIRST_ACTIVE_TIME,
+    LAST_ACTIVE_TIME FROM oceanbase.GV$OB_KV_CONNECTIONS
         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -28935,7 +29849,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    TRANS_ID,
+    TYPE,
+    ID1,
+    ID2,
+    LMODE,
+    REQUEST,
+    CTIME,
+    BLOCK
     FROM oceanbase.GV$OB_LOCKS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -29464,7 +30388,15 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-        SELECT * FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB
+        SELECT SVR_IP,
+              SVR_PORT,
+              TRACE_ID,
+              DATAHUB_ID,
+              MESSAGE_TYPE,
+              TENANT_ID,
+              HOLD_SIZE,
+              TIMEOUT_TS,
+              START_TIME FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -29512,7 +30444,18 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     view_definition = """
-    SELECT * FROM OCEANBASE.GV$SQL_JOIN_FILTER
+    SELECT SVR_IP,
+    SVR_PORT,
+    QC_SESSION_ID,
+    QC_INSTANCE_ID,
+    SQL_PLAN_HASH_VALUE,
+    FILTER_ID,
+    BITS_SET,
+    FILTERED,
+    PROBED,
+    ACTIVE,
+    CON_ID,
+    TRACE_ID FROM OCEANBASE.GV$SQL_JOIN_FILTER
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
@@ -30555,7 +31498,38 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   view_definition = """
-  SELECT *
+  SELECT SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    COMPAT_MODE,
+    UNIT_MIN_CPU,
+    UNIT_MAX_CPU,
+    SLICE,
+    REMAIN_SLICE,
+    TOKEN_CNT,
+    ASS_TOKEN_CNT,
+    LQ_TOKENS,
+    USED_LQ_TOKENS,
+    STOPPED,
+    IDLE_US,
+    RECV_HP_RPC_CNT,
+    RECV_NP_RPC_CNT,
+    RECV_LP_RPC_CNT,
+    RECV_MYSQL_CNT,
+    RECV_TASK_CNT,
+    RECV_LARGE_REQ_CNT,
+    RECV_LARGE_QUERIES,
+    ACTIVES,
+    WORKERS,
+    LQ_WAITING_WORKERS,
+    REQ_QUEUE_TOTAL_SIZE,
+    QUEUE_0,
+    QUEUE_1,
+    QUEUE_2,
+    QUEUE_3,
+    QUEUE_4,
+    QUEUE_5,
+    LARGE_QUEUED
   FROM
     oceanbase.GV$OB_TENANT_RUNTIME_INFO
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
@@ -30593,7 +31567,12 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  *
+  SVR_IP,
+    SVR_PORT,
+    CFS_QUOTA_US,
+    CFS_PERIOD_US,
+    SHARES,
+    CGROUP_PATH
 FROM oceanbase.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
@@ -30856,7 +31835,22 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT TENANT_ID,
+    SNAPSHOT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    META_EXISTED,
+    BUILD_STATUS,
+    REBUILD_SEQ_START,
+    REBUILD_SEQ_END,
+    END_INTERVAL_SCN,
+    LS_META_PACKAGE,
+    TSNAP_IS_RUNNING,
+    TSNAP_HAS_UNFINISHED_CREATE_DAG,
+    TSNAP_HAS_UNFINISHED_GC_DAG,
+    TSNAP_CLONE_REF,
+    TSNAP_META_EXISTED
     FROM oceanbase.GV$OB_LS_SNAPSHOTS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
@@ -45543,7 +46537,8 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.DICTIONARY
+    SELECT TABLE_NAME,
+      COMMENTS FROM SYS.DICTIONARY
 """.replace("\n", " ")
 )
 
@@ -48332,7 +49327,25 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   in_tenant_space = True,
-  view_definition ="""SELECT * FROM SYS.ALL_SCHEDULER_WINDOWS""".replace("\n", " "),
+  view_definition ="""SELECT OWNER,
+                             WINDOW_NAME,
+                             RESOURCE_PLAN,
+                             SCHEDULE_OWNER,
+                             SCHEDULE_NAME,
+                             SCHEDULE_TYPE,
+                             START_DATE,
+                             REPEAT_INTERVAL,
+                             END_DATE,
+                             DURATION,
+                             WINDOW_PRIORITY,
+                             NEXT_RUN_DATE,
+                             LAST_START_DATE,
+                             ENABLED,
+                             ACTIVE,
+                             MANUAL_OPEN_TIME,
+                             MANUAL_DURATION,
+                             COMMENTS
+FROM SYS.ALL_SCHEDULER_WINDOWS""".replace("\n", " "),
 )
 
 def_table_schema(
@@ -49767,7 +50780,15 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-        SELECT * FROM SYS.GV$OB_PX_P2P_DATAHUB
+        SELECT SVR_IP,
+          SVR_PORT,
+          TRACE_ID,
+          DATAHUB_ID,
+          MESSAGE_TYPE,
+          TENANT_ID,
+          HOLD_SIZE,
+          TIMEOUT_TS,
+          START_TIME FROM SYS.GV$OB_PX_P2P_DATAHUB
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -49815,7 +50836,18 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-    SELECT * FROM SYS.GV$SQL_JOIN_FILTER
+    SELECT SVR_IP,
+          SVR_PORT,
+          QC_SESSION_ID,
+          QC_INSTANCE_ID,
+          SQL_PLAN_HASH_VALUE,
+          FILTER_ID,
+          BITS_SET,
+          FILTERED,
+          PROBED,
+          ACTIVE,
+          CON_ID,
+          TRACE_ID FROM SYS.GV$SQL_JOIN_FILTER
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -50124,7 +51156,15 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
+  view_definition = """SELECT TENANT_ID,
+                              JOB,
+                              TIME,
+                              CODE,
+                              MESSAGE,
+                              JOB_CLASS,
+                              GMT_CREATE,
+                              GMT_MODIFIED
+                       FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
 """.replace("\n", " ")
 )
 
@@ -51682,7 +52722,101 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  view_definition = """SELECT SVR_IP,
+SVR_PORT,
+REQUEST_ID,
+SQL_EXEC_ID,
+TRACE_ID,
+SID,
+CLIENT_IP,
+CLIENT_PORT,
+TENANT_ID,
+EFFECTIVE_TENANT_ID,
+TENANT_NAME,
+USER_ID,
+USER_NAME,
+USER_GROUP,
+USER_CLIENT_IP,
+DB_ID,
+DB_NAME,
+SQL_ID,
+QUERY_SQL,
+PLAN_ID,
+AFFECTED_ROWS,
+RETURN_ROWS,
+PARTITION_CNT,
+RET_CODE,
+QC_ID,
+DFO_ID,
+SQC_ID,
+WORKER_ID,
+EVENT,
+P1TEXT,
+P1,
+P2TEXT,
+P2,
+P3TEXT,
+P3,
+"LEVEL",
+WAIT_CLASS_ID,
+"WAIT_CLASS#",
+WAIT_CLASS,
+STATE,
+WAIT_TIME_MICRO,
+TOTAL_WAIT_TIME_MICRO,
+TOTAL_WAITS,
+RPC_COUNT,
+PLAN_TYPE,
+IS_INNER_SQL,
+IS_EXECUTOR_RPC,
+IS_HIT_PLAN,
+REQUEST_TIME,
+ELAPSED_TIME,
+NET_TIME,
+NET_WAIT_TIME,
+QUEUE_TIME,
+DECODE_TIME,
+GET_PLAN_TIME,
+EXECUTE_TIME,
+APPLICATION_WAIT_TIME,
+CONCURRENCY_WAIT_TIME,
+USER_IO_WAIT_TIME,
+SCHEDULE_TIME,
+ROW_CACHE_HIT,
+BLOOM_FILTER_CACHE_HIT,
+BLOCK_CACHE_HIT,
+DISK_READS,
+RETRY_CNT,
+TABLE_SCAN,
+CONSISTENCY_LEVEL,
+MEMSTORE_READ_ROW_COUNT,
+SSSTORE_READ_ROW_COUNT,
+DATA_BLOCK_READ_CNT,
+DATA_BLOCK_CACHE_HIT,
+INDEX_BLOCK_READ_CNT,
+INDEX_BLOCK_CACHE_HIT,
+BLOCKSCAN_BLOCK_CNT,
+BLOCKSCAN_ROW_CNT,
+PUSHDOWN_STORAGE_FILTER_ROW_CNT,
+REQUEST_MEMORY_USED,
+EXPECTED_WORKER_COUNT,
+USED_WORKER_COUNT,
+SCHED_INFO,
+PS_CLIENT_STMT_ID,
+PS_INNER_STMT_ID,
+TX_ID,
+SNAPSHOT_VERSION,
+REQUEST_TYPE,
+IS_BATCHED_MULTI_STMT,
+OB_TRACE_INFO,
+PLAN_HASH,
+PARAMS_VALUE,
+RULE_NAME,
+TX_INTERNAL_ROUTING,
+TX_STATE_VERSION,
+FLT_TRACE_ID,
+TOTAL_MEMSTORE_READ_ROW_COUNT,
+TOTAL_SSSTORE_READ_ROW_COUNT FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -51851,7 +52985,61 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-      SELECT * FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+      SELECT TENANT_ID,
+SVR_IP,
+SVR_PORT,
+PLAN_ID,
+SQL_ID,
+TYPE,
+IS_BIND_SENSITIVE,
+IS_BIND_AWARE,
+DB_ID,
+STATEMENT,
+QUERY_SQL,
+SPECIAL_PARAMS,
+PARAM_INFOS,
+SYS_VARS,
+PLAN_HASH,
+FIRST_LOAD_TIME,
+SCHEMA_VERSION,
+LAST_ACTIVE_TIME,
+AVG_EXE_USEC,
+SLOWEST_EXE_TIME,
+SLOWEST_EXE_USEC,
+SLOW_COUNT,
+HIT_COUNT,
+PLAN_SIZE,
+EXECUTIONS,
+DISK_READS,
+DIRECT_WRITES,
+BUFFERS_GETS,
+APPLICATION_WATI_TIME,
+CONCURRENCY_WAIT_TIME,
+USER_IO_WAIT_TIME,
+ROWS_PROCESSED,
+ELAPSED_TIME,
+CPU_TIME,
+LARGE_QUERYS,
+DELAYED_LARGE_QUERYS,
+DELAYED_PX_QUERYS,
+OUTLINE_VERSION,
+OUTLINE_ID,
+OUTLINE_DATA,
+HINTS_INFO,
+HINTS_ALL_WORKED,
+ACS_SEL_INFO,
+TABLE_SCAN,
+EVOLUTION,
+EVO_EXECUTIONS,
+EVO_CPU_TIME,
+TIMEOUT_COUNT,
+PS_STMT_ID,
+SESSID,
+TEMP_TABLES,
+IS_USE_JIT,
+OBJECT_TYPE,
+PL_SCHEMA_ID,
+IS_BATCHED_MULTI_STMT FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -51895,7 +53083,17 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-      SELECT * FROM SYS.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+      SELECT TENANT_ID,
+SVR_IP,
+SVR_PORT,
+PLAN_ID,
+PLAN_DEPTH,
+PLAN_LINE_ID,
+OPERATOR,
+NAME,
+"ROWS",
+COST,
+PROPERTY FROM SYS.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -51946,7 +53144,24 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$SESSION_WAIT
+    SELECT SID,
+CON_ID,
+SVR_IP,
+SVR_PORT,
+EVENT,
+P1TEXT,
+P1,
+P2TEXT,
+P2,
+P3TEXT,
+P3,
+WAIT_CLASS_ID,
+"WAIT_CLASS#",
+WAIT_CLASS,
+STATE,
+WAIT_TIME_MICRO,
+TIME_REMAINING_MICRO,
+TIME_SINCE_LAST_WAIT_MICRO FROM SYS.GV$SESSION_WAIT
      WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -51996,7 +53211,22 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$SESSION_WAIT_HISTORY
+    SELECT SID,
+CON_ID,
+SVR_IP,
+SVR_PORT,
+"SEQ#",
+"EVENT#",
+EVENT,
+P1TEXT,
+P1,
+P2TEXT,
+P2,
+P3TEXT,
+P3,
+WAIT_TIME,
+WAIT_TIME_MICRO,
+TIME_SINCE_LAST_WAIT_MICRO FROM SYS.GV$SESSION_WAIT_HISTORY
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -52039,7 +53269,14 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT CON_ID,
+SVR_IP,
+SVR_PORT,
+CTX_NAME,
+MOD_NAME,
+COUNT,
+HOLD,
+USED
     FROM SYS.GV$OB_MEMORY
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52083,7 +53320,14 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    ACTIVE_SPAN,
+    FREEZE_TRIGGER,
+    FREEZE_CNT,
+    MEMSTORE_USED,
+    MEMSTORE_LIMIT
     FROM SYS.GV$OB_MEMSTORE
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52127,7 +53371,16 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    LS_ID,
+    TABLET_ID,
+    IS_ACTIVE,
+    START_SCN,
+    END_SCN,
+    FREEZE_TS
     FROM SYS.GV$OB_MEMSTORE_INFO
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52168,7 +53421,12 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$SESSTAT
+    SELECT SID,
+          CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          "STATISTIC#",
+          VALUE FROM SYS.GV$SESSTAT
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -52210,7 +53468,14 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          "STATISTIC#",
+          NAME,
+          CLASS,
+          VALUE,
+          STAT_ID
     FROM SYS.GV$SYSSTAT
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52258,7 +53523,19 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$SYSTEM_EVENT WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+    SELECT CON_ID,
+SVR_IP,
+SVR_PORT,
+EVENT_ID,
+EVENT,
+WAIT_CLASS_ID,
+"WAIT_CLASS#",
+WAIT_CLASS,
+TOTAL_WAITS,
+TOTAL_TIMEOUTS,
+TIME_WAITED,
+AVERAGE_WAIT,
+TIME_WAITED_MICRO FROM SYS.GV$SYSTEM_EVENT WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -52306,7 +53583,18 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-      SELECT *
+      SELECT SVR_IP,
+      SVR_PORT,
+      SQL_NUM,
+      MEM_USED,
+      MEM_HOLD,
+      ACCESS_COUNT,
+      HIT_COUNT,
+      HIT_RATE,
+      PLAN_NUM,
+      MEM_LIMIT,
+      HASH_BUCKET,
+      STMTKEY_NUM
       FROM SYS.GV$OB_PLAN_CACHE_STAT WHERE
       SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52468,7 +53756,16 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  SELECT *
+  SELECT SESSION_ID,
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    TRACE_ID,
+    QC_ID,
+    SQC_ID,
+    WORKER_ID,
+    DFO_ID,
+    START_TIME
   FROM SYS.GV$OB_PX_WORKER_STAT
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52509,7 +53806,12 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT SVR_IP,
+    SVR_PORT,
+    STMT_COUNT,
+    HIT_COUNT,
+    ACCESS_COUNT,
+    MEM_HOLD
   FROM SYS.GV$OB_PS_STAT
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52546,7 +53848,9 @@ table_name      = 'V$OB_PS_ITEM_INFO',
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT SVR_IP, SVR_PORT, STMT_ID, DB_ID,
+         PS_SQL, PARAM_COUNT, STMT_ITEM_REF_COUNT,
+         STMT_INFO_REF_COUNT, MEM_HOLD, STMT_TYPE, CHECKSUM, EXPIRED
   FROM SYS.GV$OB_PS_ITEM_INFO
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52605,7 +53909,30 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  SELECT * FROM SYS.GV$SQL_WORKAREA_ACTIVE
+  SELECT SQL_HASH_VALUE,
+SQL_ID,
+SQL_EXEC_START,
+SQL_EXEC_ID,
+WORKAREA_ADDRESS,
+OPERATION_TYPE,
+OPERATION_ID,
+POLICY,
+SID,
+QCINST_ID,
+QCSID,
+ACTIVE_TIME,
+WORK_AREA_SIZE,
+EXPECT_SIZE,
+ACTUAL_MEM_USED,
+MAX_MEM_USED,
+NUMBER_PASSES,
+TEMPSEG_SIZE,
+TABLESPACE,
+"SEGRFNO#",
+"SEGBLK#",
+CON_ID,
+SVR_IP,
+SVR_PORT FROM SYS.GV$SQL_WORKAREA_ACTIVE
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -52648,7 +53975,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  SELECT *
+  SELECT LOW_OPTIMAL_SIZE,
+HIGH_OPTIMAL_SIZE,
+OPTIMAL_EXECUTIONS,
+ONEPASS_EXECUTIONS,
+MULTIPASSES_EXECUTIONS,
+TOTAL_EXECUTIONS,
+CON_ID,
+SVR_IP,
+SVR_PORT
   FROM SYS.GV$SQL_WORKAREA_HISTOGRAM
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52694,7 +54029,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  SELECT *
+  SELECT MAX_WORKAREA_SIZE,
+      WORKAREA_HOLD_SIZE,
+      MAX_AUTO_WORKAREA_SIZE,
+      MEM_TARGET,
+      TOTAL_MEM_USED,
+      GLOBAL_MEM_BOUND,
+      DRIFT_SIZE,
+      WORKAREA_COUNT,
+      MANUAL_CALC_COUNT,
+      SVR_IP,
+      SVR_PORT
   FROM SYS.GV$OB_SQL_WORKAREA_MEMORY_INFO
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52766,7 +54111,44 @@ normal_columns  = [],
 gm_columns      = [],
 in_tenant_space = True,
 view_definition = """
-SELECT * FROM SYS.GV$OB_PLAN_CACHE_REFERENCE_INFO
+SELECT SVR_IP,
+SVR_PORT,
+TENANT_ID,
+PC_REF_PLAN_LOCAL,
+PC_REF_PLAN_REMOTE,
+PC_REF_PLAN_DIST,
+PC_REF_PLAN_ARR,
+PC_REF_PL,
+PC_REF_PL_STAT,
+PLAN_GEN,
+CLI_QUERY,
+OUTLINE_EXEC,
+PLAN_EXPLAIN,
+ASYN_BASELINE,
+LOAD_BASELINE,
+PS_EXEC,
+GV_SQL,
+PL_ANON,
+PL_ROUTINE,
+PACKAGE_VAR,
+PACKAGE_TYPE,
+PACKAGE_SPEC,
+PACKAGE_BODY,
+PACKAGE_RESV,
+GET_PKG,
+INDEX_BUILDER,
+PCV_SET,
+PCV_RD,
+PCV_WR,
+PCV_GET_PLAN_KEY,
+PCV_GET_PL_KEY,
+PCV_EXPIRE_BY_USED,
+PCV_EXPIRE_BY_MEM,
+LC_REF_CACHE_NODE,
+LC_NODE,
+LC_NODE_RD,
+LC_NODE_WR,
+LC_REF_CACHE_OBJ_STAT FROM SYS.GV$OB_PLAN_CACHE_REFERENCE_INFO
 WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -52823,7 +54205,29 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  SELECT *
+  SELECT ADDRESS,
+HASH_VALUE,
+SQL_ID,
+CHILD_NUMBER,
+WORKAREA_ADDRESS,
+OPERATION_TYPE,
+OPERATION_ID,
+POLICY,
+ESTIMATED_OPTIMAL_SIZE,
+ESTIMATED_ONEPASS_SIZE,
+LAST_MEMORY_USED,
+LAST_EXECUTION,
+LAST_DEGREE,
+TOTAL_EXECUTIONS,
+OPTIMAL_EXECUTIONS,
+ONEPASS_EXECUTIONS,
+MULTIPASSES_EXECUTIONS,
+ACTIVE_TIME,
+MAX_TEMPSEG_SIZE,
+LAST_TEMPSEG_SIZE,
+CON_ID,
+SVR_IP,
+SVR_PORT
   FROM SYS.GV$SQL_WORKAREA
   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -52877,8 +54281,19 @@ normal_columns  = [],
 gm_columns      = [],
 in_tenant_space = True,
 view_definition = """
-SELECT *
-FROM SYS.GV$OB_SSTABLES
+SELECT M.SVR_IP,
+ M.SVR_PORT,
+ M.TABLE_TYPE,
+ M.LS_ID,
+ M.TABLET_ID,
+ M.START_LOG_SCN,
+ M.END_LOG_SCN,
+ M."SIZE",
+ M.REF,
+ M.UPPER_TRANS_VERSION,
+ M.IS_ACTIVE,
+ M.CONTAIN_UNCOMMITTED_ROW
+FROM SYS.GV$OB_SSTABLES M
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -52921,7 +54336,14 @@ def_table_schema(
  gm_columns      = [],
  in_tenant_space = True,
  view_definition = """
-SELECT *
+SELECT SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  REFRESHED_SCHEMA_VERSION,
+  RECEIVED_SCHEMA_VERSION,
+  SCHEMA_COUNT,
+  SCHEMA_SIZE,
+  MIN_SSTABLE_SCHEMA_VERSION
 FROM
   SYS.GV$OB_SERVER_SCHEMA_INFO
 WHERE
@@ -53046,7 +54468,92 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-    SELECT * FROM SYS.GV$SQL_PLAN_MONITOR  WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+    SELECT CON_ID,
+REQUEST_ID,
+KEY,
+STATUS,
+SVR_IP,
+SVR_PORT,
+TRACE_ID,
+FIRST_REFRESH_TIME,
+LAST_REFRESH_TIME,
+FIRST_CHANGE_TIME,
+LAST_CHANGE_TIME,
+REFRESH_COUNT,
+SID,
+PROCESS_NAME,
+SQL_ID,
+SQL_EXEC_START,
+SQL_EXEC_ID,
+SQL_PLAN_HASH_VALUE,
+SQL_CHILD_ADDRESS,
+PLAN_PARENT_ID,
+PLAN_LINE_ID,
+PLAN_OPERATION,
+PLAN_OPTIONS,
+PLAN_OBJECT_OWNER,
+PLAN_OBJECT_NAME,
+PLAN_OBJECT_TYPE,
+PLAN_DEPTH,
+PLAN_POSITION,
+PLAN_COST,
+PLAN_CARDINALITY,
+PLAN_BYTES,
+PLAN_TIME,
+PLAN_PARTITION_START,
+PLAN_PARTITION_STOP,
+PLAN_CPU_COST,
+PLAN_IO_COST,
+PLAN_TEMP_SPACE,
+STARTS,
+OUTPUT_ROWS,
+IO_INTERCONNECT_BYTES,
+PHYSICAL_READ_REQUESTS,
+PHYSICAL_READ_BYTES,
+PHYSICAL_WRITE_REQUESTS,
+PHYSICAL_WRITE_BYTES,
+WORKAREA_MEM,
+WORKAREA_MAX_MEM,
+WORKAREA_TEMPSEG,
+WORKAREA_MAX_TEMPSEG,
+OTHERSTAT_GROUP_ID,
+OTHERSTAT_1_ID,
+OTHERSTAT_1_TYPE,
+OTHERSTAT_1_VALUE,
+OTHERSTAT_2_ID,
+OTHERSTAT_2_TYPE,
+OTHERSTAT_2_VALUE,
+OTHERSTAT_3_ID,
+OTHERSTAT_3_TYPE,
+OTHERSTAT_3_VALUE,
+OTHERSTAT_4_ID,
+OTHERSTAT_4_TYPE,
+OTHERSTAT_4_VALUE,
+OTHERSTAT_5_ID,
+OTHERSTAT_5_TYPE,
+OTHERSTAT_5_VALUE,
+OTHERSTAT_6_ID,
+OTHERSTAT_6_TYPE,
+OTHERSTAT_6_VALUE,
+OTHERSTAT_7_ID,
+OTHERSTAT_7_TYPE,
+OTHERSTAT_7_VALUE,
+OTHERSTAT_8_ID,
+OTHERSTAT_8_TYPE,
+OTHERSTAT_8_VALUE,
+OTHERSTAT_9_ID,
+OTHERSTAT_9_TYPE,
+OTHERSTAT_9_VALUE,
+OTHERSTAT_10_ID,
+OTHERSTAT_10_TYPE,
+OTHERSTAT_10_VALUE,
+OTHER_XML,
+PLAN_OPERATION_INACTIVE,
+OUTPUT_BATCHES,
+SKIPPED_ROWS_COUNT,
+DB_TIME,
+USER_IO_WAIT_TIME,
+OTHER_WAIT_TIME FROM SYS.GV$SQL_PLAN_MONITOR  WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -53116,7 +54623,20 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$OPEN_CURSOR
+    SELECT SVR_IP,
+SVR_PORT,
+SADDR,
+SID,
+USER_NAME,
+ADDRESS,
+HASH_VALUE,
+SQL_ID,
+SQL_TEXT,
+LAST_SQL_ACTIVE_TIME,
+SQL_EXEC_ID,
+CURSOR_TYPE,
+CHILD_ADDRESS,
+CON_ID FROM SYS.GV$OPEN_CURSOR
       WHERE svr_ip = host_ip() AND svr_port = rpc_port()
   """.replace("\n", " ")
 )
@@ -54911,7 +56431,11 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           HOLD,
+           FREE
     FROM SYS.GV$OB_TENANT_MEMORY
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -54956,7 +56480,17 @@ def_table_schema(
     in_tenant_space = True,
     rowkey_columns = [],
     normal_columns = [],
-    view_definition = """SELECT *
+    view_definition = """SELECT SVR_IP,
+          SVR_PORT,
+          TENANT_ID,
+          IS_LEADER,
+          VERSION,
+          PEER_IP,
+          PEER_PORT,
+          PEER_TARGET,
+          PEER_TARGET_USED,
+          LOCAL_TARGET_USED,
+          LOCAL_PARALLEL_SESSION_COUNT
         FROM SYS.GV$OB_PX_TARGET_MONITOR
         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " ")
@@ -55274,7 +56808,24 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT
-  *
+  TENANT_ID,
+SVR_IP,
+SVR_PORT,
+LINK_ID,
+LOGGED_ON,
+HETEROGENEOUS,
+PROTOCOL,
+OPEN_CURSORS,
+IN_TRANSACTION,
+UPDATE_SENT,
+COMMIT_POINT_STRENGTH,
+LINK_TENANT_ID,
+OCI_CONN_OPENED,
+OCI_CONN_CLOSED,
+OCI_STMT_QUERIED,
+OCI_ENV_CHARSET,
+OCI_ENV_NCHARSET,
+EXTRA_INFO
   FROM
   SYS.ALL_VIRTUAL_DBLINK_INFO where tenant_id = effective_tenant_id()
 """.replace("\n", " ")
@@ -55507,7 +57058,24 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+           SVR_PORT,
+           UNIT_ID,
+           TENANT_ID,
+           ZONE,
+           ZONE_TYPE,
+           REGION,
+           MIN_CPU,
+           MAX_CPU,
+           MEMORY_SIZE,
+           MIN_IOPS,
+           MAX_IOPS,
+           IOPS_WEIGHT,
+           LOG_DISK_SIZE,
+           LOG_DISK_IN_USE,
+           DATA_DISK_IN_USE,
+           STATUS,
+           CREATE_TIME
     FROM SYS.GV$OB_UNITS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -55553,7 +57121,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+  SVR_PORT,
+  ZONE,
+  SCOPE,
+  TENANT_ID,
+  NAME,
+  DATA_TYPE,
+  VALUE,
+  INFO,
+  SECTION,
+  EDIT_LEVEL
     FROM SYS.GV$OB_PARAMETERS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -55623,7 +57201,41 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP, SVR_PORT, SQL_PORT,
+  ID,
+  "USER",
+  HOST,
+  DB,
+  TENANT,
+  COMMAND,
+  TIME,
+  TOTAL_TIME,
+  STATE,
+  INFO,
+  PROXY_SESSID,
+  MASTER_SESSID,
+  USER_CLIENT_IP,
+  USER_HOST,
+  RETRY_CNT,
+  RETRY_INFO,
+  SQL_ID,
+  TRANS_ID,
+  THREAD_ID,
+  SSL_CIPHER,
+  TRACE_ID,
+  TRANS_STATE,
+  ACTION,
+  MODULE,
+  CLIENT_INFO,
+  "LEVEL",
+  SAMPLE_PERCENTAGE,
+  RECORD_POLICY,
+  LB_VID,
+  LB_VIP,
+  LB_VPORT,
+  IN_BYTES,
+  OUT_BYTES,
+  USER_CLIENT_PORT
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -55668,7 +57280,16 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  CACHE_NAME,
+  PRIORITY,
+  CACHE_SIZE,
+  HIT_RATIO,
+  TOTAL_PUT_CNT,
+  TOTAL_HIT_CNT,
+  TOTAL_MISS_CNT
     FROM SYS.GV$OB_KVCACHE
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -55754,7 +57375,27 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT tenant_id,
+SVR_IP,
+SVR_PORT,
+SESSION_ID,
+SCHEDULER_ADDR,
+TX_TYPE,
+TX_ID,
+LS_ID,
+PARTICIPANTS,
+CTX_CREATE_TIME,
+TX_EXPIRED_TIME,
+STATE,
+ACTION,
+PENDING_LOG_SIZE,
+FLUSHED_LOG_SIZE,
+ROLE,
+COORD,
+LAST_REQUEST_TIME,
+FORMATID,
+GLOBALID,
+BRANCHID
     FROM SYS.GV$OB_TRANSACTION_PARTICIPANTS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
@@ -55804,7 +57445,21 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      ZONE,
+      COMPACTION_SCN,
+      STATUS,
+      TOTAL_TABLET_COUNT,
+      UNFINISHED_TABLET_COUNT,
+      DATA_SIZE,
+      UNFINISHED_DATA_SIZE,
+      COMPRESSION_RATIO,
+      START_TIME,
+      ESTIMATED_FINISH_TIME,
+      COMMENTS
     FROM SYS.GV$OB_COMPACTION_PROGRESS
     WHERE
         SVR_IP=HOST_IP()
@@ -55859,7 +57514,23 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      COMPACTION_SCN,
+      TASK_ID,
+      STATUS,
+      DATA_SIZE,
+      UNFINISHED_DATA_SIZE,
+      PROGRESSIVE_COMPACTION_ROUND,
+      CREATE_TIME,
+      START_TIME,
+      ESTIMATED_FINISH_TIME,
+      START_CG_ID,
+      END_CG_ID
     FROM SYS.GV$OB_TABLET_COMPACTION_PROGRESS
     WHERE
         SVR_IP=HOST_IP()
@@ -55925,7 +57596,34 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      LS_ID,
+      TABLET_ID,
+      TYPE,
+      COMPACTION_SCN,
+      START_TIME,
+      FINISH_TIME,
+      TASK_ID,
+      OCCUPY_SIZE,
+      MACRO_BLOCK_COUNT,
+      MULTIPLEXED_MACRO_BLOCK_COUNT,
+      NEW_MICRO_COUNT_IN_NEW_MACRO,
+      MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,
+      TOTAL_ROW_COUNT,
+      INCREMENTAL_ROW_COUNT,
+      COMPRESSION_RATIO,
+      NEW_FLUSH_DATA_RATE,
+      PROGRESSIVE_COMPACTION_ROUND,
+      PROGRESSIVE_COMPACTION_NUM,
+      PARALLEL_DEGREE,
+      PARALLEL_INFO,
+      PARTICIPANT_TABLE,
+      MACRO_ID_LIST,
+      COMMENTS,
+      START_CG_ID,
+      END_CG_ID
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -55978,7 +57676,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      STATUS,
+      CREATE_TIME,
+      DIAGNOSE_INFO
     FROM SYS.GV$OB_COMPACTION_DIAGNOSE_INFO
     WHERE
         SVR_IP=HOST_IP()
@@ -56025,7 +57731,15 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      TYPE,
+      LS_ID,
+      TABLET_ID,
+      START_TIME,
+      FINISH_TIME,
+      SUGGESTION
     FROM SYS.GV$OB_COMPACTION_SUGGESTIONS
     WHERE
         SVR_IP=HOST_IP()
@@ -56081,7 +57795,25 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-    SELECT * FROM SYS.GV$OB_DTL_INTERM_RESULT_MONITOR
+    SELECT SVR_IP,
+          SVR_PORT,
+          TENANT_ID,
+          TRACE_ID,
+          OWNER,
+          START_TIME,
+          EXPIRE_TIME,
+          HOLD_MEMORY,
+          DUMP_SIZE,
+          DUMP_COST,
+          DUMP_TIME,
+          DUMP_FD,
+          DUMP_DIR_ID,
+          CHANNEL_ID,
+          QC_ID,
+          DFO_ID,
+          SQC_ID,
+          BATCH_ID,
+          MAX_HOLD_MEMORY FROM SYS.GV$OB_DTL_INTERM_RESULT_MONITOR
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -56258,7 +57990,46 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  view_definition = """SELECT
+      SVR_IP,
+      SVR_PORT,
+      SAMPLE_ID,
+      SAMPLE_TIME,
+      CON_ID,
+      USER_ID,
+      SESSION_ID,
+      SESSION_TYPE,
+      SESSION_STATE,
+      SQL_ID,
+      PLAN_ID,
+      TRACE_ID,
+      EVENT,
+      EVENT_NO,
+      P1TEXT,
+      P1,
+      P2TEXT,
+      P2,
+      P3TEXT,
+      P3,
+      WAIT_CLASS,
+      WAIT_CLASS_ID,
+      TIME_WAITED,
+      SQL_PLAN_LINE_ID,
+      IN_PARSE,
+      IN_PL_PARSE,
+      IN_PLAN_CACHE,
+      IN_SQL_OPTIMIZE,
+      IN_SQL_EXECUTION,
+      IN_PX_EXECUTION,
+      IN_SEQUENCE_LOAD,
+      IN_COMMITTING,
+      IN_STORAGE_READ,
+      IN_STORAGE_WRITE,
+      IN_REMOTE_DAS_EXECUTION,
+      MODULE,
+      ACTION,
+      CLIENT_ID,
+      BACKTRACE FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -56303,7 +58074,20 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-    SELECT * FROM SYS.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+    SELECT
+          SVR_IP,
+          SVR_PORT,
+          INST_ID,
+          OBJN,
+          INS,
+          UPD,
+          DEL,
+          DROPSEG,
+          CURROWS,
+          PAROBJN,
+          LASTUSED,
+          FLAGS,
+          CON_ID FROM SYS.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -56489,7 +58273,27 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    ROLE,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    IN_SYNC,
+    BASE_LSN,
+    BEGIN_LSN,
+    BEGIN_SCN,
+    END_LSN,
+    END_SCN,
+    MAX_LSN,
+    MAX_SCN,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST,
+    LEARNER_LIST
   FROM SYS.GV$OB_LOG_STAT
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -56548,7 +58352,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT TENANT_ID,
+      FORMATID,
+      GLOBALID,
+      BRANCHID,
+      TX_ID,
+      SVR_IP,
+      SVR_PORT,
+      COORD_LS_ID,
+      IS_READONLY,
+      STATE,
+      FLAG
     FROM SYS.GV$OB_GLOBAL_TRANSACTION
     WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
   """.replace("\n", " ")
@@ -56910,7 +58724,26 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    SESSION_ID,
+    TX_ID,
+    STATE,
+    CLUSTER_ID,
+    COORDINATOR,
+    PARTICIPANTS,
+    ISOLATION_LEVEL,
+    SNAPSHOT_VERSION,
+    ACCESS_MODE,
+    TX_OP_SN,
+    ACTIVE_TIME,
+    EXPIRE_TIME,
+    CAN_EARLY_LOCK_RELEASE,
+    FORMATID,
+    GLOBALID,
+    BRANCHID
     FROM SYS.GV$OB_TRANSACTION_SCHEDULERS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
@@ -57269,7 +59102,17 @@ def_table_schema(
   normal_columns  = [],
   in_tenant_space = True,
   view_definition = """
-SELECT *
+SELECT SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  TRANS_ID,
+  TYPE,
+  ID1,
+  ID2,
+  LMODE,
+  REQUEST,
+  CTIME,
+  BLOCK
     FROM SYS.GV$OB_LOCKS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
   """.replace("\n", " "),
@@ -57362,7 +59205,21 @@ def_table_schema(
     rowkey_columns = [],
     normal_columns = [],
     view_definition = """
-    SELECT * FROM SYS.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+    SELECT TENANT_ID,
+          SVR_IP,
+          SVR_PORT,
+          SESSION_ID,
+          TRACE_ID,
+          TASK_ID,
+          TYPE,
+          TASK_START_TIME,
+          TASK_DURATION_TIME,
+          TASK_TABLE_COUNT,
+          COMPLETED_TABLE_COUNT,
+          RUNNING_TABLE_OWNER,
+          RUNNING_TABLE_NAME,
+          RUNNING_TABLE_DURATION_TIME,
+          RUNNING_TABLE_PROGRESS FROM SYS.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -57407,7 +59264,17 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT * FROM SYS.GV$SESSION_LONGOPS
+    SELECT SID,
+           TRACE_ID,
+           OPNAME,
+           TARGET,
+           SVR_IP,
+           SVR_PORT,
+           START_TIME,
+           ELAPSED_SECONDS,
+           TIME_REMAINING,
+           LAST_UPDATE_TIME,
+           MESSAGE FROM SYS.GV$SESSION_LONGOPS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
@@ -57451,7 +59318,16 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  *
+  SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  TID,
+  TNAME,
+  STATUS,
+  LATCH_WAIT,
+  LATCH_HOLD,
+  TRACE_ID,
+  CGROUP_PATH
 FROM SYS.GV$OB_THREAD
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
@@ -57497,7 +59373,17 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
   FROM SYS.GV$OB_ARBITRATION_MEMBER_INFO
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -57536,7 +59422,10 @@ def_table_schema(
     normal_columns  = [],
     in_tenant_space = True,
     view_definition = """
-  SELECT *
+  SELECT SVR_IP,
+    SVR_PORT,
+    ARBITRATION_SERVICE_ADDRESS,
+    STATUS
   FROM SYS.GV$OB_ARBITRATION_SERVICE_STATUS
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
@@ -57659,7 +59548,12 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  *
+  SVR_IP,
+  SVR_PORT,
+  CFS_QUOTA_US,
+  CFS_PERIOD_US,
+  SHARES,
+  CGROUP_PATH
 FROM SYS.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
@@ -57801,7 +59695,22 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT *
+  view_definition = """SELECT TENANT_ID,
+      SNAPSHOT_ID,
+      LS_ID,
+      SVR_IP,
+      SVR_PORT,
+      META_EXISTED,
+      BUILD_STATUS,
+      REBUILD_SEQ_START,
+      REBUILD_SEQ_END,
+      END_INTERVAL_SCN,
+      LS_META_PACKAGE,
+      TSNAP_IS_RUNNING,
+      TSNAP_HAS_UNFINISHED_CREATE_DAG,
+      TSNAP_HAS_UNFINISHED_GC_DAG,
+      TSNAP_CLONE_REF,
+      TSNAP_META_EXISTED
     FROM SYS.GV$OB_LS_SNAPSHOTS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),

@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_sstables_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM OCEANBASE.GV$OB_SSTABLES WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT M.SVR_IP,  M.SVR_PORT,  M.TABLE_TYPE,  M.TENANT_ID,  M.LS_ID,  M.TABLET_ID,  M.CG_IDX,  M.START_LOG_SCN,  M.END_LOG_SCN,  M.DATA_CHECKSUM,  M.SIZE,  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM OCEANBASE.GV$OB_SSTABLES M WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::v_ob_server_schema_info_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM   oceanbase.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   TENANT_ID,   REFRESHED_SCHEMA_VERSION,   RECEIVED_SCHEMA_VERSION,   SCHEMA_COUNT,   SCHEMA_SIZE,   MIN_SSTABLE_SCHEMA_VERSION FROM   oceanbase.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -460,7 +460,7 @@ int ObInnerTableSchema::v_ob_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM OCEANBASE.GV$OB_MERGE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT         SVR_IP,         SVR_PORT,         TENANT_ID,         LS_ID,         TABLET_ID,         ACTION,         COMPACTION_SCN,         START_TIME,         END_TIME,         MACRO_BLOCK_COUNT,         REUSE_PCT,         PARALLEL_DEGREE     FROM OCEANBASE.GV$OB_MERGE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -810,7 +810,7 @@ int ObInnerTableSchema::v_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM     oceanbase.GV$OB_TENANT_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT TENANT_ID,        SVR_IP,        SVR_PORT,        HOLD,        FREE FROM     oceanbase.GV$OB_TENANT_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::v_ob_px_target_monitor_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT *         FROM oceanbase.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                           SVR_IP,                           SVR_PORT,                           TENANT_ID,                           IS_LEADER,                           VERSION,                           PEER_IP,                           PEER_PORT,                           PEER_TARGET,                           PEER_TARGET_USED,                           LOCAL_TARGET_USED,                           LOCAL_PARALLEL_SESSION_COUNT         FROM oceanbase.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

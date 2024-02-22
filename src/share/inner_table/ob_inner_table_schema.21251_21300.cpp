@@ -960,7 +960,7 @@ int ObInnerTableSchema::v_active_session_history_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP,     SVR_PORT,     SAMPLE_ID,     SAMPLE_TIME,     CON_ID,     USER_ID,     SESSION_ID,     SESSION_TYPE,     SESSION_STATE,     SQL_ID,     PLAN_ID,     TRACE_ID,     EVENT,     EVENT_NO,     P1TEXT,     P1,     P2TEXT,     P2,     P3TEXT,     P3,     WAIT_CLASS,     WAIT_CLASS_ID,     TIME_WAITED,     SQL_PLAN_LINE_ID,     IN_PARSE,     IN_PL_PARSE,     IN_PLAN_CACHE,     IN_SQL_OPTIMIZE,     IN_SQL_EXECUTION,     IN_PX_EXECUTION,     IN_SEQUENCE_LOAD,     IN_COMMITTING,     IN_STORAGE_READ,     IN_STORAGE_WRITE,     IN_REMOTE_DAS_EXECUTION,     MODULE,     ACTION,     CLIENT_ID,     BACKTRACE FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1060,7 +1060,7 @@ int ObInnerTableSchema::v_dml_stats_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM oceanbase.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     INST_ID,     OBJN,     INS,     UPD,     DEL,     DROPSEG,     CURROWS,     PAROBJN,     LASTUSED,     FLAGS,     CON_ID FROM oceanbase.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
