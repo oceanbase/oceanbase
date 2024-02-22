@@ -594,6 +594,10 @@ public:
     return is_udt_routine() && SP_FLAG_STATIC == (flag_ & SP_FLAG_STATIC);
   }
 
+  OB_INLINE bool is_dblink_routine() const {
+    return dblink_id_ != OB_INVALID_ID;
+  }
+
   TO_STRING_KV(K_(tenant_id),
                K_(database_id),
                K_(package_id),

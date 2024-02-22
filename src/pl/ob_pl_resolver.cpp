@@ -11358,7 +11358,8 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
     }
     OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
     OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
-                                                pkg_name,
+                                                sch_routine_info->is_dblink_routine() ?
+                                                    sch_routine_info->get_dblink_pkg_name() : pkg_name,
                                                 routine_id,
                                                 sch_routine_info->get_package_id(),
                                                 ObArray<int64_t>(),
@@ -12313,7 +12314,8 @@ int ObPLResolver::resolve_udf_info(
       }
       GET_DBLINK_NAME(schema_routine_info);
       OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
-                                                  package_name,
+                                                  schema_routine_info->is_dblink_routine() ?
+                                                    schema_routine_info->get_dblink_pkg_name() : package_name,
                                                   routine_id,
                                                   schema_routine_info->get_package_id(),
                                                   ObArray<int64_t>(),
@@ -13898,6 +13900,13 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
                                 static_cast<uint64_t>(access_idxs.at(access_idxs.count()-1).var_index_),
                                 routine_name, expr_params, routine_info));
         OX (func.set_can_cached(false));
+      }
+      if (OB_SUCC(ret) && NULL != routine_info && NULL != routine_info->get_ret_info()) {
+        CK (access_ident.is_pl_udf());
+        CK (OB_NOT_NULL(access_ident.udf_info_.ref_expr_));
+        if (OB_SUCC(ret)) {
+          access_ident.udf_info_.ref_expr_->set_func_name(routine_info->get_routine_name());
+        }
       }
     }
 
