@@ -2524,6 +2524,22 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
     }
   }
   if (OB_SUCC(ret)) {
+    //split expr may result T_OP_ROW shared
+    ObSEArray<ObRawExpr*, 4> new_or_exprs;
+    ObRawExprCopier copier(*expr_factory);
+    ReplaceExprByType replacer(T_OP_ROW);
+    if (OB_FAIL(copier.copy_on_replace(or_exprs,
+                                       new_or_exprs,
+                                       &replacer))) {
+      LOG_WARN("failed to copy on replace start with exprs", K(ret));
+    } else if (OB_UNLIKELY(or_exprs.count() != new_or_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(or_exprs.count()), K(new_or_exprs.count()));
+    } else if (OB_FAIL(or_exprs.assign(new_or_exprs))) {
+      LOG_WARN("failed to assign assign results", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory, or_exprs, new_expr))) {
       LOG_WARN("failed to build or expr", K(ret));
     } else if (OB_ISNULL(new_expr)) {
