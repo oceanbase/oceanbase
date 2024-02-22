@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_column_stat.h"
@@ -270,7 +271,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_STAT_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_ORA_TID ||
-         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID;
+         table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_MDS_NODE_STAT_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)

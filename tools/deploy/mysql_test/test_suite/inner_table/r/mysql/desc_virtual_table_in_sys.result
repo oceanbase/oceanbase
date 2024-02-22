@@ -7850,11 +7850,9 @@ state	longtext	NO		NULL
 position	longtext	NO		NULL	
 user_data	longtext	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mds_node_stat;
-IF(count(*) >= 0, 1, 0)
-1
+ERROR 0A000: Not supported feature or function
 "oceanbase.__all_virtual_mds_node_stat runs in single server"
-IF(count(*) >= 0, 1, 0)
-1
+ERROR 0A000: Not supported feature or function
 desc oceanbase.__all_virtual_mds_event_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

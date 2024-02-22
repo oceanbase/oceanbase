@@ -295,17 +295,7 @@ int ObAllVirtualMdsNodeStat::get_tablet_info_(ObLS &ls, const ObFunction<int(ObT
     MDS_LOG(ERROR, "invalid ob function", KR(ret), K(key_ranges_), K(*this));
   } else {
     if (!tablet_ranges_.empty()) {// scan
-      if (OB_FAIL(ObTenantMdsService::for_each_tablet_in_ls(ls, [&ret, &apply_on_tablet_op, this](ObTablet &tablet) {
-        common::ObTabletID tablet_id = tablet.get_tablet_meta().tablet_id_;
-        if (judege_in_ranges(tablet_id, tablet_ranges_) || in_selected_points_(tablet_id)) {
-          if (OB_FAIL(apply_on_tablet_op(tablet))) {
-            MDS_LOG(WARN, "fail to apply op on tablet", KR(ret), K(key_ranges_), K(*this));
-          }
-        }
-        return ret;
-      }))) {
-        MDS_LOG(WARN, "fail to do for_each tablet in ls", KR(ret), K(key_ranges_), K(*this));
-      }
+      ret = OB_NOT_SUPPORTED;
     } else if (!tablet_points_.empty()) {// point select
       for (int64_t idx = 0; idx < tablet_points_.count() && OB_SUCC(ret); ++idx) {
         ObTabletHandle tablet_handle;
