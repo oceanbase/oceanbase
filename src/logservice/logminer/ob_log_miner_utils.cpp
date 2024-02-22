@@ -76,7 +76,7 @@ int write_signed_number(const int64_t num, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_NUM_LEN = 30;
-  char buf[MAX_NUM_LEN];
+  char buf[MAX_NUM_LEN] = {0};
   int len = snprintf(buf, MAX_NUM_LEN, "%ld", num);
   APPEND_STR(buffer, buf, len);
   return ret;
@@ -86,7 +86,7 @@ int write_unsigned_number(const uint64_t num, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_NUM_LEN = 30;
-  char buf[MAX_NUM_LEN];
+  char buf[MAX_NUM_LEN] = {0};
   int len = snprintf(buf, MAX_NUM_LEN, "%lu", num);
   APPEND_STR(buffer, buf, len);
   return ret;

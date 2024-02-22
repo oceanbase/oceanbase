@@ -438,11 +438,7 @@ int ObLogMinerFileManager::generate_data_file_header_(
     }
 
     case RecordFileFormat::REDO_ONLY:
-    case RecordFileFormat::UNDO_ONLY: {
-      // do nothing;
-      break;
-    }
-
+    case RecordFileFormat::UNDO_ONLY:
     case RecordFileFormat::JSON: {
       // do nothing;
       break;

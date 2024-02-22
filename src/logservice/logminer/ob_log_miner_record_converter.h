@@ -27,8 +27,8 @@ public:
   // TODO: there may be concurrency issue in future?
   static ILogMinerRecordConverter *get_converter_instance(const RecordFileFormat format);
   virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written) = 0;
-  virtual int set_timezone(const char *timezone) = 0;
 
+public:
   // TENANT_ID,TRANS_ID,PRIMARY_KEY,ROW_UNIQUE_ID,SEQ_NO,TENANT_NAME,USER_NAME,TABLE_NAME,OPERATION,
   // OPERATION_CODE,COMMIT_SCN,COMMIT_TIMESTAMP,SQL_REDO,SQL_UNDO,ORG_CLUSTER_ID
   #define MINER_SCHEMA_DEF(field, id, args...) \
@@ -46,20 +46,17 @@ class ObLogMinerRecordCsvConverter: public ILogMinerRecordConverter
 {
 public:
   virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
-  virtual int set_timezone(const char *timezone);
 public:
-  ObLogMinerRecordCsvConverter();
+  ObLogMinerRecordCsvConverter() {};
   ~ObLogMinerRecordCsvConverter() {}
 private:
-  ObTimeZoneInfo tz_info_;
-  int write_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
+  int write_csv_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
 };
 
 class ObLogMinerRecordRedoSqlConverter: public ILogMinerRecordConverter
 {
 public:
   virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
-  virtual int set_timezone(const char *timezone);
 public:
   ObLogMinerRecordRedoSqlConverter() {}
   ~ObLogMinerRecordRedoSqlConverter() {}
@@ -70,7 +67,6 @@ class ObLogMinerRecordUndoSqlConverter: public ILogMinerRecordConverter
 {
 public:
   virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
-  virtual int set_timezone(const char *timezone);
 public:
   ObLogMinerRecordUndoSqlConverter() {}
   ~ObLogMinerRecordUndoSqlConverter() {}
@@ -80,14 +76,12 @@ class ObLogMinerRecordJsonConverter: public ILogMinerRecordConverter
 {
 public:
   virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
-  virtual int set_timezone(const char *timezone);
 public:
-  ObLogMinerRecordJsonConverter();
+  ObLogMinerRecordJsonConverter() {};
   ~ObLogMinerRecordJsonConverter() {}
 private:
-  int write_json_key_(const ObString &str, common::ObStringBuffer &buffer);
-  int write_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
-  ObTimeZoneInfo tz_info_;
+  int write_json_key_(const char *str, common::ObStringBuffer &buffer);
+  int write_json_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
 };
 
 }

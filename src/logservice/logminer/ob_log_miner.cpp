@@ -21,6 +21,7 @@
 #include "ob_log_miner_utils.h"
 #include "ob_log_miner_logger.h"
 #include "ob_log_miner_record_converter.h"
+#include "ob_log_miner_timezone_getter.h"
 
 namespace oceanbase {
 namespace oblogminer {
@@ -53,11 +54,8 @@ int ObLogMiner::init(const ObLogMinerArgs &args)
   } else {
     mode_ = args.mode_;
     LOGMINER_LOGGER.set_verbose(args.verbose_);
-    if (OB_FAIL(LOGMINER_LOGGER.set_timezone(args.timezone_))) {
+    if (OB_FAIL(LOGMINER_TZ.set_timezone(args.timezone_))) {
       LOG_ERROR("oblogminer logger set timezone failed", K(ret), K(args.timezone_));
-    } else if (OB_FAIL(ILogMinerRecordConverter::get_converter_instance(
-        RecordFileFormat::CSV)->set_timezone(args.timezone_))) {
-      LOG_ERROR("csv converter set timezone failed", K(ret), K(args.timezone_));
     }
     if (OB_SUCC(ret)) {
       if (is_analysis_mode(mode_)) {

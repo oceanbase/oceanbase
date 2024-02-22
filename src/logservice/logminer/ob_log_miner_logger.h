@@ -13,9 +13,6 @@
 #ifndef OCEANBASE_LOG_MINER_LOGGER_H_
 #define OCEANBASE_LOG_MINER_LOGGER_H_
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/timezone/ob_timezone_info.h"            // ObTimeZoneInfo
-
 namespace oceanbase
 {
 namespace oblogminer
@@ -35,14 +32,12 @@ public:
   void set_verbose(bool verbose) {
     verbose_ = verbose;
   }
-  int set_timezone(const char *timezone);
   void log_stdout(const char *format, ...);
   void log_stdout_v(const char *format, ...);
   int log_progress(int64_t record_num, int64_t current_ts, int64_t begin_ts, int64_t end_ts);
 
 private:
   bool verbose_;
-  ObTimeZoneInfo tz_info_;
 };
 
 }

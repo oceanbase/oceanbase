@@ -30,7 +30,6 @@ namespace oceanbase
 {
 namespace oblogminer
 {
-
 #define MINER_SCHEMA_DEF(field, id, args...) \
 ILogMinerRecordConverter::ColType::field,
 const ILogMinerRecordConverter::ColType ILogMinerRecordConverter::COL_ORDER[] =
@@ -80,8 +79,6 @@ ILogMinerRecordConverter *ILogMinerRecordConverter::get_converter_instance(const
 }
 
 ////////////////////////////// ObLogMinerRecordCsvConverter //////////////////////////////
-ObLogMinerRecordCsvConverter::ObLogMinerRecordCsvConverter():
-    tz_info_() {}
 
 int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
     common::ObStringBuffer &buffer, bool &is_written)
@@ -124,7 +121,7 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
       case ColType::DATABASE_NAME: {
         if (OB_FAIL(write_string_no_escape(record.get_database_name().str(), buffer))) {
           LOG_ERROR("write database_name failed", K(record));
-        } // database_name/user_name
+        } // database_name
         break;
       }
 
@@ -162,7 +159,7 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
         int64_t pos = 0;
         ObString nls_format;
         if (OB_FAIL(ObTimeConverter::datetime_to_str(record.get_commit_scn().convert_to_ts(),
-            &tz_info_, nls_format, scale, time_buf, sizeof(time_buf), pos))) {
+            &LOGMINER_TZ.get_tz_info(), nls_format, scale, time_buf, sizeof(time_buf), pos))) {
           LOG_ERROR("failed to get time string from commit_scn", K(record));
         } else if (OB_FAIL(write_string_no_escape(time_buf, buffer))) {
           LOG_ERROR("write commit_timestamp failed", K(record));
@@ -171,14 +168,14 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
       }
 
       case ColType::SQL_REDO: {
-        if (OB_FAIL(write_string_escape_(record.get_redo_stmt().string(),buffer))) {
+        if (OB_FAIL(write_csv_string_escape_(record.get_redo_stmt().string(), buffer))) {
           LOG_ERROR("write redo_stmt failed", K(record));
         } // redo_stmt
         break;
       }
 
       case ColType::SQL_UNDO: {
-        if (OB_FAIL(write_string_escape_(record.get_undo_stmt().string(), buffer))) {
+        if (OB_FAIL(write_csv_string_escape_(record.get_undo_stmt().string(), buffer))) {
           LOG_ERROR("write undo_stmt failed", K(record));
         } // undo_stmt
         break;
@@ -211,7 +208,7 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
   return ret;
 }
 
-int ObLogMinerRecordCsvConverter::write_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+int ObLogMinerRecordCsvConverter::write_csv_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   const char *data = str.ptr(), *prev_ptr = data;
@@ -224,16 +221,6 @@ int ObLogMinerRecordCsvConverter::write_string_escape_(const ObString &str, comm
 
   APPEND_STR(buffer, prev_ptr);
   APPEND_STR(buffer, "\"");
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::set_timezone(const char *timezone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(tz_info_.set_timezone(ObString(timezone)))) {
-    LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone));
-    LOGMINER_STDOUT("parse timezone failed\n");
-  }
   return ret;
 }
 
@@ -254,12 +241,6 @@ int ObLogMinerRecordRedoSqlConverter::write_record(const ObLogMinerRecord &recor
   return ret;
 }
 
-int ObLogMinerRecordRedoSqlConverter::set_timezone(const char *timezone)
-{
-  UNUSED(timezone);
-  int ret = OB_SUCCESS;
-  return ret;
-}
 ////////////////////////////// ObLogMinerRecordUndoSqlConverter //////////////////////////////
 
 int ObLogMinerRecordUndoSqlConverter::write_record(const ObLogMinerRecord &record,
@@ -277,16 +258,7 @@ int ObLogMinerRecordUndoSqlConverter::write_record(const ObLogMinerRecord &recor
   return ret;
 }
 
-int ObLogMinerRecordUndoSqlConverter::set_timezone(const char *timezone)
-{
-  UNUSED(timezone);
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
 ////////////////////////////// ObLogMinerRecordJsonConverter //////////////////////////////
-ObLogMinerRecordJsonConverter::ObLogMinerRecordJsonConverter():
-    tz_info_() {}
 
 int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
     common::ObStringBuffer &buffer, bool &is_written)
@@ -340,7 +312,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
           LOG_ERROR("write json_key DATABASE_NAME failed", K(record));
         } else if (OB_FAIL(write_string_no_escape(record.get_database_name().str(), buffer))) {
           LOG_ERROR("write database_name failed", K(record));
-        } // database_name/user_name
+        } // database_name
         break;
       }
 
@@ -388,7 +360,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
         if (OB_FAIL(write_json_key_("COMMIT_TIMESTAMP", buffer))) {
           LOG_ERROR("write json_key COMMIT_TIMESTAMP failed", K(record));
         } else if (OB_FAIL(ObTimeConverter::datetime_to_str(record.get_commit_scn().convert_to_ts(),
-            &tz_info_, nls_format, scale, time_buf, sizeof(time_buf), pos))) {
+            &LOGMINER_TZ.get_tz_info(), nls_format, scale, time_buf, sizeof(time_buf), pos))) {
           LOG_ERROR("failed to get time string from commit_scn", K(record));
         } else if (OB_FAIL(write_string_no_escape(time_buf, buffer))) {
           LOG_ERROR("write commit_timestamp failed", K(record));
@@ -399,7 +371,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
       case ColType::SQL_REDO: {
         if (OB_FAIL(write_json_key_("SQL_REDO", buffer))) {
           LOG_ERROR("write json_key SQL_REDO failed", K(record));
-        } else if (OB_FAIL(write_string_escape_(record.get_redo_stmt().string(), buffer))) {
+        } else if (OB_FAIL(write_json_string_escape_(record.get_redo_stmt().string(), buffer))) {
           LOG_ERROR("write redo_stmt failed", K(record));
         } // redo_stmt
         break;
@@ -408,7 +380,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
       case ColType::SQL_UNDO: {
         if (OB_FAIL(write_json_key_("SQL_UNDO", buffer))) {
           LOG_ERROR("write json_key SQL_UNDO failed", K(record));
-        } else if (OB_FAIL(write_string_escape_(record.get_undo_stmt().string(), buffer))) {
+        } else if (OB_FAIL(write_json_string_escape_(record.get_undo_stmt().string(), buffer))) {
           LOG_ERROR("write undo_stmt failed", K(record));
         } // undo_stmt
         break;
@@ -443,7 +415,7 @@ int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
   return ret;
 }
 
-int ObLogMinerRecordJsonConverter::write_json_key_(const ObString &str, common::ObStringBuffer &buffer)
+int ObLogMinerRecordJsonConverter::write_json_key_(const char *str, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   APPEND_STR(buffer, "\"");
@@ -452,14 +424,13 @@ int ObLogMinerRecordJsonConverter::write_json_key_(const ObString &str, common::
   return ret;
 }
 
-int ObLogMinerRecordJsonConverter::write_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+int ObLogMinerRecordJsonConverter::write_json_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
-  const char *data = str.ptr(), *prev_ptr = data;
-
-  if (nullptr != prev_ptr) {
+  const char *data = str.ptr();
+  if (nullptr != data) {
     if (OB_FAIL(ObJsonBaseUtil::add_double_quote(buffer, data, str.length()))) {
-      LOG_ERROR("write json_string_escape failed", K(str));
+      LOG_ERROR("add_double_quote failed", K(str));
     }
   } else {
     APPEND_STR(buffer, "\"\"");
@@ -467,17 +438,6 @@ int ObLogMinerRecordJsonConverter::write_string_escape_(const ObString &str, com
 
   return ret;
 }
-
-int ObLogMinerRecordJsonConverter::set_timezone(const char *timezone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(tz_info_.set_timezone(ObString(timezone)))) {
-    LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone));
-    LOGMINER_STDOUT("parse timezone failed\n");
-  }
-  return ret;
-}
-
 
 }
 }

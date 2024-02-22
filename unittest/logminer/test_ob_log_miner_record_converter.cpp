@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_log_miner_timezone_getter.h"
 #include "ob_log_miner_test_utils.h"
 #include "gtest/gtest.h"
 
@@ -28,7 +29,7 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteType)
   ObConcurrentFIFOAllocator alloc;
   ObStringBuffer str_buf(&alloc);
   EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
-  EXPECT_EQ(OB_SUCCESS, converter.write_string_escape_("'aaaa\"\"bbbbb'", str_buf));
+  EXPECT_EQ(OB_SUCCESS, converter.write_csv_string_escape_("'aaaa\"\"bbbbb'", str_buf));
   EXPECT_STREQ("\"'aaaa\"\"\"\"bbbbb'\"", str_buf.ptr());
   str_buf.reset();
 }
@@ -42,8 +43,11 @@ TEST(test_ob_log_miner_record_converter, JsonConverterWriteType)
   EXPECT_EQ(OB_SUCCESS, converter.write_json_key_("aaa", str_buf));
   EXPECT_STREQ("\"aaa\":", str_buf.ptr());
   str_buf.reset();
-  EXPECT_EQ(OB_SUCCESS, converter.write_string_escape_("'aaaa\"\"bbbbb'", str_buf));
+  EXPECT_EQ(OB_SUCCESS, converter.write_json_string_escape_("'aaaa\"\"bbbbb'", str_buf));
   EXPECT_STREQ("\"'aaaa\\\"\\\"bbbbb'\"", str_buf.ptr());
+  str_buf.reset();
+  EXPECT_EQ(OB_SUCCESS, converter.write_json_string_escape_("\n\b\t", str_buf));
+  EXPECT_STREQ("\"\\n\\b\\t\"", str_buf.ptr());
   str_buf.reset();
 }
 
@@ -51,11 +55,11 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
 {
   ObLogMinerRecordCsvConverter converter;
   ObConcurrentFIFOAllocator alloc;
+  EXPECT_EQ(OB_SUCCESS, LOGMINER_TZ.set_timezone("+8:00"));
   bool is_written = false;
   EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
   ObStringBuffer str_buf(&alloc);
   ObLogMinerRecord *rec = nullptr;
-  EXPECT_EQ(OB_SUCCESS, converter.set_timezone("+8:00"));
   const char *pkarr1[] = {"aaa", "bbb"};
   const char *ukarr1[] = {"ccc"};
   rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
@@ -218,11 +222,11 @@ TEST(test_ob_log_miner_record_converter, JsonConverterWriteRecord)
 {
   ObLogMinerRecordJsonConverter converter;
   ObConcurrentFIFOAllocator alloc;
+  EXPECT_EQ(OB_SUCCESS, LOGMINER_TZ.set_timezone("+8:00"));
   bool is_written = false;
   EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
   ObStringBuffer str_buf(&alloc);
   ObLogMinerRecord *rec = nullptr;
-  EXPECT_EQ(OB_SUCCESS, converter.set_timezone("+8:00"));
   const char *pkarr1[] = {"aaa", "bbb"};
   const char *ukarr1[] = {"ccc"};
   rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,

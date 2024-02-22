@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include "ob_log_miner_logger.h"
+#include "ob_log_miner_timezone_getter.h"
+#include "lib/string/ob_string.h"
 #include "lib/timezone/ob_time_convert.h"             // ObTimeConverter
 
 namespace oceanbase
@@ -26,18 +28,7 @@ LogMinerLogger &LogMinerLogger::get_logminer_logger_instance()
   return logger_instance;
 }
 LogMinerLogger::LogMinerLogger():
-    verbose_(false),
-    tz_info_() { }
-
-int LogMinerLogger::set_timezone(const char *timezone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(tz_info_.set_timezone(ObString(timezone)))) {
-    LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone));
-    LOGMINER_STDOUT("parse timezone failed\n");
-  }
-  return ret;
-}
+    verbose_(false) { }
 
 void LogMinerLogger::log_stdout(const char *format, ...) 
 {
@@ -71,9 +62,9 @@ int LogMinerLogger::log_progress(int64_t record_num, int64_t current_ts, int64_t
   progress = percentage * 100;
   lpad = (int)(percentage * PB_WIDTH);
   rpad = PB_WIDTH - lpad;
-  if (OB_FAIL(ObTimeConverter::datetime_to_str(current_ts, &tz_info_,
+  if (OB_FAIL(ObTimeConverter::datetime_to_str(current_ts, &LOGMINER_TZ.get_tz_info(),
       nls_format, 0, time_buf, sizeof(time_buf), pos))) {
-    LOG_WARN("datetime to string failed", K(current_ts), K(tz_info_));
+    LOG_WARN("datetime to string failed", K(current_ts), K(LOGMINER_TZ.get_tz_info()));
   }
   if (OB_SUCC(ret)) {
     fprintf(stdout, "\r%s [%.*s%*s]%.1lf%%, written records: %jd", time_buf, lpad,
