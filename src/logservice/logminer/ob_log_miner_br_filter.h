@@ -17,6 +17,7 @@
 #include "lib/thread/ob_multi_fixed_queue_thread.h"
 #include "libobcdc.h"
 #include "ob_log_miner_filter_condition.h"
+#include "ob_log_miner_resource_collector.h"
 #include "lib/container/ob_se_array.h"
 #include "ob_log_miner_error_handler.h"
 
@@ -117,6 +118,7 @@ public:
   int init(const char *table_cond,
       const char *op_cond,
       ILogMinerDataManager *data_manager,
+      ILogMinerResourceCollector *resource_collector,
       ILogMinerBRConverter *br_converter,
       ILogMinerErrorHandler *err_handle);
 
@@ -128,6 +130,7 @@ private:
   ObArenaAllocator plugin_allocator;
   common::ObSEArray<IBRFilterPlugin *, 4> filter_pipeline_;
   ILogMinerDataManager *data_manager_;
+  ILogMinerResourceCollector *resource_collector_;
   ILogMinerBRConverter *br_converter_;
   ILogMinerErrorHandler *err_handle_;
 };

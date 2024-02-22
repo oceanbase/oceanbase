@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/allocator/ob_concurrent_fifo_allocator.h"     //ObConcurrentFIFOAllocator
 #include "lib/allocator/page_arena.h"
 #include "ob_log_miner_utils.h"
 #include "gtest/gtest.h"
@@ -268,6 +269,29 @@ TEST(test_ob_log_miner_utils, ConvertUintToBit)
   EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
   EXPECT_STREQ("10101011001110001101101100110010001010", bit_str.ptr());
   bit_str.reset();
+}
+
+TEST(test_ob_log_miner_utils, ObLogMinerUtilsWriteRecord)
+{
+  ObConcurrentFIFOAllocator alloc;
+  ObStringBuffer str_buf(&alloc);
+  KeyArray key_arr;
+  EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
+  EXPECT_EQ(key_arr.push_back("aaa"), OB_SUCCESS);
+  EXPECT_EQ(key_arr.push_back("bbb"), OB_SUCCESS);
+  EXPECT_EQ(key_arr.push_back("ccc"), OB_SUCCESS);
+  EXPECT_EQ(OB_SUCCESS, write_keys(key_arr, str_buf));
+  EXPECT_STREQ("\"aaa/bbb/ccc\"", str_buf.ptr());
+  str_buf.reset();
+  EXPECT_EQ(OB_SUCCESS, write_signed_number(-12345, str_buf));
+  EXPECT_STREQ("-12345", str_buf.ptr());
+  str_buf.reset();
+  EXPECT_EQ(OB_SUCCESS, write_unsigned_number(1111, str_buf));
+  EXPECT_STREQ("1111", str_buf.ptr());
+  str_buf.reset();
+  EXPECT_EQ(OB_SUCCESS, write_string_no_escape("aaaaabbbb'", str_buf));
+  EXPECT_STREQ("\"aaaaabbbb'\"", str_buf.ptr());
+  str_buf.reset();
 }
 
 }

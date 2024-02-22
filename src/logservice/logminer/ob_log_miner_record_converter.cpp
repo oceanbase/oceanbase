@@ -12,10 +12,12 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
+#include "lib/json_type/ob_json_base.h"               // ObJsonBaseUtil
 #include "lib/timezone/ob_time_convert.h"             // ObTimeConverter
 #include "ob_log_miner_record_converter.h"
 #include "logservice/common_util/ob_log_time_utils.h"
 #include "ob_log_miner_logger.h"
+#include "ob_log_miner_utils.h"
 
 #define APPEND_STR(buf, args...) \
   do {\
@@ -28,20 +30,22 @@ namespace oceanbase
 {
 namespace oblogminer
 {
-////////////////////////////// ObLogMinerRecordCsvConverter //////////////////////////////
 #define MINER_SCHEMA_DEF(field, id, args...) \
-ObLogMinerRecordCsvConverter::ColType::field,
-const ObLogMinerRecordCsvConverter::ColType ObLogMinerRecordCsvConverter::COL_ORDER[] =
+ILogMinerRecordConverter::ColType::field,
+const ILogMinerRecordConverter::ColType ILogMinerRecordConverter::COL_ORDER[] =
 {
   #include "ob_log_miner_analyze_schema.h"
 };
 #undef MINER_SCHEMA_DEF
+
+const char *ILogMinerRecordConverter::DELIMITER = ",";
 
 ILogMinerRecordConverter *ILogMinerRecordConverter::get_converter_instance(const RecordFileFormat format)
 {
   static ObLogMinerRecordCsvConverter csv_converter;
   static ObLogMinerRecordRedoSqlConverter redo_sql_converter;
   static ObLogMinerRecordUndoSqlConverter undo_sql_converter;
+  static ObLogMinerRecordJsonConverter json_converter;
 
   ILogMinerRecordConverter *converter = nullptr;
   switch(format) {
@@ -60,6 +64,11 @@ ILogMinerRecordConverter *ILogMinerRecordConverter::get_converter_instance(const
       break;
     }
 
+    case RecordFileFormat::JSON: {
+      converter = &json_converter;
+      break;
+    }
+
     default: {
       converter = nullptr;
       break;
@@ -69,11 +78,7 @@ ILogMinerRecordConverter *ILogMinerRecordConverter::get_converter_instance(const
   return converter;
 }
 
-
-const char *ObLogMinerRecordCsvConverter::DELIMITER = ",";
-
-ObLogMinerRecordCsvConverter::ObLogMinerRecordCsvConverter():
-    tz_info_() {}
+////////////////////////////// ObLogMinerRecordCsvConverter //////////////////////////////
 
 int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
     common::ObStringBuffer &buffer, bool &is_written)
@@ -86,63 +91,63 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
     const char *end_char = i == col_num-1 ? "\n": DELIMITER;
     switch(COL_ORDER[i]) {
       case ColType::TENANT_ID: {
-        if (OB_FAIL(write_unsigned_number_(record.get_tenant_id(), buffer))) {
+        if (OB_FAIL(write_unsigned_number(record.get_tenant_id(), buffer))) {
           LOG_ERROR("write tenant_id failed", K(record));
         } // tenant_id
         break;
       }
 
       case ColType::TRANS_ID: {
-        if (OB_FAIL(write_signed_number_(record.get_ob_trans_id().get_id(), buffer))) {
+        if (OB_FAIL(write_signed_number(record.get_ob_trans_id().get_id(), buffer))) {
           LOG_ERROR("write trans_id failed", K(record));
         } // trans_id
         break;
       }
 
       case ColType::PRIMARY_KEY: {
-        if (OB_FAIL(write_keys_(record.get_primary_keys(), buffer))) {
+        if (OB_FAIL(write_keys(record.get_primary_keys(), buffer))) {
           LOG_ERROR("write primary_key failed", K(record));
         } // primary_key
         break;
       }
 
       case ColType::TENANT_NAME: {
-        if (OB_FAIL(write_string_no_escape_(record.get_tenant_name().str(), buffer))) {
+        if (OB_FAIL(write_string_no_escape(record.get_tenant_name().str(), buffer))) {
           LOG_ERROR("write tenant_name failed", K(record));
         } // tenant_name
         break;
       }
 
       case ColType::DATABASE_NAME: {
-        if (OB_FAIL(write_string_no_escape_(record.get_database_name().str(), buffer))) {
+        if (OB_FAIL(write_string_no_escape(record.get_database_name().str(), buffer))) {
           LOG_ERROR("write database_name failed", K(record));
-        } // database_name/user_name
+        } // database_name
         break;
       }
 
       case ColType::TABLE_NAME: {
-        if (OB_FAIL(write_string_no_escape_(record.get_table_name().str(), buffer))) {
+        if (OB_FAIL(write_string_no_escape(record.get_table_name().str(), buffer))) {
           LOG_ERROR("write table_name failed", K(record));
         } // table_name
         break;
       }
 
       case ColType::OPERATION: {
-        if (OB_FAIL(write_string_no_escape_(record_type_to_str(record.get_record_type()), buffer))) {
+        if (OB_FAIL(write_string_no_escape(record_type_to_str(record.get_record_type()), buffer))) {
           LOG_ERROR("write operation failed", K(record));
         } // operation
         break;
       }
 
       case ColType::OPERATION_CODE: {
-        if (OB_FAIL(write_signed_number_(record_type_to_num(record.get_record_type()), buffer))) {
+        if (OB_FAIL(write_signed_number(record_type_to_num(record.get_record_type()), buffer))) {
           LOG_ERROR("write operation_code failed", K(record));
         } // operation_code
         break;
       }
 
       case ColType::COMMIT_SCN: {
-        if (OB_FAIL(write_signed_number_(record.get_commit_scn().get_val_for_inner_table_field(), buffer))) {
+        if (OB_FAIL(write_signed_number(record.get_commit_scn().get_val_for_inner_table_field(), buffer))) {
           LOG_ERROR("write commit_scn failed", K(record));
         } // commit scn
         break;
@@ -154,30 +159,30 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
         int64_t pos = 0;
         ObString nls_format;
         if (OB_FAIL(ObTimeConverter::datetime_to_str(record.get_commit_scn().convert_to_ts(),
-            &tz_info_, nls_format, scale, time_buf, sizeof(time_buf), pos))) {
+            &LOGMINER_TZ.get_tz_info(), nls_format, scale, time_buf, sizeof(time_buf), pos))) {
           LOG_ERROR("failed to get time string from commit_scn", K(record));
-        } else if (OB_FAIL(write_string_no_escape_(time_buf, buffer))) {
+        } else if (OB_FAIL(write_string_no_escape(time_buf, buffer))) {
           LOG_ERROR("write commit_timestamp failed", K(record));
         }
         break;
       }
 
       case ColType::SQL_REDO: {
-        if (OB_FAIL(write_string_escape_(record.get_redo_stmt().string(),buffer))) {
+        if (OB_FAIL(write_csv_string_escape_(record.get_redo_stmt().string(), buffer))) {
           LOG_ERROR("write redo_stmt failed", K(record));
         } // redo_stmt
         break;
       }
 
       case ColType::SQL_UNDO: {
-        if (OB_FAIL(write_string_escape_(record.get_undo_stmt().string(), buffer))) {
+        if (OB_FAIL(write_csv_string_escape_(record.get_undo_stmt().string(), buffer))) {
           LOG_ERROR("write undo_stmt failed", K(record));
         } // undo_stmt
         break;
       }
 
       case ColType::ORG_CLUSTER_ID: {
-        if (OB_FAIL(write_signed_number_(record.get_cluster_id(), buffer))) {
+        if (OB_FAIL(write_signed_number(record.get_cluster_id(), buffer))) {
           LOG_ERROR("write org_cluster_id failed", K(record));
         } // org_cluster_id
         break;
@@ -203,55 +208,7 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
   return ret;
 }
 
-int ObLogMinerRecordCsvConverter::write_keys_(const KeyArray &key_arr, common::ObStringBuffer &buffer)
-{
-  int ret = OB_SUCCESS;
-  int64_t total_size = 0;
-  char *tmp_buffer = nullptr;
-  const char *keys_delimiter = "/";
-  APPEND_STR(buffer, "\"");
-  ARRAY_FOREACH_N(key_arr, idx, key_num) {
-    const ObString &key = key_arr.at(idx);
-    APPEND_STR(buffer, key);
-    if (idx != key_num - 1) {
-      APPEND_STR(buffer, keys_delimiter);
-    }
-  }
-  APPEND_STR(buffer, "\"");
-
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::write_signed_number_(const int64_t num, common::ObStringBuffer &buffer)
-{
-  int ret = OB_SUCCESS;
-  const int64_t MAX_NUM_LEN = 30;
-  char buf[MAX_NUM_LEN];
-  int len = snprintf(buf, MAX_NUM_LEN, "%ld", num);
-  APPEND_STR(buffer, buf, len);
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::write_unsigned_number_(const uint64_t num, common::ObStringBuffer &buffer)
-{
-  int ret = OB_SUCCESS;
-  const int64_t MAX_NUM_LEN = 30;
-  char buf[MAX_NUM_LEN];
-  int len = snprintf(buf, MAX_NUM_LEN, "%lu", num);
-  APPEND_STR(buffer, buf, len);
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::write_string_no_escape_(const ObString &str, common::ObStringBuffer &buffer)
-{
-  int ret = OB_SUCCESS;
-  APPEND_STR(buffer, "\"");
-  APPEND_STR(buffer, str);
-  APPEND_STR(buffer, "\"");
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::write_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+int ObLogMinerRecordCsvConverter::write_csv_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
 {
   int ret = OB_SUCCESS;
   const char *data = str.ptr(), *prev_ptr = data;
@@ -264,16 +221,6 @@ int ObLogMinerRecordCsvConverter::write_string_escape_(const ObString &str, comm
 
   APPEND_STR(buffer, prev_ptr);
   APPEND_STR(buffer, "\"");
-  return ret;
-}
-
-int ObLogMinerRecordCsvConverter::set_timezone(const char *timezone)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(tz_info_.set_timezone(ObString(timezone)))) {
-    LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone));
-    LOGMINER_STDOUT("parse timezone failed\n");
-  }
   return ret;
 }
 
@@ -294,12 +241,6 @@ int ObLogMinerRecordRedoSqlConverter::write_record(const ObLogMinerRecord &recor
   return ret;
 }
 
-int ObLogMinerRecordRedoSqlConverter::set_timezone(const char *timezone)
-{
-  UNUSED(timezone);
-  int ret = OB_SUCCESS;
-  return ret;
-}
 ////////////////////////////// ObLogMinerRecordUndoSqlConverter //////////////////////////////
 
 int ObLogMinerRecordUndoSqlConverter::write_record(const ObLogMinerRecord &record,
@@ -317,10 +258,184 @@ int ObLogMinerRecordUndoSqlConverter::write_record(const ObLogMinerRecord &recor
   return ret;
 }
 
-int ObLogMinerRecordUndoSqlConverter::set_timezone(const char *timezone)
+////////////////////////////// ObLogMinerRecordJsonConverter //////////////////////////////
+
+int ObLogMinerRecordJsonConverter::write_record(const ObLogMinerRecord &record,
+    common::ObStringBuffer &buffer, bool &is_written)
 {
-  UNUSED(timezone);
   int ret = OB_SUCCESS;
+
+  const int64_t col_num = sizeof(COL_ORDER) / sizeof(ColType);
+  APPEND_STR(buffer, "{");
+
+  for (int64_t i = 0; i < col_num && OB_SUCC(ret); i++) {
+    const char *end_char = i == col_num-1 ? "}\n": DELIMITER;
+    switch(COL_ORDER[i]) {
+      case ColType::TENANT_ID: {
+        if (OB_FAIL(write_json_key_("TENANT_ID", buffer))) {
+          LOG_ERROR("write json_key TENANT_ID failed", K(record));
+        } else if (OB_FAIL(write_unsigned_number(record.get_tenant_id(), buffer))) {
+          LOG_ERROR("write tenant_id failed", K(record));
+        } // tenant_id
+        break;
+      }
+
+      case ColType::TRANS_ID: {
+        if (OB_FAIL(write_json_key_("TRANS_ID", buffer))) {
+          LOG_ERROR("write json_key TRANS_ID failed", K(record));
+        } else if (OB_FAIL(write_signed_number(record.get_ob_trans_id().get_id(), buffer))) {
+          LOG_ERROR("write trans_id failed", K(record));
+        } // trans_id
+        break;
+      }
+
+      case ColType::PRIMARY_KEY: {
+        if (OB_FAIL(write_json_key_("PRIMARY_KEY", buffer))) {
+          LOG_ERROR("write json_key PRIMARY_KEY failed", K(record));
+        } else if (OB_FAIL(write_keys(record.get_primary_keys(), buffer))) {
+          LOG_ERROR("write primary_key failed", K(record));
+        } // primary_key
+        break;
+      }
+
+      case ColType::TENANT_NAME: {
+        if (OB_FAIL(write_json_key_("TENANT_NAME", buffer))) {
+          LOG_ERROR("write json_key TENANT_NAME failed", K(record));
+        } else if (OB_FAIL(write_string_no_escape(record.get_tenant_name().str(), buffer))) {
+          LOG_ERROR("write tenant_name failed", K(record));
+        } // tenant_name
+        break;
+      }
+
+      case ColType::DATABASE_NAME: {
+        if (OB_FAIL(write_json_key_("DATABASE_NAME", buffer))) {
+          LOG_ERROR("write json_key DATABASE_NAME failed", K(record));
+        } else if (OB_FAIL(write_string_no_escape(record.get_database_name().str(), buffer))) {
+          LOG_ERROR("write database_name failed", K(record));
+        } // database_name
+        break;
+      }
+
+      case ColType::TABLE_NAME: {
+        if (OB_FAIL(write_json_key_("TABLE_NAME", buffer))) {
+          LOG_ERROR("write json_key TABLE_NAME failed", K(record));
+        } else if (OB_FAIL(write_string_no_escape(record.get_table_name().str(), buffer))) {
+          LOG_ERROR("write table_name failed", K(record));
+        } // table_name
+        break;
+      }
+
+      case ColType::OPERATION: {
+        if (OB_FAIL(write_json_key_("OPERATION", buffer))) {
+          LOG_ERROR("write json_key OPERATION failed", K(record));
+        } else if (OB_FAIL(write_string_no_escape(record_type_to_str(record.get_record_type()), buffer))) {
+          LOG_ERROR("write operation failed", K(record));
+        } // operation
+        break;
+      }
+
+      case ColType::OPERATION_CODE: {
+        if (OB_FAIL(write_json_key_("OPERATION_CODE", buffer))) {
+          LOG_ERROR("write json_key OPERATION_CODE failed", K(record));
+        } else if (OB_FAIL(write_signed_number(record_type_to_num(record.get_record_type()), buffer))) {
+          LOG_ERROR("write operation_code failed", K(record));
+        } // operation_code
+        break;
+      }
+
+      case ColType::COMMIT_SCN: {
+        if (OB_FAIL(write_json_key_("COMMIT_SCN", buffer))) {
+          LOG_ERROR("write json_key COMMIT_SCN failed", K(record));
+        } else if (OB_FAIL(write_signed_number(record.get_commit_scn().get_val_for_inner_table_field(), buffer))) {
+          LOG_ERROR("write commit_scn failed", K(record));
+        } // commit scn
+        break;
+      }
+
+      case ColType::COMMIT_TIMESTAMP: {
+        const int16_t scale = 6;
+        char time_buf[128] = {0};
+        int64_t pos = 0;
+        ObString nls_format;
+        if (OB_FAIL(write_json_key_("COMMIT_TIMESTAMP", buffer))) {
+          LOG_ERROR("write json_key COMMIT_TIMESTAMP failed", K(record));
+        } else if (OB_FAIL(ObTimeConverter::datetime_to_str(record.get_commit_scn().convert_to_ts(),
+            &LOGMINER_TZ.get_tz_info(), nls_format, scale, time_buf, sizeof(time_buf), pos))) {
+          LOG_ERROR("failed to get time string from commit_scn", K(record));
+        } else if (OB_FAIL(write_string_no_escape(time_buf, buffer))) {
+          LOG_ERROR("write commit_timestamp failed", K(record));
+        }
+        break;
+      }
+
+      case ColType::SQL_REDO: {
+        if (OB_FAIL(write_json_key_("SQL_REDO", buffer))) {
+          LOG_ERROR("write json_key SQL_REDO failed", K(record));
+        } else if (OB_FAIL(write_json_string_escape_(record.get_redo_stmt().string(), buffer))) {
+          LOG_ERROR("write redo_stmt failed", K(record));
+        } // redo_stmt
+        break;
+      }
+
+      case ColType::SQL_UNDO: {
+        if (OB_FAIL(write_json_key_("SQL_UNDO", buffer))) {
+          LOG_ERROR("write json_key SQL_UNDO failed", K(record));
+        } else if (OB_FAIL(write_json_string_escape_(record.get_undo_stmt().string(), buffer))) {
+          LOG_ERROR("write undo_stmt failed", K(record));
+        } // undo_stmt
+        break;
+      }
+
+      case ColType::ORG_CLUSTER_ID: {
+        if (OB_FAIL(write_json_key_("ORG_CLUSTER_ID", buffer))) {
+          LOG_ERROR("write json_key ORG_CLUSTER_ID failed", K(record));
+        } else if (OB_FAIL(write_signed_number(record.get_cluster_id(), buffer))) {
+          LOG_ERROR("write org_cluster_id failed", K(record));
+        } // org_cluster_id
+        break;
+      }
+
+      default: {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        LOG_ERROR("unsupported column type", K(COL_ORDER[i]), K(record));
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(buffer.append(end_char))) {
+      LOG_ERROR("append delimiter failed", K(record), K(end_char));
+    }
+
+    if (OB_SUCC(ret)) {
+      is_written = true;
+      LOG_TRACE("ObLogMinerRecordJsonConverter write record succ", K(record));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMinerRecordJsonConverter::write_json_key_(const char *str, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  APPEND_STR(buffer, "\"");
+  APPEND_STR(buffer, str);
+  APPEND_STR(buffer, "\":");
+  return ret;
+}
+
+int ObLogMinerRecordJsonConverter::write_json_string_escape_(const ObString &str, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  const char *data = str.ptr();
+  if (nullptr != data) {
+    if (OB_FAIL(ObJsonBaseUtil::add_double_quote(buffer, data, str.length()))) {
+      LOG_ERROR("add_double_quote failed", K(str));
+    }
+  } else {
+    APPEND_STR(buffer, "\"\"");
+  }
+
   return ret;
 }
 

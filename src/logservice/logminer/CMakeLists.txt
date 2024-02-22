@@ -27,6 +27,7 @@ ob_set_subtarget(oblogminer_obj_list common
   ob_log_miner_record_rewriter.cpp
   ob_log_miner_record.cpp
   ob_log_miner_resource_collector.cpp
+  ob_log_miner_timezone_getter.cpp
   ob_log_miner_undo_task.cpp
   ob_log_miner_utils.cpp
   ob_log_miner.cpp

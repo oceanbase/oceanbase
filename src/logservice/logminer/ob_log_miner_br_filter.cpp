@@ -257,6 +257,7 @@ ObLogMinerBRFilter::ObLogMinerBRFilter():
     plugin_allocator("FilterPlugin"),
     filter_pipeline_(),
     data_manager_(nullptr),
+    resource_collector_(nullptr),
     br_converter_(nullptr),
     err_handle_(nullptr) { }
 
@@ -268,6 +269,7 @@ ObLogMinerBRFilter::~ObLogMinerBRFilter()
 int ObLogMinerBRFilter::init(const char *table_column_cond,
     const char *op_cond,
     ILogMinerDataManager *data_manager,
+    ILogMinerResourceCollector *resource_collector,
     ILogMinerBRConverter *br_converter,
     ILogMinerErrorHandler *err_handle)
 {
@@ -277,7 +279,7 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("oblogminer br_filter is already inited, no need to init again", K(is_inited_),
-        K(table_column_cond), K(op_cond), K(data_manager), K(br_converter));
+        K(table_column_cond), K(op_cond), K(data_manager), K(resource_collector), K(br_converter));
   } else if (OB_FAIL(BRFilterThreadPool::init(BR_FILTER_THREAD_NUM, BR_FILTER_QUEUE_SIZE))) {
     LOG_ERROR("BRFilterThreadPool failed to init");
   } else if (OB_ISNULL(column_plugin =
@@ -301,6 +303,7 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
       LOG_ERROR("filter pipeline push back column_plugin failed", K(column_plugin), K(filter_pipeline_));
     } else {
       data_manager_ = data_manager;
+      resource_collector_ = resource_collector;
       br_converter_ = br_converter;
       err_handle_ = err_handle;
       is_inited_ = true;
@@ -354,6 +357,7 @@ void ObLogMinerBRFilter::destroy()
   if (IS_INIT) {
     filter_pipeline_.destroy();
     data_manager_ = nullptr;
+    resource_collector_ = nullptr;
     br_converter_ = nullptr;
     plugin_allocator.clear();
     err_handle_ = nullptr;
@@ -424,9 +428,16 @@ int ObLogMinerBRFilter::handle(void *data, const int64_t thread_index, volatile 
 
     if (OB_SUCC(ret)) {
       if (logminer_br->is_filtered()) {
-        // do nothing
-      } else if (OB_FAIL(br_converter_->push(logminer_br))) {
-        LOG_ERROR("failed to push logminer br into br converter", K(br_converter_), KPC(logminer_br));
+        // the RecordType of filtered br must be EINSERT, EUPDATE or EDELETE
+        // records of the RecordType above don't impact the progress, i.e. analysis checkpoint.
+        LOG_TRACE("br has been filtered", KPC(logminer_br));
+        if (OB_FAIL(resource_collector_->revert(logminer_br))) {
+          LOG_ERROR("failed to revert logminer br", KPC(logminer_br), K(resource_collector_));
+        }
+      } else {
+        if (OB_FAIL(br_converter_->push(logminer_br))) {
+          LOG_ERROR("failed to push logminer br into br converter", K(br_converter_), KPC(logminer_br));
+        }
       }
     }
   }

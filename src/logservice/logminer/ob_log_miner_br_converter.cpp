@@ -160,9 +160,8 @@ int ObLogMinerBRConverter::handle(void *data, const int64_t thread_index, volati
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("get null br when handle br converter tasks", K(br));
   } else if (br->is_filtered()) {
-    // the RecordType of filtered br must be EINSERT, EUPDATE or EDELETE
-    // records of the RecordType above don't impact the progress, i.e. analysis checkpoint.
-    LOG_TRACE("br has been filtered", KPC(br));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("filtered br appears in converter", K(br));
   } else if (OB_FAIL(data_manager_->get_logminer_record(record))) {
     LOG_ERROR("get logminer record from data manager failed", K(record), K(data_manager_));
   } else if (OB_ISNULL(record)) {
