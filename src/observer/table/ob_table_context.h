@@ -322,7 +322,7 @@ public:
   OB_INLINE common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   OB_INLINE ObIArray<sql::ObRawExpr *>& get_filter_exprs() { return filter_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_filter_exprs() const { return filter_exprs_; }
-  OB_INLINE const ObIArray<sql::ObRawExpr *>& get_select_exprs() const { return select_exprs_; }
+  OB_INLINE const ObIArray<sql::ObColumnRefRawExpr *>& get_select_exprs() const { return select_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_rowkey_exprs() const { return rowkey_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_index_exprs() const { return index_exprs_; }
   OB_INLINE const share::schema::ObTableSchema* get_index_schema() const { return index_schema_; }
@@ -482,6 +482,7 @@ public:
   int get_column_item_by_expr(sql::ObRawExpr *raw_expr, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const;
   int get_expr_from_column_items(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
+  int get_expr_from_column_items(const common::ObString &col_name, sql::ObColumnRefRawExpr *&expr) const;
   int get_expr_from_assignments(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
   int check_insert_up_can_use_put(bool &use_put);
   int get_assignment_by_column_id(uint64_t column_id, const ObTableAssignment *&assign) const;
@@ -575,7 +576,7 @@ private:
   bool is_get_;
   bool read_latest_; // default true, false in single get and multi get
   common::ObQueryFlag::ScanOrder scan_order_;
-  common::ObSEArray<sql::ObRawExpr*, 32> select_exprs_;
+  common::ObSEArray<sql::ObColumnRefRawExpr*, 32> select_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 16> rowkey_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 16> index_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 8> filter_exprs_;

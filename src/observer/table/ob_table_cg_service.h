@@ -269,9 +269,10 @@ private:
   static int generate_constraint_ctdefs(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
-  static int replace_exprs_with_dependant(ObTableCtx &ctx,
-                                          ObTableIndexInfo &index_info,
-                                          common::ObIArray<sql::ObRawExpr *> &dst_exprs);
+  static int replace_exprs(ObTableCtx &ctx,
+                           ObTableIndexInfo &index_info,
+                           bool use_column_ref_exprs,
+                           common::ObIArray<sql::ObRawExpr *> &dst_exprs);
   static int add_all_column_infos(ObTableCtx &ctx,
                                   ObTableIndexInfo &index_info,
                                   common::ObIAllocator &allocator,

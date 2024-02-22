@@ -257,6 +257,32 @@ int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObRawExpr *
   return ret;
 }
 
+int ObTableCtx::get_expr_from_column_items(const ObString &col_name, ObColumnRefRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+
+  if (column_items_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column items is empty", K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count() && !found; i++) {
+      const ObTableColumnItem &item = column_items_.at(i);
+      if (0 == item.column_name_.case_compare(col_name)) {
+        if (OB_ISNULL(item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("item expr is null", K(ret), K(item));
+        } else {
+          found = true;
+          expr = item.expr_;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTableCtx::get_expr_from_assignments(const ObString &col_name, ObRawExpr *&expr) const
 {
   int ret = OB_SUCCESS;
@@ -1616,24 +1642,21 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
 int ObTableCtx::classify_scan_exprs()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObRawExpr *> &exprs = all_exprs_.get_expr_array();
-
-  if (0 == exprs.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exprs is empty", K(ret));
-  } else if (column_items_.count() > exprs.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unecpect column_items_ count", K(ret), K(column_items_), K(exprs.count()));
-  } else if (!select_exprs_.empty()) {
+  if (!select_exprs_.empty()) {
     // had classify, do nothing
   } else {
     ObSEArray<uint64_t, 8> rowkey_column_ids;
     // for select exprs, its order is from user input
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
       const ObTableColumnItem &tmp_item = column_items_.at(i);
-      if (has_exist_in_array(select_col_ids_, tmp_item.column_id_)
-          && OB_FAIL(select_exprs_.push_back(exprs.at(i)))) {
-        LOG_WARN("fail to push back select expr", K(ret));
+      if (has_exist_in_array(select_col_ids_, tmp_item.column_id_)) {
+        if (OB_ISNULL(tmp_item.expr_)) {
+          // use column ref exprs, cause select exprs no need to calculate
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column ref expr is NULL", K(ret), K(i));
+        } else if (OB_FAIL(select_exprs_.push_back(tmp_item.expr_))) {
+          LOG_WARN("fail to push back select expr", K(ret));
+        }
       }
     }
 
