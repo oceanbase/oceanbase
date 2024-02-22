@@ -1490,10 +1490,26 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
         if (OB_FAIL(ret)) {
         } else if (member->member_type_.is_obj_type() || OB_INVALID_INDEX != member->get_default()) {
           //不论基础类型还是复杂类型，如果有default，直接把default值存入即可
-          OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
-          OZ (generator.generate_check_not_null(*stmt,
-                                                member->member_type_.get_not_null(),
-                                                result));
+          if (OB_INVALID_INDEX != member->get_default()) {
+            ObLLVMValue allocator;
+            ObLLVMValue src_datum;
+            ObLLVMValue dst_datum;
+            OZ (generator.generate_null(ObIntType, allocator));
+            OZ (generator.extract_obobj_ptr_from_objparam(result, src_datum));
+            OZ (member->member_type_.generate_copy(generator,
+                                                   stmt->get_block()->get_namespace(),
+                                                   allocator,
+                                                   src_datum,
+                                                   ptr_elem,
+                                                   stmt->get_block()->in_notfound(),
+                                                   stmt->get_block()->in_warning(),
+                                                   OB_INVALID_ID));
+            OZ (generator.generate_check_not_null(*stmt,
+                                                  member->member_type_.get_not_null(),
+                                                  result));
+          } else {
+            OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
+          }
           if (OB_SUCC(ret) && !member->member_type_.is_obj_type()) { // process complex null value
             ObLLVMBasicBlock null_branch;
             ObLLVMBasicBlock final_branch;
