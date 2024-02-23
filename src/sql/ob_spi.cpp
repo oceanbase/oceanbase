@@ -4143,22 +4143,38 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
 
   if (OB_FAIL(ret)) {
   } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
+    /* 流式场景:
+        非for update skip lock:isvalid=false，或者commited=true，则报错
+        for update skip lock检查逻辑和for update一致
+       非流式场景：
+        forupdate：isvalid=false，或者commited=true，则报错，否则继续检查事务状态
+        非forupdate，直接看isvalid是否为true */
     if (lib::is_oracle_mode()) {
-      if (!cursor->get_snapshot().valid_) {
+      if (cursor->is_for_update()) {
+        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
+          ret = OB_ERR_FETCH_OUT_SEQUENCE;
+          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+        } else {
+          transaction::ObTransID tx_id = cursor->get_trans_id();
+          transaction::ObTransService* txs = MTL(transaction::ObTransService*);
+          bool tx_active = false;
+          CK (OB_NOT_NULL(txs));
+          CK (tx_id.is_valid());
+          OZ (txs->is_tx_active(tx_id, tx_active), tx_id);
+          if (OB_SUCC(ret) && !tx_active) {
+            ret = OB_ERR_FETCH_OUT_SEQUENCE;
+            LOG_WARN("cursor has been closed because of txn was terminated",
+                    K(ret), K(tx_id), K(cursor->get_snapshot()));
+          }
+        }
+      } else if (cursor->is_streaming()) {
+        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
+          ret = OB_ERR_FETCH_OUT_SEQUENCE;
+          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+        }
+      } else if (!cursor->get_snapshot().is_valid()) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;
         LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
-      } else if (cursor->is_for_update()) {
-        transaction::ObTransID tx_id = cursor->get_trans_id();
-        transaction::ObTransService* txs = MTL(transaction::ObTransService*);
-        bool tx_active = false;
-        CK (OB_NOT_NULL(txs));
-        CK (tx_id.is_valid());
-        OZ (txs->is_tx_active(tx_id, tx_active), tx_id);
-        if (OB_SUCC(ret) && !tx_active) {
-          ret = OB_ERR_FETCH_OUT_SEQUENCE;
-          LOG_WARN("cursor has been closed because of txn was terminated",
-                  K(ret), K(tx_id), K(cursor->get_snapshot()));
-        }
       }
     }
   }

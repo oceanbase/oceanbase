@@ -192,7 +192,8 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     uncertain_bound_,
                     snapshot_lsid_,
                     parts_,
-                    snapshot_ls_role_);
+                    snapshot_ls_role_,
+                    committed_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
@@ -1160,6 +1161,7 @@ ObTxSnapshot &ObTxSnapshot::operator=(const ObTxSnapshot &r)
 
 ObTxReadSnapshot::ObTxReadSnapshot()
   : valid_(false),
+    committed_(false),
     core_(),
     source_(SRC::INVL),
     snapshot_lsid_(),
@@ -1171,6 +1173,7 @@ ObTxReadSnapshot::ObTxReadSnapshot()
 ObTxReadSnapshot::~ObTxReadSnapshot()
 {
   valid_ = false;
+  committed_ = false;
   source_ = SRC::INVL;
   snapshot_ls_role_ = common::INVALID_ROLE;
   uncertain_bound_ = 0;
@@ -1179,6 +1182,7 @@ ObTxReadSnapshot::~ObTxReadSnapshot()
 void ObTxReadSnapshot::reset()
 {
   valid_ = false;
+  committed_ = false;
   core_.reset();
   source_ = SRC::INVL;
   snapshot_lsid_.reset();
@@ -1191,6 +1195,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
 {
   int ret = OB_SUCCESS;
   valid_ = from.valid_;
+  committed_ = from.committed_;
   core_ = from.core_;
   source_ = from.source_;
   snapshot_lsid_ = from.snapshot_lsid_;
