@@ -511,6 +511,9 @@ DEF_TO_STRING(ObDatumRow)
       J_ARRAY_END();
     }
   }
+  if (trans_info_) {
+    databuff_printf(buf, buf_len, pos, ",trans_info[version, scn, txid, seq_no(branch_id, seq)]:%s", trans_info_);
+  }
   J_OBJ_END();
   return pos;
 }

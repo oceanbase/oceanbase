@@ -177,6 +177,7 @@ public:
   // only used in ObMemTable
   bool is_multi_version_minor_merge_;
   bool need_scn_;
+  bool need_trans_info_;
   bool is_same_schema_column_;
   bool vectorized_enabled_;
   bool has_virtual_columns_;

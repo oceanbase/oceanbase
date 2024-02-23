@@ -3714,13 +3714,20 @@ int ObLSTabletService::check_old_row_legitimacy(
     const common::ObNewRow &old_row)
 {
   int ret = OB_SUCCESS;
-
+  // usage:
+  //   alter system set_tp tp_no=9,match=3221487629,error_code=4377,frequency=1
+  // where session_id is 3221487629
+  const int inject_err = OB_E(EventTable::EN_9, run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_->get_session_id()) OB_SUCCESS;
+  if (OB_ERR_DEFENSIVE_CHECK == inject_err) {
+    ret = OB_ERR_DEFENSIVE_CHECK;
+  }
   ObRelativeTable &data_table = run_ctx.relative_table_;
   ObStoreRowkey rowkey;
   bool need_check = false;
   bool is_udf = false;
   rowkey.assign(old_row.cells_, data_table.get_rowkey_column_num());
-  if (OB_UNLIKELY(rowkey.get_obj_cnt() > old_row.count_) || OB_ISNULL(run_ctx.column_ids_)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(rowkey.get_obj_cnt() > old_row.count_) || OB_ISNULL(run_ctx.column_ids_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("old row is invalid", K(ret), K(old_row), K(rowkey.get_obj_cnt()), KP(run_ctx.column_ids_));
   } else if (OB_FAIL(need_check_old_row_legitimacy(run_ctx, need_check, is_udf))) {
@@ -4665,7 +4672,6 @@ int ObLSTabletService::process_old_row(
   ObStoreCtx &store_ctx = run_ctx.store_ctx_;
   ObRelativeTable &relative_table = run_ctx.relative_table_;
   bool is_delete_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
-
   if (OB_UNLIKELY(!relative_table.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid relative tables", K(ret), K(relative_table));
@@ -5619,6 +5625,7 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
     access_param.iter_param_.read_info_ = read_info;
     access_param.iter_param_.out_cols_project_ = &out_col_pros;
     access_param.iter_param_.set_tablet_handle(data_table.get_tablet_handle());
+    access_param.iter_param_.need_trans_info_ = true;
 
     ObStoreRowIterator *getter = nullptr;
     ObITable *table = nullptr;
