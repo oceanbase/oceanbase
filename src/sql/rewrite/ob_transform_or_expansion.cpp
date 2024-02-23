@@ -36,7 +36,12 @@ int ObTransformOrExpansion::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
+  bool is_stmt_valid = false;
+  if (OB_FAIL(check_stmt_valid_for_expansion(stmt, is_stmt_valid))) {
+    LOG_WARN("failed to check stmt valid for expansion", K(ret));
+  } else if (!is_stmt_valid) {
+    /* do nothing */
+  } else if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
     LOG_WARN("failed to do or expansion in joined condition", K(ret));
   } else if (trans_happened) {
     /* do nothing */
@@ -3336,6 +3341,26 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     }
   } else if (rel_table == table){
     left_bottom = true;
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid)
+{
+  int ret = OB_SUCCESS;
+  is_stmt_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_stmt_valid && i < stmt->get_table_size(); i++) {
+    TableItem *table_item = stmt->get_table_items().at(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (table_item->is_fake_cte_table()) {
+      is_stmt_valid = false;
+    }
   }
   return ret;
 }

@@ -391,6 +391,7 @@ private:
                               TableItem *rel_table,
                               TableItem *table,
                               bool &left_bottom);
+  int check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid);
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 private:
   int64_t try_times_;
