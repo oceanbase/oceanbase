@@ -196,6 +196,7 @@ TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 private:
 int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
 int init_tx_(ObTxDesc &tx, const uint32_t session_id);
+int reinit_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
 void abort_tx__(ObTxDesc &tx, const bool cleanup);

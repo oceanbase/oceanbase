@@ -148,10 +148,9 @@ int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
-  // FIXME: open check later
-  // } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
+  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
@@ -212,9 +211,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
 #endif
     }
     // it is safe to operate tx without lock when not shared
-    uint32_t session_id = tx.sess_id_;
-    tx.reset();
-    ret = init_tx_(tx, session_id);
+    ret = reinit_tx_(tx, tx.sess_id_);
   }
   TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -226,6 +223,12 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
+}
+
+int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id)
+{
+  tx.reset();
+  return init_tx_(tx, session_id);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
