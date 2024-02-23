@@ -3373,6 +3373,7 @@ PLAN_ID	bigint(20)	NO		NULL
 TRACE_ID	varchar(64)	NO			
 EVENT	varchar(64)	NO			
 EVENT_NO	bigint(20)	NO		NULL	
+EVENT_ID	bigint(20)	YES		NULL	
 P1TEXT	varchar(64)	NO			
 P1	bigint(20)	NO		NULL	
 P2TEXT	varchar(64)	NO			
@@ -3383,6 +3384,9 @@ WAIT_CLASS	varchar(64)	NO
 WAIT_CLASS_ID	bigint(20)	NO			
 TIME_WAITED	bigint(20)	NO		NULL	
 SQL_PLAN_LINE_ID	bigint(20)	YES		NULL	
+GROUP_ID	bigint(20)	YES		NULL	
+TX_ID	bigint(20)	YES		NULL	
+BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
 IN_PARSE	varchar(1)	NO			
 IN_PL_PARSE	varchar(1)	NO			
 IN_PLAN_CACHE	varchar(1)	NO			
@@ -3394,10 +3398,24 @@ IN_COMMITTING	varchar(1)	NO
 IN_STORAGE_READ	varchar(1)	NO			
 IN_STORAGE_WRITE	varchar(1)	NO			
 IN_REMOTE_DAS_EXECUTION	varchar(1)	NO			
+IN_FILTER_ROWS	varchar(1)	NO			
+PROGRAM	varchar(64)	YES		NULL	
 MODULE	varchar(64)	YES		NULL	
 ACTION	varchar(64)	YES		NULL	
 CLIENT_ID	varchar(64)	YES		NULL	
 BACKTRACE	varchar(512)	YES		NULL	
+TM_DELTA_TIME	bigint(20)	YES		NULL	
+TM_DELTA_CPU_TIME	bigint(20)	YES		NULL	
+TM_DELTA_DB_TIME	bigint(20)	YES		NULL	
+TOP_LEVEL_SQL_ID	varchar(32)	YES		NULL	
+IN_PLSQL_COMPILATION	varchar(1)	NO			
+IN_PLSQL_EXECUTION	varchar(1)	NO			
+PLSQL_ENTRY_OBJECT_ID	bigint(20)	YES		NULL	
+PLSQL_ENTRY_SUBPROGRAM_ID	bigint(20)	YES		NULL	
+PLSQL_ENTRY_SUBPROGRAM_NAME	varchar(32)	YES		NULL	
+PLSQL_OBJECT_ID	bigint(20)	YES		NULL	
+PLSQL_SUBPROGRAM_ID	bigint(20)	YES		NULL	
+PLSQL_SUBPROGRAM_NAME	varchar(32)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -3417,6 +3435,7 @@ PLAN_ID	bigint(20)	NO
 TRACE_ID	varchar(64)	NO			
 EVENT	varchar(64)	NO			
 EVENT_NO	bigint(20)	NO			
+EVENT_ID	bigint(20)	NO			
 P1TEXT	varchar(64)	NO			
 P1	bigint(20)	NO			
 P2TEXT	varchar(64)	NO			
@@ -3427,6 +3446,9 @@ WAIT_CLASS	varchar(64)	NO
 WAIT_CLASS_ID	bigint(20)	NO			
 TIME_WAITED	bigint(20)	NO			
 SQL_PLAN_LINE_ID	bigint(20)	NO			
+GROUP_ID	bigint(20)	NO			
+TX_ID	bigint(20)	NO			
+BLOCKING_SESSION_ID	bigint(20)	NO			
 IN_PARSE	varchar(1)	NO			
 IN_PL_PARSE	varchar(1)	NO			
 IN_PLAN_CACHE	varchar(1)	NO			
@@ -3438,10 +3460,24 @@ IN_COMMITTING	varchar(1)	NO
 IN_STORAGE_READ	varchar(1)	NO			
 IN_STORAGE_WRITE	varchar(1)	NO			
 IN_REMOTE_DAS_EXECUTION	varchar(1)	NO			
+IN_FILTER_ROWS	varchar(1)	NO			
+PROGRAM	varchar(64)	NO			
 MODULE	varchar(64)	NO			
 ACTION	varchar(64)	NO			
 CLIENT_ID	varchar(64)	NO			
 BACKTRACE	varchar(512)	NO			
+TM_DELTA_TIME	bigint(20)	NO			
+TM_DELTA_CPU_TIME	bigint(20)	NO			
+TM_DELTA_DB_TIME	bigint(20)	NO			
+TOP_LEVEL_SQL_ID	varchar(32)	NO			
+IN_PLSQL_COMPILATION	varchar(1)	NO			
+IN_PLSQL_EXECUTION	varchar(1)	NO			
+PLSQL_ENTRY_OBJECT_ID	bigint(20)	NO			
+PLSQL_ENTRY_SUBPROGRAM_ID	bigint(20)	NO			
+PLSQL_ENTRY_SUBPROGRAM_NAME	varchar(32)	NO			
+PLSQL_OBJECT_ID	bigint(20)	NO			
+PLSQL_SUBPROGRAM_ID	bigint(20)	NO			
+PLSQL_SUBPROGRAM_NAME	varchar(32)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
@@ -4934,11 +4970,15 @@ SESSION_STATE	varchar(7)	NO
 SQL_ID	varchar(32)	YES		NULL	
 TRACE_ID	varchar(64)	YES		NULL	
 EVENT_NO	bigint(20)	YES		NULL	
+EVENT_ID	bigint(20)	YES		NULL	
 TIME_WAITED	bigint(20)	YES		NULL	
 P1	bigint(20)	YES		NULL	
 P2	bigint(20)	YES		NULL	
 P3	bigint(20)	YES		NULL	
 SQL_PLAN_LINE_ID	bigint(20)	YES		NULL	
+GROUP_ID	bigint(20)	YES		NULL	
+TX_ID	bigint(20)	YES		NULL	
+BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
 TIME_MODEL	bigint(20) unsigned	YES		NULL	
 IN_PARSE	varchar(1)	NO			
 IN_PL_PARSE	varchar(1)	NO			
@@ -4951,11 +4991,25 @@ IN_COMMITTING	varchar(1)	NO
 IN_STORAGE_READ	varchar(1)	NO			
 IN_STORAGE_WRITE	varchar(1)	NO			
 IN_REMOTE_DAS_EXECUTION	varchar(1)	NO			
+IN_FILTER_ROWS	varchar(1)	NO			
+PROGRAM	varchar(64)	YES		NULL	
 MODULE	varchar(64)	YES		NULL	
 ACTION	varchar(64)	YES		NULL	
 CLIENT_ID	varchar(64)	YES		NULL	
 BACKTRACE	varchar(512)	YES		NULL	
 PLAN_ID	bigint(20)	YES		NULL	
+TM_DELTA_TIME	bigint(20)	YES		NULL	
+TM_DELTA_CPU_TIME	bigint(20)	YES		NULL	
+TM_DELTA_DB_TIME	bigint(20)	YES		NULL	
+TOP_LEVEL_SQL_ID	varchar(32)	YES		NULL	
+IN_PLSQL_COMPILATION	varchar(1)	NO			
+IN_PLSQL_EXECUTION	varchar(1)	NO			
+PLSQL_ENTRY_OBJECT_ID	bigint(20)	YES		NULL	
+PLSQL_ENTRY_SUBPROGRAM_ID	bigint(20)	YES		NULL	
+PLSQL_ENTRY_SUBPROGRAM_NAME	varchar(32)	YES		NULL	
+PLSQL_OBJECT_ID	bigint(20)	YES		NULL	
+PLSQL_SUBPROGRAM_ID	bigint(20)	YES		NULL	
+PLSQL_SUBPROGRAM_NAME	varchar(32)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_ACTIVE_SESSION_HISTORY limit 1);
 cnt
 1
