@@ -1114,7 +1114,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     if (OB_SUCC(ret) && old_status != real_new_status) {
       add_event_info(real_new_status, dst_tenant_id_);
       task_status_ = real_new_status;
-      next_schedule_ts_ = 0; // when status changed, schedule immediately
+      delay_schedule_time_ = 0; // when status changed, schedule immediately
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
@@ -1458,12 +1458,10 @@ void ObDDLTask::calc_next_schedule_ts(const int ret_code, const int64_t total_ta
     const int64_t min_dt = max_dt / 2;
     next_schedule_ts_ = ObTimeUtility::current_time() + ObRandom::rand(min_dt, max_dt);
   } else {
-    delay_schedule_time_ = 0;
-    if (next_schedule_ts_ > 0) {
-      // if next_schedule_ts_ is set, means that the task is not to schedule immediately.
-      // make sure it will be delayed at least 10ms to awoid spin
-      next_schedule_ts_ = max(next_schedule_ts_, ObTimeUtility::current_time() + DEFAULT_TASK_IDLE_TIME_US);
-    }
+    // if delay_schedule_time_ is set 0, means that the task need schedule immediately.
+    // that usually happens when task status changed, after that, recover the default delay to awoid spin
+    next_schedule_ts_ = max(next_schedule_ts_, ObTimeUtility::current_time() + delay_schedule_time_);
+    delay_schedule_time_ = DEFAULT_TASK_IDLE_TIME_US;
   }
   return;
 }
