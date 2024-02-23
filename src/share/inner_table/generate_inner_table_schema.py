@@ -1785,6 +1785,12 @@ def def_table_schema(**keywords):
     elif keywords.has_key('partition_columns') and 0 != len(keywords['partition_columns']):
       raise Exception("partition_columns only works for virtual table after 4.0", tid)
 
+  if is_sys_view(tid):
+    pattern = re.compile(r'^\s*SELECT\s+\*', re.IGNORECASE)
+    if keywords.has_key('view_definition') and 0 != len(keywords['view_definition']) and pattern.match(keywords['view_definition'].upper().replace("\n", " ")):
+      print(keywords['view_definition'])
+      raise Exception("The system view definition cannot start with select *. Please specify the column name explicitly, ", tid)
+
   fill_default_values(default_filed_values, keywords, missing_fields)
   check_fileds(fields, keywords)
 

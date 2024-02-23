@@ -460,7 +460,7 @@ int ObInnerTableSchema::v_session_event_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT  * FROM OCEANBASE.GV$SESSION_EVENT   WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CON_ID,          SVR_IP,          SVR_PORT,          SID,          EVENT,          TOTAL_WAITS,          TOTAL_TIMEOUTS,          TIME_WAITED,          AVERAGE_WAIT,          MAX_WAIT,          TIME_WAITED_MICRO,          CPU,          EVENT_ID,          WAIT_CLASS_ID,          `WAIT_CLASS#`,          WAIT_CLASS FROM OCEANBASE.GV$SESSION_EVENT   WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -510,7 +510,7 @@ int ObInnerTableSchema::v_session_wait_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM OCEANBASE.GV$SESSION_WAIT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SID,           CON_ID,           SVR_IP,           SVR_PORT,           EVENT,           P1TEXT,           P1,           P2TEXT,           P2,           P3TEXT,           P3,           WAIT_CLASS_ID,           `WAIT_CLASS#`,           WAIT_CLASS,           STATE,           WAIT_TIME_MICRO,           TIME_REMAINING_MICRO,           TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -560,7 +560,7 @@ int ObInnerTableSchema::v_session_wait_history_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM OCEANBASE.GV$SESSION_WAIT_HISTORY                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT      SID,     CON_ID,     SVR_IP,     SVR_PORT,     `SEQ#`,     `EVENT#`,     EVENT,     P1TEXT,     P1,     P2TEXT,     P2,     P3TEXT,     P3,     WAIT_TIME,     WAIT_TIME_MICRO,     TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT_HISTORY                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -610,7 +610,7 @@ int ObInnerTableSchema::v_sesstat_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM OCEANBASE.GV$SESSTAT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SID,     CON_ID,     SVR_IP,     SVR_PORT,     `STATISTIC#`,     VALUE FROM OCEANBASE.GV$SESSTAT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -660,7 +660,7 @@ int ObInnerTableSchema::v_sysstat_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM OCEANBASE.GV$SYSSTAT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT CON_ID,     SVR_IP,     SVR_PORT,     `STATISTIC#`,     NAME,     CLASS,     VALUE,     VALUE_TYPE,     STAT_ID FROM OCEANBASE.GV$SYSSTAT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -710,7 +710,7 @@ int ObInnerTableSchema::v_system_event_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM OCEANBASE.GV$SYSTEM_EVENT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT CON_ID,     SVR_IP,     SVR_PORT,     EVENT_ID,     EVENT,     WAIT_CLASS_ID,     `WAIT_CLASS#`,     WAIT_CLASS,     TOTAL_WAITS,     TOTAL_TIMEOUTS,     TIME_WAITED,     AVERAGE_WAIT,     TIME_WAITED_MICRO FROM OCEANBASE.GV$SYSTEM_EVENT                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::v_ob_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   * FROM     oceanbase.GV$OB_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   TENANT_ID,     SVR_IP,     SVR_PORT,     CTX_NAME,     MOD_NAME,     COUNT,     HOLD,     USED FROM     oceanbase.GV$OB_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1010,7 +1010,7 @@ int ObInnerTableSchema::v_ob_memstore_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     OCEANBASE.GV$OB_MEMSTORE WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     ACTIVE_SPAN,     FREEZE_TRIGGER,     FREEZE_CNT,     MEMSTORE_USED,     MEMSTORE_LIMIT FROM     OCEANBASE.GV$OB_MEMSTORE WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1110,7 +1110,7 @@ int ObInnerTableSchema::v_ob_memstore_info_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     OCEANBASE.GV$OB_MEMSTORE_INFO WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     IS_ACTIVE,     START_SCN,     END_SCN,     FREEZE_TS FROM     OCEANBASE.GV$OB_MEMSTORE_INFO WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1160,7 +1160,7 @@ int ObInnerTableSchema::v_ob_plan_cache_stat_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM oceanbase.GV$OB_PLAN_CACHE_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,SVR_IP,SVR_PORT,SQL_NUM,MEM_USED,MEM_HOLD,ACCESS_COUNT,   HIT_COUNT,HIT_RATE,PLAN_NUM,MEM_LIMIT,HASH_BUCKET,STMTKEY_NUM   FROM oceanbase.GV$OB_PLAN_CACHE_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1210,7 +1210,7 @@ int ObInnerTableSchema::v_ob_plan_cache_plan_stat_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,SVR_IP,SVR_PORT,PLAN_ID,SQL_ID,TYPE,IS_BIND_SENSITIVE,IS_BIND_AWARE,     DB_ID,STATEMENT,QUERY_SQL,SPECIAL_PARAMS,PARAM_INFOS, SYS_VARS, CONFIGS, PLAN_HASH,     FIRST_LOAD_TIME,SCHEMA_VERSION,LAST_ACTIVE_TIME,AVG_EXE_USEC,SLOWEST_EXE_TIME,SLOWEST_EXE_USEC,     SLOW_COUNT,HIT_COUNT,PLAN_SIZE,EXECUTIONS,DISK_READS,DIRECT_WRITES,BUFFER_GETS,APPLICATION_WAIT_TIME,     CONCURRENCY_WAIT_TIME,USER_IO_WAIT_TIME,ROWS_PROCESSED,ELAPSED_TIME,CPU_TIME,LARGE_QUERYS,     DELAYED_LARGE_QUERYS,DELAYED_PX_QUERYS,OUTLINE_VERSION,OUTLINE_ID,OUTLINE_DATA,ACS_SEL_INFO,     TABLE_SCAN,EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID,     TEMP_TABLES, IS_USE_JIT,OBJECT_TYPE,HINTS_INFO,HINTS_ALL_WORKED, PL_SCHEMA_ID,     IS_BATCHED_MULTI_STMT, RULE_NAME   FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1310,7 +1310,7 @@ int ObInnerTableSchema::v_ob_plan_cache_plan_explain_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            PLAN_ID,            PLAN_DEPTH,            PLAN_LINE_ID,            OPERATOR,            NAME,            ROWS,            COST,            PROPERTY FROM oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::v_ob_sql_audit_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP,     SVR_PORT,     REQUEST_ID,     SQL_EXEC_ID,     TRACE_ID,     SID,     CLIENT_IP,     CLIENT_PORT,     TENANT_ID,     TENANT_NAME,     EFFECTIVE_TENANT_ID,     USER_ID,     USER_NAME,     USER_GROUP,     USER_CLIENT_IP,     DB_ID,     DB_NAME,     SQL_ID,     QUERY_SQL,     PLAN_ID,     AFFECTED_ROWS,     RETURN_ROWS,     PARTITION_CNT,     RET_CODE,     QC_ID,     DFO_ID,     SQC_ID,     WORKER_ID,     EVENT,     P1TEXT,     P1,     P2TEXT,     P2,     P3TEXT,     P3,     `LEVEL`,     WAIT_CLASS_ID,     `WAIT_CLASS#`,     WAIT_CLASS,     STATE,     WAIT_TIME_MICRO,     TOTAL_WAIT_TIME_MICRO,     TOTAL_WAITS,     RPC_COUNT,     PLAN_TYPE,     IS_INNER_SQL,     IS_EXECUTOR_RPC,     IS_HIT_PLAN,     REQUEST_TIME,     ELAPSED_TIME,     NET_TIME,     NET_WAIT_TIME,     QUEUE_TIME,     DECODE_TIME,     GET_PLAN_TIME,     EXECUTE_TIME,     APPLICATION_WAIT_TIME,     CONCURRENCY_WAIT_TIME,     USER_IO_WAIT_TIME,     SCHEDULE_TIME,     ROW_CACHE_HIT,     BLOOM_FILTER_CACHE_HIT,     BLOCK_CACHE_HIT,     DISK_READS,     RETRY_CNT,     TABLE_SCAN,     CONSISTENCY_LEVEL,     MEMSTORE_READ_ROW_COUNT,     SSSTORE_READ_ROW_COUNT,     DATA_BLOCK_READ_CNT,     DATA_BLOCK_CACHE_HIT,     INDEX_BLOCK_READ_CNT,     INDEX_BLOCK_CACHE_HIT,     BLOCKSCAN_BLOCK_CNT,     BLOCKSCAN_ROW_CNT,     PUSHDOWN_STORAGE_FILTER_ROW_CNT,     REQUEST_MEMORY_USED,     EXPECTED_WORKER_COUNT,     USED_WORKER_COUNT,     SCHED_INFO,     FUSE_ROW_CACHE_HIT,     PS_CLIENT_STMT_ID,     PS_INNER_STMT_ID,     TX_ID,     SNAPSHOT_VERSION,     REQUEST_TYPE,     IS_BATCHED_MULTI_STMT,     OB_TRACE_INFO,     PLAN_HASH,     LOCK_FOR_READ_TIME,     PARAMS_VALUE,     RULE_NAME,     PARTITION_HIT,     TX_INTERNAL_ROUTING,     TX_STATE_VERSION,     FLT_TRACE_ID,     PL_TRACE_ID,     PLSQL_EXEC_TIME FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::v_latch_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT * FROM OCEANBASE.GV$LATCH WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CON_ID,     SVR_IP,     SVR_PORT,     ADDR,     `LATCH#`,     `LEVEL#`,     NAME,     HASH,     GETS,     MISSES,     SLEEPS,     IMMEDIATE_GETS,     IMMEDIATE_MISSES,     SPIN_GETS,     WAIT_TIME FROM OCEANBASE.GV$LATCH WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1510,7 +1510,7 @@ int ObInnerTableSchema::v_ob_rpc_outgoing_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     oceanbase.GV$OB_RPC_OUTGOING WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     TENANT_ID,     SVR_IP,     SVR_PORT,     PCODE,     PCODE_NAME,     COUNT,     TOTAL_TIME,     TOTAL_SIZE,     FAILURE,     TIMEOUT,     SYNC,     ASYNC,     LAST_TIMESTAMP FROM     oceanbase.GV$OB_RPC_OUTGOING WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1610,7 +1610,7 @@ int ObInnerTableSchema::v_ob_rpc_incoming_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     oceanbase.GV$OB_RPC_INCOMING WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     TENANT_ID,     SVR_IP,     SVR_PORT,     PCODE,     PCODE_NAME,     COUNT,     TOTAL_SIZE,     NET_TIME,     WAIT_TIME,     QUEUE_TIME,     PROCESS_TIME,     LAST_TIMESTAMP,     DCOUNT FROM     oceanbase.GV$OB_RPC_INCOMING WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1710,7 +1710,7 @@ int ObInnerTableSchema::v_sql_plan_monitor_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT  *  FROM OCEANBASE.GV$SQL_PLAN_MONITOR     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT  CON_ID,     REQUEST_ID,     `KEY`,     STATUS,     SVR_IP,     SVR_PORT,     TRACE_ID,     DB_TIME,     USER_IO_WAIT_TIME,     OTHER_WAIT_TIME,     FIRST_REFRESH_TIME,     LAST_REFRESH_TIME,     FIRST_CHANGE_TIME,     LAST_CHANGE_TIME,     REFRESH_COUNT,     SID,     PROCESS_NAME,     SQL_ID,     SQL_EXEC_START,     SQL_EXEC_ID,     SQL_PLAN_HASH_VALUE,     SQL_CHILD_ADDRESS,     PLAN_PARENT_ID,     PLAN_LINE_ID,     PLAN_OPERATION,     PLAN_OPTIONS,     PLAN_OBJECT_OWNER,     PLAN_OBJECT_NAME,     PLAN_OBJECT_TYPE,     PLAN_DEPTH,     PLAN_POSITION,     PLAN_COST,     PLAN_CARDINALITY,     PLAN_BYTES,     PLAN_TIME,     PLAN_PARTITION_START,     PLAN_PARTITION_STOP,     PLAN_CPU_COST,     PLAN_IO_COST,     PLAN_TEMP_SPACE,     STARTS,     OUTPUT_ROWS,     IO_INTERCONNECT_BYTES,     PHYSICAL_READ_REQUESTS,     PHYSICAL_READ_BYTES,     PHYSICAL_WRITE_REQUESTS,     PHYSICAL_WRITE_BYTES,     WORKAREA_MEM,     WORKAREA_MAX_MEM,     WORKAREA_TEMPSEG,     WORKAREA_MAX_TEMPSEG,     OTHERSTAT_GROUP_ID,     OTHERSTAT_1_ID,     OTHERSTAT_1_TYPE,     OTHERSTAT_1_VALUE,     OTHERSTAT_2_ID,     OTHERSTAT_2_TYPE,     OTHERSTAT_2_VALUE,     OTHERSTAT_3_ID,     OTHERSTAT_3_TYPE,     OTHERSTAT_3_VALUE,     OTHERSTAT_4_ID,     OTHERSTAT_4_TYPE,     OTHERSTAT_4_VALUE,     OTHERSTAT_5_ID,     OTHERSTAT_5_TYPE,     OTHERSTAT_5_VALUE,     OTHERSTAT_6_ID,     OTHERSTAT_6_TYPE,     OTHERSTAT_6_VALUE,     OTHERSTAT_7_ID,     OTHERSTAT_7_TYPE,     OTHERSTAT_7_VALUE,     OTHERSTAT_8_ID,     OTHERSTAT_8_TYPE,     OTHERSTAT_8_VALUE,     OTHERSTAT_9_ID,     OTHERSTAT_9_TYPE,     OTHERSTAT_9_VALUE,     OTHERSTAT_10_ID,     OTHERSTAT_10_TYPE,     OTHERSTAT_10_VALUE,     OTHER_XML,     PLAN_OPERATION_INACTIVE,     OUTPUT_BATCHES,     SKIPPED_ROWS_COUNT  FROM OCEANBASE.GV$SQL_PLAN_MONITOR     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

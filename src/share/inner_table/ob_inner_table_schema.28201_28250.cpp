@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_cgroup_config_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   * FROM SYS.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   CFS_QUOTA_US,   CFS_PERIOD_US,   SHARES,   CGROUP_PATH FROM SYS.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -210,7 +210,7 @@ int ObInnerTableSchema::v_ob_sqlstat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, TENANT_ID, SQL_ID, PLAN_ID, PLAN_HASH, PLAN_TYPE, QUERY_SQL, MODULE, ACTION, PARSING_DB_ID, PARSING_DB_NAME, PARSING_USER_ID, EXECUTIONS_TOTAL, EXECUTIONS_DELTA, DISK_READS_TOTAL, DISK_READS_DELTA, BUFFER_GETS_TOTAL, BUFFER_GETS_DELTA, ELAPSED_TIME_TOTAL, ELAPSED_TIME_DELTA, CPU_TIME_TOTAL, CPU_TIME_DELTA, CCWAIT_TOTAL, CCWAIT_DELTA, USERIO_WAIT_TOTAL, USERIO_WAIT_DELTA, APWAIT_TOTAL, APWAIT_DELTA, PHYSICAL_READ_REQUESTS_TOTAL, PHYSICAL_READ_REQUESTS_DELTA, PHYSICAL_READ_BYTES_TOTAL, PHYSICAL_READ_BYTES_DELTA, WRITE_THROTTLE_TOTAL, WRITE_THROTTLE_DELTA, ROWS_PROCESSED_TOTAL, ROWS_PROCESSED_DELTA, MEMSTORE_READ_ROWS_TOTAL, MEMSTORE_READ_ROWS_DELTA, MINOR_SSSTORE_READ_ROWS_TOTAL, MINOR_SSSTORE_READ_ROWS_DELTA, MAJOR_SSSTORE_READ_ROWS_TOTAL, MAJOR_SSSTORE_READ_ROWS_DELTA, RPC_TOTAL, RPC_DELTA, FETCHES_TOTAL, FETCHES_DELTA, RETRY_TOTAL, RETRY_DELTA, PARTITION_TOTAL, PARTITION_DELTA, NESTED_SQL_TOTAL, NESTED_SQL_DELTA, SOURCE_IP, SOURCE_PORT, ROUTE_MISS_TOTAL, ROUTE_MISS_DELTA FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::v_ob_sess_time_model_ora_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     *   FROM     SYS.GV$OB_SESS_TIME_MODEL   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SID,     TENANT_ID,     SVR_IP,     SVR_PORT,     STAT_ID,     STAT_NAME,     VALUE   FROM     SYS.GV$OB_SESS_TIME_MODEL   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -410,7 +410,7 @@ int ObInnerTableSchema::v_ob_sys_time_model_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     *   FROM     SYS.GV$OB_SYS_TIME_MODEL   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     TENANT_ID,     SVR_IP,     SVR_PORT,     STAT_ID,     STAT_NAME,     VALUE   FROM     SYS.GV$OB_SYS_TIME_MODEL   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -610,7 +610,7 @@ int ObInnerTableSchema::v_ob_active_session_history_ora_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, SAMPLE_ID, SAMPLE_TIME, CON_ID, USER_ID, SESSION_ID, SESSION_TYPE, SESSION_STATE, SQL_ID, PLAN_ID, TRACE_ID, EVENT, EVENT_NO, EVENT_ID, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS, WAIT_CLASS_ID, TIME_WAITED, SQL_PLAN_LINE_ID, IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION, IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION, IN_FILTER_ROWS, PROGRAM, MODULE, ACTION, CLIENT_ID, BACKTRACE, TM_DELTA_TIME, TM_DELTA_CPU_TIME, TM_DELTA_DB_TIME, TOP_LEVEL_SQL_ID, IN_PLSQL_COMPILATION, IN_PLSQL_EXECUTION, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

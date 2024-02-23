@@ -60,7 +60,7 @@ int ObInnerTableSchema::v_ob_sql_workarea_memory_info_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$OB_SQL_WORKAREA_MEMORY_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT MAX_WORKAREA_SIZE,       WORKAREA_HOLD_SIZE,       MAX_AUTO_WORKAREA_SIZE,       MEM_TARGET,       TOTAL_MEM_USED,       GLOBAL_MEM_BOUND,       DRIFT_SIZE,       WORKAREA_COUNT,       MANUAL_CALC_COUNT,       SVR_IP,       SVR_PORT   FROM SYS.GV$OB_SQL_WORKAREA_MEMORY_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -160,7 +160,7 @@ int ObInnerTableSchema::v_ob_plan_cache_reference_info_ora_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM SYS.GV$OB_PLAN_CACHE_REFERENCE_INFO WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT SVR_IP, SVR_PORT, TENANT_ID, PC_REF_PLAN_LOCAL, PC_REF_PLAN_REMOTE, PC_REF_PLAN_DIST, PC_REF_PLAN_ARR, PC_REF_PL, PC_REF_PL_STAT, PLAN_GEN, CLI_QUERY, OUTLINE_EXEC, PLAN_EXPLAIN, ASYN_BASELINE, LOAD_BASELINE, PS_EXEC, GV_SQL, PL_ANON, PL_ROUTINE, PACKAGE_VAR, PACKAGE_TYPE, PACKAGE_SPEC, PACKAGE_BODY, PACKAGE_RESV, GET_PKG, INDEX_BUILDER, PCV_SET, PCV_RD, PCV_WR, PCV_GET_PLAN_KEY, PCV_GET_PL_KEY, PCV_EXPIRE_BY_USED, PCV_EXPIRE_BY_MEM, LC_REF_CACHE_NODE, LC_NODE, LC_NODE_RD, LC_NODE_WR, LC_REF_CACHE_OBJ_STAT FROM SYS.GV$OB_PLAN_CACHE_REFERENCE_INFO WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -260,7 +260,7 @@ int ObInnerTableSchema::v_sql_workarea_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$SQL_WORKAREA   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT ADDRESS, HASH_VALUE, SQL_ID, CHILD_NUMBER, WORKAREA_ADDRESS, OPERATION_TYPE, OPERATION_ID, POLICY, ESTIMATED_OPTIMAL_SIZE, ESTIMATED_ONEPASS_SIZE, LAST_MEMORY_USED, LAST_EXECUTION, LAST_DEGREE, TOTAL_EXECUTIONS, OPTIMAL_EXECUTIONS, ONEPASS_EXECUTIONS, MULTIPASSES_EXECUTIONS, ACTIVE_TIME, MAX_TEMPSEG_SIZE, LAST_TEMPSEG_SIZE, CON_ID, SVR_IP, SVR_PORT   FROM SYS.GV$SQL_WORKAREA   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -360,7 +360,7 @@ int ObInnerTableSchema::v_ob_sstables_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM SYS.GV$OB_SSTABLES WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT M.SVR_IP,  M.SVR_PORT,  M.TABLE_TYPE,  M.LS_ID,  M.TABLET_ID,  M.START_LOG_SCN,  M.END_LOG_SCN,  M."SIZE",  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM SYS.GV$OB_SSTABLES M WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -460,7 +460,7 @@ int ObInnerTableSchema::v_ob_server_schema_info_ora_schema(ObTableSchema &table_
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM   SYS.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT SVR_IP,   SVR_PORT,   TENANT_ID,   REFRESHED_SCHEMA_VERSION,   RECEIVED_SCHEMA_VERSION,   SCHEMA_COUNT,   SCHEMA_SIZE,   MIN_SSTABLE_SCHEMA_VERSION FROM   SYS.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -560,7 +560,7 @@ int ObInnerTableSchema::v_sql_plan_monitor_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SQL_PLAN_MONITOR  WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID, REQUEST_ID, KEY, STATUS, SVR_IP, SVR_PORT, TRACE_ID, FIRST_REFRESH_TIME, LAST_REFRESH_TIME, FIRST_CHANGE_TIME, LAST_CHANGE_TIME, REFRESH_COUNT, SID, PROCESS_NAME, SQL_ID, SQL_EXEC_START, SQL_EXEC_ID, SQL_PLAN_HASH_VALUE, SQL_CHILD_ADDRESS, PLAN_PARENT_ID, PLAN_LINE_ID, PLAN_OPERATION, PLAN_OPTIONS, PLAN_OBJECT_OWNER, PLAN_OBJECT_NAME, PLAN_OBJECT_TYPE, PLAN_DEPTH, PLAN_POSITION, PLAN_COST, PLAN_CARDINALITY, PLAN_BYTES, PLAN_TIME, PLAN_PARTITION_START, PLAN_PARTITION_STOP, PLAN_CPU_COST, PLAN_IO_COST, PLAN_TEMP_SPACE, STARTS, OUTPUT_ROWS, IO_INTERCONNECT_BYTES, PHYSICAL_READ_REQUESTS, PHYSICAL_READ_BYTES, PHYSICAL_WRITE_REQUESTS, PHYSICAL_WRITE_BYTES, WORKAREA_MEM, WORKAREA_MAX_MEM, WORKAREA_TEMPSEG, WORKAREA_MAX_TEMPSEG, OTHERSTAT_GROUP_ID, OTHERSTAT_1_ID, OTHERSTAT_1_TYPE, OTHERSTAT_1_VALUE, OTHERSTAT_2_ID, OTHERSTAT_2_TYPE, OTHERSTAT_2_VALUE, OTHERSTAT_3_ID, OTHERSTAT_3_TYPE, OTHERSTAT_3_VALUE, OTHERSTAT_4_ID, OTHERSTAT_4_TYPE, OTHERSTAT_4_VALUE, OTHERSTAT_5_ID, OTHERSTAT_5_TYPE, OTHERSTAT_5_VALUE, OTHERSTAT_6_ID, OTHERSTAT_6_TYPE, OTHERSTAT_6_VALUE, OTHERSTAT_7_ID, OTHERSTAT_7_TYPE, OTHERSTAT_7_VALUE, OTHERSTAT_8_ID, OTHERSTAT_8_TYPE, OTHERSTAT_8_VALUE, OTHERSTAT_9_ID, OTHERSTAT_9_TYPE, OTHERSTAT_9_VALUE, OTHERSTAT_10_ID, OTHERSTAT_10_TYPE, OTHERSTAT_10_VALUE, OTHER_XML, PLAN_OPERATION_INACTIVE, OUTPUT_BATCHES, SKIPPED_ROWS_COUNT, DB_TIME, USER_IO_WAIT_TIME, OTHER_WAIT_TIME FROM SYS.GV$SQL_PLAN_MONITOR  WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -710,7 +710,7 @@ int ObInnerTableSchema::v_open_cursor_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$OPEN_CURSOR       WHERE svr_ip = host_ip() AND svr_port = rpc_port()   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP, SVR_PORT, SADDR, SID, USER_NAME, ADDRESS, HASH_VALUE, SQL_ID, SQL_TEXT, LAST_SQL_ACTIVE_TIME, SQL_EXEC_ID, CURSOR_TYPE, CHILD_ADDRESS, CON_ID FROM SYS.GV$OPEN_CURSOR       WHERE svr_ip = host_ip() AND svr_port = rpc_port()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
