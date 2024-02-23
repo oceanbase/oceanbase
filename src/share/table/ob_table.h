@@ -63,7 +63,11 @@ public:
   static const size_type BLOCK_MOD_BITS = 3;                    // 2^3 = 8
 
 public:
-  ObTableBitMap() : block_count_(-1) {};
+  ObTableBitMap()
+    : block_count_(-1)
+  {
+    datas_.set_attr(ObMemAttr(MTL_ID(), "TableBitMapData"));
+  };
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_serialize_size() const;
@@ -175,7 +179,7 @@ class ObTableEntity: public ObITableEntity
 {
 public:
   ObTableEntity();
-  ~ObTableEntity();
+  virtual ~ObTableEntity();
   virtual int set_rowkey(const ObRowkey &rowkey) override;
   virtual int set_rowkey(const ObITableEntity &other) override;
   virtual int set_rowkey_value(int64_t idx, const ObObj &value) override;
@@ -1324,7 +1328,9 @@ public:
         all_rowkey_names_(nullptr),
         all_properties_names_(nullptr),
         is_same_properties_names_(false)
-  {}
+  {
+    entities_.set_attr(ObMemAttr(MTL_ID(), "SingleOpEntity"));
+  }
 
   ~ObTableSingleOp() = default;
 
@@ -1336,11 +1342,6 @@ public:
   OB_INLINE const ObIArray<ObTableSingleOpEntity> &get_entities() const { return entities_; }
 
   OB_INLINE ObTableOperationType::Type get_op_type() const { return op_type_; }
-
-  OB_INLINE void set_entity_factory(table::ObTableEntityFactory<table::ObTableSingleOpEntity> *entity_factory)
-  {
-    default_entity_factory_ = entity_factory;
-  }
 
   OB_INLINE void set_deserialize_allocator(common::ObIAllocator *allocator)
   {
@@ -1399,11 +1400,12 @@ public:
         all_rowkey_names_(nullptr),
         all_properties_names_(nullptr),
         is_ls_same_properties_names_(false)
-  {}
+  {
+    single_ops_.set_attr(ObMemAttr(MTL_ID(), "TabletOpSingOps"));
+  }
   ~ObTableTabletOp() = default;
   ObTableTabletOp(const ObTableTabletOp &other);
   OB_INLINE int64_t count() const { return single_ops_.count(); }
-  OB_INLINE void set_entity_factory(ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory) { entity_factory_ = entity_factory; }
   OB_INLINE void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_alloc_ = allocator; }
   OB_INLINE const ObTableSingleOp &at(int64_t idx) const { return single_ops_.at(idx); }
   OB_INLINE ObTableSingleOp &at(int64_t idx) { return single_ops_.at(idx); }
@@ -1437,7 +1439,6 @@ private:
     };
   };
   common::ObSEArray<ObTableSingleOp, 1> single_ops_;
-  ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory_; // do not serialize
   common::ObIAllocator *deserialize_alloc_; // do not serialize
   const ObIArray<ObString>* all_rowkey_names_; // do not serialize
   const ObIArray<ObString>* all_properties_names_; // do not serialize
@@ -1465,9 +1466,12 @@ public:
       entity_factory_(nullptr),
       deserialize_alloc_(nullptr),
       tablet_ops_()
-  {}
+  {
+    rowkey_names_.set_attr(ObMemAttr(MTL_ID(), "LSOpRkNames"));
+    properties_names_.set_attr(ObMemAttr(MTL_ID(), "LSOpPropNames"));
+    tablet_ops_.set_attr(ObMemAttr(MTL_ID(), "LSOpTabletOps"));
+  }
   void reset();
-  OB_INLINE void set_entity_factory(ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory) { entity_factory_ = entity_factory; }
   OB_INLINE void set_deserialize_allocator(common::ObIAllocator *allocator) { deserialize_alloc_ = allocator; }
   OB_INLINE int64_t count() const { return tablet_ops_.count(); }
   OB_INLINE const share::ObLSID &get_ls_id() const { return ls_id_; }

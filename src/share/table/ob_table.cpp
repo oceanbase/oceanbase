@@ -2029,25 +2029,16 @@ OB_DEF_DESERIALIZE(ObTableTabletOp,)
   OB_UNIS_DECODE(single_op_size);
 
   if (OB_SUCC(ret)) {
-    ObTableSingleOp *single_op = nullptr;
-    if (OB_ISNULL(single_op = OB_NEWx(ObTableSingleOp, deserialize_alloc_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObTableSingleOp)));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < single_op_size; ++i) {
-        single_op->reset();
-        single_op->set_entity_factory(entity_factory_);
-        single_op->set_deserialize_allocator(deserialize_alloc_);
-        single_op->set_dictionary(all_rowkey_names_, all_properties_names_);
-        single_op->set_is_same_properties_names(is_ls_same_properties_names_);
-        OB_UNIS_DECODE(*single_op);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(single_ops_.push_back(*single_op))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }  // end for
+    if (OB_FAIL(single_ops_.prepare_allocate(single_op_size))) {
+      LOG_WARN("fail to prepare allocatate single ops", K(ret), K(single_op_size));
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < single_op_size; ++i) {
+      ObTableSingleOp &single_op = single_ops_.at(i);
+      single_op.set_deserialize_allocator(deserialize_alloc_);
+      single_op.set_dictionary(all_rowkey_names_, all_properties_names_);
+      single_op.set_is_same_properties_names(is_ls_same_properties_names_);
+      OB_UNIS_DECODE(single_op);
+    }  // end for
   }
 
   return ret;
@@ -2100,26 +2091,18 @@ OB_DEF_DESERIALIZE(ObTableLSOp,)
   int64_t tablet_op_size = 0;
   OB_UNIS_DECODE(tablet_op_size);
 
-  if (OB_SUCC(ret)) {
-    ObTableTabletOp *tablet_op = nullptr;
-    if (OB_ISNULL(tablet_op = OB_NEWx(ObTableTabletOp, deserialize_alloc_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObTableTabletOp)));
-    } else {
-      tablet_op->set_entity_factory(entity_factory_);
-      tablet_op->set_deserialize_allocator(deserialize_alloc_);
-      tablet_op->set_dictionary(&rowkey_names_, &properties_names_);
-      tablet_op->set_is_ls_same_prop_name(is_same_properties_names_);
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_op_size; ++i) {
-        OB_UNIS_DECODE(*tablet_op);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(tablet_ops_.push_back(*tablet_op))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }  // end for
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_ops_.prepare_allocate(tablet_op_size))) {
+      LOG_WARN("fail to prepare allocatate tablet ops", K(ret), K(tablet_op_size));
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_op_size; ++i) {
+      ObTableTabletOp &tablet_op = tablet_ops_.at(i);
+      tablet_op.set_deserialize_allocator(deserialize_alloc_);
+      tablet_op.set_dictionary(&rowkey_names_, &properties_names_);
+      tablet_op.set_is_ls_same_prop_name(is_same_properties_names_);
+      OB_UNIS_DECODE(tablet_op);
+    } // end for
   }
 
   return ret;
@@ -2151,24 +2134,15 @@ OB_DEF_DESERIALIZE(ObTableSingleOp, )
     int64_t entities_size = 0;
     OB_UNIS_DECODE(entities_size);
 
-    ObITableEntity *entity;
-    for (int64_t i = 0; OB_SUCC(ret) && i < entities_size; ++i) {
-      if (OB_ISNULL(default_entity_factory_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("entity factory is null", KR(ret));
-      } else if (OB_ISNULL(entity = default_entity_factory_->alloc())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc", KR(ret));
-      } else {
-        ObTableSingleOpEntity *op_entity = static_cast<ObTableSingleOpEntity *>(entity);
-        op_entity->set_dictionary(all_rowkey_names_, all_properties_names_);
-        op_entity->set_is_same_properties_names(is_same_properties_names_);
-        OB_UNIS_DECODE(*op_entity);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(entities_.push_back(*op_entity))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(entities_.prepare_allocate(entities_size))) {
+        LOG_WARN("failed to prepare allocate single op entities", K(ret), K(entities_size));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < entities_size; ++i) {
+        ObTableSingleOpEntity &op_entity = entities_.at(i);
+        op_entity.set_dictionary(all_rowkey_names_, all_properties_names_);
+        op_entity.set_is_same_properties_names(is_same_properties_names_);
+        OB_UNIS_DECODE(op_entity);
       }
     }
   }

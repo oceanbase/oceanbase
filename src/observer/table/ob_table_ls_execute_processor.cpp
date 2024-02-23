@@ -32,7 +32,6 @@ ObTableLSExecuteP::ObTableLSExecuteP(const ObGlobalContext &gctx)
 int ObTableLSExecuteP::deserialize()
 {
   arg_.ls_op_.set_deserialize_allocator(&allocator_);
-  arg_.ls_op_.set_entity_factory(&default_entity_factory_);
 
   int ret = ParentType::deserialize();
   if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
