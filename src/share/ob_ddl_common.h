@@ -227,6 +227,14 @@ static inline bool is_direct_load_task(const ObDDLType type)
   return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
 }
 
+static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
+{
+  return DDL_DROP_COLUMN == type
+      || DDL_ADD_COLUMN_OFFLINE == type
+      || DDL_COLUMN_REDEFINITION == type
+      || DDL_TABLE_RESTORE == type;
+}
+
 static inline bool is_invalid_ddl_type(const ObDDLType type)
 {
   return DDL_INVALID == type;

@@ -650,6 +650,20 @@ int ObRpcBuildDDLSingleReplicaRequestP::process()
   return ret;
 }
 
+int ObRpcCheckandCancelDDLComplementDagP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    bool is_dag_exist = true;
+    ret = gctx_.ob_service_->check_and_cancel_ddl_complement_data_dag(arg_, is_dag_exist);
+    result_ = is_dag_exist;
+  }
+  return ret;
+}
+
 int ObRpcFetchSysLSP::process()
 {
   int ret = OB_SUCCESS;

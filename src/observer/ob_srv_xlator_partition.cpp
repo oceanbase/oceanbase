@@ -310,4 +310,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObWrSyncUserSubmitSnapshotTaskP, gctx_);
   RPC_PROCESSOR(ObWrSyncUserModifySettingsTaskP, gctx_);
 
+  // ddl
+  RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 }

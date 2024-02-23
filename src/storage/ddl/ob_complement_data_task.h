@@ -176,6 +176,7 @@ public:
   virtual bool is_ha_dag() const override { return false; }
   // report replica build status to RS.
   int report_replica_build_status();
+  int check_and_exit_on_demand();
 private:
   bool is_inited_;
   ObComplementDataParam param_;
