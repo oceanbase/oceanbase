@@ -99,7 +99,8 @@ private:
         expr_constraints_(expr_constraints),
         params_(params),
         use_in_optimization_(false),
-        row_in_offsets_()
+        row_in_offsets_(),
+        is_oracle_char_gt_varchar_(false)
     {
     }
     ~ObQueryRangeCtx()
@@ -121,6 +122,7 @@ private:
     ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
     bool use_in_optimization_;
     ObSEArray<int64_t, 4> row_in_offsets_;
+    bool is_oracle_char_gt_varchar_;
   };
 public:
   enum ObQueryRangeState

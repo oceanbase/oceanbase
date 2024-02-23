@@ -351,6 +351,13 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
   } else if (OB_FAIL(alloc_range_node(range_node))) {
     LOG_WARN("failed to alloc common range node");
   } else {
+    if (is_oracle_mode() && cmp_type == T_OP_GT &&
+        ((column_meta->column_type_.get_type() == ObCharType && const_expr->get_result_type().get_type() == ObVarcharType) ||
+         (column_meta->column_type_.get_type() == ObNCharType && const_expr->get_result_type().get_type() == ObNVarchar2Type))) {
+        /* when char compare with varchar, same string may need return due to padding blank.
+           e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */
+      cmp_type = T_OP_GE;
+    }
     if (T_OP_NSEQ == cmp_type && OB_FAIL(ctx_.null_safe_value_idxs_.push_back(const_val))) {
       LOG_WARN("failed to push back null safe value index", K(const_val));
     //if current expr can be extracted to range, just store the expr
@@ -543,6 +550,13 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
           LOG_WARN("failed to push back key idx", K(key_idx));
         } else if (OB_FAIL(val_idxs.push_back(const_val))) {
           LOG_WARN("failed to push back key idx", K(const_val));
+        } else if (is_oracle_mode() && (cmp_type == T_OP_GT || cmp_type == T_OP_GE) &&
+                   ((column_meta->column_type_.get_type() == ObCharType && const_expr->get_result_type().get_type() == ObVarcharType) ||
+                    (column_meta->column_type_.get_type() == ObNCharType && const_expr->get_result_type().get_type() == ObNVarchar2Type))) {
+          /* when char compare with varchar, same string may need return due to padding blank.
+            e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */
+          // can not extract query range for next row item
+          cmp_type = T_OP_GE;
         } else {
           last_key_idx = key_idx;
           check_next = true;

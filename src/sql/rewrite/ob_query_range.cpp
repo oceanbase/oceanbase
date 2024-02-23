@@ -1756,6 +1756,15 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       out_key_part->id_ = id;
       out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
+
+      if (is_oracle_mode() && (c_type == T_OP_GT || c_type == T_OP_GE) &&
+          ((pos->column_type_.get_type() == ObCharType && const_expr->get_result_type().get_type() == ObVarcharType) ||
+           (pos->column_type_.get_type() == ObNCharType && const_expr->get_result_type().get_type() == ObNVarchar2Type))) {
+          /* when char compare with varchar, same string may need return due to padding blank.
+            e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */
+        c_type = T_OP_GE;
+        query_range_ctx_->is_oracle_char_gt_varchar_ = true;
+      }
       if (const_expr->is_immutable_const_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
               && T_OP_LIKE == c_type
@@ -1986,6 +1995,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       bool is_bound_modified = false;
       const ObRawExpr *l_expr = l_row->get_param_expr(i);
       const ObRawExpr *r_expr = r_row->get_param_expr(i);
+      query_range_ctx_->is_oracle_char_gt_varchar_ = false;
       if (OB_FAIL(check_null_param_compare_in_row(l_expr,
                                                   r_expr,
                                                   tmp_key_part))) {
@@ -2006,7 +2016,9 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       } else if (T_OP_ROW == l_expr->get_expr_type()
                  || T_OP_ROW == r_expr->get_expr_type()) {
         // ((a,b),(c,d)) = (((1,2),(2,3)),((1,2),(2,3)))
-        row_is_precise = false;
+        // row_is_precise = false;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), KPC(l_expr), KPC(r_expr), K(cmp_type));
       } else if (OB_ISNULL(tmp_key_part)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -2047,6 +2059,12 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
           b_flag = true;
           row_is_precise = false;
         }
+      }
+      if (OB_SUCC(ret) && tmp_key_part != NULL &&
+          !(tmp_key_part->is_always_false() || tmp_key_part->is_always_true()) &&
+          query_range_ctx_->is_oracle_char_gt_varchar_) {
+        b_flag = true;
+        row_is_precise = false;
       }
     }
     if (OB_SUCC(ret)) {
@@ -6875,12 +6893,6 @@ if (OB_SUCC(ret) ) { \
         include_start = true; \
       } else if (cmp > 0) { \
         include_start = false; \
-      } else if (is_oracle_mode() && \
-                 ((column_type.get_type() == ObCharType && start.get_type() == ObVarcharType) || \
-                  (column_type.get_type() == ObNCharType && start.get_type() == ObNVarchar2Type))) { \
-        /* when char compare with varchar, same string may need return due to padding blank. \
-           e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */ \
-        include_start = true; \
       } \
       start = *dest_val; \
     } \
