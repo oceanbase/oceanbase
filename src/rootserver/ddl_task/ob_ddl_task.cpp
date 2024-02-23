@@ -1571,7 +1571,7 @@ int ObDDLTask::gather_scanned_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, scan_res) {
       if (OB_FAIL(scan_sql.assign_fmt(
           "SELECT OUTPUT_ROWS FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SUBPLAN_SCAN' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SUBPLAN_SCAN' OR PLAN_OPERATION='PHY_VEC_SUBPLAN_SCAN') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
@@ -1621,7 +1621,7 @@ int ObDDLTask::gather_sorted_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, sort_res) {
       if (OB_FAIL(sort_sql.assign_fmt(
           "SELECT OTHERSTAT_1_VALUE AS ROW_SORTED FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SORT' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SORT' OR PLAN_OPERATION = 'PHY_VEC_SORT') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
