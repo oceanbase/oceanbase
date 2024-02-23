@@ -32,7 +32,20 @@ namespace oceanbase
 namespace common
 {
 
-int64_t FASTSTACK_MIN_INTERVAL = 30 * 60 * 1000 * 1000; // 30min
+ObSigFaststack::ObSigFaststack()
+    : min_interval_(30 * 60 * 1000 * 1000UL) // 30min
+{
+}
+
+ObSigFaststack::~ObSigFaststack()
+{
+}
+
+ObSigFaststack &ObSigFaststack::get_instance()
+{
+  static ObSigFaststack sig_faststack;
+  return sig_faststack;
+}
 
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
 static constexpr char MINICORE_SHELL_PATH[] = "tools/minicore.sh";
@@ -273,7 +286,7 @@ int faststack()
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last = ATOMIC_LOAD(&last_ts);
   int ret = OB_SUCCESS;
-  if (now - last < FASTSTACK_MIN_INTERVAL) {
+  if (now - last < ObSigFaststack::get_instance().get_min_interval()) {
     ret = OB_EAGAIN;
   } else if (!ATOMIC_BCAS(&last_ts, last, now)) {
     ret = OB_EAGAIN;
