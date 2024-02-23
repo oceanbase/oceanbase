@@ -16,7 +16,7 @@ Item_result item_cmp_type(Item_result a,Item_result b)
 }
 */
 
-static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
+static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
 {
   /*NullType*/
   {
@@ -217,7 +217,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,       /*MediumTextType*/
     ObNumberType,        /*LongTextType*/
     ObNumberType,      /*BitType*/
-    ObNumberType,      /*EnumSetType*/
+    ObNumberType,      /*EnumType*/
     ObNumberType,      /*SetType*/
     ObNumberType,      /*EnumInnerType*/
     ObNumberType,      /*SetInnerType*/
@@ -1558,7 +1558,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* UDT */
     ObDecimalIntType,     /* ObDecimalIntType */
   },
-/*TextType*/
+  /*TextType*/
   {
     ObMediumTextType,     /* NullType  */
     ObNumberType,      /* TinyIntType  */
@@ -2527,10 +2527,11 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,      /* ObNVarchar2Type */
     ObNullType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
+    ObNullType,         /* ObLobType */
     ObNullType,       /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
     ObMaxType,         /* UDT */
-    ObNullType,      /* ObDecimalIntType */
+    ObMaxType,      /* ObDecimalIntType */
   },
   /*ObLobType*/
   {
@@ -2584,7 +2585,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,       /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
     ObMaxType,         /* UDT */
-    ObNullType,       /* ObDecimalIntType */
+    ObMaxType,       /* ObDecimalIntType */
   },
   /*ObJsonType*/
   {
@@ -2806,7 +2807,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
 
 
 
-static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
+static constexpr ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
 {
   /*NullType*/
   {
@@ -3007,7 +3008,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,       /*MediumTextType*/
     ObNumberType,        /*LongTextType*/
     ObNumberType,      /*BitType*/
-    ObNumberType,      /*EnumSetType*/
+    ObNumberType,      /*EnumType*/
     ObNumberType,      /*SetType*/
     ObNumberType,      /*EnumInnerType*/
     ObNumberType,      /*SetInnerType*/
@@ -4348,7 +4349,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,             /* UDT */
     ObDecimalIntType,     /* ObDecimalIntType */
   },
-/*TextType*/
+  /*TextType*/
   {
     ObMediumTextType,     /* NullType  */
     ObNumberType,      /* TinyIntType  */
@@ -5595,3 +5596,6 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDecimalIntType,     /* ObDecimalIntType */
   },
 };
+
+//static_assert(is_array_fully_initialized(ORACLE_RELATIONAL_CMP_TYPE, ObMaxType), "ORACLE_RELATIONAL_CMP_TYPE is partially initlized");
+static_assert(is_array_fully_initialized(RELATIONAL_CMP_TYPE, ObMaxType), "RELATIONAL_CMP_TYPE is partially initlized");

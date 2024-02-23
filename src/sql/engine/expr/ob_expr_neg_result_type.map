@@ -1,4 +1,4 @@
-static ObObjType NEG_RESULT_TYPE[ObMaxType] =
+static constexpr ObObjType NEG_RESULT_TYPE[ObMaxType] =
 {
     ObDoubleType,     /*NullType  */
     ObIntType,        /*TinyIntType  */
@@ -53,7 +53,7 @@ static ObObjType NEG_RESULT_TYPE[ObMaxType] =
     ObDecimalIntType,  /* ObDecimalIntType */
 };
 
-static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
+static constexpr ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
 {
     ObNumberType,     /*NullType  */
     ObNumberType,        /*TinyIntType  */
@@ -107,3 +107,6 @@ static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
     ObMaxType,         /* ObUserDefinedSQLType   */
     ObNumberType,  /* ObDecimalIntType */
 };
+
+static_assert(is_array_fully_initialized(NEG_RESULT_TYPE_ORACLE), "NEG_RESULT_TYPE_ORACLE is partially initlized");
+static_assert(is_array_fully_initialized(NEG_RESULT_TYPE), "NEG_RESULT_TYPE is partially initlized");

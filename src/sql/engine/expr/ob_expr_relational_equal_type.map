@@ -1,4 +1,4 @@
-static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] = 
+static constexpr ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
 {
   /*NullType*/
   {
@@ -51,6 +51,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObMaxType,        /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
 
@@ -105,6 +106,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -159,6 +161,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -213,6 +216,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -267,6 +271,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -321,6 +326,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*UTinyIntType*/
@@ -374,6 +380,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -428,6 +435,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -482,6 +490,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -536,6 +545,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -590,6 +600,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -644,6 +655,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
   },
 
@@ -698,6 +710,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
   },
 
@@ -752,6 +765,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
   },
 
@@ -806,6 +820,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDoubleType,        /* ObDecimalIntType */
   },
 
@@ -860,6 +875,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObNumberType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
   },
 
@@ -914,6 +930,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObNumberType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
   },
 
@@ -968,6 +985,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,             /* ObLobType */
     ObJsonType,            /* ObJsonType */
     ObMaxType,             /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDateTimeType,        /* ObDecimalIntType */
   },
 
@@ -1022,6 +1040,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,              /* ObLobType */
     ObJsonType,             /* ObJsonType */
     ObMaxType,              /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampType,        /* ObDecimalIntType */
   },
 
@@ -1076,6 +1095,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,             /* ObLobType */
     ObJsonType,            /* ObJsonType */
     ObMaxType,             /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDateType,        /* ObDecimalIntType */
   },
 
@@ -1130,6 +1150,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,             /* ObLobType */
     ObJsonType,            /* ObJsonType */
     ObHexStringType,       /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObTimeType,        /* ObDecimalIntType */
   },
 
@@ -1184,6 +1205,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,             /* ObLobType */
     ObJsonType,            /* ObJsonType */
     ObDoubleType,          /* ObGeometryType*/
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -1238,6 +1260,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObHexStringType,      /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -1292,6 +1315,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObHexStringType,      /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -1346,6 +1370,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObHexStringType,      /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -1400,6 +1425,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObMaxType,        /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
 
@@ -1454,6 +1480,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObMaxType,        /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*TinyTextType*/
@@ -1507,6 +1534,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*TextType*/
@@ -1560,6 +1588,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*MediumTextType*/
@@ -1613,6 +1642,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*LongTextType*/
@@ -1666,6 +1696,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
    /*BitType*/
@@ -1705,7 +1736,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,       /*EnumType*/
     ObMaxType,       /*SetType*/
     ObMaxType,       /*EnumInnerType*/
-    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
     ObTimestampNanoType,  /* ObTimestampNanoType */
@@ -1719,6 +1750,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObJsonType,           /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*EnumType*/
@@ -1757,7 +1789,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /*BitType*/
     ObMaxType,      /*EnumType*/
     ObMaxType,      /*SetType*/
-    ObMaxType,      /*EnumSetInnerType*/
+    ObMaxType,      /*EnumInnerType*/
     ObMaxType,      /*SetInnerType*/
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
@@ -1772,6 +1804,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObNumberType,         /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*SetType*/
@@ -1810,7 +1843,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /*BitType*/
     ObMaxType,      /*EnumType*/
     ObMaxType,      /*SetType*/
-    ObMaxType,      /*EnumSetInnerType*/
+    ObMaxType,      /*EnumInnerType*/
     ObMaxType,      /*SetInnerType*/
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
@@ -1825,6 +1858,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObNumberType,         /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*EnumInnerType*/
@@ -1878,6 +1912,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObNumberType,     /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*SetInnerType*/
@@ -1931,6 +1966,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObNumberType,     /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*ObTimestampTZType*/
@@ -1984,6 +2020,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObTimestampTZType,    /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampTZType,        /* ObDecimalIntType */
   },
   /*ObTimestampLTZType*/
@@ -2037,6 +2074,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObTimestampLTZType,   /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampLTZType,        /* ObDecimalIntType */
   },
   /*ObTimestampNanoType*/
@@ -2090,6 +2128,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObTimestampNanoType,  /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObTimestampNanoType,        /* ObDecimalIntType */
   },
   /*ObRawType*/
@@ -2143,6 +2182,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObVarcharType,        /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObRawType,        /* ObDecimalIntType */
   },
   /*ObIntervalYMType*/
@@ -2196,6 +2236,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObMaxType,            /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObIntervalYMType,        /* ObDecimalIntType */
   },
   /*ObIntervalDSType*/
@@ -2249,6 +2290,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObMaxType,            /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObIntervalDSType,        /* ObDecimalIntType */
   },
 
@@ -2303,6 +2345,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObMaxType,            /* ObJsonType */
     ObDoubleType,         /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObNumberType,        /* ObDecimalIntType */
   },
 
@@ -2357,6 +2400,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObMaxType,            /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 
@@ -2411,6 +2455,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* ObLobType */
     ObMaxType,            /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
   /*ObURowIDType*/
@@ -2461,8 +2506,10 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObNVarchar2Type */
     ObMaxType,      /* ObNCharType */
     ObMaxType,      /* ObURowIDType */
+    ObMaxType,      /* ObLobType */
     ObMaxType,      /* ObJsonType */
     ObMaxType,      /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*ObLobType*/
@@ -2513,8 +2560,10 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObNVarchar2Type */
     ObMaxType,      /* ObNCharType */
     ObMaxType,      /* ObURowIDType */
+    ObMaxType,      /* ObLobType */
     ObMaxType,      /* ObJsonType */
     ObMaxType,      /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*ObJsonType*/
@@ -2568,6 +2617,7 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,          /* ObLobType */
     ObJsonType,         /* ObJsonType */
     ObJsonType,         /* ObGeometryType*/
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
   },
   /*ObGeometryType*/
@@ -2621,7 +2671,62 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType */
     ObJsonType,        /* ObJsonType */
     ObHexStringType,   /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObMaxType,        /* ObDecimalIntType */
+  },
+  /*ObUserDefinedSQLType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UIntType  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /*TinyTextType*/
+    ObMaxType,         /*TextType*/
+    ObMaxType,         /*MediumTextType*/
+    ObMaxType,         /*LongTextType*/
+    ObMaxType,         /*BitType*/
+    ObMaxType,         /*EnumType*/
+    ObMaxType,         /*SetType*/
+    ObMaxType,         /*EnumInnerType*/
+    ObMaxType,         /*SetInnerType*/
+    ObMaxType,         /* ObTimestampTZType */
+    ObMaxType,         /* ObTimestampLTZType */
+    ObMaxType,         /* ObTimestampNanoType */
+    ObMaxType,         /* ObRawType */
+    ObMaxType,         /* ObIntervalYMType */
+    ObMaxType,         /* ObIntervalDSType */
+    ObMaxType,         /* ObNumberFloatType */
+    ObMaxType,         /* ObNVarchar2Type */
+    ObMaxType,         /* ObNCharType */
+    ObMaxType,         /* ObURowIDType */
+    ObMaxType,         /* ObLobType */
+    ObMaxType,         /* ObJsonType */
+    ObMaxType,         /* ObGeometryType */
+    ObMaxType,         /* ObUserDefinedSQLType */
+    ObMaxType,         /* ObDecimalIntType */
   },
   /*DecimalIntType*/
   {
@@ -2674,9 +2779,11 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObLobType */
     ObMaxType,        /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
+    ObMaxType,            /* ObUserDefinedSQLType */
     ObDecimalIntType,        /* ObDecimalIntType */
   },
 };
 
+static_assert(is_array_fully_initialized(RELATIONAL_EQUAL_TYPE, ObMaxType), "RELATIONAL_EQUAL_TYPE is partially initlized");
 
 
