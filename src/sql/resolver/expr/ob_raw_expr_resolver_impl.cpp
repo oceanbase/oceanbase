@@ -514,7 +514,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         break;
       }
       case T_OP_AND:
-      case T_OP_OR:
+      case T_OP_OR: {
+        if (OB_FAIL(process_and_or_node(node, expr))) {
+          LOG_WARN("failed to flatten and resolve operator", K(ret));
+        }
+        break;
+      }
       case T_OP_XOR: {
         ObOpRawExpr *m_expr = NULL;
         int64_t num_child = 2;
@@ -7960,6 +7965,55 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
   return ret;
 }
 
+/* A or B or D is associated as (A or B) or C */
+int ObRawExprResolverImpl::process_and_or_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 16> node_stack;
+  ObOpRawExpr *m_expr = NULL;
+  if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_OP_AND && node->type_ != T_OP_OR)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected param", K(ret));
+  } else if (OB_FAIL(node_stack.push_back(reinterpret_cast<int64_t>(node)))) {
+    LOG_WARN("failed to push back node", K(ret), K(node_stack.count()));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, m_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  }
+  while (OB_SUCC(ret) && !node_stack.empty()) {
+    int64_t top = node_stack.count() - 1;
+    const ParseNode *process_node = reinterpret_cast<const ParseNode*>(node_stack.at(top));
+    if (OB_FAIL(node_stack.remove(top--))) {
+      LOG_WARN("failed to remove node", K(ret), K(top));
+    } else if (node->type_ == process_node->type_) {
+      if (OB_UNLIKELY(process_node->num_child_ != 2) ||
+          OB_ISNULL(process_node->children_[0]) ||
+          OB_ISNULL(process_node->children_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected param", K(ret));
+      /* first in last out */
+      } else if (OB_FAIL(node_stack.push_back(reinterpret_cast<int64_t>(process_node->children_[1])))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(node_stack.push_back(reinterpret_cast<int64_t>(process_node->children_[0])))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else {
+      ObRawExpr *param_expr = NULL;
+      if (OB_FAIL(recursive_resolve(process_node, param_expr))) {
+        LOG_WARN("resolve child node", K(ret));
+      } else if (OB_FAIL(m_expr->add_param_expr(param_expr))) {
+        LOG_WARN("fail to set param expr", K(ret), KP(m_expr));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
+      LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
+    } else {
+      expr = m_expr;
+    }
+  }
+  return ret;
+}
 
 } //namespace sql
 } //namespace oceanbase

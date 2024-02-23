@@ -221,7 +221,7 @@ private:
 
   int resolve_left_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int resolve_right_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
-
+  int process_and_or_node(const ParseNode *node, ObRawExpr *&expr);
 private:
   // data members
   ObExprResolveContext &ctx_;
