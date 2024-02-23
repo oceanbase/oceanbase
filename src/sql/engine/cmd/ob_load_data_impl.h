@@ -686,7 +686,7 @@ public:
     InsertTask,
   };
   struct ToolBox {
-    ToolBox() : device_handle_(NULL), fd_(), expr_buffer(nullptr) {}
+    ToolBox() : device_handle_(NULL), fd_(), job_status(NULL), expr_buffer(nullptr), temp_handle(NULL) {}
     int init(ObExecContext &ctx, ObLoadDataStmt &load_stmt);
     int build_calc_partid_expr(ObExecContext &ctx,
                                ObLoadDataStmt &load_stmt,
