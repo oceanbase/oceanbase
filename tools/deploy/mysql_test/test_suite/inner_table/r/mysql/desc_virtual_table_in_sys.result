@@ -7398,7 +7398,7 @@ result	bigint(20)	YES		NULL
 comment	longtext	YES		NULL	
 balance_task_id	bigint(20)	NO		NULL	
 table_lock_owner_id	bigint(20)	YES		NULL	
-data_version	bigint(20) unsigned	YES		NULL	
+data_version	varchar(256)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7427,7 +7427,7 @@ balance_task_id	bigint(20)	NO		NULL
 table_lock_owner_id	bigint(20)	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
-data_version	bigint(20) unsigned	YES		NULL	
+data_version	varchar(256)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_task_history;
 IF(count(*) >= 0, 1, 0)
 1

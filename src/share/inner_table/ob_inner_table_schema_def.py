@@ -5370,7 +5370,7 @@ def_table_schema(
         ('comment', 'longtext', 'true'),
         ('balance_task_id', 'int', 'false'),
         ('table_lock_owner_id', 'int', 'true'),
-        ('data_version', 'uint', 'true'),
+        ('data_version', 'varchar:OB_CLUSTER_VERSION_LENGTH', 'true', ''),
     ],
 )
 
@@ -5408,7 +5408,7 @@ def_table_schema(
         ('table_lock_owner_id', 'int', 'true'),
         ('create_time', 'timestamp', 'false'),
         ('finish_time', 'timestamp', 'false'),
-        ('data_version', 'uint', 'true'),
+        ('data_version', 'varchar:OB_CLUSTER_VERSION_LENGTH', 'true', ''),
     ],
 )
 
