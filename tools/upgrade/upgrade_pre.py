@@ -155,10 +155,12 @@
 #
 #  return timeout
 #
-#def set_tenant_parameter(cur, parameter, value, timeout = 0):
+#def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = False):
 #
 #  tenants_list = []
-#  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+#  if only_sys_tenant:
+#    tenants_list = ['sys']
+#  elif get_min_cluster_version(cur) < get_version("4.2.1.0"):
 #    tenants_list = ['all']
 #  else:
 #    tenants_list = ['sys', 'all_user', 'all_meta']
@@ -174,7 +176,7 @@
 #
 #  set_session_timeout(cur, 10)
 #
-#  wait_parameter_sync(cur, True, parameter, value, timeout)
+#  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 #
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
@@ -258,10 +260,11 @@
 #    bret = False
 #  return bret
 #
-#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_tenant = False):
 #  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+#  extra_sql = " and tenant_id = 1" if is_tenant_config and only_sys_tenant else ""
 #  sql = """select count(*) as cnt from oceanbase.{0}
-#           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
+#           where name = '{1}' and value != '{2}'{3}""".format(table_name, key, value, extra_sql)
 #
 #  wait_timeout = 0
 #  query_timeout = 0
@@ -1347,6 +1350,14 @@
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
 #      and actions.get_version(target_version) >= actions.get_version('4.2.0.0'):
 #    actions.set_tenant_parameter(cur, '_bloom_filter_enabled', 'False', timeout)
+#  # Disable enable_rebalance of sys tenant to avoid automatic unit migration
+#  # regardless of the same version upgrade or cross-version upgrade.
+#  # enable_rebalance is changed from cluster level to tenant level since 4.2.
+#  if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+#    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+#  else:
+#    only_sys_tenant = True
+#    actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
 #
 #####========******####======== actions begin ========####******========####
 #  return
@@ -2879,9 +2890,10 @@
 #def enable_ddl(cur, timeout):
 #  actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
 #
-## 5 打开rebalance
+## 5 打开sys租户rebalance
 #def enable_rebalance(cur, timeout):
-#  actions.set_parameter(cur, 'enable_rebalance', 'True', timeout)
+#  only_sys_tenant = True
+#  actions.set_tenant_parameter(cur, 'enable_rebalance', 'True', timeout, only_sys_tenant)
 #
 ## 6 打开rereplication
 #def enable_rereplication(cur, timeout):

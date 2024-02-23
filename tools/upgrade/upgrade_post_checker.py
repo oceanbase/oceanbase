@@ -106,9 +106,10 @@ def check_root_inspection(cur, query_cur, timeout):
 def enable_ddl(cur, timeout):
   actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
 
-# 5 打开rebalance
+# 5 打开sys租户rebalance
 def enable_rebalance(cur, timeout):
-  actions.set_parameter(cur, 'enable_rebalance', 'True', timeout)
+  only_sys_tenant = True
+  actions.set_tenant_parameter(cur, 'enable_rebalance', 'True', timeout, only_sys_tenant)
 
 # 6 打开rereplication
 def enable_rereplication(cur, timeout):

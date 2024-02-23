@@ -147,10 +147,12 @@ def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout)
 
   return timeout
 
-def set_tenant_parameter(cur, parameter, value, timeout = 0):
+def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = False):
 
   tenants_list = []
-  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+  if only_sys_tenant:
+    tenants_list = ['sys']
+  elif get_min_cluster_version(cur) < get_version("4.2.1.0"):
     tenants_list = ['all']
   else:
     tenants_list = ['sys', 'all_user', 'all_meta']
@@ -166,7 +168,7 @@ def set_tenant_parameter(cur, parameter, value, timeout = 0):
 
   set_session_timeout(cur, 10)
 
-  wait_parameter_sync(cur, True, parameter, value, timeout)
+  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 
 def get_ori_enable_ddl(cur, timeout):
   ori_value_str = fetch_ori_enable_ddl(cur)
@@ -250,10 +252,11 @@ def check_parameter(cur, is_tenant_config, key, value):
     bret = False
   return bret
 
-def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_tenant = False):
   table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+  extra_sql = " and tenant_id = 1" if is_tenant_config and only_sys_tenant else ""
   sql = """select count(*) as cnt from oceanbase.{0}
-           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
+           where name = '{1}' and value != '{2}'{3}""".format(table_name, key, value, extra_sql)
 
   wait_timeout = 0
   query_timeout = 0

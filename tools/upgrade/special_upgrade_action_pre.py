@@ -41,6 +41,14 @@ def do_special_upgrade(conn, cur, timeout, user, passwd):
   if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
       and actions.get_version(target_version) >= actions.get_version('4.2.0.0'):
     actions.set_tenant_parameter(cur, '_bloom_filter_enabled', 'False', timeout)
+  # Disable enable_rebalance of sys tenant to avoid automatic unit migration
+  # regardless of the same version upgrade or cross-version upgrade.
+  # enable_rebalance is changed from cluster level to tenant level since 4.2.
+  if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+  else:
+    only_sys_tenant = True
+    actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
 
 ####========******####======== actions begin ========####******========####
   return
