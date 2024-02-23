@@ -1841,7 +1841,7 @@ int ObMPStmtExecute::process()
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
-    SQL_INFO_GUARD(session.get_current_query_string(), session.get_cur_sql_id());
+    SQL_INFO_GUARD(ctx_.cur_sql_, ObString(ctx_.sql_id_));
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
