@@ -247,7 +247,8 @@ struct ObTxSnapshot
 // snapshot used to consistency read
 struct ObTxReadSnapshot
 {
-  bool valid_;
+  bool valid_;              // used by cursor check snapshot state
+  bool committed_;          // used by cursor check snapshot state
   ObTxSnapshot core_;
   enum class SRC {
     INVL = 0,
@@ -275,8 +276,10 @@ struct ObTxReadSnapshot
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
-  const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
+  bool is_valid() const { return valid_; }
+  bool is_committed() const { return committed_; }
   int format_source_for_display(char *buf, const int64_t buf_len) const;
+  const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
@@ -289,7 +292,8 @@ struct ObTxReadSnapshot
                K_(snapshot_lsid),
                K_(snapshot_ls_role),
                K_(snapshot_acquire_addr),
-               K_(parts));
+               K_(parts),
+               K_(committed));
   OB_UNIS_VERSION(1);
 };
 
