@@ -260,7 +260,7 @@ int ObInnerTableSchema::dba_scheduler_windows_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.ALL_SCHEDULER_WINDOWS)__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT OWNER,                              WINDOW_NAME,                              RESOURCE_PLAN,                              SCHEDULE_OWNER,                              SCHEDULE_NAME,                              SCHEDULE_TYPE,                              START_DATE,                              REPEAT_INTERVAL,                              END_DATE,                              DURATION,                              WINDOW_PRIORITY,                              NEXT_RUN_DATE,                              LAST_START_DATE,                              ENABLED,                              ACTIVE,                              MANUAL_OPEN_TIME,                              MANUAL_DURATION,                              COMMENTS FROM SYS.ALL_SCHEDULER_WINDOWS)__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2110,7 +2110,7 @@ int ObInnerTableSchema::v_ob_px_p2p_datahub_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT * FROM SYS.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT SVR_IP,           SVR_PORT,           TRACE_ID,           DATAHUB_ID,           MESSAGE_TYPE,           TENANT_ID,           HOLD_SIZE,           TIMEOUT_TS,           START_TIME FROM SYS.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2210,7 +2210,7 @@ int ObInnerTableSchema::v_sql_join_filter_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,           SVR_PORT,           QC_SESSION_ID,           QC_INSTANCE_ID,           SQL_PLAN_HASH_VALUE,           FILTER_ID,           BITS_SET,           FILTERED,           PROBED,           ACTIVE,           CON_ID,           TRACE_ID FROM SYS.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

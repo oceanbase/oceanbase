@@ -260,7 +260,7 @@ int ObInnerTableSchema::dba_scheduler_job_run_details_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT TENANT_ID,                               JOB,                               TIME,                               CODE,                               MESSAGE,                               JOB_CLASS,                               GMT_CREATE,                               GMT_MODIFIED FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
