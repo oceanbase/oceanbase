@@ -407,6 +407,7 @@ constexpr int OB_CLONE_TENANT_TIMEOUT = -9109;
 constexpr int OB_ERR_CLONE_TENANT = -9110;
 constexpr int OB_ERR_TENANT_SNAPSHOT = -9111;
 constexpr int OB_TENANT_SNAPSHOT_LOCK_CONFLICT = -9112;
+constexpr int OB_CHECKSUM_TYPE_NOT_SUPPORTED = -9113;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
