@@ -85,7 +85,11 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObExpr *gis_arg2 = expr.args_[1];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get session", K(ret));
+  } else if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
@@ -137,9 +141,12 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else if (srid1 != srid2) {
       LOG_WARN("srid not the same", K(srid1), K(srid2));
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
-    } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_CONTAINS))) {
+    } else if (!is_geo1_cached && !is_geo2_cached
+               && OB_FAIL(ObGeoExprUtils::get_srs_item(session->get_effective_tenant_id(), srs_guard, srid1, srs))) {
+      LOG_WARN("fail to get srs item", K(ret), K(srid1));
+    } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_ST_CONTAINS))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_CONTAINS))) {
+    } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_ST_CONTAINS))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
         || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
@@ -158,7 +165,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           LOG_WARN("add geo2 to const cache failed", K(ret));
         }
       }
-      ObGeoEvalCtx gis_context(&temp_allocator, srs);
+      ObGeoEvalCtx gis_context(&temp_allocator);
       bool result = false;
       if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {
         LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));

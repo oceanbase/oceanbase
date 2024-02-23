@@ -101,7 +101,11 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
     }
   }
 
-  if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get session", K(ret));
+  } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
@@ -109,12 +113,15 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
     LOG_WARN("srid not the same", K(srid1), K(srid2));
     ret = OB_ERR_GIS_DIFFERENT_SRIDS;
     LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_PRIV_ST_COVERS, srid1, srid2);
+  } else if (!is_geo1_cached && !is_geo2_cached
+               && OB_FAIL(ObGeoExprUtils::get_srs_item(session->get_effective_tenant_id(), srs_guard, srid1, srs))) {
+    LOG_WARN("fail to get srs item", K(ret), K(srid1));
   } else if (ObGeoTypeUtil::is_geo1_dimension_higher_than_geo2(type2, type1)) {
     res.set_bool(false);
-  } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_COVERS,
+  } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, nullptr, N_PRIV_ST_COVERS,
                                                     true, true))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
-  } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_COVERS,
+  } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, nullptr, N_PRIV_ST_COVERS,
                                                     true, true))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
@@ -134,7 +141,7 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
         LOG_WARN("add geo2 to const cache failed", K(ret));
       }
     }
-    ObGeoEvalCtx gis_context(&temp_allocator, srs);
+    ObGeoEvalCtx gis_context(&temp_allocator);
     bool result = false;
     if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
