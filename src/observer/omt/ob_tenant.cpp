@@ -541,10 +541,36 @@ int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(workers_lock_);
-  while (req_queue_.size() > 0
-    || (multi_level_queue_.get_total_size() > 0)) {
-    ob_usleep(10L * 1000L);
+
+  int tmp_ret = OB_SUCCESS;
+  const int64_t timeout = 10 * 1000;
+  ObLink* task = nullptr;
+  rpc::ObRequest *req = nullptr;
+  while (req_queue_.size() > 0) {
+    if (OB_TMP_FAIL(req_queue_.pop(task, timeout))) {
+      LOG_WARN("req queue pop task fail", K(tmp_ret), K(&req_queue_));
+    } else if (NULL != task) {
+      req = static_cast<rpc::ObRequest*>(task);
+      on_translate_fail(req, OB_TENANT_NOT_IN_SERVER);
+    } else {
+      LOG_ERROR("req queue pop successfully but task is NULL");
+    }
   }
+
+  for (int32_t level = 0; level < MULTI_LEVEL_QUEUE_SIZE; level++) {
+    while (multi_level_queue_.get_size(level) > 0) {
+      if (OB_TMP_FAIL(multi_level_queue_.pop(task, level, timeout))) {
+        LOG_WARN("req queue pop task fail", K(tmp_ret), K(&multi_level_queue_));
+      } else if (NULL != task) {
+        req = static_cast<rpc::ObRequest*>(task);
+        on_translate_fail(req, OB_TENANT_NOT_IN_SERVER);
+      } else {
+        LOG_ERROR("multi level queue pop successfully but task is NULL");
+      }
+    }
+  }
+
+
   while (nesting_workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_REMOVESAFE(wnode, nesting_workers_) {
