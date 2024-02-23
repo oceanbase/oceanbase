@@ -383,7 +383,6 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(src.get_ext());
       CK (OB_NOT_NULL(opaque));
       OX (opaque->~ObPLOpaque());
-      OX (src.set_null());
     }
       break;
 #endif
