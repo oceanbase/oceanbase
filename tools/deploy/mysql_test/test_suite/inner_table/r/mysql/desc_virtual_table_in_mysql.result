@@ -789,6 +789,7 @@ seq_num	bigint(20)	NO		NULL
 total_memstore_read_row_count	bigint(20)	NO		NULL	
 total_ssstore_read_row_count	bigint(20)	NO		NULL	
 proxy_user	varchar(128)	YES		NULL	
+format_sql_id	varchar(32)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1070,6 +1071,8 @@ outline_target	longtext	NO		NULL
 outline_sql	longtext	NO		NULL	
 sql_id	varchar(32)	NO			
 outline_content	longtext	NO		NULL	
+format_sql_id	varbinary(32)	NO			
+format_outline	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_outline;
 IF(count(*) >= 0, 1, 0)
 1

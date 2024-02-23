@@ -5703,7 +5703,8 @@ bool ObDropOutlineArg::is_valid() const
 OB_SERIALIZE_MEMBER((ObDropOutlineArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
-                    outline_name_);
+                    outline_name_,
+                    is_format_);
 
 bool ObCreateDbLinkArg::is_valid() const
 {

@@ -267,6 +267,23 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
           }
           break;
         }
+        case FORMAT_SQL_TEXT : {
+          ObString str("");
+          cells[cell_idx].set_lob_value(ObLongTextType, str.ptr(), 0);
+          cells[cell_idx].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case FORMAT_SQL_ID : {
+          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case FORMAT_OUTLINE : {
+          cells[cell_idx].set_int(static_cast<int64_t>(false));
+          break;
+        }
         default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));

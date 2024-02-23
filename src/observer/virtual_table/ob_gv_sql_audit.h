@@ -176,6 +176,7 @@ private:
     TOTAL_MEMSTORE_READ_ROW_COUNT,
     TOTAL_SSSTORE_READ_ROW_COUNT,
     PROXY_USER_NAME,
+    FORMAT_SQL_ID
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

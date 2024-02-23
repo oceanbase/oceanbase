@@ -8228,6 +8228,7 @@ def_table_schema(
     ('total_memstore_read_row_count', 'int'),
     ('total_ssstore_read_row_count', 'int'),
     ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8525,7 +8526,9 @@ def_table_schema(
       ('outline_target', 'longtext', 'false'),
       ('outline_sql', 'longtext', 'false'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-      ('outline_content', 'longtext', 'false')
+      ('outline_content', 'longtext', 'false'),
+      ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
+      ('format_outline', 'int', 'false', '0')
     ],
 )
 
