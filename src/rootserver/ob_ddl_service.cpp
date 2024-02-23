@@ -5395,7 +5395,6 @@ int ObDDLService::lock_tablets(ObMySQLTransaction &trans,
                                                            timeout,
                                                            conn))) {
         LOG_WARN("lock dest table failed", KR(ret), K(table_id), K(tenant_id));
-        ret = ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
       }
     }
   }
@@ -5427,7 +5426,6 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
                                                       timeout,
                                                       conn))) {
       LOG_WARN("lock dest table failed", KR(ret), K(table_schema));
-      ret = ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
     }
   }
   return ret;

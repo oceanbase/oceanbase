@@ -198,6 +198,7 @@ private:
   int register_into_deadlock_detector_(const ObStoreCtx &ctx,
                                        const ObTableLockOp &lock_op);
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
+  int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;

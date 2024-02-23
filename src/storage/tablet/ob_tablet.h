@@ -329,9 +329,6 @@ public:
       const int64_t len,
       share::ObLSID &ls_id,
       common::ObTabletID &tablet_id);
-  static int64_t get_lock_wait_timeout(
-      const int64_t abs_lock_timeout,
-      const int64_t stmt_timeout);
   int rowkey_exists(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -842,14 +839,6 @@ inline int64_t ObTablet::dec_ref()
   STORAGE_LOG(DEBUG, "tablet dec ref", KP(this), K(tablet_id), "ref_cnt", cnt, K(lbt()));
 
   return cnt;
-}
-
-inline int64_t ObTablet::get_lock_wait_timeout(
-    const int64_t abs_lock_timeout,
-    const int64_t stmt_timeout)
-{
-  return (abs_lock_timeout < 0 ? stmt_timeout :
-          (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
 }
 
 #ifdef OB_BUILD_TDE_SECURITY
