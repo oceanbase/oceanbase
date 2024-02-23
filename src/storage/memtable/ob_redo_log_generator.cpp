@@ -38,6 +38,14 @@ void ObRedoLogGenerator::reset()
   }
 }
 
+void ObRedoLogGenerator::clear_big_row_buf()
+{
+  if (NULL != big_row_buf_) {
+    ob_free(big_row_buf_);
+    big_row_buf_ = NULL;
+  }
+}
+
 int ObRedoLogGenerator::set(ObMvccRowCallback* start, ObMvccRowCallback* end, ObIMemtableCtx* mem_ctx)
 {
   int ret = OB_SUCCESS;

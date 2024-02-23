@@ -173,6 +173,7 @@ void ObMemtableCtx::reset()
     data_relocated_ = false;
     arena_.free();
     if (OB_NOT_NULL(mutator_iter_)) {
+      mutator_iter_->reset();
       ctx_cb_allocator_.free(mutator_iter_);
       mutator_iter_ = NULL;
     }
@@ -1756,6 +1757,16 @@ int ObMemtableCtx::check_trans_size_(const bool for_replay)
     }
   }
   return ret;
+}
+
+void ObMemtableCtx::purge_big_row()
+{
+  log_gen_.clear_big_row_buf();
+  if (OB_NOT_NULL(mutator_iter_)) {
+    mutator_iter_->reset();
+    ctx_cb_allocator_.free(mutator_iter_);
+    mutator_iter_ = NULL;
+  }
 }
 
 }  // namespace memtable

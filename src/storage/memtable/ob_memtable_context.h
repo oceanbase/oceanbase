@@ -502,6 +502,7 @@ public:
   }
   void dec_pending_elr_count();
   int clean_dirty_callbacks();
+  void purge_big_row();
 
 public:
   void on_tsc_retry(const ObMemtableKey& key) override;
