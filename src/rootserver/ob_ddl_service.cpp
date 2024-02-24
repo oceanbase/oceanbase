@@ -11444,12 +11444,12 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           } else if (OB_FAIL(drop_rls_policy_caused_by_drop_column_online(schema_guard, *orig_table_schema,
               drop_cols_id_arr, new_table_schema, ddl_operator, trans))) {
             LOG_WARN("drop rls policy failed", K(ret));
-          } else if (OB_FAIL(drop_index_caused_by_drop_column_online(schema_guard, *orig_table_schema, drop_cols_id_arr,
-              alter_table_arg.allocator_, ddl_operator, trans, ddl_tasks))) {
-            LOG_WARN("drop index caused by drop column failed", K(ret), K(drop_cols_id_arr));
           } else if (OB_FAIL(drop_lob_caused_by_drop_column_online_if_need(alter_table_arg, *orig_table_schema,
               new_table_schema, alter_table_arg.allocator_, trans, ddl_tasks, res))) {
             LOG_WARN("drop lob caused by drop column online failed", K(ret));
+          } else if (OB_FAIL(drop_index_caused_by_drop_column_online(schema_guard, *orig_table_schema, drop_cols_id_arr,
+              alter_table_arg.allocator_, ddl_operator, trans, ddl_tasks))) {
+            LOG_WARN("drop index caused by drop column failed", K(ret), K(drop_cols_id_arr));
           }
         }
 
