@@ -337,6 +337,8 @@ int ObTransformJoinLimitPushDown::split_cartesian_tables(ObSelectStmt *select_st
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_contain_correlated_function_table(select_stmt, is_contain))) {
     LOG_WARN("failed to check contain correlated function table", K(ret));
+  } else if (is_contain) {
+    //do nothing
   } else if (OB_FAIL(check_contain_correlated_json_table(select_stmt, is_contain))) {
     LOG_WARN("failed to check contain correlated function table", K(ret));
   } else if (is_contain) {
