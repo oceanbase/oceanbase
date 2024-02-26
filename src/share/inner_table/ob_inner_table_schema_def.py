@@ -13730,6 +13730,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12476: __all_virtual_user_proxy_role_info
 # 12477: __all_virtual_user_proxy_role_info_history
 # 12478: __all_virtual_tablet_reorganize_history
+# 12479: __all_virtual_res_mgr_directive
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -32835,6 +32836,8 @@ def_table_schema(
 # 21543: GV$OB_TRACEPOINT_INFO
 # 21544: V$OB_TRACEPOINT_INFO
 # 21545: V$OB_COMPATIBILITY_CONTROL
+# 21546: DBA_OB_RSRC_DIRECTIVES
+# 21547: CDB_OB_RSRC_DIRECTIVES
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -59852,6 +59855,7 @@ def_table_schema(
 # 28220: V$OB_SESSION_PS_INFO
 # 28221: GV$OB_TRACEPOINT_INFO
 # 28222: V$OB_TRACEPOINT_INFO
+# 28223: DBA_OB_RSRC_DIRECTIVES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
