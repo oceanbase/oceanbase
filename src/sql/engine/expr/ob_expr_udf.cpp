@@ -130,6 +130,10 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
             } else {
               types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
             }
+          } else if (types[i].is_enum_or_set()) {
+            types[i].set_type(ObVarcharType);
+            types[i].set_collation_level(params_type_.at(i).get_collation_level());
+            types[i].set_collation_type(params_type_.at(i).get_collation_type());
           }
         }
       }
@@ -180,8 +184,12 @@ int ObExprUDF::check_types(const ObExpr &expr, const ObExprUDFInfo &info)
     if (!expr.args_[i]->obj_meta_.is_null()
         && (!info.params_desc_.at(i).is_out())) {
       if (expr.args_[i]->obj_meta_.get_type() != info.params_type_.at(i).get_type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("check param type failed", K(ret), K(i));
+        if (info.params_type_.at(i).is_enum_or_set() && ObVarcharType == expr.args_[i]->obj_meta_.get_type()) {
+          // do nothing ...
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("check param type failed", K(ret), K(i));
+        }
       }
     }
   }
