@@ -114,15 +114,15 @@ public:
   int check_user_access(const ObString &credential_str);
   // transaction control
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
-                  const table::ObTableConsistencyLevel consistency_level, uint64_t table_id,
-                  const share::ObLSID &ls_id, int64_t timeout_ts);
+                  const table::ObTableConsistencyLevel consistency_level,
+                  const share::ObLSID &ls_id, int64_t timeout_ts, bool need_global_snapshot);
   int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts,
                 bool use_sync = false, table::ObHTableLockHandle *lock_handle = nullptr);
   static int start_trans_(bool is_readonly, transaction::ObTxDesc*& trans_desc,
                           transaction::ObTxReadSnapshot &tx_snapshot,
                           const ObTableConsistencyLevel consistency_level,
                           sql::TransState *trans_state_ptr,
-                          uint64_t table_id, const share::ObLSID &ls_id, int64_t timeout_ts);
+                          const share::ObLSID &ls_id, int64_t timeout_ts, bool need_global_snapshot);
   int sync_end_trans(bool is_rollback, int64_t timeout_ts, table::ObHTableLockHandle *lock_handle = nullptr);
   static int sync_end_trans_(bool is_rollback,
                              transaction::ObTxDesc *&trans_desc,
@@ -133,7 +133,7 @@ public:
   // for get
   int init_read_trans(const table::ObTableConsistencyLevel  consistency_level,
                       const share::ObLSID &ls_id,
-                      int64_t timeout_ts);
+                      int64_t timeout_ts, bool need_global_snapshot);
   void release_read_trans();
   inline transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
@@ -157,7 +157,6 @@ protected:
   virtual void audit_on_finish() {}
   virtual void save_request_string() = 0;
   virtual void generate_sql_id() = 0;
-  virtual int check_table_index_supported(uint64_t table_id, bool &is_supported);
 
 private:
   int async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts, table::ObHTableLockHandle *lock_handle = nullptr);
@@ -165,7 +164,8 @@ private:
                                transaction::ObTxReadSnapshot &tx_snapshot,
                                const bool strong_read,
                                const share::ObLSID &ls_id,
-                               const int64_t timeout_ts);
+                               const int64_t timeout_ts,
+                               bool need_global_snapshot);
 protected:
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;

@@ -154,6 +154,7 @@ public:
   static const uint16_t ENABLE_RATELIMIT_FLAG  = 1 << 8;
   static const uint16_t BACKGROUND_FLOW_FLAG   = 1 << 7;
   static const uint16_t TRACE_INFO_FLAG        = 1 << 6;
+  static const uint16_t IS_KV_REQUEST_FALG     = 1 << 5;
 
   uint64_t checksum_;
   ObRpcPacketCode pcode_;
@@ -271,6 +272,8 @@ public:
   inline bool unneed_response() const;
   inline void set_require_rerouting();
   inline bool require_rerouting() const;
+  inline bool is_kv_request() const;
+  inline void set_kv_request();
 
   inline bool ratelimit_enabled() const;
   inline void enable_ratelimit();
@@ -492,6 +495,16 @@ bool ObRpcPacket::has_context() const
 bool ObRpcPacket::has_trace_info() const
 {
   return hdr_.flags_ & ObRpcPacketHeader::TRACE_INFO_FLAG;
+}
+
+bool ObRpcPacket::is_kv_request() const
+{
+  return hdr_.flags_ & ObRpcPacketHeader::IS_KV_REQUEST_FALG;
+}
+
+void ObRpcPacket::set_kv_request()
+{
+  hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
 }
 
 void ObRpcPacket::set_stream_next()

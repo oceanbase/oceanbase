@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace table
 {
+class ObTableGlobalIndexLookupExecutor;
 class ObTableApiScanSpec : public ObTableApiSpec
 {
 public:
@@ -38,23 +39,26 @@ private:
 
 class ObTableApiScanExecutor : public ObTableApiExecutor
 {
+  friend class ObTableGlobalIndexLookupExecutor;
 public:
   ObTableApiScanExecutor(ObTableCtx &ctx, const ObTableApiScanSpec &spec)
       : ObTableApiExecutor(ctx),
         scan_spec_(spec),
-        tsc_rtdef_(ctx.get_allocator()),
-        das_ref_(eval_ctx_, ctx.get_exec_ctx())
+        tsc_rtdef_(allocator_),
+        das_ref_(eval_ctx_, ctx.get_exec_ctx()),
+        global_index_lookup_executor_(nullptr)
   {
     reset();
   }
-  virtual ~ObTableApiScanExecutor() {}
+  virtual ~ObTableApiScanExecutor() { destroy(); }
   int open() override;
   int get_next_row() override;
   int close() override;
-  void destroy() override {}
+  void destroy() override;
   virtual void clear_evaluated_flag() override;
 public:
   OB_INLINE const ObTableApiScanSpec& get_spec() const { return scan_spec_; }
+  OB_INLINE ObIAllocator& get_allocator() { return allocator_; }
   OB_INLINE void reset()
   {
     input_row_cnt_ = 0;
@@ -69,6 +73,7 @@ protected:
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
   bool need_do_init_;
+  ObTableGlobalIndexLookupExecutor *global_index_lookup_executor_;
 private:
   int init_tsc_rtdef();
   int init_das_scan_rtdef(const sql::ObDASScanCtDef &das_ctdef,
@@ -80,6 +85,7 @@ private:
   int do_table_scan();
   int get_next_row_with_das();
   int check_filter(bool &filter);
+  int get_next_row_for_tsc();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanExecutor);
 };

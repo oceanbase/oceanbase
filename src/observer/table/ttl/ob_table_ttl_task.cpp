@@ -175,9 +175,9 @@ int ObTableTTLDeleteTask::process_one()
                         tx_snapshot,
                         ObTableConsistencyLevel::STRONG,
                         &trans_state,
-                        scan_ctx.get_table_id(),
                         scan_ctx.get_ls_id(),
-                        get_timeout_ts()))) {
+                        get_timeout_ts(),
+                        scan_ctx.need_dist_das()))) {
       LOG_WARN("fail to start trans", KR(ret));
     } else if (OB_FAIL(scan_ctx.init_trans(trans_desc, tx_snapshot))) {
       LOG_WARN("fail to init trans", KR(ret));

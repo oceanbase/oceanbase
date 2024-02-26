@@ -82,7 +82,10 @@ public:
                          const sql::ObDASTableLocMeta *loc_meta);
   int init_related_das_rtdef(const sql::DASDMLCtDefArray &das_ctdefs,
                              sql::DASDMLRtDefArray &das_rtdefs);
-  int calc_tablet_loc(sql::ObDASTabletLoc *&tablet_loc);
+  int calc_local_tablet_loc(sql::ObDASTabletLoc *&tablet_loc);
+  int calc_tablet_loc(ObExpr *calc_part_id_expr,
+                      ObDASTableLoc &table_loc,
+                      ObDASTabletLoc *&tablet_loc);
   OB_INLINE int64_t get_affected_rows() const { return affected_rows_; }
   int get_affected_entity(ObITableEntity *&entity);
 protected:
@@ -92,6 +95,10 @@ protected:
                          ObTableDelRtDef &del_rtdef);
   int generate_upd_rtdef(const ObTableUpdCtDef &upd_ctdef,
                          ObTableUpdRtDef &upd_rtdef);
+  int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                    ObTableUpdRtDef &upd_rtdef);
+  int generate_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                    ObTableUpdRtDef &upd_rtdef);
   int insert_row_to_das(const ObTableInsCtDef &ins_ctdef,
                         ObTableInsRtDef &ins_rtdef);
   int delete_row_to_das(const ObTableDelCtDef &del_ctdef,
@@ -102,7 +109,6 @@ protected:
   // for htable
   int modify_htable_timestamp();
   int fetch_conflict_rowkey(sql::ObConflictChecker &conflict_checker);
-  int reset_das_env(ObTableInsRtDef &ins_rtdef);
   int check_whether_row_change(const ObChunkDatumStore::StoredRow &upd_old_row,
                                const ObChunkDatumStore::StoredRow &upd_new_row,
                                const ObTableUpdCtDef &upd_ctdef,
@@ -111,20 +117,13 @@ protected:
                           const ObChunkDatumStore::StoredRow &upd_new_row);
   int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
                        const ObTableUpdCtDef &upd_ctdef);
-  int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
-                                    ObTableUpdRtDef &upd_rtdef);
-  int generate_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
-                                    ObTableUpdRtDef &upd_rtdef);
-  int delete_upd_old_row_to_das(const ObRowkey &constraint_rowkey,
-                                const sql::ObConflictValue &constraint_value,
-                                const ObTableUpdCtDef &upd_ctdef,
+  int delete_upd_old_row_to_das(const ObTableUpdCtDef &upd_ctdef,
                                 ObTableUpdRtDef &upd_rtdef,
                                 sql::ObDMLRtCtx &dml_rtctx);
   int insert_upd_new_row_to_das(const ObTableUpdCtDef &upd_ctdef,
                                 ObTableUpdRtDef &upd_rtdef,
                                 sql::ObDMLRtCtx &dml_rtctx);
   int execute_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
-  void set_need_fetch_conflict(sql::ObDMLRtCtx &upd_rtctx,ObTableInsRtDef &ins_rtdef);
   int stored_row_to_exprs(const ObChunkDatumStore::StoredRow &row,
                           const common::ObIArray<ObExpr*> &exprs,
                           ObEvalCtx &ctx);

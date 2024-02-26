@@ -23,20 +23,61 @@ namespace oceanbase
 {
 namespace table
 {
-
-int ObTableApiTTLExecutor::generate_ttl_rtdef(const ObTableTTLCtDef &ctdef, ObTableTTLRtDef &rtdef)
+int ObTableApiTTLSpec::init_ctdefs_array(int64_t size)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(ttl_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      ttl_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
 
-  if (OB_FAIL(generate_ins_rtdef(ctdef.ins_ctdef_,
-                                 rtdef.ins_rtdef_))) {
-    LOG_WARN("fail to generate insert rtdef", K(ret));
-  } else if (OB_FAIL(generate_del_rtdef(ctdef.del_ctdef_,
-                                        rtdef.del_rtdef_))) {
-    LOG_WARN("fail to generate delete rtdef", K(ret));
-  } else if (OB_FAIL(generate_upd_rtdef(ctdef.upd_ctdef_,
-                                        rtdef.upd_rtdef_))) {
-    LOG_WARN("fail to generate update rtdef", K(ret));
+ObTableApiTTLSpec::~ObTableApiTTLSpec()
+{
+  for (int64_t i = 0; i < ttl_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(ttl_ctdefs_.at(i))) {
+      ttl_ctdefs_.at(i)->~ObTableTTLCtDef();
+    }
+  }
+  ttl_ctdefs_.reset();
+}
+
+bool ObTableApiTTLExecutor::is_duplicated()
+{
+
+  for (int64_t i = 0 ; i < ttl_rtdefs_.count() && !is_duplicated_; i++) {
+    is_duplicated_ = ttl_rtdefs_.at(i).ins_rtdef_.das_rtdef_.is_duplicated_;
+  }
+  return is_duplicated_;
+}
+
+int ObTableApiTTLExecutor::generate_ttl_rtdefs()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ttl_rtdefs_.allocate_array(allocator_, ttl_spec_.get_ctdefs().count()))) {
+    LOG_WARN("allocate ttl rtdef failed", K(ret), K(ttl_spec_.get_ctdefs().count()));
+  }
+  for (int64_t i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableTTLCtDef *ttl_ctdef = nullptr;
+    ObTableTTLRtDef &ttl_rtdef = ttl_rtdefs_.at(i);
+    if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_ins_rtdef(ttl_ctdef->ins_ctdef_,
+                                  ttl_rtdef.ins_rtdef_))) {
+      LOG_WARN("fail to generate insert rtdef", K(ret));
+    } else if (OB_FAIL(generate_del_rtdef(ttl_ctdef->del_ctdef_,
+                                          ttl_rtdef.del_rtdef_))) {
+      LOG_WARN("fail to generate delete rtdef", K(ret));
+    } else if (OB_FAIL(generate_upd_rtdef(ttl_ctdef->upd_ctdef_,
+                                          ttl_rtdef.upd_rtdef_))) {
+      LOG_WARN("fail to generate update rtdef", K(ret));
+    }
   }
 
   return ret;
@@ -48,27 +89,28 @@ int ObTableApiTTLExecutor::open()
 
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_ttl_rtdef(ttl_spec_.get_ctdef(), ttl_rtdef_))) {
+  } else if (OB_FAIL(generate_ttl_rtdefs())) {
     LOG_WARN("fail to generate ttl rtdef", K(ret));
   } else {
     ObDASTabletLoc *tablet_loc = nullptr;
-    ObDASTableLoc *table_loc = ttl_rtdef_.ins_rtdef_.das_rtdef_.table_loc_;
+    ObDASTableLoc *table_loc = ttl_rtdefs_.at(0).ins_rtdef_.das_rtdef_.table_loc_;
     if (OB_ISNULL(table_loc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table location is invalid", K(ret));
     } else if (OB_FAIL(conflict_checker_.init_conflict_checker(ttl_spec_.get_expr_frame_info(), table_loc))) {
       LOG_WARN("fail to init conflict_checker", K(ret));
-    } else if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
+    } else if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
       LOG_WARN("fail to calc tablet location", K(ret));
     } else {
       conflict_checker_.set_local_tablet_loc(tablet_loc);
       // init update das_ref
       ObMemAttr mem_attr;
+      bool use_dist_das = tb_ctx_.has_global_index();
       mem_attr.tenant_id_ = tb_ctx_.get_session_info().get_effective_tenant_id();
       mem_attr.label_ = "TableApiTTL";
       upd_rtctx_.das_ref_.set_expr_frame_info(ttl_spec_.get_expr_frame_info());
       upd_rtctx_.das_ref_.set_mem_attr(mem_attr);
-      upd_rtctx_.das_ref_.set_execute_directly(true);
+      upd_rtctx_.das_ref_.set_execute_directly(!use_dist_das);
     }
   }
 
@@ -84,16 +126,20 @@ int ObTableApiTTLExecutor::open()
 int ObTableApiTTLExecutor::refresh_exprs_frame(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
-  const ObTableTTLCtDef &ctdef = ttl_spec_.get_ctdef();
-  const ObTableInsCtDef &ins_ctdef = ctdef.ins_ctdef_;
-  const ObTableUpdCtDef &upd_ctdef = ctdef.upd_ctdef_;
+  ObTableTTLCtDef *ttl_ctdef = nullptr;
 
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
+  } else if (ttl_spec_.get_ctdefs().count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl ctdefs count is less than 1", K(ret));
+  } else if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl ctdef is NULL", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_ttl_exprs_frame(tb_ctx_,
-                                                                   ins_ctdef.new_row_,
-                                                                   upd_ctdef.delta_row_,
+                                                                   ttl_ctdef->ins_ctdef_.new_row_,
+                                                                   ttl_ctdef->upd_ctdef_.delta_row_,
                                                                    *entity))) {
     LOG_WARN("fail to refresh ttl exprs frame", K(ret), K(*entity));
   }
@@ -115,17 +161,31 @@ int ObTableApiTTLExecutor::get_next_row_from_child()
   return ret;
 }
 
+int ObTableApiTTLExecutor::insert_row_to_das() {
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsRtDef &ins_rtdef = ttl_rtdefs_.at(i).ins_rtdef_;
+    ObTableTTLCtDef *ttl_ctdef = nullptr;
+    if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_row_to_das(ttl_ctdef->ins_ctdef_, ins_rtdef))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i), K(ttl_ctdef->ins_ctdef_), K(ins_rtdef));
+    }
+  }
+  return ret;
+}
+
 int ObTableApiTTLExecutor::try_insert_row()
 {
   int ret = OB_SUCCESS;
-  const ObTableTTLCtDef &ctdef = ttl_spec_.get_ctdef();
 
   while (OB_SUCC(ret)) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next row from child", K(ret));
       }
-    } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, ttl_rtdef_.ins_rtdef_))) {
+    } else if (OB_FAIL(insert_row_to_das())) {
       LOG_WARN("fail to insert row to das", K(ret));
     } else {
       cur_idx_++;
@@ -142,10 +202,10 @@ int ObTableApiTTLExecutor::try_insert_row()
 int ObTableApiTTLExecutor::check_expired(bool &is_expired)
 {
   int ret = OB_SUCCESS;
-  ObExpr *expr = ttl_spec_.get_ctdef().expire_expr_;
+  ObExpr *expr = nullptr;
   ObDatum *datum = nullptr;
 
-  if (OB_ISNULL(expr)) {
+  if (OB_ISNULL(expr = ttl_spec_.get_ctdefs().at(0)->expire_expr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expire expr is null", K(ret));
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
@@ -160,10 +220,15 @@ int ObTableApiTTLExecutor::check_expired(bool &is_expired)
 int ObTableApiTTLExecutor::do_delete()
 {
   int ret = OB_SUCCESS;
-  const ObTableTTLCtDef &ctdef = ttl_spec_.get_ctdef();
-
-  if (OB_FAIL(delete_row_to_das(ctdef.del_ctdef_, ttl_rtdef_.del_rtdef_))) {
-    LOG_WARN("fail to delete row to das", K(ret), K(ctdef), K_(ttl_rtdef));
+  for (int64_t i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableDelRtDef &del_rtdef = ttl_rtdefs_.at(i).del_rtdef_;
+    ObTableTTLCtDef *ttl_ctdef = nullptr;
+    if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(delete_row_to_das(ttl_ctdef->del_ctdef_, del_rtdef))) {
+      LOG_WARN("fail to delete row to das", K(ret), K(ttl_ctdef->del_ctdef_), K(del_rtdef), K(i));
+    }
   }
 
   return ret;
@@ -172,14 +237,13 @@ int ObTableApiTTLExecutor::do_delete()
 int ObTableApiTTLExecutor::do_insert()
 {
   int ret = OB_SUCCESS;
-  const ObTableTTLCtDef &ctdef = ttl_spec_.get_ctdef();
   const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
 
   // do_insert前被conflict checker刷成了旧行，需要重新刷一遍
   if (OB_FAIL(refresh_exprs_frame(entity))) {
     LOG_WARN("fail to refresh exprs frame", K(ret));
-  } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, ttl_rtdef_.ins_rtdef_))) {
-    LOG_WARN("fail to insert row to das", K(ret), K(ctdef), K_(ttl_rtdef));
+  } else if (OB_FAIL(insert_row_to_das())) {
+    LOG_WARN("fail to insert row to das", K(ret));
   }
 
   return ret;
@@ -190,7 +254,7 @@ int ObTableApiTTLExecutor::update_row_to_conflict_checker()
   int ret = OB_SUCCESS;
   ObSEArray<ObConflictValue, 1> constraint_values;
   ObChunkDatumStore::StoredRow *insert_row = nullptr;
-  ObTableUpdRtDef &upd_rtdef = ttl_rtdef_.upd_rtdef_;
+  ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(0).upd_rtdef_;
   const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
   const ObExprPtrIArray &new_row_exprs = get_primary_table_insert_row();
 
@@ -215,7 +279,7 @@ int ObTableApiTTLExecutor::update_row_to_conflict_checker()
       LOG_WARN("can not update rowkey column", K(ret));
     } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
                                                 *upd_new_row,
-                                                ttl_spec_.get_ctdef().upd_ctdef_,
+                                                ttl_spec_.get_ctdefs().at(0)->upd_ctdef_,
                                                 is_row_changed_))) {
       LOG_WARN("fail to check whether row change", K(ret));
     } else if (is_row_changed_) {
@@ -275,24 +339,16 @@ int ObTableApiTTLExecutor::update_row_to_das()
         OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
                                get_primary_table_upd_old_row(),
                                eval_ctx_));
-        OZ(delete_upd_old_row_to_das(constraint_rowkey,
-                                     constraint_value,
-                                     ttl_spec_.get_ctdef().upd_ctdef_,
-                                     ttl_rtdef_.upd_rtdef_,
-                                     upd_rtctx_));
+        OZ(delete_upd_old_row_to_das());
         OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                            ttl_spec_.get_ctdef().upd_ctdef_));
+                            ttl_spec_.get_ctdefs().at(0)->upd_ctdef_));
         clear_evaluated_flag();
-        OZ(insert_upd_new_row_to_das(ttl_spec_.get_ctdef().upd_ctdef_,
-                                     ttl_rtdef_.upd_rtdef_,
-                                     upd_rtctx_));
+        OZ(insert_upd_new_row_to_das());
       } else if (NULL == constraint_value.baseline_datum_row_ &&
                  NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
         OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                            ttl_spec_.get_ctdef().upd_ctdef_));
-        OZ(insert_upd_new_row_to_das(ttl_spec_.get_ctdef().upd_ctdef_,
-                                     ttl_rtdef_.upd_rtdef_,
-                                     upd_rtctx_));
+                            ttl_spec_.get_ctdefs().at(0)->upd_ctdef_));
+        OZ(insert_upd_new_row_to_das());
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected constraint_value", K(ret));
@@ -303,11 +359,52 @@ int ObTableApiTTLExecutor::update_row_to_das()
   return ret;
 }
 
+int ObTableApiTTLExecutor::delete_upd_old_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t ttl_ctdefs_count = ttl_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(ttl_ctdefs_count != ttl_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl ctdef count is not equal to rtdefs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ttl_rtdefs_.count(); i++) {
+    const ObTableTTLCtDef *ttl_ctdef = ttl_spec_.get_ctdefs().at(i);
+    ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(i).upd_rtdef_;
+    if (OB_ISNULL(ttl_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_upd_old_row_to_das(ttl_ctdef->upd_ctdef_, upd_rtdef, upd_rtctx_))) {
+      LOG_WARN("fail to delete old row to das", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableApiTTLExecutor::insert_upd_new_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t ttl_ctdefs_count = ttl_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(ttl_ctdefs_count != ttl_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl ctdef count is not equal to rtdefs", K(ret));
+  }
+  for (int64_t i = 0; i < ttl_spec_.get_ctdefs().count(); i++) {
+    const ObTableTTLCtDef *ttl_ctdef = ttl_spec_.get_ctdefs().at(i);
+    ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(i).upd_rtdef_;
+    if (OB_ISNULL(ttl_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_upd_new_row_to_das(ttl_ctdef->upd_ctdef_, upd_rtdef, upd_rtctx_))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 int ObTableApiTTLExecutor::do_update()
 {
   int ret = OB_SUCCESS;
-  const ObTableTTLCtDef &ctdef = ttl_spec_.get_ctdef();
-
   // 1. 刷frame，刷到upd_ctdef.new_row中
   // 2. conflict_checker_.update_row
   // 3. 遍历冲突map，do_update,参考ObTableApiInsertUpExecutor::do_update
@@ -381,6 +478,38 @@ int ObTableApiTTLExecutor::process_expire()
   return ret;
 }
 
+void ObTableApiTTLExecutor::set_need_fetch_conflict()
+{
+  for (int64_t i = 0; i < ttl_rtdefs_.count(); i++) {
+    ObTableInsRtDef &ins_rtdef = ttl_rtdefs_.at(i).ins_rtdef_;
+    ins_rtdef.das_rtdef_.need_fetch_conflict_ = true;
+  }
+  dml_rtctx_.set_non_sub_full_task();
+  upd_rtctx_.set_pick_del_task_first();
+  upd_rtctx_.set_non_sub_full_task();
+}
+
+int ObTableApiTTLExecutor::reset_das_env()
+{
+  int ret = OB_SUCCESS;
+  // 释放第一次try insert的das task
+  if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+    LOG_WARN("fail to close all das task", K(ret));
+  } else {
+    dml_rtctx_.das_ref_.reuse();
+  }
+
+  // 因为第二次插入不需要fetch conflict result了
+  for (int64_t i = 0; OB_SUCC(ret) && i < ttl_rtdefs_.count(); i++) {
+    ObTableInsRtDef &ins_rtdef = ttl_rtdefs_.at(i).ins_rtdef_;
+    ins_rtdef.das_rtdef_.need_fetch_conflict_ = false;
+    ins_rtdef.das_rtdef_.is_duplicated_ = false;
+  }
+
+  return ret;
+}
+
+
 // 1. 获取快照点
 // 2. 写入记录
 //   a. 不冲突，写入成功
@@ -396,7 +525,7 @@ int ObTableApiTTLExecutor::get_next_row()
   int ret = OB_SUCCESS;
   transaction::ObTxSEQ savepoint_no;
 
-  set_need_fetch_conflict(upd_rtctx_, ttl_rtdef_.ins_rtdef_);
+  set_need_fetch_conflict();
   if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(exec_ctx_, savepoint_no))) {
     LOG_WARN("fail to create save_point", K(ret));
   } else if (OB_FAIL(try_insert_row())) {
@@ -406,7 +535,7 @@ int ObTableApiTTLExecutor::get_next_row()
     LOG_DEBUG("no duplicated, insert successfully");
   } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {// 获取所有的冲突主键
     LOG_WARN("fail to fetch conflict rowkey", K(ret));
-  } else if (OB_FAIL(reset_das_env(ttl_rtdef_.ins_rtdef_))) { // reuse das 相关信息
+  } else if (OB_FAIL(reset_das_env())) { // reuse das 相关信息
     LOG_WARN("fail to reset das env", K(ret));
   } else if (OB_FAIL(ObSqlTransControl::rollback_savepoint(exec_ctx_, savepoint_no))) { // 本次插入存在冲突, 回滚到save_point
     LOG_WARN("fail to rollback to save_point", K(ret), K(savepoint_no));
@@ -415,7 +544,7 @@ int ObTableApiTTLExecutor::get_next_row()
   }
 
   if (OB_SUCC(ret)) {
-    affected_rows_ = insert_rows_ + ttl_rtdef_.upd_rtdef_.found_rows_;
+    affected_rows_ = insert_rows_ + ttl_rtdefs_.at(0).upd_rtdef_.found_rows_;
   }
 
   return ret;

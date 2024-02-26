@@ -72,6 +72,8 @@ private:
   int process_get(table::ObTableCtx &op_tb_ctx, table::ObTableOperationResult &result);
   int execute_htable_delete(const table::ObTableBatchOperation &batch_operation);
   int execute_htable_put(const table::ObTableBatchOperation &batch_operation);
+  int check_table_has_global_index(uint64_t table_id, bool &is_supported);
+
 
 private:
   static const int64_t COMMON_COLUMN_NUM = 16;
