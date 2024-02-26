@@ -1785,6 +1785,7 @@ def_table_schema(
   ('order_flag', 'bool', 'false'),
   ('cycle_flag', 'bool', 'false'),
   ('is_system_generated', 'bool', 'false', 'false'),
+  ('flag', 'int', 'false', 0),
   ],
 )
 
@@ -1813,6 +1814,7 @@ def_table_schema(
   ('order_flag', 'bool', 'true'),
   ('cycle_flag', 'bool', 'true'),
   ('is_system_generated', 'bool', 'true'),
+  ('flag', 'int', 'false', 0),
   ],
 )
 

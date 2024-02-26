@@ -1128,6 +1128,9 @@ PCODE_DEF(OB_TRIM_KEY_LIST, 0x1618)
 //proxy user
 //PCODE_DEF(OB_ALTER_USER_PROXY, 0x1620)
 
+// global sequence service
+// PCODE_DEF(OB_GAIS_NEXT_SEQUENCE_REQUEST, 0x1621)
+
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：

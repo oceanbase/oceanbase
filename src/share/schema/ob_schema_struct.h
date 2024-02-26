@@ -6888,6 +6888,11 @@ public:
   // inline void set_cache_size(int64_t val) { option_.set_cache_size(val); }
   inline void set_cycle_flag(bool cycle) { option_.set_cycle_flag(cycle); }
   inline void set_order_flag(bool order) { option_.set_order_flag(order); }
+  inline void set_flag(int64_t flag) { option_.set_flag(flag); }
+  inline void set_cache_order_mode(ObSequenceCacheOrderMode mode)
+  {
+    option_.set_cache_order_mode(mode);
+  }
 
   // Temporary compatibility code, in order to support max_value etc. as Number type
   // int set_max_value(const common::ObString &str);
@@ -6918,8 +6923,13 @@ public:
   //inline int64_t get_increment_by() const { return option_.get_increment_by(); }
   //inline int64_t get_start_with() const { return option_.get_start_with(); }
   //inline int64_t get_cache_size() const { return option_.get_cache_size(); }
+  inline int64_t get_flag() const { return option_.get_flag(); }
   inline bool get_cycle_flag() const { return option_.get_cycle_flag(); }
   inline bool get_order_flag() const { return option_.get_order_flag(); }
+  inline ObSequenceCacheOrderMode get_cache_order_mode() const
+  {
+    return option_.get_cache_order_mode();
+  }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }

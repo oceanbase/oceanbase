@@ -3726,6 +3726,7 @@ cache_size	decimal(28,0)	NO		NULL
 order_flag	tinyint(4)	NO		NULL	
 cycle_flag	tinyint(4)	NO		NULL	
 is_system_generated	tinyint(4)	NO		0	
+flag	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sequence_object;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3747,6 +3748,7 @@ cache_size	decimal(28,0)	YES		NULL
 order_flag	tinyint(4)	YES		NULL	
 cycle_flag	tinyint(4)	YES		NULL	
 is_system_generated	tinyint(4)	YES		NULL	
+flag	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sequence_object_history;
 IF(count(*) >= 0, 1, 0)
 1
