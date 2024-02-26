@@ -732,6 +732,16 @@ int ObRebuildService::check_can_rebuild_(
           "ls_id", ls->get_ls_id(), K(role));
     }
   }
+
+#ifdef ERRSIM
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    if (tenant_config->ls_rebuild_without_check_limit) {
+      can_rebuild = true;
+    }
+  }
+#endif
+
   return ret;
 }
 

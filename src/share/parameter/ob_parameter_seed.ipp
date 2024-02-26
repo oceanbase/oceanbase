@@ -1851,3 +1851,6 @@ DEF_TIME(_faststack_min_interval, OB_CLUSTER_PARAMETER, "30m", "[1s,)",
 ERRSIM_DEF_BOOL(errsim_migration_solo_send_medium_info, OB_CLUSTER_PARAMETER, "False",
          "send migration tablet meta without medium info list, follow by N medium infos.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_BOOL(ls_rebuild_without_check_limit, OB_TENANT_PARAMETER, "False",
+         "ls rebuild without check limit",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
