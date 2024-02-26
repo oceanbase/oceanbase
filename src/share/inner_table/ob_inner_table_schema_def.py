@@ -6915,6 +6915,7 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 513 : __all_user_proxy_info_history
 # 514 : __all_user_proxy_role_info
 # 515 : __all_user_proxy_role_info_history
+# 516 : __all_service
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -7168,6 +7169,7 @@ def_table_schema(
   ('out_bytes', 'bigint'),
   ('user_client_port', 'int', 'false', '0'),
   ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+  ('service_name', 'varchar:64', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -32856,6 +32858,8 @@ def_table_schema(
 # 21545: V$OB_COMPATIBILITY_CONTROL
 # 21546: DBA_OB_RSRC_DIRECTIVES
 # 21547: CDB_OB_RSRC_DIRECTIVES
+# 21548: DBA_OB_SERVICES
+# 21549: CDB_OB_SERVICES
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -52686,6 +52690,7 @@ def_table_schema(
 )
 
 # 25301: PROXY_USERS
+# 25302: DBA_OB_SERVICES
 
 #
 # 余留位置（此行之前占位）

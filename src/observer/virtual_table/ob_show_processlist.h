@@ -80,6 +80,7 @@ private:
     OUT_BYTES,
     USER_CLIENT_PORT,
     PROXY_USER_NAME,
+    SERVICE_NAME,
   };
   class FillScanner
   {
