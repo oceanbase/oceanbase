@@ -71,6 +71,25 @@ int ObXAService::init(const ObAddr &self_addr,
   return ret;
 }
 
+void ObXAService::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    if (is_running_) {
+      stop();
+      wait();
+    }
+    xa_inner_table_gc_worker_.destroy();
+    xa_trans_heartbeat_worker_.destroy();
+    xa_ctx_mgr_.destroy();
+    timer_.destroy();
+    xa_rpc_.destroy();
+    xa_proxy_.destroy();
+    is_inited_ = false;
+  }
+  TRANS_LOG(INFO, "xa service destroy");
+}
+
 int ObXAService::start()
 {
   int ret = OB_SUCCESS;
@@ -115,6 +134,7 @@ void ObXAService::stop()
     xa_trans_heartbeat_worker_.stop();
     xa_inner_table_gc_worker_.stop();
   }
+  TRANS_LOG(INFO, "xa service stop", KR(ret));
 
   return;
 }
@@ -137,6 +157,7 @@ void ObXAService::wait()
     xa_trans_heartbeat_worker_.wait();
     xa_inner_table_gc_worker_.wait();
   }
+  TRANS_LOG(INFO, "xa service wait", KR(ret));
 
   return;
 }

@@ -92,14 +92,14 @@ class ObXAService
 {
 public:
   ObXAService() : is_running_(false), is_inited_(false) {}
-  virtual ~ObXAService() {}
+  virtual ~ObXAService() { destroy(); }
   int init(const ObAddr &self_addr,
            rpc::frame::ObReqTransport *req_transport);
   static int mtl_init(ObXAService* &xa_service);
   int start();
   void stop();
   void wait();
-  void destroy() {}
+  void destroy();
 public:
   int xa_start(const ObXATransID &xid,
               const int64_t flags,
