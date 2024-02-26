@@ -10859,7 +10859,7 @@ int ObInnerTableSchema::all_virtual_transfer_task_schema(ObTableSchema &table_sc
       OB_CLUSTER_VERSION_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      true, //is_nullable
+      false, //is_nullable
       false, //is_autoincrement
       data_version_default,
       data_version_default); //default_value
@@ -11271,7 +11271,7 @@ int ObInnerTableSchema::all_virtual_transfer_task_history_schema(ObTableSchema &
       OB_CLUSTER_VERSION_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      true, //is_nullable
+      false, //is_nullable
       false, //is_autoincrement
       data_version_default,
       data_version_default); //default_value
