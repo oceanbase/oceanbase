@@ -1055,7 +1055,6 @@ public:
 
 protected:
   int process();
-  int fill_copy_tablet_info(const obrpc::ObCopyTabletInfo &tablet_info);
 protected:
   int64_t max_tablet_num_;
 };
