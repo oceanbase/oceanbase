@@ -192,8 +192,7 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     uncertain_bound_,
                     snapshot_lsid_,
                     parts_,
-                    snapshot_ls_role_,
-                    snapshot_acquire_addr_);
+                    snapshot_ls_role_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
