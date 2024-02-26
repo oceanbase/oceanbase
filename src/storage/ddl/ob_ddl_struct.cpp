@@ -285,12 +285,12 @@ const ObTabletDirectLoadMgr *ObTabletDirectLoadMgrHandle::get_obj() const
   return tablet_mgr_;
 }
 
-ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj()
+ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj() const
 {
   return static_cast<ObTabletFullDirectLoadMgr *>(tablet_mgr_);
 }
 
-ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj()
+ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj() const
 {
   return static_cast<ObTabletIncDirectLoadMgr *>(tablet_mgr_);
 }

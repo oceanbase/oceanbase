@@ -223,7 +223,7 @@ public:
       const ObMergeType merge_type,
       const int64_t &merge_snapshot_version);
   static int schedule_tablet_ddl_major_merge(
-      const share::ObLSID &ls_id,
+      ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
 
   int get_min_dependent_schema_version(int64_t &min_schema_version);

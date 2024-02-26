@@ -569,6 +569,47 @@ int ObTabletDDLKvMgr::get_ddl_kvs_for_query(ObTablet &tablet, ObIArray<ObDDLKVHa
   return ret;
 }
 
+// when ddl commit scn is only in memory, try flush it, need wait log replay point elapsed the ddl commit scn
+int ObTabletDDLKvMgr::try_flush_ddl_commit_scn(
+    ObLSHandle &ls_handle,
+    const ObTabletHandle &tablet_handle,
+    const ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    const share::SCN &commit_scn)
+{
+  int ret = OB_SUCCESS;
+   ObTabletFullDirectLoadMgr *direct_load_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid() || OB_ISNULL(direct_load_mgr = direct_load_mgr_handle.get_full_obj()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_handle));
+  } else if (commit_scn.is_valid_and_not_min() // already committed
+      && tablet_handle.get_obj()->get_tablet_meta().ddl_checkpoint_scn_ != commit_scn) {// only exist in memory
+    SCN max_decided_scn;
+    bool already_freezed = true;
+    {
+      ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+      already_freezed = max_freeze_scn_ >= commit_scn;
+    }
+    if (already_freezed) {
+      // do nothing
+    } else if (OB_FAIL(ls_handle.get_ls()->get_max_decided_scn(max_decided_scn))) {
+      LOG_WARN("get max decided log ts failed", K(ret), K(ls_handle.get_ls()->get_ls_id()));
+    } else if (SCN::plus(max_decided_scn, 1) >= commit_scn) { // commit_scn elapsed, means the prev clog already replayed or applied
+      // max_decided_scn is the left border scn - 1
+      // the min deciding(replay or apply) scn (aka left border) is max_decided_scn + 1
+      if (OB_FAIL(freeze_ddl_kv(direct_load_mgr->get_start_scn(),
+              direct_load_mgr->get_table_key().get_snapshot_version(),
+              direct_load_mgr->get_data_format_version(),
+              commit_scn))) {
+        LOG_WARN("freeze ddl kv failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletDDLKvMgr::check_has_effective_ddl_kv(bool &has_ddl_kv)
 {
   int ret = OB_SUCCESS;
