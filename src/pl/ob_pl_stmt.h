@@ -900,6 +900,7 @@ public:
   int get_idx(int64_t &idx) const;
   inline uint64_t get_parent_id() const { return parent_id_; }
   inline uint64_t get_id() const { return id_; }
+  inline uint64_t get_routine_id() const { return id_; }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return subprogram_path_; }
   inline int set_subprogram_path(const ObIArray<int64_t> &path) { return append(subprogram_path_, path); }
   inline int add_subprogram_path(int64_t path) { return subprogram_path_.push_back(path); }
