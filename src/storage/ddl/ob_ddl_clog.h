@@ -144,7 +144,8 @@ public:
            const common::ObTabletID &tablet_id,
            const share::SCN &start_scn,
            const uint32_t lock_tid,
-           ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
+           ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+           ObTabletDirectLoadMgrHandle &lob_direct_load_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -161,6 +162,7 @@ private:
   share::SCN start_scn_;
   uint32_t lock_tid_;
   ObTabletDirectLoadMgrHandle direct_load_mgr_handle_;
+  ObTabletDirectLoadMgrHandle lob_direct_load_mgr_handle_;
 };
 
 class ObDDLClogHeader final

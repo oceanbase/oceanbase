@@ -315,11 +315,10 @@ int ObTabletDirectLoadMgrHandle::assign(const ObTabletDirectLoadMgrHandle &other
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_UNLIKELY(!other.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(other));
-  } else if (OB_FAIL(set_obj(other.tablet_mgr_))) {
-    LOG_WARN("set obj failed", K(ret));
+  if (OB_LIKELY(other.is_valid())) {
+    if (OB_FAIL(set_obj(other.tablet_mgr_))) {
+      LOG_WARN("set obj failed", K(ret));
+    }
   }
   return ret;
 }

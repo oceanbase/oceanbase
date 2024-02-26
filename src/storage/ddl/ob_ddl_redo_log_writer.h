@@ -302,6 +302,7 @@ private:
       const share::ObLSID &ls_id,
       logservice::ObLogHandler *log_handler,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+      ObTabletDirectLoadMgrHandle &lob_direct_load_mgr_handle,
       ObDDLCommitLogHandle &handle,
       uint32_t &lock_tid);
   int remote_write_ddl_commit_redo(

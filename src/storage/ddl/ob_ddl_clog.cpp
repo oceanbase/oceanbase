@@ -263,7 +263,7 @@ int ObDDLMacroBlockClogCb::on_failure()
 }
 
 ObDDLCommitClogCb::ObDDLCommitClogCb()
-  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), direct_load_mgr_handle_()
+  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), direct_load_mgr_handle_(), lob_direct_load_mgr_handle_()
 {
 
 }
@@ -272,18 +272,21 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
                             const common::ObTabletID &tablet_id,
                             const share::SCN &start_scn,
                             const uint32_t lock_tid,
-                            ObTabletDirectLoadMgrHandle &direct_load_mgr_handle)
+                            ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+                            ObTabletDirectLoadMgrHandle &lob_direct_load_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(direct_load_mgr_handle_.assign(direct_load_mgr_handle))) {
-    LOG_WARN("assign handle failed", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !start_scn.is_valid_and_not_min()
       || 0 == lock_tid)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_scn), K(lock_tid));
+  } else if (OB_FAIL(direct_load_mgr_handle_.assign(direct_load_mgr_handle))) {
+    LOG_WARN("assign handle failed", K(ret));
+  } else if (OB_FAIL(lob_direct_load_mgr_handle_.assign(lob_direct_load_mgr_handle))) {
+    LOG_WARN("assign handle failed", K(ret));
   } else {
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
@@ -306,7 +309,11 @@ int ObDDLCommitClogCb::on_success()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), K(tablet_id_));
   } else {
-    data_direct_load_mgr->set_commit_scn_nolock(__get_scn());
+    const SCN commit_scn = __get_scn();
+    data_direct_load_mgr->set_commit_scn_nolock(commit_scn);
+    if (lob_direct_load_mgr_handle_.is_valid()) {
+      lob_direct_load_mgr_handle_.get_full_obj()->set_commit_scn_nolock(commit_scn);
+    }
     data_direct_load_mgr->unlock(lock_tid_);
   }
   status_.set_ret_code(ret);
