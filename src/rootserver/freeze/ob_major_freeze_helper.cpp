@@ -442,7 +442,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
           LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
         } else if (OB_FAIL(proxy.to(leader)
                                 .trace_time(true)
-                                .max_process_handler_time(MAX_PROCESS_TIME_US)
+                                .timeout(THIS_WORKER.get_timeout_remain())
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .tenant_admin_merge(req, resp))) {
