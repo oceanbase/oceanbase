@@ -906,7 +906,7 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT; }
   void print() const;
 
-  TO_STRING_KV(K_(type), K_(count));
+  TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
   int32_t count_; //field count

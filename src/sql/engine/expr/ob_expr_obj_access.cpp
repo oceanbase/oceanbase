@@ -212,7 +212,8 @@ int ObExprObjAccess::ExtraInfo::update_coll_first_last(
 int ObExprObjAccess::calc_result(ObObj &result,
                                  const ObObj *objs_stack,
                                  int64_t param_num,
-                                 const ParamStore &param_store) const
+                                 const ParamStore &param_store,
+                                 ObEvalCtx *ctx) const
 {
   return info_.calc(result,
                     get_result_type(),
@@ -220,7 +221,7 @@ int ObExprObjAccess::calc_result(ObObj &result,
                     param_store,
                     objs_stack,
                     param_num,
-                    nullptr);
+                    ctx);
 }
 
 int ObExprObjAccess::ExtraInfo::get_collection_attr(int64_t* params,

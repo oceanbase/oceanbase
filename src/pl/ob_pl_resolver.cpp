@@ -10573,7 +10573,7 @@ int ObPLResolver::resolve_inner_call(
           ObArray<ObRawExpr*> params;
           OZ (stmt_factory_.allocate(PL_RAISE_APPLICATION_ERROR, current_block_, stmt));
           CK (OB_NOT_NULL(raise_stmt = static_cast<ObPLRaiseAppErrorStmt *>(stmt)));
-          OZ (obj_access_idents.at(idents_cnt-1).extract_params(0, params));
+          OZ (obj_access_idents.at(idents_cnt - 1).extract_params(0, params));
           for (int64_t  i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             int64_t expr_idx = OB_INVALID_ID;
             CK (OB_NOT_NULL(params.at(i)));
@@ -10607,107 +10607,36 @@ int ObPLResolver::resolve_inner_call(
         } else if (OB_ISNULL(call_stmt = static_cast<ObPLCallStmt *>(stmt))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to cast stmt", K(ret));
-        } else if (access_idxs.at(idx_cnt-1).is_internal_procedure()) {
-          ObArray<ObRawExpr*> params;
-          const ObPLRoutineInfo *package_routine_info = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt-1).routine_info_);
+        } else if (access_idxs.at(idx_cnt - 1).is_internal_procedure()) {
+          ObSEArray<ObRawExpr*, 4> params;
+          const ObPLRoutineInfo *package_routine_info = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(package_routine_info));
-          if (OB_SUCC(ret)) {
-            call_stmt->set_proc_id(package_routine_info->get_id());
-            call_stmt->set_package_id(func.get_package_id());
-            OX (call_stmt->set_route_sql(package_routine_info->get_route_sql()));
-            if (package_routine_info->has_accessible_by_clause()) {
-              OZ (check_package_accessible(
-                current_block_, resolve_ctx_.schema_guard_, func.get_package_id()));
-            }
-            if (OB_SUCC(ret) && package_routine_info->is_udt_routine()) {
-              call_stmt->set_is_object_udf();
-            }
-            // mock udt udf's self param
-            if (OB_SUCC(ret)
-                && package_routine_info->is_udt_routine()
-                && !package_routine_info->is_udt_static_routine()) {
-              if (idents_cnt > 0 && obj_access_idents.at(idents_cnt - 1).udf_info_.is_udt_udf_) {
-                call_stmt->set_is_object_udf();
-              }
-              const ObIArray<ObPLRoutineParam *> &routine_params
-                                  = package_routine_info->get_params();
-              const ObPLRoutineParam *self_param = NULL;
-              int64_t self_param_pos = OB_INVALID_INDEX;
-              for (int64_t i = 0; i < routine_params.count(); ++i) {
-                if (routine_params.at(i)->is_self_param()) {
-                  self_param = routine_params.at(i);
-                  self_param_pos = i;
-                  break;
-                }
-              }
-              if (OB_NOT_NULL(self_param)) {
-                const ObIRoutineInfo* routine_info = NULL;
-                CK (0 == self_param_pos || self_param_pos == routine_params.count() - 1);
-                CK (OB_NOT_NULL(routine_info = access_idxs.at(idx_cnt - 1).routine_info_));
-
-                if (OB_FAIL(ret)) {
-                } else if (routine_info->is_udt_routine()
-                           && !(routine_info->is_udt_static_routine() || routine_info->is_udt_cons())) {
-                  if (idx_cnt > 1 && idents_cnt > 1) {
-                    OZ (mock_self_param(0 == self_param_pos, obj_access_idents, self_access_idxs, func));
-                  } else {
-                    ObConstRawExpr *question_expr = NULL;
-                    OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, question_expr));
-                    CK (OB_NOT_NULL(question_expr));
-                    if (OB_SUCC(ret)) {
-                      ObObjParam val;
-                      ObExprResType type;
-                      val.set_unknown(0);
-                      val.set_param_meta();
-                      question_expr->set_value(val);
-                      type.set_ext();
-                      question_expr->set_result_type(type);
-                      OZ (question_expr->extract_info());
-                      OZ (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
-                      OZ (obj_access_idents.at(idents_cnt - 1)
-                            .params_.push_back(std::make_pair(question_expr, 0)));
-                      OZ (func.add_expr(question_expr));
-                      if (OB_SUCC(ret) && 0 == self_param_pos) {
-                        std::rotate(obj_access_idents.at(idents_cnt-1).params_.begin(),
-                                obj_access_idents.at(idents_cnt-1).params_.begin()
-                                  + obj_access_idents.at(idents_cnt-1).params_.count() - 1,
-                                obj_access_idents.at(idents_cnt-1).params_.end());
-                      }
-                    }
-                  }
-                } else {
-                  ObConstRawExpr *null_expr = NULL;
-                  OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
-                  CK (OB_NOT_NULL(null_expr));
-                  OZ (null_expr->extract_info());
-                  OZ (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
-                  OZ (obj_access_idents.at(idents_cnt - 1)
-                        .params_.push_back(std::make_pair(null_expr, 0)));
-                  OZ (func.add_expr(null_expr));
-                  if (OB_SUCC(ret) && 0 == self_param_pos) {
-                    std::rotate(obj_access_idents.at(idents_cnt-1).params_.begin(),
-                                obj_access_idents.at(idents_cnt-1).params_.begin()
-                                  + obj_access_idents.at(idents_cnt-1).params_.count() - 1,
-                                obj_access_idents.at(idents_cnt-1).params_.end());
-                  }
-                }
-              }
-            }
-            // end mock self param
-            OZ (obj_access_idents.at(idents_cnt-1).extract_params(0, params));
-            if (OB_FAIL(ret)){
-            } else if (package_routine_info->get_param_count() != 0) {
-              OZ (resolve_call_param_list(params, package_routine_info->get_params(), call_stmt, func));
-            } else if (params.count() != 0) {
-              ret = OB_INVALID_ARGUMENT_NUM;
-              LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
-                       K(ret), K(params.count()), K(package_routine_info->get_param_count()));
-            }
+          OX (call_stmt->set_proc_id(package_routine_info->get_id()));
+          OX (call_stmt->set_package_id(func.get_package_id()));
+          OX (call_stmt->set_route_sql(package_routine_info->get_route_sql()));
+          if (OB_SUCC(ret) && package_routine_info->has_accessible_by_clause()) {
+            OZ (check_package_accessible(
+              current_block_, resolve_ctx_.schema_guard_, func.get_package_id()));
+          }
+#ifdef OB_BUILD_ORACLE_PL
+          if (OB_SUCC(ret) && package_routine_info->is_udt_routine()) {
+            call_stmt->set_is_object_udf();
+          }
+          OZ (add_udt_self_argument(
+            package_routine_info, obj_access_idents.at(idents_cnt - 1), access_idxs, func), K(obj_access_idents), K(access_idxs));
+#endif
+          OZ (obj_access_idents.at(idents_cnt - 1).extract_params(0, params));
+          if (OB_FAIL(ret)){
+          } else if (package_routine_info->get_param_count() != 0) {
+            OZ (resolve_call_param_list(params, package_routine_info->get_params(), call_stmt, func));
+          } else if (params.count() != 0) {
+            ret = OB_INVALID_ARGUMENT_NUM;
+            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+                     K(ret), K(params.count()), K(package_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_external_procedure()) {
-          ObArray<ObRawExpr*> params;
-          const share::schema::ObRoutineInfo *schema_routine_info
-                     = static_cast<const ObRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
+          ObSEArray<ObRawExpr*, 4> params;
+          const share::schema::ObRoutineInfo *schema_routine_info = static_cast<const ObRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(schema_routine_info));
           OX (call_stmt->set_package_id(schema_routine_info->get_package_id()));
           OX (call_stmt->set_dblink_id(schema_routine_info->get_dblink_id()));
@@ -10720,59 +10649,40 @@ int ObPLResolver::resolve_inner_call(
           OX (call_stmt->set_route_sql(schema_routine_info->get_route_sql()));
           OZ (check_routine_accessible(
             current_block_, resolve_ctx_.schema_guard_, *schema_routine_info));
-          if (OB_SUCC(ret)) {
-            const common::ObIArray<share::schema::ObRoutineParam*> &routine_params
-                                                     = schema_routine_info->get_routine_params();
-            int64_t idents_cnt = obj_access_idents.count();
-            if (schema_routine_info->is_udt_routine()) {
-              call_stmt->set_is_object_udf();
-            }
-            if (OB_SUCC(ret) && !schema_routine_info->is_udt_static_routine()) {
-              if (idents_cnt > 1 && idx_cnt > 1) {
-                // call_stmt->set_is_object_udf();
-                const ObRoutineParam *self_param = NULL;
-                int64_t self_param_pos = OB_INVALID_INDEX;
-                for (int64_t i = 0; i < routine_params.count(); ++i) {
-                  if (routine_params.at(i)->is_self_param()) {
-                    self_param = routine_params.at(i);
-                    self_param_pos = i;
-                    break;
-                  }
-                }
-                // member procedure can be used as static procedure, if pass correct argument
-                if (OB_NOT_NULL(self_param)) {
-                  CK (0 == self_param_pos || self_param_pos == routine_params.count() - 1);
-                  OZ(mock_self_param(0 == self_param_pos, obj_access_idents, self_access_idxs, func));
-                }
-              }
-            }
-            OZ (obj_access_idents.at(idents_cnt - 1).extract_params(0, params));
-            if (routine_params.count() != 0) {
-              OZ (resolve_call_param_list(params, routine_params, call_stmt, func));
-            } else if (params.count() != 0) {
-              ret = OB_INVALID_ARGUMENT_NUM;
-              LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
-                       K(ret), K(params.count()), K(schema_routine_info->get_param_count()));
-            }
+
+#ifdef OB_BUILD_ORACLE_PL
+          if (OB_SUCC(ret) && schema_routine_info->is_udt_routine()) {
+            call_stmt->set_is_object_udf();
+          }
+          OZ (add_udt_self_argument(
+            schema_routine_info, obj_access_idents.at(idents_cnt - 1), access_idxs, func));
+#endif
+
+          OZ (obj_access_idents.at(idents_cnt - 1).extract_params(0, params));
+          if (OB_FAIL(ret)) {
+          } else if (schema_routine_info->get_routine_params().count() != 0) {
+            OZ (resolve_call_param_list(params, schema_routine_info->get_routine_params(), call_stmt, func));
+          } else if (params.count() != 0) {
+            ret = OB_INVALID_ARGUMENT_NUM;
+            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+                     K(ret), K(params.count()), K(schema_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_nested_procedure()) {
           ObArray<ObRawExpr*> params;
-          const ObPLRoutineInfo *root_routine_info
-              = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt-1).routine_info_);
+          const ObPLRoutineInfo *root_routine_info = static_cast<const ObPLRoutineInfo *>(access_idxs.at(idx_cnt - 1).routine_info_);
           CK (OB_NOT_NULL(root_routine_info));
-          if (OB_SUCC(ret)) {
-            call_stmt->set_package_id(func.get_package_id());
-            call_stmt->set_proc_id(root_routine_info->get_parent_id());
-            OX (call_stmt->set_route_sql(root_routine_info->get_route_sql()));
-            OZ (call_stmt->set_subprogram_path(root_routine_info->get_subprogram_path()));
-            OZ (obj_access_idents.at(idx_cnt-1).extract_params(0, params));
-            if (root_routine_info->get_param_count() != 0) {
-              OZ (resolve_call_param_list(params, root_routine_info->get_params(), call_stmt, func));
-            } else if (params.count() != 0) {
-              ret = OB_INVALID_ARGUMENT_NUM;
-              LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
-                       K(ret), K(params.count()), K(root_routine_info->get_param_count()));
-            }
+          OX (call_stmt->set_package_id(func.get_package_id()));
+          OX (call_stmt->set_proc_id(root_routine_info->get_parent_id()));
+          OX (call_stmt->set_route_sql(root_routine_info->get_route_sql()));
+          OZ (call_stmt->set_subprogram_path(root_routine_info->get_subprogram_path()));
+          OZ (obj_access_idents.at(idx_cnt - 1).extract_params(0, params));
+          if (OB_FAIL(ret)) {
+          } else if (root_routine_info->get_param_count() != 0) {
+            OZ (resolve_call_param_list(params, root_routine_info->get_params(), call_stmt, func));
+          } else if (params.count() != 0) {
+            ret = OB_INVALID_ARGUMENT_NUM;
+            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+                     K(ret), K(params.count()), K(root_routine_info->get_param_count()));
           }
         } else {
           ret = OB_NOT_SUPPORTED;
@@ -12003,9 +11913,35 @@ int ObPLResolver::make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&ex
 
 #ifdef OB_BUILD_ORACLE_PL
 int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                                        ObObjAccessIdent &access_ident,
+                                        ObIArray<ObObjAccessIdx> &access_idxs,
+                                        ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> local_expr_params;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); ++i) {
+    if (0 == access_ident.params_.at(i).second) {
+      OZ (local_expr_params.push_back(access_ident.params_.at(i).first));
+    }
+  }
+  int64_t orig_expr_params_cnt = local_expr_params.count();
+  ObObjAccessIdx last_idx;
+  CK (access_idxs.count() > 0);
+  OX (last_idx = access_idxs.at(access_idxs.count() - 1));
+  OX (access_idxs.pop_back());
+  OZ (add_udt_self_argument(routine_info, local_expr_params, access_idxs, NULL, func));
+  OZ (access_idxs.push_back(last_idx));
+  if (OB_SUCC(ret) && local_expr_params.count() > orig_expr_params_cnt) {
+    OZ (access_ident.params_.push_back(std::make_pair(local_expr_params.at(local_expr_params.count() - 1), 0)));
+    std::rotate(access_ident.params_.begin(), access_ident.params_.begin() + access_ident.params_.count() - 1, access_ident.params_.end());
+  }
+  return ret;
+}
+
+int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                         ObIArray<ObRawExpr*> &expr_params,
                                         ObIArray<ObObjAccessIdx> &access_idxs,
-                                        ObUDFInfo &udf_info,
+                                        ObUDFInfo *udf_info,
                                         ObPLCompileUnitAST &func)
 {
   int ret = OB_SUCCESS;
@@ -12021,20 +11957,20 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                       && expr_params.at(0)->get_result_type().get_expr_udt_id()
                         == access_idxs.at(access_idxs.count() - 1).var_index_)))) {
     ObRawExpr *self_argument = NULL;
-    CK (OB_NOT_NULL(udf_info.ref_expr_));
     if (OB_FAIL(ret)) {
     } else if (routine_info->is_udt_cons()) { // UDT Construct Self Argument.
+      CK (OB_NOT_NULL(udf_info));
       OZ (ObPLUDTObjectManager::make_constructor_self_expr(
                                     resolve_ctx_,
-                                    udf_info.udf_database_,
-                                    udf_info.udf_name_,
+                                    udf_info->udf_database_,
+                                    udf_info->udf_name_,
                                     resolve_ctx_.session_info_.get_effective_tenant_id(),
                                     expr_factory_,
                                     current_block_->get_namespace(),
                                     self_argument));
       CK (OB_NOT_NULL(self_argument));
       OZ (self_argument->formalize(&resolve_ctx_.session_info_));
-      OX (udf_info.set_is_udf_udt_cons());
+      OX (udf_info->set_is_udf_udt_cons());
       OZ (func.add_expr(self_argument));
     } else if (access_idxs.count() > 0) { // Member Self Argument With Prefix.
       if (access_idxs.at(access_idxs.count() - 1).is_udf_type()) {
@@ -12047,6 +11983,7 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                  &resolve_ctx_.schema_guard_,
                                  current_block_->get_namespace(),
                                  self_argument));
+        OZ (func.add_expr(self_argument));
         if (OB_SUCC(ret) && !ObObjAccessIdx::is_expr_type(access_idxs)) {
           bool for_write = false;
           ObIRoutineParam *param = nullptr;
@@ -12059,20 +11996,25 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
       }
     } else { // Member Self Argument Without Prefix.
       OZ (make_self_symbol_expr(func, self_argument));
+      OZ (func.add_expr(self_argument));
     }
     CK (OB_NOT_NULL(self_argument));
     OZ (self_argument->add_flag(IS_UDT_UDF_SELF_PARAM));
     if (OB_SUCC(ret) && self_argument->is_obj_access_expr()) {
       OZ (func.add_obj_access_expr(self_argument));
     }
-    OZ (udf_info.ref_expr_->add_param_expr(self_argument));
-    OX (udf_info.udf_param_num_++);
     OZ (expr_params.push_back(self_argument));
-    for(int64_t i = udf_info.ref_expr_->get_children_count() - 1; OB_SUCC(ret) && i > 0; --i) {
-      OZ (udf_info.ref_expr_->replace_param_expr(i, expr_params.at(i - 1)));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(udf_info)) {
+      CK (OB_NOT_NULL(udf_info->ref_expr_));
+      OZ (udf_info->ref_expr_->add_param_expr(self_argument));
+      OX (udf_info->udf_param_num_++);
+      for(int64_t i = udf_info->ref_expr_->get_children_count() - 1; OB_SUCC(ret) && i > 0; --i) {
+        OZ (udf_info->ref_expr_->replace_param_expr(i, expr_params.at(i - 1)));
+      }
+      OZ (udf_info->ref_expr_->replace_param_expr(0, self_argument));
+      OX (udf_info->is_contain_self_param_ = true);
     }
-    OZ (udf_info.ref_expr_->replace_param_expr(0, self_argument));
-    OX (udf_info.is_contain_self_param_ = true);
   }
   return ret;
 }
@@ -12130,7 +12072,7 @@ int ObPLResolver::resolve_udf_info(
   }
 
 #ifdef OB_BUILD_ORACLE_PL
-  OZ (add_udt_self_argument(routine_info, expr_params, access_idxs, udf_info, func),
+  OZ (add_udt_self_argument(routine_info, expr_params, access_idxs, &udf_info, func),
     K(access_idxs), K(expr_params));
 #endif
 
