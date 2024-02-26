@@ -144,7 +144,7 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_column("state", job_info.state_));
   if (0 == job_info.state_.case_compare("COMPLETED")) {
-    OZ (dml.add_column("enabled", "false"));
+    OZ (dml.add_column("enabled", false));
   }
   OZ (dml.add_column(true, "this_date"));
   OZ (dml.add_time_column("last_date", job_info.this_date_));
@@ -298,7 +298,7 @@ int ObDBMSSchedTableOperator::update_for_enddate(ObDBMSSchedJobInfo &job_info)
 int ObDBMSSchedTableOperator::update_for_timeout(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
-  OZ (update_for_end(job_info, 0, "check job timeout"));
+  OZ (update_for_end(job_info, -4012, "check job timeout"));
   return ret;
 }
 
@@ -323,7 +323,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   } else {
     OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
     OX (job_info.flag_ = job_info.failures_ > 15 ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
-    OX (job_info.total_ += (errmsg.empty() ? now - job_info.this_date_ : 0));
+    OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.
       job_info.next_date_ = 64060560000000000; // 4000-01-01
