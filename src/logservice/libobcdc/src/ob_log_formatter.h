@@ -140,6 +140,9 @@ private:
     bool is_null_lob_old_columns_[common::OB_MAX_COLUMN_NUMBER];
     bool is_diff_[common::OB_MAX_COLUMN_NUMBER];
 
+    // invoke before handle format stmt task
+    // incase of usage of column_num but row doesn't contain valid column and column_num is not set
+    void reset_column_num() { column_num_ = 0; };
     void reset();
     int init(const int64_t column_num, const bool contain_old_column);
 
