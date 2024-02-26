@@ -261,7 +261,6 @@ struct ObTxReadSnapshot
   share::ObLSID snapshot_lsid_;    // for source_ = LOCAL                                  //
   common::ObRole snapshot_ls_role_; // for source_ = LS, only can be used for dup_table with a
                                     // max_commit_ts from the follower
-  common::ObAddr snapshot_acquire_addr_;
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 
@@ -291,8 +290,7 @@ struct ObTxReadSnapshot
                K_(snapshot_lsid),
                K_(snapshot_ls_role),
                K_(parts),
-               K_(committed),
-               K_(snapshot_acquire_addr));
+               K_(committed));
   OB_UNIS_VERSION(1);
 };
 
