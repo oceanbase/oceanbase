@@ -29,6 +29,7 @@ class ObTablet;
 class ObTableStoreIterator;
 class ObCachedTableHandle;
 class ObStorageMetaHandle;
+struct ObTabletHAStatus;
 
 class ObReadyForReadParam final
 {
@@ -245,7 +246,8 @@ private:
       const blocksstable::ObSSTable *new_sstable,
       const ObTabletTableStore &old_store,
       const bool need_check_sstable,
-      const int64_t inc_base_snapshot_version);
+      const int64_t inc_base_snapshot_version,
+      const ObTabletHAStatus &ha_status);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
       const blocksstable::ObSSTable *new_sstable,
