@@ -9135,14 +9135,15 @@ int ObPLResolver::is_static_relation_expr(const ObRawExpr *expr, bool &is_static
     OZ (check_static_bool_expr(child, is_static_relation_expr));
   } else if (T_OP_AND == expr->get_expr_type()
           || T_OP_OR == expr->get_expr_type()) {
-    const ObRawExpr *left = NULL;
-    const ObRawExpr *right = NULL;
-    CK (2 == expr->get_param_count());
-    CK (OB_NOT_NULL(left = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(0))));
-    CK (OB_NOT_NULL(right = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(1))));
-    OZ (check_static_bool_expr(left, is_static_relation_expr));
-    OZ (is_static_relation_expr
-      ? check_static_bool_expr(right, is_static_relation_expr) : OB_SUCCESS);
+    bool is_all_static = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_all_static && i < expr->get_param_count(); i++) {
+      const ObRawExpr *child_param = NULL;
+      CK (OB_NOT_NULL(child_param = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(i))));
+      OZ (check_static_bool_expr(child_param, is_all_static));
+    }
+    if (OB_SUCC(ret)) {
+      is_static_relation_expr = is_all_static;
+    }
   } else if (T_OP_IS == expr->get_expr_type()
             || T_OP_IS_NOT == expr->get_expr_type()) {
     const ObRawExpr *child = NULL;
