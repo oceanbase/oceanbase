@@ -25,7 +25,7 @@ namespace common
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
   : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
-    checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
+    checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
@@ -41,7 +41,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 void ObObjectStorageInfo::reset()
 {
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
-  checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
@@ -207,13 +207,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         }
       } else if (0 == strncmp(CHECKSUM_TYPE, token, strlen(CHECKSUM_TYPE))) {
         const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
-        if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_MD5)) {
-          checksum_type_ = OB_MD5_ALGO;
-        } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_CRC32)) {
-          checksum_type_ = OB_CRC32_ALGO;
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          OB_LOG(WARN, "invalid checksum type", K(ret), K(checksum_type_str));
+        if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
+          OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
         }
       } else {
       }
@@ -232,6 +227,59 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
   }
+  return ret;
+}
+
+bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(checksum_type_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(checksum_type_str));
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_NO_CHECKSUM)) {
+    checksum_type_ = OB_NO_CHECKSUM_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_MD5)) {
+    checksum_type_ = OB_MD5_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_CRC32)) {
+    checksum_type_ = OB_CRC32_ALGO;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid checksum type", K(ret), K(checksum_type_str));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_STORAGE_OSS == device_type_ && !is_oss_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for oss",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  } else if (OB_UNLIKELY(OB_STORAGE_COS == device_type_ && !is_cos_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for cos",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  } else if (OB_UNLIKELY(OB_STORAGE_S3 == device_type_ && !is_s3_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for s3",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  }
+
   return ret;
 }
 

@@ -392,13 +392,6 @@ void fin_s3_env()
   ObS3Env::get_instance().destroy();
 }
 
-bool is_s3_supported_checksum(ObStorageChecksumType checksum_type)
-{
-  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-      || checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
-}
-
 std::shared_ptr<Aws::Crt::Io::ClientBootstrap> s3_clientBootstrap_create_fn()
 {
   return nullptr;
@@ -652,6 +645,7 @@ static void handle_s3_outcome(OutcomeType &outcome, int &ob_errcode)
   log_s3_status(outcome, ob_errcode);
 }
 
+/*--------------------------------Checksum Util--------------------------------*/
 template<typename RequestType>
 static int set_request_checkusum_algorithm(RequestType &request,
                                            const ObStorageChecksumType checksum_type)
@@ -684,6 +678,103 @@ static int set_completed_part_checksum(Aws::S3::Model::CompletedPart &completed_
     } else {
       // default md5
     }
+  }
+  return ret;
+}
+
+// The check_xxx functions are used to verify that the checksum of the returned data
+// when reading a complete object matches the checksum value carried in the response header.
+// As it's unclear what checksum algorithm was specifically used during data upload,
+// the check_xxx functions should not be used in isolation. Instead, use validate_response_checksum.
+// Therefore, the check_xxx functions do not validate the input arguments for their effectiveness;
+// validate_response_checksum is responsible for performing a unified validation.
+static int check_crc32(const char *buf, const int64_t size, Aws::S3::Model::GetObjectResult &result)
+{
+  int ret = OB_SUCCESS;
+  const Aws::String &response_checksum = result.GetChecksumCRC32();
+  if (!response_checksum.empty()) {
+    Aws::String buf_str(buf, size);
+    Aws::Utils::ByteBuffer checksum_buf = Aws::Utils::HashingUtils::CalculateCRC32(buf_str);
+    Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
+
+    if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
+      ret = OB_CHECKSUM_ERROR;
+      OB_LOG(ERROR, "crc32 mismatch",
+          K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
+    }
+  }
+  return ret;
+}
+
+static int check_crc32c(const char *buf, const int64_t size, Aws::S3::Model::GetObjectResult &result)
+{
+  int ret = OB_SUCCESS;
+  const Aws::String &response_checksum = result.GetChecksumCRC32C();
+  if (!response_checksum.empty()) {
+    Aws::String buf_str(buf, size);
+    Aws::Utils::ByteBuffer checksum_buf = Aws::Utils::HashingUtils::CalculateCRC32C(buf_str);
+    Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
+
+    if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
+      ret = OB_CHECKSUM_ERROR;
+      OB_LOG(ERROR, "crc32c mismatch",
+          K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
+    }
+  }
+  return ret;
+}
+
+static int check_sha1(const char *buf, const int64_t size, Aws::S3::Model::GetObjectResult &result)
+{
+  int ret = OB_SUCCESS;
+  const Aws::String &response_checksum = result.GetChecksumSHA1();
+  if (!response_checksum.empty()) {
+    Aws::String buf_str(buf, size);
+    Aws::Utils::ByteBuffer checksum_buf = Aws::Utils::HashingUtils::CalculateSHA1(buf_str);
+    Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
+
+    if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
+      ret = OB_CHECKSUM_ERROR;
+      OB_LOG(ERROR, "sha1 mismatch",
+          K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
+    }
+  }
+  return ret;
+}
+
+static int check_sha256(const char *buf, const int64_t size, Aws::S3::Model::GetObjectResult &result)
+{
+  int ret = OB_SUCCESS;
+  const Aws::String &response_checksum = result.GetChecksumSHA256();
+  if (!response_checksum.empty()) {
+    Aws::String buf_str(buf, size);
+    Aws::Utils::ByteBuffer checksum_buf = Aws::Utils::HashingUtils::CalculateSHA256(buf_str);
+    Aws::String returned_data_checksum = Aws::Utils::HashingUtils::Base64Encode(checksum_buf);
+
+    if (OB_UNLIKELY(returned_data_checksum != response_checksum)) {
+      ret = OB_CHECKSUM_ERROR;
+      OB_LOG(ERROR, "sha256 mismatch",
+          K(ret), K(size), K(returned_data_checksum.c_str()), K(response_checksum.c_str()));
+    }
+  }
+  return ret;
+}
+
+static int validate_response_checksum(
+    const char *buf, const int64_t size, Aws::S3::Model::GetObjectResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
+  } else if (OB_FAIL(check_crc32(buf, size, result))) {
+    OB_LOG(WARN, "failed to check crc32", K(ret));
+  } else if (OB_FAIL(check_crc32c(buf, size, result))) {
+    OB_LOG(WARN, "failed to check crc32c", K(ret));
+  } else if (OB_FAIL(check_sha1(buf, size, result))) {
+    OB_LOG(WARN, "failed to check sha1", K(ret));
+  } else if (OB_FAIL(check_sha1(buf, size, result))) {
+    OB_LOG(WARN, "failed to check sha256", K(ret));
   }
   return ret;
 }
@@ -820,7 +911,7 @@ ObStorageS3Base::ObStorageS3Base()
       s3_client_(NULL),
       bucket_(),
       object_(),
-      checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO),
+      checksum_type_(ObStorageChecksumType::OB_MD5_ALGO),
       is_inited_(false),
       s3_account_()
 {
@@ -836,7 +927,7 @@ void ObStorageS3Base::reset()
   is_inited_ = false;
   s3_account_.reset();
   allocator_.clear();
-  checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   if (OB_NOT_NULL(s3_client_)) {
     s3_client_->release();
     s3_client_ = NULL;
@@ -972,17 +1063,6 @@ int ObStorageS3Writer::open_(const ObString &uri, ObObjectStorageInfo *storage_i
     file_length_ = 0;
   }
   return ret;
-}
-
-static Aws::String calculate_crc32(const char *buf, const int64_t size)
-{
-  Aws::String crc;
-  if (NULL != buf && size > 0) {
-    Aws::String buf_str(buf, size);
-    Aws::Utils::ByteBuffer crc_buf = Aws::Utils::HashingUtils::CalculateCRC32(buf_str);
-    crc = Aws::Utils::HashingUtils::Base64Encode(crc_buf);
-  }
-  return crc;
 }
 
 static int init_put_object_request(const char *bucket, const char *object,
@@ -1173,6 +1253,15 @@ int ObStorageS3Reader::pread_(char *buf,
       } else {
         read_size = outcome.GetResult().GetContentLength();
         outcome.GetResult().GetBody().read(buf, read_size);
+
+        // read size <= get_data_size <= buf_size
+        if (read_size == file_length_) {
+          if (OB_FAIL(validate_response_checksum(buf, read_size, outcome.GetResult()))) {
+            OB_LOG(WARN, "fail to validate_response_checksum",
+                K(ret), K(read_size), K(get_data_size), K(buf_size));
+          }
+        }
+
       }
     }
   }
@@ -1935,6 +2024,20 @@ int ObStorageS3MultiPartWriter::pwrite_(const char *buf, const int64_t size, con
   return write(buf, size);
 }
 
+static bool is_obs_destination(const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome)
+{
+  Aws::String key_str = Aws::Utils::StringUtils::ToLower("server");
+  const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+  Aws::Http::HeaderValueCollection::const_iterator iter = headers.find(key_str);
+  return (iter != headers.end() && iter->second == "OBS");
+}
+
+static bool is_gcs_destination(const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome)
+{
+  // The x-guploader-uploadid header is a unique identifier provided in Cloud Storage responses.
+  return outcome.GetError().ResponseHeaderExists("x-guploader-uploadid");
+}
+
 int ObStorageS3MultiPartWriter::complete_()
 {
   int ret = OB_SUCCESS;
@@ -1994,6 +2097,27 @@ int ObStorageS3MultiPartWriter::complete_()
       OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));
     } else if (!complete_multipart_upload_outcome.IsSuccess()) {
       handle_s3_outcome(complete_multipart_upload_outcome, ret);
+
+      // Due to the following reasons:
+      //   1. OBS/GCS is currently accessed through the S3 SDK without any dedicated OBS/GCS prefix or type,
+      //      and using the host to determine if the endpoint is OBS/GCS is not secure.
+      //   2. The S3 SDK can only acquire the response header to distinguish the server type
+      //      when a request fails.
+      //   3. Furthermore, when the S3 SDK is used to access OBS/GCS with the checksum type set to crc32,
+      //      the OBS/GCS server will only return an error in the complete_multipart_upload interface.
+      // Therefore, it is only possible to determine at this point
+      // whether the configured checksum type is supported by the destination.
+      // If the checksum algorithm is crc32 and the destination type is OBS/GCS,
+      // for the caller at a higher level,
+      // the checksum algorithm should first be set to a type supported by OBS/GCS.
+      // Hence, the error code is directly translated to OB_CHECKSUM_TYPE_NOT_SUPPORTED.
+      if (ObStorageChecksumType::OB_CRC32_ALGO == checksum_type_
+          && (is_obs_destination(complete_multipart_upload_outcome)
+              || is_gcs_destination(complete_multipart_upload_outcome))) {
+        ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+        OB_LOG(WARN, "the checksum type is not supported for OBS/GCS", K(ret), K_(checksum_type));
+      }
+
       OB_LOG(WARN, "failed to complete multipart upload for s3",
           K(ret), K_(bucket), K_(object));
     }
