@@ -7,7 +7,8 @@ on:
     branches: [ master, develop ]
     paths-ignore:
       - 'docs/**'
-      - '.github/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/pull_request_template.md'
       - 'README.md'
       - 'README_CN.md'
       - 'CONTRIBUTING.md'
