@@ -1694,7 +1694,8 @@ uint64_t ObTableQueryAndMutate::get_checksum()
 OB_SERIALIZE_MEMBER(ObTableQueryAndMutate,
                     query_,
                     mutations_,
-                    return_affected_entity_);
+                    return_affected_entity_,
+                    flag_);
 
 OB_SERIALIZE_MEMBER(ObTableQueryAndMutateResult,
                     affected_rows_,
