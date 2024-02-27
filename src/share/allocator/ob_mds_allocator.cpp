@@ -190,7 +190,7 @@ ObMdsThrottleGuard::~ObMdsThrottleGuard()
     MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "throttle tool is unexpected nullptr", KP(throttle_tool_));
   } else if (throttle_tool_->is_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
     (void)TxShareMemThrottleUtil::do_throttle<ObTenantMdsAllocator>(
-        for_replay_, abs_expire_time_, *throttle_tool_, share_ti_guard, module_ti_guard);
+        for_replay_, abs_expire_time_, share::mds_throttled_alloc(), *throttle_tool_, share_ti_guard, module_ti_guard);
 
     if (throttle_tool_->still_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
       (void)throttle_tool_->skip_throttle<ObTenantMdsAllocator>(

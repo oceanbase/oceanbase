@@ -174,7 +174,8 @@ void ObThrottleUnit<ALLOCATOR>::print_throttle_info_(const int64_t holding_size,
               "Release Speed",              release_speed,
               "Total Resource Limit",       resource_limit_,
               "Config Specify Limit",       config_specify_resource_limit_,
-              "Throttle Trigger Threshold", throttle_trigger);
+              "Throttle Trigger Threshold", throttle_trigger,
+              "Decay Factor",               decay_factor_);
   }
 }
 

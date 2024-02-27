@@ -94,7 +94,8 @@ public:
 
   static void print_throttle_statistic(const int err_code,
                                        const char *throttle_unit_name,
-                                       const int64_t sleep_time);
+                                       const int64_t sleep_time,
+                                       const int64_t throttle_memory_size = 0);
 };
 
 }  // namespace share
