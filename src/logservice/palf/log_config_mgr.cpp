@@ -2892,6 +2892,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     }
   }
   if (OB_SUCC(ret)){
+    SpinLockGuard guard(child_lock_);
     LogLearner parent(self_, region_, child.register_time_us_);
     if (reg_ret == REGISTER_DONE ||
         reg_ret == REGISTER_CONTINUE ||
