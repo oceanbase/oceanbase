@@ -57,6 +57,7 @@ public:
 
     ObIArray<const ObTableScanSpec *> &get_scan_ops() { return (ObIArray<const ObTableScanSpec *> &)scan_ops_; }
     ObTableModifySpec *get_modify_op() { return (ObTableModifySpec *)modify_op_; }
+    int assign(const ObGranulePumpOpInfo &rhs);
     common::ObArray<const ObTableScanSpec*> scan_ops_;
     const ObTableModifySpec* modify_op_;
   };
@@ -92,6 +93,7 @@ public :
     query_range_by_runtime_filter_.reset();
   }
 
+  int assign(const ObGranulePumpArgs &rhs);
 
   ObExecContext *ctx_;
   ObGranulePumpOpInfo op_info_;

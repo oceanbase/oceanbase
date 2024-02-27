@@ -1653,5 +1653,45 @@ int ObGranulePump::reset_gi_task()
   return ret;
 }
 
+int ObGranulePumpArgs::assign(const ObGranulePumpArgs &rhs)
+{
+  int ret = OB_SUCCESS;
+  ctx_ = rhs.ctx_;
+  cur_tablet_idx_ = rhs.cur_tablet_idx_;
+  finish_pruning_tablet_idx_ = rhs.finish_pruning_tablet_idx_;
+  sharing_iter_end_ = rhs.sharing_iter_end_;
+  pruning_status_ = rhs.pruning_status_;
+  pruning_ret_ = rhs.pruning_ret_;
+  parallelism_ = rhs.parallelism_;
+  tablet_size_ = rhs.tablet_size_;
+  gi_attri_flag_ = rhs.gi_attri_flag_;
+  lucky_one_ = rhs.lucky_one_;
+  extract_finished_ = rhs.extract_finished_;
+  if (OB_FAIL(op_info_.assign(rhs.op_info_))) {
+    LOG_WARN("Failed to assign op_info", K(ret));
+  } else if (OB_FAIL(tablet_arrays_.assign(rhs.tablet_arrays_))) {
+    LOG_WARN("Failed to assign tablet_arrays", K(ret));
+  } else if (OB_FAIL(run_time_pruning_flags_.assign(rhs.run_time_pruning_flags_))) {
+    LOG_WARN("Failed to assign run_time_pruning_flags", K(ret));
+  } else if (OB_FAIL(partitions_info_.assign(rhs.partitions_info_))) {
+    LOG_WARN("Failed to assign partitions_info", K(ret));
+  } else if (OB_FAIL(external_table_files_.assign(rhs.external_table_files_))) {
+    LOG_WARN("Failed to assign external_table_files", K(ret));
+  } else if (OB_FAIL(query_range_by_runtime_filter_.assign(rhs.query_range_by_runtime_filter_))) {
+    LOG_WARN("Failed to assign query_range_by_runtime_filter", K(ret));
+  }
+  return ret;
+}
+
+int ObGranulePumpArgs::ObGranulePumpOpInfo::assign(const ObGranulePumpOpInfo &rhs) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scan_ops_.assign(rhs.scan_ops_))) {
+    LOG_WARN("Failed to assign scan_ops_.", K(ret));
+  } else {
+    modify_op_ = rhs.modify_op_;
+  }
+  return ret;
+}
+
 }//sql
 }//oceanbase
