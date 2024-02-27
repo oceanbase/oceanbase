@@ -831,7 +831,8 @@ class ObTableQueryAndMutate final
   OB_UNIS_VERSION(1);
 public:
   ObTableQueryAndMutate()
-      :return_affected_entity_(true)
+      : return_affected_entity_(true),
+        flag_(0)
   {}
   const ObTableQuery &get_query() const { return query_; }
   ObTableQuery &get_query() { return query_; }
@@ -841,15 +842,31 @@ public:
 
   void set_deserialize_allocator(common::ObIAllocator *allocator);
   void set_entity_factory(ObITableEntityFactory *entity_factory);
+
+  bool is_check_and_execute() const { return is_check_and_execute_; }
+  bool is_check_exists() const { return is_check_and_execute_ && !is_check_no_exists_; }
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
                K_(mutations),
-               K_(return_affected_entity));
+               K_(return_affected_entity),
+               K_(flag),
+               K_(is_check_and_execute),
+               K_(is_check_no_exists));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;
   bool return_affected_entity_;
+  union
+  {
+    uint64_t flag_;
+    struct
+    {
+      bool is_check_and_execute_ : 1;
+      bool is_check_no_exists_ : 1;
+      uint64_t reserved : 62;
+    };
+  };
 };
 
 inline void ObTableQueryAndMutate::set_deserialize_allocator(common::ObIAllocator *allocator)
