@@ -423,7 +423,7 @@ DEFINE_ERROR(OB_KEYSTORE_EXIST, -4350, -1, "HY000", "the keystore already exists
 DEFINE_ERROR(OB_KEYSTORE_NOT_EXIST, -4351, -1, "HY000", "the keystore is not exist");
 DEFINE_ERROR(OB_KEYSTORE_WRONG_PASSWORD, -4352, -1, "HY000", "the password is wrong for keystore");
 DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_EXIST, -4353, -1, "HY000", "tablespace already exists", "tablespace '%.*s' already exists", 1543, "tablespace already exists", "tablespace '%.*s' already exists");
-DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_NOT_EXIST, -4354, -1, "HY000", "tablespace does not exist", "tablespace '%.*s' does not exist", 959, "tablespace does not exist", "tablespace '%.*s' does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_NOT_EXIST, -4354, ER_TABLESPACE_NOT_EXIST, "HY000", "Tablespace does not exist", "Tablespace '%.*s' does not exist", 959, "Tablespace does not exist", "Tablespace '%.*s' does not exist");
 DEFINE_ERROR(OB_TABLESPACE_DELETE_NOT_EMPTY, -4355, -1, "HY000", "cannot delete a tablespace which is not empty");
 DEFINE_ORACLE_ERROR(OB_FLOAT_PRECISION_OUT_RANGE, -4356, -1, "HY000", "floating point precision is out of range (1 to 126)", 1724, "floating point precision is out of range (1 to 126)");
 DEFINE_ORACLE_ERROR(OB_NUMERIC_PRECISION_OUT_RANGE, -4357, -1, "HY000", "numeric precision specifier is out of range (1 to 38)", 1727, "numeric precision specifier is out of range (1 to 38)");
