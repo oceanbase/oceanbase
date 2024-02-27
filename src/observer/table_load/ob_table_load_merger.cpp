@@ -302,6 +302,9 @@ int ObTableLoadMerger::build_merge_ctx()
           LOG_WARN("fail to build merge task", KR(ret));
         }
       }
+      if (OB_NOT_NULL(tablet_result)) {
+        table_compact_ctx_.result_.tablet_result_map_.revert(tablet_result);
+      }
     }
   }
   if (OB_SUCC(ret)) {
