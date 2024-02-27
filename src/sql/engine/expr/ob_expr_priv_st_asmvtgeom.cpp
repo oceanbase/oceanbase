@@ -43,11 +43,11 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   int ret = OB_SUCCESS;
   ObObjType obj_type1 = types_stack[0].get_type();  // geometry
   ObObjType obj_type2 = types_stack[1].get_type();  // geometry
-  if (!ob_is_string_type(obj_type1) && !ob_is_geometry(obj_type1) && !ob_is_null(obj_type1)) {
+  if (ObHexStringType != obj_type1 && !ob_is_geometry(obj_type1) && !ob_is_null(obj_type1)) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
     LOG_WARN("invalid type", K(ret), K(obj_type1));
-  } else if (!ob_is_string_type(obj_type2) && !ob_is_geometry(obj_type2)) {
+  } else if (ObHexStringType != obj_type1 && !ob_is_geometry(obj_type2)) {
     if (ob_is_null(obj_type2)) {
       ret = OB_ERR_NULL_INPUT;
       LOG_WARN("_ST_AsMVTGeom: Geometric bounds cannot be null", K(ret), K(obj_type2));
@@ -60,7 +60,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   if (OB_SUCC(ret) && param_num >= 3) {
     ObObjType extent_type = types_stack[2].get_type();
     if (extent_type == ObTinyIntType
-        || (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type) && !ob_is_null(extent_type))) {
+        || (!ob_is_integer_type(extent_type) && extent_type != ObVarcharType && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -71,7 +71,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   if (OB_SUCC(ret) && param_num >= 4) {
     ObObjType extent_type = types_stack[3].get_type();
     if (extent_type == ObTinyIntType
-        || (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type) && !ob_is_null(extent_type))) {
+        || (!ob_is_integer_type(extent_type) && extent_type != ObVarcharType && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -81,7 +81,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // boolean clip_geom
   if (OB_SUCC(ret) && param_num >= 5) {
     ObObjType extent_type = types_stack[4].get_type();
-    if (extent_type != ObTinyIntType && !ob_is_string_type(extent_type)
+    if (extent_type != ObTinyIntType && extent_type != ObVarcharType
         && !ob_is_null(extent_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
@@ -241,10 +241,6 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
     } else if (datum->is_null()) {
       // use default value
     } else if (FALSE_IT(clip_num = datum->get_tinyint())) {
-    } else if (clip_num < 0 || clip_num > 1) {
-      ret = OB_OPERATE_OVERFLOW;
-      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "clip", N_PRIV_ST_ASMVTGEOM);
-      LOG_WARN("value is out of range", K(ret), K(clip_num));
     } else {
       clip_geom = datum->get_tinyint();
     }
