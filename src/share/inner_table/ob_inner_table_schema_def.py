@@ -16857,6 +16857,7 @@ def_table_schema(
   view_definition = """
     SELECT ADDRESS,
     HASH_VALUE,
+    DB_ID,
     SQL_ID,
     CHILD_NUMBER,
     WORKAREA_ADDRESS,
@@ -16933,6 +16934,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT SQL_HASH_VALUE,
+    DB_ID,
     SQL_ID,
     SQL_EXEC_START,
     SQL_EXEC_ID,
@@ -54059,6 +54061,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT SQL_HASH_VALUE,
+  DB_ID,
 SQL_ID,
 SQL_EXEC_START,
 SQL_EXEC_ID,
@@ -54357,6 +54360,7 @@ def_table_schema(
   view_definition = """
   SELECT ADDRESS,
 HASH_VALUE,
+DB_ID,
 SQL_ID,
 CHILD_NUMBER,
 WORKAREA_ADDRESS,
