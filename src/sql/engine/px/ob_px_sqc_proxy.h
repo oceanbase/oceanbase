@@ -307,7 +307,8 @@ int ObPxSQCProxy::inner_get_dh_msg(
           // wait 50us
           ob_usleep(50);
         }
-      } while (common::OB_EAGAIN == ret);
+      } while (common::OB_EAGAIN == ret &&
+               OB_SUCC(THIS_WORKER.check_status()));
     }
   }
   return ret;
