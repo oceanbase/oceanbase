@@ -564,7 +564,9 @@ int ObSPIService::calc_obj_access_expr(ObPLExecCtx *ctx,
       LOG_DEBUG("calc_obj_access_expr without row", K(expr));
       OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, expr, result));
     }
-    result.set_param_meta();
+    ObExprResType type;
+    OZ (get_result_type(*ctx, expr, type));
+    OX (result.set_param_meta(type));
   }
   return ret;
 }
@@ -879,6 +881,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
       OZ (calc_obj_access_expr(ctx, *expr, *result));
     } else {
       LOG_DEBUG("spi_calc_expr without row", K(*expr));
+      ObExprResType result_type;
       bool has_implicit_savepoint = false;
       bool explicit_trans = ctx->exec_ctx_->get_my_session()->has_explicit_start_trans();
       ObPLContext *pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx();
@@ -897,6 +900,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         LOG_WARN("change error code to value error", K(ret));
         ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
       }
+      OZ (get_result_type(*ctx, *expr, result_type));
+      OX (result->set_param_meta(result_type));
       /* 如果本层是udf, 本次计算的表达式中含有udf;
          如果内层udf失败，由udf内部来回滚, 如果内层udf成功, 发生了强转失败等问题, 此处不回滚,
          由本层udf的destory接口来保证回滚, 兼容mysql */
@@ -978,7 +983,7 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         result->ObObj::set_scale(param.get_meta().get_scale());
         result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
         if (result->is_null()) {
-          result->set_null_meta(param.get_null_meta());
+          result->set_param_meta(param.get_param_meta());
         }
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
@@ -6763,6 +6768,7 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
         }
       } else {
         result.set_accuracy(result_type.get_accuracy());
+        result.set_param_meta(result_type);
         if (is_question_mark_expression(*expr)) {
           bool exist = false;
           OZ (check_exist_in_into_exprs(ctx, into_exprs, into_count, get_const_value(*expr), exist));
@@ -8727,9 +8733,22 @@ int ObSPIService::get_result_type(ObPLExecCtx &ctx, const ObSqlExpression &expr,
   } else {
     if (is_const_expression(expr)) {
       if (is_question_mark_expression(expr)) {
-        ObObjParam &obj_param = ctx.params_->at(get_const_value(expr).get_int());
-        type.set_meta(obj_param.get_meta());
-        type.set_accuracy(obj_param.get_accuracy());
+        int64_t idx = get_const_value(expr).get_int();
+        if (idx >= ctx.params_->count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("idx is invlid", K(ret));
+        } else {
+          ObObjParam &obj_param = ctx.params_->at(idx);
+          if (idx < ctx.func_->get_variables().count() &&
+              ctx.func_->get_variables().at(idx).is_obj_type() &&
+              OB_NOT_NULL(ctx.func_->get_variables().at(idx).get_data_type())) {
+            type.set_meta(ctx.func_->get_variables().at(idx).get_data_type()->get_meta_type());
+            type.set_accuracy(ctx.func_->get_variables().at(idx).get_data_type()->get_accuracy());
+          } else {
+            type.set_meta(obj_param.get_meta());
+            type.set_accuracy(obj_param.get_accuracy());
+          }
+        }
       } else {
         ObObjType obj_type = static_cast<ObObjType>(get_expression_type(expr));
         type.set_type(obj_type);

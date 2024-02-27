@@ -899,7 +899,12 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
 {
   int ret = common::OB_SUCCESS;
   if (is_null()) {
+    // it exists datum is null, but meta type not nulltype, need keep cs_type attr
     obj.set_null();
+    if (!meta.is_null()) {
+      obj.set_collation_level(meta.get_collation_level());
+      obj.set_collation_type(meta.get_collation_type());
+    }
   } else {
     obj.meta_ = meta;
     switch (meta.get_type()) {

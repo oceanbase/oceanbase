@@ -45,7 +45,13 @@ int ObExprExtract::calc_result_type2(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   if (lib::is_oracle_mode()) {
-    if (OB_FAIL(set_result_type_oracle(type_ctx, date_unit, type))) {
+    if (!ob_is_null(date.get_type()) &&
+        !ob_is_temporal_type(date.get_type()) &&
+        !ob_is_interval_tc(date.get_type()) &&
+        !ob_is_otimestamp_type(date.get_type())) {
+      ret = OB_ERR_EXTRACT_FIELD_INVALID; //ORA-30076: invalid extract field for extract source
+      LOG_WARN("invalid extract field for extract source", K(ret), "expr type", date.get_type());
+    } else if (OB_FAIL(set_result_type_oracle(type_ctx, date_unit, type))) {
       LOG_WARN("set_result_type_oracle failed", K(ret), K(type));
     }
   } else {
@@ -232,6 +238,7 @@ int ObExprExtract::calc_oracle(T &result,
                                ObIAllocator *calc_buf)
 {
   int ret = OB_SUCCESS;
+
   if (date.is_null()) {
     result.set_null();
   } else {

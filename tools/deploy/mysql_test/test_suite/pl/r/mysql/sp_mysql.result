@@ -4689,7 +4689,7 @@ CHARSET(p2)	COLLATION(p2)
 CHARSET(p3)	COLLATION(p3)
 utf8mb4	utf8mb4_general_ci
 utf8mb4	utf8mb4_general_ci
-binary	binary
+utf8mb4	utf8mb4_general_ci
 CALL bug16676_p2('a', @v2, @v3)|
 CHARSET(p1)	COLLATION(p1)
 CHARSET(p2)	COLLATION(p2)

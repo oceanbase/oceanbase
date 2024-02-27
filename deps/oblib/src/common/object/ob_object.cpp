@@ -2337,6 +2337,7 @@ void ObObjParam::reset()
   accuracy_.reset();
   res_flags_ = 0;
   flag_.reset();
+  param_meta_.reset();
 }
 
 void ParamFlag::reset()

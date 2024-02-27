@@ -3274,9 +3274,9 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       OX (param.set_param_meta());
       OX (param.set_accuracy(func_.get_variables().at(i).get_data_type()->get_accuracy()));
       if (OB_SUCC(ret) && i >= param_cnt) {
-        ObObjMeta null_meta = param.get_meta();
+        ObObjMeta param_meta = param.get_meta();
         param.set_null();
-        param.set_null_meta(null_meta);
+        param.set_param_meta(param_meta);
       }
     } else if (func_.get_variables().at(i).is_ref_cursor_type()) {
       OX (param.set_is_ref_cursor_type(true));
@@ -3359,7 +3359,7 @@ do {                                                                  \
           if (OB_SUCC(ret) && result.is_null()) {
             ObObjMeta null_meta = get_params().at(i).get_meta();
             get_params().at(i).set_null();
-            get_params().at(i).set_null_meta(null_meta);
+            get_params().at(i).set_param_meta(null_meta);
           } else {
             OX (get_params().at(i) = result);
           }
@@ -3379,9 +3379,9 @@ do {                                                                  \
                       || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())) {
           if (params->at(i).is_null()
               || (lib::is_oracle_mode() && params->at(i).is_null_oracle())) {
-            ObObjMeta null_meta = get_params().at(i).get_meta();
+            ObObjMeta param_meta = get_params().at(i).get_param_meta();
             get_params().at(i) = params->at(i); // 空值不做cast
-            params->at(i).is_null() ? get_params().at(i).set_null_meta(null_meta) : (void)NULL;
+            params->at(i).is_null() ? get_params().at(i).set_param_meta(param_meta) : (void)NULL;
           } else if (params->at(i).get_meta().get_type() == get_params().at(i).get_meta().get_type()
                      && params->at(i).get_meta().is_numeric_type()) {
             ObObj tmp;
@@ -3491,7 +3491,9 @@ do {                                                                  \
           ObObj obj;  // 基础类型apply一个空的OBJECT
           ObObjMeta null_meta = get_params().at(i).get_meta();
           OZ (get_params().at(i).apply(obj));
-          OX (get_params().at(i).set_null_meta(null_meta));
+          OX (get_params().at(i).set_collation_level(null_meta.get_collation_level()));
+          OX (get_params().at(i).set_collation_type(null_meta.get_collation_type()));
+          OX (get_params().at(i).set_param_meta(null_meta));
         } else if (is_anonymous
                    && (func_.get_variables().at(i).is_nested_table_type()
                         || func_.get_variables().at(i).is_varray_type())
