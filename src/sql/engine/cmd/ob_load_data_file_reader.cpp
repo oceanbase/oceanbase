@@ -261,7 +261,6 @@ int ObRandomOSSReader::get_file_size(int64_t &file_size)
 /**
  * ObPacketStreamFileReader
  */
-
 class CSMemPoolAdaptor : public obmysql::ObICSMemPool
 {
 public:
@@ -285,7 +284,8 @@ ObPacketStreamFileReader::ObPacketStreamFileReader(ObIAllocator &allocator)
       packet_handle_(NULL),
       session_(NULL),
       timeout_ts_(INT64_MAX),
-      arena_allocator_(allocator),
+      // OB_MALLOC_MIDDLE_BLOCK_SIZE 64K. one mysql packet is about 16K
+      arena_allocator_(allocator, OB_MALLOC_MIDDLE_BLOCK_SIZE),
       cached_packet_(NULL),
       received_size_(0),
       read_size_(0),
