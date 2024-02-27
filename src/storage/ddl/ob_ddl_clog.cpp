@@ -391,7 +391,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), data_format_version_(0), execution_id_(-1), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_DDL) /*for compatibility*/
+  : table_key_(), data_format_version_(0), execution_id_(-1), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_DDL) /*for compatibility*/,
+    lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID)
 {
 }
 
@@ -399,22 +400,25 @@ int ObDDLStartLog::init(
     const ObITable::TableKey &table_key,
     const uint64_t data_format_version,
     const int64_t execution_id,
-    const ObDirectLoadType direct_load_type)
+    const ObDirectLoadType direct_load_type,
+    const ObTabletID &lob_meta_tablet_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type))) {
+  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type)
+        || ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID == lob_meta_tablet_id.id())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type), K(lob_meta_tablet_id));
   } else {
     table_key_ = table_key;
     data_format_version_ = data_format_version;
     execution_id_ = execution_id;
     direct_load_type_ = direct_load_type;
+    lob_meta_tablet_id_ = lob_meta_tablet_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_, lob_meta_tablet_id_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()
@@ -436,25 +440,28 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
 ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_scn_(SCN::min_scn())
+  : table_key_(), start_scn_(SCN::min_scn()), lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID)
 {
 }
 
 int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
-                         const SCN &start_scn)
+                         const SCN &start_scn,
+                         const ObTabletID &lob_meta_tablet_id)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min()) {
+  if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid_and_not_min()
+        || ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID == lob_meta_tablet_id.id())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(lob_meta_tablet_id));
   } else {
     table_key_ = table_key;
     start_scn_ = start_scn;
+    lob_meta_tablet_id_ = lob_meta_tablet_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_);
+OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, lob_meta_tablet_id_);
 
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
