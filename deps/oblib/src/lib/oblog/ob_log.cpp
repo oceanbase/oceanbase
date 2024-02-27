@@ -1276,14 +1276,14 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
   } else if (OB_ISNULL(filename)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "filename has not been set", KCSTRING(filename), K(ret));
-  } else if (OB_FAIL(regcomp(&uncompressed_regex, OB_UNCOMPRESSED_SYSLOG_FILE_PATTERN, REG_EXTENDED))) {
-    OB_LOG(ERROR, "failed to compile regex pattern", K(ret));
   } else if (NULL == (dirc = strdup(filename))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(ERROR, "strdup filename error", K(ret));
   } else if (NULL == (basec = strdup(filename))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(ERROR, "strdup filename error", K(ret));
+  } else if (OB_FAIL(regcomp(&uncompressed_regex, OB_UNCOMPRESSED_SYSLOG_FILE_PATTERN, REG_EXTENDED))) {
+    OB_LOG(ERROR, "failed to compile regex pattern", K(ret));
   } else {
     ObIArray<FileName> *files_arr = static_cast<ObIArray<FileName> *>(files);
     ObIArray<FileName> *wf_files_arr = static_cast<ObIArray<FileName> *>(wf_files);
@@ -1336,6 +1336,7 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
         OB_LOG(WARN, "Close dir error", K(ret));
       }
     }
+    regfree(&uncompressed_regex);
   }
   if (NULL != dirc) {
     free(dirc);
