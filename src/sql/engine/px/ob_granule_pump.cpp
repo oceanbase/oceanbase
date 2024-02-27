@@ -64,6 +64,19 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
   return ret;
 }
 
+int ObGITaskSet::get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_id) const
+{
+  int ret = OB_SUCCESS;
+  if (pos < 0 || pos >= gi_task_set_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(pos));
+  } else {
+    int64_t cur_idx = gi_task_set_.at(pos).idx_;
+    tablet_id = gi_task_set_.at(pos).tablet_loc_->tablet_id_.id();
+  }
+  return ret;
+}
+
 int ObGITaskSet::get_next_gi_task_pos(int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -439,7 +452,9 @@ int ObGranulePump::fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &in
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_pw_end(end_tsc_count, op_ids.count(), infos.count()))) {
-    LOG_WARN("incorrect state", K(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("incorrect state", K(ret));
+    }
   }
   LOG_TRACE("get a new partition wise join gi tasks", K(infos), K(ret));
   return ret;
