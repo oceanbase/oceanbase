@@ -366,8 +366,9 @@ int ObCOSSTableV2::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
     LOG_WARN("failed to serialize is empty co", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(cs_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to serialize cs meta", K(ret), KP(buf), K(buf_len), K(pos));
+  } else {
+    LOG_INFO("succeed to serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos));
   }
-  FLOG_INFO("chaser debug serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos)); // tmp debug code
   return ret;
 }
 
@@ -396,7 +397,7 @@ int ObCOSSTableV2::deserialize(
     LOG_WARN("failed to deserialize cs meta", K(ret), KP(buf), K(data_len), K(pos));
   } else {
     valid_for_cs_reading_ = true;
-    FLOG_INFO("success to deserialize co sstable", K(ret), KPC(this), K(data_len), K(pos), K(old_pos)); // tmp debug code
+    LOG_DEBUG("success to deserialize co sstable", K(ret), KPC(this), K(data_len), K(pos), K(old_pos));
   }
   return ret;
 }
@@ -420,8 +421,9 @@ int ObCOSSTableV2::serialize_full_table(char *buf, const int64_t buf_len, int64_
     LOG_WARN("failed to serialize is empty co", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(cs_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to deserialize cs meta", K(ret), KP(buf), K(buf_len), K(pos));
+  } else {
+    LOG_INFO("succeed to serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos));
   }
-  FLOG_INFO("chaser debug serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos)); // tmp debug code
   return ret;
 }
 
