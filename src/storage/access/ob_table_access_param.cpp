@@ -35,6 +35,7 @@ ObTableIterParam::ObTableIterParam()
       pushdown_filter_(nullptr),
       is_multi_version_minor_merge_(false),
       need_scn_(false),
+      need_trans_info_(false),
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
@@ -61,6 +62,7 @@ void ObTableIterParam::reset()
   agg_cols_project_ = NULL;
   is_multi_version_minor_merge_ = false;
   need_scn_ = false;
+  need_trans_info_ = false;
   is_same_schema_column_ = false;
   pd_storage_flag_ = 0;
   pushdown_filter_ = nullptr;
@@ -107,7 +109,8 @@ bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) cons
 bool ObTableIterParam::need_trans_info() const
 {
   bool bret = false;
-  if (OB_NOT_NULL(op_) && OB_NOT_NULL(op_->expr_spec_.trans_info_expr_)) {
+  if (need_trans_info_ ||
+      (OB_NOT_NULL(op_) && OB_NOT_NULL(op_->expr_spec_.trans_info_expr_))) {
     bret = true;
   }
   return bret;
