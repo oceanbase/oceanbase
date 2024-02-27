@@ -1296,7 +1296,9 @@ int ObResolverUtils::match_vacancy_parameters(
         ret = OB_ERR_SP_WRONG_ARG_NUM;
         LOG_WARN("argument count not match",
                K(ret),
-               K(routine_info.get_param_count()), K(i));
+               K(routine_info.get_param_count()),
+               K(i),
+               K(match_info));
       } else {
         OX (match_info.match_info_.at(i) =
           ObRoutineMatchInfo::MatchInfo(routine_param->is_default_cast(),
