@@ -927,7 +927,7 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     tenant_id_,
                     ls_id_,
                     unused_replica_type_,
-                    ls_persistent_state_,
+                    ls_persistent_state_,   // FARM COMPAT WHITELIST
                     clog_checkpoint_scn_,
                     clog_base_lsn_,
                     rebuild_seq_,
