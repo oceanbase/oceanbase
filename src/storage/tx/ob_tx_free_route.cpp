@@ -431,7 +431,11 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     } else if (tx->tx_id_ != header.tx_id_) {
       // replace
       audit_record.replace_tx_ = true;
-      tx_desc_mgr_.remove(*tx);
+      if (!tx->flags_.SHADOW_) {
+        tx_desc_mgr_.remove(*tx);
+      }
+      // reset tx to cleanup for new txn
+      reinit_tx_(*tx, session_id);
       need_add_tx = true;
     } else {
       // update
