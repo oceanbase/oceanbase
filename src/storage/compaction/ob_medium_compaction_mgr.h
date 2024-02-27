@@ -47,6 +47,10 @@ public:
   int submit_medium_compaction_info(ObMediumCompactionInfo &medium_info, ObIAllocator &allocator);
   // follower
   int replay_medium_compaction_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
+  static int64_t cal_buf_len(
+    const common::ObTabletID &tablet_id,
+    const ObMediumCompactionInfo &medium_info,
+    const logservice::ObLogBaseHeader *log_header);
   INHERIT_TO_STRING_KV("ObIStorageClogRecorder", ObIStorageClogRecorder, K_(ignore_medium), K_(ls_id), K_(tablet_id));
 private:
   virtual int inner_replay_clog(

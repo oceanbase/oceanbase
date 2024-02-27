@@ -82,7 +82,7 @@ public:
     ObIAllocator &allocator,
     storage::ObStorageSchema &storage_schema);
   static int batch_check_medium_finish(
-    hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+    const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
     const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
     ObCompactionTimeGuard &time_guard);
@@ -112,14 +112,14 @@ protected:
   int submit_medium_clog(ObMediumCompactionInfo &medium_info);
   static int batch_check_medium_meta_table(
       const ObIArray<ObTabletCheckInfo> &tablet_ls_infos,
-      hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+      const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
       ObIArray<ObTabletCheckInfo> &finish_tablet_ls,
       ObCompactionTimeGuard &time_guard);
   static int check_medium_meta_table(
       const int64_t medium_snapshot,
       const ObTabletInfo &tablet_info,
       const share::ObTabletReplicaFilterHolder &filters,
-      hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
+      const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
       bool &merge_finish);
   static int init_tablet_filters(share::ObTabletReplicaFilterHolder &filters);
   static int check_medium_checksum(
