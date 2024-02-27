@@ -2261,6 +2261,9 @@ DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -9111, -1, "HY000", "Tenant snapsho
 DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -9112, -1, "HY000", "Tenant snapshot lock conflict", "%s");
 
 DEFINE_ERROR_DEP(OB_CHECKSUM_TYPE_NOT_SUPPORTED, -9113, -1, "HY000", "checksum type is not supported");
+DEFINE_ERROR_DEP(OB_INVALID_STORAGE_DEST, -9114, -1, "HY000", "storage destination is not valid");
+DEFINE_ERROR(OB_STORAGE_DEST_NOT_CONNECT, -9115, -1, "HY000", "can not connect to storage destination");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/O operation permission of the object storage");
 
 // 余留位置，在该行之前继续添加storage错误码
 
