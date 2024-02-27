@@ -4635,6 +4635,10 @@ OUTPUT_BATCHES	bigint(20)	NO		NULL
 SKIPPED_ROWS_COUNT	bigint(20)	NO		NULL	
 DB_TIME	bigint(20)	NO		NULL	
 USER_IO_WAIT_TIME	bigint(20)	NO		NULL	
+WORKAREA_MEM	bigint(20)	NO		NULL	
+WORKAREA_MAX_MEM	bigint(20)	NO		NULL	
+WORKAREA_TEMPSEG	bigint(20)	NO		NULL	
+WORKAREA_MAX_TEMPSEG	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_plan_monitor;
 IF(count(*) >= 0, 1, 0)
 1
