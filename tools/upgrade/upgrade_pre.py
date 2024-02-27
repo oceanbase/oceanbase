@@ -662,7 +662,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False)  # need_check_major_status = False
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #      if run_modules.MODULE_END_ROLLING_UPGRADE in my_module_set:
@@ -848,7 +848,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #    except Exception, e:
@@ -911,6 +911,90 @@
 #
 #
 #
+####====XXXX======######==== I am a splitter ====######======XXXX====####
+#filename:gen_obcdc_compatiable_info.py
+##!/usr/bin/env python3
+## -*- coding: utf-8 -*-
+#
+## RUN THIS SCRIPT AFTER oceanbase_upgrade_dep.yml MODIFIED
+##
+## PREPARE: install yaml with `pip install PyYaml` before run this script
+## RUN: run this script in tools/upgrade/ directory
+#
+#import yaml
+#import os
+#
+#def get_yaml(filename):
+#    yaml_data = None
+#    with open(filename, 'r', encoding='utf-8') as f:
+#        yaml_data = yaml.safe_load(f)
+#    return yaml_data
+#
+#def dump_to_yaml_obj(content):
+#   return yaml.safe_dump(content, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
+#
+#def write_yaml_to_file(content, filename):
+#    with open(filename, 'w',) as f :
+#        yaml.safe_dump(content, f, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
+#        print('Dump yaml format data to file successfully. File path: {0}'.format(filename))
+#
+#def collect_can_upgrade_from(target_ver):
+#    target_set = set()
+#    target_set.add(target_ver)
+#    if target_ver in can_upgrade_from_map.keys():
+#        can_upgrade_to_target_set = can_upgrade_from_map[target_ver]
+#        for target in can_upgrade_to_target_set:
+#            target_set.update(collect_can_upgrade_from(target))
+#    return target_set
+#
+#
+#if __name__ == '__main__':
+#    dir_path = os.path.dirname(os.path.realpath(__file__))
+#    ob_upgrade_deps_file = dir_path + "/oceanbase_upgrade_dep.yml"
+#    obcdc_compatiable_info_file = dir_path + "/obcdc_compatiable_ob_info.yaml"
+#    ob_upgrade_deps = get_yaml(ob_upgrade_deps_file)
+#    support_ob_versions = []
+#    cur_ob_version = ''
+#
+#    # key: upgraded_to_version
+#    # value: direct_upgrade_from_version_set
+#    can_upgrade_from_map = {}
+#    detect_cur_ob_ver_succ = False
+#
+#    if ob_upgrade_deps is not None:
+#        for ob_ver in ob_upgrade_deps:
+#            cur_ver = str(ob_ver['version'])
+#            if 'can_be_upgraded_to' not in ob_ver.keys():
+#                if detect_cur_ob_ver_succ:
+#                    print("duplicate detect cur_ob_version, last_detect_version: {cur_ob_version}, current_decect_info: {ob_ver}")
+#                    break
+#                else:
+#                    detect_cur_ob_ver_succ = True
+#                    cur_ob_version = cur_ver
+#                    if can_upgrade_to not in can_upgrade_from_map.keys():
+#                        can_upgrade_from_set = set()
+#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
+#            else:
+#                can_upgrade_to_list = list(ob_ver['can_be_upgraded_to'])
+#                for can_upgrade_to in can_upgrade_to_list:
+#                    if can_upgrade_to not in can_upgrade_from_map.keys():
+#                        can_upgrade_from_set = set()
+#                        can_upgrade_from_set.add(cur_ver)
+#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
+#                    else:
+#                        can_upgrade_from_map[can_upgrade_to].add(cur_ver)
+#
+#
+#        if detect_cur_ob_ver_succ:
+#            can_upgrade_from_set = can_upgrade_from_map[cur_ob_version]
+#            can_upgrade_from_set.update(collect_can_upgrade_from(cur_ob_version))
+#            res_map = {}
+#            res_list = []
+#            res_map["compatiable_ob_version"] = sorted(list(can_upgrade_from_set))
+#            res_map["obcdc_version"] = cur_ob_version
+#            res_list.append(res_map)
+#            print(dump_to_yaml_obj(res_list))
+#            write_yaml_to_file(res_list, obcdc_compatiable_info_file)
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:my_error.py
 ##!/usr/bin/env python
@@ -1334,14 +1418,6 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
-#    # wait scheduler in storage to notice adaptive_compaction is switched to false
-#    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
@@ -2032,9 +2108,6 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -2758,7 +2831,7 @@
 #    time.sleep(10)
 #
 ## 开始健康检查
-#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need_check_major_status, zone = ''):
+#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -2775,8 +2848,6 @@
 #      check_paxos_replica(query_cur, timeout)
 #      check_schema_status(query_cur, timeout)
 #      check_server_version_by_zone(query_cur, zone)
-#      if True == need_check_major_status:
-#        check_major_merge(query_cur, timeout)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -2811,7 +2882,7 @@
 #      zone = get_opt_zone()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
 #          host, port, user, password, log_filename, timeout, zone)
-#      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
+#      do_check(host, port, user, password, upgrade_params, timeout, zone)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
 #      raise e
@@ -2952,7 +3023,6 @@
 #    enable_ddl(cur, timeout)
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
-#    enable_major_freeze(cur, timeout)
 #  except Exception, e:
 #    logging.exception('run error')
 #    raise e
