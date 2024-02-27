@@ -473,20 +473,25 @@ int ObLobManager::lob_remote_query_with_retry(
       LOG_WARN("failed to do remote query", K(ret), K(arg), K(dst_addr), K(timeout));
       if (is_remote_ret_can_retry(ret)) {
         retry_cnt++;
-        switch (ret) {
-          case OB_NOT_MASTER: {
-            bool remote_bret = false;
-            // refresh leader
-            if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
-              LOG_WARN("fail to refresh leader addr", K(ret), K(param));
-              is_continue = false;
-            } else {
-              LOG_INFO("refresh leader location", K(retry_cnt), K(retry_max), K(remote_bret), K(dst_addr), K(param));
+        if (retry_cnt > retry_max) {
+          is_continue = false;
+          LOG_INFO("retry cnt is reach retry_max_cnt, return error code", K(ret), K(retry_cnt), K(retry_max));
+        } else {
+          switch (ret) {
+            case OB_NOT_MASTER: {
+              bool remote_bret = false;
+              // refresh leader
+              if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
+                LOG_WARN("fail to refresh leader addr", K(ret), K(param));
+                is_continue = false;
+              } else {
+                LOG_INFO("refresh leader location", K(retry_cnt), K(retry_max), K(remote_bret), K(dst_addr), K(param));
+              }
+              break;
             }
-            break;
-          }
-          default: {
-            LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt), K(retry_max));
+            default: {
+              LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt), K(retry_max));
+            }
           }
         }
       } else {
@@ -495,7 +500,7 @@ int ObLobManager::lob_remote_query_with_retry(
     } else {
       is_continue = false;
     }
-  } while (is_continue && retry_cnt <= retry_max);
+  } while (is_continue);
   return ret;
 }
 
