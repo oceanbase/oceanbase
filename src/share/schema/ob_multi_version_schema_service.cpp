@@ -3359,8 +3359,11 @@ int ObMultiVersionSchemaService::get_gc_candidates(ObHashSet<uint64_t> &candidat
           LOG_WARN("fail to check if tenant can release", K(ret), K(tenant_id)); \
         } else if (!can_release) { \
           continue; \
-        } else if (OB_FAIL(candidates.set_refactored(tenant_id))) { \
-          LOG_WARN("fail to set candidate", K(ret), K(tenant_id)); \
+        } else { \
+          LOG_INFO("tenant is not in tenant_id_set, we can release it", K(tenant_id), K(tenant_id_set)); \
+          if (OB_FAIL(candidates.set_refactored(tenant_id))) { \
+            LOG_WARN("fail to set candidate", KR(ret), K(tenant_id)); \
+          } \
         } \
       }
 
