@@ -60,7 +60,9 @@ using namespace share;
 
 namespace transaction {
 
-inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
+inline int ObTransService::init_tx_(ObTxDesc &tx,
+                                    const uint32_t session_id,
+                                    const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   tx.tenant_id_ = tenant_id_;
@@ -71,7 +73,9 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
   tx.state_     = ObTxDesc::State::IDLE;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
+  tx.cluster_version_ = cluster_version;
+  // cluster_version is invalid, need to get it
+  if (0 == cluster_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
     TRANS_LOG(WARN, "get min data version fail", K(ret), K(tx));
   } else if (tx.cluster_version_ >= DATA_VERSION_4_3_0_0) {
     tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
@@ -79,13 +83,15 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   return ret;
 }
 
-int ObTransService::acquire_tx(ObTxDesc *&tx, const uint32_t session_id)
+int ObTransService::acquire_tx(ObTxDesc *&tx,
+                               const uint32_t session_id,
+                               const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret));
   } else {
-    ret = init_tx_(*tx, session_id);
+    ret = init_tx_(*tx, session_id, cluster_version);
   }
   TRANS_LOG(TRACE, "acquire tx", KPC(tx), K(session_id));
   if (OB_SUCC(ret)) {
@@ -172,7 +178,7 @@ int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
   return ret;
 }
 
-int ObTransService::reuse_tx(ObTxDesc &tx)
+int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int spin_cnt = 0;
@@ -211,7 +217,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
 #endif
     }
     // it is safe to operate tx without lock when not shared
-    ret = reinit_tx_(tx, tx.sess_id_);
+    ret = reinit_tx_(tx, tx.sess_id_, data_version);
   }
   TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -225,10 +231,10 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
   return ret;
 }
 
-int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id)
+int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint64_t cluster_version)
 {
   tx.reset();
-  return init_tx_(tx, session_id);
+  return init_tx_(tx, session_id, cluster_version);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
