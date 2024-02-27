@@ -10734,6 +10734,7 @@ def_table_schema(
       ('last_tempseg_size', 'int'),
       ('tenant_id', 'int'),
       ('policy', 'varchar:10'),
+      ('db_id', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10765,6 +10766,7 @@ def_table_schema(
       ('tempseg_size', 'int'),
       ('tenant_id', 'int'),
       ('policy', 'varchar:6'),
+      ('db_id', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -16813,6 +16815,7 @@ def_table_schema(
     SELECT
       CAST(NULL AS BINARY(8)) AS ADDRESS,
       CAST(NULL AS SIGNED) AS HASH_VALUE,
+      DB_ID,
       SQL_ID,
       CAST(PLAN_ID AS SIGNED) AS CHILD_NUMBER,
       CAST(NULL AS BINARY(8)) AS WORKAREA_ADDRESS,
@@ -16887,6 +16890,7 @@ def_table_schema(
   view_definition = """
     SELECT
       CAST(NULL AS SIGNED) AS SQL_HASH_VALUE,
+      DB_ID,
       SQL_ID,
       CAST(NULL AS DATE) AS SQL_EXEC_START,
       SQL_EXEC_ID,
@@ -54010,6 +54014,7 @@ def_table_schema(
   view_definition = """
   SELECT
       CAST(NULL AS NUMBER) AS SQL_HASH_VALUE,
+      DB_ID,
       SQL_ID,
       CAST(NULL AS DATE) AS SQL_EXEC_START,
       CAST(SQL_EXEC_ID AS NUMBER) AS SQL_EXEC_ID,
@@ -54308,6 +54313,7 @@ def_table_schema(
   SELECT
       CAST(NULL AS RAW(8)) AS ADDRESS,
       CAST(NULL AS NUMBER) AS HASH_VALUE,
+      DB_ID,
       SQL_ID,
       CAST(PLAN_ID AS NUMBER) AS CHILD_NUMBER,
       CAST(NULL AS RAW(8)) AS WORKAREA_ADDRESS,

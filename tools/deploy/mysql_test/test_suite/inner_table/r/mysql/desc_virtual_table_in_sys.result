@@ -4344,6 +4344,7 @@ max_tempseg_size	bigint(20)	NO		NULL
 last_tempseg_size	bigint(20)	NO		NULL	
 tenant_id	bigint(20)	NO		NULL	
 policy	varchar(10)	NO		NULL	
+db_id	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_workarea_history_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -4369,6 +4370,7 @@ number_passes	bigint(20)	NO		NULL
 tempseg_size	bigint(20)	NO		NULL	
 tenant_id	bigint(20)	NO		NULL	
 policy	varchar(6)	NO		NULL	
+db_id	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_workarea_active;
 IF(count(*) >= 0, 1, 0)
 1

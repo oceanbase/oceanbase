@@ -1434,6 +1434,7 @@ desc oceanbase.GV$SQL_WORKAREA;
 Field	Type	Null	Key	Default	Extra
 ADDRESS	varbinary(8)	NO			
 HASH_VALUE	bigint(0)	NO			
+DB_ID	bigint(20)	NO		NULL	
 SQL_ID	varchar(32)	NO		NULL	
 CHILD_NUMBER	bigint(20)	NO		NULL	
 WORKAREA_ADDRESS	varbinary(8)	NO			
@@ -1462,6 +1463,7 @@ desc oceanbase.V$SQL_WORKAREA;
 Field	Type	Null	Key	Default	Extra
 ADDRESS	varbinary(8)	NO			
 HASH_VALUE	bigint(0)	NO			
+DB_ID	bigint(20)	NO			
 SQL_ID	varchar(32)	NO			
 CHILD_NUMBER	bigint(20)	NO			
 WORKAREA_ADDRESS	varbinary(8)	NO			
@@ -1489,6 +1491,7 @@ cnt
 desc oceanbase.GV$SQL_WORKAREA_ACTIVE;
 Field	Type	Null	Key	Default	Extra
 SQL_HASH_VALUE	bigint(0)	NO			
+DB_ID	bigint(20)	NO		NULL	
 SQL_ID	varchar(32)	NO		NULL	
 SQL_EXEC_START	date	NO			
 SQL_EXEC_ID	bigint(20)	NO		NULL	
@@ -1518,6 +1521,7 @@ cnt
 desc oceanbase.V$SQL_WORKAREA_ACTIVE;
 Field	Type	Null	Key	Default	Extra
 SQL_HASH_VALUE	bigint(0)	NO			
+DB_ID	bigint(20)	NO			
 SQL_ID	varchar(32)	NO			
 SQL_EXEC_START	date	NO			
 SQL_EXEC_ID	bigint(20)	NO			
