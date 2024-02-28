@@ -1637,6 +1637,7 @@ nested_offset	bigint(20)	NO		NULL
 nested_size	bigint(20)	NO		NULL	
 cg_idx	bigint(20)	NO		NULL	
 data_checksum	bigint(20)	NO		NULL	
+table_flag	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_mgr;
 IF(count(*) >= 0, 1, 0)
 1

@@ -9964,6 +9964,7 @@ def_table_schema(
       ('nested_size', 'int'),
       ('cg_idx', 'int'),
       ('data_checksum', 'int'),
+      ('table_flag', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
