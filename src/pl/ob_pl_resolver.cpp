@@ -10460,40 +10460,6 @@ int ObPLResolver::init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &acce
   return ret;
 }
 
-int ObPLResolver::mock_self_param(bool need_rotate,
-                                  ObIArray<ObObjAccessIdent> &obj_access_idents,
-                                  ObIArray<ObObjAccessIdx> &self_access_idxs,
-                                  ObPLFunctionAST &func)
-{
-  int ret = OB_SUCCESS;
-  uint64_t acc_cnt = obj_access_idents.count();
-  ObRawExpr *self_arg = NULL;
-  if (!(self_access_idxs.count() > 0 &&
-        ObObjAccessIdx::IS_UDT_NS == self_access_idxs.at(self_access_idxs.count() - 1).access_type_)) {
-    if (self_access_idxs.at(self_access_idxs.count() - 1).is_udf_type()) {
-      OX (self_arg = self_access_idxs.at(self_access_idxs.count() - 1).get_sysfunc_);
-      CK (OB_NOT_NULL(self_arg));
-    } else {
-      OZ (make_var_from_access(self_access_idxs,
-                               expr_factory_,
-                               &resolve_ctx_.session_info_,
-                               &resolve_ctx_.schema_guard_,
-                               current_block_->get_namespace(),
-                               self_arg), K(obj_access_idents), K(self_access_idxs));
-      OZ (func.add_obj_access_expr(self_arg));
-    }
-    OZ (func.add_expr(self_arg));
-    OZ (obj_access_idents.at(acc_cnt - 1).params_.push_back(std::make_pair(self_arg, 0)));
-    if (OB_SUCC(ret) && need_rotate) {
-      std::rotate(obj_access_idents.at(acc_cnt - 1).params_.begin(),
-                  obj_access_idents.at(acc_cnt - 1).params_.begin()
-                    + obj_access_idents.at(acc_cnt - 1).params_.count() - 1,
-                  obj_access_idents.at(acc_cnt - 1).params_.end());
-    }
-  }
-  return ret;
-}
-
 int ObPLResolver::resolve_inner_call(
   const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func)
 {
@@ -11930,6 +11896,10 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
   OX (last_idx = access_idxs.at(access_idxs.count() - 1));
   OX (access_idxs.pop_back());
   OZ (add_udt_self_argument(routine_info, local_expr_params, access_idxs, NULL, func));
+  if (OB_ERR_VARIABLE_IS_READONLY == ret) {
+    ret = OB_ERR_EXP_NOT_ASSIGNABLE;
+    LOG_WARN("expression cannot be used as an assignment", K(ret));
+  }
   OZ (access_idxs.push_back(last_idx));
   if (OB_SUCC(ret) && local_expr_params.count() > orig_expr_params_cnt) {
     OZ (access_ident.params_.push_back(std::make_pair(local_expr_params.at(local_expr_params.count() - 1), 0)));
@@ -11971,7 +11941,6 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
       CK (OB_NOT_NULL(self_argument));
       OZ (self_argument->formalize(&resolve_ctx_.session_info_));
       OX (udf_info->set_is_udf_udt_cons());
-      OZ (func.add_expr(self_argument));
     } else if (access_idxs.count() > 0) { // Member Self Argument With Prefix.
       if (access_idxs.at(access_idxs.count() - 1).is_udf_type()) {
         OX (self_argument = access_idxs.at(access_idxs.count() - 1).get_sysfunc_);
@@ -11983,7 +11952,6 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
                                  &resolve_ctx_.schema_guard_,
                                  current_block_->get_namespace(),
                                  self_argument));
-        OZ (func.add_expr(self_argument));
         if (OB_SUCC(ret) && !ObObjAccessIdx::is_expr_type(access_idxs)) {
           bool for_write = false;
           ObIRoutineParam *param = nullptr;
@@ -11996,9 +11964,9 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
       }
     } else { // Member Self Argument Without Prefix.
       OZ (make_self_symbol_expr(func, self_argument));
-      OZ (func.add_expr(self_argument));
     }
     CK (OB_NOT_NULL(self_argument));
+    OZ (func.add_expr(self_argument));
     OZ (self_argument->add_flag(IS_UDT_UDF_SELF_PARAM));
     if (OB_SUCC(ret) && self_argument->is_obj_access_expr()) {
       OZ (func.add_obj_access_expr(self_argument));

@@ -4357,18 +4357,26 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
 int ObPLCompileUnitAST::add_expr(sql::ObRawExpr* expr, bool is_simple_integer)
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode()) {
-    bool is_simple_calc = false;
-    if (!is_simple_integer && OB_FAIL(check_simple_calc_expr(expr, is_simple_calc))) {
-      LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
-    } else if (is_simple_calc || is_simple_integer) {
-      if (OB_FAIL(add_simple_calc(exprs_.count()))) {
-        LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
-      }
-    } else { /*do nothing*/ }
+  bool exists = false;
+  for (int64_t i = 0; !exists && i < exprs_.count(); ++i) {
+    if (expr == exprs_.at(i)) {
+      exists = true;
+    }
   }
-  if (OB_SUCC(ret) && OB_FAIL(exprs_.push_back(expr))) {
-    LOG_WARN("push back error", K(expr), K(ret));
+  if (!exists) {
+    if (lib::is_oracle_mode()) {
+      bool is_simple_calc = false;
+      if (!is_simple_integer && OB_FAIL(check_simple_calc_expr(expr, is_simple_calc))) {
+        LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
+      } else if (is_simple_calc || is_simple_integer) {
+        if (OB_FAIL(add_simple_calc(exprs_.count()))) {
+          LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
+        }
+      } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(exprs_.push_back(expr))) {
+      LOG_WARN("push back error", K(expr), K(ret));
+    }
   }
   return ret;
 }
