@@ -8810,14 +8810,18 @@ struct ObCheckServerForAddingServerResult
 {
   OB_UNIS_VERSION(1);
 public:
+  enum ObServerMode {
+    INVALID_MODE = 0
+  };
   ObCheckServerForAddingServerResult()
       : is_server_empty_(false),
       zone_(),
       sql_port_(0),
-      build_version_()
+      build_version_(),
+      startup_mode_(ObServerMode::INVALID_MODE)
   {
   }
-  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version));
+  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version), K_(startup_mode));
   int init(
       const bool is_server_empty,
       const ObZone &zone,
@@ -8845,6 +8849,7 @@ private:
   ObZone zone_;
   int64_t sql_port_;
   share::ObServerInfoInTable::ObBuildVersion build_version_;
+  ObServerMode startup_mode_; // not used, only as placeholder
 };
 
 struct ObArchiveLogArg
@@ -9103,9 +9108,14 @@ struct ObCheckDeploymentModeArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false) {}
-  TO_STRING_KV(K_(single_zone_deployment_on));
+  enum ObServerMode {
+    INVALID_MODE = 0
+  };
+  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false), startup_mode_(ObServerMode::INVALID_MODE) {}
+  TO_STRING_KV(K_(single_zone_deployment_on), K_(startup_mode));
+  int assign(const ObCheckDeploymentModeArg &other);
   bool single_zone_deployment_on_;
+  ObServerMode startup_mode_;	// not used, only as placeholder
 };
 
 struct ObPreProcessServerArg
