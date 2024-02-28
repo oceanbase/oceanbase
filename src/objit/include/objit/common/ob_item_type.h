@@ -2421,6 +2421,7 @@ typedef enum ObItemType
   T_ALTER_USER_PROXY,
 
   T_PARALLEL_DAS_DML,
+  T_DISABLE_PARALLEL_DAS_DML,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
