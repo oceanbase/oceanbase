@@ -668,8 +668,8 @@ int ObInnerConnectionLockUtil::request_lock_(
         } else {
           int32_t group_id = 0;
           const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-          if ((min_cluster_version > CLUSTER_VERSION_4_2_1_3 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
-              || (min_cluster_version > CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+          if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+              || (min_cluster_version >= CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
               || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0)) {
             if (arg.is_unlock_request()) {
               group_id = share::OBCG_UNLOCK;

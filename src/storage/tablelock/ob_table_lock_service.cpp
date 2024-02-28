@@ -1775,8 +1775,8 @@ int ObTableLockService::rpc_call_(RpcProxy &proxy_batch,
   int ret = OB_SUCCESS;
   int32_t group_id = 0;
   const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  if ((min_cluster_version > CLUSTER_VERSION_4_2_1_3 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
-      || (min_cluster_version > CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+  if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+      || (min_cluster_version >= CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
       || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0)) {
     group_id = share::OBCG_LOCK;
     if (request.is_unlock_request()) {
