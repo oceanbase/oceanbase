@@ -8277,9 +8277,10 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         // feature id column name won't add to keys
         mvt_res.feat_id_idx_ = i;
       } else if (!expr->obj_meta_.is_json() // json type will be expanded
+                && !expr->obj_meta_.is_enum_or_set()
                 && OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
         LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
-      } else if (!expr->obj_meta_.is_json() &&OB_FAIL(mvt_res.keys_.push_back(key_name))) {
+      } else if (!expr->obj_meta_.is_json() && !expr->obj_meta_.is_enum_or_set() && OB_FAIL(mvt_res.keys_.push_back(key_name))) {
         LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
       }
     } else if (!is_param_done) {

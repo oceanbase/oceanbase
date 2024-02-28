@@ -322,7 +322,8 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
       if (OB_FAIL(transform_json_column(tmp_obj[i]))) {
         LOG_WARN("failed to transform json column", K(ret));
       }
-    } else if (tmp_obj[i].is_null()) {
+    } else if (tmp_obj[i].is_null()
+              || ob_is_enum_or_set_type(type)) { // enum/set type mvt encode isn't supported
       // do nothing
     } else if (OB_FAIL(get_key_id(tmp_obj[i + 1].get_string(), key_id))) {
       LOG_WARN("failed to get column key id", K(ret));
@@ -368,8 +369,6 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         value.test_oneof_case = VECTOR_TILE__TILE__VALUE__TEST_ONEOF_DOUBLE_VALUE;
         tile_value.ptr_ = &value.double_value;
         tile_value.len_ = sizeof(value.double_value);
-      } else if (ob_is_enum_or_set_type(type)) {
-        // do nothing, enum/set type mvt encode isn't supported
       } else {
         // other type cast to varchar
         ObObj obj;

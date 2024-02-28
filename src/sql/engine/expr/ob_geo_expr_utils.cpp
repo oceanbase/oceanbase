@@ -866,11 +866,11 @@ int ObGeoExprUtils::get_input_geometry(ObIAllocator &allocator, ObDatum *gis_dat
     LOG_WARN("fail to get real string data", K(ret), K(wkb));
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb, type, srid))) {
     if (ret == OB_ERR_GIS_INVALID_DATA) {
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_EQUALS);
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
     }
     LOG_WARN("get type and srid from wkb failed", K(wkb), K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
-                  ctx, srs_guard, wkb, srs, true, N_PRIV_ST_EQUALS))) {
+                  ctx, srs_guard, wkb, srs, true, func_name))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
                   wkb,
