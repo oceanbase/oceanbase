@@ -4791,6 +4791,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret) && spec.report_col_checksum_) {
+    const bool is_oracle_mode = lib::is_oracle_mode();
     spec.ddl_output_cids_.assign(op.get_ddl_output_column_ids());
     for (int64_t i = 0; OB_SUCC(ret) && i < spec.ddl_output_cids_.count(); i++) {
       const ObColumnSchemaV2 *column_schema = NULL;
@@ -4801,7 +4802,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret));
       } else if (column_schema->get_meta_type().is_fixed_len_char_type() &&
-        column_schema->is_virtual_generated_column()) {
+        (column_schema->is_virtual_generated_column() || is_oracle_mode)) {
         // add flag in ddl_output_cids_ in this special scene.
         uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
         spec.ddl_output_cids_.at(i) = spec.ddl_output_cids_.at(i) | VIRTUAL_GEN_FIX_LEN_TAG;
