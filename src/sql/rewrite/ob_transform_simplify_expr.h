@@ -183,7 +183,8 @@ private:
 
   int get_opposite_op(ObItemType type, ObItemType& opposit_type);
   int remove_duplicate_exprs(ObQueryCtx* query_ctx, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int do_remove(ObRawExpr* &expr, bool &trans_happened);
+  int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObRawExpr* &expr, bool &trans_happened);
+  int do_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
   int pull_similar_expr(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int recursive_pull_similar(ObDMLStmt *stmt, ObRawExpr* &expr, bool &trans_happened);
   int do_pull_similar(ObDMLStmt *stmt,
@@ -197,7 +198,9 @@ private:
   int get_intersection(ObDMLStmt *stmt,
                        ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
                        ObIArray<ObRawExpr *> &intersection);
-  int remove_intersect_item(ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets, ObIArray<ObRawExpr *> &intersection);
+  int remove_intersect_item(ObDMLStmt *stmt,
+                            ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
+                            ObIArray<ObRawExpr *> &intersection);
   int get_params_array(ObIArray<ObRawExpr*> &exprs,
                    ObRawExpr *&expr,
                    ObItemType parent_type);

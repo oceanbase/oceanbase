@@ -2485,6 +2485,7 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
       OPT_TRACE("   push_not_happend:", push_not_happend);
       OPT_TRACE("   remove_duplicate_happend:", remove_duplicate_happend);
       OPT_TRACE("   pull_similar_happend:", pull_similar_happend);
+      LOG_TRACE("do canonicalize", K(push_not_happend), K(remove_duplicate_happend), K(pull_similar_happend));
     }
   }
   return ret;
@@ -2830,52 +2831,26 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
   int ret = OB_SUCCESS;
   const int64_t param_count = conditions.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < param_count; i++) {
-    if (OB_ISNULL(conditions.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null pointer error", K(conditions.at(i)), K(ret));
-    } else if (OB_FAIL(do_remove(conditions.at(i), trans_happened))) {
-      LOG_WARN("do_remove fail", K(conditions.at(i)), K(ret));
+    if (OB_FAIL(recursive_remove_duplicate_exprs(*query_ctx, conditions.at(i), trans_happened))) {
+      LOG_WARN("do_remove_duplicate_exprs fail", K(conditions.at(i)), K(ret));
     }
   }
-  if (OB_SUCC(ret) && param_count > 1 && param_count <= 100) {
+  if (OB_SUCC(ret)) {
     //select * from t1 where c1 > 1 and c1 > 1
     //like above stmt, and expr in level 0 is process here
     ObSEArray<ObRawExpr *, 4> param_conds;
-    ObQuestionmarkEqualCtx cmp_ctx(true);
-
-    if (OB_ISNULL(query_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null pointer error", K(ret));
+    if (param_count <= 1 || param_count > 100) {
+      /* use too much resource and need add lots of constraints */
     } else if (OB_FAIL(param_conds.assign(conditions))) {
       LOG_WARN("failed to assign array", K(ret));
+    } else if (OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds))) {
+      LOG_WARN("failed to do remove duplicate exprs", K(ret));
+    } else if (param_conds.count() == conditions.count()) {
+      //do nothing
+    } else if (OB_FAIL(conditions.assign(param_conds))) {
+      LOG_WARN("assign array failed", K(ret));
     } else {
-      for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
-        for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
-          if (param_conds.at(i)->same_as(*param_conds.at(j), &cmp_ctx)) {
-            if (OB_FAIL(param_conds.remove(i))) {
-              LOG_WARN("failed to remove", K(ret));
-            } else if (!cmp_ctx.equal_pairs_.empty()) {
-              if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
-                                 cmp_ctx.equal_pairs_))) {
-                LOG_WARN("failed to append expr", K(ret));
-              } else {
-                cmp_ctx.equal_pairs_.reset();
-              }
-            }
-            break;
-          } else if (!cmp_ctx.equal_pairs_.empty()) {
-            cmp_ctx.equal_pairs_.reset();
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (param_conds.count() == conditions.count()) {
-        //do nothing
-      } else if (OB_FAIL(conditions.assign(param_conds))) {
-        LOG_WARN("assign array failed", K(ret));
-      } else {
-        trans_happened = true;
-      }
+      trans_happened = true;
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
@@ -2886,7 +2861,9 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
   return ret;
 }
 
-int ObTransformSimplifyExpr::do_remove(ObRawExpr* &expr, bool &trans_happened)
+int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx,
+                                                              ObRawExpr* &expr,
+                                                              bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
@@ -2894,11 +2871,10 @@ int ObTransformSimplifyExpr::do_remove(ObRawExpr* &expr, bool &trans_happened)
     LOG_WARN("unexpect null pointer error", K(expr), K_(ctx), K_(ctx_->expr_factory), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_ISNULL(expr->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null pointer error", K(expr->get_param_expr(i)), K(ret));
-      } else if (OB_FAIL(SMART_CALL(do_remove(expr->get_param_expr(i),trans_happened)))) {
-        LOG_WARN("fail to do_remove", K(expr->get_param_expr(i)), K(ret));
+      if (OB_FAIL(SMART_CALL(recursive_remove_duplicate_exprs(query_ctx,
+                                                              expr->get_param_expr(i),
+                                                              trans_happened)))) {
+        LOG_WARN("failed to recursive remove duplicate exprs", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -2906,8 +2882,12 @@ int ObTransformSimplifyExpr::do_remove(ObRawExpr* &expr, bool &trans_happened)
     } else if (expr->get_expr_type() == T_OP_OR || expr->get_expr_type() == T_OP_AND) {
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
       ObSEArray<ObRawExpr *, 4> param_conds;
-      if (OB_FAIL(append_array_no_dup(param_conds, op_expr->get_param_exprs()))) {
-        LOG_WARN("fail to append_array_no_dup", K(ret));
+      if (op_expr->get_param_count() > 100) {
+        /* use too much resource and need add lots of constraints */
+      } else if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
+        LOG_WARN("failed to assign array", K(ret));
+      } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
+        LOG_WARN("failed to do remove duplicate exprs", K(ret));
       } else if (param_conds.count() == op_expr->get_param_count()) {
         //do nothing
       } else if (param_conds.count() == 1) {
@@ -2922,6 +2902,40 @@ int ObTransformSimplifyExpr::do_remove(ObRawExpr* &expr, bool &trans_happened)
         LOG_WARN("assign array failed", K(ret));
       } else {
         trans_happened = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
+                                                       ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  const int64_t param_count = exprs.count();
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer error", K_(ctx), K_(ctx_->expr_factory), K(ret));
+  } else {
+    ObStmtCompareContext cmp_ctx;
+    cmp_ctx.init(&query_ctx.calculable_items_);
+    for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
+        if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
+          if (OB_FAIL(exprs.remove(i))) {
+            LOG_WARN("failed to remove", K(ret));
+          } else if (!cmp_ctx.equal_param_info_.empty()) {
+            if (OB_FAIL(append(ctx_->equal_param_constraints_,
+                               cmp_ctx.equal_param_info_))) {
+              LOG_WARN("failed to append expr", K(ret));
+            } else {
+              cmp_ctx.equal_param_info_.reset();
+            }
+          }
+          break;
+        } else if (!cmp_ctx.equal_param_info_.empty()) {
+          cmp_ctx.equal_param_info_.reset();
+        }
       }
     }
   }
@@ -3055,7 +3069,7 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
     LOG_WARN("failed to calculate the intersection of sets", K(ret));
   } else if (intersection.count() == 0) {
     is_valid = false;
-  } else if (OB_FAIL(remove_intersect_item(params_sets, intersection))) {
+  } else if (OB_FAIL(remove_intersect_item(stmt, params_sets, intersection))) {
     LOG_WARN("failed to remove exprs", K(ret));
   } else if (OB_FAIL(gen_not_intersect_param(new_param, params_sets, expr_type))) {
     LOG_WARN("fail to gen_not_intersect_param", K(ret));
@@ -3137,11 +3151,18 @@ int ObTransformSimplifyExpr::get_intersection(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformSimplifyExpr::remove_intersect_item(ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
-                                                  ObIArray<ObRawExpr *> &intersection)
+int ObTransformSimplifyExpr::remove_intersect_item(ObDMLStmt *stmt,
+                                                   ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
+                                                   ObIArray<ObRawExpr *> &intersection)
 {
   int ret = OB_SUCCESS;
   ObStmtCompareContext context;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer error", K_(ctx), K(stmt), K(stmt->get_query_ctx()), K(ret));
+  } else {
+    context.init(&stmt->get_query_ctx()->calculable_items_);
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < params_sets.count(); i++) {
     ObSEArray<ObRawExpr *, 4> temp_result;
     for (int64_t j = 0; OB_SUCC(ret) && j < params_sets.at(i).count(); j++) {
@@ -3151,7 +3172,6 @@ int ObTransformSimplifyExpr::remove_intersect_item(ObIArray<ObSEArray<ObRawExpr 
       } else if (find) {
         if (!context.equal_param_info_.empty()) {
           if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
-            ret = OB_SIZE_OVERFLOW == context.error_code_;
             LOG_WARN("append equal param info failed", K(ret));
           }
           context.equal_param_info_.reset();
