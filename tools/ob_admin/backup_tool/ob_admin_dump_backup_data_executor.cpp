@@ -559,7 +559,9 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
   } else {
     bool is_table_list_dir = false;
     if (OB_FAIL(check_is_table_list_dir_(is_table_list_dir))) {
-    STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
+      STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (is_table_list_dir && OB_FAIL(handle_print_table_list_())) {
       STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
     } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
@@ -675,7 +677,13 @@ int ObAdminDumpBackupDataExecutor::check_dir_exist_(
   if (OB_FAIL(storage_info.set(backup_path, storage_info_str))) {
     STORAGE_LOG(WARN, "failed to set storage info", K(ret), K(storage_info_str));
   } else if (OB_FAIL(util.is_empty_directory(backup_path, &storage_info, is_empty_dir))) {
-    STORAGE_LOG(WARN, "failed to check dir exist", K(ret), K(backup_path), K(storage_info));
+    if (OB_IO_ERROR == ret) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+      STORAGE_LOG(INFO, "backup path may be file path rather than dir path", K(backup_path));
+    } else {
+      STORAGE_LOG(WARN, "failed to check dir exist", K(ret), K(backup_path), K(storage_info));
+    }
   } else if (!is_empty_dir) {
     is_exist = true;
   }
@@ -2898,10 +2906,7 @@ int ObAdminDumpBackupDataExecutor::check_is_table_list_dir_(bool &is_table_list_
 
   if (OB_FAIL(check_dir_exist_(backup_path_, storage_info_, is_exist))) {
     STORAGE_LOG(WARN, "fail to check dir exist", K(ret), K_(backup_path));
-  } else if (!is_exist) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "dir does not exist", K(ret), K_(backup_path));
-  } else {
+  } else if (is_exist) {
     char tmp[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
     char *token = NULL;
     char *saveptr = NULL;
