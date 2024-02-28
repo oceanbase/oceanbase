@@ -434,7 +434,6 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
     }
     if (func.update_global_index_) {
-      ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }
     if (func.contain_link_table_) {
