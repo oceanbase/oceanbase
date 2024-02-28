@@ -353,7 +353,6 @@ public:
       ObTabletHandle &tablet_handle,
       ObStoreCtx &ctx,
       const ObDMLBaseParam &dml_param,
-      const int64_t abs_lock_timeout,
       const ObLockFlag lock_flag,
       const bool is_sfu,
       ObNewRowIterator *row_iter,
@@ -362,7 +361,6 @@ public:
       ObTabletHandle &tablet_handle,
       ObStoreCtx &ctx,
       const ObDMLBaseParam &dml_param,
-      const int64_t abs_lock_timeout,
       const ObNewRow &row,
       const ObLockFlag lock_flag,
       const bool is_sfu);

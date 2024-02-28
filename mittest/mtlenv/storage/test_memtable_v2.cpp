@@ -357,7 +357,7 @@ public:
                  &ls_tx_ctx_mgr_,
                  tx_data, // ObTxData
                  NULL);   // mailbox_mgr
-    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ = 0; // nowait
+    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ts_ = 0; // nowait
     store_ctx->mvcc_acc_ctx_.tx_desc_ = tx_desc;
     store_ctx->mvcc_acc_ctx_.tx_id_ = tx_id;
     store_ctx->mvcc_acc_ctx_.tx_ctx_ = tx_ctx;
@@ -388,7 +388,7 @@ public:
     store_ctx->mvcc_acc_ctx_.snapshot_.version_ = snapshot_scn;
     store_ctx->mvcc_acc_ctx_.snapshot_.scn_ = ObTxSEQ(ObSequence::get_max_seq_no(), 0);
     const int64_t abs_expire_time = expire_time + ::oceanbase::common::ObTimeUtility::current_time();
-    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
+    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ts_ = abs_expire_time;
     store_ctx->mvcc_acc_ctx_.tx_scn_ = ObTxSEQ(ObSequence::inc_and_get_max_seq_no(), 0);
   }
   void start_pdml_stmt(ObStoreCtx *store_ctx,
@@ -402,7 +402,7 @@ public:
     store_ctx->mvcc_acc_ctx_.snapshot_.version_ = snapshot_scn;
     store_ctx->mvcc_acc_ctx_.snapshot_.scn_ = read_seq_no;
     const int64_t abs_expire_time = expire_time + ::oceanbase::common::ObTimeUtility::current_time();
-    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
+    store_ctx->mvcc_acc_ctx_.abs_lock_timeout_ts_ = abs_expire_time;
     store_ctx->mvcc_acc_ctx_.tx_scn_ = ObTxSEQ(ObSequence::inc_and_get_max_seq_no(), 0);
   }
   void print_callback(ObStoreCtx *wtx)
@@ -3387,7 +3387,7 @@ TEST_F(TestMemtableV2, test_parallel_lock_with_same_txn)
   wtx->mvcc_acc_ctx_.snapshot_.version_ = scn_1000;
   wtx->mvcc_acc_ctx_.snapshot_.scn_ = read_seq_no;
   const int64_t abs_expire_time = 10000000000 + ::oceanbase::common::ObTimeUtility::current_time();
-  wtx->mvcc_acc_ctx_.abs_lock_timeout_ = abs_expire_time;
+  wtx->mvcc_acc_ctx_.abs_lock_timeout_ts_ = abs_expire_time;
   wtx->mvcc_acc_ctx_.tx_scn_ = ObTxSEQ(ObSequence::inc_and_get_max_seq_no(),0);
 
   ObTableAccessContext context;

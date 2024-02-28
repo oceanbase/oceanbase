@@ -567,6 +567,7 @@ int ObAccessService::check_write_allowed_(
     const common::ObTabletID &tablet_id,
     const ObStoreAccessType access_type,
     const ObDMLBaseParam &dml_param,
+    const int64_t lock_wait_timeout_ts,
     transaction::ObTxDesc &tx_desc,
     ObTabletHandle &tablet_handle,
     ObStoreCtxGuard &ctx_guard)
@@ -579,7 +580,6 @@ int ObAccessService::check_write_allowed_(
   const ObTableLockMode lock_mode = ROW_EXCLUSIVE;
   const ObTableLockOpType lock_op_type = IN_TRANS_DML_LOCK;
   const ObTableLockOwnerID lock_owner(0);
-  const bool is_try_lock = false;
   const bool is_deadlock_avoid_enabled = false;
   bool enable_table_lock = true;
   ret = OB_E(EventTable::EN_ENABLE_TABLE_LOCK) OB_SUCCESS;
@@ -587,13 +587,15 @@ int ObAccessService::check_write_allowed_(
     enable_table_lock = false;
     ret = OB_SUCCESS;
   }
+  bool is_try_lock = lock_wait_timeout_ts <= 0;
+  int64_t abs_timeout_ts = MIN(lock_wait_timeout_ts, tx_desc.get_expire_ts());
   if (OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
     LOG_WARN("fail to check tenant out of mem limit", K(ret), K_(tenant_id));
   } else if (is_out_of_mem && !tablet_id.is_inner_tablet()) {
     ret = OB_TENANT_OUT_OF_MEM;
     LOG_WARN("this tenant is already out of memstore limit", K(ret), K_(tenant_id));
   } else if (OB_FAIL(get_write_store_ctx_guard_(ls_id,
-                                                dml_param.timeout_,
+                                                abs_timeout_ts,
                                                 tx_desc,
                                                 dml_param.snapshot_,
                                                 dml_param.write_flag_,
@@ -607,7 +609,6 @@ int ObAccessService::check_write_allowed_(
   } else if (!enable_table_lock) {
     // do nothing
   } else {
-    // TODO: this may confuse user, because of txn timeout won't notify user proactively
     int64_t lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
     if (OB_FAIL(get_lock_id(tablet_id, lock_id))) {
       LOG_WARN("get lock id failed", K(ret), K(tablet_id));
@@ -618,6 +619,11 @@ int ObAccessService::check_write_allowed_(
                                       dml_param.schema_version_,
                                       is_deadlock_avoid_enabled,
                                       is_try_lock,
+                                      // we can not use abs_timeout_ts here,
+                                      // because we may meet select-for-update nowait,
+                                      // and abs_timeout_ts is 0. We will judge
+                                      // timeout before meet lock conflict in tablelock,
+                                      // so it will lead to incorrect error
                                       lock_expired_ts))) {
       LOG_WARN("get lock param failed", K(ret), K(lock_id));
     } // When locking the table, the tablet is not detected to be deleted.
@@ -673,6 +679,7 @@ int ObAccessService::delete_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -732,6 +739,7 @@ int ObAccessService::put_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -792,6 +800,7 @@ int ObAccessService::insert_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -856,6 +865,7 @@ int ObAccessService::insert_row(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -930,6 +940,7 @@ int ObAccessService::update_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
+                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -976,6 +987,7 @@ int ObAccessService::lock_rows(
   ObLSTabletService *tablet_service = nullptr;
   // Attention!!! This handle is only used for ObLSTabletService, will be reset inside ObLSTabletService.
   ObTabletHandle tablet_handle;
+  int64_t lock_wait_timeout_ts = get_lock_wait_timeout_(abs_lock_timeout, dml_param.timeout_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -991,6 +1003,7 @@ int ObAccessService::lock_rows(
                                           tablet_id,
                                           ObStoreAccessType::ROW_LOCK,
                                           dml_param,
+                                          lock_wait_timeout_ts,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -1005,7 +1018,6 @@ int ObAccessService::lock_rows(
     ret = tablet_service->lock_rows(tablet_handle,
                                     ctx_guard.get_store_ctx(),
                                     dml_param,
-                                    abs_lock_timeout,
                                     lock_flag,
                                     false,
                                     row_iter,
@@ -1030,6 +1042,7 @@ int ObAccessService::lock_row(
   ObLSTabletService *tablet_service = nullptr;
   // Attention!!! This handle is only used for ObLSTabletService, will be reset inside ObLSTabletService.
   ObTabletHandle tablet_handle;
+  int64_t lock_wait_timeout_ts = get_lock_wait_timeout_(abs_lock_timeout, dml_param.timeout_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob access service is not running.", K(ret));
@@ -1045,6 +1058,7 @@ int ObAccessService::lock_row(
                                           tablet_id,
                                           ObStoreAccessType::ROW_LOCK,
                                           dml_param,
+                                          lock_wait_timeout_ts,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {
@@ -1059,7 +1073,6 @@ int ObAccessService::lock_row(
     ret = tablet_service->lock_row(tablet_handle,
                                     ctx_guard.get_store_ctx(),
                                     dml_param,
-                                    abs_lock_timeout,
                                     row,
                                     lock_flag,
                                     false);
@@ -1325,6 +1338,5 @@ int ObAccessService::audit_tablet_opt_dml_stat(
   }
   return ret;
 }
-
 }
 }
