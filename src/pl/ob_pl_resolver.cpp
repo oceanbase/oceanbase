@@ -13817,7 +13817,10 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
                                 routine_name, expr_params, routine_info));
         OX (func.set_can_cached(false));
       }
-      if (OB_SUCC(ret) && NULL != routine_info && NULL != routine_info->get_ret_info()) {
+      if (OB_SUCC(ret)
+          && NULL != routine_info
+          && NULL != routine_info->get_ret_info()
+          && OB_INVALID_ID != routine_info->get_dblink_id()) {
         CK (access_ident.is_pl_udf());
         CK (OB_NOT_NULL(access_ident.udf_info_.ref_expr_));
         if (OB_SUCC(ret)) {
