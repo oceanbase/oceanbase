@@ -28,6 +28,7 @@ struct pktc_cb_t {
 };
 
 struct pktc_req_t {
+  int64_t pkt_type;
   struct pktc_sk_t* sk;
   PNIO_DELAY_WARN(int64_t ctime_us);
   pktc_flush_cb_func_t flush_cb;
@@ -37,6 +38,14 @@ struct pktc_req_t {
   dlink_t link;
   str_t msg;
 };
+
+typedef struct pn_client_cmd_req_t
+{
+  pktc_req_t req;
+  easy_head_t head;
+  int64_t cmd;
+  int64_t arg;
+} pn_client_cmd_req_t;
 
 extern int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id);
 extern int pktc_post(pktc_t* io, pktc_req_t* req);
