@@ -192,12 +192,22 @@ class AChunkMgr
   friend class ProtectedStackAllocator;
   friend class ObMemoryCutter;
 private:
+  struct Slot
+  {
+    Slot(int64_t max_cache_size = INT64_MAX) : maps_(0), unmaps_(0), free_list_()
+    {
+      free_list_.set_max_chunk_cache_size(max_cache_size);
+    }
+    AChunkList* operator->() { return &free_list_; }
+    int64_t maps_;
+    int64_t unmaps_;
+    AChunkList free_list_;
+  };
   static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
-  static constexpr int64_t LARGE_ACHUNK_SIZE = INTACT_ACHUNK_SIZE << 1;
+  static constexpr int64_t N = 10;
 public:
-  static constexpr int64_t DEFAULT_LARGE_CHUNK_CACHE_SIZE = 128L << 20;
   static AChunkMgr &instance();
 
 public:
@@ -212,13 +222,19 @@ public:
   static OB_INLINE uint64_t aligned(const uint64_t size);
   static OB_INLINE uint64_t hold(const uint64_t size);
   void set_max_chunk_cache_size(const int64_t max_cache_size)
-  { free_list_.set_max_chunk_cache_size(max_cache_size); }
+  {
+    slots_[0]->set_max_chunk_cache_size(max_cache_size);
+  }
   void set_max_large_chunk_cache_size(const int64_t max_cache_size)
-  { large_free_list_.set_max_chunk_cache_size(max_cache_size); }
-
+  {
+    for (int i = 1; i < ARRAYSIZEOF(slots_); ++i) {
+      slots_[i]->set_max_chunk_cache_size(max_cache_size);
+    }
+  }
   inline static AChunk *ptr2chunk(const void *ptr);
   bool update_hold(int64_t bytes, bool high_prio);
   virtual int madvise(void *addr, size_t length, int advice);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   inline void set_limit(int64_t limit);
   inline int64_t get_limit() const;
@@ -227,17 +243,7 @@ public:
   inline int64_t get_hold() const;
   inline int64_t get_total_hold() const { return ATOMIC_LOAD(&total_hold_); }
   inline int64_t get_used() const;
-  inline int64_t get_free_chunk_count() const;
-  inline int64_t get_free_chunk_pushes() const;
-  inline int64_t get_free_chunk_pops() const;
   inline int64_t get_freelist_hold() const;
-  inline int64_t get_large_freelist_hold() const;
-  inline int64_t get_maps()  { return maps_; }
-  inline int64_t get_unmaps()  { return unmaps_; }
-  inline int64_t get_large_maps()  { return large_maps_; }
-  inline int64_t get_large_unmaps()  { return large_unmaps_; }
-  inline int64_t get_huge_maps()  { return huge_maps_; }
-  inline int64_t get_huge_unmaps()  { return huge_unmaps_; }
   inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
 
   int64_t sync_wash();
@@ -251,24 +257,22 @@ private:
   // wrap for mmap
   void *low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void low_free(const void *ptr, const uint64_t size);
+  Slot &get_slot(const uint64_t size)
+  {
+    return (size >= INTACT_ACHUNK_SIZE && size <= INTACT_ACHUNK_SIZE * N) ?
+        slots_[(size - 1) / INTACT_ACHUNK_SIZE] :
+        huge_slot_;
+  }
 
 protected:
-  AChunkList free_list_;
-  AChunkList large_free_list_;
-  ChunkBitMap *chunk_bitmap_;
-
   int64_t limit_;
   int64_t urgent_;
   int64_t hold_; // Including the memory occupied by free_list, limited by memory_limit
   int64_t total_hold_; // Including virtual memory, just for statifics.
-
-  int64_t maps_;
-  int64_t unmaps_;
-  int64_t large_maps_;
-  int64_t large_unmaps_;
-  int64_t huge_maps_;
-  int64_t huge_unmaps_;
+  int64_t used_;
   int64_t shadow_hold_;
+  Slot slots_[N];
+  Slot huge_slot_;
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)
@@ -313,34 +317,13 @@ inline int64_t AChunkMgr::get_hold() const
 
 inline int64_t AChunkMgr::get_used() const
 {
-  return hold_ - get_freelist_hold() - get_large_freelist_hold();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_count() const
-{
-  return free_list_.count();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_pushes() const
-{
-  return free_list_.get_pushes();
-}
-
-inline int64_t AChunkMgr::get_free_chunk_pops() const
-{
-  return free_list_.get_pops();
+  return used_;
 }
 
 inline int64_t AChunkMgr::get_freelist_hold() const
 {
-  return free_list_.hold();
+  return hold_ - used_;
 }
-
-inline int64_t AChunkMgr::get_large_freelist_hold() const
-{
-  return large_free_list_.hold();
-}
-
 } // end of namespace lib
 } // end of namespace oceanbase
 

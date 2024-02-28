@@ -127,49 +127,14 @@ int ObTenantMemoryPrinter::print_tenant_usage()
 
     // print global chunk freelist
     const int64_t max_unmanaged_memory_size = 10LL<<30;
-    int64_t memory_limit = CHUNK_MGR.get_limit();
     int64_t resident_size = 0;
     int64_t memory_used = get_virtual_memory_used(&resident_size);
-
-    if (resident_size > CHUNK_MGR.get_limit() + max_unmanaged_memory_size) {
-      LOG_ERROR("RESIDENT_SIZE OVER MEMORY_LIMIT", K(resident_size), K(memory_limit));
+    int64_t limit = CHUNK_MGR.get_limit();
+    if (resident_size > limit + max_unmanaged_memory_size) {
+      LOG_ERROR("RESIDENT_SIZE OVER MEMORY_LIMIT", K(resident_size), K(limit));
     }
-
-    _STORAGE_LOG(INFO,
-        "[CHUNK_MGR] free=%ld pushes=%ld pops=%ld limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld" \
-        " freelist_hold=%'15ld large_freelist_hold=%'15ld" \
-        " maps=%'15ld unmaps=%'15ld" \
-        " large_maps=%'15ld large_unmaps=%'15ld" \
-        " huge_maps=%'15ld huge_unmaps=%'15ld" \
-        " memalign=%d resident_size=%'15ld"
-#ifndef ENABLE_SANITY
-        " virtual_memory_used=%'15ld\n",
-#else
-        " virtual_memory_used=%'15ld actual_virtual_memory_used=%'15ld\n",
-#endif
-        CHUNK_MGR.get_free_chunk_count(),
-        CHUNK_MGR.get_free_chunk_pushes(),
-        CHUNK_MGR.get_free_chunk_pops(),
-        memory_limit,
-        CHUNK_MGR.get_hold(),
-        CHUNK_MGR.get_total_hold(),
-        CHUNK_MGR.get_used(),
-        CHUNK_MGR.get_freelist_hold() + CHUNK_MGR.get_large_freelist_hold(),
-        CHUNK_MGR.get_large_freelist_hold(),
-        CHUNK_MGR.get_maps(),
-        CHUNK_MGR.get_unmaps(),
-        CHUNK_MGR.get_large_maps(),
-        CHUNK_MGR.get_large_unmaps(),
-        CHUNK_MGR.get_huge_maps(),
-        CHUNK_MGR.get_huge_unmaps(),
-        0,
-        resident_size,
-#ifndef ENABLE_SANITY
-        memory_used
-#else
-        memory_used - CHUNK_MGR.get_shadow_hold(), memory_used
-#endif
-        );
+    int64_t pos = CHUNK_MGR.to_string(print_buf, BUF_LEN);
+    _STORAGE_LOG(INFO, "%.*s", static_cast<int>(pos), print_buf);
     ObMallocTimeMonitor::get_instance().print();
     print_mutex_.unlock();
   }
