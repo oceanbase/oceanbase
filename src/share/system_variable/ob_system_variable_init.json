@@ -3453,7 +3453,7 @@
     "base_value": "en_US",
     "data_type": "varchar",
     "info": "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY | NEED_SERIALIZE",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_locale_type_is_valid",
     "publish_version": "422",
     "info_cn": "",
