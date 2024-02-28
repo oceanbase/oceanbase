@@ -152,7 +152,8 @@ int ObTableLoadSchema::get_column_idxs(const ObTableSchema *table_schema,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    ObSEArray<ObColDesc, 64> column_descs;
+    ObArray<ObColDesc> column_descs;
+    column_descs.set_tenant_id(MTL_ID());
     if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
       LOG_WARN("fail to get column ids", KR(ret));
     }
@@ -205,6 +206,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     schema_version_(0),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
   column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
   multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
 }
@@ -243,7 +245,6 @@ int ObTableLoadSchema::init(uint64_t tenant_id, uint64_t table_id)
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadSchema init twice", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
@@ -295,6 +296,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     if (OB_SUCC(ret)) {
       ObArray<ObTabletID> tablet_ids;
       ObArray<uint64_t> part_ids;
+      tablet_ids.set_tenant_id(MTL_ID());
+      part_ids.set_tenant_id(MTL_ID());
       if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(tablet_ids, part_ids))) {
         LOG_WARN("fail to get all tablet ids", KR(ret));
       } else if (OB_FAIL(partition_ids_.create(part_ids.count(), allocator_))) {

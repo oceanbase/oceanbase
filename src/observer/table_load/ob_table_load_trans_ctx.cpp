@@ -27,10 +27,11 @@ ObTableLoadTransCtx::ObTableLoadTransCtx(ObTableLoadTableCtx *ctx,
                                          const ObTableLoadTransId &trans_id)
   : ctx_(ctx),
     trans_id_(trans_id),
-    allocator_("TLD_TCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
+    allocator_("TLD_TCtx"),
     trans_status_(ObTableLoadTransStatusType::NONE),
     error_code_(OB_SUCCESS)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 int ObTableLoadTransCtx::advance_trans_status(ObTableLoadTransStatusType trans_status)

@@ -43,6 +43,7 @@ ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  column_stat_array_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
@@ -891,6 +892,7 @@ ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterat
     dml_row_handler_(nullptr),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::~RowIterator()
@@ -920,7 +922,6 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
     LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(origin_table),
              KP(heap_table_array));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     range_.set_whole_range();
     // init row iterator
     ObDirectLoadInsertTableRowIteratorParam row_iterator_param;

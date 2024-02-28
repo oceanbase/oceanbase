@@ -57,7 +57,7 @@ private:
     int add(CompactorTask *compactor_task);
     int get_next_compactor_task(CompactorTask *&compactor_task);
   private:
-    common::ObSEArray<CompactorTask *, 64> compactor_task_array_;
+    common::ObArray<CompactorTask *> compactor_task_array_;
     int64_t pos_;
   };
   int add_tablet_table(int32_t session_id, CompactorTaskMap &compactor_task_map,
@@ -77,7 +77,7 @@ private:
   ObTableLoadStoreCtx *store_ctx_;
   const ObTableLoadParam *param_;
   common::ObArenaAllocator allocator_;
-  common::ObSEArray<storage::ObIDirectLoadTabletTableCompactor *, 64> all_compactor_array_;
+  common::ObArray<storage::ObIDirectLoadTabletTableCompactor *> all_compactor_array_;
   mutable lib::ObMutex mutex_;
   CompactorTaskIter compactor_task_iter_;
   common::ObDList<CompactorTask> compacting_list_;

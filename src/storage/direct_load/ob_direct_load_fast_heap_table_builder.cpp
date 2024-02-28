@@ -137,6 +137,8 @@ ObDirectLoadFastHeapTableBuilder::ObDirectLoadFastHeapTableBuilder()
     is_closed_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  column_stat_array_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadFastHeapTableBuilder::~ObDirectLoadFastHeapTableBuilder()
@@ -197,7 +199,6 @@ int ObDirectLoadFastHeapTableBuilder::init(const ObDirectLoadFastHeapTableBuildP
   } else {
     bool has_lob_storage = param.lob_column_cnt_ > 0? true :false;
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
     if (param.online_opt_stat_gather_ && OB_FAIL(init_sql_statistics())) {
       LOG_WARN("fail to inner init sql statistics", KR(ret));
     } else if (OB_FAIL(param_.insert_table_ctx_->get_tablet_context(

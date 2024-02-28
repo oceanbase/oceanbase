@@ -39,21 +39,28 @@ class ObTableLoadStoreCtx;
 class ObTableLoadTransStore
 {
 public:
-  ObTableLoadTransStore(ObTableLoadTransCtx *trans_ctx) : trans_ctx_(trans_ctx) {}
+  ObTableLoadTransStore(ObTableLoadTransCtx *trans_ctx) : trans_ctx_(trans_ctx)
+  {
+    session_store_array_.set_tenant_id(MTL_ID());
+  }
   ~ObTableLoadTransStore() { reset(); }
   int init();
   void reset();
   TO_STRING_KV(KP_(trans_ctx), K_(session_store_array));
   struct SessionStore
   {
-    SessionStore() : session_id_(0), allocator_("TLD_SessStore") {}
+    SessionStore() : session_id_(0), allocator_("TLD_SessStore")
+    {
+      allocator_.set_tenant_id(MTL_ID());
+      partition_table_array_.set_block_allocator(ModulePageAllocator(allocator_));
+    }
     int32_t session_id_;
     common::ObArenaAllocator allocator_;
     common::ObArray<storage::ObIDirectLoadPartitionTable *> partition_table_array_;
     TO_STRING_KV(K_(session_id), K_(partition_table_array));
   };
   ObTableLoadTransCtx *const trans_ctx_;
-  common::ObSEArray<SessionStore *, 64> session_store_array_;
+  common::ObArray<SessionStore *> session_store_array_;
 };
 
 class ObTableLoadTransStoreWriter

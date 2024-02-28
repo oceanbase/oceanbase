@@ -85,6 +85,7 @@ public:
   {
     ctx_->inc_ref_count();
     heap_table_allocator_.set_tenant_id(MTL_ID());
+    heap_table_array_.set_tenant_id(MTL_ID());
   }
   virtual ~CompactTaskProcessor()
   {
@@ -142,6 +143,7 @@ private:
     ObArray<ObDirectLoadMultipleHeapTable *> *next_round = &tmp_heap_table_array;
     ObDirectLoadMultipleHeapTableCompactParam heap_table_compact_param;
     ObDirectLoadMultipleHeapTableCompactor heap_table_compactor;
+    tmp_heap_table_array.set_tenant_id(MTL_ID());
     heap_table_compact_param.table_data_desc_ = mem_ctx_->table_data_desc_;
     heap_table_compact_param.file_mgr_ = mem_ctx_->file_mgr_;
     heap_table_compact_param.index_dir_id_ = index_dir_id_;
@@ -294,6 +296,7 @@ ObTableLoadMultipleHeapTableCompactor::ObTableLoadMultipleHeapTableCompactor()
     allocator_("TLD_MemC"),
     finish_task_count_(0)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadMultipleHeapTableCompactor::~ObTableLoadMultipleHeapTableCompactor()
@@ -316,7 +319,6 @@ int ObTableLoadMultipleHeapTableCompactor::inner_init()
   const uint64_t tenant_id = MTL_ID();
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &(store_ctx_->ctx_->param_);
-  allocator_.set_tenant_id(tenant_id);
 
   mem_ctx_.mem_dump_task_count_ = param_->session_count_ / 3; //暂时先写成1/3，后续再优化
   if (mem_ctx_.mem_dump_task_count_ == 0)  {
@@ -360,7 +362,8 @@ int ObTableLoadMultipleHeapTableCompactor::start()
 int ObTableLoadMultipleHeapTableCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+  ObArray<ObTableLoadTransStore *> trans_store_array;
+  trans_store_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   }

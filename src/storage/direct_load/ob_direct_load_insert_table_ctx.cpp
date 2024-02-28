@@ -489,7 +489,11 @@ int ObDirectLoadInsertTabletContext::cancel()
  * ObDirectLoadInsertTableContext
  */
 
-ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext() : is_inited_(false) {}
+ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext()
+  : allocator_("TLD_InsertTbl"), is_inited_(false)
+{
+  allocator_.set_tenant_id(MTL_ID());
+}
 
 ObDirectLoadInsertTableContext::~ObDirectLoadInsertTableContext() { destory(); }
 

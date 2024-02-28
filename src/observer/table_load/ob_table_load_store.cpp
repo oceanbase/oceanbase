@@ -88,6 +88,7 @@ int ObTableLoadStore::abort_active_trans(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTransId> trans_id_array;
+  trans_id_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(ctx->store_ctx_->get_active_trans_ids(trans_id_array))) {
     LOG_WARN("fail to get active trans ids", KR(ret));
   }
@@ -221,9 +222,10 @@ int ObTableLoadStore::pre_merge(
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store pre merge");
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("TLD_Tmp");
     bool trans_exist = false;
     ObTableLoadArray<ObTableLoadTransId> store_committed_trans_id_array;
+    allocator.set_tenant_id(MTL_ID());
     // 1. 冻结状态, 防止后续继续创建trans
     if (OB_FAIL(store_ctx_->set_status_frozen())) {
       LOG_WARN("fail to set store status frozen", KR(ret));
@@ -339,8 +341,10 @@ int ObTableLoadStore::commit_sql_statistics(const ObTableLoadSqlStatistics &sql_
   const uint64_t table_id = param_.table_id_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ObSEArray<ObOptColumnStat *, 64> part_column_stats;
-  ObSEArray<ObOptTableStat *, 64> part_table_stats;
+  ObArray<ObOptColumnStat *> part_column_stats;
+  ObArray<ObOptTableStat *> part_table_stats;
+  part_column_stats.set_tenant_id(MTL_ID());
+  part_table_stats.set_tenant_id(MTL_ID());
   if (sql_statistics.is_empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql statistics is empty", K(ret));

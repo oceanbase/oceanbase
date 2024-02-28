@@ -27,8 +27,11 @@ class ObTableLoadTableCompactor;
 
 struct ObTableLoadTableCompactTabletResult : public common::LinkHashValue<common::ObTabletID>
 {
-  common::ObSEArray<storage::ObIDirectLoadPartitionTable *, 64> table_array_;
+public:
+  ObTableLoadTableCompactTabletResult() { table_array_.set_tenant_id(MTL_ID()); }
   TO_STRING_KV(K_(table_array));
+public:
+  common::ObArray<storage::ObIDirectLoadPartitionTable *> table_array_;
 };
 
 struct ObTableLoadTableCompactResult

@@ -45,6 +45,8 @@ bool ObDirectLoadFastHeapTableCreateParam::is_valid() const
 ObDirectLoadFastHeapTable::ObDirectLoadFastHeapTable()
   : allocator_("TLD_FastHTable"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  column_stat_array_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadFastHeapTable::~ObDirectLoadFastHeapTable()
@@ -94,7 +96,6 @@ int ObDirectLoadFastHeapTable::init(const ObDirectLoadFastHeapTableCreateParam &
   } else {
     meta_.tablet_id_ = param.tablet_id_;
     meta_.row_count_ = param.row_count_;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(copy_col_stat(param))){
       LOG_WARN("fail to inner init", KR(ret), K(param));
     } else {
