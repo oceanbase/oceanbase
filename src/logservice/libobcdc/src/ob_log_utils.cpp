@@ -567,7 +567,15 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_UROWID";
       break;
 
-    case oceanbase::obmysql::MYSQL_TYPE_ORA_XML:
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_FLOAT:
+      sc_type = "MYSQL_TYPE_ORA_BINARY_FLOAT";
+      break;
+
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_DOUBLE:
+      sc_type = "MYSQL_TYPE_ORA_BINARY_DOUBLE";
+      break;
+
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_XML:
       sc_type = "MYSQL_TYPE_ORA_XML";
       break;
 
@@ -611,7 +619,7 @@ bool is_geometry_type(const int ctype)
 
 bool is_xml_type(const int ctype)
 {
-  return (ctype == oceanbase::obmysql::MYSQL_TYPE_ORA_XML);
+  return (ctype == drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
 }
 
 double get_delay_sec(const int64_t tstamp_ns)
