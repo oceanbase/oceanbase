@@ -3694,13 +3694,27 @@ static struct VarsInit{
     ObSysVars[261].alias_ = "OB_SV_SECURITY_VERSION" ;
     }();
 
+    [&] (){
+      ObSysVars[262].default_value_ = "1" ;
+      ObSysVars[262].info_ = "Specifies the correlation model when the optimizer estimates cardinality" ;
+      ObSysVars[262].name_ = "cardinality_estimation_model" ;
+      ObSysVars[262].data_type_ = ObIntType ;
+      ObSysVars[262].enum_names_ = "[u'INDEPENDENT', u'PARTIAL', u'FULL']" ;
+      ObSysVars[262].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[262].id_ = SYS_VAR_CARDINALITY_ESTIMATION_MODEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CARDINALITY_ESTIMATION_MODEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CARDINALITY_ESTIMATION_MODEL] = 262 ;
+      ObSysVars[262].base_value_ = "1" ;
+    ObSysVars[262].alias_ = "OB_SV_CARDINALITY_ESTIMATION_MODEL" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 262;
+static int64_t var_amount = 263;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
