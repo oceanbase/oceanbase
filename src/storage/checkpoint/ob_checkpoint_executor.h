@@ -75,8 +75,8 @@ public:
 
   // the service will flush and advance checkpoint
   // after flush, checkpoint_scn will be equal or greater than recycle_scn
-  int advance_checkpoint_by_flush(
-      share::SCN recycle_scn = share::SCN::invalid_scn());
+  int advance_checkpoint_by_flush(share::SCN recycle_scn = share::SCN::invalid_scn());
+
 
   // for __all_virtual_checkpoint
   int get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &checkpoint_array);
@@ -88,6 +88,9 @@ public:
   int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
   int traversal_flush() const;
+private:
+  int check_need_flush_(const SCN clog_checkpoint_scn, const SCN recycle_scn);
+  int calculate_recycle_scn_(const palf::LSN clog_checkpoint_lsn, const SCN clog_checkpoint_snc, SCN &recycle_scn);
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
@@ -105,7 +108,12 @@ private:
   RWLock rwlock_for_update_clog_checkpoint_;
 
   bool update_checkpoint_enabled_;
+  int64_t reuse_recycle_scn_times_;
+
+  palf::LSN prev_clog_checkpoint_lsn_;
+  share::SCN prev_recycle_scn_;
 };
+
 
 }  // namespace checkpoint
 }  // namespace storage
