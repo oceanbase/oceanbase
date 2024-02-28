@@ -247,6 +247,10 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   int count = 0;
   pn_grp_t* pn_grp = ensure_grp(gid);
   ef(pn_grp == NULL);
+  if (thread_count > MAX_PN_PER_GRP) {
+    err = -EINVAL;
+    rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
+  }
   count = pn_grp->count;
   while(0 == err && count < thread_count) {
     pn_t* pn = pn_create(listen_id, gid, count);
