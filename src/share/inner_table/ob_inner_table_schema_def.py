@@ -13741,6 +13741,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12477: __all_virtual_user_proxy_role_info_history
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
+# 12480: __all_virtual_service
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14208,7 +14209,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15446: __all_user_proxy_info
 # 15447: __all_user_proxy_role_info
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
-
+# 15449: __all_virtual_service
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
