@@ -135,6 +135,7 @@ OceanBase Database is licensed under the Mulan Public License, Version 2. See th
 Join the OceanBase community via:
 
 * [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
+* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
 * [Chinese User Forum](https://ask.oceanbase.com/)
 * DingTalk Group: 33254054 ([QR code](images/dingtalk.svg))
 * WeChat Group (Add the assistant with WeChat ID: OBCE666)
