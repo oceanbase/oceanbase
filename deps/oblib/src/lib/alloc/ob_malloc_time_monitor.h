@@ -22,16 +22,6 @@ namespace lib
 class ObMallocTimeMonitor
 {
 public:
-struct Guard
-{
-  Guard(const int64_t size, const ObMemAttr &attr);
-  ~Guard();
-  const int64_t size_;
-  const ObMemAttr &attr_;
-  ObBasicTimeGuard *last_time_guard_;
-  ObBasicTimeGuard time_guard_;
-};
-public:
   static volatile int64_t WARN_THRESHOLD;
   static constexpr const int64_t TIME_SLOT[] = {10, 100, 1000, 10000, 100000, 1000000, INT64_MAX};
   static const int64_t TIME_SLOT_NUM = ARRAYSIZEOF(TIME_SLOT);
@@ -45,12 +35,6 @@ public:
     static ObMallocTimeMonitor instance;
     return instance;
   }
-  static void click(const char *mod = NULL)
-  {
-    if (NULL != tl_time_guard) {
-      tl_time_guard->click(mod);
-    }
-  }
   void inc(int64_t cost_time)
   {
     for (int i = 0; i < TIME_SLOT_NUM; ++i) {
@@ -61,9 +45,21 @@ public:
       }
     }
   }
+  void record_malloc_time(ObBasicTimeGuard& time_guard, const int64_t size, const ObMemAttr& attr)
+  {
+    const int64_t cost_time = time_guard.get_diff();
+    inc(cost_time);
+    if (OB_UNLIKELY(cost_time > WARN_THRESHOLD)) {
+      const int64_t buf_len = 1024;
+      char buf[buf_len] = {'\0'};
+      int64_t pos = attr.to_string(buf, buf_len);
+      (void)logdata_printf(buf, buf_len, pos, ", size=%ld, ", size);
+      pos += time_guard.to_string(buf + pos, buf_len - pos);
+      int64_t tid = GETTID();
+      fprintf(stderr, "[%ld]OB_MALLOC COST TOO MUCH TIME, cost_time=%ld, %.*s\n", tid, cost_time, static_cast<int>(pos), buf);
+    }
+  }
   void print();
-private:
-  static __thread ObBasicTimeGuard *tl_time_guard;
 private:
   int64_t last_total_cost_times_[TIME_SLOT_NUM];
   int64_t last_counts_[TIME_SLOT_NUM];

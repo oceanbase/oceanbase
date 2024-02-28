@@ -163,14 +163,33 @@ int64_t ObFatalErrExtraInfoGuard::to_string(char* buf, const int64_t buf_len) co
   return pos;
 }
 
+__thread ObBasicTimeGuard *ObBasicTimeGuard::tl_time_guard = NULL;
 int64_t ObBasicTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (click_count_ > 0) {
-    ret = databuff_printf(buf, buf_len, pos, "time dist: %s=%d", click_str_[0], click_[0]);
-    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
-      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
+    const int64_t click_count = click_count_ < MAX_CLICK_COUNT ? click_count_ : MAX_CLICK_COUNT;
+    ClickInfo click_infos[click_count];
+    MEMCPY(click_infos, click_infos_, sizeof(click_infos));
+    std::sort(click_infos, click_infos + click_count, ClickInfo::compare);
+    ret = databuff_printf(buf, buf_len, pos,
+        "owner: %s, click_count: %ld, time dist:[%s=%d",
+        owner_, click_count_, click_infos[0].mod_, click_infos[0].cost_time_);
+    for (int i = 1; OB_SUCC(ret) && i < click_count; ++i) {
+      ret = databuff_printf(buf, buf_len, pos, ", %s=%d",
+          click_infos[i].mod_, click_infos[i].cost_time_);
+    }
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buf, buf_len, pos, "], seq:[%d",
+          click_infos[0].seq_);
+    }
+    for (int i = 1; OB_SUCC(ret) && i < click_count; ++i) {
+      ret = databuff_printf(buf, buf_len, pos, ", %d",
+          click_infos[i].seq_);
+    }
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buf, buf_len, pos, "]");
     }
   }
   if (OB_FAIL(ret)) pos = 0;
