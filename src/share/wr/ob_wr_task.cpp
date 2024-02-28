@@ -372,7 +372,7 @@ int WorkloadRepositoryTask::fetch_snapshot_id_sequence_nextval(int64_t &snap_id)
       LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(result->get_obj((int64_t)0, snap_id_obj))) {
       LOG_WARN("failed to get snap_id obj", KR(ret));
-    } else if (snap_id_obj.get_number().cast_to_int64(snap_id)) {
+    } else if (OB_FAIL(snap_id_obj.get_number().cast_to_int64(snap_id))) {
       LOG_WARN("failed to get snap_id value", KR(ret));
     }
   }
