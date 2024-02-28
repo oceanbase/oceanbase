@@ -1154,7 +1154,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   auto fd_type = get_fd_type(mod_name);
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
-  ObBasicTimeGuard tg;
+  BASIC_TIME_GUARD(tg, "ObLog");
   if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
           allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
@@ -1207,7 +1207,7 @@ inline void ObLogger::do_log_message(const bool is_async,
         check_log_end(*log_item, pos);
       }
     }
-    tg.click("FORMAT_END");
+    BASIC_TIME_GUARD_CLICK("FORMAT_END");
 
 
     if (OB_SUCC(ret)) {
@@ -1227,7 +1227,7 @@ _Pragma("GCC diagnostic pop")
             // update buf_size
           new_log_item->set_buf_size(log_item->get_data_len());
           log_item = new_log_item;
-          tg.click("ALLOC_END");
+          BASIC_TIME_GUARD_CLICK("ALLOC_END");
         }
 
         if (OB_SUCC(ret)) {
@@ -1240,12 +1240,12 @@ _Pragma("GCC diagnostic pop")
               (void)ATOMIC_AAF(current_written_count_ + tl_type, 1);
             }
             last_logging_seq_ = curr_logging_seq_;
-            tg.click("APPEND_END");
+            BASIC_TIME_GUARD_CLICK("APPEND_END");
           }
         }
       } else {
         flush_logs_to_file(&log_item, 1);
-        tg.click("FLUSH_END");
+        BASIC_TIME_GUARD_CLICK("FLUSH_END");
       }
 
       // stat
@@ -1255,7 +1255,7 @@ _Pragma("GCC diagnostic pop")
           free_log_item(log_item);
         }
         log_item = NULL;
-        tg.click("FREE_END");
+        BASIC_TIME_GUARD_CLICK("FREE_END");
       }
       check_reset_force_allows();
     } /* not allow */
