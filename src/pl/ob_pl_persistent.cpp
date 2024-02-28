@@ -207,7 +207,17 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
     // set action
     if (ObPLCompileUnitAST::UnitType::ROUTINE_TYPE == unit_ast.get_type() &&
         0 != binary.length()) {
-      OZ (static_cast<ObPLFunction &>(unit).gen_action_from_precompiled(static_cast<ObPLCompileUnitAST &>(unit_ast).get_name(), binary.length(), binary.ptr()));
+      int64_t length = binary.length();
+      char *copy_buf = static_cast<char*>(allocator_.alloc_aligned(length, 16));
+
+      if (OB_ISNULL(copy_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for deep copy compiled binary", K(ret));
+      } else {
+        MEMCPY(copy_buf, binary.ptr(), length);
+      }
+
+      OZ (static_cast<ObPLFunction &>(unit).gen_action_from_precompiled(static_cast<ObPLCompileUnitAST &>(unit_ast).get_name(), length, copy_buf));
     }
     if (OB_SUCC(ret) && nums > 0) {
       ObPLRoutineTable &routine_table = unit_ast.get_routine_table();
