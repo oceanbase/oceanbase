@@ -485,10 +485,19 @@ int ObPxTaskProcess::do_process()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
+      int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS == ERRSIM_INTERRUPT_QC_FAILED) {
-        (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
+        if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_))) {
+          LOG_WARN("interrupt_qc failed", K(tmp_ret));
+        }
       }
-      (void) ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_, ret);
+      // Regardless of whether interrupt_qc succeeds or not,
+      // always execute interrupt_tasks to ensure other threads in the current sqc terminate more quickly,
+      // thereby improving overall efficiency.
+      if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+                                              OB_GOT_SIGNAL_ABORTING))) {
+        LOG_WARN("interrupt_tasks failed", K(tmp_ret));
+      }
     }
   }
 
