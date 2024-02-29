@@ -13,23 +13,18 @@
 #ifndef OB_OBSERVER_OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_H
 #define OB_OBSERVER_OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_H
 
-#include "observer/omt/ob_multi_tenant_operator.h"
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/virtual_table/ob_iterate_private_virtual_table.h"
 #include "storage/ls/ob_ls_meta_package.h"
 
 namespace oceanbase {
 namespace observer {
 
-class ObAllVirtualTenantSnapshotLSReplicaHistory : public common::ObVirtualTableScannerIterator,
-                                            public omt::ObMultiTenantOperator
+class ObAllVirtualTenantSnapshotLSReplicaHistory : public ObIteratePrivateVirtualTable
 {
 public:
-  ObAllVirtualTenantSnapshotLSReplicaHistory();
-  virtual ~ObAllVirtualTenantSnapshotLSReplicaHistory();
-
-  virtual int inner_get_next_row(common::ObNewRow *&row);
-  virtual void reset();
-  virtual int inner_open();
+  ObAllVirtualTenantSnapshotLSReplicaHistory() {}
+  virtual ~ObAllVirtualTenantSnapshotLSReplicaHistory() {}
+  virtual int try_convert_row(const ObNewRow *input_row, ObNewRow *&row) override;
 
 private:
   enum COLUMN_ID_LIST
@@ -48,20 +43,11 @@ private:
     END_INTERVAL_SCN,
     LS_META_PACKAGE
   };
-  virtual bool is_need_process(uint64_t tenant_id) override;
-  virtual int process_curr_tenant(common::ObNewRow *&row) override;
-  virtual void release_last_tenant() override;
   int decode_hex_string_to_package_(const ObString& hex_str,
-                                    ObIAllocator& allocator,
                                     ObLSMetaPackage& ls_meta_package);
-  int get_tenant_snapshot_ls_replica_entries_();
-  int construct_sql_(common::ObSqlString &sql);
 
 private:
   static const int64_t LS_META_BUFFER_SIZE = 16 * 1024;
-  char *ls_meta_buf_;
-  common::ObMySQLProxy::MySQLResult *sql_res_;
-  common::sqlclient::ObMySQLResult *result_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantSnapshotLSReplicaHistory);

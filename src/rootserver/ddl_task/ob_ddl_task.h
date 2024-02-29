@@ -552,6 +552,8 @@ public:
   virtual int collect_longops_stat(share::ObLongopsValue &value);
 
   void calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt);
+  void disable_schedule() { next_schedule_ts_ = INT64_MAX; }
+  void enable_schedule() { next_schedule_ts_ = 0; }
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
   int64_t get_execution_id() const;

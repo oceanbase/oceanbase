@@ -79,7 +79,7 @@ int ObCgroupCtrl::init()
     snprintf(procs_path, PATH_BUFSIZE, "%s/cgroup.procs", other_cgroup_);
     snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
     if(OB_FAIL(write_string_to_file_(procs_path, pid_value))) {
-      LOG_WARN("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
+      LOG_ERROR("add tid to cgroup failed", K(ret), K(procs_path), K(pid_value));
     } else {
       valid_ = true;
     }
@@ -135,15 +135,17 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
     LOG_WARN("open group failed", K(ret), K(group_task_path), K(errno), KERRMSG);
   } else {
     char tid_buf[VALUE_BUFSIZE];
+    int tmp_ret = OB_SUCCESS;
     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-      if (OB_FAIL(write_string_to_file_(parent_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(ret), K(parent_task_path));
-        break;
+      if (OB_TMP_FAIL(write_string_to_file_(parent_task_path, tid_buf))) {
+        LOG_WARN("remove tenant task failed", K(tmp_ret), K(parent_task_path));
       }
     }
     fclose(group_task_file);
   }
-  if (OB_SUCC(ret) && OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
+
+  if (OB_SUCCESS != ret) {
+  } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
   } else {
     LOG_INFO("remove group directory success", K(curr_dir));
@@ -877,7 +879,7 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
     LOG_ERROR("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
-    LOG_ERROR("write file error",
+    LOG_WARN("write file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing

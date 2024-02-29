@@ -518,16 +518,18 @@ int ObStorageFileUtil::check_is_appendable(
 {
   int ret = OB_SUCCESS;
   ObStorageObjectMetaBase obj_meta;
+  char logic_apendable_obj_name[OB_MAX_URI_LENGTH] = { 0 };
   char tmp_uri_buf[OB_MAX_URI_LENGTH] = "";
-  int pos = snprintf(tmp_uri_buf, OB_MAX_URI_LENGTH, "%s/%s/%s%s", uri.ptr(), cur_entry.d_name,
-                     OB_S3_APPENDABLE_FRAGMENT_PREFIX, OB_S3_APPENDABLE_FORMAT_META);
-  if (pos < 0 || pos >= OB_MAX_URI_LENGTH) {
-    ret = OB_BUF_NOT_ENOUGH;
-    OB_LOG(WARN, "fail to build format meta file path", K(ret), K(pos), K(uri), KCSTRING(cur_entry.d_name));
+  if (OB_FAIL(databuff_printf(logic_apendable_obj_name, sizeof(logic_apendable_obj_name), "%s/%s",
+                              uri.ptr(), cur_entry.d_name))) {
+    OB_LOG(WARN, "fail to construct logic_apendable_obj_name", K(ret), K(uri), K(cur_entry.d_name));
+  } else if (OB_FAIL(construct_fragment_full_name(logic_apendable_obj_name,
+                                                  OB_S3_APPENDABLE_FORMAT_META,
+                                                  tmp_uri_buf, sizeof(tmp_uri_buf)))) {
+    OB_LOG(WARN, "fail to construct fragment full name", K(ret), K(uri), K(cur_entry.d_name));
   } else {
-    common::ObString format_meta_uri(pos, tmp_uri_buf);
-    if (OB_FAIL(head_object_meta(format_meta_uri, obj_meta))) {
-      OB_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
+    if (OB_FAIL(head_object_meta(tmp_uri_buf, obj_meta))) {
+      OB_LOG(WARN, "fail to head object meta", K(ret), K(tmp_uri_buf));
     } else {
       is_appendable_file = obj_meta.is_exist_;
     }

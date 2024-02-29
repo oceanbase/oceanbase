@@ -169,6 +169,7 @@ int ObUnitTableOperator::check_server_empty(const common::ObAddr &server, bool &
     LOG_WARN("fail to get units", KR(ret), K(server));
   } else if (units.count() > 0) {
     is_empty = false;
+    LOG_DEBUG("server exists in the server list or migrate_from_server list", K(server), K(units));
   }
   return ret;
 }

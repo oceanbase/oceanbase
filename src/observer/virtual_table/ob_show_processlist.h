@@ -78,7 +78,9 @@ private:
     VPORT,
     IN_BYTES,
     OUT_BYTES,
-    USER_CLIENT_PORT
+    USER_CLIENT_PORT,
+    PROXY_USER_NAME,
+    SERVICE_NAME,
   };
   class FillScanner
   {

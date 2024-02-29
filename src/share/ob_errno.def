@@ -423,7 +423,7 @@ DEFINE_ERROR(OB_KEYSTORE_EXIST, -4350, -1, "HY000", "the keystore already exists
 DEFINE_ERROR(OB_KEYSTORE_NOT_EXIST, -4351, -1, "HY000", "the keystore is not exist");
 DEFINE_ERROR(OB_KEYSTORE_WRONG_PASSWORD, -4352, -1, "HY000", "the password is wrong for keystore");
 DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_EXIST, -4353, -1, "HY000", "tablespace already exists", "tablespace '%.*s' already exists", 1543, "tablespace already exists", "tablespace '%.*s' already exists");
-DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_NOT_EXIST, -4354, -1, "HY000", "tablespace does not exist", "tablespace '%.*s' does not exist", 959, "tablespace does not exist", "tablespace '%.*s' does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_TABLESPACE_NOT_EXIST, -4354, ER_TABLESPACE_NOT_EXIST, "HY000", "Tablespace does not exist", "Tablespace '%.*s' does not exist", 959, "Tablespace does not exist", "Tablespace '%.*s' does not exist");
 DEFINE_ERROR(OB_TABLESPACE_DELETE_NOT_EMPTY, -4355, -1, "HY000", "cannot delete a tablespace which is not empty");
 DEFINE_ORACLE_ERROR(OB_FLOAT_PRECISION_OUT_RANGE, -4356, -1, "HY000", "floating point precision is out of range (1 to 126)", 1724, "floating point precision is out of range (1 to 126)");
 DEFINE_ORACLE_ERROR(OB_NUMERIC_PRECISION_OUT_RANGE, -4357, -1, "HY000", "numeric precision specifier is out of range (1 to 38)", 1727, "numeric precision specifier is out of range (1 to 38)");
@@ -2260,6 +2260,11 @@ DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -9110, -1, "HY000", "Tenant clone job 
 DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -9111, -1, "HY000", "Tenant snapshot task failed", "%.*s");
 DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -9112, -1, "HY000", "Tenant snapshot lock conflict", "%s");
 
+DEFINE_ERROR_DEP(OB_CHECKSUM_TYPE_NOT_SUPPORTED, -9113, -1, "HY000", "checksum type is not supported");
+DEFINE_ERROR_DEP(OB_INVALID_STORAGE_DEST, -9114, -1, "HY000", "storage destination is not valid");
+DEFINE_ERROR(OB_STORAGE_DEST_NOT_CONNECT, -9115, -1, "HY000", "can not connect to storage destination");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/O operation permission of the object storage");
+
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2590,6 +2595,7 @@ DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey
 DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
+DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse errror, the input filter string is: '%.*s'");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
@@ -2627,6 +2633,7 @@ DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
 DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
 DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND, "HY000", "Can't find FULLTEXT index matching the column list");
+DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

@@ -707,7 +707,7 @@ public:
   void resume();
   void run1() override;
   int yield();
-  void set_task(ObITask *task) { task_ = task; }
+  void set_task(ObITask *task);
   void set_function_type(const int64_t function_type) { function_type_ = function_type; }
   int set_dag_resource(const uint64_t group_id);
   bool need_wake_up() const;
@@ -720,10 +720,10 @@ public:
   static void set_mem_ctx(compaction::ObCompactionMemoryContext *mem_ctx) { if (nullptr == mem_ctx_) { mem_ctx_ = mem_ctx; } }
   uint64_t get_group_id() { return group_id_; }
   bool get_force_cancel_flag();
-  bool hold_by_compaction_dag();
+  bool hold_by_compaction_dag() const { return hold_by_compaction_dag_; }
 private:
   void notify(DagWorkerStatus status);
-  void reset_compaction_thread_locals() { is_reserve_mode_ = false; mem_ctx_ = nullptr; }
+  void reset_compaction_thread_locals() { is_reserve_mode_ = false; mem_ctx_ = nullptr; hold_by_compaction_dag_ = false; }
 private:
   RLOCAL_STATIC(ObTenantDagWorker *, self_);
   RLOCAL_STATIC(bool, is_reserve_mode_);
@@ -738,6 +738,7 @@ private:
   int64_t function_type_;
   uint64_t group_id_;
   int tg_id_;
+  bool hold_by_compaction_dag_;
   bool is_inited_;
 };
 
@@ -1427,7 +1428,7 @@ inline bool is_reserve_mode()
         worker->set_mem_ctx(&mem_ctx);                                   \
       } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
-          "only compaction dag can set memctx", KPC(worker));            \
+          "only compaction dag can set memctx", K(worker));              \
       }                                                                  \
     }                                                                    \
   })
@@ -1441,7 +1442,7 @@ inline bool is_reserve_mode()
         mem_ctx = worker->get_mem_ctx();                                 \
       } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
-          "memctx only provided for compaction dag", KPC(worker));       \
+          "memctx only provided for compaction dag", K(worker));         \
       }                                                                  \
     }                                                                    \
     mem_ctx;                                                             \

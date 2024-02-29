@@ -1551,6 +1551,14 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_cursor_expression() ||
                     (get_plan()->get_optimizer_context().has_var_assign() && enable_var_assign_use_das && !is_virtual_table(ref_id)) ||
                     is_batch_update_table;
+    if (!force_das_tsc
+        && table_item->for_update_
+        && table_item->skip_locked_
+        && NULL != get_plan()->get_optimizer_context().get_session_info()
+        && NULL != get_plan()->get_optimizer_context().get_session_info()->get_pl_context()) {
+      // select for update skip locked stmt in PL use das force
+      force_das_tsc = true;
+    }
     if (EXTERNAL_TABLE == table_item->table_type_) {
       create_das_path = false;
       create_basic_path = true;
@@ -1963,8 +1971,7 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
     }
     if (OB_FAIL(ret) || filter_columns.empty()) {
     } else if (max_pos < 0 || max_pos >= column_group_infos.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can not find column group info for filter", K(ret));
+      //table filter with index column group
     } else if (OB_FAIL(column_group_infos.at(max_pos).filters_.push_back(filter))) {
       LOG_WARN("failed to push back filter", K(ret));
     } else if (use_filter_sel) {
@@ -7020,7 +7027,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
                                    false,
                                    right_sort_keys_,
                                    server_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost,
+    if (OB_FAIL(ObOptEstCost::cost_nestloop(est_join_info, op_cost, other_cond_sel_,
                                             plan->get_predicate_selectivities(),
                                             opt_ctx))) {
       LOG_WARN("failed to estimate nest loop join cost", K(est_join_info), K(ret));

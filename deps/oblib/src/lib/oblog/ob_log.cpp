@@ -337,7 +337,7 @@ int64_t ObLogger::FileName::to_string(char * buff, const int64_t len) const
 
 void __attribute__ ((noinline)) on_probe_abort()
 {
-  abort();
+  ob_abort();
 }
 
 ProbeAction probe_str2action(const char *str)

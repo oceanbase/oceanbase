@@ -1794,6 +1794,7 @@ int ObInnerSQLConnection::nonblock_get_leader(
     int64_t tmp_abs_timeout_us = 0;
     const int64_t retry_interval_us = 200 * 1000; // 200ms
     do {
+      ret = OB_SUCCESS;
       tmp_abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_sql_timeout;
       if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;

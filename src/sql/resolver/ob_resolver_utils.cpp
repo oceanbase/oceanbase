@@ -1082,7 +1082,9 @@ int ObResolverUtils::match_vacancy_parameters(
         ret = OB_ERR_SP_WRONG_ARG_NUM;
         LOG_WARN("argument count not match",
                K(ret),
-               K(routine_info.get_param_count()), K(i));
+               K(routine_info.get_param_count()),
+               K(i),
+               K(match_info));
       } else {
         OX (match_info.match_info_.at(i) =
           ObRoutineMatchInfo::MatchInfo(routine_param->is_default_cast(),
@@ -6710,45 +6712,52 @@ int ObResolverUtils::check_foreign_key_columns_type(const bool is_mysql_compat_m
     LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
     LOG_WARN("the count of foreign key columns should be between [1,64]", K(ret), K(child_columns.count()), K(parent_columns.count()));
   } else {
+    uint64_t child_table_id = child_table_schema.get_table_id();
+    uint64_t parent_table_id = parent_table_schema.get_table_id();
     for (int64_t i = 0; OB_SUCC(ret) && i < parent_columns.count(); ++i) {
-      const ObColumnSchemaV2 *child_col = NULL;
-      const ObColumnSchemaV2 *parent_col = parent_table_schema.get_column_schema(parent_columns.at(i));
-      if (NULL == column) { // table-level fk
-        child_col = child_table_schema.get_column_schema(child_columns.at(i));
-      } else { // column level fk
-        child_col = column;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(child_col)) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("child column is not exist", K(ret));
-      } else if (OB_ISNULL(parent_col)) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("parent column is not exist", K(ret));
-      } else if ((child_col->get_data_type() != parent_col->get_data_type())
-                    && !is_synonymous_type(child_col->get_data_type(),
-                                            parent_col->get_data_type())) {
-        // 这里类型必须相同的
+      if (child_table_id == parent_table_id && 0 == parent_columns.at(i).compare(child_columns.at(i))) {
         ret = OB_ERR_CANNOT_ADD_FOREIGN;
-        LOG_WARN("Column data types between child table and parent table are different", K(ret),
-            K(child_col->get_data_type()),
-            K(parent_col->get_data_type()));
-      } else if (ob_is_string_type(child_col->get_data_type())) {
-        // 列类型一致，对于数据宽度要求子表大于父表, 目前只考虑 string 类型,
-        if (child_col->get_collation_type() != parent_col->get_collation_type()) {
+        LOG_WARN("Child table is same as parent table and child column is same as parant column", K(ret), K(child_table_id), K(parent_table_id), K(parent_columns.at(i)), K(child_columns.at(i)));
+      } else {
+        const ObColumnSchemaV2 *child_col = NULL;
+        const ObColumnSchemaV2 *parent_col = parent_table_schema.get_column_schema(parent_columns.at(i));
+        if (NULL == column) { // table-level fk
+          child_col = child_table_schema.get_column_schema(child_columns.at(i));
+        } else { // column level fk
+          child_col = column;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(child_col)) {
+          ret = OB_ERR_COLUMN_NOT_FOUND;
+          LOG_WARN("child column is not exist", K(ret));
+        } else if (OB_ISNULL(parent_col)) {
+          ret = OB_ERR_COLUMN_NOT_FOUND;
+          LOG_WARN("parent column is not exist", K(ret));
+        } else if ((child_col->get_data_type() != parent_col->get_data_type())
+                      && !is_synonymous_type(child_col->get_data_type(),
+                                              parent_col->get_data_type())) {
+          // 这里类型必须相同的
           ret = OB_ERR_CANNOT_ADD_FOREIGN;
-          LOG_WARN("The collation types are different", K(ret),
-              K(child_col->get_collation_type()),
-              K(parent_col->get_collation_type()));
-        } else if (is_mysql_compat_mode &&
-                   (child_col->get_data_length() < parent_col->get_data_length())) {
-          ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
-          LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
-              child_col->get_column_name_str().length(),
-              child_col->get_column_name_str().ptr(),
-              parent_col->get_column_name_str().length(),
-              parent_col->get_column_name_str().ptr());
-        } else { } // 对于其他bit/int/number /datetime/time/year 不做data_length要求
+          LOG_WARN("Column data types between child table and parent table are different", K(ret),
+              K(child_col->get_data_type()),
+              K(parent_col->get_data_type()));
+        } else if (ob_is_string_type(child_col->get_data_type())) {
+          // 列类型一致，对于数据宽度要求子表大于父表, 目前只考虑 string 类型,
+          if (child_col->get_collation_type() != parent_col->get_collation_type()) {
+            ret = OB_ERR_CANNOT_ADD_FOREIGN;
+            LOG_WARN("The collation types are different", K(ret),
+                K(child_col->get_collation_type()),
+                K(parent_col->get_collation_type()));
+          } else if (is_mysql_compat_mode &&
+                    (child_col->get_data_length() < parent_col->get_data_length())) {
+            ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
+            LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
+                child_col->get_column_name_str().length(),
+                child_col->get_column_name_str().ptr(),
+                parent_col->get_column_name_str().length(),
+                parent_col->get_column_name_str().ptr());
+          } else { } // 对于其他bit/int/number /datetime/time/year 不做data_length要求
+        }
       }
     }
   }
@@ -6920,7 +6929,22 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       if (routine_info->is_reads_sql_data()) {
         ctx.udf_has_select_stmt_ = true;
       }
-      if (routine_info->is_modifies_sql_data()) {
+      /*
+      create table t1(c0 int);
+      create function f1() returns int deterministic
+      begin
+      insert into t1 value(2);
+      insert into t1 value('dd');
+      return 1;
+      end
+
+      create function f2() returns int deterministic
+      begin
+      set @a = f1();
+      return 2;
+      end
+      f2 can not know whether f1 has dml, so if external_state is true, we assume f2 has dml */
+      if (routine_info->is_modifies_sql_data() || routine_info->is_external_state()) {
         ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));

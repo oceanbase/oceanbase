@@ -628,13 +628,17 @@ void ObTransService::invalid_registered_snapshot_(ObTxDesc &tx)
   }
 }
 
-void ObTransService::registered_snapshot_clear_part_(ObTxDesc &tx)
+void ObTransService::process_registered_snapshot_on_commit_(ObTxDesc &tx)
 {
+  // cleanup snapshot's participant info, so that they will skip
+  // verify participant txn ctx, which cause false negative,
+  // because txn ctx has quit when txn committed.
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.savepoints_, i) {
     ObTxSavePoint &p = tx.savepoints_[i];
     if (p.is_snapshot() && p.snapshot_->valid_) {
       p.snapshot_->parts_.reset();
+      p.snapshot_->committed_ = true;
     }
   }
 }

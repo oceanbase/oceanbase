@@ -2792,6 +2792,13 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
                   K_(saved_tenant_info), K(effective_tenant_id));
       ATOMIC_STORE(&saved_tenant_info_, effective_tenant_id);
     }
+    // 缓存data version 用于性能优化
+    uint64_t data_version = 0;
+    if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, data_version))) {
+      LOG_WARN_RET(tmp_ret, "get data version fail", "ret", tmp_ret, K(effective_tenant_id));
+    } else {
+      ATOMIC_STORE(&data_version_, data_version);
+    }
       // 1.是否支持外部一致性
     is_external_consistent_ = transaction::ObTsMgr::get_instance().is_external_consistent(effective_tenant_id);
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(effective_tenant_id));

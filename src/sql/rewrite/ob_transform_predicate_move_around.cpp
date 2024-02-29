@@ -357,6 +357,8 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->is_hierarchical_query()) {
+    OPT_TRACE("can not pullup predicates for hierarchical query");
   } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -1372,7 +1374,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !stmt->is_hierarchical_query()) {
     ObArray<ObRawExpr *> dummy_expr;
     ObIArray<ObQueryRefRawExpr *> &subquery_exprs = stmt->get_subquery_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
@@ -2519,6 +2521,22 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
       LOG_WARN("failed to to build and expr", K(ret));
     } else if (OB_FAIL(or_exprs.push_back(new_and_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    //split expr may result T_OP_ROW shared
+    ObSEArray<ObRawExpr*, 4> new_or_exprs;
+    ObRawExprCopier copier(*expr_factory);
+    ReplaceExprByType replacer(T_OP_ROW);
+    if (OB_FAIL(copier.copy_on_replace(or_exprs,
+                                       new_or_exprs,
+                                       &replacer))) {
+      LOG_WARN("failed to copy on replace start with exprs", K(ret));
+    } else if (OB_UNLIKELY(or_exprs.count() != new_or_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(or_exprs.count()), K(new_or_exprs.count()));
+    } else if (OB_FAIL(or_exprs.assign(new_or_exprs))) {
+      LOG_WARN("failed to assign assign results", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

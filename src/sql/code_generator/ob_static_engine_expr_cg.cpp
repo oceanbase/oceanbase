@@ -618,11 +618,11 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
       && !raw_exprs.at(i)->has_flag(IS_TABLE_ASSIGN) && !is_dyn_qm) {
       if (raw_exprs.at(i)->has_flag(IS_DYNAMIC_PARAM)) {
         // if questionmark is dynamic evaluated, e.g. decint->nmb, use dynamic_param_frame as its memory
-        if (dynamic_param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(dynamic_param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       } else {
-        if (param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       }

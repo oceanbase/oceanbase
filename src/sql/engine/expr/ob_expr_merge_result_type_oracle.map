@@ -1,4 +1,4 @@
-static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
+static constexpr ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
@@ -2784,7 +2784,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
     }
 };
 
-static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
+static constexpr ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
@@ -5569,3 +5569,6 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObNumberType,     /*ObDecimalIntType=>ObDecimalIntType  */
     },
 };
+
+static_assert(is_array_fully_initialized(MERGE_RESULT_TYPE_ORACLE, ObMaxType), "MERGE_RESULT_TYPE_ORACLE is partially initlized");
+static_assert(is_array_fully_initialized(MERGE_RESULT_TYPE, ObMaxType), "MERGE_RESULT_TYPE is partially initlized");

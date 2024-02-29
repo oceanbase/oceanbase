@@ -152,7 +152,8 @@ void PrintThrottleUtil::pirnt_throttle_info(const int err_code,
 
 void PrintThrottleUtil::print_throttle_statistic(const int err_code,
                                                  const char *throttle_unit_name,
-                                                 const int64_t sleep_time)
+                                                 const int64_t sleep_time,
+                                                 const int64_t throttle_memory_size)
 {
   int ret = err_code;
   const int64_t THROTTLE_LOG_INTERVAL = 1L * 1000L * 1000L; /*one seconds*/
@@ -162,7 +163,9 @@ void PrintThrottleUtil::print_throttle_statistic(const int err_code,
               "Throttle Unit Name",
               throttle_unit_name,
               "Throttle Sleep Time(us)",
-              sleep_time);
+              sleep_time,
+              "Throttle Memory Size",
+              throttle_memory_size);
   }
 }
 

@@ -281,9 +281,8 @@ private:
       AdaptiveMergeReason &merge_reason);
 
 public:
-  static constexpr int64_t SCHEDULE_META_MERGE_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t INC_ROW_COUNT_THRESHOLD = 100L * 1000L; // 10w
-  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 30L * 1000L; // 3w
+  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 200L * 1000L; // 20w
   static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 1w
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;

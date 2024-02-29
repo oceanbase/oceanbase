@@ -1537,15 +1537,14 @@ int ObPartTransCtx::check_scheduler_status()
     bool is_alive = true;
     bool need_check_scheduler = need_to_ask_scheduler_status_();
     if (!need_check_scheduler) {
-      TRANS_LOG(DEBUG, "don't need ask scheduler status", K(ret), K(*this));
-    } else if (OB_FAIL(check_rs_scheduler_is_alive_(is_alive))) {
-      TRANS_LOG(WARN, "check rs scheduler is alive error", KR(ret), K(is_alive), "context",
-                *this);
+      TRANS_LOG(DEBUG, "don't need ask scheduler status", K(ret), KPC(this));
+    } else if (exec_info_.scheduler_ != addr_ && OB_FAIL(check_rs_scheduler_is_alive_(is_alive))) {
+      TRANS_LOG(WARN, "check rs scheduler is alive error", KR(ret), K(is_alive), KPC(this));
       // scheduler已宕机
     } else if (!is_alive) {
-      TRANS_LOG(WARN, "scheduler server is not alive, tx ctx will do gc");
+      TRANS_LOG(WARN, "scheduler server is not alive, tx ctx will do gc", KPC(this));
       if (OB_FAIL(gc_ctx_())) {
-        TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), "context", *this);
+        TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), KPC(this));
       }
     } else {
       // do nothing

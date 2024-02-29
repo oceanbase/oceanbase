@@ -171,7 +171,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
 
   ObTxParam &tx_param = plan_ctx->get_trans_param();
   OZ (build_tx_param_(session, tx_param, &read_only));
-  OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid()));
+  OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid(), session->get_data_version()));
   OZ (txs->start_tx(*session->get_tx_desc(), tx_param), tx_param);
   OX (tx_id = session->get_tx_desc()->get_tx_id());
 
@@ -1220,7 +1220,10 @@ int ObSqlTransControl::get_trans_result(ObExecContext &exec_ctx)
   return get_trans_result(exec_ctx, exec_ctx.get_my_session()->get_trans_result());
 }
 
-int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc, bool reset_trans_variable)
+int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
+                                              bool reuse_tx_desc,
+                                              bool reset_trans_variable,
+                                              const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("reset session tx state", KPC(session->get_tx_desc()), K(lbt()));
@@ -1233,7 +1236,7 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session, bool 
       transaction::ObTransService *txs = NULL;
       OZ (get_tx_service(session, txs), *session, tx_desc);
       if (reuse_tx_desc) {
-        if (OB_FAIL(txs->reuse_tx(tx_desc))) {
+        if (OB_FAIL(txs->reuse_tx(tx_desc, data_version))) {
           LOG_ERROR("reuse txn descriptor fail, will release it", K(ret), KPC(session), K(tx_desc));
           OZ (txs->release_tx(tx_desc), tx_id);
           session->get_tx_desc() = NULL;
@@ -1262,7 +1265,8 @@ int ObSqlTransControl::reset_session_tx_state(ObSQLSessionInfo *session, bool re
       LOG_WARN_RET(temp_ret, "trx level temporary table clean failed", KR(temp_ret));
     }
   }
-  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc, reset_trans_variable);
+  int ret = reset_session_tx_state(static_cast<ObBasicSessionInfo*>(session), reuse_tx_desc,
+      reset_trans_variable, session->get_data_version());
   return COVER_SUCC(temp_ret);
 }
 
@@ -1291,7 +1295,7 @@ int ObSqlTransControl::acquire_tx_if_need_(transaction::ObTransService *txs, ObS
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session.get_tx_desc())) {
-    OZ (txs->acquire_tx(session.get_tx_desc(), session.get_sessid()), session);
+    OZ (txs->acquire_tx(session.get_tx_desc(), session.get_sessid(), session.get_data_version()), session);
   }
   return ret;
 }
@@ -1313,7 +1317,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (get_lock_service(session->get_effective_tenant_id(), lock_service));
   if (OB_SUCC(ret) && OB_ISNULL(session->get_tx_desc())) {
-    OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid()), *session);
+    OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid(), session->get_data_version()), *session);
   }
   ObTxParam tx_param;
   OZ (build_tx_param_(session, tx_param));
@@ -1442,7 +1446,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     bool has_tx_desc = OB_NOT_NULL(tx_desc);                            \
     transaction::ObTransID prev_tx_id;                                 \
     if (has_tx_desc) { prev_tx_id =  session.get_tx_id(); }             \
-    OZ (txs->txn_free_route__update_##name##_state(session.get_sessid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos), session); \
+    OZ (txs->txn_free_route__update_##name##_state(session.get_sessid(), tx_desc, session.get_txn_free_route_ctx(), buf, len, pos, session.get_data_version()), session); \
     if (OB_SUCC(ret) && has_tx_desc && (OB_ISNULL(tx_desc) || tx_desc->get_tx_id() !=  prev_tx_id)) { \
       session.reset_tx_variable();                                      \
     }                                                                   \

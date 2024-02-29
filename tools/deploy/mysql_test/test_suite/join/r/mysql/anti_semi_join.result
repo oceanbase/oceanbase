@@ -123,7 +123,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
-      conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c2 > xy_t2.c2], [xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -343,7 +343,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
-      conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c2 > xy_t2.c2], [xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -438,7 +438,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2], [xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
-      conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c2 > xy_t2.c2], [xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -549,7 +549,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_t1.c1], [xy_t1.c2], [xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
-      conds([xy_t1.c1 = xy_t2.c1], [xy_t1.c2 > xy_t2.c2]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c2 > xy_t2.c2], [xy_t1.c1 = xy_t2.c1]), nl_params_(nil), use_batch=false
   1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -731,7 +731,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([xy_x_t.x1], [xy_x_t.x2]), filter(nil), rowset=256
-      conds([xy_y_t.y2 < xy_x_t.x2], [xy_x_t.x1 = xy_y_t.y1]), nl_params_(nil), use_batch=false
+      conds([xy_x_t.x1 = xy_y_t.y1], [xy_y_t.y2 < xy_x_t.x2]), nl_params_(nil), use_batch=false
   1 - output([xy_x_t.x2], [xy_x_t.x1]), filter(nil), rowset=256
       access([xy_x_t.x2], [xy_x_t.x1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -4042,7 +4042,7 @@ Outputs & filters:
   0 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       sort_keys([xy_t1.c2, ASC], [xy_t1.c3, ASC])
   1 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
-      conds([xy_t1.c2 = xy_t2.c2], [xy_t1.c3 < xy_t2.c3]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c3 < xy_t2.c3], [xy_t1.c2 = xy_t2.c2]), nl_params_(nil), use_batch=false
   2 - output([xy_t1.c2], [xy_t1.c3]), filter(nil), rowset=16
       access([xy_t1.c2], [xy_t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -4192,7 +4192,7 @@ Outputs & filters:
   0 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       sort_keys([xy_t2.c2, ASC], [xy_t2.c3, ASC])
   1 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
-      conds([xy_t1.c2 = xy_t2.c2], [xy_t1.c3 < xy_t2.c3]), nl_params_(nil), use_batch=false
+      conds([xy_t1.c3 < xy_t2.c3], [xy_t1.c2 = xy_t2.c2]), nl_params_(nil), use_batch=false
   2 - output([xy_t2.c2], [xy_t2.c3]), filter(nil), rowset=16
       access([xy_t2.c2], [xy_t2.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 

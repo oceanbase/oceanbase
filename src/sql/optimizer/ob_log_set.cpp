@@ -868,3 +868,25 @@ int ObLogSet::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   }
   return ret;
 }
+
+int ObLogSet::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0.0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = get_child(i);
+    if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+      if (0 == i) {
+        card = child->get_card();
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child->get_card(), set_type);
+      }
+    } else if (0 == i) {
+      card = child_ndv_.at(i);
+    } else {
+      card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+    }
+  }
+  return ret;
+}

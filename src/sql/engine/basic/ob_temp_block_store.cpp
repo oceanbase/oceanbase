@@ -293,7 +293,7 @@ int ObTempBlockStore::append_block_payload(const char *buf, const int64_t size, 
   // dump data if mem used > 16MB
   const int64_t dump_threshold = 1 << 24;
   if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
-    if (OB_FAIL(dump(false /* reuse */, true /* all_dump */))) {
+    if (OB_FAIL(dump(true /* all_dump */))) {
       LOG_WARN("dump failed", K(ret));
     }
   }

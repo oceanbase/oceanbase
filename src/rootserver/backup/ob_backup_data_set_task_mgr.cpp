@@ -533,8 +533,6 @@ int ObBackupSetTaskMgr::backup_user_meta_()
         LOG_WARN("[DATA_BACKUP]fail to update task type to backup data", K(ret));
       } else if (OB_FAIL(advance_status_(trans_, next_status))) {
         LOG_WARN("[DATA_BACKUP]failed to advance status to BACKUP_DATA_MINOR", K(ret), K(next_status));
-      } else {
-        ROOTSERVICE_EVENT_ADD("backup_data", "after_backup_consistent_scn");
       }
 
       if (OB_SUCC(ret)) {

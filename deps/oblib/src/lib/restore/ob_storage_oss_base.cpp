@@ -52,13 +52,6 @@ void fin_oss_env()
   ObOssEnvIniter::get_instance().global_destroy();
 }
 
-bool is_oss_supported_checksum(ObStorageChecksumType checksum_type)
-{
-  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
-}
-
-
 ObStorageOssStaticVar::ObStorageOssStaticVar()
   : compressor_(NULL),
     compress_type_(INVALID_COMPRESSOR)
@@ -350,7 +343,7 @@ ObStorageOssBase::ObStorageOssBase()
    oss_option_(NULL),
    is_inited_(false),
    oss_account_(),
-   checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
+   checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
   memset(oss_endpoint_, 0, MAX_OSS_ENDPOINT_LENGTH);
 }
@@ -370,7 +363,7 @@ void ObStorageOssBase::reset()
     }
     oss_option_ = NULL;
     is_inited_ = false;
-    checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+    checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   }
 }
 

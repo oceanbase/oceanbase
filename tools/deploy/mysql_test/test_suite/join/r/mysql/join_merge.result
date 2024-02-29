@@ -1504,7 +1504,7 @@ Outputs & filters:
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=16
       sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
   1 - output([t2.a], [t2.b], [t7.a], [t7.b], [t2.c], [t7.c], [t7.d]), filter(nil), rowset=16
-      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), use_batch=false
+      conds([t2.c = t7.d], [cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))]), nl_params_(nil), use_batch=false
   2 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), rowset=16
       access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -1669,7 +1669,7 @@ Outputs & filters:
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=16
       sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
   1 - output([t2.a], [t2.b], [t7.a], [t7.b], [t2.c], [t7.c], [t7.d]), filter(nil), rowset=16
-      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil), use_batch=false
+      conds([t2.c = t7.d], [cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))]), nl_params_(nil), use_batch=false
   2 - output([t2.b], [t2.c], [t2.a]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 

@@ -55,6 +55,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
 {
   (void)throttle_if_needed_();
   reset();
+  share::memstore_throttled_alloc() = 0;
 }
 
 void ObStorageTableGuard::throttle_if_needed_()
@@ -71,8 +72,12 @@ void ObStorageTableGuard::throttle_if_needed_()
       // only do throttle on active memtable
       if (OB_NOT_NULL(memtable_) && memtable_->is_active_memtable()) {
         reset();
-        (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(
-            for_replay_, store_ctx_.timeout_, throttle_tool, share_ti_guard, module_ti_guard);
+        (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(for_replay_,
+                                                                       store_ctx_.timeout_,
+                                                                       share::memstore_throttled_alloc(),
+                                                                       throttle_tool,
+                                                                       share_ti_guard,
+                                                                       module_ti_guard);
       }
 
       // if throttle is skipped due to some reasons, advance clock by call skip_throttle() and clean throttle status
@@ -190,7 +195,6 @@ void ObStorageTableGuard::reset()
     memtable_->dec_write_ref();
     memtable_ = NULL;
   }
-  share::memstore_throttled_alloc() = 0;
 }
 
 void ObStorageTableGuard::double_check_inc_write_ref(

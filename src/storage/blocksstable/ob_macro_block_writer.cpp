@@ -1080,6 +1080,9 @@ int ObMacroBlockWriter::build_micro_block()
   }
 #endif
 
+  STORAGE_LOG(DEBUG, "build micro block desc", "tablet_id", data_store_desc_->get_tablet_id(),
+    K(micro_block_desc), "lbt", lbt(), K(ret), K(tmp_ret));
+
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
     if (data_store_desc_->need_build_hash_index_for_micro_block_) {
@@ -1094,8 +1097,6 @@ int ObMacroBlockWriter::build_micro_block()
       data_aggregator_->reuse();
     }
   }
-  STORAGE_LOG(DEBUG, "build micro block desc", "tablet_id", data_store_desc_->get_tablet_id(),
-    K(micro_block_desc), "lbt", lbt(), K(ret), K(tmp_ret));
   return ret;
 }
 

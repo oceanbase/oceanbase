@@ -87,6 +87,7 @@ public:
   template <typename ALLOCATOR>
   static int do_throttle(const bool for_replay,
                          const int64_t abs_expire_time,
+                         const int64_t throttle_memory_size,
                          TxShareThrottleTool &throttle_tool,
                          ObThrottleInfoGuard &share_ti_guard,
                          ObThrottleInfoGuard &module_ti_guard)
@@ -142,7 +143,7 @@ public:
                                              module_ti_guard,
                                              has_printed_lbt);
     }
-    PrintThrottleUtil::print_throttle_statistic(ret, ALLOCATOR::throttle_unit_name(), sleep_time);
+    PrintThrottleUtil::print_throttle_statistic(ret, ALLOCATOR::throttle_unit_name(), sleep_time, throttle_memory_size);
 
     if (for_replay && sleep_time > 0) {
       // avoid print replay_timeout

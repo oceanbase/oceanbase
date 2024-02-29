@@ -796,7 +796,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     subschema_ctx_,
                     use_rich_format_,
                     disable_auto_memory_mgr_,
-                    udf_has_dml_stmt_);
+                    udf_has_dml_stmt_,
+                    stat_.format_sql_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

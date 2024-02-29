@@ -62,6 +62,10 @@ public:
   virtual int close(const ObIOFd &fd) override;
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;
+  // When attempting to delete a non-existent file, NFS will return an OB_BACKUP_FILE_NOT_EXIST error.
+  // OSS/COS/S3/OBS will not report any error, while GCS will return a 'file not found' error.
+  // Since GCS is accessed using the S3 SDK, to maintain consistency across different object storage services
+  // that are accessed via the S3 SDK, no error code is returned when attempting to delete a non-existent object.
   virtual int unlink(const char *pathname) override;
   virtual int exist(const char *pathname, bool &is_exist) override;
   //sync io interfaces

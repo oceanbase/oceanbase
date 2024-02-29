@@ -438,15 +438,15 @@ private:
   OB_INLINE int64_t get_data_mem_used() { return sql_mem_processor_.get_data_size(); }
   OB_INLINE bool need_dump(int64_t mem_used)
   {
-    return mem_used > sql_mem_processor_.get_mem_bound() ;
+    return mem_used > sql_mem_processor_.get_mem_bound() * data_ratio_;
   }
   OB_INLINE bool need_dump()
   {
-    return get_cur_mem_used() > sql_mem_processor_.get_mem_bound();
+    return get_cur_mem_used() > sql_mem_processor_.get_mem_bound() * data_ratio_;
   }
   int64_t get_need_dump_size(int64_t mem_used)
   {
-    return mem_used - sql_mem_processor_.get_mem_bound() + 2 * 1024 * 1024;
+    return mem_used - sql_mem_processor_.get_mem_bound() * data_ratio_ + 2 * 1024 * 1024;
   }
   OB_INLINE bool all_in_memory(int64_t size) const
   { return size < remain_data_memory_size_; }
@@ -599,6 +599,7 @@ private:
   bool skip_left_null_;
   bool skip_right_null_;
 
+  double data_ratio_;
   OutputInfo output_info_;
   ObTempRowStore::IterationAge iter_age_;
 };

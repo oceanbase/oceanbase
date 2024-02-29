@@ -248,7 +248,8 @@ struct ObTxSnapshot
 // snapshot used to consistency read
 struct ObTxReadSnapshot
 {
-  bool valid_;
+  bool valid_;              // used by cursor check snapshot state
+  bool committed_;          // used by cursor check snapshot state
   ObTxSnapshot core_;
   enum class SRC {
     INVL = 0,
@@ -261,6 +262,7 @@ struct ObTxReadSnapshot
   share::ObLSID snapshot_lsid_;    // for source_ = LOCAL                                  //
   common::ObRole snapshot_ls_role_; // for source_ = LS, only can be used for dup_table with a
                                     // max_commit_ts from the follower
+  ObAddr snapshot_acquire_addr_;    // snapshot version acquired from which server
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 
@@ -275,7 +277,10 @@ struct ObTxReadSnapshot
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
+  bool is_valid() const { return valid_; }
+  bool is_committed() const { return committed_; }
   int format_source_for_display(char *buf, const int64_t buf_len) const;
+  const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
@@ -287,7 +292,9 @@ struct ObTxReadSnapshot
                K_(uncertain_bound),
                K_(snapshot_lsid),
                K_(snapshot_ls_role),
-               K_(parts));
+               K_(snapshot_acquire_addr),
+               K_(parts),
+               K_(committed));
   OB_UNIS_VERSION(1);
 };
 

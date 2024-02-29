@@ -30680,9 +30680,11 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
     if (OB_SUCC(ret) && role_ids.count() > 0) {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       ObDDLSQLTransaction trans(schema_service_);
-      ObUserInfo user = *user_info;
+      ObUserInfo user;
       int64_t refreshed_schema_version = 0;
-      if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      if (OB_FAIL(user.assign(*user_info))) {
+        LOG_WARN("assign user failed", K(ret), KPC(user_info));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -31126,13 +31128,14 @@ int ObDDLService::alter_user_profile(const ObAlterUserProfileArg &arg)
   }
 
   if (OB_SUCC(ret) && OB_INVALID_ID == arg.default_role_flag_) {
-    ObUserInfo user_info = *user;
-    user_info.set_profile_id(profile_id);
-
+    ObUserInfo user_info;
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    if (OB_FAIL(user_info.assign(*user))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FALSE_IT(user_info.set_profile_id(profile_id))) {
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));

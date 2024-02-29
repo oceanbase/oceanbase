@@ -73,6 +73,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       proxy_sessid_(VALID_PROXY_SESSID),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
+      proxy_user_id_(OB_INVALID_ID),
       tx_desc_(NULL),
       tx_result_(),
       reserved_read_snapshot_version_(),
@@ -459,6 +460,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   }
   client_identifier_.reset();
   last_refresh_schema_version_ = OB_INVALID_VERSION;
+  proxy_user_id_ = OB_INVALID_ID;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -4453,6 +4455,12 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               use_rich_vector_format_);
   }();
   OB_UNIS_ENCODE(ObString(sql_id_));
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+  }
   return ret;
 }
 
@@ -4700,6 +4708,12 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   }();
   ObString sql_id;
   OB_UNIS_DECODE(sql_id);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+  }
   return ret;
 }
 
@@ -4974,6 +4988,10 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               is_client_sessid_support_,
               use_rich_vector_format_);
   OB_UNIS_ADD_LEN(ObString(sql_id_));
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              proxy_user_id_,
+              thread_data_.proxy_user_name_,
+              thread_data_.proxy_host_name_);
   return len;
 }
 

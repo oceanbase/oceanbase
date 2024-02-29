@@ -86,6 +86,11 @@ const static double VECTOR_HASH_NUMBER_COST = 0.01494804432806 * DEFAULT_CPU_SPE
 const static double VECTOR_HASH_CHAR_COST = 0.18684685876579 * DEFAULT_CPU_SPEED;
 const static double VECTOR_INVALID_HASH_COST = -1;
 
+//mock complex expr cost
+const static double VECTOR_CMP_UDF_COST = 100.0 * DEFAULT_CPU_SPEED;
+const static double VECTOR_CMP_LOB_COST = 9.707028746051587301587301588 * DEFAULT_CPU_SPEED; //NORMAL_CMP_CHAR_COST * 100
+const static double VECTOR_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539 * DEFAULT_CPU_SPEED; //NORMAL_CMP_INT_COST * 100
+
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
   VECTOR_CMP_INT_COST,            // int8, int16, int24, int32, int64.
@@ -208,6 +213,9 @@ const static ObOptCostModelParameter cost_params_vector(
    VECTOR_DELETE_CHECK_PER_ROW_COST,
    VECTOR_SPATIAL_PER_ROW_COST,
    VECTOR_RANGE_COST,
+   VECTOR_CMP_UDF_COST,
+   VECTOR_CMP_LOB_COST,
+   VECTOR_CMP_ERR_HANDLE_EXPR_COST,
    comparison_params_vector,
    hash_params_vector,
    project_params_vector

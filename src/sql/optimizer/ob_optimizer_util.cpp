@@ -4639,6 +4639,7 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   new_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> new_expr_params;
   ObRawExprFactory &expr_factory = opt_ctx.get_expr_factory();
   const ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
   if (OB_ISNULL(session_info) || OB_ISNULL(stmt)) {
@@ -4653,35 +4654,46 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
     for (int64_t i = 0; OB_SUCC(ret) && i < sub_exprs.count(); ++i) {
       ObIArray<ObRawExpr *> &cur_exprs = sub_exprs.at(i);
       const int64_t N = cur_exprs.count();
-        // 在原or expr的子expr上只有一个expr符合条件，直接加入到or expr中即可
       if (1 == N) {
-        if (OB_FAIL(new_expr->add_param_expr(cur_exprs.at(0)))) {
-          LOG_WARN("failed to add param expr", K(ret));
+        if (OB_FAIL(new_expr_params.push_back(cur_exprs.at(0)))) {
+          LOG_WARN("failed to push back param expr", K(ret));
         }
       } else {
+        ObOpRawExpr *new_param_expr = NULL;
         // 在原or expr的子expr上有多个expr符合条件，需要生成一个新的and expr
-        ObOpRawExpr *new_and_expr = NULL;
-        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, new_and_expr))) {
+        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, new_param_expr))) {
           LOG_WARN("failed to create and expr", K(ret));
-        } else if (OB_ISNULL(new_and_expr)) {
+        } else if (OB_ISNULL(new_param_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create expr get null", K(ret));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < N; ++j) {
-          if (OB_FAIL(new_and_expr->add_param_expr(cur_exprs.at(j)))) {
-            LOG_WARN("failed to add param expr", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          /* do nothing */
-        } else if (OB_FAIL(new_and_expr->formalize(session_info))) {
+        } else if (OB_FAIL(new_param_expr->get_param_exprs().assign(cur_exprs))) {
+          LOG_WARN("failed to assign param exprs", K(ret));
+        } else if (OB_FAIL(new_param_expr->formalize(session_info))) {
           LOG_WARN("failed to formalize and expr", K(ret));
-        } else if (OB_FAIL(new_and_expr->pull_relation_id())) {
+        } else if (OB_FAIL(new_param_expr->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
-        } else if (OB_FAIL(new_expr->add_param_expr(new_and_expr))) {
-          LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(new_expr_params.push_back(new_param_expr))) {
+          LOG_WARN("failed to push back param expr", K(ret));
         }
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    //split expr may result T_OP_ROW shared
+    ObSEArray<ObRawExpr*, 4> new_or_exprs;
+    ObRawExprCopier copier(expr_factory);
+    ReplaceExprByType replacer(T_OP_ROW);
+    if (OB_FAIL(copier.copy_on_replace(new_expr_params,
+                                       new_or_exprs,
+                                       &replacer))) {
+      LOG_WARN("failed to copy on replace start with exprs", K(ret));
+    } else if (OB_UNLIKELY(new_expr_params.count() != new_or_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(new_expr_params.count()), K(new_or_exprs.count()));
+    } else if (OB_FAIL(new_expr_params.assign(new_or_exprs))) {
+      LOG_WARN("failed to assign assign results", K(ret));
+    } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
+      LOG_WARN("failed to assign param exprs", K(ret));
     }
   }
   if (OB_FAIL(ret)) {

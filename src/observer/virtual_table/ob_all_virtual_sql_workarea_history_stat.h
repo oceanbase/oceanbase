@@ -76,6 +76,7 @@ private:
     LAST_TEMPSEG_SIZE,
     TENAND_ID,         // OB_APP_MIN_COLUMN_ID + 18
     POLICY,
+    DB_ID,
   };
   int fill_row(
     uint64_t tenant_id,

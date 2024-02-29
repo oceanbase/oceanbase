@@ -191,6 +191,7 @@ private:
   // As we read a packet from client, the NIO store the data into the NIO buffer
   // and allocate an ObPacket by an allocator(arena_allocator_). The ObPacket(cached_packet_)
   // is cached in the memory of allocator.
+  // NOTE: arena_allocator only ccache the size is smaller than it's page_size(8K,16K, etc)
   ObArenaAllocator arena_allocator_;
   obmysql::ObMySQLRawPacket *cached_packet_;
 

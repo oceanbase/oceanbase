@@ -196,10 +196,6 @@ int ObParallelMergeInfo::generate_from_range_array(
   LOG_DEBUG("parallel range info", K(ret), KPC(this), K(paral_range), K(paral_range.count()), K(paral_range.at(0)));
   if (OB_FAIL(ret)) {
     destroy();
-  } else if (get_serialize_size() > MAX_PARALLEL_RANGE_SERIALIZE_LEN) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_DEBUG("parallel range info is too large to sync", K(ret), KPC(this));
-    destroy();
   }
   return ret;
 }
@@ -484,8 +480,6 @@ int ObMediumCompactionInfo::gene_parallel_info(
   if (OB_FAIL(parallel_merge_info_.generate_from_range_array(allocator, paral_range))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
       LOG_WARN("failed to generate parallel merge info", K(ret), K(paral_range));
-    } else {
-      ret = OB_SUCCESS;
     }
   } else if (parallel_merge_info_.get_size() > 0) {
     contain_parallel_range_ = true;

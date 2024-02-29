@@ -471,7 +471,7 @@ int MockObServer::handle(ObReq &req, ObResp &resp)
 #define TX_STATE_UPDATE__(T, tn)                                        \
       case SyncTxState::T:                                              \
         if (OB_SUCC(ret) &&                                             \
-            OB_FAIL(tx_node_.txn_free_route__update_##tn##_state(session_.get_sessid(), tx_desc, free_route_ctx, buf, len, pos))) { \
+            OB_FAIL(tx_node_.txn_free_route__update_##tn##_state(session_.get_sessid(), tx_desc, free_route_ctx, buf, len, pos, session_.get_data_version()))) { \
           TRANS_LOG(ERROR, "update txn state fail", K(ret), "type", #T); \
         } else if (pos != len) {                                        \
           TRANS_LOG(WARN, "[maybe] pos != len, consume buffer incomplete", K(ret), K(pos), K(len), "state_type", #T); \

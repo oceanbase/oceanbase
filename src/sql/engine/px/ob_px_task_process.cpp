@@ -333,6 +333,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_INTERRUPT_QC_FAILED)
 int ObPxTaskProcess::do_process()
 {
   LOG_TRACE("[CMD] run task", "task", arg_.task_);
@@ -484,7 +485,10 @@ int ObPxTaskProcess::do_process()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
-      (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
+      if (OB_SUCCESS == ERRSIM_INTERRUPT_QC_FAILED) {
+        (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
+      }
+      (void) ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_, ret);
     }
   }
 

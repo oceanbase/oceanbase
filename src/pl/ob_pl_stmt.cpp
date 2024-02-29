@@ -984,6 +984,9 @@ int ObPLBlockNS::add_symbol(const ObString &name,
   } else if (is_dup && lib::is_mysql_mode()) {
     ret = OB_ERR_SP_DUP_VAR;
     LOG_USER_ERROR(OB_ERR_SP_DUP_VAR, name.length(), name.ptr());
+  } else if (is_dup && is_formal_param) {
+    ret = OB_ERR_DUPLICATE_FILED;
+    LOG_WARN("duplicate fields in argument list are not permitted", K(ret), K(name), K(is_dup), K(is_formal_param));
   } else {
     OZ (symbols_.push_back(get_symbol_table()->get_count()));
     CK (OB_NOT_NULL(exprs_));
@@ -2932,16 +2935,13 @@ bool ObPLBlockNS::search_routine_local(const ObString &db_name,
     search_local = true;
   } else if (!db_name.empty() && !package_name.empty()) {
     if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && ObCharset::case_compat_mode_equal(package_name_, package_name)) {
+        && ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   } else if (db_name.empty() && !package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(package_name_, package_name)) {
-      search_local = true;
-    }
-  } else if (!db_name.empty() && package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && package_name_.empty()) {
+    if (ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   }
@@ -4161,25 +4161,33 @@ const ObIArray<ObPLCursor *>* ObPLStmt::get_cursors() const
   return NULL == get_cursor_table() ? NULL : &(get_cursor_table()->get_cursors());
 }
 
-const ObString *ObPLStmt::get_label() const
+const ObString* ObPLStmt::get_label(int64_t idx) const
 {
-  return NULL == get_label_table() ? NULL : get_label_table()->get_label(label_);
+  return NULL == get_label_table() ? NULL : get_label_table()->get_label(idx);
 }
 
 int ObPLStmt::set_label_idx(int64_t idx)
 {
   int ret = OB_SUCCESS;
+
   if (OB_ISNULL(get_label_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null label table", K(ret));
+  } else if (label_cnt_ >= FUNC_MAX_LABELS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected label_cnt count, out of range", K(ret), K(label_cnt_));
   } else {
     ObPLLabelTable *pl_label = const_cast<ObPLLabelTable *>(get_label_table());
     if (0 <= idx && idx < pl_label->get_count()) {
       const ObPLStmt *ls = pl_label->get_next_stmt(idx);
-      if (OB_ISNULL(ls)) {
+      if (OB_NOT_NULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set label idx", K(ret));
+      } else {
         pl_label->set_next_stmt(idx, this);
+        labels_[label_cnt_] = idx;
+        label_cnt_++;
       }
-      label_ = idx;
     }
   }
 

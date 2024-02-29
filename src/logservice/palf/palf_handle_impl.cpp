@@ -4570,20 +4570,24 @@ int PalfHandleImpl::get_election_leader_without_lock_(ObAddr &addr) const
   return ret;
 }
 
-int PalfHandleImpl::revoke_leader(const int64_t proposal_id)
+int PalfHandleImpl::advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                                  const int64_t downgrade_priority_time_us,
+                                                                  const char *reason)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id));
+    PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id), K(reason));
   } else if (false == state_mgr_.can_revoke(proposal_id)) {
     ret = OB_NOT_MASTER;
-    PALF_LOG(WARN, "revoke_leader failed, not master", K(ret), K_(palf_id), K(proposal_id));
-  } else if (OB_FAIL(election_.revoke(RoleChangeReason::AskToRevoke))) {
-    PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id));
+    PALF_LOG(WARN, "advance election epoch failed, not master", K(ret), K_(palf_id), K(proposal_id), K(reason));
+  } else if (OB_FAIL(election_.change_leader_to(GCTX.self_addr()))) {
+    PALF_LOG(WARN, "fail to change leader to self", K(ret), K_(palf_id), K(proposal_id), K(reason));
+  } else if (OB_FAIL(election_.temporarily_downgrade_protocol_priority(downgrade_priority_time_us, reason))) {
+    PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id), K(reason));
   } else {
-    PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id));
+    PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id), K(reason));
   }
   return ret;
 }

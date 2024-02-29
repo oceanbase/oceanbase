@@ -1555,6 +1555,7 @@ constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
 constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
 constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
+constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -1833,6 +1834,7 @@ constexpr int OB_KV_ROWKEY_COUNT_NOT_MATCH = -10510;
 constexpr int OB_KV_COLUMN_TYPE_NOT_MATCH = -10511;
 constexpr int OB_KV_COLLATION_MISMATCH = -10512;
 constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
+constexpr int OB_KV_FILTER_PARSE_ERROR = -10514;
 constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
@@ -1849,6 +1851,7 @@ constexpr int OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED = -11011;
 constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
 constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_FT_COLUMN_NOT_INDEXED = -11014;
+constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2175,7 +2178,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KEYSTORE_NOT_EXIST__USER_ERROR_MSG "the keystore is not exist"
 #define OB_KEYSTORE_WRONG_PASSWORD__USER_ERROR_MSG "the password is wrong for keystore"
 #define OB_TABLESPACE_EXIST__USER_ERROR_MSG "tablespace '%.*s' already exists"
-#define OB_TABLESPACE_NOT_EXIST__USER_ERROR_MSG "tablespace '%.*s' does not exist"
+#define OB_TABLESPACE_NOT_EXIST__USER_ERROR_MSG "Tablespace '%.*s' does not exist"
 #define OB_TABLESPACE_DELETE_NOT_EMPTY__USER_ERROR_MSG "cannot delete a tablespace which is not empty"
 #define OB_FLOAT_PRECISION_OUT_RANGE__USER_ERROR_MSG "floating point precision is out of range (1 to 126)"
 #define OB_NUMERIC_PRECISION_OUT_RANGE__USER_ERROR_MSG "numeric precision specifier is out of range (1 to 38)"
@@ -3777,6 +3780,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLONE_TENANT__USER_ERROR_MSG "%.*s"
 #define OB_ERR_TENANT_SNAPSHOT__USER_ERROR_MSG "%.*s"
 #define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__USER_ERROR_MSG "%s"
+#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__USER_ERROR_MSG "checksum type is not supported"
+#define OB_INVALID_STORAGE_DEST__USER_ERROR_MSG "storage destination is not valid"
+#define OB_STORAGE_DEST_NOT_CONNECT__USER_ERROR_MSG "can not connect to storage destination"
+#define OB_OBJECT_STORAGE_PERMISSION_DENIED__USER_ERROR_MSG "no I/O operation permission of the object storage"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4057,6 +4064,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLUMN_TYPE_NOT_MATCH__USER_ERROR_MSG "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
 #define OB_KV_COLLATION_MISMATCH__USER_ERROR_MSG "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
+#define OB_KV_FILTER_PARSE_ERROR__USER_ERROR_MSG "Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -4073,6 +4081,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CANNOT_USER_IF_EXISTS__USER_ERROR_MSG "User %.*s does not exist"
 #define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__USER_ERROR_MSG "Can't find FULLTEXT index matching the column list"
+#define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4399,7 +4408,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KEYSTORE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4351, the keystore is not exist"
 #define OB_KEYSTORE_WRONG_PASSWORD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4352, the password is wrong for keystore"
 #define OB_TABLESPACE_EXIST__ORA_USER_ERROR_MSG "ORA-01543: tablespace '%.*s' already exists"
-#define OB_TABLESPACE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00959: tablespace '%.*s' does not exist"
+#define OB_TABLESPACE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00959: Tablespace '%.*s' does not exist"
 #define OB_TABLESPACE_DELETE_NOT_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4355, cannot delete a tablespace which is not empty"
 #define OB_FLOAT_PRECISION_OUT_RANGE__ORA_USER_ERROR_MSG "ORA-01724: floating point precision is out of range (1 to 126)"
 #define OB_NUMERIC_PRECISION_OUT_RANGE__ORA_USER_ERROR_MSG "ORA-01727: numeric precision specifier is out of range (1 to 38)"
@@ -6001,6 +6010,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLONE_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9110, %.*s"
 #define OB_ERR_TENANT_SNAPSHOT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9111, %.*s"
 #define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9112, %s"
+#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9113, checksum type is not supported"
+#define OB_INVALID_STORAGE_DEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9114, storage destination is not valid"
+#define OB_STORAGE_DEST_NOT_CONNECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9115, can not connect to storage destination"
+#define OB_OBJECT_STORAGE_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9116, no I/O operation permission of the object storage"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6281,6 +6294,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_COLUMN_TYPE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10511, Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
 #define OB_KV_COLLATION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10512, Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
 #define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
+#define OB_KV_FILTER_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -6297,6 +6311,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CANNOT_USER_IF_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11012, User %.*s does not exist"
 #define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11014, Can't find FULLTEXT index matching the column list"
+#define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6307,7 +6322,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2220];
+extern int g_all_ob_errnos[2226];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -99,7 +99,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                                                          my_session->get_xa_end_timeout_seconds(),
                                                          my_session->get_sessid(),
                                                          tx_param,
-                                                         tx_desc))) {
+                                                         tx_desc,
+                                                         my_session->get_data_version()))) {
       LOG_WARN("xa start failed", K(ret), K(tx_param));
       my_session->reset_tx_variable();
       my_session->set_early_lock_release(false);

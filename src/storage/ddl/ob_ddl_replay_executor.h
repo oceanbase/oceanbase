@@ -45,6 +45,12 @@ protected:
       const share::SCN &scn,
       bool &need_replay);
 
+  static int get_lob_meta_tablet_id(
+      const ObTabletHandle &tablet_handle,
+      const common::ObTabletID &possible_lob_meta_tablet_id,
+      common::ObTabletID &lob_meta_tablet_id);
+
+
   virtual bool is_replay_update_mds_table_() const override
   {
     return false;

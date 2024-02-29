@@ -62,8 +62,6 @@ int init_oss_env();
 // Thread safe guaranteed by user.
 void fin_oss_env();
 
-bool is_oss_supported_checksum(ObStorageChecksumType checksum_type);
-
 class ObStorageOssStaticVar
 {
 public:

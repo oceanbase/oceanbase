@@ -90,7 +90,8 @@ int ObPLRouter::check_error_in_resolve(int code)
     case OB_ERR_DUP_SIGNAL_SET:
     case OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT:
     case OB_ERR_CANNOT_UPDATE_VIRTUAL_COL_IN_TRG:
-    case OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK: {
+    case OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK:
+    case OB_ERR_VIEW_SELECT_CONTAIN_INTO: {
       if (lib::is_mysql_mode()) {
         ret = code;
         break;

@@ -159,8 +159,8 @@ public:
   int assign(const ObTabletDirectLoadMgrHandle &handle);
   ObTabletDirectLoadMgr *get_obj();
   const ObTabletDirectLoadMgr *get_obj() const;
-  ObTabletFullDirectLoadMgr *get_full_obj();
-  ObTabletIncDirectLoadMgr *get_inc_obj();
+  ObTabletFullDirectLoadMgr *get_full_obj() const;
+  ObTabletIncDirectLoadMgr *get_inc_obj() const;
   void reset();
   bool is_valid() const;
   TO_STRING_KV(KP_(tablet_mgr));

@@ -1114,7 +1114,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     if (OB_SUCC(ret) && old_status != real_new_status) {
       add_event_info(real_new_status, dst_tenant_id_);
       task_status_ = real_new_status;
-      next_schedule_ts_ = 0; // when status changed, schedule immediately
+      delay_schedule_time_ = 0; // when status changed, schedule immediately
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
@@ -1458,12 +1458,10 @@ void ObDDLTask::calc_next_schedule_ts(const int ret_code, const int64_t total_ta
     const int64_t min_dt = max_dt / 2;
     next_schedule_ts_ = ObTimeUtility::current_time() + ObRandom::rand(min_dt, max_dt);
   } else {
-    delay_schedule_time_ = 0;
-    if (next_schedule_ts_ > 0) {
-      // if next_schedule_ts_ is set, means that the task is not to schedule immediately.
-      // make sure it will be delayed at least 10ms to awoid spin
-      next_schedule_ts_ = max(next_schedule_ts_, ObTimeUtility::current_time() + DEFAULT_TASK_IDLE_TIME_US);
-    }
+    // if delay_schedule_time_ is set 0, means that the task need schedule immediately.
+    // that usually happens when task status changed, after that, recover the default delay to awoid spin
+    next_schedule_ts_ = max(next_schedule_ts_, ObTimeUtility::current_time() + delay_schedule_time_);
+    delay_schedule_time_ = DEFAULT_TASK_IDLE_TIME_US;
   }
   return;
 }
@@ -1571,7 +1569,7 @@ int ObDDLTask::gather_scanned_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, scan_res) {
       if (OB_FAIL(scan_sql.assign_fmt(
           "SELECT OUTPUT_ROWS FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SUBPLAN_SCAN' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SUBPLAN_SCAN' OR PLAN_OPERATION='PHY_VEC_SUBPLAN_SCAN') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
@@ -1621,7 +1619,7 @@ int ObDDLTask::gather_sorted_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, sort_res) {
       if (OB_FAIL(sort_sql.assign_fmt(
           "SELECT OTHERSTAT_1_VALUE AS ROW_SORTED FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SORT' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SORT' OR PLAN_OPERATION = 'PHY_VEC_SORT') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {

@@ -60,7 +60,7 @@ int ObInnerTableSchema::gv_ob_sql_audit_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                          svr_ip SVR_IP,                          svr_port SVR_PORT,                          request_id REQUEST_ID,                          execution_id SQL_EXEC_ID,                          trace_id TRACE_ID,                          session_id SID,                          client_ip CLIENT_IP,                          client_port CLIENT_PORT,                          tenant_id TENANT_ID,                          effective_tenant_id EFFECTIVE_TENANT_ID,                          tenant_name TENANT_NAME,                          user_id USER_ID,                          user_name USER_NAME,                          user_group as USER_GROUP,                          user_client_ip as USER_CLIENT_IP,                          db_id DB_ID,                          db_name DB_NAME,                          sql_id SQL_ID,                          query_sql QUERY_SQL,                          plan_id PLAN_ID,                          affected_rows AFFECTED_ROWS,                          return_rows RETURN_ROWS,                          partition_cnt PARTITION_CNT,                          ret_code RET_CODE,                          qc_id QC_ID,                          dfo_id DFO_ID,                          sqc_id SQC_ID,                          worker_id WORKER_ID,                          event EVENT,                          p1text P1TEXT,                          p1 P1,                          p2text P2TEXT,                          p2 P2,                          p3text P3TEXT,                          p3 P3,                          "LEVEL" "LEVEL",                          wait_class_id WAIT_CLASS_ID,                          "WAIT_CLASS#" "WAIT_CLASS#",                          wait_class WAIT_CLASS,                          state STATE,                          wait_time_micro WAIT_TIME_MICRO,                          total_wait_time_micro TOTAL_WAIT_TIME_MICRO,                          total_waits TOTAL_WAITS,                          rpc_count RPC_COUNT,                          plan_type PLAN_TYPE,                          is_inner_sql IS_INNER_SQL,                          is_executor_rpc IS_EXECUTOR_RPC,                          is_hit_plan IS_HIT_PLAN,                          request_time REQUEST_TIME,                          elapsed_time ELAPSED_TIME,                          net_time NET_TIME,                          net_wait_time NET_WAIT_TIME,                          queue_time QUEUE_TIME,                          decode_time DECODE_TIME,                          get_plan_time GET_PLAN_TIME,                          execute_time EXECUTE_TIME,                          application_wait_time APPLICATION_WAIT_TIME,                          concurrency_wait_time CONCURRENCY_WAIT_TIME,                          user_io_wait_time USER_IO_WAIT_TIME,                          schedule_time SCHEDULE_TIME,                          row_cache_hit ROW_CACHE_HIT,                          bloom_filter_cache_hit BLOOM_FILTER_CACHE_HIT,                          block_cache_hit BLOCK_CACHE_HIT,                          disk_reads DISK_READS,                          retry_cnt RETRY_CNT,                          table_scan TABLE_SCAN,                          consistency_level CONSISTENCY_LEVEL,                          memstore_read_row_count MEMSTORE_READ_ROW_COUNT,                          ssstore_read_row_count SSSTORE_READ_ROW_COUNT,                          data_block_read_cnt as DATA_BLOCK_READ_CNT,                          data_block_cache_hit as DATA_BLOCK_CACHE_HIT,                          index_block_read_cnt as INDEX_BLOCK_READ_CNT,                          index_block_cache_hit as INDEX_BLOCK_CACHE_HIT,                          blockscan_block_cnt as BLOCKSCAN_BLOCK_CNT,                          blockscan_row_cnt as BLOCKSCAN_ROW_CNT,                          pushdown_storage_filter_row_cnt as PUSHDOWN_STORAGE_FILTER_ROW_CNT,                          request_memory_used REQUEST_MEMORY_USED,                          expected_worker_count EXPECTED_WORKER_COUNT,                          used_worker_count USED_WORKER_COUNT,                          sched_info SCHED_INFO,                          ps_client_stmt_id PS_CLIENT_STMT_ID,                          ps_inner_stmt_id PS_INNER_STMT_ID,                          transaction_id as TX_ID,                          snapshot_version as SNAPSHOT_VERSION,                          request_type as REQUEST_TYPE,                          is_batched_multi_stmt as IS_BATCHED_MULTI_STMT,                          ob_trace_info as OB_TRACE_INFO,                          plan_hash as PLAN_HASH,                          params_value as PARAMS_VALUE,                          rule_name as RULE_NAME,                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end                            as TX_INTERNAL_ROUTING,                          tx_internal_route_version as TX_STATE_VERSION,                          flt_trace_id as FLT_TRACE_ID,                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                          svr_ip SVR_IP,                          svr_port SVR_PORT,                          request_id REQUEST_ID,                          execution_id SQL_EXEC_ID,                          trace_id TRACE_ID,                          session_id SID,                          client_ip CLIENT_IP,                          client_port CLIENT_PORT,                          tenant_id TENANT_ID,                          effective_tenant_id EFFECTIVE_TENANT_ID,                          tenant_name TENANT_NAME,                          user_id USER_ID,                          user_name USER_NAME,                          user_group as USER_GROUP,                          user_client_ip as USER_CLIENT_IP,                          db_id DB_ID,                          db_name DB_NAME,                          sql_id SQL_ID,                          query_sql QUERY_SQL,                          plan_id PLAN_ID,                          affected_rows AFFECTED_ROWS,                          return_rows RETURN_ROWS,                          partition_cnt PARTITION_CNT,                          ret_code RET_CODE,                          qc_id QC_ID,                          dfo_id DFO_ID,                          sqc_id SQC_ID,                          worker_id WORKER_ID,                          event EVENT,                          p1text P1TEXT,                          p1 P1,                          p2text P2TEXT,                          p2 P2,                          p3text P3TEXT,                          p3 P3,                          "LEVEL" "LEVEL",                          wait_class_id WAIT_CLASS_ID,                          "WAIT_CLASS#" "WAIT_CLASS#",                          wait_class WAIT_CLASS,                          state STATE,                          wait_time_micro WAIT_TIME_MICRO,                          total_wait_time_micro TOTAL_WAIT_TIME_MICRO,                          total_waits TOTAL_WAITS,                          rpc_count RPC_COUNT,                          plan_type PLAN_TYPE,                          is_inner_sql IS_INNER_SQL,                          is_executor_rpc IS_EXECUTOR_RPC,                          is_hit_plan IS_HIT_PLAN,                          request_time REQUEST_TIME,                          elapsed_time ELAPSED_TIME,                          net_time NET_TIME,                          net_wait_time NET_WAIT_TIME,                          queue_time QUEUE_TIME,                          decode_time DECODE_TIME,                          get_plan_time GET_PLAN_TIME,                          execute_time EXECUTE_TIME,                          application_wait_time APPLICATION_WAIT_TIME,                          concurrency_wait_time CONCURRENCY_WAIT_TIME,                          user_io_wait_time USER_IO_WAIT_TIME,                          schedule_time SCHEDULE_TIME,                          row_cache_hit ROW_CACHE_HIT,                          bloom_filter_cache_hit BLOOM_FILTER_CACHE_HIT,                          block_cache_hit BLOCK_CACHE_HIT,                          disk_reads DISK_READS,                          retry_cnt RETRY_CNT,                          table_scan TABLE_SCAN,                          consistency_level CONSISTENCY_LEVEL,                          memstore_read_row_count MEMSTORE_READ_ROW_COUNT,                          ssstore_read_row_count SSSTORE_READ_ROW_COUNT,                          data_block_read_cnt as DATA_BLOCK_READ_CNT,                          data_block_cache_hit as DATA_BLOCK_CACHE_HIT,                          index_block_read_cnt as INDEX_BLOCK_READ_CNT,                          index_block_cache_hit as INDEX_BLOCK_CACHE_HIT,                          blockscan_block_cnt as BLOCKSCAN_BLOCK_CNT,                          blockscan_row_cnt as BLOCKSCAN_ROW_CNT,                          pushdown_storage_filter_row_cnt as PUSHDOWN_STORAGE_FILTER_ROW_CNT,                          request_memory_used REQUEST_MEMORY_USED,                          expected_worker_count EXPECTED_WORKER_COUNT,                          used_worker_count USED_WORKER_COUNT,                          sched_info SCHED_INFO,                          ps_client_stmt_id PS_CLIENT_STMT_ID,                          ps_inner_stmt_id PS_INNER_STMT_ID,                          transaction_id as TX_ID,                          snapshot_version as SNAPSHOT_VERSION,                          request_type as REQUEST_TYPE,                          is_batched_multi_stmt as IS_BATCHED_MULTI_STMT,                          ob_trace_info as OB_TRACE_INFO,                          plan_hash as PLAN_HASH,                          params_value as PARAMS_VALUE,                          rule_name as RULE_NAME,                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end                            as TX_INTERNAL_ROUTING,                          tx_internal_route_version as TX_STATE_VERSION,                          flt_trace_id as FLT_TRACE_ID,                          pl_trace_id as PL_TRACE_ID,                          plsql_exec_time as PLSQL_EXEC_TIME,                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_sql_audit_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, REQUEST_ID, SQL_EXEC_ID, TRACE_ID, SID, CLIENT_IP, CLIENT_PORT, TENANT_ID, EFFECTIVE_TENANT_ID, TENANT_NAME, USER_ID, USER_NAME, USER_GROUP, USER_CLIENT_IP, DB_ID, DB_NAME, SQL_ID, QUERY_SQL, PLAN_ID, AFFECTED_ROWS, RETURN_ROWS, PARTITION_CNT, RET_CODE, QC_ID, DFO_ID, SQC_ID, WORKER_ID, EVENT, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, "LEVEL", WAIT_CLASS_ID, "WAIT_CLASS#", WAIT_CLASS, STATE, WAIT_TIME_MICRO, TOTAL_WAIT_TIME_MICRO, TOTAL_WAITS, RPC_COUNT, PLAN_TYPE, IS_INNER_SQL, IS_EXECUTOR_RPC, IS_HIT_PLAN, REQUEST_TIME, ELAPSED_TIME, NET_TIME, NET_WAIT_TIME, QUEUE_TIME, DECODE_TIME, GET_PLAN_TIME, EXECUTE_TIME, APPLICATION_WAIT_TIME, CONCURRENCY_WAIT_TIME, USER_IO_WAIT_TIME, SCHEDULE_TIME, ROW_CACHE_HIT, BLOOM_FILTER_CACHE_HIT, BLOCK_CACHE_HIT, DISK_READS, RETRY_CNT, TABLE_SCAN, CONSISTENCY_LEVEL, MEMSTORE_READ_ROW_COUNT, SSSTORE_READ_ROW_COUNT, DATA_BLOCK_READ_CNT, DATA_BLOCK_CACHE_HIT, INDEX_BLOCK_READ_CNT, INDEX_BLOCK_CACHE_HIT, BLOCKSCAN_BLOCK_CNT, BLOCKSCAN_ROW_CNT, PUSHDOWN_STORAGE_FILTER_ROW_CNT, REQUEST_MEMORY_USED, EXPECTED_WORKER_COUNT, USED_WORKER_COUNT, SCHED_INFO, PS_CLIENT_STMT_ID, PS_INNER_STMT_ID, TX_ID, SNAPSHOT_VERSION, REQUEST_TYPE, IS_BATCHED_MULTI_STMT, OB_TRACE_INFO, PLAN_HASH, PARAMS_VALUE, RULE_NAME, TX_INTERNAL_ROUTING, TX_STATE_VERSION, FLT_TRACE_ID, PL_TRACE_ID, PLSQL_EXEC_TIME, TOTAL_MEMSTORE_READ_ROW_COUNT, TOTAL_SSSTORE_READ_ROW_COUNT FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::v_ob_plan_cache_plan_stat_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT * FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, SQL_ID, TYPE, IS_BIND_SENSITIVE, IS_BIND_AWARE, DB_ID, STATEMENT, QUERY_SQL, SPECIAL_PARAMS, PARAM_INFOS, SYS_VARS, PLAN_HASH, FIRST_LOAD_TIME, SCHEMA_VERSION, LAST_ACTIVE_TIME, AVG_EXE_USEC, SLOWEST_EXE_TIME, SLOWEST_EXE_USEC, SLOW_COUNT, HIT_COUNT, PLAN_SIZE, EXECUTIONS, DISK_READS, DIRECT_WRITES, BUFFERS_GETS, APPLICATION_WATI_TIME, CONCURRENCY_WAIT_TIME, USER_IO_WAIT_TIME, ROWS_PROCESSED, ELAPSED_TIME, CPU_TIME, LARGE_QUERYS, DELAYED_LARGE_QUERYS, DELAYED_PX_QUERYS, OUTLINE_VERSION, OUTLINE_ID, OUTLINE_DATA, HINTS_INFO, HINTS_ALL_WORKED, ACS_SEL_INFO, TABLE_SCAN, EVOLUTION, EVO_EXECUTIONS, EVO_CPU_TIME, TIMEOUT_COUNT, PS_STMT_ID, SESSID, TEMP_TABLES, IS_USE_JIT, OBJECT_TYPE, PL_SCHEMA_ID, IS_BATCHED_MULTI_STMT FROM SYS.GV$OB_PLAN_CACHE_PLAN_STAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -410,7 +410,7 @@ int ObInnerTableSchema::v_ob_plan_cache_plan_explain_ora_schema(ObTableSchema &t
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT * FROM SYS.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT TENANT_ID, SVR_IP, SVR_PORT, PLAN_ID, PLAN_DEPTH, PLAN_LINE_ID, OPERATOR, NAME, "ROWS", COST, PROPERTY FROM SYS.GV$OB_PLAN_CACHE_PLAN_EXPLAIN WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -510,7 +510,7 @@ int ObInnerTableSchema::v_session_wait_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SESSION_WAIT      WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SID, CON_ID, SVR_IP, SVR_PORT, EVENT, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS_ID, "WAIT_CLASS#", WAIT_CLASS, STATE, WAIT_TIME_MICRO, TIME_REMAINING_MICRO, TIME_SINCE_LAST_WAIT_MICRO FROM SYS.GV$SESSION_WAIT      WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -610,7 +610,7 @@ int ObInnerTableSchema::v_session_wait_history_ora_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SESSION_WAIT_HISTORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SID, CON_ID, SVR_IP, SVR_PORT, "SEQ#", "EVENT#", EVENT, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_TIME, WAIT_TIME_MICRO, TIME_SINCE_LAST_WAIT_MICRO FROM SYS.GV$SESSION_WAIT_HISTORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -710,7 +710,7 @@ int ObInnerTableSchema::v_ob_memory_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_MEMORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID, SVR_IP, SVR_PORT, CTX_NAME, MOD_NAME, COUNT, HOLD, USED     FROM SYS.GV$OB_MEMORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -810,7 +810,7 @@ int ObInnerTableSchema::v_ob_memstore_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_MEMSTORE     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     TENANT_ID,     ACTIVE_SPAN,     FREEZE_TRIGGER,     FREEZE_CNT,     MEMSTORE_USED,     MEMSTORE_LIMIT     FROM SYS.GV$OB_MEMSTORE     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::v_ob_memstore_info_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_MEMSTORE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT      SVR_IP,     SVR_PORT,     TENANT_ID,     LS_ID,     TABLET_ID,     IS_ACTIVE,     START_SCN,     END_SCN,     FREEZE_TS     FROM SYS.GV$OB_MEMSTORE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1010,7 +1010,7 @@ int ObInnerTableSchema::v_sesstat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SESSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SID,           CON_ID,           SVR_IP,           SVR_PORT,           "STATISTIC#",           VALUE FROM SYS.GV$SESSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1110,7 +1110,7 @@ int ObInnerTableSchema::v_sysstat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$SYSSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID,           SVR_IP,           SVR_PORT,           "STATISTIC#",           NAME,           CLASS,           VALUE,           STAT_ID     FROM SYS.GV$SYSSTAT     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1210,7 +1210,7 @@ int ObInnerTableSchema::v_system_event_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SYSTEM_EVENT WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT CON_ID, SVR_IP, SVR_PORT, EVENT_ID, EVENT, WAIT_CLASS_ID, "WAIT_CLASS#", WAIT_CLASS, TOTAL_WAITS, TOTAL_TIMEOUTS, TIME_WAITED, AVERAGE_WAIT, TIME_WAITED_MICRO FROM SYS.GV$SYSTEM_EVENT WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1310,7 +1310,7 @@ int ObInnerTableSchema::v_ob_plan_cache_stat_ora_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT *       FROM SYS.GV$OB_PLAN_CACHE_STAT WHERE       SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT SVR_IP,       SVR_PORT,       SQL_NUM,       MEM_USED,       MEM_HOLD,       ACCESS_COUNT,       HIT_COUNT,       HIT_RATE,       PLAN_NUM,       MEM_LIMIT,       HASH_BUCKET,       STMTKEY_NUM       FROM SYS.GV$OB_PLAN_CACHE_STAT WHERE       SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1660,7 +1660,7 @@ int ObInnerTableSchema::v_ob_px_worker_stat_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$OB_PX_WORKER_STAT   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SESSION_ID,     TENANT_ID,     SVR_IP,     SVR_PORT,     TRACE_ID,     QC_ID,     SQC_ID,     WORKER_ID,     DFO_ID,     START_TIME   FROM SYS.GV$OB_PX_WORKER_STAT   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1760,7 +1760,7 @@ int ObInnerTableSchema::v_ob_ps_stat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$OB_PS_STAT   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SVR_IP,     SVR_PORT,     STMT_COUNT,     HIT_COUNT,     ACCESS_COUNT,     MEM_HOLD   FROM SYS.GV$OB_PS_STAT   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1860,7 +1860,7 @@ int ObInnerTableSchema::v_ob_ps_item_info_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$OB_PS_ITEM_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SVR_IP, SVR_PORT, STMT_ID, DB_ID,          PS_SQL, PARAM_COUNT, STMT_ITEM_REF_COUNT,          STMT_INFO_REF_COUNT, MEM_HOLD, STMT_TYPE, CHECKSUM, EXPIRED   FROM SYS.GV$OB_PS_ITEM_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1910,7 +1910,7 @@ int ObInnerTableSchema::gv_sql_workarea_active_ora_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       CAST(NULL AS NUMBER) AS SQL_HASH_VALUE,       SQL_ID,       CAST(NULL AS DATE) AS SQL_EXEC_START,       CAST(SQL_EXEC_ID AS NUMBER) AS SQL_EXEC_ID,       CAST(NULL AS RAW(8)) AS WORKAREA_ADDRESS,       CAST(OPERATION_TYPE AS VARCHAR2(160)) AS OPERATION_TYPE,       CAST(OPERATION_ID AS NUMBER) AS OPERATION_ID,       CAST(POLICY AS VARCHAR2(24)) AS POLICY,       CAST(SID AS NUMBER) AS SID,       CAST(NULL AS NUMBER) AS QCINST_ID,       CAST(NULL AS NUMBER) AS QCSID,       CAST(ACTIVE_TIME AS NUMBER) AS ACTIVE_TIME,       CAST(WORK_AREA_SIZE AS NUMBER) AS WORK_AREA_SIZE,       CAST(EXPECT_SIZE AS NUMBER) AS EXPECT_SIZE,       CAST(ACTUAL_MEM_USED AS NUMBER) AS ACTUAL_MEM_USED,       CAST(MAX_MEM_USED AS NUMBER) AS MAX_MEM_USED,       CAST(NUMBER_PASSES AS NUMBER) AS NUMBER_PASSES,       CAST(TEMPSEG_SIZE AS NUMBER) AS TEMPSEG_SIZE,       CAST(NULL AS VARCHAR2(128)) AS TABLESPACE,       CAST(NULL AS NUMBER) AS "SEGRFNO#",       CAST(NULL AS NUMBER) AS "SEGBLK#",       CAST(TENANT_ID AS NUMBER) AS CON_ID,       SVR_IP,       SVR_PORT   FROM SYS.ALL_VIRTUAL_SQL_WORKAREA_ACTIVE )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       CAST(NULL AS NUMBER) AS SQL_HASH_VALUE,       DB_ID,       SQL_ID,       CAST(NULL AS DATE) AS SQL_EXEC_START,       CAST(SQL_EXEC_ID AS NUMBER) AS SQL_EXEC_ID,       CAST(NULL AS RAW(8)) AS WORKAREA_ADDRESS,       CAST(OPERATION_TYPE AS VARCHAR2(160)) AS OPERATION_TYPE,       CAST(OPERATION_ID AS NUMBER) AS OPERATION_ID,       CAST(POLICY AS VARCHAR2(24)) AS POLICY,       CAST(SID AS NUMBER) AS SID,       CAST(NULL AS NUMBER) AS QCINST_ID,       CAST(NULL AS NUMBER) AS QCSID,       CAST(ACTIVE_TIME AS NUMBER) AS ACTIVE_TIME,       CAST(WORK_AREA_SIZE AS NUMBER) AS WORK_AREA_SIZE,       CAST(EXPECT_SIZE AS NUMBER) AS EXPECT_SIZE,       CAST(ACTUAL_MEM_USED AS NUMBER) AS ACTUAL_MEM_USED,       CAST(MAX_MEM_USED AS NUMBER) AS MAX_MEM_USED,       CAST(NUMBER_PASSES AS NUMBER) AS NUMBER_PASSES,       CAST(TEMPSEG_SIZE AS NUMBER) AS TEMPSEG_SIZE,       CAST(NULL AS VARCHAR2(128)) AS TABLESPACE,       CAST(NULL AS NUMBER) AS "SEGRFNO#",       CAST(NULL AS NUMBER) AS "SEGBLK#",       CAST(TENANT_ID AS NUMBER) AS CON_ID,       SVR_IP,       SVR_PORT   FROM SYS.ALL_VIRTUAL_SQL_WORKAREA_ACTIVE )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1960,7 +1960,7 @@ int ObInnerTableSchema::v_sql_workarea_active_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT * FROM SYS.GV$SQL_WORKAREA_ACTIVE   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SQL_HASH_VALUE,   DB_ID, SQL_ID, SQL_EXEC_START, SQL_EXEC_ID, WORKAREA_ADDRESS, OPERATION_TYPE, OPERATION_ID, POLICY, SID, QCINST_ID, QCSID, ACTIVE_TIME, WORK_AREA_SIZE, EXPECT_SIZE, ACTUAL_MEM_USED, MAX_MEM_USED, NUMBER_PASSES, TEMPSEG_SIZE, TABLESPACE, "SEGRFNO#", "SEGBLK#", CON_ID, SVR_IP, SVR_PORT FROM SYS.GV$SQL_WORKAREA_ACTIVE   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2060,7 +2060,7 @@ int ObInnerTableSchema::v_sql_workarea_histogram_ora_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$SQL_WORKAREA_HISTOGRAM   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT LOW_OPTIMAL_SIZE, HIGH_OPTIMAL_SIZE, OPTIMAL_EXECUTIONS, ONEPASS_EXECUTIONS, MULTIPASSES_EXECUTIONS, TOTAL_EXECUTIONS, CON_ID, SVR_IP, SVR_PORT   FROM SYS.GV$SQL_WORKAREA_HISTOGRAM   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

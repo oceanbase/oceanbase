@@ -395,7 +395,8 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
                                                         ObTxnFreeRouteCtx &ctx,
                                                         const char* buf,
                                                         const int64_t len,
-                                                        int64_t &pos)
+                                                        int64_t &pos,
+                                                        const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   bool need_add_tx = false;
@@ -419,7 +420,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         TRANS_LOG(WARN, "handle tx exist fail", K(ret));
       } else if (OB_ISNULL(tx)) {
         audit_record.alloc_tx_ = true;
-        if (OB_FAIL(acquire_tx(tx, session_id))) {
+        if (OB_FAIL(acquire_tx(tx, session_id, data_version))) {
           // if acquire tx failed, it may retryable: alloc-memory failed
           TRANS_LOG(WARN, "acquire tx for decode failed", K(ret));
         } else { need_add_tx = true; }
@@ -431,7 +432,11 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     } else if (tx->tx_id_ != header.tx_id_) {
       // replace
       audit_record.replace_tx_ = true;
-      tx_desc_mgr_.remove(*tx);
+      if (!tx->flags_.SHADOW_) {
+        tx_desc_mgr_.remove(*tx);
+      }
+      // reset tx to cleanup for new txn
+      reinit_tx_(*tx, session_id, tx->get_cluster_version());
       need_add_tx = true;
     } else {
       // update
@@ -512,7 +517,8 @@ int ObTransService::txn_free_route__update_dynamic_state(const uint32_t session_
                                                          ObTxnFreeRouteCtx &ctx,
                                                          const char* buf,
                                                          const int64_t len,
-                                                         int64_t &pos)
+                                                         int64_t &pos,
+                                                         const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
@@ -571,7 +577,8 @@ int ObTransService::txn_free_route__update_parts_state(const uint32_t session_id
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
                                                        const int64_t len,
-                                                       int64_t &pos)
+                                                       int64_t &pos,
+                                                       const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   ObTxnFreeRouteAuditRecord &audit_record = ctx.audit_record_;
@@ -628,7 +635,8 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
                                                        ObTxnFreeRouteCtx &ctx,
                                                        const char* buf,
                                                        const int64_t len,
-                                                       int64_t &pos)
+                                                       int64_t &pos,
+                                                       const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int64_t logic_clock = 0;
@@ -663,7 +671,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
     } else if (OB_FAIL(update_logic_clock_(logic_clock, NULL, false))) {
       TRANS_LOG(ERROR, "update logic clock fail", K(ret));
     }
-    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id))) {
+    if (OB_SUCC(ret) && add_tx && OB_FAIL(acquire_tx(tx, session_id, data_version))) {
       // only has savepoints or txn scope snapshot, txn not started
       // acquire tx to hold extra info
       TRANS_LOG(WARN, "acquire tx fail", K(ret));

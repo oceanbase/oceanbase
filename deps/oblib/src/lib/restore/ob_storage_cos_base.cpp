@@ -50,12 +50,6 @@ void fin_cos_env()
   qcloud_cos::ObCosEnv::get_instance().destroy();
 }
 
-bool is_cos_supported_checksum(ObStorageChecksumType checksum_type)
-{
-  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
-}
-
 struct CosListFilesCbArg
 {
   common::ObIAllocator &allocator_;
@@ -509,7 +503,7 @@ int ObStorageCosUtil::del_unmerged_parts(const ObString &uri)
 /*--------------------------------ObStorageCosBase---------------------------*/
 
 ObStorageCosBase::ObStorageCosBase()
-  : is_opened_(false), handle_(), checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
+  : is_opened_(false), handle_(), checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
 }
 

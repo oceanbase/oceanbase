@@ -898,8 +898,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   // init limit_,offset_
   bool is_query_with_filter = query.get_htable_filter().is_valid() ||
                               query.get_filter_string().length() > 0;
-  limit_ = is_query_with_filter ? -1 : query.get_limit(); // // query with filter can't pushdown limit
-  offset_ = query.get_offset();
+  limit_ = is_query_with_filter || is_ttl_table() ? -1 : query.get_limit(); // query with filter or ttl table can't pushdown limit
+  offset_ = is_ttl_table() ? 0 : query.get_offset();
   // init is_index_scan_
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;

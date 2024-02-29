@@ -1104,7 +1104,7 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         }
       }
       if (OB_SUCC(ret)) {
-        if (!database_name.empty()) {
+        if (!database_name.empty() && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0) {
           DATA_PRINTF("%.*s.", LEN_AND_PTR(database_name));
         }
         if (!package_name.empty()) {
@@ -3334,8 +3334,6 @@ do { \
   } else if (OB_FAIL(schema_guard_->get_object_info_func(tenant_id, object_id, object_info))) { \
     LOG_WARN("failed to get udt info", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_ISNULL(object_info)) { \
-    ret = OB_ERR_UNEXPECTED; \
-    LOG_WARN("object info is null", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, object_info->get_database_id(), database_schema))) { \
     LOG_WARN("failed to get database schema", K(ret), KPC(expr), K(tenant_id)); \
   } else if (OB_ISNULL(database_schema)) { \
@@ -3516,7 +3514,7 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
           }
         }
         if (OB_SUCC(ret)) {
-          if(!database.empty()){
+          if(!database.empty() && database.case_compare(OB_SYS_DATABASE_NAME) != 0) {
             PRINT_IDENT_WITH_QUOT(database);
             DATA_PRINTF(".");
           }

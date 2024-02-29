@@ -196,7 +196,8 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
   } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn,
-      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/))) {
+      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/,
+      false/*with_order_by_field*/))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;

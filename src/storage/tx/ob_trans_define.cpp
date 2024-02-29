@@ -948,8 +948,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applied_log_ts_,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
-                    checksum_[0],
-                    checksum_scn_[0],
+                    checksum_[0],       // FARM COMPAT WHITELIST
+                    checksum_scn_[0],   // FARM COMPAT WHITELIST
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,

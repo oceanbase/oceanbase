@@ -41,6 +41,7 @@ public:
 
   virtual int do_open() override;
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
+  virtual int try_convert_row(const ObNewRow *input_row, ObNewRow *&row);
   virtual int inner_close() override;
 private:
   virtual int init_non_exist_map_item(

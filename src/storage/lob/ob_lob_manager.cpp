@@ -25,6 +25,18 @@ namespace oceanbase
 namespace storage
 {
 
+static int check_write_length(ObLobAccessParam& param, int64_t expected_len)
+{
+  int ret = OB_SUCCESS;
+  if (ObLobDataOutRowCtx::OpType::SQL != param.op_type_) {
+    // skip not full write
+  } else if (param.byte_size_ != expected_len) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("size not match", K(ret), K(expected_len), K(param.byte_size_));
+  }
+  return ret;
+}
+
 const ObLobCommon ObLobManager::ZERO_LOB = ObLobCommon();
 
 int ObLobManager::mtl_new(ObLobManager *&m) {
@@ -461,20 +473,25 @@ int ObLobManager::lob_remote_query_with_retry(
       LOG_WARN("failed to do remote query", K(ret), K(arg), K(dst_addr), K(timeout));
       if (is_remote_ret_can_retry(ret)) {
         retry_cnt++;
-        switch (ret) {
-          case OB_NOT_MASTER: {
-            bool remote_bret = false;
-            // refresh leader
-            if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
-              LOG_WARN("fail to refresh leader addr", K(ret), K(param));
-              is_continue = false;
-            } else {
-              LOG_INFO("refresh leader location", K(retry_cnt), K(retry_max), K(remote_bret), K(dst_addr), K(param));
+        if (retry_cnt > retry_max) {
+          is_continue = false;
+          LOG_INFO("retry cnt is reach retry_max_cnt, return error code", K(ret), K(retry_cnt), K(retry_max));
+        } else {
+          switch (ret) {
+            case OB_NOT_MASTER: {
+              bool remote_bret = false;
+              // refresh leader
+              if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
+                LOG_WARN("fail to refresh leader addr", K(ret), K(param));
+                is_continue = false;
+              } else {
+                LOG_INFO("refresh leader location", K(retry_cnt), K(retry_max), K(remote_bret), K(dst_addr), K(param));
+              }
+              break;
             }
-            break;
-          }
-          default: {
-            LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt), K(retry_max));
+            default: {
+              LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt), K(retry_max));
+            }
           }
         }
       } else {
@@ -483,7 +500,7 @@ int ObLobManager::lob_remote_query_with_retry(
     } else {
       is_continue = false;
     }
-  } while (is_continue && retry_cnt <= retry_max);
+  } while (is_continue);
   return ret;
 }
 
@@ -1594,6 +1611,10 @@ int ObLobManager::append(
       if (OB_NOT_NULL(buf)) {
         param.allocator_->free(buf);
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_write_length(param, append_lob_len))) {
+        LOG_WARN("check_write_length fail", K(ret), K(param), K(lob), K(append_lob_len));
+      }
     }
   }
   return ret;
@@ -1900,6 +1921,10 @@ int ObLobManager::append(
             }
           }
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(check_write_length(param, data.length()))) {
+        LOG_WARN("check_write_length fail", K(ret), K(param), K(data.length()));
       }
     }
   }

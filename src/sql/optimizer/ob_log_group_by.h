@@ -233,6 +233,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
+  virtual int get_card_without_filter(double &card) override;
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;

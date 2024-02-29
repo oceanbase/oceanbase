@@ -66,6 +66,11 @@ uint64_t ObSqlWorkAreaProfile::get_session_id()
   return session_id_;
 }
 
+uint64_t ObSqlWorkAreaProfile::get_db_id()
+{
+  return db_id_;
+}
+
 int ObSqlWorkAreaProfile::set_exec_info(ObExecContext &exec_ctx)
   {
     int ret = OB_SUCCESS;
@@ -81,6 +86,10 @@ int ObSqlWorkAreaProfile::set_exec_info(ObExecContext &exec_ctx)
         memcpy(sql_id_, plan_ctx->get_phy_plan()->get_sql_id(), OB_MAX_SQL_ID_LENGTH);
         sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
       }
+    }
+    ObSQLSessionInfo *sql_session = exec_ctx.get_my_session();
+    if (OB_NOT_NULL(sql_session)) {
+      db_id_ = sql_session->get_database_id();
     }
     return ret;
   }
@@ -737,6 +746,7 @@ int ObTenantSqlMemoryManager::new_and_fill_workarea_stat(
       wa_stat->workarea_key_.set_sql_id(profile.get_sql_id());
       wa_stat->workarea_key_.set_plan_id(profile.get_plan_id());
       wa_stat->workarea_key_.set_operator_id(profile.get_operator_id());
+      wa_stat->workarea_key_.set_database_id(profile.get_db_id());
       wa_stat->op_type_ = profile.get_operator_type();
       if (OB_FAIL(fill_workarea_stat(*wa_stat, profile))) {
         LOG_WARN("failed to fill workarea stat", K(ret));
@@ -767,7 +777,8 @@ int ObTenantSqlMemoryManager::collect_workarea_stat(ObSqlWorkAreaProfile &profil
   if (profile.has_exec_ctx()) {
     ObSqlWorkAreaStat::WorkareaKey workarea_key(
       profile.get_plan_id(),
-      profile.get_operator_id());
+      profile.get_operator_id(),
+      profile.get_db_id());
     workarea_key.set_sql_id(profile.get_sql_id());
     bool need_insert = false;
     if (OB_FAIL(try_fill_workarea_stat(workarea_key, profile, need_insert))) {
@@ -1320,6 +1331,7 @@ int ObTenantSqlMemoryManager::get_all_active_workarea(
         profile_info.sql_exec_id_ = profile->get_exec_id();
         profile_info.set_sql_id(profile->get_sql_id());
         profile_info.session_id_ = profile->get_session_id();
+        profile_info.database_id_ = profile->get_db_id();
         if (OB_FAIL(wa_actives.push_back(profile_info))) {
           LOG_WARN("failed to push back profile", K(ret));
         }

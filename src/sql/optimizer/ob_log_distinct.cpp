@@ -376,5 +376,12 @@ int ObLogDistinct::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
+int ObLogDistinct::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_total_ndv();
+  return ret;
+}
+
 }
 }

@@ -473,7 +473,7 @@ int RoleCoordinator::switch_follower_to_leader_(
     CLOG_LOG(INFO, "switch_follower_to_leader_ success", K(ret), KPC(ls));
   }
   if (OB_FAIL(ret) && !retry_ctx.need_retry()) {
-    log_handler->revoke_leader();
+    log_handler->change_leader_to(GCTX.self_addr());
     CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), KPC(ls));
   }
   return ret;
@@ -515,7 +515,7 @@ int RoleCoordinator::switch_leader_to_follower_forcedly_(
     CLOG_LOG(INFO, "switch_leader_to_follower_forcedly_ success", K(ret), KPC(ls));
   }
   if (OB_FAIL(ret)) {
-    log_handler->revoke_leader();
+    log_handler->change_leader_to(GCTX.self_addr());
     CLOG_LOG(WARN, "switch_leader_to_follower_forcedly_ failed", K(ret), K(new_proposal_id), K(new_role));
   }
   return ret;
@@ -573,7 +573,7 @@ int RoleCoordinator::switch_leader_to_follower_gracefully_(
     CLOG_LOG(INFO, "switch_to_follower_gracefully success", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
   }
   if (OB_FAIL(ret) || OB_LS_NEED_REVOKE == tmp_ret) {
-    log_handler->revoke_leader();
+    log_handler->change_leader_to(GCTX.self_addr());
     CLOG_LOG(WARN, "switch_leader_to_follower_gracefully failed, revoke leader", K(ret), K(tmp_ret), K(dst_addr),
 				K(new_role), K(new_proposal_id));
     ret = (OB_SUCCESS == ret ? tmp_ret : ret);

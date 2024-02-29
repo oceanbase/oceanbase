@@ -2533,6 +2533,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
       longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));
     }
+    ddl_task->disable_schedule();
     if (OB_FAIL(task_queue_.push_task(ddl_task))) {
       if (OB_ENTRY_EXIST != ret) {
         LOG_WARN("push back task to task queue failed", K(ret));
@@ -2546,6 +2547,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
       if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
         LOG_WARN("add sys task failed", K(tmp_ret));
       }
+      ddl_task->enable_schedule();
       idler_.wakeup();
     }
   }

@@ -1071,6 +1071,15 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case TOTAL_SSSTORE_READ_ROW_COUNT: {
           cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
         } break;
+        case PROXY_USER_NAME: {
+          cells[cell_idx].set_null();
+        } break;
+        //format_sql_id
+        case FORMAT_SQL_ID: {
+          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

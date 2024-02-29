@@ -286,17 +286,24 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
     if (NULL != last_row_) {
       if (OB_FAIL(one_result_->add_row(*last_row_))) {
         LOG_WARN("failed to add row, ", K(ret));
+      } else {
+        row_idx_++;
+        last_row_ = NULL;
       }
-      last_row_ = NULL;
     }
   }
 
   if (OB_SUCC(ret)) {
+    const bool has_limit = (limit_ != -1);
+    bool has_reach_limit = (row_idx_ >= offset_ + limit_);
     next_result = one_result_;
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
+           OB_SUCC(scan_result_->get_next_row(row))) {
       LOG_DEBUG("[yzfdebug] scan result", "row", *row);
-      if (OB_FAIL(one_result_->add_row(*row))) {
+      if (has_limit && row_idx_ < offset_) {
+        row_idx_++;
+      } else if (OB_FAIL(one_result_->add_row(*row))) {
         if (OB_BUF_NOT_ENOUGH == ret) {
           ret = OB_SUCCESS;
           last_row_ = row;
@@ -304,13 +311,22 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
         } else {
           LOG_WARN("failed to add row", K(ret));
         }
-      } else if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
-        NG_TRACE(tag9);
-        break;
       } else {
-        LOG_DEBUG("[yzfdebug] scan return one row", "row", *row);
+        row_idx_++;
+        if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
+          NG_TRACE(tag9);
+          break;
+        } else {
+          LOG_DEBUG("[yzfdebug] scan return one row", "row", *row);
+        }
       }
+      has_reach_limit = (row_idx_ >= offset_ + limit_);
     }  // end while
+
+    if (OB_SUCC(ret) && (has_limit && has_reach_limit)) {
+      ret = OB_ITER_END;
+    }
+
     if (OB_ITER_END == ret) {
       has_more_rows_ = false;
       if (one_result_->get_row_count() > 0) {

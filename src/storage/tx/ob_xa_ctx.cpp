@@ -73,6 +73,7 @@ void ObXACtx::reset()
   timeout_task_.reset();
   xa_start_cond_.reset();
   xa_sync_status_cond_.reset();
+  sync_stmt_info_cond_.reset();
   xa_branch_count_ = 0;
   xa_ref_count_ = 0;
   lock_grant_ = 0;
@@ -222,8 +223,14 @@ int ObXACtx::wait_xa_start_complete()
 
 int ObXACtx::kill()
 {
+  int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
+  set_terminated_();
+  (void)unregister_timeout_task_();
+  try_exit_();
   REC_TRACE_EXT(tlog_, kill, OB_ID(ctx_ref), get_uref());
-  return OB_NOT_SUPPORTED;
+  TRANS_LOG(INFO, "xa ctx kill", K_(xid), K_(trans_id));
+  return ret;
 }
 
 int ObXACtx::check_terminated_() const
@@ -292,6 +299,20 @@ int ObXACtx::wait_xa_sync_status_(const int64_t expired_time)
     }
   }
   //TRANS_LOG(INFO, "wait_xa_sync_status completed", K(ret), K(this));
+  return ret;
+}
+
+int ObXACtx::wait_sync_stmt_info_(const int64_t expired_time) {
+  int ret = OB_SUCCESS;
+  int result = OB_SUCCESS;
+  if (0 > expired_time) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(expired_time));
+  } else {
+    if (OB_FAIL(sync_stmt_info_cond_.wait(expired_time, result)) || OB_FAIL(result)) {
+      TRANS_LOG(WARN, "wait sync stmt info failed", K(ret), "context", *this, K(expired_time), K(result));
+    }
+  }
   return ret;
 }
 
@@ -408,6 +429,8 @@ int ObXACtx::unregister_timeout_task_()
     // rewrite ret
     if (OB_TIMER_TASK_HAS_NOT_SCHEDULED == ret) {
       ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(WARN, "fail to unregister timeout task", K(ret), K_(trans_id), K_(xid));
     }
   } else {
     //just dec ctx ref
@@ -817,7 +840,7 @@ int ObXACtx::process_xa_start_response(const obrpc::ObXAStartRPCResponse &resp)
     tx_desc_->inc_ref(1);
   }
 
-  TRANS_LOG(INFO, "xa start response", K(ret), K(*this));
+  TRANS_LOG(INFO, "xa start response", K(ret), K(*this), K(resp));
   xa_sync_status_cond_.notify(ret);
   REC_TRACE_EXT(tlog_, xa_start_response, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
@@ -970,7 +993,7 @@ int ObXACtx::process_start_stmt_response(const obrpc::ObXAStartStmtRPCResponse &
   }
 
   TRANS_LOG(INFO, "process start stmt response", K(ret), K(res));
-  xa_sync_status_cond_.notify(ret);
+  sync_stmt_info_cond_.notify(ret);
   REC_TRACE_EXT(tlog_, xa_start_stmt_response, OB_Y(ret), OB_ID(ctx_ref), get_uref());
 
   return ret;
@@ -1835,7 +1858,7 @@ int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
       // this flag indicates that a branch is executing normal stmt
       is_executing_ = true;
       start_stmt_cond_.reset();
-      xa_sync_status_cond_.reset();
+      sync_stmt_info_cond_.reset();
       if (is_original) {
         // local
         if (OB_FAIL(start_stmt_local_(xid))) {
@@ -1908,7 +1931,7 @@ int ObXACtx::start_stmt_local_(const ObXATransID &xid)
   } else {
     // notify SUCCESS
     start_stmt_cond_.notify(ret);
-    xa_sync_status_cond_.notify(ret);
+    sync_stmt_info_cond_.notify(ret);
     TRANS_LOG(INFO, "succeed to start stmt local", K(ret), K(xid));
   }
 
@@ -2384,7 +2407,7 @@ int ObXACtx::wait_start_stmt(const uint32_t session_id)
       } else {
         TRANS_LOG(WARN, "fail to wait cond", K(ret), K(result));
       }
-    } else if (OB_FAIL(wait_xa_sync_status_(wait_time + 500000))) {
+    } else if (OB_FAIL(wait_sync_stmt_info_(wait_time + 500000))) {
       // TRANS_LOG(WARN, "unexpected status", K(ret));
       if (OB_TIMEOUT == ret) {
         TRANS_LOG(WARN, "wait xa stmt info timeout, need retry", K(ret));

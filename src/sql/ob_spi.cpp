@@ -336,8 +336,9 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, const ObStr
       ret = OB_ERR_CANNOT_PERFORM_DDL_COMMIT_OR_ROLLBACK_INSIDE_QUERY_OR_DML_TIPS;
       LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
                K(ret), K(stmt_type), K(lbt()));
-    } else {
-      // do nothing ...
+    } else if (exec_ctx.get_my_session()->is_in_user_scope() && ObStmt::is_dml_write_stmt(stmt_type)) {
+      ret = OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT;
+      LOG_WARN("Can't update table while ctas is being created.", K(ret));
     }
   }
   return ret;
@@ -2180,7 +2181,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
                                                 schema_guard,
                                                 prepare_result))) { //resolve ref object
             LOG_WARN("failed to resolve_ref_objects", K(ret));
-          } else { /*do nothing*/ }
+          }
         }
       }
     }
@@ -2335,7 +2336,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       secondary_namespace,
                                       prepare_result.has_dup_column_name_));
           } else {
-            PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
+            PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, false);
             const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
                                           pl_prepare_result.result_set_->get_route_sql() :
                                           pl_prepare_result.result_set_->get_stmt_ps_sql();
@@ -2697,7 +2698,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           ret = OB_ERR_DDL_IN_ILLEGAL_CONTEXT;
           LOG_WARN("DDL statement is executed in an illegal context",
                     K(ret), K(into_count), K(param_count), K(is_returning));
-        } else if (ObStmt::is_select_stmt(stmt_type) && 0 >= into_count) {
+        } else if (ObStmt::is_select_stmt(stmt_type) && !for_update && 0 >= into_count) {
           /* If dynamic_sql_statement is a SELECT statement, and you omit both
             * into_clause and bulk_collect_into_clause, then
             * execute_immediate_statement never executes.
@@ -4142,22 +4143,38 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
 
   if (OB_FAIL(ret)) {
   } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
+    /* 流式场景:
+        非for update skip lock:isvalid=false，或者commited=true，则报错
+        for update skip lock检查逻辑和for update一致
+       非流式场景：
+        forupdate：isvalid=false，或者commited=true，则报错，否则继续检查事务状态
+        非forupdate，直接看isvalid是否为true */
     if (lib::is_oracle_mode()) {
-      if (!cursor->get_snapshot().valid_) {
+      if (cursor->is_for_update()) {
+        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
+          ret = OB_ERR_FETCH_OUT_SEQUENCE;
+          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+        } else {
+          transaction::ObTransID tx_id = cursor->get_trans_id();
+          transaction::ObTransService* txs = MTL(transaction::ObTransService*);
+          bool tx_active = false;
+          CK (OB_NOT_NULL(txs));
+          CK (tx_id.is_valid());
+          OZ (txs->is_tx_active(tx_id, tx_active), tx_id);
+          if (OB_SUCC(ret) && !tx_active) {
+            ret = OB_ERR_FETCH_OUT_SEQUENCE;
+            LOG_WARN("cursor has been closed because of txn was terminated",
+                    K(ret), K(tx_id), K(cursor->get_snapshot()));
+          }
+        }
+      } else if (cursor->is_streaming()) {
+        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
+          ret = OB_ERR_FETCH_OUT_SEQUENCE;
+          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+        }
+      } else if (!cursor->get_snapshot().is_valid()) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;
         LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
-      } else if (cursor->is_for_update()) {
-        transaction::ObTransID tx_id = cursor->get_trans_id();
-        transaction::ObTransService* txs = MTL(transaction::ObTransService*);
-        bool tx_active = false;
-        CK (OB_NOT_NULL(txs));
-        CK (tx_id.is_valid());
-        OZ (txs->is_tx_active(tx_id, tx_active), tx_id);
-        if (OB_SUCC(ret) && !tx_active) {
-          ret = OB_ERR_FETCH_OUT_SEQUENCE;
-          LOG_WARN("cursor has been closed because of txn was terminated",
-                  K(ret), K(tx_id), K(cursor->get_snapshot()));
-        }
       }
     }
   }
@@ -7685,8 +7702,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     }
     // check range
     for (int64_t i = 0; OB_SUCC(ret) && i < calc_array->count(); ++i) {
-      OZ (sql::ObExprPLIntegerChecker::check_range(calc_array->at(i),
-          calc_array->at(i).get_type(), pl_integer_ranges[i]));
+      OZ (sql::ObExprPLIntegerChecker::check_range(
+        calc_array->at(i), calc_array->at(i).get_type(), pl_integer_ranges[i]));
     }
   }
   // 向变量赋值
@@ -8393,6 +8410,19 @@ int ObSPIService::resolve_into_params(const ParseResult &parse_result,
       || OB_ISNULL(parse_result.result_tree_->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("result tree is NULL or invalid result tree", K(ret));
+  } else if (T_CREATE_VIEW == parse_result.result_tree_->children_[0]->type_) {
+    if (parse_result.result_tree_->children_[0]->num_child_ <= 4
+        || OB_ISNULL(parse_result.result_tree_->children_[0]->children_[4])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result tree is NULL or invalid result tree", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::get_select_into_node(*parse_result.result_tree_->children_[0]->children_[4],
+                                                             into_node,
+                                                             true))) {
+      LOG_WARN("wrong usage of into clause", K(ret));
+    } else if (OB_NOT_NULL(into_node)) {
+      ret = OB_ERR_VIEW_SELECT_CONTAIN_INTO;
+      LOG_WARN("View's SELECT contains a 'INTO' clause.", K(ret));
+    }
   } else if (OB_FAIL(ObResolverUtils::get_select_into_node(*parse_result.result_tree_->children_[0],
                                                            into_node,
                                                            true))) {
@@ -8734,7 +8764,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
   CK (OB_NOT_NULL(routine_info));
   CK (OB_NOT_NULL(dblink_proxy = GCTX.dblink_proxy_));
   OX (tenant_id = session->get_effective_tenant_id());
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type));
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type, true));
   CK (OB_NOT_NULL(dblink_conn));
   if (DBLINK_DRV_OB == link_type) {
     OZ (ObPLDblinkUtil::print_dblink_call_stmt(allocator, *session, call_stmt, params, routine_info));
@@ -8769,15 +8799,6 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
   }
 
-  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
-      LOG_WARN("failed to relese connection", K(tmp_ret));
-    }
-    if (OB_SUCC(ret)) {
-      ret = tmp_ret;
-    }
-  }
   return ret;
 }
 

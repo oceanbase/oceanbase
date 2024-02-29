@@ -5703,7 +5703,8 @@ bool ObDropOutlineArg::is_valid() const
 OB_SERIALIZE_MEMBER((ObDropOutlineArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
-                    outline_name_);
+                    outline_name_,
+                    is_format_);
 
 bool ObCreateDbLinkArg::is_valid() const
 {
@@ -9014,7 +9015,7 @@ int ObBatchCreateTabletArg::deserialize_create_tablet_schemas(const char *buf,
       } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
       } else if (OB_FAIL(create_tablet_schema->deserialize(allocator_, buf, data_len, pos))) {
         create_tablet_schema->~ObCreateTabletSchema();
-        STORAGE_LOG(WARN,"failed to deserialize schema", K(ret), K(buf), K(data_len), K(pos));
+        STORAGE_LOG(WARN,"failed to deserialize schema", K(ret), K(i), K(count), K(buf), K(data_len), K(pos));
       } else if (OB_FAIL(create_tablet_schemas_.push_back(create_tablet_schema))) {
         create_tablet_schema->~ObCreateTabletSchema();
         STORAGE_LOG(WARN, "failed to add schema", K(ret));

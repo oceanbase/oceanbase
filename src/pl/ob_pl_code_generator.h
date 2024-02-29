@@ -406,11 +406,21 @@ public:
     }
     return label;
   }
+
+  inline int set_label(const ObPLStmt &s, jit::ObLLVMBasicBlock &start, jit::ObLLVMBasicBlock &exit)
+  {
+    int ret = common::OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < s.get_label_cnt(); ++i) {
+      ret = set_label(s.get_label(s.get_label_idx(i)), s.get_level(), start, exit);
+    }
+    return ret;
+  }
+
   inline int set_label(const common::ObString *name, int64_t level, jit::ObLLVMBasicBlock &start, jit::ObLLVMBasicBlock &exit)
   {
     int ret = common::OB_SUCCESS;
     if (label_stack_.cur_ < LABEL_STACK_DEPTH - 1) {
-      label_stack_.labels_[label_stack_.cur_].name_ = NULL == name ? ObString() : *name;
+      label_stack_.labels_[label_stack_.cur_].name_ = (NULL == name) ? ObString() : *name;
       label_stack_.labels_[label_stack_.cur_].level_ = level;
       label_stack_.labels_[label_stack_.cur_].start_ = start;
       label_stack_.labels_[label_stack_.cur_].exit_ = exit;
@@ -423,8 +433,18 @@ public:
   inline int reset_label()
   {
     int ret = common::OB_SUCCESS;
-    if (label_stack_.cur_ > 0) {
-      --label_stack_.cur_;
+    int64_t new_cur = label_stack_.cur_ - 1;
+    while (new_cur > 0) {
+      if (label_stack_.labels_[label_stack_.cur_].level_ == label_stack_.labels_[new_cur].level_
+          && label_stack_.labels_[label_stack_.cur_].start_.get_v() == label_stack_.labels_[new_cur].start_.get_v()
+          && label_stack_.labels_[label_stack_.cur_].exit_.get_v() == label_stack_.labels_[new_cur].exit_.get_v()) {
+        new_cur --;
+      } else {
+        break;
+      }
+    }
+    if (new_cur >= 0) {
+      label_stack_.cur_ = new_cur;
     } else {
       ret = common::OB_ERR_UNEXPECTED;
     }

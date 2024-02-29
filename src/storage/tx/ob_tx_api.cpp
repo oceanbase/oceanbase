@@ -60,7 +60,9 @@ using namespace share;
 
 namespace transaction {
 
-inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
+inline int ObTransService::init_tx_(ObTxDesc &tx,
+                                    const uint32_t session_id,
+                                    const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   tx.tenant_id_ = tenant_id_;
@@ -71,7 +73,9 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
   tx.state_     = ObTxDesc::State::IDLE;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
+  tx.cluster_version_ = cluster_version;
+  // cluster_version is invalid, need to get it
+  if (0 == cluster_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
     TRANS_LOG(WARN, "get min data version fail", K(ret), K(tx));
   } else if (tx.cluster_version_ >= DATA_VERSION_4_3_0_0) {
     tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
@@ -79,13 +83,15 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   return ret;
 }
 
-int ObTransService::acquire_tx(ObTxDesc *&tx, const uint32_t session_id)
+int ObTransService::acquire_tx(ObTxDesc *&tx,
+                               const uint32_t session_id,
+                               const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret));
   } else {
-    ret = init_tx_(*tx, session_id);
+    ret = init_tx_(*tx, session_id, cluster_version);
   }
   TRANS_LOG(TRACE, "acquire tx", KPC(tx), K(session_id));
   if (OB_SUCC(ret)) {
@@ -148,10 +154,9 @@ int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
-  // FIXME: open check later
-  // } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
+  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
@@ -173,7 +178,7 @@ int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
   return ret;
 }
 
-int ObTransService::reuse_tx(ObTxDesc &tx)
+int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int spin_cnt = 0;
@@ -212,9 +217,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
 #endif
     }
     // it is safe to operate tx without lock when not shared
-    uint32_t session_id = tx.sess_id_;
-    tx.reset();
-    ret = init_tx_(tx, session_id);
+    ret = reinit_tx_(tx, tx.sess_id_, data_version);
   }
   TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -226,6 +229,12 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
+}
+
+int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint64_t cluster_version)
+{
+  tx.reset();
+  return init_tx_(tx, session_id, cluster_version);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
@@ -1907,20 +1916,10 @@ int ObTransService::add_tx_exec_result(ObTxDesc &tx, const ObTxExecResult &exec_
 void ObTransService::tx_post_terminate_(ObTxDesc &tx)
 {
   // invalid registered snapshot
-  if (tx.state_ == ObTxDesc::State::ABORTED ||
-      tx.is_commit_unsucc()
-      // FIXME: (yunxing.cyx)
-      // bellow line is temproary, when storage layer support
-      // record txn-id in SSTable's MvccRow, we can remove this
-      // (the support was planed in v4.1)
-      || tx.state_ == ObTxDesc::State::COMMITTED
-      ) {
+  if (tx.state_ == ObTxDesc::State::ABORTED || tx.is_commit_unsucc()) {
     invalid_registered_snapshot_(tx);
   } else if (tx.state_ == ObTxDesc::State::COMMITTED) {
-    // cleanup snapshot's participant info, so that they will skip
-    // verify participant txn ctx, which cause false negative,
-    // because txn ctx has quit when txn committed.
-    registered_snapshot_clear_part_(tx);
+    process_registered_snapshot_on_commit_(tx);
   }
   // statistic
   if (tx.is_tx_end()) {

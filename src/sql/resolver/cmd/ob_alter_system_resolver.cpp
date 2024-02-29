@@ -577,9 +577,17 @@ int ObFreezeResolver::resolve_minor_freeze_(ObFreezeStmt *freeze_stmt,
   int ret = OB_SUCCESS;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(opt_tenant_list_or_ls_or_tablet_id) &&
-      OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_or_ls_or_tablet_id))) {
-    LOG_WARN("resolve tenant ls table failed", KR(ret));
+  if (OB_NOT_NULL(opt_tenant_list_or_ls_or_tablet_id)) {
+    if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_or_ls_or_tablet_id))) {
+      LOG_WARN("resolve tenant ls table failed", KR(ret));
+    } else if (T_TABLET_ID == opt_tenant_list_or_ls_or_tablet_id->type_) {
+      freeze_stmt->get_tenant_ids().reuse();
+      freeze_stmt->get_ls_id() = share::ObLSID::INVALID_LS_ID;
+      if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {  // if tenant is not explicitly
+                                                                              // specified, add owned tenant_id
+        LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
+      }
+    }
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(opt_server_list) && OB_FAIL(resolve_server_list_(freeze_stmt, opt_server_list))) {
