@@ -42,6 +42,22 @@ jobs:
   ubuntu-build:
     runs-on: ubuntu-22.04
     steps:
+    - name: Free Disk Space
+      uses: insightsengineering/disk-space-reclaimer@v1
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tools-cache: false
+
+        # all of these default to true, but feel free to set to
+        # "false" if necessary for your workflow
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        swap-storage: true
+        docker-images: true
+        
     - uses: actions/checkout@v3
 
     - name: Install ubuntu environment
