@@ -84,6 +84,7 @@ public:
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
   int64_t max_serialized_medium_scn_;
+  ObTabletSpaceUsage space_usage_;
   // keep member same to 4.1 !!!
 };
 
@@ -148,6 +149,8 @@ int ObTabletMetaV1::serialize(char *buf, const int64_t len, int64_t &pos) const
     LOG_WARN("failed to serialize ddl cluster version", K(ret), K(len), K(new_pos), K_(ddl_cluster_version));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, max_serialized_medium_scn_))) {
     LOG_WARN("failed to serialize max_serialized_medium_scn", K(ret), K(len), K(new_pos), K_(max_serialized_medium_scn));
+  } else if (new_pos - pos < length && OB_FAIL(space_usage_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos), K_(space_usage));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -187,6 +190,7 @@ int64_t ObTabletMetaV1::get_serialize_size() const
   size += serialization::encoded_length_i64(ddl_execution_id_);
   size += serialization::encoded_length_i64(ddl_cluster_version_);
   size += serialization::encoded_length_i64(max_serialized_medium_scn_);
+  size += space_usage_.get_serialize_size();
   return size;
 }
 
@@ -227,7 +231,8 @@ public:
                K_(table_store_flag),
                K_(max_sync_storage_schema_version),
                K_(max_serialized_medium_scn),
-               K_(ddl_commit_scn));
+               K_(ddl_commit_scn),
+               K_(space_usage));
 
 public:
   int64_t magic_number_;
@@ -259,6 +264,7 @@ public:
   int64_t ddl_data_format_version_;
   int64_t max_serialized_medium_scn_;
   share::SCN ddl_commit_scn_;
+  ObTabletSpaceUsage space_usage_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
@@ -337,6 +343,8 @@ int ObMigrationTabletParamV1::serialize(char *buf, const int64_t len, int64_t &p
     LOG_WARN("failed to serialize max_serialized_medium_scn", K(ret), K(len), K(new_pos), K_(max_serialized_medium_scn));
   } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize ddl commit scn", K(ret), K(len), K(new_pos), K_(ddl_commit_scn));
+  } else if (new_pos - pos < length && OB_FAIL(space_usage_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos), K(space_usage_));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -380,6 +388,7 @@ int64_t ObMigrationTabletParamV1::get_serialize_size() const
   size += serialization::encoded_length_i64(ddl_data_format_version_);
   size += serialization::encoded_length_i64(max_serialized_medium_scn_);
   size += ddl_commit_scn_.get_fixed_serialize_size();
+  size += space_usage_.get_serialize_size();
   return size;
 }
 

@@ -1839,11 +1839,10 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletMapKey &key,
     const ObTabletHandle &old_handle,
-    ObTabletHandle &new_handle)
+    const ObTabletHandle &new_handle)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
-  const ObMetaDiskAddr &new_addr = new_handle.get_obj()->get_tablet_addr();
   const ObTablet *old_tablet = old_handle.get_obj();
   const ObTablet *new_tablet = new_handle.get_obj();
 
@@ -1855,7 +1854,6 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else if (OB_UNLIKELY(!key.is_valid()
-                      || !new_addr.is_valid()
                       || !new_handle.is_valid()
                       || !old_handle.is_valid()
                       || new_handle.is_tmp_tablet()
@@ -1863,11 +1861,11 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
                       // || !(new_addr.is_memory() || new_addr.is_block())
                       )) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    LOG_WARN("invalid argument", K(ret), K(key), K(old_handle), K(new_handle));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, new_addr, old_handle, new_handle))) {
-      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, old_handle, new_handle))) {
+      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(old_handle), K(new_handle));
     } else if (CLICK_FAIL(update_tablet_buffer_header(old_handle.get_obj(), new_handle.get_obj()))) {
       LOG_WARN("fail to update tablet buffer header", K(ret), K(old_handle), K(new_handle));
     } else if (old_handle.get_obj() != new_handle.get_obj()) { // skip first init, old_handle == new_handle

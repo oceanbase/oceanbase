@@ -144,7 +144,7 @@ ObTablet::ObTablet()
     ddl_data_cache_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1576, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1592, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -267,6 +267,50 @@ int ObTablet::init_for_first_time_creation(
     reset();
   }
 
+  return ret;
+}
+
+int ObTablet::calc_tablet_data_usage()
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator iter;
+  if (OB_FAIL(inner_get_all_sstables(iter))) {
+    LOG_WARN("fail to get all sstables", K(ret));
+  }
+  int64_t occupy_bytes = 0;
+  int64_t required_bytes = 0;
+  while (OB_SUCC(ret)) {
+    ObITable *table = nullptr;
+    ObSSTable *sstable = nullptr;
+    ObSSTableMetaHandle meta_handle;
+    if (OB_FAIL(iter.get_next(table))) {
+      if (OB_UNLIKELY(OB_ITER_END == ret)) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("fail to get next table from iter", K(ret), K(iter));
+      }
+    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
+    } else if (OB_ISNULL(sstable) || !sstable->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the sstable is null or invalid", K(ret), KPC(sstable));
+    } else if (OB_FAIL(sstable->get_meta(meta_handle))) {
+      LOG_WARN("fail to get sstable meta handle", K(ret), KPC(sstable));
+    } else if (!meta_handle.is_valid()) {
+      LOG_WARN("meta_handle is not valid", K(ret), K(meta_handle), KPC(sstable));
+    } else if (sstable->is_small_sstable()) {
+      occupy_bytes += sstable->get_macro_read_size(); /*nested_size_*/
+      required_bytes += sstable->get_macro_read_size(); /*nested_size_*/
+    } else {
+      const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
+      occupy_bytes += sstable_meta.get_occupy_size();
+      required_bytes += sstable_meta.get_total_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    tablet_meta_.space_usage_.occupy_bytes_ = occupy_bytes;
+    tablet_meta_.space_usage_.required_bytes_ = required_bytes;
+  }
   return ret;
 }
 
@@ -489,6 +533,10 @@ int ObTablet::init_with_migrate_param(
   }
 
   if (OB_SUCC(ret)) {
+
+    // init tablet space usage
+    tablet_meta_.space_usage_ = param.space_usage_;
+
     if (param.is_empty_shell()) {
       int64_t pos = 0;
       ObString data = param.mds_data_.tablet_status_committed_kv_.v_.user_data_;
@@ -3806,6 +3854,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.report_status_ = tablet_meta_.report_status_;
     mig_tablet_param.mds_checkpoint_scn_ = tablet_meta_.mds_checkpoint_scn_;
     mig_tablet_param.transfer_info_ = tablet_meta_.transfer_info_;
+    mig_tablet_param.space_usage_ = tablet_meta_.space_usage_;
     mig_tablet_param.is_empty_shell_ = is_empty_shell();
 
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "BuildMigParam"));
@@ -4933,6 +4982,7 @@ int ObTablet::build_transfer_tablet_param(
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.mds_checkpoint_scn_ = user_data.transfer_scn_;
+    mig_tablet_param.space_usage_ = tablet_meta_.space_usage_;
     mig_tablet_param.report_status_.reset();
 
     const int64_t transfer_seq = tablet_meta_.transfer_info_.transfer_seq_ + 1;
@@ -5888,7 +5938,6 @@ int ObTablet::get_medium_info_mds_dump_kv(
 
   return ret;
 }
-
 int ObTablet::check_new_mds_with_cache(
     const int64_t snapshot_version,
     const int64_t timeout)

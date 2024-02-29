@@ -73,11 +73,11 @@ private:
   class ObReportResultGetter final
   {
   public:
-    explicit ObReportResultGetter(ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr)
+    explicit ObReportResultGetter(ObArray<hash::HashMapPair<ObDiskUsageReportKey, std::pair<int64_t, int64_t>>> &result_arr)
       : result_arr_(result_arr)
     {}
     ~ObReportResultGetter() = default;
-    int operator()(const hash::HashMapPair<ObDiskUsageReportKey, int64_t> &pair)
+    int operator()(const hash::HashMapPair<ObDiskUsageReportKey, std::pair<int64_t, int64_t>> &pair)
     {
       int ret = OB_SUCCESS;
       if (OB_FAIL(result_arr_.push_back(pair))) {
@@ -86,7 +86,7 @@ private:
       return ret;
     }
   private:
-    ObArray<hash::HashMapPair<ObDiskUsageReportKey, int64_t>> &result_arr_;
+    ObArray<hash::HashMapPair<ObDiskUsageReportKey, std::pair<int64_t, int64_t>>> &result_arr_;
     DISALLOW_COPY_AND_ASSIGN(ObReportResultGetter);
   };
 
@@ -113,7 +113,7 @@ private:
                             const int64_t seq_num);
 
   virtual void runTimerTask();
-  typedef common::hash::ObHashMap<ObDiskUsageReportKey, int64_t> ReportResultMap;
+  typedef common::hash::ObHashMap<ObDiskUsageReportKey, std::pair<int64_t, int64_t>> ReportResultMap; // pair<occupy_size, required_size>
 private:
   bool is_inited_;
   ReportResultMap result_map_;

@@ -201,6 +201,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_multi_source_data.cpp
   tablet/ob_tablet_service_clog_replay_executor.cpp
   tablet/ob_tablet_slog_helper.cpp
+  tablet/ob_tablet_space_usage.cpp
   tablet/ob_tablet_status.cpp
   tablet/ob_tablet_table_store.cpp
   tablet/ob_tablet_table_store_iterator.cpp
@@ -483,6 +484,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_freeze_checkpoint.cpp
   checkpoint/ob_checkpoint_diagnose.cpp
   meta_mem/ob_meta_obj_struct.cpp
+  meta_mem/ob_meta_pointer_map.cpp
   meta_mem/ob_tablet_handle.cpp
   meta_mem/ob_tablet_map_key.cpp
   meta_mem/ob_tablet_pointer.cpp

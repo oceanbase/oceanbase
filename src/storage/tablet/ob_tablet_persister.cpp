@@ -283,6 +283,8 @@ int ObTabletPersister::persist_and_fill_tablet(
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(type));
   } else if (CLICK_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));
+  } else if (CLICK_FAIL(new_handle.get_obj()->calc_tablet_data_usage())) {
+    LOG_WARN("fail to calc tablet data size", K(ret), K(new_handle), K(type));
   }
 
   return ret;
