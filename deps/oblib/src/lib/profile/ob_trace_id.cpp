@@ -26,7 +26,7 @@ TLOCAL(ObCurTraceId::TraceId, ObCurTraceId::trace_id_);
 
 uint64_t ObCurTraceId::SeqGenerator::seq_generator_ = 0;
 
-OB_SERIALIZE_MEMBER(ObCurTraceId::TraceId, uval_[0], uval_[1]);
+OB_SERIALIZE_MEMBER(ObCurTraceId::TraceId, uval_[0], uval_[1], uval_[2], uval_[3]);
 
 } // end namespace common
 } // end namespace oceanbase
