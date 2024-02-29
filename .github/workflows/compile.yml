@@ -18,12 +18,22 @@ jobs:
     runs-on: ubuntu-20.04
     container: centos:7
     steps:
+    - name: show disk space(init)
+      shell: bash
+      run: |
+        df -h
+        
     - uses: actions/checkout@v3
 
     - name: Install centos environment
       shell: bash
       run: yum install -y git wget rpm* cpio make glibc-devel glibc-headers binutils m4
 
+    - name: show disk space(install system deps)
+      shell: bash
+      run: |
+        df -h
+        
     - name: Cache deps
       id: cache-deps
       uses: actions/cache@v3
@@ -33,11 +43,21 @@ jobs:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
         path: deps/3rd
 
+    - name: show disk space(download deps cache)
+      shell: bash
+      run: |
+        df -h
+        
     - name: Build
       uses: ./.github/workflows/buildbase
       with:
         save_cache: ${{github.event_name == 'push'}}
         os: 'centos7'
+
+    - name: show disk space(build done)
+      shell: bash
+      run: |
+        df -h
 
   ubuntu-build:
     runs-on: ubuntu-22.04
