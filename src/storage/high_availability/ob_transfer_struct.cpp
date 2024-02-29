@@ -48,9 +48,8 @@ void ObTXStartTransferOutInfo::reset()
 bool ObTXStartTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
-      && dest_ls_id_.is_valid()
-      && !tablet_list_.empty()
-      && transfer_epoch_ > 0;
+    && dest_ls_id_.is_valid()
+    && !tablet_list_.empty();
 }
 
 int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_transfer_out_info)
