@@ -1593,14 +1593,6 @@ int ObDDLRedoLogWriterCallback::wait()
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
   } else if (OB_FAIL(ddl_writer_->wait_macro_block_log_finish(redo_info_, macro_block_id_))) {
     LOG_WARN("fail to wait redo log finish", K(ret));
-    if (ObDDLRedoLogWriter::need_retry(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(retry(ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US))) {
-        LOG_WARN("retry wirte ddl macro redo log failed", K(ret), K(tmp_ret), K(task_id_), K(table_key_));
-      } else {
-        ret = OB_SUCCESS; // overwrite the return code
-      }
-    }
   }
   return ret;
 }
