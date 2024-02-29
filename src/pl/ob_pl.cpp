@@ -3492,7 +3492,11 @@ do {                                                                  \
           ObObjMeta null_meta = get_params().at(i).get_meta();
           OZ (get_params().at(i).apply(obj));
           OX (get_params().at(i).set_collation_level(null_meta.get_collation_level()));
-          OX (get_params().at(i).set_collation_type(null_meta.get_collation_type()));
+          if (CS_TYPE_ANY != null_meta.get_collation_type()) {
+            OX (get_params().at(i).set_collation_type(null_meta.get_collation_type()));
+          } else if (!params->at(i).is_null()) {
+            OX (get_params().at(i).set_collation_type(params->at(i).get_meta().get_collation_type()));
+          }
           OX (get_params().at(i).set_param_meta(null_meta));
         } else if (is_anonymous
                    && (func_.get_variables().at(i).is_nested_table_type()
