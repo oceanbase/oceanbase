@@ -458,6 +458,7 @@ public:
   int64_t &inserted_cg_row_cnt_;
 };
 
+class ObCOSliceWriter;
 class ObDirectLoadSliceWriter final
 {
 public:
@@ -494,9 +495,14 @@ public:
       const ObStorageSchema *storage_schema,
       const share::SCN &start_scn,
       ObInsertMonitor *monitor_node = NULL);
+  int fill_aggregated_column_group(
+      const int64_t cg_idx,
+      ObCOSliceWriter *cur_writer,
+      ObIArray<sql::ObCompactStore *> &datum_stores);
   void set_row_offset(const int64_t row_offset) { row_offset_ = row_offset; }
   int64_t get_row_count() const { return nullptr == slice_store_ ? 0 : slice_store_->get_row_count(); }
   int64_t get_row_offset() const { return row_offset_; }
+  blocksstable::ObMacroDataSeq &get_start_seq() { return start_seq_; }
   bool is_empty() const { return 0 == get_row_count(); }
   bool need_column_store() const { return need_column_store_; }
   ObTabletSliceStore *get_slice_store() const { return slice_store_; }
@@ -552,6 +558,7 @@ private:
       const int64_t lob_inrow_threshold,
       const uint64_t src_tenant_id,
       ObLobMetaRowIterator *&row_iter);
+  int mock_chunk_store(const int64_t row_cnt);
 private:
   bool is_inited_;
   bool need_column_store_;
@@ -585,6 +592,7 @@ public:
       const sql::ObChunkDatumStore::StoredRow *stored_row,
       blocksstable::ObDatumRow &cg_row);
   int close();
+  bool is_inited() { return is_inited_; }
   TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_));
 private:
   bool is_inited_;

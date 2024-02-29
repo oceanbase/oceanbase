@@ -282,6 +282,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
   merge_param.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
   merge_param.is_column_store_ = store_ctx_->ctx_->schema_.is_column_store_;
+  merge_param.fill_cg_thread_cnt_ = param_.session_count_;
   merge_param.px_mode_ = param_.px_mode_;
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
   merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;

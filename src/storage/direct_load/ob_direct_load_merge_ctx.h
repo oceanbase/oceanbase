@@ -62,6 +62,7 @@ public:
   int64_t store_column_count_;
   int64_t snapshot_version_;
   int64_t lob_column_cnt_;
+  int64_t fill_cg_thread_cnt_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;

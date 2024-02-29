@@ -178,6 +178,7 @@ public:
   int calc_range(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
+      const int64_t thread_cnt,
       const bool is_full_direct_load);
   int fill_column_group(
       const share::ObLSID &ls_id,
@@ -263,7 +264,18 @@ public:
     return common::murmurhash(&slice_id, sizeof(slice_id), 0L);
   }
   void reset_slice_ctx_on_demand();
-  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt));
+  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx));
+  struct AggregatedCGInfo final {
+  public:
+    AggregatedCGInfo()
+      : start_idx_(0),
+        last_idx_(0) {}
+    ~AggregatedCGInfo() {}
+    TO_STRING_KV(K_(start_idx), K_(last_idx));
+  public:
+    int64_t start_idx_;
+    int64_t last_idx_;
+  };
 public:
   typedef common::hash::ObHashMap<
     int64_t,
@@ -276,6 +288,7 @@ public:
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   common::ObArray<ObOptColumnStat*> column_stat_array_; // online column stat result.
   common::ObArray<ObDirectLoadSliceWriter *> sorted_slice_writers_;
+  common::ObArray<AggregatedCGInfo> sorted_slices_idx_; //for cg_aggregation
   bool is_task_end_; // to avoid write commit log/freeze in memory index sstable again.
   int64_t task_finish_count_; // reach the parallel slice cnt, means the tablet data finished.
   int64_t task_total_cnt_; // parallelism of the PX.
@@ -353,7 +366,8 @@ public:
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const share::SCN &start_scn);
   int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   virtual int notify_all();
-  virtual int calc_range(const ObStorageSchema *storage_schema, const blocksstable::ObStorageDatumUtils &datum_utils);
+  virtual int calc_range(const ObStorageSchema *storage_schema, const blocksstable::ObStorageDatumUtils &datum_utils, const int64_t thread_cnt);
+  int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
 
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
@@ -362,7 +376,13 @@ public:
 private:
   int prepare_schema_item_on_demand(const uint64_t table_id);
   void calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx);
-
+  int fill_aggregated_column_group(
+      const int64_t start_idx,
+      const int64_t last_idx,
+      const ObStorageSchema *storage_schema,
+      ObCOSliceWriter *cur_writer,
+      int64_t &fill_cg_finish_count,
+      int64_t &fill_row_cnt);
 // private:
   /* +++++ online column stat collect +++++ */
   // virtual int init_sql_statistics_if_needed();
@@ -370,6 +390,7 @@ private:
   /* +++++ -------------------------- +++++ */
 public:
   static const int64_t TRY_LOCK_TIMEOUT = 1 * 1000000; // 1s
+  static const int64_t EACH_MACRO_MIN_ROW_CNT = 1000000; // 100w
 protected:
   bool is_inited_;
   bool is_schema_item_ready_;

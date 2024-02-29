@@ -648,6 +648,31 @@ ObDirectLoadSliceWriter::~ObDirectLoadSliceWriter()
   need_column_store_ = false;
 }
 
+//for test
+int ObDirectLoadSliceWriter::mock_chunk_store(const int64_t row_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (row_cnt < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid row cnt", K(ret), K(row_cnt));
+  } else {
+    ObChunkSliceStore *chunk_slice_store = nullptr;
+    if (OB_ISNULL(chunk_slice_store = OB_NEWx(ObChunkSliceStore, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for chunk slice store failed", K(ret));
+    } else {
+      chunk_slice_store->row_cnt_ = row_cnt;
+      slice_store_ = chunk_slice_store;
+
+    }
+    if (OB_FAIL(ret) && nullptr != chunk_slice_store) {
+      chunk_slice_store->~ObChunkSliceStore();
+      allocator_.free(chunk_slice_store);
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     const int64_t schema_rowkey_column_num,
     const bool is_column_store,
@@ -1057,6 +1082,54 @@ int ObDirectLoadSliceWriter::check_null(
   return ret;
 }
 
+int ObDirectLoadSliceWriter::fill_aggregated_column_group(
+    const int64_t cg_idx,
+    ObCOSliceWriter *cur_writer,
+    ObIArray<sql::ObCompactStore *> &datum_stores)
+{
+  int ret = OB_SUCCESS;
+  datum_stores.reset();
+  ObChunkSliceStore *chunk_slice_store = static_cast<ObChunkSliceStore *>(slice_store_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (nullptr == chunk_slice_store || is_empty()) {
+    // do nothing
+    LOG_INFO("chunk slice store is null or empty", K(ret),
+        KPC(chunk_slice_store), KPC(tablet_direct_load_mgr_));
+  } else if (ATOMIC_LOAD(&is_canceled_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
+  } else if (cg_idx < 0 || cg_idx > chunk_slice_store->datum_stores_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cg idx", K(ret), K(cg_idx), K(chunk_slice_store->datum_stores_));
+  } else {
+    sql::ObCompactStore *cur_datum_store = chunk_slice_store->datum_stores_.at(cg_idx);
+    const ObChunkDatumStore::StoredRow *stored_row = nullptr;
+    bool has_next = false;
+    while (OB_SUCC(ret) && OB_SUCC(cur_datum_store->has_next(has_next)) && has_next) {
+      if (OB_FAIL(cur_datum_store->get_next_row(stored_row))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("get next row failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(cur_writer->append_row(stored_row))) {
+          LOG_WARN("append row failed", K(ret), KPC(stored_row));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(datum_stores.push_back(cur_datum_store))) {
+          LOG_WARN("fail to push datum store", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadSliceWriter::close()
 {
   int ret = OB_SUCCESS;
@@ -1091,8 +1164,6 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
     LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
   } else {
     const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
-    ObArray<ObCOSliceWriter *> co_ddl_writers;
-    co_ddl_writers.set_attr(ObMemAttr(MTL_ID(), "DL_co_writers"));
     FLOG_INFO("[DDL_FILL_CG] fill column group start",
         "tablet_id", tablet_direct_load_mgr_->get_tablet_id(),
         "row_count", chunk_slice_store->get_row_count(),
@@ -1106,7 +1177,6 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
     } else {
       // 2. rescan and write
       for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
-        const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(cg_idx);
         cur_writer->reset();
         if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, tablet_direct_load_mgr_, start_seq_, row_offset_, start_scn))) {
           LOG_WARN("init co ddl writer failed", K(ret), KPC(cur_writer), K(cg_idx), KPC(this));

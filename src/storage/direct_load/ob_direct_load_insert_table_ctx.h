@@ -110,7 +110,7 @@ public:
                              blocksstable::ObDatumRow &datum_row);
 
   int get_lob_write_ctx(ObDirectLoadInsertTabletWriteCtx &write_ctx);
-  int calc_range();
+  int calc_range(const int64_t thread_cnt);
   int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   int cancel();
   TO_STRING_KV(K_(param), K_(is_open));

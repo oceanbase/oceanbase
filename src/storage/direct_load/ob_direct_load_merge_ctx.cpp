@@ -50,6 +50,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     store_column_count_(0),
     snapshot_version_(0),
     lob_column_cnt_(0),
+    fill_cg_thread_cnt_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),

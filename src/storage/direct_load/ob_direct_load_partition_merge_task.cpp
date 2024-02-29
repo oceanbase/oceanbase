@@ -110,7 +110,7 @@ int ObDirectLoadPartitionMergeTask::process()
         LOG_WARN("fail to inc finish count", KR(ret));
       } else if (is_ready) {
         if (merge_param_->is_column_store_) {
-          if (OB_FAIL(tablet_ctx->calc_range())) {
+          if (OB_FAIL(tablet_ctx->calc_range(merge_param_->fill_cg_thread_cnt_))) {
             LOG_WARN("fail to calc range", KR(ret));
           }
         } else if (OB_FAIL(tablet_ctx->close())) {

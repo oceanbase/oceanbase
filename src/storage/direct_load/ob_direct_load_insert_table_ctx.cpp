@@ -437,7 +437,7 @@ int ObDirectLoadInsertTabletContext::close_lob_sstable_slice(const int64_t slice
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::calc_range()
+int ObDirectLoadInsertTabletContext::calc_range(const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -445,7 +445,7 @@ int ObDirectLoadInsertTabletContext::calc_range()
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
-    if (OB_FAIL(sstable_insert_mgr->calc_range(param_.ls_id_, param_.tablet_id_, true))) {
+    if (OB_FAIL(sstable_insert_mgr->calc_range(param_.ls_id_, param_.tablet_id_, thread_cnt, true))) {
       LOG_WARN("fail to calc range", KR(ret), K(param_.tablet_id_));
     } else {
       LOG_INFO("success to calc range", K(param_.tablet_id_));

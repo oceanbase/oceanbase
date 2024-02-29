@@ -493,6 +493,7 @@ int ObTenantDirectLoadMgr::fill_lob_sstable_slice(
 int ObTenantDirectLoadMgr::calc_range(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
+    const int64_t thread_cnt,
     const bool is_full_direct_load)
 {
   int ret = OB_SUCCESS;
@@ -531,8 +532,8 @@ int ObTenantDirectLoadMgr::calc_range(
     } else if (OB_UNLIKELY(!is_column_store)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table withou cg", K(ret));
-    } else if (OB_FAIL(handle.get_obj()->calc_range(storage_schema, tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils()))) {
-      LOG_WARN("calc range failed", K(ret));
+    } else if (OB_FAIL(handle.get_obj()->calc_range(storage_schema, tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils(), thread_cnt))) {
+      LOG_WARN("calc range failed", K(ret), K(thread_cnt));
     }
     ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
     arena_allocator.reset();
@@ -1066,10 +1067,11 @@ private:
 
 ObTabletDirectLoadBuildCtx::ObTabletDirectLoadBuildCtx()
   : allocator_(), slice_writer_allocator_(), build_param_(), slice_mgr_map_(), data_block_desc_(true/*is ddl*/), index_builder_(nullptr),
-    column_stat_array_(), sorted_slice_writers_(), is_task_end_(false), task_finish_count_(0), fill_column_group_finish_count_(0)
+    column_stat_array_(), sorted_slice_writers_(), sorted_slices_idx_(), is_task_end_(false), task_finish_count_(0), fill_column_group_finish_count_(0)
 {
   column_stat_array_.set_attr(ObMemAttr(MTL_ID(), "TblDL_CSA"));
   sorted_slice_writers_.set_attr(ObMemAttr(MTL_ID(), "TblDL_SSR"));
+  sorted_slices_idx_.set_attr(ObMemAttr(MTL_ID(), "TblDL_IDX"));
 }
 
 ObTabletDirectLoadBuildCtx::~ObTabletDirectLoadBuildCtx()
@@ -1088,6 +1090,7 @@ ObTabletDirectLoadBuildCtx::~ObTabletDirectLoadBuildCtx()
   }
   column_stat_array_.reset();
   sorted_slice_writers_.reset();
+  sorted_slices_idx_.reset();
 
   if (!slice_mgr_map_.empty()) {
     DestroySliceWriterMapFn destroy_map_fn(&slice_writer_allocator_);
@@ -1603,7 +1606,7 @@ public:
   int ret_code_;
 };
 
-int ObTabletDirectLoadMgr::calc_range(const ObStorageSchema *storage_schema, const ObStorageDatumUtils &datum_utils)
+int ObTabletDirectLoadMgr::calc_range(const ObStorageSchema *storage_schema, const ObStorageDatumUtils &datum_utils, const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
   ObArray<ObDirectLoadSliceWriter *> sorted_slices;
@@ -1643,11 +1646,67 @@ int ObTabletDirectLoadMgr::calc_range(const ObStorageSchema *storage_schema, con
     if (OB_FAIL(ObCODDLUtil::need_column_group_store(*storage_schema, is_column_store))) {
       LOG_WARN("fail to check need column group", K(ret));
     } else if (is_column_store) {
-      if (OB_FAIL(sqc_build_ctx_.sorted_slice_writers_.assign(sorted_slices))) {
-        LOG_WARN("copy slice array failed", K(ret), K(sorted_slices.count()));
+      if (thread_cnt <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invali thread cnt", K(ret), K(thread_cnt));
+      } else if (OB_FAIL(calc_cg_range(sorted_slices, thread_cnt))) {
+        LOG_WARN("fail to calc cg range", K(ret), K(sorted_slices), K(thread_cnt));
       }
     }
   }
+  return ret;
+}
+
+int ObTabletDirectLoadMgr::calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (thread_cnt <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invali thread cnt", K(ret), K(thread_cnt));
+  } else {
+    common::ObArray<ObTabletDirectLoadBuildCtx::AggregatedCGInfo> sorted_slices_idx;
+    int64_t slice_idx = 0;
+    while (OB_SUCC(ret) && slice_idx < sorted_slices.count()) {
+      int64_t tmp_row_cnt = 0;
+      ObTabletDirectLoadBuildCtx::AggregatedCGInfo cur_info;
+      cur_info.start_idx_ = slice_idx;
+      while (OB_SUCC(ret) && slice_idx < sorted_slices.count()) {
+        tmp_row_cnt += sorted_slices.at(slice_idx)->get_row_count();
+        ++slice_idx;
+        cur_info.last_idx_ = slice_idx;
+        if (tmp_row_cnt >= EACH_MACRO_MIN_ROW_CNT) {
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(sorted_slices_idx.push_back(cur_info))) {
+          LOG_WARN("fail to push slice info", K(ret));
+        }
+      }
+    }
+
+    sqc_build_ctx_.sorted_slices_idx_.reset();
+    if (OB_FAIL(ret)) {
+    } else if (sorted_slices_idx.count() > thread_cnt) {
+      // thread_cnt cannot handle aggregated group, re_calc by thread_cnt
+      for (int64_t i = 0; OB_SUCC(ret) && i < thread_cnt; ++i) {
+        ObTabletDirectLoadBuildCtx::AggregatedCGInfo cur_info;
+        calc_cg_idx(thread_cnt, i, cur_info.start_idx_, cur_info.last_idx_);
+        if (OB_FAIL(sqc_build_ctx_.sorted_slices_idx_.push_back(cur_info))) {
+          LOG_WARN("fail to push info", K(ret), K(i));
+        }
+      }
+    } else if (OB_FAIL(sqc_build_ctx_.sorted_slices_idx_.assign(sorted_slices_idx))) {
+      LOG_WARN("fail to assign array", K(ret));
+    }
+
+    sqc_build_ctx_.sorted_slice_writers_.reset();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sqc_build_ctx_.sorted_slice_writers_.assign(sorted_slices))) {
+      LOG_WARN("copy slice array failed", K(ret), K(sorted_slices.count()));
+    }
+  }
+  FLOG_INFO("calc_cg_range", K(ret), K(sorted_slices.count()), K(thread_cnt), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.sorted_slices_idx_.count()));
   return ret;
 }
 
@@ -1740,7 +1799,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
             LOG_WARN("slice writer fill column group failed", K(ret));
           }
         } else {
-          if (OB_FAIL(calc_range(storage_schema, tablet->get_rowkey_read_info().get_datum_utils()))) {
+          if (OB_FAIL(calc_range(storage_schema, tablet->get_rowkey_read_info().get_datum_utils(), 0))) {
             LOG_WARN("calc range failed", K(ret));
           } else if (OB_FAIL(notify_all())) {
             LOG_WARN("notify all failed", K(ret));
@@ -1787,7 +1846,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
   return ret;
 }
 
-void ObTabletDirectLoadMgr::calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx)
+void ObTabletDirectLoadMgr::calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &start_idx, int64_t &end_idx)
 {
   int ret = OB_SUCCESS;
   const int64_t each_thread_task_cnt = sqc_build_ctx_.sorted_slice_writers_.count() / thread_cnt;
@@ -1795,15 +1854,16 @@ void ObTabletDirectLoadMgr::calc_cg_idx(const int64_t thread_cnt, const int64_t 
   const int64_t pre_handle_cnt = need_plus_thread_cnt * (each_thread_task_cnt + 1);
   if (need_plus_thread_cnt != 0) {
     if (thread_id < need_plus_thread_cnt) {
-      strat_idx = (each_thread_task_cnt + 1) * thread_id;
-      end_idx = strat_idx + (each_thread_task_cnt + 1);
+      start_idx = (each_thread_task_cnt + 1) * thread_id;
+      end_idx = start_idx + (each_thread_task_cnt + 1);
     } else {
-      strat_idx = pre_handle_cnt + (thread_id - need_plus_thread_cnt) * each_thread_task_cnt;
-      end_idx = strat_idx + each_thread_task_cnt;
+      start_idx = pre_handle_cnt + (thread_id - need_plus_thread_cnt) * each_thread_task_cnt;
+      end_idx = start_idx + each_thread_task_cnt;
+      // when slice_cnt < thread_cnt, idle thread start_idx = end_idx
     }
   } else {
-    strat_idx = each_thread_task_cnt * thread_id;
-    end_idx = strat_idx + each_thread_task_cnt;
+    start_idx = each_thread_task_cnt * thread_id;
+    end_idx = start_idx + each_thread_task_cnt;
   }
 }
 
@@ -1816,46 +1876,57 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
   } else if (OB_UNLIKELY(thread_cnt <= 0 || thread_id < 0 || thread_id > thread_cnt - 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), K(thread_cnt), K(thread_id));
-  } else if (sqc_build_ctx_.sorted_slice_writers_.count() == 0) {
+  } else if (sqc_build_ctx_.sorted_slice_writers_.count() == 0 || thread_id > sqc_build_ctx_.sorted_slices_idx_.count() - 1) {
     //ignore
+    FLOG_INFO("[DIRECT_LOAD_FILL_CG] idle thread", K(sqc_build_ctx_.sorted_slice_writers_.count()), K(thread_id), K(sqc_build_ctx_.sorted_slices_idx_.count()));
   } else if (sqc_build_ctx_.sorted_slice_writers_.count() != sqc_build_ctx_.slice_mgr_map_.size()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong slice writer num", K(ret), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.slice_mgr_map_.size()), K(common::lbt()));
   } else {
-    int64_t strat_idx = 0;
-    int64_t last_idx = 0;
-    calc_cg_idx(thread_cnt, thread_id, strat_idx, last_idx);
-    LOG_INFO("direct load start fill column group", K(tablet_id_), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(thread_cnt), K(thread_id), K(strat_idx), K(last_idx));
-    if (strat_idx < 0 || strat_idx >= sqc_build_ctx_.sorted_slice_writers_.count() || last_idx > sqc_build_ctx_.sorted_slice_writers_.count()) {
-      //skip
+    const int64_t start_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).start_idx_;
+    const int64_t last_idx = sqc_build_ctx_.sorted_slices_idx_.at(thread_id).last_idx_;
+
+    ObArenaAllocator arena_allocator("DIRECT_RESCAN", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTablet *tablet = nullptr;
+    ObStorageSchema *storage_schema = nullptr;
+    int64_t fill_cg_finish_count = -1;
+    int64_t row_cnt = 0;
+    if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle_));
+    } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is null", K(ret), K(ls_id_), K(tablet_id_));
+    } else if (OB_FAIL(tablet->load_storage_schema(arena_allocator, storage_schema))) {
+      LOG_WARN("load storage schema failed", K(ret), K(tablet_id_));
+    } else if (OB_UNLIKELY(nullptr == storage_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid storage_schema", K(ret), KP(storage_schema));
     } else {
-      ObArenaAllocator arena_allocator("DIRECT_RESCAN", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      ObTablet *tablet = nullptr;
-      ObStorageSchema *storage_schema = nullptr;
-      int64_t fill_cg_finish_count = -1;
-      if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle_));
-      } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet is null", K(ret), K(ls_id_), K(tablet_id_));
-      } else if (OB_FAIL(tablet->load_storage_schema(arena_allocator, storage_schema))) {
-        LOG_WARN("load storage schema failed", K(ret), K(tablet_id_));
-      } else {
-        for (int64_t i = strat_idx; OB_SUCC(ret) && i < last_idx; ++i) {
-          ObDirectLoadSliceWriter *slice_writer = sqc_build_ctx_.sorted_slice_writers_.at(i);
-          if (OB_ISNULL(slice_writer) || !slice_writer->need_column_store()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("wrong slice writer", KPC(slice_writer));
-          } else if (OB_FAIL(slice_writer->fill_column_group(storage_schema, get_start_scn()))) {
-            LOG_WARN("slice writer rescan failed", K(ret), KP(storage_schema), K(get_start_scn()));
-          } else {
-            fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, 1);
-          }
-        }
+      const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
+      FLOG_INFO("[DIRECT_LOAD_FILL_CG] start fill cg",
+          "tablet_id", tablet_id_,
+          "cg_cnt", cg_schemas.count(),
+          "slice_cnt", sqc_build_ctx_.sorted_slice_writers_.count(),
+          K(thread_cnt), K(thread_id), K(start_idx), K(last_idx));
+
+      ObCOSliceWriter *cur_writer = nullptr;
+      if (OB_ISNULL(cur_writer = OB_NEWx(ObCOSliceWriter, &arena_allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for co writer failed", K(ret));
+      } else if (OB_FAIL(fill_aggregated_column_group(start_idx, last_idx, storage_schema, cur_writer, fill_cg_finish_count, row_cnt))) {
+        LOG_WARN("fail to fill aggregated cg", K(ret), KPC(cur_writer));
+      }
+      // free writer anyhow
+      if (OB_NOT_NULL(cur_writer)) {
+        cur_writer->~ObCOSliceWriter();
+        arena_allocator.free(cur_writer);
+        cur_writer = nullptr;
       }
       ObTabletObjLoadHelper::free(arena_allocator, storage_schema); //arena cannot free
       arena_allocator.reset();
+
+      // after finish all slice, free slice_writer
       if (OB_SUCC(ret)) {
         if (fill_cg_finish_count == sqc_build_ctx_.sorted_slice_writers_.count()) {
           sqc_build_ctx_.sorted_slice_writers_.reset();
@@ -1873,8 +1944,77 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
       }
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("direct load finish fill column group", K(tablet_id_), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(thread_cnt), K(thread_id), K(strat_idx), K(last_idx),
-                                                       K(sqc_build_ctx_.slice_mgr_map_.size()));
+      FLOG_INFO("[DIRECT_LOAD_FILL_CG] finish fill cg",
+          "tablet_id", tablet_id_,
+          "row_cnt", row_cnt,
+          "slice_cnt", sqc_build_ctx_.sorted_slice_writers_.count(),
+          K(thread_cnt), K(thread_id), K(start_idx), K(last_idx),  K(sqc_build_ctx_.slice_mgr_map_.size()));
+    }
+  }
+  return ret;
+}
+
+int ObTabletDirectLoadMgr::fill_aggregated_column_group(
+    const int64_t start_idx,
+    const int64_t last_idx,
+    const ObStorageSchema *storage_schema,
+    ObCOSliceWriter *cur_writer,
+    int64_t &fill_cg_finish_count,
+    int64_t &fill_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  fill_cg_finish_count = -1;
+  fill_row_cnt = 0;
+  if (OB_ISNULL(cur_writer) || OB_ISNULL(storage_schema) || OB_UNLIKELY(start_idx < 0 || last_idx < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(cur_writer), KP(storage_schema), K(start_idx), K(last_idx));
+  } else {
+    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
+    for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
+      cur_writer->reset();
+      common::ObArray<sql::ObCompactStore *> datum_stores;
+      if (start_idx == last_idx || start_idx >= sqc_build_ctx_.sorted_slice_writers_.count() || last_idx > sqc_build_ctx_.sorted_slice_writers_.count()) {
+        // skip
+      } else {
+        ObDirectLoadSliceWriter *first_slice_writer = sqc_build_ctx_.sorted_slice_writers_.at(start_idx);
+        if (OB_ISNULL(first_slice_writer)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null slice writer", K(ret), KP(first_slice_writer));
+        } else if (OB_UNLIKELY(first_slice_writer->get_row_offset() < 0)) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("invalid row offset", K(ret), K(first_slice_writer->get_row_offset()));
+        } else if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, this, first_slice_writer->get_start_seq(), first_slice_writer->get_row_offset(), get_start_scn()))) {
+          LOG_WARN("init co ddl writer failed", K(ret), KPC(cur_writer), K(cg_idx), KPC(this));
+        } else {
+          for (int64_t i = start_idx; OB_SUCC(ret) && i < last_idx; ++i) {
+            ObDirectLoadSliceWriter *slice_writer = sqc_build_ctx_.sorted_slice_writers_.at(i);
+            if (OB_ISNULL(slice_writer) || !slice_writer->need_column_store()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("wrong slice writer",  K(ret), KPC(slice_writer));
+            } else if (OB_FAIL(slice_writer->fill_aggregated_column_group(cg_idx, cur_writer, datum_stores))) {
+              LOG_WARN("slice writer rescan failed", K(ret), K(cg_idx), KPC(cur_writer));
+            } else if (cg_idx == cg_schemas.count() - 1) {
+              // after fill last cg, inc finish cnt
+              fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, 1);
+              fill_row_cnt += slice_writer->get_row_count();
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (cur_writer->is_inited() && OB_FAIL(cur_writer->close())) {
+          LOG_WARN("close co ddl writer failed", K(ret));
+        } else {
+          for (int64_t i = 0; i < datum_stores.count(); ++i) {
+            if (OB_NOT_NULL(datum_stores.at(i))) {
+              datum_stores.at(i)->~ObCompactStore();
+            }
+          }
+          datum_stores.reset();
+        }
+      }
+      // next cg
     }
   }
   return ret;
