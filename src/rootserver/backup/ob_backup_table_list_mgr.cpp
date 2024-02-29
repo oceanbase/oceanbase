@@ -184,7 +184,7 @@ int ObBackupTableListMgr::backup_table_list()
   } else if (OB_FAIL(store.is_table_list_meta_exist(snapshot_point_, is_meta_exist))) {
     LOG_WARN("fail to check is table list meta exist", K(ret), K_(snapshot_point), K_(backup_set_dest));
   } else if (is_meta_exist) { // do nothing
-  } else if (OB_FAIL(tmp_file_.open(tenant_id_))) {
+  } else if (OB_FAIL(tmp_file_.open(MTL_ID()))) {
     LOG_WARN("fail to open tmp file", K(ret), K_(tenant_id));
   } else if (OB_FAIL(backup_table_list_to_tmp_file_(count, serialize_size_array))) {
     LOG_WARN("fail to backup table list to tmp file", K(ret), K_(snapshot_point));
