@@ -30,7 +30,7 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
 {
   int ret = OB_SUCCESS;
   ObStoreRowLockState lock_state;
-  ObMvccAccessCtx acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+  ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
   share::SCN max_trans_version = share::SCN::min_scn();
   const ObTransID my_tx_id = acc_ctx.get_tx_id();
   const share::SCN snapshot_version = acc_ctx.get_snapshot_version();
@@ -145,7 +145,7 @@ int ObRowConflictHandler::check_foreign_key_constraint(const storage::ObTableIte
                                                        const common::ObStoreRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  ObMvccAccessCtx acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+  ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
   blocksstable::ObDatumRowkeyHelper rowkey_converter;
   blocksstable::ObDatumRowkey datum_rowkey;
   if (OB_FAIL(rowkey_converter.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {

@@ -61,6 +61,7 @@ public:
     type_ = T::INVL;
     abs_lock_timeout_ts_ = -1;
     tx_lock_timeout_us_ = -1;
+    tx_table_guards_.reset();
     tx_id_.reset();
     tx_desc_ = NULL;
     tx_ctx_ = NULL;
@@ -169,9 +170,11 @@ public:
     write_flag_ = write_flag;
   }
 
-  void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard)
+  void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard,
+                              storage::ObLSHandle &src_ls_handle)
   {
     tx_table_guards_.src_tx_table_guard_ = tx_table_guard;
+    tx_table_guards_.src_ls_handle_ = src_ls_handle;
   }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,

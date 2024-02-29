@@ -1382,9 +1382,10 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
   }
 
   if (OB_SUCC(ret) && (acc_ctx.is_read())) {
+    // just for warning and report the errors
     if (acc_ctx.tx_table_guards_.check_ls_offline()) {
-      ret = OB_LS_OFFLINE;
-      STORAGE_LOG(WARN, "ls offline during the read operation", K(ret), K(acc_ctx.snapshot_));
+      int tmp_ret = OB_LS_OFFLINE;
+      STORAGE_LOG(WARN, "ls offline during the read operation", K(tmp_ret), K(acc_ctx.snapshot_));
     }
   }
 

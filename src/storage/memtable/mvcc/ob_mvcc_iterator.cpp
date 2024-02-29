@@ -282,7 +282,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
 int ObMvccValueIterator::try_cleanout_tx_node_(ObMvccTransNode *tnode)
 {
   int ret = OB_SUCCESS;
-  auto tx_table_guards = ctx_->get_tx_table_guards();
+  ObTxTableGuards &tx_table_guards = ctx_->get_tx_table_guards();
   if (!(tnode->is_committed() || tnode->is_aborted())
       && tnode->is_delayed_cleanout()
       && OB_FAIL(tx_table_guards.cleanout_tx_node(tnode->tx_id_,

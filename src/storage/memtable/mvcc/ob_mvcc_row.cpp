@@ -1057,7 +1057,7 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
   ObRowLatchGuard guard(latch_);
 
   auto iter = ATOMIC_LOAD(&list_head_);
-  auto tx_table_guards = ctx.get_tx_table_guards();
+  ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
   bool need_retry = true;
 
   while (OB_SUCC(ret) && need_retry) {

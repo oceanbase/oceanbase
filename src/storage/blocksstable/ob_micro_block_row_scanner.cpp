@@ -83,7 +83,6 @@ void ObIMicroBlockRowScanner::reuse()
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   can_ignore_multi_version_ = false;
-  tx_table_guard_.reuse();
 }
 
 int ObIMicroBlockRowScanner::init(
@@ -118,7 +117,6 @@ int ObIMicroBlockRowScanner::init(
       if (NULL != reader_) {
         reader_->reset();
       }
-      tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
       LOG_DEBUG("init ObIMicroBlockRowScanner", K(context), KPC_(read_info), K(param));
     }
   }
@@ -162,7 +160,6 @@ int ObIMicroBlockRowScanner::switch_context(
     context_ = &context;
     sstable_ = sstable;
     use_fuse_row_cache_ = context.use_fuse_row_cache_;
-    tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
   }
 
   return ret;
@@ -2800,7 +2797,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
     OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(trans_id, sql_seq, trans_state)) {
     can_read = trans_state.can_read_;
   } else {
-    storage::ObTxTableGuards tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
+    storage::ObTxTableGuards &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
     if (OB_FAIL(tx_table_guards.check_sql_sequence_can_read(
             trans_id,
             sql_seq,

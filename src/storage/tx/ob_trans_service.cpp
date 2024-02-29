@@ -944,6 +944,8 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = revert_store_ctx(store_ctx))) {
       TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(tx_desc), K(ls_id), K(type));
+    } else {
+      store_ctx.reset();
     }
   }
   TRANS_LOG(DEBUG, "register multi source data on participant", KR(ret), K(tx_desc), K(ls_id),
