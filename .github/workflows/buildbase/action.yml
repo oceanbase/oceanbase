@@ -17,12 +17,24 @@ runs:
         bash build.sh init
         echo "$GITHUB_WORKSPACE/deps/3rd/usr/local/oceanbase/devtools/bin" >> $GITHUB_PATH
 
+    - name: show disk space(before download build ccache)
+      shell: bash
+      run: |
+        df -h
+        
+    # on centos7, we cannot use the latest `node`.
+    # ccache-action@v1.2 uses `node20` which cannot works on centos7 but node16 works fun
     - name: Setup ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+      uses: hendrikmuhs/ccache-action@v1.2.11
       with:
         max-size: 800M
         save: ${{inputs.save_cache}}
         key: ${{inputs.os}}
+
+    - name: show disk space(after download ccache)
+      shell: bash
+      run: |
+        df -h
 
     - name: Build project
       shell: bash
@@ -30,3 +42,4 @@ runs:
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4
         ccache -s
+        du -sh *
