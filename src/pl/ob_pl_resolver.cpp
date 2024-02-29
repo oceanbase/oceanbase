@@ -14025,6 +14025,10 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   ObRawExpr* expr = NULL;
   const ObUserDefinedType *user_type = NULL;
   ObObjAccessIdx access_idx;
+  if (!access_ident.is_pl_udf()) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_ident));
+  }
   OV (access_ident.is_pl_udf(), OB_ERR_UNEXPECTED, K(access_ident));
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));

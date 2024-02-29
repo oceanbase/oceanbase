@@ -1383,19 +1383,22 @@ int ObSql::handle_pl_prepare(const ObString &sql,
                           pl_prepare_ctx.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
                           sess.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
 
-    if (OB_SUCC(ret)) {
-      context.is_dynamic_sql_ = pl_prepare_ctx.is_dynamic_sql_;
-      context.is_dbms_sql_ = pl_prepare_ctx.is_dbms_sql_;
-      context.is_cursor_ = pl_prepare_ctx.is_cursor_;
-      context.secondary_namespace_ = pl_prepare_ctx.secondary_ns_;
-      context.session_info_ = &sess;
-      context.disable_privilege_check_ = OB_SYS_TENANT_ID == sess.get_priv_tenant_id()
-                                          ? PRIV_CHECK_FLAG_DISABLE
-                                          : PRIV_CHECK_FLAG_IN_PL;
-      context.exec_type_ = PLSql;
-      context.is_prepare_protocol_ = true;
-      context.is_prepare_stage_ = true;
+    context.is_dynamic_sql_ = pl_prepare_ctx.is_dynamic_sql_;
+    context.is_dbms_sql_ = pl_prepare_ctx.is_dbms_sql_;
+    context.is_cursor_ = pl_prepare_ctx.is_cursor_;
+    context.secondary_namespace_ = pl_prepare_ctx.secondary_ns_;
+    context.session_info_ = &sess;
+    context.disable_privilege_check_ = OB_SYS_TENANT_ID == sess.get_priv_tenant_id()
+                                        ? PRIV_CHECK_FLAG_DISABLE
+                                        : PRIV_CHECK_FLAG_IN_PL;
+    context.exec_type_ = PLSql;
+    context.is_prepare_protocol_ = true;
+    context.is_prepare_stage_ = true;
+
+    if (OB_FAIL(ob_write_string(allocator, sess.get_current_query_string(), cur_query))) {
+      LOG_WARN("failed to write string", K(ret));
     }
+
     if (OB_SUCC(ret)) {
       WITH_CONTEXT(pl_prepare_result.mem_context_) {
           ObResultSet &result = *pl_prepare_result.result_set_;
@@ -1412,8 +1415,6 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           } else if (FALSE_IT(context.schema_guard_ = &schema_guard)) {
           } else if (OB_FAIL(init_result_set(context, result))) {
             LOG_WARN("failed to init result set", K(ret));
-          } else if (OB_FAIL(ob_write_string(allocator, sess.get_current_query_string(), cur_query))) {
-            LOG_WARN("failed to write string", K(ret));
           } else if (OB_FAIL(sess.store_query_string(sql))) {
             LOG_WARN("store query string fail", K(ret));
           } else if (OB_FAIL(parser.parse(sql, parse_result, parse_mode,
@@ -1491,10 +1492,11 @@ int ObSql::handle_pl_prepare(const ObString &sql,
             // do nothing
           } else if (OB_FAIL(ob_write_string(allocator, normalized_sql, result.get_stmt_ps_sql(), true))) {
             LOG_WARN("failed to write string", K(trimed_stmt), K(ret));
-          } else if (OB_FAIL(sess.store_query_string(cur_query))) {
-            LOG_WARN("failed to store query string", K(ret));
-          } else {
-            // do nothing
+          }
+          int tmp_ret = OB_SUCCESS;
+          if ((tmp_ret = sess.store_query_string(cur_query)) != OB_SUCCESS) {
+            LOG_WARN("failed to store query string", K(ret), K(tmp_ret));
+            ret = OB_SUCCESS == ret ?  tmp_ret : ret;
           }
       }
     }
