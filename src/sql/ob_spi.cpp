@@ -8007,10 +8007,16 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!(obj.is_pl_extend()
-                 || obj.is_user_defined_sql_type()
-                 || obj.is_geometry()
-                 || (obj.is_null() && !current_type.at(i).get_meta_type().is_xml_sql_type()))
+    } else if (obj.is_null()
+               && result_types[i].get_meta_type().is_ext()
+               && (current_type.at(i).get_meta_type().is_user_defined_sql_type() && !current_type.at(i).get_meta_type().is_xml_sql_type())) {
+      // only support xml null cast to xmltype, others will report error.
+      ret = OB_ERR_INTO_EXPR_ILLEGAL;
+      LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(obj), K(i), K(current_type.at(i)), K(result_types[i]));
+    } else if (!obj.is_pl_extend()
+               && !obj.is_user_defined_sql_type()
+               && !obj.is_geometry()
+               && !obj.is_null()
                && result_types[i].get_meta_type().is_ext()
                && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
       // sql udt or oracle gis can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
@@ -8018,7 +8024,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
       // not support: select null into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
-      LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
+      LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(obj), K(i), K(current_type.at(i)), K(result_types[i]));
     } else {
       LOG_DEBUG("column convert", K(i), K(obj.get_meta()), K(result_types[i].get_meta_type()),
                                   K(current_type.at(i)), K(result_types[i].get_accuracy()));
@@ -8080,6 +8086,19 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
           LOG_WARN("sql udt type can not convert extend any type", K(ret));
         } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
           LOG_WARN("fail to convert with null check", K(ret));
+        } else if (tmp_obj.is_null()
+                   && (current_type.at(i).get_meta_type().is_xml_sql_type()
+                      || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML))) {
+#ifdef OB_BUILD_ORACLE_PL
+          ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(cast_ctx.allocator_v2_->alloc(sizeof(ObPLOpaque)));;
+          if (OB_ISNULL(opaque)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloca memory for xml null value", K(ret));
+          } else {
+            new (opaque) ObPLOpaque();
+            tmp_obj.set_ext(reinterpret_cast<int64_t>(opaque));
+          }
+#endif
         }
         if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()) {
           LOG_WARN("change error code to value error", K(ret));
