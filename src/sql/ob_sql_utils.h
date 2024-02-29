@@ -485,7 +485,8 @@ public:
                                  int64_t range_key_count,
                                  uint64_t table_id,
                                  ObEvalCtx &eval_ctx,
-                                 common::ObNewRange &partition_range);
+                                 common::ObNewRange &partition_range,
+                                 ObArenaAllocator &allocator);
 
   static int revise_hash_part_object(common::ObObj &obj,
                                      const ObNewRow &row,
@@ -698,6 +699,28 @@ public:
                               const bool check_for_path_char, const int64_t max_ident_len);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
+  static bool part_expr_has_virtual_column(const ObExpr *part_expr);
+  static int get_range_for_vector(
+                                  ObObj *start_row_key,
+                                  ObObj *end_row_key,
+                                  int64_t range_key_count,
+                                  uint64_t table_id,
+                                  common::ObNewRange &part_range);
+  static int get_partition_range_common(
+                                    ObObj *function_obj,
+                                    const share::schema::ObPartitionFuncType part_type,
+                                    const ObExpr *part_expr,
+                                    ObEvalCtx &eval_ctx);
+  static int get_range_for_scalar(ObObj *start_row_key,
+                                  ObObj *end_row_key,
+                                  ObObj *function_obj,
+                                  const share::schema::ObPartitionFuncType part_type,
+                                  const ObExpr *part_expr,
+                                  int64_t range_key_count,
+                                  uint64_t table_id,
+                                  ObEvalCtx &eval_ctx,
+                                  common::ObNewRange &part_range,
+                                  ObArenaAllocator &allocator);
   struct SessionInfoCtx
   {
     common::ObCollationType collation_type_;
