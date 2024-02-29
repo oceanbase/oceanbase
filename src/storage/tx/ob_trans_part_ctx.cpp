@@ -3930,7 +3930,8 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
         if (OB_SUCC(ret) &&
             mt_ctx_.is_prepared() &&
             get_upstream_state() == ObTxState::PREPARE &&
-            get_downstream_state() < ObTxState::PREPARE) {
+            get_downstream_state() < ObTxState::PREPARE &&
+            !is_2pc_logging()) {
 	  ret = submit_prepare_log_();
 	}
         break;
