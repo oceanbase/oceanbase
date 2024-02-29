@@ -80,7 +80,7 @@ public:                                                                         
     } else if (OB_FAIL(handler.handle_request(req))) {                                                            \
       CLOG_LOG(WARN, "Processor handle_request failed", K(ret), K(req));                                          \
     } else {                                                                                                      \
-      CLOG_LOG(INFO, "Processor handle_request success", K(ret), K(req));                                         \
+      CLOG_LOG(TRACE, "Processor handle_request success", K(ret), K(req));                                         \
     }                                                                                                             \
     return ret;                                                                                                   \
   }                                                                                                               \
