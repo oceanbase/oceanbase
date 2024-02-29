@@ -746,7 +746,7 @@ int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
       LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
     }
   }
-#ifndef OB_BUILD_RPM
+#ifndef OB_BUILD_PACKAGE
   FLOG_INFO("push tablet into gc queue", K(ret), KP(tablet), K(common::lbt()));
 #endif
   return ret;
