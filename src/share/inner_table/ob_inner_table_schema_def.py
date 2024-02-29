@@ -8531,6 +8531,7 @@ def_table_schema(
       ('outline_sql', 'longtext', 'false'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('outline_content', 'longtext', 'false'),
+      ('format_sql_text', 'longtext', 'true'),
       ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('format_outline', 'int', 'false', '0')
     ],
