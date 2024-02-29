@@ -1852,3 +1852,6 @@ ERRSIM_DEF_BOOL(errsim_migration_solo_send_medium_info, OB_CLUSTER_PARAMETER, "F
 ERRSIM_DEF_BOOL(ls_rebuild_without_check_limit, OB_TENANT_PARAMETER, "False",
          "ls rebuild without check limit",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
+        "set max partition num in mysql mode",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
