@@ -5611,8 +5611,18 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
         if (prepare_result.for_update_) {
           func.set_modifies_sql_data();
         } else if (stmt::T_SELECT == prepare_result.type_) {
+          bool has_real_table = false;
+          for (int64_t i = 0; OB_SUCC(ret) && !has_real_table && i < prepare_result.ref_objects_.count(); ++i) {
+            if (ObDependencyTableType::DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_) {
+              has_real_table = true;
+            }
+          }
           if (!func.is_modifies_sql_data()) {
-            func.set_reads_sql_data();
+            if (has_real_table) {
+              func.set_reads_sql_data();
+            } else if (!func.is_reads_sql_data()) {
+              func.set_contains_sql();
+            }
           }
         } else if (ObStmt::is_dml_write_stmt(prepare_result.type_) ||
                    ObStmt::is_savepoint_stmt(prepare_result.type_) ||
