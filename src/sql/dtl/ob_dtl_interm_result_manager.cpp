@@ -104,9 +104,9 @@ void ObAtomicAppendBlockCall::operator() (common::hash::HashMapPair<ObDTLIntermR
       ret_ = OB_INVALID_ARGUMENT;
     } else {
       if (entry.second->use_rich_format_) {
-        entry.second->col_store_->append_block(block_buf_, size_);
+        ret_ = entry.second->col_store_->append_block(block_buf_, size_);
       } else {
-        entry.second->datum_store_->append_block(block_buf_, size_, true);
+        ret_ = entry.second->datum_store_->append_block(block_buf_, size_, true);
       }
       if (is_eof_) {
         entry.second->is_eof_ = is_eof_;
@@ -125,9 +125,9 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
       ret_ = OB_INVALID_ARGUMENT;
     } else {
       if (entry.second->use_rich_format_) {
-        entry.second->col_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_);
+        ret_ = entry.second->col_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_);
       } else {
-        entry.second->datum_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_, true);
+        ret_ = entry.second->datum_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_, true);
       }
       if (is_eof_) {
         entry.second->is_eof_ = is_eof_;
