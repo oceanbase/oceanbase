@@ -235,6 +235,10 @@ int ObSqlWorkareaActive::fill_row(
           ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
+      case DB_ID: {
+        cells[cell_idx].set_int(wa_active.database_id_);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));
