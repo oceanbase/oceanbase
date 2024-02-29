@@ -948,7 +948,7 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
     OB_LOG(WARN, "failed to parse uri", K(ret), K(uri));
   } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
     OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
-  } else if (s3_account_.parse_from(info_str, strlen(info_str))) {
+  } else if (OB_FAIL(s3_account_.parse_from(info_str, strlen(info_str)))) {
     OB_LOG(WARN, "failed to build s3 account", K(ret));
   } else if (OB_FAIL(ObS3Env::get_instance().get_or_create_s3_client(s3_account_, s3_client_))) {
     OB_LOG(WARN, "faied to get s3 client", K(ret));

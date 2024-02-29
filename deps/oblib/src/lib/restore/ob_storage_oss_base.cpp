@@ -2122,12 +2122,12 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
                   int64_t cur_pos = -1;
                   char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
                   if (OB_ISNULL(append_pos_str)) {
-                    OB_LOG(WARN, "after append fail, current append pos is not found");
+                    OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
                   } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
                     OB_LOG(WARN, "after append fail, fail to get append pos",
-                        K(tmp_ret), K(append_pos_str), K_(object));
+                        K(ret), K(tmp_ret), K(append_pos_str), K_(object));
                   } else {
-                    OB_LOG(WARN, "after append fail, we got the object meta", K(cur_pos));
+                    OB_LOG(WARN, "after append fail, we got the object meta", K(ret), K(cur_pos));
                   }
                 }
               }
