@@ -775,6 +775,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   ObArenaAllocator allocator;
   ObStorageSchema *storage_schema = nullptr;
   ObTabletHandle tablet_handle;
+  const uint64_t tenant_id = MTL_ID();
 
   if (!tablet_id.is_valid() || cluster_version < 0 || OB_ISNULL(sstable_param)) {
     ret = OB_INVALID_ARGUMENT;
@@ -786,7 +787,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   }
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
       ret = PHYSICAL_COPY_TASK_GET_TABLET_FAILED ? : OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake PHYSICAL_COPY_TASK_GET_TABLET_FAILED", K(ret));
