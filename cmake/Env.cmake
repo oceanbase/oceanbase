@@ -23,6 +23,7 @@ ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
 ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
+ob_define(LTO_JOBS 32)
 # get compiler from build.sh
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
@@ -62,7 +63,7 @@ ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
   set(THIN_LTO_OPT "-flto=thin")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=${LTO_JOBS}")
 endif()
 
 set(ob_close_modules_static_name "")
