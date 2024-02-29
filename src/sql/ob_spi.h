@@ -44,9 +44,11 @@ class ObExprObjAccess;
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator)
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_()
   {
     row_desc_.set_tenant_id(MTL_ID());
+    complex_objs_.reset();
+    complex_objs_.set_tenant_id(MTL_ID());
   }
 
   ~ObSPICursor()
@@ -257,7 +259,8 @@ public:
     ps_sql_(),
     is_bulk_(false),
     has_dup_column_name_(false),
-    has_link_table_(false)
+    has_link_table_(false),
+    is_skip_locked_(false)
     {}
     stmt::StmtType type_; //prepare的语句类型
     bool for_update_;
@@ -273,6 +276,7 @@ public:
     bool is_bulk_;
     bool has_dup_column_name_;
     bool has_link_table_;
+    bool is_skip_locked_;
   };
 
   struct PLPrepareCtx
@@ -499,7 +503,8 @@ public:
                              int64_t cursor_index,
                              const int64_t *formal_param_idxs,
                              const ObSqlExpression **actual_param_exprs,
-                             int64_t cursor_param_count);
+                             int64_t cursor_param_count,
+                             bool skip_locked);
   static int dbms_cursor_open(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               const ObString &ps_sql,
@@ -696,7 +701,8 @@ public:
                              stmt::StmtType &type,
                              bool &for_update,
                              bool &hidden_rowid,
-                             int64_t &into_cnt);
+                             int64_t &into_cnt,
+                             bool &skip_locked);
   static int prepare_dynamic(pl::ObPLExecCtx *ctx,
                              ObIAllocator &allocator,
                              bool is_returning,
@@ -708,6 +714,7 @@ public:
                              bool &for_update,
                              bool &hidden_rowid,
                              int64_t &into_cnt,
+                             bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
   static int force_refresh_schema(uint64_t tenant_id);
 

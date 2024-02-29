@@ -55,6 +55,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
 {
   (void)throttle_if_needed_();
   reset();
+  share::memstore_throttled_alloc() = 0;
 }
 
 void ObStorageTableGuard::throttle_if_needed_()
@@ -71,7 +72,12 @@ void ObStorageTableGuard::throttle_if_needed_()
       // only do throttle on active memtable
       if (OB_NOT_NULL(memtable_) && memtable_->is_active_memtable()) {
         reset();
-        (void)do_throttle_(throttle_tool, share_ti_guard, module_ti_guard);
+        (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(for_replay_,
+                                                                       store_ctx_.timeout_,
+                                                                       share::memstore_throttled_alloc(),
+                                                                       throttle_tool,
+                                                                       share_ti_guard,
+                                                                       module_ti_guard);
       }
 
       // if throttle is skipped due to some reasons, advance clock by call skip_throttle() and clean throttle status
@@ -88,84 +94,6 @@ void ObStorageTableGuard::throttle_if_needed_()
   }
 }
 
-#define PRINT_THROTTLE_WARN                                                              \
-  do {                                                                                   \
-    const int64_t WARN_LOG_INTERVAL = 60L * 1000L * 1000L /* one minute */;              \
-    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) { \
-      SHARE_LOG(WARN,                                                                    \
-                "[Throttling] Attention!! Sleep More Than One Minute!!",                 \
-                K(sleep_time),                                                           \
-                K(left_interval),                                                        \
-                K(expected_wait_time));                                                  \
-    }                                                                                    \
-  } while (0)
-
-#define PRINT_THROTTLE_STATISTIC                                                       \
-  do {                                                                                 \
-    const int64_t MEMSTORE_THROTTLE_LOG_INTERVAL = 1L * 1000L * 1000L; /*one seconds*/ \
-    if (sleep_time > 0 && REACH_TIME_INTERVAL(MEMSTORE_THROTTLE_LOG_INTERVAL)) {       \
-      SHARE_LOG(INFO,                                                                  \
-                "[Throttling] (report write throttle info) Time Info",                 \
-                "Throttle Unit Name",                                                  \
-                ObMemstoreAllocator::throttle_unit_name(),                             \
-                "Throttle Sleep Time(us)",                                             \
-                sleep_time);                                                           \
-    }                                                                                  \
-  } while (0);
-
-void ObStorageTableGuard::do_throttle_(TxShareThrottleTool &throttle_tool,
-                                       ObThrottleInfoGuard &share_ti_guard,
-                                       ObThrottleInfoGuard &module_ti_guard)
-{
-  int ret = OB_SUCCESS;
-  int64_t sleep_time = 0;
-  int64_t left_interval = share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME;
-
-  if (!for_replay_) {
-    left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getClock());
-  }
-
-  uint64_t timeout = 10000;  // 10s
-  common::ObWaitEventGuard wait_guard(
-      common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
-
-  while (throttle_tool.still_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard) && (left_interval > 0)) {
-    int64_t expected_wait_time = 0;
-    if (for_replay_ && MTL(ObTenantFreezer *)->exist_ls_freezing()) {
-      // skip throttle if ls freeze exists
-      break;
-    } else if ((expected_wait_time =
-                    throttle_tool.expected_wait_time<ObMemstoreAllocator>(share_ti_guard, module_ti_guard)) <= 0) {
-      if (expected_wait_time < 0) {
-        LOG_ERROR("expected wait time should not smaller than 0",
-                  K(expected_wait_time),
-                  KPC(share_ti_guard.throttle_info()),
-                  KPC(module_ti_guard.throttle_info()),
-                  K(clock),
-                  K(left_interval));
-      }
-      break;
-    }
-
-    // do sleep when expected_wait_time and left_interval are not equal to 0
-    int64_t sleep_interval = min(SLEEP_INTERVAL_PER_TIME, expected_wait_time);
-    ::usleep(sleep_interval);
-    sleep_time += sleep_interval;
-    left_interval -= sleep_interval;
-
-    PRINT_THROTTLE_WARN;
-  }
-  PRINT_THROTTLE_STATISTIC;
-
-  if (for_replay_ && sleep_time > 0) {
-    // avoid print replay_timeout
-    get_replay_is_writing_throttling() = true;
-  }
-}
-
-#undef PRINT_THROTTLE_WARN
-#undef PRINT_THROTTLE_STATISTIC
-
 int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_table)
 {
   int ret = OB_SUCCESS;
@@ -178,24 +106,20 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
   }
 
   while (OB_SUCC(ret) && need_to_refresh_table(*iter.table_iter())) {
-    if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
+    const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
+    if (OB_UNLIKELY(remain_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+    } else if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
-        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+        remain_timeout,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
         relative_table.allow_not_ready()))) {
-      LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(tablet_id),
-           "table id", relative_table.get_table_id());
+      LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(remain_timeout),
+           "table_id", relative_table.get_table_id());
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
       tablet_ = iter.get_tablet();
-      // TODO: check if session is killed
-      if (store_ctx_.timeout_ > 0) {
-        const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
-        if (query_left_time <= 0) {
-          ret = OB_TRANS_STMT_TIMEOUT;
-        }
-      }
     }
   }
 
@@ -271,7 +195,6 @@ void ObStorageTableGuard::reset()
     memtable_->dec_write_ref();
     memtable_ = NULL;
   }
-  share::memstore_throttled_alloc() = 0;
 }
 
 void ObStorageTableGuard::double_check_inc_write_ref(
@@ -365,6 +288,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     if (0 == write_ref) {
       SCN clog_checkpoint_scn;
       bool need_create_memtable = true;
+      SCN migration_clog_checkpoint_scn;
       ObTabletHandle tmp_handle;
       ObLSHandle ls_handle;
       if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
@@ -376,9 +300,13 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
           tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
       } else if (FALSE_IT(clog_checkpoint_scn = tmp_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_)) {
-      } else if (for_replay_ && replay_scn_ <= clog_checkpoint_scn) {
-        for_replace_tablet_meta = true;
-        need_create_memtable = false;
+      } else if (FALSE_IT(migration_clog_checkpoint_scn = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_scn())) {
+      } else if (for_replay_ && !migration_clog_checkpoint_scn.is_min()) {
+        static_cast<memtable::ObMemtable *>(memtable)->resolve_right_boundary();
+        if (replay_scn_ <= clog_checkpoint_scn) {
+          for_replace_tablet_meta = true;
+          need_create_memtable = false;
+        }
       }
 
       // create a new memtable if no write in the old memtable

@@ -802,6 +802,18 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_DROP_MLOG:
       ddl_type_str = "drop materialized view log";
       break;
+    case DDL_AUTO_SPLIT_BY_RANGE:
+      ddl_type_str = "auto split by range";
+      break;
+    case DDL_AUTO_SPLIT_NON_RANGE:
+      ddl_type_str = "auto split non range";
+      break;
+    case DDL_MANUAL_SPLIT_BY_RANGE:
+      ddl_type_str = "manual split by range";
+      break;
+    case DDL_MANUAL_SPLIT_NON_RANGE:
+      ddl_type_str = "manual split non range";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
@@ -1060,7 +1072,8 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   } else {
     int64_t table_task_status = 0;
     int64_t execution_id = -1;
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, dst_tenant_id_, task_id_, table_task_status, execution_id))) {
+    int64_t ret_code = OB_SUCCESS;
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, dst_tenant_id_, task_id_, table_task_status, execution_id, ret_code))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         need_retry_ = false;
       }
@@ -1070,8 +1083,10 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       real_new_status = FAIL;
       ret_code_ = OB_CANCELED;
     } else if (old_status != table_task_status) {
-      // refresh status
+      // refresh status and ret_code
       real_new_status = static_cast<ObDDLTaskStatus>(table_task_status);
+      ret_code_ = ret_code;
+      LOG_INFO("refresh status", K(task_id_), K(real_new_status), K(ret_code_));
     } else if (old_status == real_new_status) {
       // do nothing
     } else {
@@ -1084,7 +1099,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
               trans, dst_tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
         LOG_WARN("update task status failed", K(ret), K(task_id_), K(real_new_status));
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && FAIL == real_new_status) {
         if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, dst_tenant_id_, task_id_, ret_code_))) {
           LOG_WARN("failed to update ret code", K(ret));
         }
@@ -1099,6 +1114,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     if (OB_SUCC(ret) && old_status != real_new_status) {
       add_event_info(real_new_status, dst_tenant_id_);
       task_status_ = real_new_status;
+      delay_schedule_time_ = 0; // when status changed, schedule immediately
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
@@ -1404,13 +1420,14 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
   ObRootService *root_service = nullptr;
   int64_t task_status = 0;
   int64_t execution_id = 0;
+  int64_t ret_code = OB_SUCCESS;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
       LOG_WARN("update task status failed", K(ret));
@@ -1441,7 +1458,10 @@ void ObDDLTask::calc_next_schedule_ts(const int ret_code, const int64_t total_ta
     const int64_t min_dt = max_dt / 2;
     next_schedule_ts_ = ObTimeUtility::current_time() + ObRandom::rand(min_dt, max_dt);
   } else {
-    delay_schedule_time_ = 0;
+    // if delay_schedule_time_ is set 0, means that the task need schedule immediately.
+    // that usually happens when task status changed, after that, recover the default delay to awoid spin
+    next_schedule_ts_ = max(next_schedule_ts_, ObTimeUtility::current_time() + delay_schedule_time_);
+    delay_schedule_time_ = DEFAULT_TASK_IDLE_TIME_US;
   }
   return;
 }
@@ -1549,7 +1569,7 @@ int ObDDLTask::gather_scanned_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, scan_res) {
       if (OB_FAIL(scan_sql.assign_fmt(
           "SELECT OUTPUT_ROWS FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SUBPLAN_SCAN' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SUBPLAN_SCAN' OR PLAN_OPERATION='PHY_VEC_SUBPLAN_SCAN') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
@@ -1599,7 +1619,7 @@ int ObDDLTask::gather_sorted_rows(
     SMART_VAR(ObMySQLProxy::MySQLResult, sort_res) {
       if (OB_FAIL(sort_sql.assign_fmt(
           "SELECT OTHERSTAT_1_VALUE AS ROW_SORTED FROM %s WHERE TENANT_ID=%lu "
-          "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_SORT' AND OTHERSTAT_5_VALUE='%ld'",
+          "AND TRACE_ID='%s' AND (PLAN_OPERATION='PHY_SORT' OR PLAN_OPERATION = 'PHY_VEC_SORT') AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, QUERY_SQL_PLAN_MONITOR_SLOW))) {
@@ -2808,6 +2828,34 @@ int ObDDLTaskRecordOperator::update_status_and_message(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::update_ret_code_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int ret_code,
+      ObString &message)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  ObSqlString message_string;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(task_id <= 0 || tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id));
+  } else if (OB_FAIL(to_hex_str(message, message_string))) {
+    LOG_WARN("append hex escaped string failed", K(ret));
+  } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET ret_code = %d, message = \"%.*s\"  WHERE task_id = %lu",
+          OB_ALL_DDL_TASK_STATUS_TNAME, ret_code, static_cast<int>(message_string.length()), message_string.ptr(), task_id))) {
+    LOG_WARN("assign sql string failed", K(ret), K(ret_code), K(task_id));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("update status of ddl task record failed", K(ret), K(sql_string));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::delete_record(common::ObMySQLProxy &proxy, const uint64_t tenant_id, const int64_t task_id)
 {
   int ret = OB_SUCCESS;
@@ -3396,7 +3444,8 @@ int ObDDLTaskRecordOperator::select_for_update(
     const uint64_t tenant_id,
     const int64_t task_id,
     int64_t &task_status,
-    int64_t &execution_id)
+    int64_t &execution_id,
+    int64_t &ret_code)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -3408,7 +3457,7 @@ int ObDDLTaskRecordOperator::select_for_update(
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id FROM %s WHERE task_id = %lu FOR UPDATE",
+      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id, ret_code FROM %s WHERE task_id = %lu FOR UPDATE",
           OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret), K(task_id), K(tenant_id));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
@@ -3429,6 +3478,7 @@ int ObDDLTaskRecordOperator::select_for_update(
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", ret_code, int64_t);
       }
     }
   }

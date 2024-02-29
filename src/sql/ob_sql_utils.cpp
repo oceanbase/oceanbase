@@ -33,12 +33,12 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/ob_select_stmt_printer.h"
-#include "sql/ob_insert_all_stmt_printer.h"
-#include "sql/ob_insert_stmt_printer.h"
-#include "sql/ob_update_stmt_printer.h"
-#include "sql/ob_delete_stmt_printer.h"
-#include "sql/ob_merge_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/printer/ob_insert_all_stmt_printer.h"
+#include "sql/printer/ob_insert_stmt_printer.h"
+#include "sql/printer/ob_update_stmt_printer.h"
+#include "sql/printer/ob_delete_stmt_printer.h"
+#include "sql/printer/ob_merge_stmt_printer.h"
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "sql/rewrite/ob_transform_rule.h"
@@ -417,6 +417,17 @@ int ObSQLUtils::calc_const_or_calculable_expr(
       // do nothing
     } else if (OB_FAIL(calc_const_expr(*exec_ctx, raw_expr,
                                        result, allocator, *params))) {
+      if (T_FUN_SYS_INNER_ROW_CMP_VALUE == raw_expr->get_expr_type()) {
+        if (ret == OB_ERR_MIN_VALUE) {
+          result.set_min_value();
+          is_valid = true;
+          ret = OB_SUCCESS;
+        } else if (ret == OB_ERR_MAX_VALUE) {
+          result.set_max_value();
+          is_valid = true;
+          ret = OB_SUCCESS;
+        }
+      }
       if (ignore_failure && !IS_SPATIAL_EXPR(raw_expr->get_expr_type())) {
         LOG_TRACE("failed to calc const expr, ignore the failure", K(ret));
         ret = OB_SUCCESS;
@@ -429,7 +440,13 @@ int ObSQLUtils::calc_const_or_calculable_expr(
         LOG_WARN("failed to store result to ctx", K(ret));
       }
     }
-    if (OB_SUCC(ret) && !is_valid) {
+    bool add_calc_failure_cons = false;
+    if (OB_SUCC(ret) && T_FUN_SYS_INNER_ROW_CMP_VALUE == raw_expr->get_expr_type()) {
+      if (result.is_min_value() || result.is_max_value()) {
+        add_calc_failure_cons = true;
+      }
+    }
+    if (OB_SUCC(ret) && (!is_valid || add_calc_failure_cons)) {
       if (NULL == constraints) {
         // do nothing
       } else if (OB_FAIL(add_calc_failure_constraint(raw_expr, *constraints))) {

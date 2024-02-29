@@ -178,6 +178,7 @@ const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
 const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
 // The timeout provided to the storage layer will be reduced by 100ms
 const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
+const uint64_t MAX_STMT_TYPE_NAME_LENGTH = 128;
 OB_INLINE bool is_user_group(const int64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
@@ -209,6 +210,7 @@ const uint64_t OB_SERVER_USER_ID = 0;
 const int64_t OB_MAX_INDEX_PER_TABLE = 128;
 const int64_t OB_MAX_SSTABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE + 1;
 const int64_t OB_MAX_SQL_LENGTH = 64 * 1024;
+const int64_t OB_TINY_SQL_LENGTH = 128;
 const int64_t OB_SHORT_SQL_LENGTH = 1 * 1024; // 1KB
 const int64_t OB_MEDIUM_SQL_LENGTH = 2 * OB_SHORT_SQL_LENGTH; // 2KB
 const int64_t OB_MAX_PROXY_SQL_STORE_LENGTH = 8 * 1024; // 8KB
@@ -224,7 +226,6 @@ const int64_t OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL  = 64;
 const int64_t OB_MAX_COLUMN_NAME_LENGTH = 128; // Compatible with oracle, OB code logic is greater than Times TODO:xiyu
 const int64_t OB_MAX_COLUMN_NAME_BUF_LENGTH = OB_MAX_COLUMN_NAME_LENGTH + 1;
 const int64_t OB_MAX_COLUMN_NAMES_LENGTH = 2 * 1024;
-const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = 256; // need to larger than max_column_name_length
 const int64_t OB_MAX_APP_NAME_LENGTH = 128;
 const int64_t OB_MAX_OPERATOR_PROPERTY_LENGTH = 4 * 1024;
 const int64_t OB_MAX_DATA_SOURCE_NAME_LENGTH = 128;
@@ -831,7 +832,8 @@ const uint64_t INVALID_COLUMN_GROUP_ID = 0;
 const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
 const uint64_t COLUMN_GROUP_START_ID = 1000;
 const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
-
+const int64_t OB_CG_NAME_PREFIX_LENGTH = 5; // length of cg prefix like "__cg_"
+const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = OB_MAX_COLUMN_NAME_LENGTH * OB_MAX_CHAR_LEN + OB_CG_NAME_PREFIX_LENGTH; //(max_column_name_length(128) * ob_max_char_len(3)) + prefix
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;
 
@@ -1416,6 +1418,7 @@ OB_INLINE bool is_dblink_type_id(uint64_t type_id)
 const char* const OB_PRIMARY_INDEX_NAME = "PRIMARY";
 
 const int64_t OB_MAX_CONFIG_URL_LENGTH = 512;
+const int64_t OB_MAX_ADMIN_COMMAND_LENGTH = 1000;
 const int64_t OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH = 256;
 const int64_t OB_MAX_ARBITRATION_SERVICE_LENGTH = 512;
 

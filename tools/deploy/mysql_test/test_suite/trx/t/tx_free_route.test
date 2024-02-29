@@ -32,6 +32,15 @@ drop table if exists t;
 --enable_warnings
 create table t(id int primary key) partition by range(id)
  (partition p0 values less than (10000), partition p1 values less than (3000000000));
+
+# insert rows to ensure tablet created
+--disable_result_log
+--disable_query_log
+insert into t values(9999),(99999);
+commit;
+--enable_result_log
+--enable_query_log
+
 let $table_id=`select table_id from oceanbase.__all_virtual_table where table_name = 't' and tenant_id = $tenant_id`;
 let $ls_count=`select count(distinct ls_id) from oceanbase.__all_tablet_to_ls where table_id = $table_id`;
 if ($ls_count <= 1) {

@@ -162,6 +162,9 @@ public:
         scan_result_(NULL),
         is_first_result_(true),
         has_more_rows_(true),
+        limit_(-1),
+        offset_(0),
+        row_idx_(0),
         agg_calculator_(query)
   {
   }
@@ -179,6 +182,8 @@ public:
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
+  inline void set_limit(int32_t limit) { limit_ = limit; }
+  inline void set_offset(int32_t offset) { offset_ = offset; }
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
@@ -187,6 +192,9 @@ private:
   table::ObTableApiScanRowIterator *scan_result_;
   bool is_first_result_;
   bool has_more_rows_;
+  int32_t limit_;
+  int32_t offset_;
+  int64_t row_idx_; // count actual row
   ObTableAggCalculator agg_calculator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNormalTableQueryResultIterator);

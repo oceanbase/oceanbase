@@ -276,7 +276,13 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
               // default value should not be used when `compatible` is not loaded yet.
               cells[i].set_varchar("0.0.0.0");
             } else {
-              cells[i].set_varchar(iter->second->str());
+              if (!is_sys_tenant(effective_tenant_id_) &&
+                  (0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(iter->first.str()) ||
+                   0 == ObString(EXTERNAL_KMS_INFO).case_compare(iter->first.str()))) {
+                cells[i].set_varchar("");
+              } else {
+                cells[i].set_varchar(iter->second->str());
+              }
             }
             cells[i].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));

@@ -62,8 +62,6 @@ int init_oss_env();
 // Thread safe guaranteed by user.
 void fin_oss_env();
 
-bool is_oss_supported_checksum(ObStorageChecksumType checksum_type);
-
 class ObStorageOssStaticVar
 {
 public:
@@ -162,7 +160,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssWriter);
 };
 
-class ObStorageOssMultiPartWriter: public ObStorageOssBase, public ObIStorageWriter
+class ObStorageOssMultiPartWriter: public ObStorageOssBase, public ObIStorageMultiPartWriter
 {
 
 public:
@@ -171,8 +169,9 @@ public:
   int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
+  virtual int complete() override;
+  virtual int abort() override;
   int close();
-  int cleanup();
   int64_t get_length() const { return file_length_; }
   virtual bool is_opened() const { return is_opened_; }
 

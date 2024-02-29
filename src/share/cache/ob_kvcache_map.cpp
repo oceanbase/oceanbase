@@ -678,17 +678,24 @@ int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, int64_t &replace_nod
         if (OB_FAIL(guard.get_ret())) {
           COMMON_LOG(WARN, "Fail to write lock bucket", K(ret), K(i));
         } else {
+          const int64_t start = common::ObClockGenerator::getClock();
           Node *&bucket_ptr = get_bucket_node(i);
           prev = NULL;
           iter = bucket_ptr;
+          int64_t node_count = 0;
           while (NULL != iter) {
             if (iter->inst_->node_allocator_.is_fragment(iter)) {
               internal_map_replace(hazard_guard, prev, iter, bucket_ptr);
-              ++replace_node_count;
+              ++node_count;
             }
             prev = iter;
             iter = iter->next_;
+            if (common::ObClockGenerator::getClock() - start >= 1 * 1000 * 1000) {
+                  COMMON_LOG(INFO, "replace map node cost too much time", K(node_count), K(replace_node_count), K(replace_start_pos), K(i));
+              break;
+            }
           }
+          replace_node_count += node_count;
         }
       }
     }  // hazard version guard

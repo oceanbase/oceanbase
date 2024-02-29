@@ -438,7 +438,7 @@ int ObMultiTenant::init(ObAddr myaddr,
   }
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
-    MTL_BIND2(nullptr, ObTenantIOManager::mtl_init, nullptr, nullptr, nullptr, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
@@ -1801,6 +1801,16 @@ int ObMultiTenant::clear_persistent_data(const uint64_t tenant_id)
   } else if (OB_FAIL(FileDirectoryUtils::is_exists(tenant_clog_dir, exist))) {
     LOG_WARN("fail to check exist", K(ret));
   } else if (exist) {
+    // defense code begin
+    int tmp_ret = OB_SUCCESS;
+    bool directory_empty = true;
+    if (OB_TMP_FAIL(FileDirectoryUtils::is_empty_directory(tenant_clog_dir, directory_empty))) {
+      LOG_WARN("fail to check directory whether is empty", KR(tmp_ret), K(tenant_clog_dir));
+    }
+    if (!directory_empty) {
+      LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "msg", "clog directory must be empty when delete tenant", K(tenant_clog_dir));
+    }
+    // defense code end
     if (OB_FAIL(FileDirectoryUtils::delete_directory_rec(tenant_clog_dir))) {
       LOG_WARN("fail to delete clog dir", K(ret), K(tenant_clog_dir));
     }

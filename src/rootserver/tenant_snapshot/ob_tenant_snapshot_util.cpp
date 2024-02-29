@@ -423,6 +423,11 @@ int ObTenantSnapshotUtil::check_log_archive_ready(const uint64_t tenant_id, cons
         LOG_WARN("fail to get next row", KR(ret), K(sql));
       } else {
         EXTRACT_UINT_FIELD_MYSQL(*result, "min_ckpt_scn", min_ls_checkpoint_scn, uint64_t);
+        if (OB_UNLIKELY(OB_ERR_NULL_VALUE == ret)) {
+          ret = OB_EAGAIN;
+          LOG_WARN("fail to get result from virtual table, "
+                   "the searching might be timeout", KR(ret));
+        }
       }
 
       if (OB_SUCC(ret)) {

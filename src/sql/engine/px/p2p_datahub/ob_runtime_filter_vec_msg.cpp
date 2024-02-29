@@ -28,15 +28,15 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 template <typename ResVec>
-static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size);
+static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
 
 template <>
 int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                                          int64_t batch_size)
+                                          const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             res_vec->set_int(idx, 1);
             return OB_SUCCESS;
           }))) {
@@ -47,11 +47,11 @@ int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVec
 
 template <>
 int proc_filter_not_active<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                            int64_t batch_size)
+                                            const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 1, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
   return ret;
 }
 
@@ -137,7 +137,8 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg::ObRFInFilterRowStore)
   OB_UNIS_DECODE(row_sizes_);
   void *alloc_buf = nullptr;
   ObCompactRow *row = nullptr;
-  if (OB_FAIL(serial_rows_.reserve(row_cnt))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(serial_rows_.reserve(row_cnt))) {
     LOG_WARN("failed to prepare_allocate serial_rows_");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
@@ -189,7 +190,6 @@ OB_DEF_SERIALIZE(ObRFInFilterVecMsg)
 OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
 {
   int ret = OB_SUCCESS;
-  int64_t row_cnt = row_store_.get_row_cnt();
   BASE_DESER((ObRFInFilterVecMsg, ObP2PDatahubMsgBase));
   OB_UNIS_DECODE(max_in_num_);
   OB_UNIS_DECODE(need_null_cmp_flags_);
@@ -198,6 +198,7 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
   OB_UNIS_DECODE(build_row_meta_);
   if (OB_SUCC(ret) && is_active_) {
     OB_UNIS_DECODE(row_store_);
+    int64_t row_cnt = row_store_.get_row_cnt();
     int64_t buckets_cnt = max(row_cnt, 1);
     if (OB_FAIL(rows_set_.create(buckets_cnt * 2,
         "RFDEInFilter",
@@ -714,7 +715,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
 
   if (VEC_FIXED == res_format) {
     IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, batch_size))) {
+    if (OB_FAIL(preset_not_match(res_vec, bound))) {
       LOG_WARN("failed to preset_not_match", K(ret));
     }
   }
@@ -734,7 +735,7 @@ int ObRFRangeFilterVecMsg::do_might_contain_vector(
     bool is_match = true;
     const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
     ObDatum datum;
-    for (int64_t batch_i  = 0; batch_i < batch_size; ++batch_i) {
+    for (int64_t batch_i  = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
       if (skip.at(batch_i)) {
         continue;
       } else {
@@ -799,15 +800,14 @@ int ObRFRangeFilterVecMsg::might_contain_vector(
   if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -829,9 +829,11 @@ int ObRFRangeFilterVecMsg::prepare_query_range()
     is_query_range_ready_ = false;
   } else if (is_empty_) {
     // make empty range
-    query_range_.table_id_ = query_range_info_.table_id_;
-    query_range_.set_false_range();
-    is_query_range_ready_ = true;
+    if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range_))) {
+      LOG_WARN("faild to fill_empty_query_range");
+    } else {
+      is_query_range_ready_ = true;
+    }
   } else {
     // only extract the first column
     int64_t prefix_col_idx = query_range_info_.prefix_col_idxs_.at(0);
@@ -849,11 +851,11 @@ int ObRFRangeFilterVecMsg::prepare_query_range()
     if (OB_ISNULL(start = static_cast<ObObj *>(
                       query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory for start_obj failed", K(ret));
+      LOG_WARN("alloc memory for start_obj failed", K(ret));
     } else if (OB_ISNULL(end = static_cast<ObObj *>(
                              query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory for end_obj failed", K(ret));
+      LOG_WARN("alloc memory for end_obj failed", K(ret));
     } else {
       new(start) ObObj();
       new(end) ObObj();
@@ -1545,7 +1547,7 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
   uint64_t *right_hash_vals = filter_ctx.right_hash_vals_;
   if (VEC_FIXED == res_format) {
     IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-    if (OB_FAIL(preset_not_match(res_vec, batch_size))) {
+    if (OB_FAIL(preset_not_match(res_vec, bound))) {
       LOG_WARN("failed to preset_not_match", K(ret));
     }
   }
@@ -1573,7 +1575,7 @@ int ObRFInFilterVecMsg::do_might_contain_vector(
     bool is_match = true;
     const int64_t is_match_payload = 1; // for VEC_FIXED set set_payload, always 1
     ObDatum datum;
-    for (int64_t batch_i  = 0; batch_i < batch_size && OB_SUCC(ret); ++batch_i) {
+    for (int64_t batch_i  = bound.start(); batch_i < bound.end() && OB_SUCC(ret); ++batch_i) {
       if (skip.at(batch_i)) {
         continue;
       } else {
@@ -1635,15 +1637,14 @@ int ObRFInFilterVecMsg::might_contain_vector(
 {
   int ret = OB_SUCCESS;
   if (!is_active_) {
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_not_active(res_vec, skip, batch_size);
+      ret = proc_filter_not_active(res_vec, skip, bound);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_not_active(res_vec, skip, batch_size);
+      ret = proc_filter_not_active(res_vec, skip, bound);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1651,15 +1652,14 @@ int ObRFInFilterVecMsg::might_contain_vector(
   } else if (OB_UNLIKELY(is_empty_)) {
     int64_t total_count = 0;
     int64_t filter_count = 0;
-    const int64_t batch_size = bound.batch_size();
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_UNIFORM == res_format) {
       IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     } else if (VEC_FIXED == res_format) {
       IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_filter_empty(res_vec, skip, batch_size, total_count, filter_count);
+      ret = proc_filter_empty(res_vec, skip, bound, total_count, filter_count);
     }
     if (OB_SUCC(ret)) {
       eval_flags.set_all(true);
@@ -1728,9 +1728,9 @@ int ObRFInFilterVecMsg::prepare_query_ranges()
   } else if (is_empty_) {
     // make empty range
     ObNewRange query_range;
-    query_range.table_id_ = query_range_info_.table_id_;
-    query_range.set_false_range();
-    if (OB_FAIL(query_range_.push_back(query_range))) {
+    if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range))) {
+      LOG_WARN("faild to fill_empty_query_range");
+    } else if (OB_FAIL(query_range_.push_back(query_range))) {
       LOG_WARN("failed to push back query_range");
     } else {
       is_query_range_ready_ = true;
@@ -1950,11 +1950,11 @@ int ObRFInFilterVecMsg::generate_one_range(int row_idx)
   if (OB_ISNULL(start = static_cast<ObObj *>(
                     query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for start_obj failed", K(ret));
+    LOG_WARN("alloc memory for start_obj failed", K(ret));
   } else if (OB_ISNULL(end = static_cast<ObObj *>(
                            query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for end_obj failed", K(ret));
+    LOG_WARN("alloc memory for end_obj failed", K(ret));
   }
   for (int64_t j = 0; j < prefix_col_idxs.count() && OB_SUCC(ret); ++j) {
     int64_t col_idx = prefix_col_idxs.at(j);

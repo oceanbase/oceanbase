@@ -38,6 +38,7 @@ public:
 
   bool is_read_only() const { return read_only_; }
   bool has_recovered_from_tx_table() const { return recovered_from_tx_table_; }
+  bool is_decided() const;
   share::SCN get_max_replayed_rollback_scn() const { return max_replayed_rollback_scn_; }
   void set_max_replayed_rollback_scn(const share::SCN &scn) { max_replayed_rollback_scn_ = scn; }
   int insert_into_tx_table();

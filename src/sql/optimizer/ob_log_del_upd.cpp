@@ -41,6 +41,7 @@ int IndexDMLInfo::deep_copy(ObIRawExprCopier &expr_copier, const IndexDMLInfo &o
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
+  is_update_primary_key_ = other.is_update_primary_key_;
   assignments_.reset();
   if (OB_FAIL(expr_copier.copy(other.column_exprs_, column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -83,6 +84,7 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
+  is_update_primary_key_ = other.is_update_primary_key_;
   trans_info_expr_ = other.trans_info_expr_;
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -1358,7 +1360,7 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_guard, fk_info.parent_column_ids_, scan_index_tid))) {
           LOG_WARN("failed to get index tid used to build scan das task for foreign key checks", K(ret));
         } else if (OB_INVALID_ID == scan_index_tid) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
         } else {
           ObRawExpr* fk_look_up_part_id_expr = nullptr;

@@ -172,7 +172,6 @@ int ObDirectLoadMultipleHeapTableSorter::work()
     const ObDirectLoadExternalFragment &fragment = fragments_.at(i);
     ExternalReader external_reader;
     if (OB_FAIL(external_reader.init(mem_ctx_->table_data_desc_.external_data_block_size_,
-                                     fragment.max_data_block_size_,
                                      mem_ctx_->table_data_desc_.compressor_type_))) {
       LOG_WARN("fail to init external reader", KR(ret));
     } else if (OB_FAIL(external_reader.open(fragment.file_handle_, 0, fragment.file_size_))) {

@@ -496,6 +496,7 @@ public:
                                         ObExprResType &utf8_type);
 
   static int erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
+  static int erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
 
   // erase implicit cast which added for operand casting.
   static int erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out);
@@ -557,11 +558,10 @@ public:
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,
                                    bool is_onetime = false);
-
-  static int create_exec_param_expr(ObQueryCtx *query_ctx,
-                                    ObRawExprFactory &expr_factory,
-                                    ObRawExpr *&src_expr,
-                                    std::pair<int64_t, ObRawExpr*> &init_expr);
+  static int create_new_exec_param(ObRawExprFactory &expr_factory,
+                                   ObRawExpr *ref_expr,
+                                   ObExecParamRawExpr *&exec_param,
+                                   bool is_onetime = false);
   static int create_param_expr(ObRawExprFactory &expr_factory, int64_t param_idx, ObRawExpr *&expr);
   static int build_trim_expr(const share::schema::ObColumnSchemaV2 *column_schema,
                              ObRawExprFactory &expr_factory,
@@ -1069,6 +1069,13 @@ public:
                              const ObIArray<common::ObField> *field_array,
                              const ObIArray<ObRawExpr*> &input_exprs,
                              ObRawExpr *&pack_expr);
+  static int build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
+                                      const ObSQLSessionInfo *session_info,
+                                      ObRawExpr *cast_expr,
+                                      ObRawExpr *input_expr,
+                                      ObRawExpr *next_expr,
+                                      const uint64_t ret_code,
+                                      ObSysFunRawExpr *&new_expr);
 
   static int set_call_in_pl(ObRawExpr *&raw_expr);
 

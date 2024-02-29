@@ -36,6 +36,12 @@ public:
   }
   void stop() override final
   {}
+  int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final
+  {
+    int ret = OB_SUCCESS;
+    UNUSED(new_config_version);
+    return ret;
+  }
   // 设置成员列表
   int set_memberlist(const MemberList &new_member_list) override final
   {
@@ -74,6 +80,13 @@ public:
     int ret = OB_SUCCESS;
     UNUSED(dest_addr);
     return ret;
+  }
+  virtual int temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason) override final
+  {
+    int ret = OB_SUCCESS;
+    UNUSED(time_us);
+    UNUSED(reason);
+    return OB_SUCCESS;
   }
   // 拿本机地址
   const common::ObAddr &get_self_addr() const override final

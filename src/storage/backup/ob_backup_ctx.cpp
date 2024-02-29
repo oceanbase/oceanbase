@@ -280,7 +280,15 @@ ObBackupDataCtx::ObBackupDataCtx()
 {}
 
 ObBackupDataCtx::~ObBackupDataCtx()
-{}
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
+    ObBackupIoAdapter util;
+    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+      LOG_WARN("fail to close device and fd", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  }
+}
 
 int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBackupDataType &backup_data_type,
     const int64_t file_id)
@@ -383,6 +391,7 @@ int ObBackupDataCtx::close()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data ctx do not init", K(ret));
@@ -392,6 +401,25 @@ int ObBackupDataCtx::close()
     LOG_WARN("failed to flush trailer", K(ret));
   } else if (OB_FAIL(file_write_ctx_.close())) {
     LOG_WARN("failed to close file writer", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
+      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  } else {
+    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+    }
+  }
+
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
   }
   return ret;
 }
@@ -825,8 +853,7 @@ ObLSBackupCtx::ObLSBackupCtx()
       sql_proxy_(NULL),
       rebuild_seq_(),
       check_tablet_info_cost_time_(),
-      backup_tx_table_filled_tx_scn_(share::SCN::min_scn()),
-      tablet_checker_()
+      backup_tx_table_filled_tx_scn_(share::SCN::min_scn())
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
@@ -835,8 +862,7 @@ ObLSBackupCtx::~ObLSBackupCtx()
 }
 
 int ObLSBackupCtx::open(
-    const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
-    common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache)
+    const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObTabletID> tablet_list;
@@ -858,8 +884,6 @@ int ObLSBackupCtx::open(
     LOG_WARN("failed to init stat", K(ret));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
-  } else if (OB_FAIL(tablet_checker_.init(param, sql_proxy, index_kv_cache))) {
-    LOG_WARN("failed to init tablet checker", K(ret), K(param));
   } else {
     max_file_id_ = 0;
     prefetch_task_id_ = 0;
@@ -1036,6 +1060,16 @@ int ObLSBackupCtx::set_max_file_id(const int64_t file_id)
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   max_file_id_ = std::max(file_id, max_file_id_);
+  return ret;
+}
+
+int ObLSBackupCtx::get_prefetch_task_id(int64_t &prefetch_task_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  prefetch_task_id = prefetch_task_id_;
+  prefetch_task_id_++;
+  LOG_INFO("get prefetch task id", K(prefetch_task_id));
   return ret;
 }
 

@@ -225,7 +225,8 @@ private:
   int register_table_lock_cb_(
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
-      ObOBJLockCallback *&cb);
+      ObOBJLockCallback *&cb,
+      const share::SCN replay_scn = share::SCN::invalid_scn());
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;

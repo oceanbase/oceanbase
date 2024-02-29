@@ -306,6 +306,10 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(j_base)) {
+    j_base->set_allocator(allocator);
+  }
   return ret;
 }
 int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
@@ -762,7 +766,10 @@ void ObJsonExprHelper::set_type_for_value(ObExprResType* types_stack, uint32_t i
   ObObjType in_type = types_stack[index].get_type();
   if (in_type == ObNullType) {
   } else if (ob_is_string_type(in_type)) {
-    if (types_stack[index].get_charset_type() != CHARSET_UTF8MB4) {
+    if (in_type == ObVarcharType && types_stack[index].get_collation_type() == CS_TYPE_BINARY) {
+      types_stack[index].set_calc_type(ObHexStringType);
+      types_stack[index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (types_stack[index].get_charset_type() != CHARSET_UTF8MB4) {
       types_stack[index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
   } else if  (in_type == ObJsonType) {
@@ -780,6 +787,37 @@ int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
   } else if (OB_FAIL(j_bin.reset_iter())) {
     LOG_WARN("failed: reset iter", K(ret));
   } else if (OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else {
+    result = (tmp_result == 0) ? 0 : 1;
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::is_json_true(const ObString& data, int& result)
+{
+  INIT_SUCC(ret);
+  int tmp_result = 0;
+
+  ObJsonBin j_bin(data.ptr(), data.length());
+  if (data.length() == 0) {
+    result = 0;
+  } else if (OB_FAIL(j_bin.reset_iter())) {
+    LOG_WARN("failed: reset iter", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_OBJECT ||
+             j_bin.json_type() == ObJsonNodeType::J_ARRAY ||
+             j_bin.json_type() == ObJsonNodeType::J_STRING ||
+             j_bin.json_type() == ObJsonNodeType::J_NULL ||
+             j_bin.json_type() == ObJsonNodeType::J_BOOLEAN)) {
+    result = 1;
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_INT || j_bin.json_type() == ObJsonNodeType::J_UINT)
+             && OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_DECIMAL)
+             && OB_FAIL(ObJsonBaseUtil::compare_decimal_uint(j_bin.get_decimal_data(), 0, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else if ((j_bin.json_type() == ObJsonNodeType::J_DOUBLE)
+             && OB_FAIL(ObJsonBaseUtil::compare_double_int(j_bin.get_double(), 0, tmp_result))) {
     LOG_WARN("failed: cmp json", K(ret));
   } else {
     result = (tmp_result == 0) ? 0 : 1;

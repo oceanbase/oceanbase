@@ -910,31 +910,6 @@ int ObIndexBlockTreeCursor::get_macro_block_id(MacroBlockId &macro_id)
   return ret;
 }
 
-int ObIndexBlockTreeCursor::get_start_row_offset(int64_t &start_row_offset)
-{
-  int ret = OB_SUCCESS;
-  const ObIndexBlockRowHeader *idx_header = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init", K(ret));
-  } else if (OB_ISNULL(curr_path_item_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("curr path item is null", K(ret));
-  } else if (FALSE_IT(start_row_offset = curr_path_item_->start_row_offset_)) {
-  } else if (OB_FAIL(idx_row_parser_.get_header(idx_header))) {
-    LOG_WARN("Fail to get index block row header", K(ret));
-  } else if (OB_ISNULL(idx_header)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Got null pointer for index block row header", K(ret));
-  } else if (!(idx_header->is_data_block() || idx_header->is_leaf_block())) {
-    if (OB_UNLIKELY(0 != start_row_offset)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("prev row offset should be -1", K(ret), KPC(idx_header), KPC_(curr_path_item));
-    }
-  }
-  return ret;
-}
-
 int ObIndexBlockTreeCursor::get_child_micro_infos(
     const ObDatumRange &range,
     ObArenaAllocator &endkey_allocator,
@@ -1108,10 +1083,8 @@ int ObIndexBlockTreeCursor::get_next_level_block(
     // curr_path_item_->is_block_transformed_ = false;
   }
   curr_path_item_->start_row_offset_ = 0;
-  if (OB_SUCC(ret) && is_normal_cg_sstable_ && TreeType::INDEX_BLOCK == tree_type_) {
-    if (idx_row_header.is_leaf_block() || idx_row_header.is_data_block()) {
-      curr_path_item_->start_row_offset_ = curr_row_offset - idx_row_header.row_count_ + 1;
-    }
+  if (OB_SUCC(ret) && TreeType::INDEX_BLOCK == tree_type_ && (idx_row_header.is_leaf_block() || idx_row_header.is_data_block())) {
+    curr_path_item_->start_row_offset_ = curr_row_offset - idx_row_header.row_count_ + 1;
   }
   return ret;
 }

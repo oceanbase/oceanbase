@@ -970,6 +970,8 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
   } else if (OB_FAIL(op.get_backup_set_array(backup_set_array))) {
     STORAGE_LOG(WARN, "fail to get backup set names", K(ret));
   } else if (!backup_set_array.empty()) {
+    storage::ObBackupDataStore::ObBackupSetDescComparator cmp;
+    std::sort(backup_set_array.begin(), backup_set_array.end(), cmp);
     for (int64_t i = backup_set_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       path.reset();
       const share::ObBackupSetDesc &backup_set_dir = backup_set_array.at(i);
@@ -1557,7 +1559,7 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
     STORAGE_LOG(WARN, "failed to read tablet metas file trailer", K(ret));
   } else {
     common::ObArenaAllocator allocator;
-    const int64_t DEFAULT_BUF_LEN = 2 * 1024 * 1024; // 2M
+    const int64_t DEFAULT_BUF_LEN = 2 * MAX_BACKUP_TABLET_META_SERIALIZE_SIZE;
     int64_t cur_buf_offset = tablet_meta_trailer.offset_;
     int64_t cur_total_len = 0;
     char *buf = nullptr;
@@ -1570,6 +1572,7 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
       } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path_, storage_info_, cur_buf_offset, buf_len, buf))) {
         STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path_), K(storage_info_), K(cur_buf_offset), K(buf_len));
       } else {
+        int64_t tablet_cnt = 0;
         backup::ObBackupTabletMeta tablet_meta;
         blocksstable::ObBufferReader buffer_reader(buf, buf_len);
         while (OB_SUCC(ret)) {
@@ -1589,7 +1592,12 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
             STORAGE_LOG(WARN, "common_header is not valid", K(ret), K(backup_path_), K(buffer_reader));
           } else if (common_header->data_zlength_ > buffer_reader.remain()) {
             cur_total_len = buffer_reader.pos() - sizeof(ObBackupCommonHeader);
-            STORAGE_LOG(INFO, "buf not enough, wait later", K(cur_total_len), K(buffer_reader));
+            if (0 == tablet_cnt) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(WARN, "tablet meta is too large", KPC(common_header), K(cur_total_len), K(buffer_reader));
+            } else {
+              STORAGE_LOG(INFO, "buf not enough, wait later", KPC(common_header), K(cur_total_len), K(buffer_reader), K(tablet_cnt));
+            }
             break;
           } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
             STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(*common_header), K(backup_path_), K(buffer_reader));
@@ -1598,6 +1606,7 @@ int ObAdminDumpBackupDataExecutor::print_ls_tablet_meta_tablets_()
           } else if (OB_FAIL(buffer_reader.advance(common_header->data_length_ + common_header->align_length_))) {
             STORAGE_LOG(WARN, "failed to advance buffer", K(ret));
           } else {
+            ++tablet_cnt;
             tablet_meta.tablet_id_ = tablet_meta.tablet_meta_.tablet_id_;
             if (OB_FAIL(dump_common_header_(*common_header))) {
               STORAGE_LOG(WARN, "failed to dump common header", K(ret));

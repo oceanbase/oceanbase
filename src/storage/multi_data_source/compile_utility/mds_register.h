@@ -117,6 +117,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObTransferDestPrepareTxCtx,\
                                           28,\
                                           TRANSFER_DEST_PREPARE)
+  // UNBIND_LOB_TABLET: ID = 29 for drop lob tablet when drop column instant.
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/

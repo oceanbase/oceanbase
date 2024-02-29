@@ -300,10 +300,12 @@ stmt_list:
     stmt_list ';' stmt
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_LINK_NODE, 2, $1, $3);
+      parse_ctx->stmt_tree_ = $$;
     }
   | stmt
     {
       $$ = $1;
+      parse_ctx->stmt_tree_ = $$;
     }
 /*  | stmt_list ';' error
     {
@@ -1511,12 +1513,18 @@ sp_proc_stmt_if:
 sp_if:
     expr THEN sp_proc_stmts sp_elseifs
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, $4);
     }
   | expr THEN sp_proc_stmts %prec PARENS
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, NULL);

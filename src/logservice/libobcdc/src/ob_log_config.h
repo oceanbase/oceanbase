@@ -103,14 +103,15 @@ public:
   DEF_INT(sequencer_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "sequencer thread number");
   DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "sequencer queue length");
   DEF_INT(formatter_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "formatter thread number");
-  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "2", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_queue_length, OB_CLUSTER_PARAMETER, "1000000", "[0,]", "lob data merger queue length");
   DEF_CAP(batch_buf_size, OB_CLUSTER_PARAMETER, "20MB", "[2MB,]", "batch buf size");
   DEF_INT(batch_buf_count, OB_CLUSTER_PARAMETER, "10", "[5,]", "batch buf count");
   DEF_INT(storager_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "storager thread number");
   DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "storager queue length");
   DEF_INT(reader_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "reader thread number");
   DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "reader queue length");
-  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0, ]", "user_binlog_record queue length");
+  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "user_binlog_record queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
   DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "11", "[1,]", "resource collector thread number");

@@ -241,3 +241,10 @@ if (1) {
   CREATE INDEX idx ON spatial_index_rebuild (g);
   SELECT /*+INDEX(spatial_index_rebuild idx)*/ st_astext(g) FROM spatial_index_rebuild WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
 }
+
+#bug fix
+--disable_warnings
+drop table if exists spatial_index;
+--enable_warnings
+CREATE TABLE spatial_index (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i),  SPATIAL KEY (g))with column group ( each column);
+select i, st_astext(g) from spatial_index where ST_Intersects(g, ST_GEOMFROMTEXT('POINT(2 2)', 4326));

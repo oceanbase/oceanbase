@@ -936,6 +936,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       // Step5: decode value
       for (int64_t i = 0; OB_SUCC(ret) && i < input_param_num; ++i) {
         ObObjParam &param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
+        param.reset();
         if (OB_SUCC(ret) && OB_FAIL(parse_request_param_value(alloc,
                                                               session,
                                                               pos,
@@ -1366,8 +1367,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     }
 
     //update v$sql statistics
-    if ((OB_SUCC(ret) || audit_record.is_timeout())
-        && session.get_local_ob_enable_plan_cache()
+    if (session.get_local_ob_enable_plan_cache()
         && !retry_ctrl_.need_retry()
         && !is_ps_cursor()) {
       // ps cursor do this in inner open
@@ -1913,27 +1913,32 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-    // whether the previous error was reported, a cleanup is to be done here
-    if (!async_resp_used) {
-      // async remove in ObSqlEndTransCb
-      ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache());
-      if (OB_ISNULL(piece_cache)) {
-        // do nothing
-        // piece_cache not be null in piece data protocol
-      } else {
+
+    if (!retry_ctrl_.need_retry()) {
+      // if no retry would be performed any more, clear the piece cache
+      ObPieceCache *piece_cache = nullptr;
+      int upper_scope_ret = ret;
+      ret = OB_SUCCESS;
+      piece_cache = session.get_piece_cache();
+      if (OB_NOT_NULL(piece_cache)) {
         for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
           if (OB_FAIL(piece_cache->remove_piece(
-                              piece_cache->get_piece_key(stmt_id_, i),
-                              session))) {
+                  piece_cache->get_piece_key(stmt_id_, i), session))) {
             if (OB_HASH_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
+              LOG_INFO("piece hash not exist", K(ret), K(stmt_id_), K(i));
             } else {
-              LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
+              need_disconnect = true;
+              LOG_WARN("remove piece fail", K(ret), K(need_disconnect), K(stmt_id_), K(i));
             }
           }
         }
+      } else {
+        LOG_DEBUG("piece_cache_ is null");
       }
+      ret = upper_scope_ret;
     }
+
     record_flt_trace(session);
   }
 
@@ -2510,9 +2515,8 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   uint64_t count = 1;
   common::ObFixedArray<ObSqlString, ObIAllocator>
                 str_buf(THIS_WORKER.get_sql_arena_allocator());
-  ObPieceCache *piece_cache = NULL == ctx_.session_info_
-                                ? NULL
-                                : static_cast<ObPieceCache*>(ctx_.session_info_->get_piece_cache());
+  ObPieceCache *piece_cache =
+      NULL == ctx_.session_info_ ? NULL : ctx_.session_info_->get_piece_cache();
   ObPiece *piece = NULL;
   if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
     ret = OB_ERR_UNEXPECTED;

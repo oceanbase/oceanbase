@@ -108,8 +108,8 @@ public:
       if (NULL != column_store_ && !column_store_->reuse_vector_array_ && NULL != vectors_) {
         vectors_->reset();
         column_store_->allocator_->free(vectors_);
-        vectors_ = NULL;
       }
+      vectors_ = NULL;
       ObTempBlockStore::BlockReader::reset();
     }
 

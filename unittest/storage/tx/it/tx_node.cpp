@@ -78,7 +78,25 @@ int ObTxDescGuard::release() {
   return ret;
 }
 
-
+ObString ObTxNode::get_identifer_str() const
+{
+  struct ID {
+    ObAddr addr;
+    int64_t ls_id;
+    DECLARE_TO_STRING {
+      int64_t pos = 0;
+      int32_t pos0 = 0;
+      addr.addr_to_buffer(buf, buf_len, pos0);
+      pos += pos0;
+      BUF_PRINTF("_%ld", ls_id);
+      return pos;
+    }
+  } identifer = {
+    .addr = addr_,
+    .ls_id = ls_id_.id()
+  };
+  return ObString(to_cstring(&identifer));
+}
 ObTxNode::ObTxNode(const int64_t ls_id,
                    const ObAddr &addr,
                    MsgBus &msg_bus) :
@@ -86,10 +104,10 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   addr_(addr),
   ls_id_(ls_id),
   tenant_id_(1001),
-  tenant_(tenant_id_),
+  tenant_(tenant_id_, 10, *GCTX.cgroup_ctrl_),
   fake_part_trans_ctx_pool_(1001, false, false, 4),
   memtable_(NULL),
-  msg_consumer_(ObString("TxNode"),
+  msg_consumer_(get_identifer_str(),
                 &msg_queue_,
                 std::bind(&ObTxNode::handle_msg_,
                           this, std::placeholders::_1)),
@@ -102,8 +120,10 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   addr.to_string(name_buf_, sizeof(name_buf_));
   msg_consumer_.set_name(name_);
   role_ = Leader;
+  tenant_.enable_tenant_ctx_check_ = false;
   tenant_.set(&fake_tenant_freezer_);
   tenant_.set(&fake_part_trans_ctx_pool_);
+  tenant_.start();
   ObTenantEnv::set_tenant(&tenant_);
   ObTableHandleV2 lock_memtable_handle;
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
@@ -237,7 +257,7 @@ void ObTxNode::dump_msg_queue_()
   int ret = OB_SUCCESS;
   MsgPack *msg = NULL;
   int i = 0;
-  while(OB_NOT_NULL((msg = (MsgPack*)msg_queue_.pop()))) {
+  while(OB_SUCC(msg_queue_.pop((ObLink*&)msg))) {
     ++i;
     MsgInfo msg_info;
     OZ (get_msg_info(msg, msg_info));
@@ -350,7 +370,7 @@ int ObTxNode::recv_msg(const ObAddr &sender, ObString &m)
   TRANS_LOG(INFO, "recv_msg", K(sender), "msg_ptr", OB_P(m.ptr()), KPC(this));
   int ret = OB_SUCCESS;
   auto pkt = new MsgPack(sender, m);
-  msg_queue_.push(pkt);
+  OZ(msg_queue_.push(pkt));
   msg_consumer_.wakeup();
   return ret;
 }
@@ -360,7 +380,7 @@ int ObTxNode::sync_recv_msg(const ObAddr &sender, ObString &m, ObString &resp)
   TRANS_LOG(INFO, "sync_recv_msg", K(sender), "msg_ptr", OB_P(m.ptr()), KPC(this));
   int ret = OB_SUCCESS;
   auto pkt = new MsgPack(sender, m, true);
-  msg_queue_.push(pkt);
+  OZ(msg_queue_.push(pkt));
   msg_consumer_.wakeup();
   pkt->cond_.wait(pkt->cond_.get_key(), 500000);
   if (pkt->resp_ready_) {
@@ -506,7 +526,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
   read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
-  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ = ObTimeUtility::current_time() + 5000ll * 1000;
+  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ts_ = ObTimeUtility::current_time() + 5000ll * 1000;
   blocksstable::ObDatumRow row;
   {
     ObTableIterParam iter_param;

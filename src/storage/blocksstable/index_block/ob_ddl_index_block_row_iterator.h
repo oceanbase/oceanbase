@@ -59,7 +59,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual void set_iter_end() override { is_iter_finish_ = true; }
@@ -117,21 +118,22 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reuse() override;
   virtual void reset() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLSStableAllRangeIterator", K(is_iter_start_), K(is_iter_finish_),
-      KPC(rowkey_read_info_), K(index_macro_iter_), K(iter_param_), KP(cur_rowkey_), KP(cur_header_));
+      KPC(rowkey_read_info_), K(index_macro_iter_), K(iter_param_), K(cur_index_info_));
 
 private:
   bool is_iter_start_;
   bool is_iter_finish_;
   const ObITableReadInfo *rowkey_read_info_;
-  const blocksstable::ObDatumRowkey *cur_rowkey_;
-  const blocksstable::ObIndexBlockRowHeader *cur_header_;
   ObIndexBlockMacroIterator index_macro_iter_;
   ObIndexBlockIterParam iter_param_;
+  ObMicroIndexRowItem cur_index_info_;
   ObArenaAllocator macro_iter_allocator_;
+  ObArenaAllocator idx_row_allocator_;
 };
 
 // for empty ddl_merge_sstable
@@ -165,7 +167,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reuse() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLMergeEmptyIterator");
 };
@@ -203,7 +206,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual int switch_context(ObStorageDatumUtils *datum_utils) override;

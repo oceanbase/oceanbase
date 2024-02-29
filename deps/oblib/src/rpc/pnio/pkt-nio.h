@@ -18,8 +18,8 @@
 #include "r0/format.h"
 #include "r0/log.h"
 #include "r0/futex.h"
-#include "r0/debug.h"
 #include "nio/addr.h"
+#include "r0/debug.h"
 
 #include "ds/link.h"
 #include "ds/dlink.h"

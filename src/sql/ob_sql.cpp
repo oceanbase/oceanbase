@@ -72,7 +72,7 @@
 #include "observer/omt/ob_th_worker.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/code_generator/ob_code_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
@@ -2806,6 +2806,17 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         result.get_session().set_group_id_not_expected(false);
       }
       NG_TRACE(resolve_end);
+      if (OB_SUCC(ret)) {
+        // move init datum param store here
+        // if `opt_param("enable_rich_vector_format", "false")` is used in hints, use_rich_format will
+        // be off, we need reset value in pctx and initialize param frame accordingly.
+        if (NULL != pc_ctx && NULL != pc_ctx->exec_ctx_.get_physical_plan_ctx()) {
+          pc_ctx->exec_ctx_.get_physical_plan_ctx()->set_rich_format(context.session_info_->use_rich_format());
+          if (OB_FAIL(pc_ctx->exec_ctx_.get_physical_plan_ctx()->init_datum_param_store())) {
+            LOG_WARN("init datum param store failed", K(ret));
+          }
+        }
+      }
       //add ref obj schema version to PL and ps info
       if (OB_SUCC(ret)) {
         if (OB_FAIL(result.get_ref_objects().assign(resolver_ctx.query_ctx_->global_dependency_tables_))) {
@@ -2828,7 +2839,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           bool in_pl = NULL != resolver_ctx.secondary_namespace_
             || (resolver_ctx.is_dynamic_sql_ && OB_NOT_NULL(result.get_session().get_pl_context()))
             || resolver_ctx.is_dbms_sql_;
-          bool need_rebuild = lib::is_mysql_mode() ?  false : resolver_ctx.is_prepare_stage_ && in_pl;
+          bool need_rebuild = (lib::is_mysql_mode() ? (resolver_ctx.is_dynamic_sql_ &&
+          OB_NOT_NULL(result.get_session().get_pl_context()) && resolver_ctx.is_prepare_stage_) : resolver_ctx.is_prepare_stage_ && in_pl);
           bool is_returning_into = false;
           if (stmt->is_insert_stmt() || stmt->is_update_stmt() || stmt->is_delete_stmt()) {
             ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(*stmt);
@@ -3867,7 +3879,7 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
          // do nothing
-        if (OB_SQL_PC_NOT_EXIST == ret) {
+        if (OB_SQL_PC_NOT_EXIST == ret || OB_REACH_MEMORY_LIMIT == ret) {
           ret = OB_SUCCESS;
         }
       } else {
@@ -4202,7 +4214,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
 
   if (OB_SUCC(ret)) {
     //租户级别的read only检查
-    if ((session->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_) || pc_ctx.is_begin_commit_stmt()) {
+    if ((session->is_inner() && !session->is_user_session()) || pc_ctx.is_begin_commit_stmt()) {
       // FIXME:
       // schema拆分后，为了避免建租户时获取不到租户read only属性导致建租户失败，对于inner sql
       // 暂时跳过read only检查。实际上，对于tenant space系统表，不应该检查read only属性。
@@ -4959,9 +4971,6 @@ int ObSql::handle_parser(const ObString &sql,
     }
     if (OB_SUCC(ret)) {
       pctx->set_original_param_cnt(pctx->get_param_store().count());
-      if (OB_FAIL(pctx->init_datum_param_store())) {
-        LOG_WARN("fail to init datum param store", K(ret));
-      }
     }
   }
   LOG_DEBUG("SQL MEM USAGE", K(parser_mem_usage), K(last_mem_usage));
@@ -5493,15 +5502,27 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
                  || plan->is_contain_oracle_trx_level_temporary_table()) {
         // access temp table
       } else {
-        fixed_route = false;
+        // check passed: special query which can not be reroute
+        //
+        // check txn free route is disabled, if so, when on txn start
+        // node, can not reroute
+        if (OB_FAIL(session.calc_txn_free_route())) {
+          LOG_WARN("cal txn free route failed", K(ret), K(session));
+        } else if (session.can_txn_free_route()) {
+          fixed_route = false;
+        } else if (session.is_txn_free_route_temp()) {
+          fixed_route = false;
+        } else {
+          // fixed route if txn started on this node
+        }
       }
       if (fixed_route) {
-        // multi-stmt or stmt disallow on other node, can not be rerouted
         should_reroute = false;
       }
     }
 
-    if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null schema guard", K(ret));
     } else if (should_reroute) {

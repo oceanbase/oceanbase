@@ -97,8 +97,6 @@ private:
 
   int check_cancel() const;
   bool is_server_alive(const common::ObAddr &server) const;
-  int get_tenant_server_list(uint64_t tenant_id,
-                             common::ObIArray<common::ObAddr> &target_server_list) const;
 
 
   bool inited_;

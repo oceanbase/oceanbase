@@ -15,6 +15,7 @@
 #include "lib/container/ob_array.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/resolver/dml/ob_stmt_expr_visitor.h"
 namespace oceanbase
 {
 namespace sql
@@ -23,6 +24,20 @@ class ObDMLResolver;
 class ObAggFunRawExpr;
 class ObSelectResolver;
 class ObSelectStmt;
+
+class ObStmtExecParamReplacer : public ObStmtExprVisitor
+{
+public:
+  ObStmtExecParamReplacer() {}
+  virtual int do_visit(ObRawExpr *&expr) override;
+  int add_replace_exprs(const ObIArray<ObExecParamRawExpr *> &from_exprs,
+                        const ObIArray<ObExecParamRawExpr *> &to_exprs);
+  int check_need_replace(const ObRawExpr *old_expr, ObRawExpr *&new_expr, bool &need_replace);
+private:
+  hash::ObHashSet<uint64_t> to_exprs_;
+  hash::ObHashMap<uint64_t, uint64_t> expr_replace_map_;
+};
+
 class ObAggrExprPushUpAnalyzer
 {
 public:
@@ -63,7 +78,9 @@ private:
   int remove_alias_exprs();
 
   int remove_alias_exprs(ObRawExpr* &expr);
-
+  int replace_final_exec_param_in_aggr(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                       ObIArray<ObQueryRefRawExpr *> &param_query_refs,
+                                       ObRawExprFactory &expr_factory);
 private:
   // contain current layer column (a real column or a alias select item)
   bool has_cur_layer_column_;

@@ -46,53 +46,12 @@ class ObLSTabletService;
 class ObTablet;
 class ObLSWRSHandler;
 class ObTableHandleV2;
+class ObLSIterator;
 namespace checkpoint
 {
 class ObDataCheckpoint;
 }
 
-class ObReplaySubmitLogPendingWhenFreezeGuard
-{
-public:
-  ObReplaySubmitLogPendingWhenFreezeGuard(logservice::ObILogHandler *loghandler,
-                                          share::ObLSID &ls_id)
-    : is_follower_(false),
-      loghandler_(loghandler),
-      ls_id_(ls_id) {
-    int ret = OB_SUCCESS;
-    int64_t proposal_id = 0;
-    common::ObRole ls_role = common::ObRole::INVALID_ROLE;
-    if (OB_FAIL(loghandler_->get_role(ls_role, proposal_id))) {
-      STORAGE_LOG(WARN, "get ls role fail", K(ret), K(ls_id_));
-    } else if (common::ObRole::FOLLOWER == ls_role) {
-      is_follower_ = true;
-    }
-
-    if (is_follower_) {
-      if (OB_ISNULL(loghandler_)) {
-        STORAGE_LOG(WARN, "loghandler should not null", K(ls_id_));
-      } else if (OB_FAIL(loghandler_->pend_submit_replay_log())) {
-        STORAGE_LOG(ERROR, "pend_submit_replay_log failed", K(ls_id_));
-      }
-    }
-  }
-
-  ~ObReplaySubmitLogPendingWhenFreezeGuard() {
-    int ret = OB_SUCCESS;
-    if (is_follower_) {
-      if (OB_ISNULL(loghandler_)) {
-        STORAGE_LOG(WARN, "loghandler should not null", K(ls_id_));
-      } else if (OB_FAIL(loghandler_->restore_submit_replay_log())) {
-        STORAGE_LOG(ERROR, "restore_submit_replay_log failed", K(ls_id_));
-      }
-    }
-  }
-
-private:
-  bool is_follower_;
-  logservice::ObILogHandler *loghandler_;
-  share::ObLSID ls_id_;
-};
 
 class ObFreezeState
 {
@@ -166,8 +125,8 @@ public:
   bool need_rewrite_meta();
   void set_state(int state);
   int get_state();
-  void set_freeze_clock(const int64_t freeze_clock);
-  int64_t get_freeze_clock();
+  void set_freeze_clock(const uint32_t freeze_clock);
+  uint32_t get_freeze_clock();
   void set_start_time(int64_t start_time);
   int64_t get_start_time();
   void set_end_time(int64_t end_time);
@@ -177,7 +136,7 @@ public:
   void set_freeze_snapshot_version(const share::SCN &freeze_snapshot_version);
   share::SCN get_freeze_snapshot_version();
   int deep_copy_to(ObFreezerStat &other);
-  int begin_set_freeze_stat(const int64_t freeze_clock,
+  int begin_set_freeze_stat(const uint32_t freeze_clock,
                             const int64_t start_time,
                             const int state,
                             const share::SCN &freeze_snapshot_version,
@@ -191,7 +150,7 @@ private:
   ObTabletID tablet_id_;
   bool need_rewrite_meta_;
   int state_;
-  int64_t freeze_clock_;
+  uint32_t freeze_clock_;
   int64_t start_time_;
   int64_t end_time_;
   int ret_code_;
@@ -267,6 +226,8 @@ public:
   void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
   // only used after start freeze_task successfully
   int wait_freeze_finished(ObFuture<int> &result);
+  int pend_ls_replay();
+  int restore_ls_replay();
 
 private:
   class ObLSFreezeGuard
@@ -287,6 +248,12 @@ private:
     bool need_release_;
     ObFreezer &parent_;
   };
+  class PendTenantReplayGuard
+  {
+  public:
+    PendTenantReplayGuard();
+    ~PendTenantReplayGuard();
+  };
 private:
   /* freeze_flag */
   int set_freeze_flag();
@@ -298,8 +265,8 @@ private:
 
   /* inner subfunctions for freeze process */
   int inner_logstream_freeze(ObFuture<int> *result);
-  int submit_log_for_freeze(bool is_try);
-  void try_submit_log_for_freeze_();
+  int submit_log_for_freeze(const bool is_tablet_freeze, const bool is_try);
+  void try_submit_log_for_freeze_(const bool is_tablet_freeze);
   int ls_freeze_task();
   int tablet_freeze_task(ObTableHandleV2 handle);
   int submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
@@ -341,6 +308,9 @@ private:
   // make sure ls freeze has higher priority than tablet freeze
   int64_t high_priority_freeze_cnt_; // waiting and freeze cnt
   int64_t low_priority_freeze_cnt_; // freeze tablet cnt
+  int64_t pend_replay_cnt_;
+  common::ObByteLock byte_lock_; // only used to control pend_replay_cnt_
+
 
   bool need_resubmit_log_;
   bool enable_;                     // whether we can do freeze now

@@ -1372,6 +1372,7 @@ int ObPxTransmitOp::link_ch_sets(ObPxTaskChSet &ch_set,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DYNAMIC_SAMPLE_FAIL)
 int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePieceMsg &piece_msg)
 {
   int ret = OB_SUCCESS;
@@ -1381,6 +1382,9 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("dynimic sample only supported in parallel execution mode", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynimic sample in non-px mode");
+  } else if (OB_SUCCESS != ERRSIM_DYNAMIC_SAMPLE_FAIL &&
+             ctx_.get_px_task_id() == 0) {
+    ret = ERRSIM_DYNAMIC_SAMPLE_FAIL;
   } else {
     const ObDynamicSampleWholeMsg *temp_whole_msg = NULL;
     ObPxSQCProxy &proxy = handler->get_sqc_proxy();
@@ -1399,10 +1403,11 @@ int ObPxTransmitOp::do_datahub_dynamic_sample(int64_t op_id, ObDynamicSamplePiec
     } else if (OB_ISNULL(temp_whole_msg)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("whole msg is unexpected", K(ret));
-    } else if (OB_FAIL(ctx_.set_partition_ranges(temp_whole_msg->part_ranges_))) {
-      LOG_WARN("set partition ranges failed", K(ret), K(*temp_whole_msg));
+    } else if (OB_FAIL(handler->set_partition_ranges(temp_whole_msg->part_ranges_))) {
+      LOG_WARN("set partition ranges failed", K(ret), K(piece_msg), K(*temp_whole_msg));
     } else {
-      LOG_INFO("dynamic sample succ", K(ret), K(piece_msg), K(*temp_whole_msg), K(ctx_.get_partition_ranges()));
+      LOG_INFO("dynamic sample succ", K(ret), K(piece_msg), K(*temp_whole_msg),
+                                      K(handler->get_partition_ranges()));
     }
   }
   return ret;

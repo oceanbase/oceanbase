@@ -75,7 +75,7 @@ Outline Data:
       USE_NL_MATERIALIZATION(@"SEL$1" "test"."tgnoindex1"@"SEL$1")
       FULL(@"SEL$1" "test"."tgnoindex2"@"SEL$1")
       FULL(@"SEL$1" "test"."tgnoindex1"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -91,6 +91,7 @@ Optimization Info:
       avaiable_index_name:[tgnoindex2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   tgnoindex1:
       table_rows:3
       physical_range_rows:3
@@ -102,6 +103,7 @@ Optimization Info:
       avaiable_index_name:[tgnoindex1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Note:
@@ -179,7 +181,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."tgeom1"@"SEL$1")
       INDEX(@"SEL$1" "test"."tgeom2"@"SEL$1" "gidx2")
       USE_DAS(@"SEL$1" "test"."tgeom2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -196,6 +198,7 @@ Optimization Info:
       pruned_index_name:[gidx1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   tgeom2:
       table_rows:10
       physical_range_rows:2
@@ -207,6 +210,7 @@ Optimization Info:
       avaiable_index_name:[gidx2, tgeom2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -293,7 +297,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."ptgeom1"@"SEL$1")
       INDEX(@"SEL$1" "test"."ptgeom2"@"SEL$1" "pgidx2")
       USE_DAS(@"SEL$1" "test"."ptgeom2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -310,6 +314,7 @@ Optimization Info:
       pruned_index_name:[pgidx1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   ptgeom2:
       table_rows:10
       physical_range_rows:2
@@ -321,6 +326,7 @@ Optimization Info:
       avaiable_index_name:[pgidx2, ptgeom2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:

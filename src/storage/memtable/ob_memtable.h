@@ -481,6 +481,9 @@ public:
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
+  int set_migration_clog_checkpoint_scn(const share::SCN &clog_checkpoint_scn);
+  share::SCN get_migration_clog_checkpoint_scn() { return migration_clog_checkpoint_scn_.atomic_get(); }
+  int resolve_right_boundary_for_migration();
   void unset_logging_blocked_for_active_memtable();
   void resolve_left_boundary_for_active_memtable();
   void set_allow_freeze(const bool allow_freeze);
@@ -506,7 +509,7 @@ public:
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolved_active_memtable_left_boundary),
-                       K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version),
+                       K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
                        K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
@@ -651,6 +654,7 @@ private:
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
+  share::SCN migration_clog_checkpoint_scn_;
   bool is_tablet_freeze_;
   bool is_flushed_;
   bool read_barrier_ CACHE_ALIGNED;

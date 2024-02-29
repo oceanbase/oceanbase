@@ -1759,6 +1759,15 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       out_key_part->id_ = id;
       out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
+
+      if (is_oracle_mode() && (c_type == T_OP_GT || c_type == T_OP_GE) &&
+          ((pos->column_type_.get_type() == ObCharType && const_expr->get_result_type().get_type() == ObVarcharType) ||
+           (pos->column_type_.get_type() == ObNCharType && const_expr->get_result_type().get_type() == ObNVarchar2Type))) {
+          /* when char compare with varchar, same string may need return due to padding blank.
+            e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */
+        c_type = T_OP_GE;
+        query_range_ctx_->is_oracle_char_gt_varchar_ = true;
+      }
       if (const_expr->is_immutable_const_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
               && T_OP_LIKE == c_type
@@ -1989,15 +1998,23 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       bool is_bound_modified = false;
       const ObRawExpr *l_expr = l_row->get_param_expr(i);
       const ObRawExpr *r_expr = r_row->get_param_expr(i);
-      if (OB_FAIL(check_null_param_compare_in_row(l_expr,
-                                                  r_expr,
-                                                  tmp_key_part))) {
+      ObItemType real_cmp_type = i < num - 1 ? c_type : cmp_type;
+      bool use_ori_cmp_type = false;
+      query_range_ctx_->is_oracle_char_gt_varchar_ = false;
+      if ((i < num - 1 && (T_OP_LT == cmp_type || T_OP_GT == cmp_type)) &&
+            OB_FAIL(check_inner_row_cmp_type(l_row->get_param_expr(i + 1),
+                                             r_row->get_param_expr(i + 1),
+                                             use_ori_cmp_type))) {
+        LOG_WARN("fail to check can use ori cmp type", K(ret));
+      } else if (OB_FAIL(check_null_param_compare_in_row(l_expr,
+                                                         r_expr,
+                                                         tmp_key_part))) {
         LOG_WARN("failed to check null param compare in row", K(ret));
       } else if (tmp_key_part == NULL &&
                  OB_FAIL(get_basic_query_range(l_expr,
                                                r_expr,
                                                NULL,
-                                               i < num - 1 ? c_type : cmp_type,
+                                               use_ori_cmp_type ? cmp_type : real_cmp_type,
                                                res_type,
                                                tmp_key_part,
                                                dtc_params,
@@ -2009,7 +2026,9 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       } else if (T_OP_ROW == l_expr->get_expr_type()
                  || T_OP_ROW == r_expr->get_expr_type()) {
         // ((a,b),(c,d)) = (((1,2),(2,3)),((1,2),(2,3)))
-        row_is_precise = false;
+        // row_is_precise = false;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), KPC(l_expr), KPC(r_expr), K(cmp_type));
       } else if (OB_ISNULL(tmp_key_part)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -2050,6 +2069,12 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
           b_flag = true;
           row_is_precise = false;
         }
+      }
+      if (OB_SUCC(ret) && tmp_key_part != NULL &&
+          !(tmp_key_part->is_always_false() || tmp_key_part->is_always_true()) &&
+          query_range_ctx_->is_oracle_char_gt_varchar_) {
+        b_flag = true;
+        row_is_precise = false;
       }
     }
     if (OB_SUCC(ret)) {
@@ -3923,6 +3948,35 @@ int ObQueryRange::check_null_param_compare_in_row(const ObRawExpr *l_expr,
   return ret;
 }
 
+int ObQueryRange::check_inner_row_cmp_type(const ObRawExpr *l_expr,
+                                           const ObRawExpr *r_expr,
+                                           bool &use_ori_cmp_type)
+{
+  int ret = OB_SUCCESS;
+  use_ori_cmp_type = false;
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), KP(l_expr), KP(r_expr));
+  } else if ((l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr()) ||
+              (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN))) {
+    const ObRawExpr *const_expr = l_expr->is_const_expr() ? l_expr : r_expr;
+    if (const_expr->has_flag(CNT_DYNAMIC_PARAM)) {
+      // do nothing
+    } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == const_expr->get_expr_type()) {
+      ObObj const_val;
+      bool is_valid = false;
+      if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+        LOG_WARN("failed to get calculable expr val", K(ret));
+      } else if (is_valid && (const_val.is_min_value() || const_val.is_max_value())) {
+        // if const val is min/max value, it means the previous expr value range is expanding,
+        // use origin cmp type to calc row range.
+        use_ori_cmp_type = true;
+      }
+    }
+  }
+  return ret;
+}
+
 void ObQueryRange::print_keypart(const ObKeyPart *keypart, const ObString &prefix) const
 {
   // or dir
@@ -4392,6 +4446,20 @@ int ObQueryRange::set_partial_row_border(
       } else if (OB_ISNULL(new_key_part) || OB_UNLIKELY(!new_key_part->is_normal_key())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new_key_part is null.");
+      } else if (((ObQueryRange::OB_FROM_LEFT == start_border_type || ObQueryRange::OB_FROM_LEFT == end_border_type) && l_cur->is_in_key()) ||
+                 ((ObQueryRange::OB_FROM_RIGHT == start_border_type || ObQueryRange::OB_FROM_RIGHT == end_border_type) && r_cur->is_in_key())) {
+        if (start_border_type != end_border_type) {
+          // in key must from one side
+          b_flag = true;
+        } else if (ObQueryRange::OB_FROM_LEFT == start_border_type) {
+          if (OB_FAIL(new_key_part->deep_node_copy(*l_cur))) {
+            LOG_WARN("Copy key part node failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(new_key_part->deep_node_copy(*r_cur))) {
+            LOG_WARN("Copy key part node failed", K(ret));
+          }
+        }
       } else {
         new_key_part->normal_keypart_->always_true_ = false;
         if (ObQueryRange::OB_FROM_LEFT == start_border_type && l_cur) {
@@ -6935,12 +7003,6 @@ if (OB_SUCC(ret) ) { \
         include_start = true; \
       } else if (cmp > 0) { \
         include_start = false; \
-      } else if (is_oracle_mode() && \
-                 ((column_type.get_type() == ObCharType && start.get_type() == ObVarcharType) || \
-                  (column_type.get_type() == ObNCharType && start.get_type() == ObNVarchar2Type))) { \
-        /* when char compare with varchar, same string may need return due to padding blank. \
-           e.g. c1(char(3)) > '1'(varchar(1)) will return '1  ' */ \
-        include_start = true; \
       } \
       start = *dest_val; \
     } \
@@ -8242,7 +8304,7 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   }
 
   const ColumnIdInfoMap& input_srid = other.get_columnId_map();
-  if (input_srid.created()) {
+  if (OB_SUCC(ret) && input_srid.created()) {
     ColumnIdInfoMap::const_iterator iter = input_srid.begin();
     if (!columnId_map_.created()) {
       if (OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {

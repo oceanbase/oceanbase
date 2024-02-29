@@ -316,7 +316,7 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
   return ret;
 }
 
-int ObBlockMetaTree::get_sorted_meta_array(ObIArray<const ObDataMacroBlockMeta *> &meta_array)
+int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
 {
   int ret = OB_SUCCESS;
   meta_array.reset();
@@ -352,8 +352,13 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<const ObDataMacroBlockMeta *
       } else if (((uint64_t)(tree_value) & 7ULL) != 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid btree value", K(ret), K(tree_value));
-      } else if (OB_FAIL(meta_array.push_back(tree_value->block_meta_))) {
-        LOG_WARN("push back block meta failed", K(ret), K(*tree_value->block_meta_));
+      } else {
+        ObDDLBlockMeta ddl_block_meta;
+        ddl_block_meta.block_meta_ = tree_value->block_meta_;
+        ddl_block_meta.end_row_offset_ = tree_value->co_sstable_row_offset_;
+        if (OB_FAIL(meta_array.push_back(ddl_block_meta))) {
+          LOG_WARN("push back block meta failed", K(ret), K(ddl_block_meta));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -800,7 +805,7 @@ int64_t ObBlockMetaTree::get_memory_used() const
 /******************             ObDDLKV              **********************/
 
 ObDDLMemtable::ObDDLMemtable()
-  : is_inited_(false), allocator_("ddl_mem_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), block_meta_tree_()
+  : is_inited_(false), block_meta_tree_()
 {
 
 }
@@ -811,6 +816,7 @@ ObDDLMemtable::~ObDDLMemtable()
 }
 
 int ObDDLMemtable::init(
+    ObArenaAllocator &allocator,
     ObTablet &tablet,
     const ObITable::TableKey &table_key,
     const share::SCN &ddl_start_scn,
@@ -836,7 +842,7 @@ int ObDDLMemtable::init(
       LOG_WARN("init mem index sstable failed", K(ret), K(table_key), K(ddl_start_scn));
     } else if (OB_FAIL(init_sstable_param(tablet, table_key, ddl_start_scn, sstable_param))) {
       LOG_WARN("init sstable param failed", K(ret));
-    } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator_))) {
+    } else if (OB_FAIL(ObSSTable::init(sstable_param, &allocator))) {
       LOG_WARN("init sstable failed", K(ret));
     } else {
       is_inited_ = true;
@@ -851,7 +857,6 @@ void ObDDLMemtable::reset()
   is_inited_ = false;
   ObSSTable::reset();
   block_meta_tree_.destroy();
-  allocator_.reset();
 }
 
 void ObDDLMemtable::set_scn_range(
@@ -862,26 +867,12 @@ void ObDDLMemtable::set_scn_range(
   key_.scn_range_.end_scn_ = end_scn;
 }
 
-int ObDDLMemtable::get_sorted_meta_array(
-    ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array)
-{
-  int ret = OB_SUCCESS;
-  meta_array.reset();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), KP(this));
-  } else if (OB_FAIL(block_meta_tree_.get_sorted_meta_array(meta_array))) {
-    LOG_WARN("get sorted array failed", K(ret));
-  }
-  return ret;
-}
-
 int ObDDLMemtable::init_ddl_index_iterator(const blocksstable::ObStorageDatumUtils *datum_utils,
                                            const bool is_reverse_scan,
                                            blocksstable::ObDDLIndexBlockRowIterator *ddl_kv_index_iter)
 {
   int ret = OB_SUCCESS;
-  const bool is_co_sst = is_co_sstable();
+  const bool is_co_sst = is_co_sstable() || is_ddl_mem_co_cg_sstable();
   if (OB_ISNULL(datum_utils) || OB_UNLIKELY(!datum_utils->is_valid()) || OB_ISNULL(ddl_kv_index_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), KP(ddl_kv_index_iter), KPC(datum_utils));
@@ -991,7 +982,7 @@ int ObDDLKV::create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &tab
     LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDDLMemtable)));
   } else {
     ddl_memtable = new (buf) ObDDLMemtable;
-    if (OB_FAIL(ddl_memtable->init(tablet, table_key, ddl_start_scn_, data_format_version_))) {
+    if (OB_FAIL(ddl_memtable->init(arena_allocator_, tablet, table_key, ddl_start_scn_, data_format_version_))) {
       LOG_WARN("init ddl memtable failed", K(ret), K(table_key));
     } else if (OB_FAIL(ddl_memtables_.push_back(ddl_memtable))) {
       LOG_WARN("push back ddl memtable failed", K(ret));

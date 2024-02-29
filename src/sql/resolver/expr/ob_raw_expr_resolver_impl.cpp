@@ -2596,15 +2596,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             /*dynamic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {
-              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).first));
+              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).element<0>()));
               if (OB_SUCC(ret)
-                  && ctx_.external_param_info_->at(i).first->same_as(*c_expr)) {
+                  && ctx_.external_param_info_->at(i).element<0>()->same_as(*c_expr)) {
                 need_save = false;
                 break;
               }
             }
             if (OB_SUCC(ret) && need_save) {
-              OZ (ctx_.external_param_info_->push_back(std::make_pair(c_expr, c_expr)));
+              OZ (ctx_.external_param_info_->push_back(ExternalParamInfo(c_expr, c_expr, 1)));
               OX (ctx_.prepare_param_count_++);
             }
           } else {
@@ -7888,7 +7888,8 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool exist = false;
   bool is_internal = false;
   if (OB_FAIL(ret)) {
-  } else if (ctx_.session_info_->is_inner()) {
+  } else if (ctx_.session_info_->is_inner()
+             || is_sys_view(ctx_.view_ref_id_)) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {
   } else if (exist && is_internal) {

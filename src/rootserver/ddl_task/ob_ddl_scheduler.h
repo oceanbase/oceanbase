@@ -210,13 +210,14 @@ class ObUpdateSSTableCompleteStatusCallback : public ObRedefCallback
 {
 public:
   ObUpdateSSTableCompleteStatusCallback()
-    : ret_code_(OB_SUCCESS)
+    : ret_code_(common::OB_SUCCESS)
   {}
   ~ObUpdateSSTableCompleteStatusCallback() = default;
+  void set_ret_code (const int ret_code) { ret_code_ = ret_code; }
+  int get_ret_code() const { return ret_code_; }
   virtual int update_redef_task_info(ObTableRedefinitionTask& redef_task) override;
   virtual int update_task_info_in_queue(ObTableRedefinitionTask& redef_task,
                                       ObDDLTaskQueue &ddl_task_queue) override;
-  int set_ret_code(const int ret_code);
 private:
   int ret_code_;
 };

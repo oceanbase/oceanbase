@@ -91,6 +91,12 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     const share::ObLSID &ls_id = ctx.get_ls_id();
     const common::ObTabletID &tablet_id = ctx.get_tablet_id();
+#ifdef ERRSIM
+    if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id.id() == GCONF.errsim_test_tablet_id.get_value()) {
+      LOG_INFO("test tablet mds dump start", K(ret), K(tablet_id));
+      DEBUG_SYNC(BEFORE_DDL_LOB_META_TABLET_MDS_DUMP);
+    }
+#endif
     const share::SCN &flush_scn = mds_merge_dag_->get_flush_scn();
     ctx.static_param_.scn_range_.end_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();

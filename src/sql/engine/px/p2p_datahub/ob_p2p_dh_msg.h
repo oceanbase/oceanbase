@@ -26,6 +26,7 @@ namespace sql
 {
 
 class ObBatchRows;
+class ObPxQueryRangeInfo;
 class ObP2PDatahubMsgBase
 {
   OB_UNIS_VERSION_V(1);
@@ -176,10 +177,14 @@ public:
   const ObRegisterDmInfo &get_register_dm_info() { return register_dm_info_; }
   uint64_t &get_dm_cb_node_seq_id() { return dm_cb_node_seq_id_; }
   template <typename ResVec>
-  int proc_filter_empty(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size,
+  int proc_filter_empty(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound,
                       int64_t &total_count, int64_t &filter_count);
-  int preset_not_match(IntegerFixedVec *res_vec, int64_t batch_size);
+  int preset_not_match(IntegerFixedVec *res_vec, const EvalBound &bound);
   TO_STRING_KV(K(p2p_datahub_id_), K_(px_sequence_id), K(tenant_id_), K(timeout_ts_), K(is_active_), K(msg_type_));
+protected:
+  int fill_empty_query_range(const ObPxQueryRangeInfo &query_range_info,
+                             common::ObIAllocator &allocator, ObNewRange &query_range);
+
 protected:
   common::ObCurTraceId::TraceId trace_id_;
   int64_t p2p_datahub_id_;

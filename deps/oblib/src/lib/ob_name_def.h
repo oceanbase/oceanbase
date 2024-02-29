@@ -625,6 +625,7 @@
 #define N_JOIN_INFO "join_info"
 #define N_ID_SET "id_set"
 #define N_CURRENT_SCN "current_scn"
+#define N_TRANSACTION_ID "ob_transaction_id"
 #define N_EQUAL_SET "equal_set"
 #define N_LEFT_ID "left_id"
 #define N_RIGHT_ID "right_id"
@@ -1074,4 +1075,5 @@
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
+#define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

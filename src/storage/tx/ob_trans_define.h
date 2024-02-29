@@ -1729,12 +1729,18 @@ typedef common::ObSEArray<ObTxExecPart, share::OB_DEFAULT_LS_COUNT> ObTxRollback
     if (OB_FAIL(parts.push_back(commit_parts.at(idx).ls_id_))) {             \
       TRANS_LOG(WARN, "parts push failed", K(ret));                          \
     }                                                                        \
+  }                                                                          \
+  if (OB_FAIL(ret)) {                                                        \
+    parts.reset();                                                           \
   }
-#define CONVERT_PARTS_TO_COMMIT_PARTS(parts, commit_parts) \
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < parts.count(); idx++) { \
-    if (OB_FAIL(commit_parts.push_back(ObTxExecPart(parts.at(idx), -1, -1)))) {             \
-      TRANS_LOG(WARN, "parts push failed", K(ret));                         \
-    }                                                                       \
+#define CONVERT_PARTS_TO_COMMIT_PARTS(parts, commit_parts)                      \
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < parts.count(); idx++) {           \
+    if (OB_FAIL(commit_parts.push_back(ObTxExecPart(parts.at(idx), -1, -1)))) { \
+      TRANS_LOG(WARN, "parts push failed", K(ret));                             \
+    }                                                                           \
+  }                                                                             \
+  if (OB_FAIL(ret)) {                                                           \
+    commit_parts.reset();                                                       \
   }
 
 class ObEndParticipantsRes
@@ -1751,6 +1757,21 @@ public:
 private:
   ObBlockedTransArray blocked_trans_ids_;
 };
+
+enum class PartCtxSource
+{
+  UNKOWN = 0,
+  MVCC_WRITE = 1,
+  REGISTER_MDS = 2,
+  REPLAY = 3,
+  RECOVER = 4,
+  TRANSFER = 5,
+  TRANSFER_RECOVER = 6,
+};
+
+bool is_transfer_ctx(PartCtxSource ctx_source);
+
+const char *to_str(PartCtxSource src);
 
 enum class RetainCause : int16_t
 {

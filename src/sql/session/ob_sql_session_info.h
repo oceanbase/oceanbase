@@ -53,6 +53,7 @@ namespace observer
 {
 class ObQueryDriver;
 class ObSqlEndTransCb;
+class ObPieceCache;
 }
 namespace pl
 {
@@ -688,6 +689,7 @@ public:
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
                                  hash_area_size_(128*1024*1024),
+                                 data_version_(0),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
@@ -707,6 +709,7 @@ public:
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
     int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
+    uint64_t get_data_version() const { return ATOMIC_LOAD(&data_version_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
@@ -727,6 +730,7 @@ public:
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
     int64_t hash_area_size_;
+    uint64_t data_version_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     int64_t range_optimizer_max_mem_size_;
@@ -1279,6 +1283,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
   }
+  uint64_t get_data_version()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_data_version();
+  }
   bool enable_query_response_time_stats()
   {
     cached_tenant_config_info_.refresh();
@@ -1318,7 +1327,7 @@ public:
   bool is_ignore_stmt() const { return is_ignore_stmt_; }
 
   // piece
-  void *get_piece_cache(bool need_init = false);
+  observer::ObPieceCache *get_piece_cache(bool need_init = false);
 
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
@@ -1472,7 +1481,7 @@ private:
   bool is_ignore_stmt_;
   ObSessionDDLInfo ddl_info_;
   bool is_table_name_hidden_;
-  void *piece_cache_;
+  observer::ObPieceCache* piece_cache_;
   bool is_load_data_exec_session_;
   ObSqlString pl_exact_err_msg_;
   bool is_varparams_sql_prepare_;

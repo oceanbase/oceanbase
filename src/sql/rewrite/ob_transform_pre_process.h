@@ -443,6 +443,20 @@ struct DistinctObjMeta
                                                 const ObItemType &cmp_type);
   static int replace_align_date4cmp_recursively(ObRawExprFactory &expr_factory,
                                                 ObRawExpr *&root_expr);
+  static int replace_inner_row_cmp_val_recursively(ObRawExprFactory &expr_factory,
+                                                   const ObSQLSessionInfo &session,
+                                                   ObRawExpr *&root_expr,
+                                                   bool &trans_happened);
+  static int check_and_transform_inner_row_cmp_val(ObRawExprFactory &expr_factory,
+                                                   const ObSQLSessionInfo &session,
+                                                   ObRawExpr *&row_cmp_expr,
+                                                   bool &trans_happened);
+  template<bool IS_LEFT>
+  static int transform_inner_op_row_cmp_for_decimal_int(ObRawExprFactory &expr_factory,
+                                                        const ObSQLSessionInfo &session,
+                                                        ObRawExpr *&row_cmp_expr,
+                                                        ObRawExpr *&row_expr,
+                                                        bool &trans_happened);
   int transformer_aggr_expr(ObDMLStmt *stmt, bool &trans_happened);
   int transform_rownum_as_limit_offset(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                        ObDMLStmt *&stmt,

@@ -847,6 +847,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
     bool for_update = false;
     bool hidden_rowid = false;
     int64_t into_cnt = 0;
+    bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
     ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
@@ -865,6 +866,7 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
                                       for_update,
                                       hidden_rowid,
                                       into_cnt,
+                                      skip_locked,
                                       &cursor->get_field_columns()));
     if (OB_SUCC(ret)) {
       cursor->set_ps_sql(ps_sql);

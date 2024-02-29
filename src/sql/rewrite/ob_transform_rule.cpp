@@ -27,7 +27,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 namespace oceanbase
 {
 namespace sql
@@ -85,6 +85,7 @@ int ObTransformerCtx::add_src_hash_val(uint64_t trans_type)
   int ret = OB_SUCCESS;
   const char *str = NULL;
   if (OB_ISNULL(str = get_trans_type_string(trans_type))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to convert trans type to src value", K(ret));
   } else {
     uint32_t hash_val = src_hash_val_.empty() ? 0 : src_hash_val_.at(src_hash_val_.count() - 1);

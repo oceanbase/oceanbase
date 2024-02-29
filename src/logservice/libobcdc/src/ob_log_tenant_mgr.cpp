@@ -1263,7 +1263,7 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
       const char *tenant_name = (OB_SYS_TENANT_ID == tenant_id) ? "sys" : nullptr;
 
       if (OB_SYS_TENANT_ID == tenant_id && enable_filter_sys_tenant) {
-        ISTAT("[FILTE] sys tenant is filtered", K(tenant_id), K(enable_filter_sys_tenant));
+        ISTAT("[ADD_TENANT][FILTE][REASON: enable_filter_sys_tenant=true]", K(tenant_id), K(enable_filter_sys_tenant));
       } else {
         if (OB_FAIL(add_tenant(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, start_tstamp_ns,
                 sys_schema_version, schema_guard, tenant_name, timeout, add_tenant_succ))) {
@@ -1333,8 +1333,8 @@ int ObLogTenantMgr::get_tenant_ids_(
     // get available tenant id list
     else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, timeout))) {
       LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_id_list), K(timeout));
-    } else if (OB_FAIL(filter_dropped_tenant_(tenant_id_list))) {
-      LOG_ERROR("filter_dropped_tenant_ fail", KR(ret), K(tenant_id_list), K(timeout));
+    } else if (OB_FAIL(filter_by_current_tenant_status_(tenant_id_list))) {
+      LOG_ERROR("filter_by_current_tenant_status_ fail", KR(ret), K(tenant_id_list), K(timeout));
     } else if (OB_FAIL(ls_getter_.init(tenant_id_list, start_tstamp_ns))) {
       LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list), K(start_tstamp_ns));
     }
@@ -1789,36 +1789,49 @@ bool ObLogTenantMgr::GlobalHeartbeatUpdateFunc::operator()(const TenantID &tid, 
   return bool_ret;
 }
 
-int ObLogTenantMgr::filter_dropped_tenant_(common::ObIArray<uint64_t> &tenant_id_list)
+int ObLogTenantMgr::filter_by_current_tenant_status_(common::ObIArray<uint64_t> &tenant_id_list)
 {
   int ret = OB_SUCCESS;
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+  IObLogTableMatcher *tb_matcher = TCTX.tb_matcher_;
   common::ObArray<uint64_t> tmp_tenant_id_list;
 
   if (OB_FAIL(tmp_tenant_id_list.assign(tenant_id_list))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant_id_list assign fail", KR(ret), K(tenant_id_list), K(tmp_tenant_id_list));
   } else if (FALSE_IT(tenant_id_list.reset())) {
-  } else if (OB_ISNULL(schema_getter)) {
+  } else if (OB_ISNULL(schema_getter) || OB_ISNULL(tb_matcher)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arguments", KR(ret), K(schema_getter));
+    LOG_ERROR("invalid arguments", KR(ret), K(schema_getter), K(tb_matcher));
   } else {
     ARRAY_FOREACH_N(tmp_tenant_id_list, idx, count) {
       const uint64_t tenant_id = tmp_tenant_id_list.at(idx);
+      TenantSchemaInfo tenant_schema_info;
       bool is_tenant_dropping_or_dropped = false;
+      bool matched = true;
 
-      if (OB_FAIL(schema_getter->check_if_tenant_is_dropping_or_dropped(tenant_id, is_tenant_dropping_or_dropped))) {
+      if (is_meta_tenant(tenant_id)) {
+        LOG_INFO("[ADD_TENANT][FILTE][REASON: META_TENANT_NOT_SYNC]", K(tenant_id));
+      } else if (OB_FAIL(schema_getter->check_if_tenant_is_dropping_or_dropped(tenant_id, is_tenant_dropping_or_dropped, tenant_schema_info))) {
         LOG_ERROR("check_if_tenant_is_dropping_or_dropped fail", KR(ret), K(tenant_id), K(is_tenant_dropping_or_dropped));
-      } else if (is_tenant_dropping_or_dropped) {
-        LOG_INFO("tenant is dropping or has been dropped", K(tenant_id), K(is_tenant_dropping_or_dropped));
+      } else if (OB_UNLIKELY(is_tenant_dropping_or_dropped)) {
+        LOG_INFO("[ADD_TENANT][FILTE][REASON: TENANT_DROPPING_OR_DROPPED]", K(tenant_id));
+      } else if (OB_UNLIKELY(! tenant_schema_info.is_valid())) {
+        LOG_WARN("[ADD_TENANT][FILTE][REASON: TENANT_CURRENT_SCHEMA_INVALID]", K(tenant_schema_info));
+      } else if (OB_UNLIKELY(tenant_schema_info.is_restore_)) {
+        LOG_INFO("[ADD_TENANT][FILTE][REASON: TENANT_IN_RESTORE_OR_CREATING_STANDBY_STATUS]", K(tenant_schema_info));
+      } else if (OB_SYS_TENANT_ID != tenant_id && OB_FAIL(tb_matcher->tenant_match(tenant_schema_info.name_, matched))) {
+        LOG_ERROR("match tenant with whitelist failed", KR(ret), K(tenant_schema_info));
+      } else if (! matched) {
+        LOG_INFO("[ADD_TENANT][FILTE][REASON: TENANT_NOT_MATCH_WHITE_LIST]", K(tenant_schema_info));
       } else if (OB_FAIL(tenant_id_list.push_back(tenant_id))) {
         LOG_ERROR("tenant_id_list push_back fail", KR(ret), K(tenant_id));
       } else {
       }
     }
 
-    LOG_INFO("filter dropped tenant finished", "origin_tenant_id_list", tmp_tenant_id_list,
-        "filtered_tenant_id_list", tenant_id_list);
+    LOG_INFO("[ADD_TENANT][FILTER_BY_CUR_TENANT_STATUS]", "origin_tenant_id_list", tmp_tenant_id_list,
+        "tenant_id_list_after_filter", tenant_id_list);
   }
 
   return ret;

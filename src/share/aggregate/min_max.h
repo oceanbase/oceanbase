@@ -287,8 +287,10 @@ private:
           *reinterpret_cast<int64_t *>(agg_cell + sizeof(char *) + sizeof(int32_t)) = reinterpret_cast<int64_t>(tmp_buf);
         }
       }
-      MEMCPY(tmp_buf, agg_data, agg_data_len);
-      *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(tmp_buf);
+      if (OB_SUCC(ret)) {
+        MEMCPY(tmp_buf, agg_data, agg_data_len);
+        *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(tmp_buf);
+      }
     }
     return ret;
   }

@@ -383,6 +383,7 @@ public:
                                 const MethodOptSizeConf &size_conf);
 
   static int get_table_part_infos(const share::schema::ObTableSchema *table_schema,
+                                  ObIAllocator &allocator,
                                   common::ObIArray<PartInfo> &part_infos,
                                   common::ObIArray<PartInfo> &subpart_infos,
                                   OSGPartMap *part_map = NULL);
@@ -491,9 +492,6 @@ public:
                                       share::schema::ObPartitionLevel data_table_level
                                           = share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO);
 
-  static int get_table_partition_map(const ObTableSchema &table_schema,
-                                     OSGPartMap &part_map);
-
   static int init_gather_task_info(ObExecContext &ctx,
                                    ObOptStatGatherType type,
                                    int64_t start_time,
@@ -586,6 +584,7 @@ private:
                                    ObIArray<ObAuxTableMetaInfo> &index_infos);
 
   static int get_table_partition_infos(const ObTableSchema &table_schema,
+                                       ObIAllocator &allocator,
                                        ObIArray<PartInfo> &partition_infos);
 
   static int get_index_schema(sql::ObExecContext &ctx,

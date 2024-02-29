@@ -529,11 +529,11 @@ int ObTableLoadMemCompactor::start_compact()
 
 void ObTableLoadMemCompactor::stop()
 {
+  set_has_error(); //先设置为error，因为stop的场景就是error
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
     task_scheduler_->wait();
   }
-  set_has_error(); //先设置为error，因为stop的场景就是error
 }
 
 int64_t ObTableLoadMemCompactor::get_compact_task_count() const

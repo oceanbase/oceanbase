@@ -100,6 +100,14 @@ int ObCtxTxData::insert_into_tx_table()
   return ret;
 }
 
+bool ObCtxTxData::is_decided() const
+{
+  // ATTENTION! : decided means the callback function of commit_log/abort_log has been called and the tx_data has been
+  // inserted into TxDataTable. The read_only_ flag is set as true after inserting into tx data table.
+  RLockGuard guard(lock_);
+  return read_only_;
+}
+
 int ObCtxTxData::recover_tx_data(ObTxData *tmp_tx_data)
 {
   int ret = OB_SUCCESS;

@@ -24,6 +24,7 @@
 #include "ob_tx_ctx_mds.h"
 #include "ob_one_phase_committer.h"
 #include "ob_two_phase_committer.h"
+#include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
 
@@ -182,6 +183,7 @@ public:
            const int64_t epoch,
            ObLSTxCtxMgr *ls_ctx_mgr,
            const bool for_replay,
+           const PartCtxSource ctx_source,
            ObXATransID xid);
   void reset() { }
   int construct_context(const ObTransMsg &msg);
@@ -288,8 +290,8 @@ private:
                 K(final_log_cb_),
                 K(ctx_tx_data_),
                 K(role_state_),
-                K(start_replay_ts_),
-                K(start_recover_ts_),
+                K(create_ctx_scn_),
+                "ctx_source", ctx_source_,
                 K(epoch_),
                 K(replay_completeness_),
                 K(mt_ctx_),
@@ -350,7 +352,10 @@ public:
   // ========================================================
   // newly added for 4.0
 
-  int retry_dup_trx_before_prepare(const share::SCN &before_prepare_version);
+  bool is_decided() const { return ctx_tx_data_.is_decided(); }
+  int retry_dup_trx_before_prepare(
+      const share::SCN &before_prepare_version,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   // int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
   int set_scheduler(const common::ObAddr &scheduler);
   const common::ObAddr &get_scheduler() const;
@@ -361,7 +366,7 @@ public:
   int try_submit_next_log();
   // for instant logging and freezing
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
-  int submit_redo_log_for_freeze();
+  int submit_redo_log_for_freeze(const uint32_t freeze_clock);
   int return_redo_log_cb(ObTxLogCb *log_cb);
   int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
@@ -379,7 +384,8 @@ public:
                          const share::SCN &timestamp,
                          const int64_t &part_log_no,
                          const bool is_tx_log_queue,
-                         const bool serial_final);
+                         const bool serial_final,
+                         const ObTxSEQ &max_seq_no);
   int replay_rollback_to(const ObTxRollbackToLog &log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
@@ -513,7 +519,8 @@ private:
                                 memtable::ObRedoLogSubmitHelper &helper,
                                 const logservice::ObReplayBarrierType &barrier);
   bool should_switch_to_parallel_logging_();
-  void switch_to_parallel_logging_(const share::SCN serial_final_scn);
+  void switch_to_parallel_logging_(const share::SCN serial_final_scn,
+                                   const ObTxSEQ max_seq_no);
   bool has_replay_serial_final_() const;
   void recovery_parallel_logging_();
   int check_can_submit_redo_();
@@ -561,7 +568,10 @@ private:
     exec_info_.is_dup_tx_ = true;
     exec_info_.trans_type_ = TransType::DIST_TRANS;
   }
-  int dup_table_before_preapre_(const share::SCN &before_prepare_version, const bool before_replay  = false);
+  int dup_table_before_preapre_(
+      const share::SCN &before_prepare_version,
+      const bool after_redo_completed,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   int clear_dup_table_redo_sync_result_();
 
   int do_local_tx_end_(TxEndAction tx_end_action);
@@ -657,7 +667,7 @@ private:
   int get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
   int return_log_cb_(ObTxLogCb *log_cb, bool release_final_cb = false);
   int get_max_submitting_log_info_(palf::LSN &lsn, share::SCN &log_ts);
-  int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
+  int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxPrevLogType &prev_log_type, palf::LSN &lsn);
   int set_start_scn_in_commit_log_(ObTxCommitLog &commit_log);
 
   // int init_tx_data_(const share::ObLSID&ls_id, const ObTransID &tx_id);
@@ -676,6 +686,10 @@ private:
   int refresh_rec_log_ts_();
   int get_tx_ctx_table_info_(ObTxCtxTableInfo &info);
   const share::SCN get_rec_log_ts_() const;
+
+  int check_is_aborted_in_tx_data_(const ObTransID tx_id,
+                                   bool &is_aborted);
+
   // ========================================================
 
   // ======================== C2PC MSG HANDLER BEGIN ========================
@@ -776,7 +790,9 @@ public:
   bool is_exec_complete_without_lock(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
 private:
   int transfer_op_log_cb_(share::SCN op_scn, NotifyType op_type);
-  int update_tx_data_end_scn_(const share::SCN end_scn, const share::SCN transfer_scn);
+  int update_tx_data_start_and_end_scn_(const share::SCN start_scn,
+                                        const share::SCN end_scn,
+                                        const share::SCN transfer_scn);
 
 protected:
   virtual int post_msg_(const share::ObLSID&receiver, ObTxMsg &msg);
@@ -871,8 +887,9 @@ private:
   int build_and_post_ask_state_msg_(const share::SCN &snapshot,
                                     const share::ObLSID &ori_ls_id, const ObAddr &ori_addr);
   int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info);
+  int process_errsim_for_standby_read_(int err_code, int ret_code);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
-  int submit_redo_log_for_freeze_(bool &try_submit);
+  int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
 public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,
@@ -1016,8 +1033,8 @@ private:
   } replay_completeness_;
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
-  share::SCN start_replay_ts_; // replay debug
-  share::SCN start_recover_ts_; // recover debug
+  share::SCN create_ctx_scn_; // replay or recover debug
+  PartCtxSource ctx_source_; // For CDC - prev_lsn
 
   share::SCN start_working_log_ts_;
 

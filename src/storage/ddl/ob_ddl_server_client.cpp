@@ -278,6 +278,9 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
+      const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+      int64_t MAX_ABORT_WAIT_TIMEOUT = 60 * 1000 * 1000; //60s
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + MAX_ABORT_WAIT_TIMEOUT);
       if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
         if (OB_CANCELED == ret) {
           ret = OB_SUCCESS;
@@ -286,9 +289,10 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
           LOG_WARN("wait ddl finish failed", K(ret), K(arg.tenant_id_), K(arg.task_id_));
         }
       }
+      THIS_WORKER.set_timeout_ts(origin_timeout_ts);
     }
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_))) {
+    if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_, tenant_id))) {
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(arg.task_id_));
     }
   }
@@ -355,7 +359,7 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
     } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, &session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
     }
-    if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_))) {
+    if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_, tenant_id))) {
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
     }
   }
@@ -422,8 +426,8 @@ int ObDDLServerClient::wait_task_reach_pending(
             int64_t forward_user_msg_len = 0;
             ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
             if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
-                              tenant_id, task_id, -1 /* target_object_id */,
-                              unused_addr, true /* is_ddl_retry_task */,
+                              tenant_id, task_id, -1 /*target_object_id*/,
+                              unused_addr, false/*is_ddl_retry_task*/,
                               *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
               if (OB_SUCCESS != error_message.ret_code_) {
                 ret = error_message.ret_code_;
@@ -442,13 +446,13 @@ int ObDDLServerClient::wait_task_reach_pending(
   return ret;
 }
 
-int ObDDLServerClient::heart_beat_clear(const int64_t task_id)
+int ObDDLServerClient::heart_beat_clear(const int64_t task_id, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (task_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id));
-  } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.remove_register_task_id(task_id))) {
+  } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.remove_register_task_id(task_id, tenant_id))) {
     LOG_WARN("failed to remove register task id", K(ret), K(task_id));
   }
   return ret;

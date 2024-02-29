@@ -238,7 +238,7 @@ ObTablet::ObTablet()
     table_store_cache_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1688, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1696, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -288,11 +288,11 @@ int ObTablet::init_for_first_time_creation(
     const share::SCN &create_scn,
     const int64_t snapshot_version,
     const ObCreateTabletSchema &storage_schema,
+    const bool need_create_empty_major_sstable,
     ObFreezer *freezer)
 {
   int ret = OB_SUCCESS;
   const lib::Worker::CompatMode compat_mode = storage_schema.get_compat_mode();
-  const bool need_create_empty_major_sstable = storage_schema.get_need_create_empty_major();
   const int64_t default_max_sync_medium_scn = 0;
   ObTableHandleV2 table_handle;
   bool is_table_row_store = false;
@@ -1986,7 +1986,7 @@ int ObTablet::deserialize(
       if (OB_NOT_NULL(ddl_kvs_addr)) {
         const int64_t ddl_kv_size = sizeof(ObDDLKV *) * DDL_KV_ARRAY_SIZE;
         if (remain < ddl_kv_size) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_BUF_NOT_ENOUGH;
           LOG_WARN("fail to deep copy ddl kv to tablet", K(ret), K(remain), K(ddl_kv_size), K(ddl_kv_count));
         } else {
           ddl_kv_count_ = ddl_kv_count;
@@ -2379,14 +2379,14 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
     } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
       LOG_WARN("fail to push macro id into print array", K(tmp_ret));
     } else if (MAX_PRINT_COUNT == print_arr.size()) {
-      FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+      FLOG_INFO("increase tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
       print_arr.reuse();
     }
 #endif
   }
 #ifndef OB_BUILD_RPM
   if (0 != print_arr.count()) {
-    FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+    FLOG_INFO("increase tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
     print_arr.reuse();
   }
 #endif
@@ -2415,14 +2415,14 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
         } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
         } else if (MAX_PRINT_COUNT == print_arr.size()) {
-          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
           print_arr.reuse();
         }
 #endif
       }
 #ifndef OB_BUILD_RPM
       if (0 != print_arr.count()) {
-        FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+        FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
         print_arr.reuse();
       }
 #endif
@@ -2628,7 +2628,7 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
         if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
         } else if (MAX_PRINT_COUNT == print_arr.size()) {
-          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
           print_arr.reuse();
         }
 #endif
@@ -2637,7 +2637,7 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
   }
 #ifndef OB_BUILD_RPM
   if (0 != print_arr.size()) {
-    FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+    FLOG_INFO("decrease tablet's macro ref", K(ret), K(tablet_meta_.tablet_id_), K(tablet_meta_.ls_id_), K(print_arr));
     print_arr.reuse();
   }
 #endif
@@ -4926,9 +4926,9 @@ int ObTablet::get_kept_snapshot_info(
     // snapshot info should smaller than snapshot on tablet
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
 
-    const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
-    if (current_time - snapshot_info.snapshot_ > 120 * 60 * 1000 * 1000L /*2 hour*/) {
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
+    const int64_t current_time = common::ObTimeUtility::fast_current_time();
+    if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 2_hour) {
+      if (REACH_TENANT_TIME_INTERVAL(10_s)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret),
           "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
           K(snapshot_info), K(old_min_reserved_snapshot), K(min_medium_snapshot),
@@ -5773,6 +5773,46 @@ int ObTablet::get_finish_medium_scn(int64_t &finish_medium_scn) const
     } else {
       finish_medium_scn = last_major->get_snapshot_version();
     }
+  }
+
+  return ret;
+}
+
+int ObTablet::set_memtable_clog_checkpoint_scn(
+    const ObMigrationTabletParam *tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  memtable::ObMemtable *memtable = nullptr;
+
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(tablet_meta)) {
+    // no need to set memtable clog checkpoint ts
+  } else if (tablet_meta->clog_checkpoint_scn_ <= tablet_meta_.clog_checkpoint_scn_) {
+    // do nothing
+  } else if (is_ls_inner_tablet()) {
+    if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
+      LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
+    } else if (OB_UNLIKELY(protected_handle->has_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls inner tablet should not have memtable", K(ret), KPC(tablet_meta));
+    }
+  } else if (OB_FAIL(get_boundary_memtable(handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get boundary memtable for tablet", K(ret), KPC(this), KPC(tablet_meta));
+    }
+  } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
+    LOG_WARN("failed to get memtable", K(ret), K(handle));
+  } else if (OB_ISNULL(memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null memtable", K(ret), KPC(memtable));
+  } else if (OB_FAIL(memtable->set_migration_clog_checkpoint_scn(tablet_meta->clog_checkpoint_scn_))) {
+    LOG_WARN("failed to set migration clog checkpoint ts", K(ret), K(handle), KPC(this));
   }
 
   return ret;

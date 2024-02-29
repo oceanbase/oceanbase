@@ -200,7 +200,7 @@ TEST_F(TestMetaSnapshot, test_create_delete)
   }
 }
 
-TEST_F(TestMetaSnapshot, test_ref_cnt)
+TEST_F(TestMetaSnapshot, test_ref_cnt_delete_tenant_snapshot)
 {
   ObLSID ls_id(ls_id_);
 
@@ -231,10 +231,52 @@ TEST_F(TestMetaSnapshot, test_ref_cnt)
     ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, table_store_id.hash());
     ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(table_store_id, block_info));
   }
-  ASSERT_EQ(ref_cnt * 2, block_info.ref_cnt_);
+  ASSERT_EQ(ref_cnt + 1, block_info.ref_cnt_);
 
   // delete snapshot and check ref cnt
   ASSERT_EQ(OB_SUCCESS, ObTenantMetaSnapshotHandler::delete_tenant_snapshot(snapshot_id));
+  {
+    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, table_store_id.hash());
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(table_store_id, block_info));
+  }
+  ASSERT_EQ(ref_cnt, block_info.ref_cnt_);
+}
+
+TEST_F(TestMetaSnapshot, test_ref_cnt_delete_ls_snapshot)
+{
+  ObLSID ls_id(ls_id_);
+
+  // persist tablet
+  int64_t ref_cnt = 0;
+  int64_t offset = 0;
+  int64_t size = 0;
+  ObBlockManager::BlockInfo block_info;
+  MacroBlockId table_store_id;
+  ObTabletHandle new_tablet_handle;
+  share::SCN clog_max_scn;
+
+  ASSERT_EQ(OB_SUCCESS, persist_tablet(new_tablet_handle));
+  ObTablet *new_tablet = new_tablet_handle.get_obj();
+  ASSERT_EQ(OB_SUCCESS, new_tablet->table_store_addr_.addr_.get_block_addr(table_store_id, offset, size));
+  {
+    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, table_store_id.hash());
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(table_store_id, block_info));
+  }
+  ref_cnt = block_info.ref_cnt_;
+
+  // create snapshot and check ref cnt
+  ObTenantSnapshotID snapshot_id(1);
+  ASSERT_NE(OB_SUCCESS, ObTenantMetaSnapshotHandler::create_single_ls_snapshot(snapshot_id, ls_id, clog_max_scn));
+  ASSERT_EQ(OB_SUCCESS, ObTenantMetaSnapshotHandler::create_tenant_snapshot(snapshot_id));
+  ASSERT_EQ(OB_SUCCESS, ObTenantMetaSnapshotHandler::create_single_ls_snapshot(snapshot_id, ls_id, clog_max_scn));
+  {
+    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, table_store_id.hash());
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(table_store_id, block_info));
+  }
+  ASSERT_EQ(ref_cnt + 1, block_info.ref_cnt_);
+
+  // delete snapshot and check ref cnt
+  ASSERT_EQ(OB_SUCCESS, ObTenantMetaSnapshotHandler::delete_single_ls_snapshot(snapshot_id, ls_id));
   {
     ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, table_store_id.hash());
     ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(table_store_id, block_info));

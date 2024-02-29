@@ -112,6 +112,7 @@ public:
     cur_row_in_blk_ = 0;
     cur_row_offset_width_ = 0;
     row_meta_ = nullptr;
+    cur_blk_ = nullptr;
   }
 
   void reuse()
@@ -123,6 +124,7 @@ public:
     cur_row_in_blk_ = 0;
     cur_row_offset_width_ = 0;
     row_info_.reset();
+    cur_blk_ = nullptr;
   }
 
   int get_row(const ObChunkDatumStore::StoredRow *&sr) override;

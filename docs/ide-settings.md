@@ -4,19 +4,19 @@ In order to easily read the code of OceanBase, we suggest using one IDE which is
 
 This document introduce how to setup `VSCode + ccls`, which is very convenient to read the code of OceanBase. [ccls](https://github.com/MaskRay/ccls) is based on [cquery](https://github.com/jacobdufault/cquery), which is one of C/C++/Objective-C [LSP](https://en.wikipedia.org/wiki/Language_Server_Protocol)s (In one word, LSP is used to provide programming language-specific features like code completion, syntax highlighting and marking of warnings and errors, as well as refactoring routines).
 
-The number of OceanBase code is pretty huge and OceanBase can't be compiled under Mac or Windows, so we recommend that download the code on the remote server, and start VSCode to access the code under the remote server. 
+The number of OceanBase code is pretty huge and OceanBase can't be compiled under Mac or Windows, so we recommend that download the code on the remote server, and start VSCode to access the code under the remote server.
 
 # Config ccls on Remote Server
 
 **Attention**
-The following `/path/to` just means the path example, please replace it with your real path. 
+The following `/path/to` just means the path example, please replace it with your real path.
 
 ## Introduction
 
 In the C/C++ LSP domain, the famous tools are clangd and ccls. Here we recommend ccls, because:
 
-1. The speed of building index of ccls is slower than that of clangd, but after building, the speed of accessing index of ccls is faster than that of clangd. 
-2. Unity building doesn't be supported by clangd, but OceanBase is being built by unity, failed to build index through compile_commands.json by clangd. 
+1. The speed of building index of ccls is slower than that of clangd, but after building, the speed of accessing index of ccls is faster than that of clangd.
+2. Unity building doesn't be supported by clangd, but OceanBase is being built by unity, failed to build index through compile_commands.json by clangd.
 
 # ccls Installation
 
@@ -26,7 +26,7 @@ In the C/C++ LSP domain, the famous tools are clangd and ccls. Here we recommend
 
 ```bash
 yum install epel-release
-yum install snapd # On centos8: yum install snapd --nobest 
+yum install snapd # On centos8: yum install snapd --nobest
 systemctl enable --now snapd.socket
 ln -s /var/lib/snapd/snap /snap
 snap install ccls --classic
@@ -65,7 +65,7 @@ ccls --version
 
 ## Remote Plugin
 
-Once the source code has been located in the remote machine, it is easy to setup debugging environment in remote machine. At the same time, the application can be run faster because remote machine is more powerful.  User can easily access the source code on the remote machine even when something is wrong with the network, just wait reload after reconnect the remote server. 
+Once the source code has been located in the remote machine, it is easy to setup debugging environment in remote machine. At the same time, the application can be run faster because remote machine is more powerful.  User can easily access the source code on the remote machine even when something is wrong with the network, just wait reload after reconnect the remote server.
 
 ### Installation
 
@@ -75,8 +75,8 @@ Download and install the Remote plugin from the VSCode extension store.
 
 ### Usage
 
-**NOTE**：Make sure the connection between the local machine and the remote machine is fine. 
-After installation the plugin, there is one icon in the left bottom corner of VSCode. 
+**NOTE**：Make sure the connection between the local machine and the remote machine is fine.
+After installation the plugin, there is one icon in the left bottom corner of VSCode.
 
 ![remote plugin usage](images/ide-settings-remote-plugin-usage.png)
 
@@ -88,16 +88,16 @@ Input user@remote_ip in the input frame, VSCode will create one new window, plea
 
 ![input password](images/ide-settings-input-password.png)
 
-After input the password, VSCode will connect to the remote server, and it is ready to open the remote machine's file or directory. 
+After input the password, VSCode will connect to the remote server, and it is ready to open the remote machine's file or directory.
 
-If you want to use the specific port, please choose `Add New SSH Host`, then input ssh command, then choose one configuration file to store the ssh configuration. 
+If you want to use the specific port, please choose `Add New SSH Host`, then input ssh command, then choose one configuration file to store the ssh configuration.
 
 ![ssh port](images/ide-settings-use-different-ssh-port.png)
 
 ![ssh config file](images/ide-settings-choose-ssh-config.png)
-After that, the configured machines can be found in the `Connect to Host`. 
+After that, the configured machines can be found in the `Connect to Host`.
 
-Password need to be input everytime. If you want to skip this action, please configure SSH security login with credential. 
+Password need to be input everytime. If you want to skip this action, please configure SSH security login with credential.
 
 ## C/C++ Plugin
 
@@ -106,7 +106,7 @@ We do **not** recommend using C/C++ plugins as they do not provide good indexing
 C/C++ plugin can be download and installed in VSCode extension store in the case of simple scenarios:
 
 ![cpp plugins](images/ide-settings-cpp-plugins.png)
-C/C++ plugin can automatically code completion and syntax highlighting, but this plugin failed to build index for OceanBase, it is hard to jump the symbol of OceanBase. 
+C/C++ plugin can automatically code completion and syntax highlighting, but this plugin failed to build index for OceanBase, it is hard to jump the symbol of OceanBase.
 
 ## ccls Plugin
 
@@ -114,7 +114,7 @@ C/C++ plugin can automatically code completion and syntax highlighting, but this
 
 ![ccls plugin](images/ide-settings-ccls-plugin.png)
 
-> if ccls will be used, it suggest to uninstall C/C++ plugin. 
+> if ccls will be used, it suggest to uninstall C/C++ plugin.
 
 ### Configure ccls Plugin
 
@@ -132,7 +132,7 @@ C/C++ plugin can automatically code completion and syntax highlighting, but this
 
 1. git clone the source code from [https://github.com/oceanbase/oceanbase](https://github.com/oceanbase/oceanbase)
 2. Run the command below to generate `compile_commands.json`
-   
+
    ```bash
    bash build.sh ccls --init
    ```

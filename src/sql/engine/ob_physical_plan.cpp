@@ -136,7 +136,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_rich_format_(false),
     subschema_ctx_(allocator_),
     disable_auto_memory_mgr_(false),
-    all_local_session_vars_(&allocator_)
+    all_local_session_vars_(&allocator_),
+    udf_has_dml_stmt_(false)
 {
 }
 
@@ -234,6 +235,7 @@ void ObPhysicalPlan::reset()
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
+  udf_has_dml_stmt_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -478,7 +480,8 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
   if (record.is_timeout()) {
     ATOMIC_INC(&(stat_.timeout_count_));
     ATOMIC_AAF(&(stat_.total_process_time_), record.get_process_time());
-  } else if (!GCONF.enable_perf_event) { // short route
+  }
+  if (!GCONF.enable_perf_event) { // short route
     ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
     ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
                                    - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
@@ -790,9 +793,11 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    use_rich_format_,
                     subschema_ctx_,
-                    disable_auto_memory_mgr_);
+                    use_rich_format_,
+                    disable_auto_memory_mgr_,
+                    udf_has_dml_stmt_,
+                    stat_.format_sql_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1121,7 +1126,7 @@ void ObPhysicalPlan::calc_whether_need_trans()
     }
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
-  if (!bool_ret && contain_pl_udf_or_trigger() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;

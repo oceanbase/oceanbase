@@ -807,9 +807,13 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
                                static_cast<int>(sizeof(OB_COLUMN_GROUP_NAME_PREFIX)),
                                OB_COLUMN_GROUP_NAME_PREFIX, column_name_.length(), column_name_.ptr());
-  if (write_len < 0 || write_len >= OB_MAX_COLUMN_GROUP_NAME_LENGTH) {
+  if (write_len < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to format column group_name", K(ret), K(write_len));
+  } else if (write_len > OB_MAX_COLUMN_GROUP_NAME_LENGTH) {
+    ret = OB_ERR_TOO_LONG_IDENT;
+    LOG_WARN("too long column name to format column group name", K(ret), KPC(this), K(write_len));
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, column_name_.length(), column_name_.ptr());
   }
 
   if (OB_SUCC(ret)) {

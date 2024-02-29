@@ -73,7 +73,7 @@ public:
   int build_table_schema(ObTableSchema &table_schema)
   {
     int ret = OB_SUCCESS;
-    int column_cnt = 5;
+    int column_cnt = 500;
     table_schema.set_tenant_id(get_random_uint64_());
     table_schema.set_database_id(get_random_uint64_());
     table_schema.set_table_id(get_random_uint64_());
@@ -101,6 +101,10 @@ public:
     column_schema.schema_version_ = 2341235;
     ObObjMeta meta;
     meta.set_collation_type(ObCollationType::CS_TYPE_GB18030_BIN);
+    common::ObString ext_info("enum {a, b, c}");
+    ObArray<common::ObString> extend_info;
+    extend_info.push_back(ext_info);
+    column_schema.set_extended_type_info(extend_info);
     column_schema.meta_type_ = meta;
     return ret;
   }

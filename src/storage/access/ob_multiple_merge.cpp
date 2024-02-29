@@ -63,6 +63,7 @@ ObMultipleMerge::ObMultipleMerge()
       get_table_param_(nullptr),
       read_memtable_only_(false),
       block_row_store_(nullptr),
+      group_by_cell_(nullptr),
       skip_bit_(nullptr),
       out_project_cols_(),
       lob_reader_(),
@@ -86,6 +87,13 @@ ObMultipleMerge::~ObMultipleMerge()
       access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
+  }
+  if (nullptr != group_by_cell_) {
+    group_by_cell_->~ObGroupByCell();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
+    }
+    group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
     if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
@@ -370,6 +378,11 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
             OB_FAIL(access_param_->get_op()->write_trans_info_datum(unprojected_row_))) {
           LOG_WARN("write trans_info to expr datum failed", K(ret), K(unprojected_row_));
         } else if (nullptr != row) {
+          if (OB_UNLIKELY(nullptr != group_by_cell_)) {
+            if (OB_FAIL(group_by_cell_->copy_single_output_row(access_param_->get_op()->get_eval_ctx()))) {
+              LOG_WARN("Failed to copy single output row", K(ret));
+            }
+          }
           break;
         }
       }
@@ -733,8 +746,14 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   } else if (need_fill_virtual_columns_ && OB_FAIL(fill_virtual_columns(cur_row_))) {
     LOG_WARN("Fail to fill virtual columns, ", K(ret));
   }
-  if (OB_FAIL(ret) || need_skip) {
-  } else{
+  if (OB_FAIL(ret)) {
+  } else if (0 == (++scan_cnt_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
+    // check if timeout or if transaction status every 10000 rows, which should be within 10ms
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      STORAGE_LOG(WARN, "query interrupt, ", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !need_skip) {
     if (in_row.fast_filter_skipped_) {
       in_row.fast_filter_skipped_ = false;
     } else if (OB_FAIL(check_filtered(cur_row_, is_filter_filtered))) {
@@ -777,6 +796,13 @@ void ObMultipleMerge::reset()
       access_ctx_->stmt_allocator_->free(block_row_store_);
     }
     block_row_store_ = nullptr;
+  }
+  if (nullptr != group_by_cell_) {
+    group_by_cell_->~ObGroupByCell();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(group_by_cell_);
+    }
+    group_by_cell_ = nullptr;
   }
   if (nullptr != skip_bit_) {
     if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
@@ -931,6 +957,15 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
       LOG_WARN("fail to init block row store", K(ret), K(block_row_store_));
     }
   }
+  if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by() && !param.iter_param_.vectorized_enabled_) {
+    if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObGroupByCell)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc aggregated store", K(ret));
+    } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(0, *context.stmt_allocator_))) {
+    } else if (OB_FAIL(group_by_cell_->init_for_single_row(param, param.get_op()->get_eval_ctx()))) {
+      LOG_WARN("Failed to init group by cell for single row", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -1080,14 +1115,7 @@ int ObMultipleMerge::fill_virtual_columns(ObDatumRow &row)
 int ObMultipleMerge::check_filtered(const ObDatumRow &row, bool &filtered)
 {
   int ret = OB_SUCCESS;
-  // check if timeout or if transaction status every 10000 rows, which should be within 10ms
-  if (0 == (++scan_cnt_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      STORAGE_LOG(WARN, "query interrupt, ", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)
-      && NULL != access_param_->op_filters_
+  if (NULL != access_param_->op_filters_
       && !access_param_->op_filters_->empty()) {
     // Execute filter in sql static typing engine.
     // %row is already projected to output expressions for main table scan.
@@ -1275,21 +1303,26 @@ int ObMultipleMerge::refresh_tablet_iter()
   } else {
     // reset first, in case get_read_tables fail and rowkey_read_info_ become dangling
     access_param_->iter_param_.rowkey_read_info_ = nullptr;
-    const common::ObTabletID tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(access_ctx_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("failed to get ls", K(ret));
+    const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
+    const share::ObLSID &ls_id = access_ctx_->ls_id_;
+    const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
+    if (OB_UNLIKELY(remain_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
+    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
-        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+        remain_timeout,
         get_table_param_->sample_info_.is_no_sample()
           ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,
         get_table_param_->tablet_iter_,
         false/*allow_not_ready*/))) {
-      LOG_WARN("failed to refresh tablet iterator", K(ret), K_(get_table_param), KP_(access_param));
+      LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
     } else {
       get_table_param_->refreshed_merge_ = this;
       access_param_->iter_param_.rowkey_read_info_ =

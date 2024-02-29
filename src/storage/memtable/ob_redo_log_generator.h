@@ -82,6 +82,7 @@ struct ObTxFillRedoCtx
     write_seq_no_(),
     skip_lock_node_(false),
     all_list_(false),
+    freeze_clock_(UINT32_MAX),
     list_log_epoch_arr_(),
     cur_epoch_(0),
     next_epoch_(0),
@@ -105,6 +106,7 @@ struct ObTxFillRedoCtx
   transaction::ObTxSEQ write_seq_no_; // to select callback list in parallel logging
   bool skip_lock_node_;    // whether skip fill lock node
   bool all_list_;          // whether to fill all callback-list
+  uint32_t freeze_clock_;  // memtables before and equals it will be flushed
   ObSEArray<RedoLogEpoch, 1> list_log_epoch_arr_; // record each list's next log epoch
   int64_t cur_epoch_;      // current filling epoch
   int64_t next_epoch_;     // next epoch of list, used to update list_log_epoch_arr_
@@ -125,10 +127,24 @@ struct ObTxFillRedoCtx
 public:
   bool is_empty() const { return fill_count_ == 0; }
   bool not_empty() const { return fill_count_ > 0; }
-  TO_STRING_KV(K_(tx_id), K_(write_seq_no), K_(all_list), K_(cur_epoch), K_(next_epoch),
-               K_(epoch_from), K_(epoch_to), K_(fill_count), K_(fill_time),
-               KPC_(callback_scope), K_(skip_lock_node), K_(is_all_filled), K_(list_idx),
-               K_(list_log_epoch_arr), KP_(last_log_blocked_memtable), K_(buf_len), K_(buf_pos));
+  TO_STRING_KV(K_(tx_id),
+               K_(write_seq_no),
+               K_(all_list),
+               K_(freeze_clock),
+               K_(cur_epoch),
+               K_(next_epoch),
+               K_(epoch_from),
+               K_(epoch_to),
+               K_(fill_count),
+               K_(fill_time),
+               KPC_(callback_scope),
+               K_(skip_lock_node),
+               K_(is_all_filled),
+               K_(list_idx),
+               K_(list_log_epoch_arr),
+               KP_(last_log_blocked_memtable),
+               K_(buf_len),
+               K_(buf_pos));
 };
 
 class ObCallbackListLogGuard

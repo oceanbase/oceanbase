@@ -93,11 +93,14 @@ public:
       const ObMigrationStatus &cur_status,
       const bool is_in_member_list,
       const bool is_ls_deleted,
+      const bool is_tenant_dropped,
       ObMigrationStatus &fail_status);
   static int check_migration_in_final_state(
       const ObMigrationStatus &status,
       bool &in_final_state);
   static bool check_is_running_migration(const ObMigrationStatus &cur_status);
+  static bool can_gc_ls_without_check_dependency(
+      const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,

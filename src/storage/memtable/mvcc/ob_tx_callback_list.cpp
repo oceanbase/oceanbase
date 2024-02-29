@@ -100,11 +100,21 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
     TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(callback));
   } else {
     const bool repos_lc = !for_replay && (log_cursor_ == &head_);
+    ObITransCallback *append_pos = NULL;
     if (!for_replay || parallel_replay || serial_final || !parallel_start_pos_) {
-      (void)get_tail()->append(callback);
+      append_pos = get_tail();
     } else {
-      parallel_start_pos_->get_prev()->append(callback);
+      append_pos = parallel_start_pos_->get_prev();
     }
+    // for replay, do sanity check: scn is incremental
+    if (for_replay
+        && append_pos != &head_  // the head with scn max
+        && append_pos->get_scn() > callback->get_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "replay callback scn out of order", K(ret), KPC(callback), KPC(this));
+      ob_abort();
+    }
+    append_pos->append(callback);
     // start parallel replay, remember the position
     if (for_replay && parallel_replay && !serial_final && !parallel_start_pos_) {
       ATOMIC_STORE(&parallel_start_pos_, get_tail());
@@ -569,8 +579,14 @@ int ObTxCallbackList::tx_calc_checksum_before_scn(const SCN scn)
 int ObTxCallbackList::tx_calc_checksum_all()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(checksum_scn_.is_max())) {
-    // skip repeate calc checksum
+  if (OB_UNLIKELY(checksum_scn_.is_max() &&
+                  0 != checksum_)) {
+    // There could be a scenario where, under the condition that checksum_scn is
+    // persisted at its maximum value, while checksum_ might be 0. In such a
+    // scenario, we still rely on calculating the checksum to prevent mistakenly
+    // using 0 for checksum verification and avoid potential errors.
+    //
+    // skip the unnecessary repeate calc checksum
   } else {
     LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
     ObCalcChecksumFunctor functor;
@@ -695,6 +711,7 @@ int ObTxCallbackList::replay_fail(const SCN scn, const bool serial_replay)
 void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, SCN &checksum_scn)
 {
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
+
   if (checksum_scn_.is_max()) {
     checksum = checksum_;
     checksum_scn = checksum_scn_;
@@ -712,10 +729,12 @@ void ObTxCallbackList::update_checksum(const uint64_t checksum, const SCN checks
 {
   LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
   if (checksum_scn.is_max()) {
-    if (checksum == 0) {
+    if (checksum == 0 && id_ > 0) {
+      // only check extends list, because version before 4.3 with 0 may happen
+      // and they will be replayed into first list (id_ equals to 0)
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "checksum should not be 0 if checksum_scn is max", KPC(this));
     }
-    checksum_ = checksum;
+    checksum_ = checksum ?: 1;
   }
   batch_checksum_.set_base(checksum);
   checksum_scn_.atomic_set(checksum_scn);

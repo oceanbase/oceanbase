@@ -73,6 +73,7 @@
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
+#include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "rootserver/ob_root_utils.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -82,6 +83,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_recovery_ls_service.h"
+#include "logservice/ob_server_log_block_mgr.h"
 
 namespace oceanbase
 {
@@ -187,52 +189,7 @@ int ObRpcLSMigrateReplicaP::process()
 
 int ObRpcLSAddReplicaP::process()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-  ObLSService *ls_service = nullptr;
-  bool is_exist = false;
-  ObMigrationOpArg migration_op_arg;
-
-  if (tenant_id != MTL_ID()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", K(tenant_id), K(ret));
-  }
-  ObCurTraceId::set(arg_.task_id_);
-  if (OB_SUCC(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
-                     "data_src", arg_.data_source_.get_server(), "dest", arg_.dst_.get_server());
-
-    ls_service = MTL(ObLSService*);
-    if (OB_ISNULL(ls_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_service->check_ls_exist(arg_.ls_id_, is_exist))) {
-      COMMON_LOG(WARN, "failed to check ls exist", K(ret), K(arg_));
-    } else if (is_exist) {
-      ret = OB_LS_EXIST;
-      COMMON_LOG(WARN, "can not add ls which local ls is exist", K(ret), K(arg_), K(is_exist));
-    } else {
-      migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg_.data_source_;
-      migration_op_arg.dst_ = arg_.dst_;
-      migration_op_arg.ls_id_ = arg_.ls_id_;
-      //TODO(muwei.ym) need check priority in 4.2 RC3
-      migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
-      migration_op_arg.paxos_replica_number_ = arg_.new_paxos_replica_number_;
-      migration_op_arg.src_ = arg_.data_source_;
-      migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
-
-      if (OB_FAIL(ls_service->create_ls_for_ha(arg_.task_id_, migration_op_arg))) {
-        COMMON_LOG(WARN, "failed to create ls for ha", K(ret), K(arg_), K(migration_op_arg));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add failed", "tenant_id", arg_.tenant_id_,
-        "ls_id", arg_.ls_id_, "result", ret);
-  }
-  return ret;
+  return observer::ObService::do_add_ls_replica(arg_);
 }
 
 int ObRpcLSTypeTransformP::process()
@@ -278,80 +235,12 @@ int ObRpcLSTypeTransformP::process()
 
 int ObRpcLSRemovePaxosReplicaP::process()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-
-  if (tenant_id != MTL_ID()) {
-    ret = guard.switch_to(tenant_id);
-  }
-  ObCurTraceId::set(arg_.task_id_);
-  if (OB_SUCC(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
-                     "dest", arg_.remove_member_.get_server());
-    LOG_INFO("start do remove ls paxos member", K(arg_));
-
-    ls_service = MTL(ObLSService*);
-    if (OB_ISNULL(ls_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), K(arg_));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls should not be NULL", K(ret), K(arg_));
-    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_paxos_member(arg_))) {
-      LOG_WARN("failed to remove paxos member", K(ret), K(arg_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member failed", "tenant_id",
-        arg_.tenant_id_, "ls_id", arg_.ls_id_.id(), "result", ret);
-  }
-  return ret;
+  return observer::ObService::do_remove_ls_paxos_replica(arg_);
 }
 
 int ObRpcLSRemoveNonPaxosReplicaP::process()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-
-  if (tenant_id != MTL_ID()) {
-    ret = guard.switch_to(tenant_id);
-  }
-  ObCurTraceId::set(arg_.task_id_);
-  if (OB_SUCC(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
-                     "dest", arg_.remove_member_.get_server());
-    LOG_INFO("start do remove ls learner member", K(arg_));
-
-    ls_service = MTL(ObLSService*);
-    if (OB_ISNULL(ls_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), K(arg_));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls should not be NULL", K(ret), K(arg_));
-    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_learner_member(arg_))) {
-      LOG_WARN("failed to remove paxos member", K(ret), K(arg_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member failed", "tenant_id",
-        arg_.tenant_id_, "ls_id", arg_.ls_id_.id(), "result", ret);
-  }
-  return ret;
+  return observer::ObService::do_remove_ls_nonpaxos_replica(arg_);
 }
 
 int ObRpcLSModifyPaxosReplicaNumberP::process()
@@ -442,6 +331,21 @@ int ObRpcLSCheckDRTaskExistP::process()
   return ret;
 }
 
+int ObAdminDRTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  ObCurTraceId::init(GCONF.self_addr_);
+  LOG_INFO("start to handle ls replica task triggered by ob_admin", K_(arg));
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (OB_FAIL(ObAdminDRTaskUtil::handle_obadmin_command(arg_))) {
+    LOG_WARN("fail to handle ob admin command", KR(ret), K_(arg));
+  }
+  LOG_INFO("finish handle ls replica task triggered by ob_admin", K_(arg));
+  return ret;
+}
+
 #ifdef OB_BUILD_ARBITRATION
 int ObRpcAddArbP::process()
 {
@@ -521,6 +425,7 @@ int ObRpcSetTenantConfigP::process()
 {
   LOG_INFO("process set tenant config", K(arg_));
   OTC_MGR.add_extra_config(arg_);
+  OTC_MGR.notify_tenant_config_changed(arg_.tenant_id_);
   return OB_SUCCESS;
 }
 
@@ -2439,16 +2344,17 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       ObTabletHandle tablet_handle;
       if (OB_FAIL(data_tablet_mgr->wrlock(ObTabletDirectLoadMgr::TRY_LOCK_TIMEOUT, lock_tid))) {
         LOG_WARN("failed to wrlock", K(ret), K(arg_));
+      } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("get tablet failed", K(ret), K(table_key));
       } else if (OB_FAIL(sstable_redo_writer.write_commit_log(false,
                                                               table_key,
                                                               arg_.start_scn_,
                                                               direct_load_mgr_handle,
+                                                              tablet_handle,
                                                               commit_scn,
                                                               is_remote_write,
                                                               lock_tid))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-        LOG_WARN("get tablet failed", K(ret), K(table_key));
       } else if (OB_FAIL(data_tablet_mgr->commit(*tablet_handle.get_obj(),
                                                  arg_.start_scn_,
                                                  commit_scn,
@@ -2971,7 +2877,6 @@ int ObTenantTTLP::process()
     RS_LOG(WARN, "fail to launch ttl", KR(ret), K(req));
   }
   res.err_code_ = ret;
-  ret = OB_SUCCESS;
   return ret;
 }
 
@@ -3184,5 +3089,61 @@ int ObCancelGatherStatsP::process()
   return ret;
 }
 
+int ObForceSetTenantLogDiskP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret));
+  } else if (OB_FAIL(GCTX.log_block_mgr_->force_update_tenant_log_disk(arg_.tenant_id_, arg_.log_disk_size_))) {
+    LOG_WARN("force_update_sys_tenant_log_disk failed", K(ret), "tenant_id", arg_.tenant_id_, "new_log_disk", arg_.log_disk_size_);
+  } else {
+    LOG_WARN("force_update_sys_tenant_log_disk success", K(ret), "tenant_id", arg_.tenant_id_, "new_log_disk", arg_.log_disk_size_);
+  }
+  return ret;
+}
+
+class ObDumpUnitInfoFunctor {
+public:
+  ObDumpUnitInfoFunctor(ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result) : result_(result) {}
+  int operator()()
+  {
+    int ret = OB_SUCCESS;
+    ObDumpServerUsageResult::ObUnitInfo info;
+    info.tenant_id_ = MTL_ID();
+    logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+    int64_t log_disk_size = 0, log_disk_in_use = 0;
+    if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_service is nullptr", KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(log_disk_in_use, log_disk_size))) {
+      LOG_WARN("get_palf_stable_disk_usage failed", KP(log_service));
+    } else {
+      info.log_disk_in_use_ = log_disk_in_use;
+      info.log_disk_size_ = log_disk_size;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(result_.push_back(info))) {
+      LOG_WARN("push_back failed", KR(ret), K(info));
+    }
+    return ret;
+  }
+private:
+  ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result_;
+};
+int ObForceDumpServerUsageP::process()
+{
+  int ret = OB_SUCCESS;
+  int64_t &log_disk_assigned = result_.server_info_.log_disk_assigned_;
+  int64_t &log_disk_capacity = result_.server_info_.log_disk_capacity_;
+  ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result = result_.unit_info_;
+  ObDumpUnitInfoFunctor dump_unit_info(result);
+  if (OB_FAIL(GCTX.omt_->operate_in_each_tenant(dump_unit_info))) {
+    CLOG_LOG(WARN, "operate_in_each_tenant failed", KR(ret));
+  } else if (OB_FAIL(GCTX.log_block_mgr_->get_disk_usage(log_disk_assigned, log_disk_capacity))) {
+    CLOG_LOG(WARN, "get_disk_usage failed", KR(ret));
+  } else {}
+  return ret;
+}
 } // end of namespace observer
 } // end of namespace oceanbase

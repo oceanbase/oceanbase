@@ -38,11 +38,18 @@ protected:
     return false;
   }
 
-  int check_need_replay_ddl_log_(
+  static int check_need_replay_ddl_log_(
+      const ObLS *ls,
       const ObTabletHandle &tablet_handle,
       const share::SCN &ddl_start_scn,
       const share::SCN &scn,
-      bool &need_replay) const;
+      bool &need_replay);
+
+  static int get_lob_meta_tablet_id(
+      const ObTabletHandle &tablet_handle,
+      const common::ObTabletID &possible_lob_meta_tablet_id,
+      common::ObTabletID &lob_meta_tablet_id);
+
 
   virtual bool is_replay_update_mds_table_() const override
   {
@@ -73,6 +80,7 @@ protected:
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
+  int replay_ddl_start(ObTabletHandle &handle, const bool is_lob_meta_tablet);
 
 private:
   const ObDDLStartLog *log_;
@@ -120,6 +128,7 @@ protected:
   // @return OB_TASK_EXPIRED, ddl task expired.
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
+  int replay_ddl_commit(ObTabletHandle &handle);
 
 private:
   const ObDDLCommitLog *log_;

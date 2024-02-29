@@ -62,6 +62,7 @@ public:
   const ObPxUserErrorMsg get_ret_code() const { return rcode_; }
   const common::ObAddr &get_dst() const { return dst_; }
   int64_t get_timeout() const { return timeout_; }
+  ObThreadCond &get_cond() { return cond_; }
   // to string
   TO_STRING_KV("dst", get_dst(), "timeout", get_timeout(), "ret_code",
                get_ret_code(), "result", get_result(), "is_visited",

@@ -77,6 +77,7 @@ int ObCdcService::get_backup_dest(const share::ObLSID &ls_id, share::ObBackupDes
 ObCdcService::ObCdcService()
   : is_inited_(false),
     stop_flag_(true),
+    tenant_id_(OB_INVALID_TENANT_ID),
     locator_(),
     fetcher_(),
     tg_id_(-1),
@@ -114,6 +115,7 @@ int ObCdcService::init(const uint64_t tenant_id,
   } else if (OB_FAIL(create_tenant_tg_(tenant_id))) {
     EXTLOG_LOG(WARN, "cdc thread group create failed", KR(ret), K(tenant_id));
   } else {
+    tenant_id_ = tenant_id;
     is_inited_ = true;
   }
 
@@ -138,7 +140,7 @@ void ObCdcService::run1()
     int64_t last_recycle_ts = 0;
     int64_t last_purge_ts = 0;
     int64_t last_check_cdc_read_archive_ts = 0;
-    while(! is_stoped()) {
+    while(! has_set_stop()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
       IGNORE_RETURN lib::Thread::update_loop_ts(current_ts);
@@ -178,6 +180,8 @@ void ObCdcService::run1()
       }
       ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
     }
+
+    EXTLOG_LOG(INFO, "CdcSrv Thread Exit due to has_set_stop", "stop_flag", has_set_stop());
   }
 }
 
@@ -190,7 +194,7 @@ int ObCdcService::start()
     EXTLOG_LOG(WARN, "ObCdcService not init", K(ret));
   } else if (OB_FAIL(log_ext_handler_.start(0))) {
     EXTLOG_LOG(WARN, "log ext handler start failed", K(ret));
-  } else if (OB_FAIL(start_tenant_tg_(MTL_ID()))) {
+  } else if (OB_FAIL(start_tenant_tg_(tenant_id_))) {
     EXTLOG_LOG(ERROR, "start CDCService failed", KR(ret));
   } else {
     stop_flag_ = false;
@@ -202,13 +206,13 @@ int ObCdcService::start()
 void ObCdcService::stop()
 {
   ATOMIC_STORE(&stop_flag_, true);
-  stop_tenant_tg_(MTL_ID());
+  stop_tenant_tg_(tenant_id_);
   log_ext_handler_.stop();
 }
 
 void ObCdcService::wait()
 {
-  wait_tenant_tg_(MTL_ID());
+  wait_tenant_tg_(tenant_id_);
   log_ext_handler_.wait();
   // do nothing
 }
@@ -217,13 +221,14 @@ void ObCdcService::destroy()
 {
   is_inited_ = false;
   stop_flag_ = true;
-  destroy_tenant_tg_(MTL_ID());
+  destroy_tenant_tg_(tenant_id_);
   fetcher_.destroy();
   locator_.destroy();
   dest_info_.reset();
   large_buffer_pool_.destroy();
   ls_ctx_map_.destroy();
   log_ext_handler_.destroy();
+  tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
 int ObCdcService::req_start_lsn_by_ts_ns(const obrpc::ObCdcReqStartLSNByTsReq &req,
@@ -309,6 +314,35 @@ int ObCdcService::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     EXTLOG_LOG(TRACE, "ObCdcService fetch_log", K(ret), K(req), K(resp));
   }
 
+  return ret;
+}
+
+int ObCdcService::init_archive_source(const ObLSID &ls_id,
+    ClientLSCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  logservice::ObRemoteLogParent *source = ctx.get_source();
+  if (OB_NOT_NULL(source)) {
+    EXTLOG_LOG(WARN, "archive source is not null, no need to init");
+  } else if (OB_ISNULL(source = logservice::ObResSrcAlloctor::alloc(ObLogRestoreSourceType::LOCATION, ls_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    EXTLOG_LOG(WARN, "alloc RemoteLocationParent failed", KR(ret), K(ls_id));
+  } else {
+    share::ObBackupDest archive_dest;
+    if (OB_FAIL(get_backup_dest(ls_id, archive_dest))) {
+      EXTLOG_LOG(WARN, "get backupdest from archivedestinfo failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(static_cast<logservice::ObRemoteLocationParent*>(source)->set(archive_dest, SCN::max_scn()))) {
+      EXTLOG_LOG(WARN, "source set archive dest info failed", KR(ret), K(archive_dest));
+    } else {
+      ctx.set_source(source);
+      EXTLOG_LOG(WARN, "init archive source succ", K(ctx), K(ls_id));
+    }
+
+    if (OB_FAIL(ret)) {
+      logservice::ObResSrcAlloctor::free(source);
+      source = nullptr;
+    }
+  }
   return ret;
 }
 

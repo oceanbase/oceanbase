@@ -402,7 +402,8 @@ public:
         error_log_info_(),
         has_instead_of_trigger_(false),
         ab_stmt_id_expr_(nullptr),
-        dml_source_from_join_(false)
+        dml_source_from_join_(false),
+        pdml_disabled_(false)
   { }
   virtual ~ObDelUpdStmt() { }
   int deep_copy_stmt_struct(ObIAllocator &allocator,
@@ -469,6 +470,8 @@ public:
   void set_dml_source_from_join(bool from_join) { dml_source_from_join_ = from_join; }
   inline bool dml_source_from_join() const { return dml_source_from_join_; }
   int check_dml_source_from_join();
+  bool is_pdml_disabled() const { return pdml_disabled_; }
+  void set_pdml_disabled() { pdml_disabled_ = true; }
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;
@@ -482,6 +485,7 @@ protected:
   common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> sharding_conditions_;
   ObRawExpr *ab_stmt_id_expr_; //for array binding batch execution to mark the stmt id
   bool dml_source_from_join_;
+  bool pdml_disabled_;  //  pdml is disabled after some transformation like or-expansion
 };
 }
 }

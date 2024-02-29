@@ -49,10 +49,11 @@ int ObTempBlockStore::ShrinkBuffer::init(char *buf, const int64_t buf_size)
 ObTempBlockStore::ObTempBlockStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), allocator_(NULL == alloc ? &inner_allocator_ : alloc), blk_(NULL),
     block_id_cnt_(0), saved_block_id_cnt_(0), dumped_block_id_cnt_(0), enable_dump_(true),
+    enable_trunc_(false), last_trunc_offset_(0),
     tenant_id_(0), label_(), ctx_id_(0), mem_limit_(0), mem_hold_(0), mem_used_(0),
     file_size_(0), block_cnt_(0), index_block_cnt_(0), block_cnt_on_disk_(0),
     alloced_mem_size_(0), max_block_size_(0), max_hold_mem_(0), idx_blk_(NULL), mem_stat_(NULL),
-    io_observer_(NULL), last_block_on_disk_(false)
+    io_observer_(NULL), last_block_on_disk_(false), cur_file_offset_(0)
 {
   label_[0] = '\0';
   io_.dir_id_ = -1;
@@ -64,7 +65,8 @@ int ObTempBlockStore::init(int64_t mem_limit,
                            uint64_t tenant_id,
                            int64_t mem_ctx_id,
                            const char *label,
-                           common::ObCompressorType compress_type)
+                           common::ObCompressorType compress_type,
+                           const bool enable_trunc)
 {
   int ret = OB_SUCCESS;
   mem_limit_ = mem_limit;
@@ -78,6 +80,7 @@ int ObTempBlockStore::init(int64_t mem_limit,
   inner_reader_.init(this);
   inited_ = true;
   compressor_.init(compress_type);
+  enable_trunc_ = enable_trunc;
   return ret;
 }
 
@@ -285,7 +288,14 @@ int ObTempBlockStore::append_block_payload(const char *buf, const int64_t size, 
     MEMCPY(blk_->payload_, buf, size);
     block_id_cnt_ = blk_->end();
     blk_->get_buffer()->fast_advance(size);
-    LOG_DEBUG("append block payload", K(*this), K(*blk_));
+    LOG_DEBUG("append block payload", K(*this), K(*blk_), K(mem_used_), K(mem_hold_));
+  }
+  // dump data if mem used > 16MB
+  const int64_t dump_threshold = 1 << 24;
+  if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
+    if (OB_FAIL(dump(true /* all_dump */))) {
+      LOG_WARN("dump failed", K(ret));
+    }
   }
   return ret;
 }
@@ -372,6 +382,18 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
       LOG_WARN("Null block returned", K(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    // truncate file, if enable_trunc_
+    if (enable_trunc_ && (last_trunc_offset_ + TRUNCATE_THRESHOLD < cur_file_offset_)) {
+      if (OB_FAIL(truncate_file(cur_file_offset_))) {
+        LOG_WARN("fail to truncate file", K(ret));
+      } else {
+        last_trunc_offset_ = cur_file_offset_;
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -826,10 +848,10 @@ int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
     }
     if (OB_SUCC(ret) && bi->on_disk_) {
       if (reader.is_async()) {
-        reader.set_cur_file_offset(bi->offset_ > 0 ? bi->offset_ - 1 : 0);
+        cur_file_offset_ = bi->offset_ > 0 ? bi->offset_ - 1 : 0;
       } else {
         blk = reinterpret_cast<const Block *>(reader.buf_.data());
-        reader.set_cur_file_offset(bi->offset_ + bi->length_);
+        cur_file_offset_ = bi->offset_ + bi->length_;
       }
     }
   }
@@ -1008,6 +1030,9 @@ int ObTempBlockStore::ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &bu
         free_blk_mem(try_reuse_blk);
         try_reuse_blk = NULL;
       }
+    } else if (try_reuse_blk != NULL) {
+      free_blk_mem(try_reuse_blk);
+      try_reuse_blk = NULL;
     }
   }
   return ret;
@@ -1024,6 +1049,11 @@ int ObTempBlockStore::BlockReader::aio_wait()
     }
   }
   return ret;
+}
+
+int ObTempBlockStore::BlockReader::get_block(const int64_t block_id, const Block *&blk)
+{
+  return store_->get_block(*this, block_id, blk);
 }
 
 int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
@@ -1397,7 +1427,6 @@ void ObTempBlockStore::BlockReader::reset_cursor(const int64_t file_size, const 
   idx_blk_ = NULL;
   aio_blk_ = NULL;
   ib_pos_ = 0;
-  cur_file_offset_ = 0;
   if (need_release && nullptr != blk_holder_ptr_) {
     blk_holder_ptr_->release();
     blk_holder_ptr_ = nullptr;

@@ -166,9 +166,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   ObTempRowStore &row_store)
 {
   int ret = OB_SUCCESS;
+  const bool enable_trunc = true;
+  const bool reorder_fixed_expr = true;
   ObMemAttr mem_attr(tenant_id_, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA);
   if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, mem_limit, enable_dump,
-                             extra_size /* row_extra_size */))) {
+                             extra_size /* row_extra_size */, reorder_fixed_expr, enable_trunc))) {
     SQL_ENG_LOG(WARN, "init row store failed", K(ret));
   } else {
     row_store.set_dir_id(sql_mem_processor_.get_dir_id());

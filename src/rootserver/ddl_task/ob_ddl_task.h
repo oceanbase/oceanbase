@@ -210,6 +210,13 @@ public:
       const int64_t task_status,
       ObString &message);
 
+  static int update_ret_code_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int ret_code,
+      ObString &message);
+
   static int delete_record(
       common::ObMySQLProxy &proxy,
       const uint64_t tenant_id,
@@ -220,7 +227,8 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       int64_t &task_status,
-      int64_t &execution_id);
+      int64_t &execution_id,
+      int64_t &ret_code);
 
   static int get_ddl_task_record(
       const uint64_t tenant_id,
@@ -544,6 +552,8 @@ public:
   virtual int collect_longops_stat(share::ObLongopsValue &value);
 
   void calc_next_schedule_ts(const int ret_code, const int64_t total_task_cnt);
+  void disable_schedule() { next_schedule_ts_ = INT64_MAX; }
+  void enable_schedule() { next_schedule_ts_ = 0; }
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
   int64_t get_execution_id() const;
@@ -570,6 +580,7 @@ public:
       K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_),
       K_(dst_tenant_id), K_(dst_schema_version));
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
+  static const int64_t DEFAULT_TASK_IDLE_TIME_US = 10L * 1000L; // 10ms
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,

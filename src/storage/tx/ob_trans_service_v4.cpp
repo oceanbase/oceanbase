@@ -127,19 +127,22 @@ int ObTransService::remove_ls(const share::ObLSID &ls_id, const bool graceful)
 #ifdef CHECK_TX_PARTS_CONTAIN_
 #error "redefine CHECK_TX_PARTS_CONTAIN_"
 #else
-#define CHECK_TX_PARTS_CONTAIN_(parts, id, epoch, ls_id, exist)     \
-  if (OB_SUCC(ret)) {                                               \
-    exist = false;                                                  \
-    ARRAY_FOREACH_NORET(parts, idx) {                               \
-      if (parts.at(idx).id == ls_id) {                              \
-        if (ObTxPart::is_without_ctx(parts.at(idx).epoch)) {        \
-          /* target LS was dropped */                               \
-          /* can not accept access any more */                      \
-          ret = OB_PARTITION_IS_BLOCKED;                            \
-        } else { exist = true; }                                    \
-        break;                                                      \
-      }                                                             \
-    }                                                               \
+#define CHECK_TX_PARTS_CONTAIN_(parts, id, epoch, ls_id, ret_epoch, exist) \
+  if (OB_SUCC(ret)) {                                                   \
+    exist = false;                                                      \
+    ARRAY_FOREACH_NORET(parts, idx) {                                   \
+      if (parts.at(idx).id == ls_id) {                                  \
+        exist = true;                                                   \
+        if (ObTxPart::is_without_ctx(parts.at(idx).epoch)) {            \
+          /* target LS was dropped */                                   \
+          /* can not accept access any more */                          \
+          ret = OB_PARTITION_IS_BLOCKED;                                \
+        } else {                                                        \
+          ret_epoch = parts.at(idx).epoch;                              \
+        }                                                               \
+        break;                                                          \
+      }                                                                 \
+    }                                                                   \
   }
 #endif
 
@@ -625,13 +628,17 @@ void ObTransService::invalid_registered_snapshot_(ObTxDesc &tx)
   }
 }
 
-void ObTransService::registered_snapshot_clear_part_(ObTxDesc &tx)
+void ObTransService::process_registered_snapshot_on_commit_(ObTxDesc &tx)
 {
+  // cleanup snapshot's participant info, so that they will skip
+  // verify participant txn ctx, which cause false negative,
+  // because txn ctx has quit when txn committed.
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.savepoints_, i) {
     ObTxSavePoint &p = tx.savepoints_[i];
     if (p.is_snapshot() && p.snapshot_->valid_) {
       p.snapshot_->parts_.reset();
+      p.snapshot_->committed_ = true;
     }
   }
 }
@@ -999,7 +1006,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   if (OB_SUCC(ret) && snap_tx_id.is_valid()) {
     // inner tx read, we verify txCtx's status
     bool exist = false;
-    CHECK_TX_PARTS_CONTAIN_(snapshot.parts_, left_, right_, ls_id, exist);
+    int64_t part_epoch = 0;
+    CHECK_TX_PARTS_CONTAIN_(snapshot.parts_, left_, right_, ls_id, part_epoch, exist);
     if (OB_SUCC(ret) && (exist || read_latest)) {
       if (OB_FAIL(get_tx_ctx_(ls_id, store_ctx.ls_, snap_tx_id, tx_ctx))) {
         if (OB_TRANS_CTX_NOT_EXIST == ret && !exist) {
@@ -1011,6 +1019,10 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
           TRANS_LOG(WARN, "get tx ctx fail",
                     K(ret), K(store_ctx), K(snapshot), K(ls_id), K(exist), K(read_latest));
         }
+      } else if (exist && tx_ctx->epoch_ != part_epoch) {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+        TRANS_LOG(WARN, "exist txCtx epoch mismatch within snapshot", K(ret),
+                  K(part_epoch), K(tx_ctx->epoch_), K(ls_id), KPC(tx_ctx), K(snapshot));
       } else if (OB_FAIL(tx_ctx->check_status())) {
         TRANS_LOG(WARN, "check status fail", K(ret), K(store_ctx), KPC(tx_ctx));
       } else {
@@ -1032,7 +1044,11 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       store_ctx.timeout_,
                                       store_ctx.tablet_id_,
                                       *store_ctx.ls_))) {
-    TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
+      TRANS_LOG(WARN, "replica not readable", K(ret),
+              K(snapshot),
+              K(ls_id),
+              K(store_ctx),
+              "ls_weak_read_ts", store_ctx.ls_->get_ls_wrs_handler()->get_ls_weak_read_ts());
   }
 
   // setup tx_table_guard
@@ -1196,7 +1212,8 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
 {
   int ret = OB_SUCCESS;
   bool exist = false;
-  CHECK_TX_PARTS_CONTAIN_(tx.parts_, id_, epoch_, ls_id, exist);
+  int64_t part_epoch = 0;
+  CHECK_TX_PARTS_CONTAIN_(tx.parts_, id_, epoch_, ls_id, part_epoch, exist);
   if (OB_FAIL(ret)) {
   } else if (exist) {
     if (OB_FAIL(get_tx_ctx_(ls_id, ls, tx.tx_id_, ctx))) {
@@ -1204,6 +1221,12 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
       if (ret == OB_TRANS_CTX_NOT_EXIST) {
         TRANS_LOG(WARN, "participant lost update", K(ls_id), K_(tx.tx_id));
       }
+    } else if (ctx->epoch_ != part_epoch) {
+      ret = OB_TRANS_CTX_NOT_EXIST;
+      TRANS_LOG(WARN, "exist txCtx epoch mismatch within txDesc", K(ret),
+                K(part_epoch), K(ctx->epoch_), K(ls_id), K(ctx), K(tx));
+      revert_tx_ctx_(ls, ctx);
+      ctx = NULL;
     }
   } else if (OB_FAIL(create_tx_ctx_(ls_id, ls, tx, ctx, special))) {
       TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls_id), K(tx), K(special));
@@ -1267,8 +1290,12 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   bool existed = false;
   int64_t epoch = 0;
+  PartCtxSource ctx_source = PartCtxSource::MVCC_WRITE;
+  if(special) {
+    ctx_source = PartCtxSource::REGISTER_MDS;
+  }
   ObTxCreateArg arg(false,  /* for_replay */
-                    special,  /* speclial tx not blocked when in block_normal state */
+                    ctx_source,  /* speclial tx not blocked when in block_normal state */
                     tx.tenant_id_,
                     tx.tx_id_,
                     ls_id,
@@ -1924,7 +1951,7 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle trans commit request", K(ret), K(msg));
 #else
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_TRANS_COMMITED != ret) {
     TRANS_LOG(WARN, "handle trans commit request failed", K(ret), K(msg));
   }
 #endif
@@ -2139,32 +2166,19 @@ int ObTransService::check_ls_status(const share::ObLSID &ls_id){
 int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_svr =  MTL(ObLSService *);
-  common::ObRole role = common::ObRole::INVALID_ROLE;
-  storage::ObLSHandle handle;
-  ObLS *ls = nullptr;
-  int64_t UNUSED = 0;
-
-  if (OB_ISNULL(ls_svr)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+  int64_t epoch = 0;
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
     TRANS_LOG(WARN, "get id service log stream failed");
-  } else if (OB_ISNULL(ls = handle.get_ls())) {
+  } else if (OB_ISNULL(ls_tx_ctx_mgr)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "id service log stream not exist");
-  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, UNUSED))) {
-    if (OB_NOT_RUNNING == ret) {
-      ret = OB_LS_NOT_EXIST;
-    } else {
-      TRANS_LOG(WARN, "get ls role fail", K(ret));
-    }
-  } else if (common::ObRole::LEADER == role) {
-    leader = true;
-  } else {
-    leader = false;
+    TRANS_LOG(WARN, "ls ctx mgr is null", K(ls_id), KPC(this));
+  } else if (OB_FAIL(ls_tx_ctx_mgr->get_ls_log_adapter()->get_role(leader, epoch))) {
+    TRANS_LOG(WARN, "get ls role fail", K(ret));
   }
-
+  if (ls_tx_ctx_mgr) {
+    tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+  }
   return ret;
 }
 

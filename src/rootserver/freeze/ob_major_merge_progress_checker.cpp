@@ -601,6 +601,7 @@ void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
   int ret = OB_SUCCESS;
   const int64_t array_cnt = ObUncompactInfo::DEBUG_INFO_CNT;
   ObSEArray<uint64_t, array_cnt> tmp_table_id_array;
+  ObSEArray<uint64_t, array_cnt> tmp_tablets_array;
   ObSEArray<ObTabletReplica, array_cnt> uncompacted_replica_array;
   ObSEArray<uint64_t, array_cnt> uncompacted_table_array;
   (void) uncompact_info_.get_uncompact_info(uncompacted_replica_array, uncompacted_table_array);
@@ -612,6 +613,12 @@ void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
       }
     }
   }
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < uncompacted_replica_array.count(); ++idx) {
+    if (OB_FAIL(tmp_tablets_array.push_back(
+            uncompacted_replica_array.at(idx).get_tablet_id().id()))) {
+      LOG_WARN("failed to push array", KR(ret));
+    }
+  }
   // table in table_ids_ may finish verified in deal_with_rest_data_table()
   // need next loop to delete from array
   ADD_RS_COMPACTION_EVENT(
@@ -620,6 +627,7 @@ void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
     common::ObTimeUtility::fast_current_time(),
     K(cost_us), K_(progress), "remain_table_id_count", table_ids_.count(),
     "remain_table_ids", tmp_table_id_array,
+    "remain_tablet_ids", tmp_tablets_array,
     K_(total_time_guard), K_(validator_statistics));
   LOG_INFO("succ to check merge progress", K_(tenant_id), K_(loop_cnt), K_(compaction_scn), K(cost_us),
     K_(progress), "remain_table_id_count", table_ids_.count(),
@@ -698,15 +706,17 @@ int ObMajorMergeProgressChecker::set_table_compaction_info_status(
 int ObMajorMergeProgressChecker::validate_index_ckm()
 {
   int ret = OB_SUCCESS;
-  if (idx_ckm_validate_array_.count() < 50
-    && progress_.get_wait_index_ckm_table_cnt() > 100
-    && !is_extra_check_round()) {
-    // do nothing
-  } else if (idx_ckm_validate_array_.count() > 0) {
-    if (OB_FAIL(loop_index_ckm_validate_array())) {
-      LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
+  if (idx_ckm_validate_array_.count() > 0) {
+    if (idx_ckm_validate_array_.count() < 50
+      && progress_.get_wait_index_ckm_table_cnt() > 100
+      && !is_extra_check_round()) {
+      // do nothing
+    } else {
+      if (OB_FAIL(loop_index_ckm_validate_array())) {
+        LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
+      }
     }
-    idx_ckm_validate_array_.reset();
+    idx_ckm_validate_array_.reuse(); // reuse array
   }
   return ret;
 }

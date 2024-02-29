@@ -39,7 +39,7 @@ using namespace oceanbase::share;
 namespace storage
 {
 
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 30 * 1000 * 1000; // 30 seconds
+int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 15 * 1000 * 1000; // 15 seconds
 
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
@@ -71,6 +71,8 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
     tx_ctx_table_ = tx_ctx_table;
     tablet_id_ = LS_TX_DATA_TABLET;
+    calc_upper_trans_is_disabled_ = false;
+    latest_transfer_scn_.reset();
 
     is_inited_ = true;
     FLOG_INFO("tx data table init success", K(sizeof(ObTxData)), K(sizeof(ObTxDataLinkNode)), KPC(this));
@@ -182,6 +184,8 @@ void ObTxDataTable::reset()
   calc_upper_info_.reset();
   calc_upper_trans_version_cache_.reset();
   memtables_cache_.reuse();
+  calc_upper_trans_is_disabled_ = false;
+  latest_transfer_scn_.reset();
   is_started_ = false;
   is_inited_ = false;
 }
@@ -205,8 +209,7 @@ int ObTxDataTable::offline()
     STORAGE_LOG(WARN, "clean memtables cache failed", KR(ret), KPC(this));
   } else {
     is_started_ = false;
-    calc_upper_info_.reset();
-    calc_upper_trans_version_cache_.reset();
+    disable_upper_trans_calculation();
   }
   return ret;
 }
@@ -230,6 +233,8 @@ int ObTxDataTable::online()
   } else {
     // load tx data table succeed
     is_started_ = true;
+    calc_upper_trans_is_disabled_ = false;
+    latest_transfer_scn_.reset();
   }
 
   return ret;
@@ -465,7 +470,10 @@ int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
                 K(tablet_id_));
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(tx_data_guard.tx_data()) && (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
+  if (OB_SUCC(ret) &&
+      OB_NOT_NULL(tx_data_guard.tx_data()) &&
+      !fn.may_exist_undecided_state_in_tx_data_table() &&
+      (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
     ret = OB_EAGAIN;
     STORAGE_LOG(WARN, "read a running state tx data from tx data table, need retry", KR(ret), K(tx_data_guard));
   }
@@ -511,7 +519,8 @@ int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID t
     }
   } else {
     if (find) {
-      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_) {
+      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_ &&
+          !fn.may_exist_undecided_state_in_tx_data_table()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR,
                     "read a running state tx data from tx data table",
@@ -609,6 +618,7 @@ int ObTxDataTable::check_need_update_memtables_cache_(bool &need_update)
     // cache already up to date, skip update
     need_update = false;
   }
+
   return ret;
 }
 
@@ -821,6 +831,8 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
+  } else if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
+    skip_calc = true;
   } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
     // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
@@ -832,13 +844,14 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
 
   if (OB_FAIL(ret)) {
   } else if (skip_calc) {
-  } else if (0 == calc_upper_trans_version_cache_.commit_versions_.array_.count()) {
-    STORAGE_LOG(ERROR, "Unexpected empty array.", K(calc_upper_trans_version_cache_));
   } else {
     TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
-    if (!calc_upper_trans_version_cache_.commit_versions_.is_valid()) {
+    if (0 == calc_upper_trans_version_cache_.commit_versions_.array_.count()) {
+      ret = OB_EAGAIN;
+      STORAGE_LOG(WARN, "empty commit versions. may be a concurrent transfer.", K(calc_upper_trans_version_cache_));
+    } else if (!calc_upper_trans_version_cache_.commit_versions_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "invalid cache for upper trans version calculation", KR(ret));
+      STORAGE_LOG(WARN, "invalid cache for upper trans version calculation. ", KR(ret));
     } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_version))) {
       STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), "ls_id", get_ls_id());
     } else {
@@ -1024,11 +1037,14 @@ int ObTxDataTable::check_min_start_in_ctx_(const SCN &sstable_end_scn,
   {
     SpinRLockGuard lock_guard(calc_upper_info_.lock_);
     if (calc_upper_info_.min_start_scn_in_ctx_ <= sstable_end_scn ||
+        (latest_transfer_scn_.is_valid() &&
+         calc_upper_info_.keep_alive_scn_ < latest_transfer_scn_) ||
         calc_upper_info_.keep_alive_scn_ >= max_decided_scn) {
       need_skip = true;
     }
 
-    if (cur_ts - calc_upper_info_.update_ts_ > 30_s && max_decided_scn > calc_upper_info_.keep_alive_scn_) {
+    if (cur_ts - calc_upper_info_.update_ts_ > ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL &&
+        max_decided_scn > calc_upper_info_.keep_alive_scn_) {
       need_update_info = true;
     }
   }
@@ -1296,6 +1312,35 @@ int ObTxDataTable::get_start_tx_scn(SCN &start_tx_scn)
     FLOG_INFO("get start tx scn done", KR(ret), K(start_tx_scn), KPC(oldest_minor_sstable));
   }
   return ret;
+}
+
+void ObTxDataTable::disable_upper_trans_calculation()
+{
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
+  {
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
+  {
+    SpinWLockGuard lock_guard(calc_upper_info_.lock_);
+    calc_upper_info_.reset();
+  }
+}
+
+void ObTxDataTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
+{
+  {
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
+  if (latest_transfer_scn_.is_valid()) {
+    latest_transfer_scn_ = SCN::max(latest_transfer_scn, latest_transfer_scn_);
+  } else {
+    latest_transfer_scn_ = latest_transfer_scn;
+  }
+  SpinWLockGuard lock_guard(calc_upper_info_.lock_);
+  calc_upper_info_.reset();
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
 }
 
 int ObTxDataTable::dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd)

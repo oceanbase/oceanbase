@@ -32,6 +32,9 @@
     <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
+    <a href="https://stackoverflow.com/questions/tagged/oceanbase">
+        <img alt="Ask on Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+    </a>
 </p>
 
 English | [中文版](README_CN.md)
@@ -135,6 +138,7 @@ OceanBase Database is licensed under the Mulan Public License, Version 2. See th
 Join the OceanBase community via:
 
 * [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
+* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
 * [Chinese User Forum](https://ask.oceanbase.com/)
 * DingTalk Group: 33254054 ([QR code](images/dingtalk.svg))
 * WeChat Group (Add the assistant with WeChat ID: OBCE666)

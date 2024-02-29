@@ -503,52 +503,9 @@ int ObRestoreScheduler::convert_tde_parameters(
     if (OB_FAIL(ret)) {
     } else if (!ObTdeMethodUtil::is_valid(tde_method)) {
       // do nothing
-    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = '%s'", tde_method.ptr()))) {
-      LOG_WARN("failed to assign fmt", K(ret), K(sql));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
-      LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
-    } else if (ObTdeMethodUtil::is_internal(tde_method)) {
-      // do nothing
-    } else if (FALSE_IT(sql.reset())) {
-    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%s'", kms_info.ptr()))) {
-      LOG_WARN("failed to assign fmt", K(ret), K(sql));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
-      LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
-    }
-    if (OB_SUCC(ret) && ObTdeMethodUtil::is_valid(tde_method)) {
-      const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
-      obrpc::ObReloadMasterKeyArg arg;
-      obrpc::ObReloadMasterKeyResult result;
-      arg.tenant_id_ = tenant_id;
-      if (OB_FAIL(rpc_proxy_->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
-        LOG_WARN("fail to reload master key", K(ret), K(arg), K(DEFAULT_TIMEOUT));
-      } else if (result.master_key_id_ > 0 ) {
-        bool is_active = false;
-        const int64_t SLEEP_US = 5 * 1000 * 1000L; // 5s
-        const int64_t MAX_WAIT_US = 60 * 1000 * 1000L; // 60s
-        const int64_t start = ObTimeUtility::current_time();
-        char master_key[OB_MAX_MASTER_KEY_LENGTH];
-        int64_t master_key_len = 0;
-        uint64_t master_key_id = 0;
-        while (OB_SUCC(ret) && !is_active) {
-          if (ObTimeUtility::current_time() - start > MAX_WAIT_US) {
-            ret = OB_TIMEOUT;
-            LOG_WARN("use too much time", K(ret), "cost_us", ObTimeUtility::current_time() - start);
-          } else if (OB_FAIL(ObMasterKeyGetter::get_active_master_key(tenant_id, master_key,
-                                                                  OB_MAX_MASTER_KEY_LENGTH,
-                                                                  master_key_len, master_key_id))) {
-            if (OB_KEYSTORE_OPEN_NO_MASTER_KEY == ret) {
-              ret = OB_SUCCESS;
-              LOG_INFO("master key is not active, need wait", K(tenant_id));
-              usleep(SLEEP_US);
-            } else {
-              LOG_WARN("fail to get active master key", K(tenant_id));
-            }
-          } else {
-            is_active = true;
-          }
-        }
-      }
+    } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, rpc_proxy_,
+                                    tenant_id, tde_method, kms_info))) {
+      LOG_WARN("failed to set_tde_parameters", KR(ret), K(tenant_id), K(tde_method));
     }
   }
 #endif

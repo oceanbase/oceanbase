@@ -181,6 +181,13 @@ public:
   int64_t get_format_id() const { return format_id_; }
   uint64_t get_gtrid_hash() const { return g_hv_; }
   uint64_t get_bqual_hash() const { return b_hv_; }
+  uint64_t get_hash() const {
+    if (0 == g_hv_ || 0 == b_hv_) {
+      g_hv_ = murmurhash(gtrid_str_.ptr(), gtrid_str_.length(), 0) % HASH_SIZE;
+      b_hv_ = murmurhash(bqual_str_.ptr(), bqual_str_.length(), 0) % HASH_SIZE;
+    }
+    return (g_hv_ + b_hv_) / 11;
+  }
   bool empty() const;
   // empty xid is also valid
   bool is_valid() const;
@@ -206,8 +213,8 @@ private:
   char bqual_buf_[MAX_BQUAL_LENGTH];
   common::ObString bqual_str_;
   int64_t format_id_;
-  uint64_t g_hv_;
-  uint64_t b_hv_;
+  mutable uint64_t g_hv_;
+  mutable uint64_t b_hv_;
 };
 
 struct ObXABranchInfo

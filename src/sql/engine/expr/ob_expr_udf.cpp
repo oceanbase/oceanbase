@@ -119,9 +119,21 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
           if (params_type_.at(i).get_collation_type() == CS_TYPE_ANY) {
             if (types[i].is_string_or_lob_locator_type()) {
               types[i].set_calc_collation_type(types[i].get_collation_type());
+              if (lib::is_oracle_mode() && types[i].get_calc_meta().is_clob()) {
+                ObCollationType dest_collation = ob_is_nstring_type(types[i].get_calc_meta().get_type()) ?
+                                                  type_ctx.get_session()->get_nls_collation_nation()
+                                                : type_ctx.get_session()->get_nls_collation();
+                if (CS_TYPE_INVALID != dest_collation) {
+                  types[i].set_calc_collation_type(dest_collation);
+                }
+              }
             } else {
               types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
             }
+          } else if (types[i].is_enum_or_set()) {
+            types[i].set_type(ObVarcharType);
+            types[i].set_collation_level(params_type_.at(i).get_collation_level());
+            types[i].set_collation_type(params_type_.at(i).get_collation_type());
           }
         }
       }
@@ -172,8 +184,12 @@ int ObExprUDF::check_types(const ObExpr &expr, const ObExprUDFInfo &info)
     if (!expr.args_[i]->obj_meta_.is_null()
         && (!info.params_desc_.at(i).is_out())) {
       if (expr.args_[i]->obj_meta_.get_type() != info.params_type_.at(i).get_type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("check param type failed", K(ret), K(i));
+        if (info.params_type_.at(i).is_enum_or_set() && ObVarcharType == expr.args_[i]->obj_meta_.get_type()) {
+          // do nothing ...
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("check param type failed", K(ret), K(i));
+        }
       }
     }
   }
@@ -660,6 +676,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     // do nothing ...
   } else {
     bool need_end_stmt = false;
+    bool need_free_udt = false;
     stmt::StmtType parent_stmt = ctx.exec_ctx_.get_sql_ctx()->stmt_type_;
     if (!session->has_start_stmt() && stmt::StmtType::T_SELECT == parent_stmt) {
       need_end_stmt = true;
@@ -704,6 +721,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       pl_type.set_type_from(pl::PL_TYPE_UDT);
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
+      OX (need_free_udt = true);
     }
     try {
       int64_t package_id = info->is_udt_udf_ ?
@@ -834,9 +852,12 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                               ctx.exec_ctx_.get_allocator(), res));
       }
       OZ(expr.deep_copy_datum(ctx, res));
-
-      if (OB_SUCC(ret) && info->is_udt_cons_) {
-        OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
+    }
+    if (need_free_udt && info->is_udt_cons_) {
+      int tmp = OB_SUCCESS;
+      tmp = pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session());
+      if (OB_SUCCESS != tmp) {
+        LOG_WARN("fail to free udt self memory", K(ret), K(tmp));
       }
     }
     if (deep_in_objs.count() > 0) {

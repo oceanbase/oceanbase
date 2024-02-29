@@ -1824,10 +1824,10 @@ int ObExprJsonValue::get_on_mismatch(const ObExpr &expr,
   ObObjType val_type;
   ObDatum *json_datum = NULL;
 
-  uint32_t expr_size = expr.arg_cnt_;
-  uint32_t pos = -1;
+  uint32_t expr_count = expr.arg_cnt_;
+  int32_t pos = -1;
 
-  for(uint32_t i = index; OB_SUCC(ret) && i < expr_size; i++) {
+  for(uint32_t i = index; OB_SUCC(ret) && i < expr_count; i++) {
     json_arg = expr.args_[i];
     val_type = json_arg->datum_meta_.type_;
     if (OB_FAIL(json_arg->eval(ctx, json_datum))) {

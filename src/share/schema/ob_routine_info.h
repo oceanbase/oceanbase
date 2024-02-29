@@ -172,6 +172,7 @@ public:
   virtual int64_t get_param_start_idx() const { return 0; }
   virtual const common::ObString &get_routine_name() const = 0;
   virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
+  virtual uint64_t get_routine_id() const = 0;
 
   TO_STRING_EMPTY();
 };
@@ -505,6 +506,18 @@ public:
     flag_ |= SP_FLAG_CONTAINS_SQL;
   }
 
+  OB_INLINE void reset_analyze_flag()
+  {
+    flag_ &= ~(uint64_t)SP_FLAG_NO_SQL;
+    flag_ &= ~(uint64_t)SP_FLAG_READS_SQL_DATA;
+    flag_ &= ~(uint64_t)SP_FLAG_MODIFIES_SQL_DATA;
+    flag_ &= ~(uint64_t)SP_FLAG_CONTAINS_SQL;
+    flag_ &= ~(uint64_t)SP_FLAG_WPS;
+    flag_ &= ~(uint64_t)SP_FLAG_RPS;
+    flag_ &= ~(uint64_t)SP_FLAG_HAS_SEQUENCE;
+    flag_ &= ~(uint64_t)SP_FLAG_HAS_OUT_PARAM;
+    flag_ &= ~(uint64_t)SP_FLAG_EXTERNAL_STATE;
+  }
 
   OB_INLINE bool is_wps() const { return SP_FLAG_WPS == (flag_ & SP_FLAG_WPS); }
   OB_INLINE bool is_rps() const { return SP_FLAG_RPS == (flag_ & SP_FLAG_RPS); }

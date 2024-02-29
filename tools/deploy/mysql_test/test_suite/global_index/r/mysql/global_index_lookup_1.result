@@ -629,9 +629,9 @@ Query Plan
 ================================================================
 |ID|OPERATOR                      |NAME  |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SUBPLAN FILTER                |      |1       |68          |
+|0 |SUBPLAN FILTER                |      |1       |93          |
 |1 |├─TABLE FULL SCAN             |t1    |2       |3           |
-|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2(i1)|1       |33          |
+|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2(i1)|1       |46          |
 ================================================================
 Outputs & filters:
 -------------------------------------

@@ -196,7 +196,8 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
   } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn,
-      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/))) {
+      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/,
+      false/*with_order_by_field*/))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
@@ -413,6 +414,27 @@ int ObStorageHAUtils::check_ls_is_leader(
     is_leader = true;
   } else {
     is_leader = false;
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::check_tenant_will_be_deleted(
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  is_deleted = false;
+
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
+  ObUnitInfoGetter::ObUnitStatus unit_status;
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (FALSE_IT(unit_status = tenant->get_unit_status())) {
+  } else if (ObUnitInfoGetter::is_unit_will_be_deleted_in_observer(unit_status)) {
+    is_deleted = true;
+    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant->id()), K(unit_status));
   }
   return ret;
 }

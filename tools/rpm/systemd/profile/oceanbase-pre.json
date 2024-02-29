@@ -1,0 +1,25 @@
+{
+    "obshell": {
+        "agentInfo": {
+            "ip": "HOSTIP",
+            "port": 2886
+        },
+        "zoneName": "zone1"
+    },
+    "oceanbase_ce": {
+        "cluster": {
+            "clusterId": 1,
+            "clusterName": "ob"
+        },
+        "server": {
+            "restart": true,
+            "scope": {
+                "type": "server",
+                "target": [
+                    "HOSTIP:2886"
+                ]
+            },
+            "observerConfig": {}
+        }
+    }
+}

@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_cgroup_config_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   * FROM SYS.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   CFS_QUOTA_US,   CFS_PERIOD_US,   SHARES,   CGROUP_PATH FROM SYS.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::v_ob_ls_snapshots_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT *     FROM SYS.GV$OB_LS_SNAPSHOTS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT TENANT_ID,       SNAPSHOT_ID,       LS_ID,       SVR_IP,       SVR_PORT,       META_EXISTED,       BUILD_STATUS,       REBUILD_SEQ_START,       REBUILD_SEQ_END,       END_INTERVAL_SCN,       LS_META_PACKAGE,       TSNAP_IS_RUNNING,       TSNAP_HAS_UNFINISHED_CREATE_DAG,       TSNAP_HAS_UNFINISHED_GC_DAG,       TSNAP_CLONE_REF,       TSNAP_META_EXISTED     FROM SYS.GV$OB_LS_SNAPSHOTS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -87,6 +87,10 @@ public:
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
+ int process_thread0_(const ObAllTenantInfo &tenant_info);
+ int process_thread1_(const ObAllTenantInfo &tenant_info,
+     share::SCN &start_scn,
+     palf::PalfBufferIterator &iterator);
  //get log iterator by start_scn
  //interface for thread0
  int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
@@ -150,6 +154,7 @@ private:
  int do_update_restore_source_(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
  int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
  int get_ls_all_replica_readable_scn_(const share::ObLSID &ls_id, share::SCN &reabable_scn);
+
 private:
   bool inited_;
   uint64_t tenant_id_;

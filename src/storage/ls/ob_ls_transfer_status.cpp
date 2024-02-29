@@ -46,7 +46,8 @@ void ObLSTransferStatus::reset()
   move_tx_scn_.reset();
 }
 
-void ObLSTransferStatus::reset_prepare_op() {
+void ObLSTransferStatus::reset_prepare_op()
+{
   transfer_prepare_op_ = false;
   transfer_prepare_scn_.reset();
   if (is_finished()) {
@@ -54,7 +55,9 @@ void ObLSTransferStatus::reset_prepare_op() {
     transfer_task_id_ = 0;
   }
 }
-void ObLSTransferStatus::reset_move_tx_op() {
+
+void ObLSTransferStatus::reset_move_tx_op()
+{
   move_tx_op_ = false;
   move_tx_scn_.reset();
   if (is_finished()) {
@@ -147,6 +150,7 @@ int ObLSTransferStatus::update_status_inner_(const transaction::ObTransID tx_id,
   if (!transfer_tx_id_.is_valid() || transfer_tx_id_ == tx_id) {
     if (NotifyType::ON_COMMIT == op_type || NotifyType::ON_ABORT == op_type) {
       if (ObTxDataSourceType::TRANSFER_DEST_PREPARE == mds_type) {
+        enable_upper_trans_calculation_(op_scn);
         reset_prepare_op();
       } else if (ObTxDataSourceType::TRANSFER_MOVE_TX_CTX == mds_type) {
         reset_move_tx_op();
@@ -157,6 +161,7 @@ int ObLSTransferStatus::update_status_inner_(const transaction::ObTransID tx_id,
       if (ObTxDataSourceType::TRANSFER_DEST_PREPARE == mds_type) {
         transfer_prepare_op_ = true;
         transfer_prepare_scn_ = op_scn;
+        disable_upper_trans_calculation_();
       } else if (ObTxDataSourceType::TRANSFER_MOVE_TX_CTX == mds_type) {
         move_tx_op_ = true;
         move_tx_scn_ = op_scn;
@@ -184,12 +189,14 @@ int ObLSTransferStatus::replay_status_inner_(const transaction::ObTransID tx_id,
   if (ObTxDataSourceType::TRANSFER_DEST_PREPARE == mds_type) {
     if (!transfer_prepare_scn_.is_valid() || transfer_prepare_scn_ < op_scn) {
       if (NotifyType::ON_COMMIT == op_type || NotifyType::ON_ABORT == op_type) {
+        enable_upper_trans_calculation_(op_scn);
         reset_prepare_op();
       } else {
         transfer_tx_id_ = tx_id;
         transfer_task_id_ = task_id;
         transfer_prepare_op_ = true;
         transfer_prepare_scn_ = op_scn;
+        disable_upper_trans_calculation_();
       }
     }
   } else if (ObTxDataSourceType::TRANSFER_MOVE_TX_CTX == mds_type) {
@@ -223,6 +230,50 @@ int ObLSTransferStatus::get_transfer_prepare_status(
   return ret;
 }
 
+int ObLSTransferStatus::enable_upper_trans_calculation_(const share::SCN op_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTxTableGuard guard;
+  ObTxDataTable *tx_data_table = nullptr;
 
+  if (OB_FAIL(ls_->get_tx_table_guard(guard))) {
+    TRANS_LOG(WARN, "failed to get tx table", K(ret));
+  } else if (OB_UNLIKELY(!guard.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx table guard is invalid", K(ret), K(guard));
+  } else if (OB_ISNULL(tx_data_table =
+                       guard.get_tx_table()->get_tx_data_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
+  } else {
+    tx_data_table->enable_upper_trans_calculation(op_scn);
+    TRANS_LOG(INFO, "enable upper trans calculation", KPC(ls_), K(guard), KPC(this));
+  }
+
+  return ret;
+}
+
+int ObLSTransferStatus::disable_upper_trans_calculation_()
+{
+  int ret = OB_SUCCESS;
+  ObTxTableGuard guard;
+  ObTxDataTable *tx_data_table = nullptr;
+
+  if (OB_FAIL(ls_->get_tx_table_guard(guard))) {
+    TRANS_LOG(WARN, "failed to get tx table", K(ret));
+  } else if (OB_UNLIKELY(!guard.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx table guard is invalid", K(ret), K(guard));
+  } else if (OB_ISNULL(tx_data_table =
+                       guard.get_tx_table()->get_tx_data_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx data table in tx table is nullptr.", K(ret));
+  } else {
+    tx_data_table->disable_upper_trans_calculation();
+    TRANS_LOG(INFO, "disable upper trans calculation", KPC(ls_), K(guard), KPC(this));
+  }
+
+  return ret;
+}
 }
 }

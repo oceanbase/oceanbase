@@ -867,10 +867,19 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
-        mysql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
-          LOG_ERROR("init timezone_info_getter failed", KR(ret));
+    if (is_tenant_sync_mode()) {
+      if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
+          mysql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
+            LOG_ERROR("init timezone_info_getter failed", KR(ret));
+      }
     } else {
+      if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
+          tenant_sql_proxy_.get_ob_mysql_proxy(), *systable_helper_, *err_handler))) {
+            LOG_ERROR("init timezone_info_getter failed", KR(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       timezone_info_getter_ = &ObCDCTimeZoneInfoGetter::get_instance();
       // init interface for getting tenant timezone map
       // get_tenant_tz_map_function is defined in ob_log_timezone_info_getter file
@@ -940,7 +949,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       enable_output_hidden_primary_key);
 
   INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num,
-      CDC_CFG_MGR.get_lob_data_merger_queue_length(), *err_handler);
+      TCONF.lob_data_merger_queue_length, *err_handler);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(lob_aux_meta_storager_.init(store_service_))) {
@@ -2769,7 +2778,7 @@ int ObLogInstance::get_task_count_(
   part_trans_task_resuable_count = 0;
 
   if (OB_ISNULL(fetcher_) || OB_ISNULL(dml_parser_) || OB_ISNULL(formatter_)
-      || OB_ISNULL(storager_)
+      || OB_ISNULL(storager_) || OB_ISNULL(lob_data_merger_)
       || OB_ISNULL(sequencer_) || OB_ISNULL(reader_) || OB_ISNULL(committer_)
       || OB_ISNULL(sys_ls_handler_) || OB_ISNULL(resource_collector_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2812,6 +2821,8 @@ int ObLogInstance::get_task_count_(
     //   (3) Tasks held by users that have not been returned
     //   (4) tasks held by resource_collector
     if (OB_SUCC(ret)) {
+      int64_t lob_data_list_task_count = 0;
+      lob_data_merger_->get_task_count(lob_data_list_task_count);
       int64_t committer_ddl_part_trans_task_count = 0;
       int64_t committer_dml_part_trans_task_count = 0;
 
@@ -2849,7 +2860,9 @@ int ObLogInstance::get_task_count_(
             seq_stat_info.ready_trans_count_, seq_stat_info.sequenced_trans_count_);
         _LOG_INFO("[TASK_COUNT_STAT] [READER] [ROW_TASK=%ld]", reader_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [DML_PARSER] [LOG_TASK=%ld]", dml_parser_log_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]", formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]",
+            formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [LOB_MERGER] [LOB_LIST_TASK=%ld]", lob_data_list_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [SORTER] [TRANS=%ld]", sorter_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [COMMITER] [DML_TRANS=%ld DDL_PART_TRANS_TASK=%ld DML_PART_TRANS_TASK=%ld]",
             committer_pending_dml_trans_count,

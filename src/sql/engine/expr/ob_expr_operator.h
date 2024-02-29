@@ -1194,6 +1194,8 @@ public:
    // CAUTION: null safe equal row compare is not included.
    static int row_cmp(const ObExpr &expr, ObDatum &expr_datum,
                       ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx);
+   template <bool IS_LEFT>
+   static int try_get_inner_row_cmp_ret(const int ret_code, int &cmp_ret);
 
   OB_INLINE static int get_comparator_operands(
                          const ObExpr &expr,

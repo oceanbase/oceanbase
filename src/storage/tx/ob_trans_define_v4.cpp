@@ -192,7 +192,9 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     uncertain_bound_,
                     snapshot_lsid_,
                     parts_,
-                    snapshot_ls_role_);
+                    snapshot_ls_role_,
+                    committed_,
+                    snapshot_acquire_addr_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
@@ -928,6 +930,13 @@ bool ObTxDesc::execute_commit_cb()
         executed = true;
         cb = commit_cb_;
         commit_cb_ = NULL;
+        if (0 <= cb_tid_) {
+#ifdef ENABLE_DEBUG_LOG
+          ob_abort();
+#endif
+          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0",
+                    KP(this), K(tx_id), KP(cb_tid_));
+        }
         ATOMIC_STORE_REL(&cb_tid_, GETTID());
         // NOTE: it is required add trace event before callback,
         // because txDesc may be released after callback called
@@ -937,7 +946,6 @@ bool ObTxDesc::execute_commit_cb()
                             OB_ID(thread_id), GETTID());
         commit_cb_lock_.unlock();
         cb->callback(commit_out_);
-        ATOMIC_STORE_REL(&cb_tid_, -1);
       } else {
         commit_cb_lock_.unlock();
       }
@@ -1154,10 +1162,12 @@ ObTxSnapshot &ObTxSnapshot::operator=(const ObTxSnapshot &r)
 
 ObTxReadSnapshot::ObTxReadSnapshot()
   : valid_(false),
+    committed_(false),
     core_(),
     source_(SRC::INVL),
     snapshot_lsid_(),
     snapshot_ls_role_(common::ObRole::INVALID_ROLE),
+    snapshot_acquire_addr_(),
     uncertain_bound_(0),
     parts_()
 {}
@@ -1165,18 +1175,22 @@ ObTxReadSnapshot::ObTxReadSnapshot()
 ObTxReadSnapshot::~ObTxReadSnapshot()
 {
   valid_ = false;
+  committed_ = false;
   source_ = SRC::INVL;
   snapshot_ls_role_ = common::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
   uncertain_bound_ = 0;
 }
 
 void ObTxReadSnapshot::reset()
 {
   valid_ = false;
+  committed_ = false;
   core_.reset();
   source_ = SRC::INVL;
   snapshot_lsid_.reset();
   snapshot_ls_role_ = common::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
   uncertain_bound_ = 0;
   parts_.reset();
 }
@@ -1185,10 +1199,12 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
 {
   int ret = OB_SUCCESS;
   valid_ = from.valid_;
+  committed_ = from.committed_;
   core_ = from.core_;
   source_ = from.source_;
   snapshot_lsid_ = from.snapshot_lsid_;
   snapshot_ls_role_ = from.snapshot_ls_role_;
+  snapshot_acquire_addr_ = from.snapshot_acquire_addr_;
   uncertain_bound_ = from.uncertain_bound_;
   if (OB_FAIL(parts_.assign(from.parts_))) {
    TRANS_LOG(WARN, "assign snapshot fail", K(ret), K(from));

@@ -311,7 +311,12 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
     LOG_WARN("failed to construct sequence values", K(ret));
   } else if (OB_FAIL(mark_probably_local_exprs())) {
     LOG_WARN("failed to mark local exprs", K(ret));
-  } else { /*do nothing*/ }
+  } else if (is_values_table_) { /* defence code */
+    if (OB_UNLIKELY(value_desc_.count() != get_output_exprs().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("defence code, EXPRESSION request output_exprs equals to value_desc", K(ret));
+    }
+  }
 
   return ret;
 }

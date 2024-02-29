@@ -503,15 +503,18 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   // OPTIMIZER_FEATURES_ENABLE
   if (OB_SUCC(ret) && (has_valid_opt_features_version())) {
     int64_t cur_pos = 0;
-    const uint64_t version = has_valid_opt_features_version()
-                             ? opt_features_version_ : CURRENT_OUTLINE_ENABLE_VERSION;
+    // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LASTED_COMPAT_VERSION,
+    // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LASTED_COMPAT_VERSION
+    const bool print_empty_str = (OB_SUCCESS != (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)
+                                 && LASTED_COMPAT_VERSION == opt_features_version_);
     if (OB_FAIL(BUF_PRINTF("%s%s(\'", outline_indent, "OPTIMIZER_FEATURES_ENABLE"))) {
       LOG_WARN("failed to print hint", K(ret));
-    } else if (OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
+    } else if (!print_empty_str &&
+               OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
                                                                                buf_len - pos,
-                                                                               version)))) {
+                                                                               opt_features_version_)))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to print version str", K(ret), K(version));
+      LOG_WARN("failed to print version str", K(ret), K(opt_features_version_));
     } else if (OB_FALSE_IT(pos += cur_pos)) {
     } else if (OB_FAIL(BUF_PRINTF("\')"))) {
     }
@@ -777,6 +780,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
       break;
     }
+    case ENABLE_RICH_VECTOR_FORMAT: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                     || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -870,6 +883,19 @@ int ObOptParamHint::has_opt_param(const OptParamType param_type, bool &has_hint)
     LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
   } else {
     has_hint = !obj.is_nop_value();
+  }
+  return ret;
+}
+
+int ObOptParamHint::check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param_v,
+                                                 bool &val) const
+{
+  int ret = OB_SUCCESS;
+  has_opt_param_v = false, val = false;
+  if (OB_FAIL(has_opt_param(param_type, has_opt_param_v))) {
+    LOG_WARN("check opt param failed", K(ret));
+  } else if (OB_FAIL(has_enable_opt_param(param_type, val))) {
+    LOG_WARN("get opt param value failed", K(ret));
   }
   return ret;
 }

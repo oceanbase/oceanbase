@@ -357,6 +357,8 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (stmt->is_hierarchical_query()) {
+    OPT_TRACE("can not pullup predicates for hierarchical query");
   } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
@@ -1372,7 +1374,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !stmt->is_hierarchical_query()) {
     ObArray<ObRawExpr *> dummy_expr;
     ObIArray<ObQueryRefRawExpr *> &subquery_exprs = stmt->get_subquery_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
@@ -1820,6 +1822,7 @@ int ObTransformPredicateMoveAround::extract_valid_preds(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> parent_set_exprs;
   if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(stmt->get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get parent set exprs", K(ret));
@@ -1866,6 +1869,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
   ObSEArray<ObRawExpr *, 4> child_select_list;
   ObSEArray<ObRawExpr *, 4> parent_select_list;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param", K(ret));
   } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_list))) {
     LOG_WARN("get child stmt select exprs failed", K(ret));
@@ -2520,6 +2524,22 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
     }
   }
   if (OB_SUCC(ret)) {
+    //split expr may result T_OP_ROW shared
+    ObSEArray<ObRawExpr*, 4> new_or_exprs;
+    ObRawExprCopier copier(*expr_factory);
+    ReplaceExprByType replacer(T_OP_ROW);
+    if (OB_FAIL(copier.copy_on_replace(or_exprs,
+                                       new_or_exprs,
+                                       &replacer))) {
+      LOG_WARN("failed to copy on replace start with exprs", K(ret));
+    } else if (OB_UNLIKELY(or_exprs.count() != new_or_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(or_exprs.count()), K(new_or_exprs.count()));
+    } else if (OB_FAIL(or_exprs.assign(new_or_exprs))) {
+      LOG_WARN("failed to assign assign results", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory, or_exprs, new_expr))) {
       LOG_WARN("failed to build or expr", K(ret));
     } else if (OB_ISNULL(new_expr)) {
@@ -2584,7 +2604,7 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(
     }
 
     ObSEArray<ObRawExpr *,4 > properites;
-    if (OB_FAIL(append(properites, pullup_preds))) {
+    if (FAILEDx(append(properites, pullup_preds))) {
       LOG_WARN("failed to push back predicates", K(ret));
     } else if (OB_FAIL(append(properites, pushdown_preds))) {
       LOG_WARN("failed to append predicates", K(ret));
@@ -2841,6 +2861,9 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
       OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(semi_info), K(right_table));
+  } else if (right_table->is_values_table()) {
+    /* not allow predicate moving into values table */
+    OPT_TRACE("right table is values table");
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get left rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
@@ -2990,9 +3013,17 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
         LOG_WARN("unexpected temp table info", K(ret));
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < info->table_infos_.count(); ++j) {
-        ObDMLStmt *&upper_stmt = info->table_infos_.at(j).upper_stmt_;
-        if (upper_stmt == stmt) {
-          upper_stmt = view_table->ref_query_;
+        if (OB_ISNULL(info->table_infos_.at(j).table_item_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (info->table_infos_.at(j).table_item_->table_id_ == right_table->table_id_) {
+          ObDMLStmt *&upper_stmt = info->table_infos_.at(j).upper_stmt_;
+          if (OB_UNLIKELY(upper_stmt != stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          } else {
+            upper_stmt = view_table->ref_query_;
+          }
         }
       }
     }
@@ -3036,6 +3067,10 @@ int ObTransformPredicateMoveAround::pushdown_into_table(ObDMLStmt *stmt,
              !table_item->is_generated_table() &&
              !table_item->is_temp_table()) {
     // do nothing
+  } else if (table_item->is_generated_table() &&
+             NULL != table_item->ref_query_ &&
+             table_item->ref_query_->is_values_table_query()) {
+    /* not allow predicate moving into values table query */
   } else if (OB_FAIL(rename_preds.assign(table_preds))) {
     LOG_WARN("failed to assgin exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt,
@@ -3297,6 +3332,7 @@ int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
   ObExprParamCheckContext context;
   ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints;
   if (OB_ISNULL(stmt.get_query_ctx()) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("init param check context failed", K(ret));
   } else if (OB_FAIL(equal_param_constraints.assign(stmt.get_query_ctx()->all_equal_param_constraints_))
              || OB_FAIL(append(equal_param_constraints, ctx_->equal_param_constraints_))) {

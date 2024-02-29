@@ -71,6 +71,25 @@ int ObXAService::init(const ObAddr &self_addr,
   return ret;
 }
 
+void ObXAService::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    if (is_running_) {
+      stop();
+      wait();
+    }
+    xa_inner_table_gc_worker_.destroy();
+    xa_trans_heartbeat_worker_.destroy();
+    xa_ctx_mgr_.destroy();
+    timer_.destroy();
+    xa_rpc_.destroy();
+    xa_proxy_.destroy();
+    is_inited_ = false;
+  }
+  TRANS_LOG(INFO, "xa service destroy");
+}
+
 int ObXAService::start()
 {
   int ret = OB_SUCCESS;
@@ -115,6 +134,7 @@ void ObXAService::stop()
     xa_trans_heartbeat_worker_.stop();
     xa_inner_table_gc_worker_.stop();
   }
+  TRANS_LOG(INFO, "xa service stop", KR(ret));
 
   return;
 }
@@ -137,6 +157,7 @@ void ObXAService::wait()
     xa_trans_heartbeat_worker_.wait();
     xa_inner_table_gc_worker_.wait();
   }
+  TRANS_LOG(INFO, "xa service wait", KR(ret));
 
   return;
 }
@@ -976,7 +997,8 @@ int ObXAService::xa_start(const ObXATransID &xid,
                           const int64_t timeout_seconds,
                           const uint32_t session_id,
                           const ObTxParam &tx_param,
-                          ObTxDesc *&tx_desc)
+                          ObTxDesc *&tx_desc,
+                          const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
 
@@ -989,7 +1011,7 @@ int ObXAService::xa_start(const ObXATransID &xid,
     ret = OB_TRANS_XA_INVAL;
     TRANS_LOG(WARN, "invalid flags for xa start", K(ret), K(xid), K(flags));
   } else if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_START)) {
-    if (OB_FAIL(xa_start_(xid, flags, timeout_seconds, session_id, tx_param, tx_desc))) {
+    if (OB_FAIL(xa_start_(xid, flags, timeout_seconds, session_id, tx_param, tx_desc, data_version))) {
       TRANS_LOG(WARN, "xa start failed", K(ret), K(flags), K(xid));
     }
   } else if (ObXAFlag::is_tmjoin(flags) || ObXAFlag::is_tmresume(flags)) {
@@ -1022,7 +1044,8 @@ int ObXAService::xa_start_(const ObXATransID &xid,
                            const int64_t timeout_seconds,
                            const uint32_t session_id,
                            const ObTxParam &tx_param,
-                           ObTxDesc *&tx_desc)
+                           ObTxDesc *&tx_desc,
+                           const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1084,7 +1107,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // the first xa start for xa trans with this xid
       // therefore tx_desc should be allocated
       // this code may be moved to pl sql level
-      if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
+      if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id, data_version))) {
         TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
       } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param, trans_id))) {
         TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));
@@ -1795,6 +1818,7 @@ int ObXAService::two_phase_xa_rollback_(const ObXATransID &xid,
     }
     xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
   }
+  xa_cache_.clean_prepare_cache_item(xid);
 
   return ret;
 }
@@ -2232,9 +2256,14 @@ int ObXAService::local_xa_prepare_(const ObXATransID &xid,
   int ret = OB_SUCCESS;
   bool alloc = false;
   ObXACtx *xa_ctx = NULL;
-
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(tx_id, alloc, xa_ctx))) {
-    TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id), KP(xa_ctx));
+    int64_t xa_state = ObXATransState::UNKNOWN;
+    if (OB_SUCCESS == xa_cache_.query_prepare_cache_item(xid, xa_state) && ObXATransState::PREPARED == xa_state) {
+      TRANS_LOG(INFO, "xa_cache hit", K(xid), K(tx_id));
+      ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id), KP(xa_ctx));
+    }
   } else if (OB_ISNULL(xa_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(xid), K(tx_id));
@@ -2850,6 +2879,8 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
     has_tx_level_temp_table = ObXAFlag::contain_temp_table(end_flag);
   }
 
+  xa_cache_.clean_prepare_cache_item(xid);
+
   TRANS_LOG(INFO, "two phase xa commit", K(ret), K(xid), K(tx_id), K(coordinator));
   return ret;
 }
@@ -2871,6 +2902,48 @@ void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
   }
   tx_desc = NULL;
   TRANS_LOG(INFO, "clear xa branch", K(xid), K(tx_id));
+}
+
+// XACache
+int ObXACache::query_prepare_cache_item(const ObXATransID &xid, int64_t &state)
+{
+  int ret = OB_SUCCESS;
+  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
+  ObXACacheItem &item = xa_prepare_cache_[idx];
+  ObSpinLockGuard guard(item.lock_);
+  if (item.is_valid_to_query(xid)) {
+    state = item.state_;
+  } else {
+    ret = OB_HASH_NOT_EXIST;
+  }
+  return ret;
+}
+
+void ObXACache::insert_prepare_cache_item(const ObXATransID &xid, int64_t state)
+{
+  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
+  ObXACacheItem &item = xa_prepare_cache_[idx];
+  ObSpinLockGuard guard(item.lock_);
+  if (item.is_valid_to_set()) {
+    clean_prepare_cache_item_(item);
+    item.state_ = state;
+    item.xid_ = xid;
+    item.create_timestamp_ = ObTimeUtility::current_time();
+  }
+}
+
+void ObXACache::clean_prepare_cache_item(const ObXATransID &xid) {
+  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
+  ObXACacheItem &item = xa_prepare_cache_[idx];
+  ObSpinLockGuard guard(item.lock_);
+  if (item.is_valid_to_query(xid)) {
+    clean_prepare_cache_item_(item);
+  }
+}
+
+void ObXACache::clean_prepare_cache_item_(ObXACacheItem &item) {
+  // should get lock in upper layer
+  item.reset();
 }
 
 }//transaction

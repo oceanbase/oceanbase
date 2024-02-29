@@ -287,18 +287,33 @@ public:
   int init();
   void update_queue_size();
   int acquire_more_worker(int64_t num, int64_t &succ_num, bool force = false);
+  int acquire_level_worker(int32_t level);
   void check_worker_count();
   void check_worker_count(ObThWorker &w);
   int clear_worker();
+  TO_STRING_KV("group_id", group_id_,
+               "queue_size", req_queue_.size(),
+               "recv_req_cnt", recv_req_cnt_,
+               "min_worker_cnt", min_worker_cnt(),
+               "max_worker_cnt", max_worker_cnt(),
+               K(multi_level_queue_),
+               "recv_level_rpc_cnt", recv_level_rpc_cnt_,
+               "worker_cnt", workers_.get_size(),
+               "nesting_worker_cnt", nesting_workers_.get_size(),
+               "token_change", token_change_ts_);
 
 private:
   lib::ObMutex& workers_lock_;
   WList workers_;
+  WList nesting_workers_;
   common::ObPriorityQueue2<0, 1> req_queue_;
+  ObMultiLevelQueue multi_level_queue_;
   bool inited_;                                  // Mark whether the container has threads and queues allocated
   volatile uint64_t recv_req_cnt_ CACHE_ALIGNED; // Statistics requested to enqueue
   volatile bool shrink_ CACHE_ALIGNED;
   int64_t token_change_ts_;
+  MultiLevelReqCnt recv_level_rpc_cnt_;
+  int nesting_worker_cnt_;
   ObTenant *tenant_;
   share::ObCgroupCtrl *cgroup_ctrl_;
 };
@@ -323,20 +338,8 @@ public:
     while (NULL != (iter = const_cast<GroupMap*>(this)->GroupHash::quick_next(iter))) {
       group = static_cast<ObResourceGroup*>(iter);
       common::databuff_printf(buf, buf_len, pos,
-       "group_id = %d,"
-       "queue_size = %ld,"
-       "recv_req_cnt = %lu,"
-       "min_worker_cnt = %ld,"
-       "max_worker_cnt = %ld,"
-       "worker_cnt = %d,"
-       "token_change = %ld ",
-       group->group_id_,
-       group->req_queue_.size(),
-       group->recv_req_cnt_,
-       group->min_worker_cnt(),
-       group->max_worker_cnt(),
-       group->workers_.get_size(),
-       group->token_change_ts_);
+       "%s",
+       to_cstring(group));
     }
     return pos;
   }

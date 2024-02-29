@@ -60,7 +60,9 @@ using namespace share;
 
 namespace transaction {
 
-inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
+inline int ObTransService::init_tx_(ObTxDesc &tx,
+                                    const uint32_t session_id,
+                                    const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   tx.tenant_id_ = tenant_id_;
@@ -71,7 +73,9 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   tx.expire_ts_ = INT64_MAX;
   tx.op_sn_     = 1;
   tx.state_     = ObTxDesc::State::IDLE;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
+  tx.cluster_version_ = cluster_version;
+  // cluster_version is invalid, need to get it
+  if (0 == cluster_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tx.cluster_version_))) {
     TRANS_LOG(WARN, "get min data version fail", K(ret), K(tx));
   } else if (tx.cluster_version_ >= DATA_VERSION_4_3_0_0) {
     tx.seq_base_ = common::ObSequence::get_max_seq_no() - 1;
@@ -79,13 +83,15 @@ inline int ObTransService::init_tx_(ObTxDesc &tx, const uint32_t session_id)
   return ret;
 }
 
-int ObTransService::acquire_tx(ObTxDesc *&tx, const uint32_t session_id)
+int ObTransService::acquire_tx(ObTxDesc *&tx,
+                               const uint32_t session_id,
+                               const uint64_t cluster_version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret));
   } else {
-    ret = init_tx_(*tx, session_id);
+    ret = init_tx_(*tx, session_id, cluster_version);
   }
   TRANS_LOG(TRACE, "acquire tx", KPC(tx), K(session_id));
   if (OB_SUCC(ret)) {
@@ -133,7 +139,7 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
  * - for tx which is a shadow copy of original tx (started on another server)
  *   release just free its memory used
  */
-int ObTransService::release_tx(ObTxDesc &tx)
+int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
 {
   /*
    * for compatible with cross tenant session usage
@@ -148,6 +154,9 @@ int ObTransService::release_tx(ObTxDesc &tx)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
+  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
@@ -169,7 +178,7 @@ int ObTransService::release_tx(ObTxDesc &tx)
   return ret;
 }
 
-int ObTransService::reuse_tx(ObTxDesc &tx)
+int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   int spin_cnt = 0;
@@ -192,7 +201,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
       PAUSE();
       if (++spin_cnt > 2000) {
         TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
-                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()));
+                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()), K(cb_tid));
         tx.print_trace();
         usleep(2000000); // 2s
       } else if (spin_cnt > 200) {
@@ -200,11 +209,15 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
       } else if (spin_cnt > 100) {
         usleep(200);     // 200us
       }
+#ifdef ENABLE_DEBUG_LOG
+      if (spin_cnt > 2015) {
+        // at least wait 30s
+        ob_abort();
+      }
+#endif
     }
     // it is safe to operate tx without lock when not shared
-    uint32_t session_id = tx.sess_id_;
-    tx.reset();
-    ret = init_tx_(tx, session_id);
+    ret = reinit_tx_(tx, tx.sess_id_, data_version);
   }
   TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -216,6 +229,12 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
+}
+
+int ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id, const uint64_t cluster_version)
+{
+  tx.reset();
+  return init_tx_(tx, session_id, cluster_version);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
@@ -477,6 +496,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
       if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
         TX_STAT_TIMEOUT_INC
         TRANS_LOG(WARN, "tx has timeout, it has rollbacked internally", K_(tx.expire_ts), K(tx));
+        tx.print_trace_();
         ret = OB_TRANS_ROLLBACKED;
         handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
       } else if (tx.flags_.PARTS_INCOMPLETE_) {
@@ -1574,7 +1594,13 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   ObPartTransCtx *ctx = NULL;
-  if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
+  bool is_leader = false;
+  // check ls is leader, to fast fail when lease expired but role change has not armed
+  if (OB_FAIL(check_ls_status_(ls, is_leader))) {
+    TRANS_LOG(WARN, "check ls leader failed", K(ret), K(ls));
+  } else if (!is_leader) {
+    ret = OB_NOT_MASTER;
+  } else if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0 && !for_transfer) {
       int tx_state = ObTxData::RUNNING;
@@ -1837,7 +1863,8 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
       // interrupted, fail fastly
       if (tx.flags_.INTERRUPTED_) {
         ret = OB_ERR_INTERRUPTED;
-        TRANS_LOG(WARN, "rollback was interrupted", K_(tx.tx_id),
+        TRANS_LOG(WARN, "rollback was interrupted", "caused_by", ObTxAbortCauseNames::of(tx.abort_cause_),
+                  "trans_id", tx.tx_id_,
                   K(remain_cnt), K(waittime), K(retries));
       }
     }
@@ -1889,20 +1916,10 @@ int ObTransService::add_tx_exec_result(ObTxDesc &tx, const ObTxExecResult &exec_
 void ObTransService::tx_post_terminate_(ObTxDesc &tx)
 {
   // invalid registered snapshot
-  if (tx.state_ == ObTxDesc::State::ABORTED ||
-      tx.is_commit_unsucc()
-      // FIXME: (yunxing.cyx)
-      // bellow line is temproary, when storage layer support
-      // record txn-id in SSTable's MvccRow, we can remove this
-      // (the support was planed in v4.1)
-      || tx.state_ == ObTxDesc::State::COMMITTED
-      ) {
+  if (tx.state_ == ObTxDesc::State::ABORTED || tx.is_commit_unsucc()) {
     invalid_registered_snapshot_(tx);
   } else if (tx.state_ == ObTxDesc::State::COMMITTED) {
-    // cleanup snapshot's participant info, so that they will skip
-    // verify participant txn ctx, which cause false negative,
-    // because txn ctx has quit when txn committed.
-    registered_snapshot_clear_part_(tx);
+    process_registered_snapshot_on_commit_(tx);
   }
   // statistic
   if (tx.is_tx_end()) {
@@ -2010,7 +2027,12 @@ OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx, const bool in_stmt)
         break;
       }
     case ObTxDesc::State::ABORTED:
-      ret = tx.abort_cause_ < 0 ? tx.abort_cause_ : OB_TRANS_NEED_ROLLBACK;
+      {
+        const int cause = tx.abort_cause_;
+        ret = cause < 0 ? cause : OB_TRANS_NEED_ROLLBACK;
+        const char *err_name = cause < 0 ? common::ob_error_name(cause) : ObTxAbortCauseNames::of(cause);
+        TRANS_LOG(WARN, "trans has been aborted", "caused_by", err_name, K(ret), "txid", tx.tx_id_);
+      }
       break;
     case ObTxDesc::State::COMMITTED:
       ret = OB_TRANS_COMMITED;

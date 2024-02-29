@@ -50,6 +50,7 @@ public:
   static int switch_context_for_cg_iter(
       const bool is_projector,
       const bool project_single_row,
+      const bool without_filter,
       ObCOSSTableV2 *co_sstable,
       ObTableAccessContext &context,
       common::ObIArray<ObTableIterParam*> &cg_params,

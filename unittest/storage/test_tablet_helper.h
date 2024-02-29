@@ -118,8 +118,7 @@ inline int TestTabletHelper::create_tablet(
   prepare_sstable_param(tablet_id, table_schema, param);
   void *buff = nullptr;
   if (OB_FAIL(create_tablet_schema.init(schema_allocator, table_schema, compat_mode,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3,
-        0/*tenant_data_version, default val*/, true/*need_create_empty_major*/))) {
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
     STORAGE_LOG(WARN, "failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
     STORAGE_LOG(WARN, "fill column checksum failed", K(ret), K(param));
@@ -129,12 +128,14 @@ inline int TestTabletHelper::create_tablet(
     ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
     ObTabletHandle tablet_handle;
     const ObTabletMapKey key(ls_id, tablet_id);
+    const bool need_create_empty_major_sstable =
+      !(create_tablet_schema.is_user_hidden_table() || (create_tablet_schema.is_index_table() && !create_tablet_schema.can_read_index()));
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "t3m acquire tablet failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, create_tablet_schema, freezer))){
+        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;

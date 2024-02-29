@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/oblog/ob_log.h"
-
 #include <string.h>
 #include <sys/uio.h>
 #include <dirent.h>
@@ -338,7 +337,7 @@ int64_t ObLogger::FileName::to_string(char * buff, const int64_t len) const
 
 void __attribute__ ((noinline)) on_probe_abort()
 {
-  abort();
+  ob_abort();
 }
 
 ProbeAction probe_str2action(const char *str)
@@ -858,7 +857,7 @@ void ObLogger::rotate_log(const char *filename,
 void ObLogger::check_file()
 {
   check_file(log_file_[FD_SVR_FILE], redirect_flag_, open_wf_flag_);
-  check_file(log_file_[FD_RS_FILE], false, false);
+  check_file(log_file_[FD_RS_FILE], false, open_wf_flag_);
   check_file(log_file_[FD_AUDIT_FILE], false, false);
   check_file(log_file_[FD_ELEC_FILE], false, open_wf_flag_);
   check_file(log_file_[FD_TRACE_FILE], false, false);
@@ -1519,6 +1518,7 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
       && OB_NOT_NULL(log_item[0])) {
     if (log_item[0]->get_timestamp() > (last_check_disk_ts + DISK_SAMPLE_TIME)) {
       last_check_disk_ts = log_item[0]->get_timestamp();
+      check_file(log_file_[FD_SVR_FILE], redirect_flag_, open_wf_flag_);
       struct statfs disk_info;
       if (0 == statfs(log_file_[FD_SVR_FILE].filename_, &disk_info)) {
         can_print_ = ((disk_info.f_bfree * disk_info.f_bsize) > CAN_PRINT_DISK_SIZE);

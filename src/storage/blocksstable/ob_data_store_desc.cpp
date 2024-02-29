@@ -161,9 +161,9 @@ int ObStaticDataStoreDesc::init(
           STORAGE_LOG(WARN, "fail to get data version", K(ret));
         } else {
           major_working_cluster_version_ = compat_version;
+          STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
+            K(cluster_version), K(major_working_cluster_version_));
         }
-        STORAGE_LOG(INFO, "success to set major working cluster version", K(ret), "merge_type", merge_type_to_str(merge_type),
-          K(cluster_version), K(major_working_cluster_version_));
       } else if (compressor_type_ != ObCompressorType::NONE_COMPRESSOR) {
         // for mini/minor, use default compressor
         compressor_type_ = DEFAULT_MINOR_COMPRESSOR_TYPE;
@@ -705,7 +705,7 @@ int ObDataStoreDesc::init(
     if (OB_FAIL(inner_init(merge_schema, row_store_type))) {
       STORAGE_LOG(WARN, "failed inner init", KR(ret), K(merge_schema));
     } else {
-      STORAGE_LOG(INFO, "success to init data desc", K(ret), KPC(this), K(merge_schema));
+      STORAGE_LOG(TRACE, "success to init data desc", K(ret), KPC(this), K(merge_schema));
     }
     if (OB_FAIL(ret)) {
       reset();
@@ -954,7 +954,7 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected invalid index store descriptor", K(ret), K(desc_), K(data_desc));
   } else {
-    STORAGE_LOG(INFO, "success to gen index desc", K(ret), K(desc_), K(data_desc));
+    STORAGE_LOG(TRACE, "success to gen index desc", K(ret), K(desc_), K(data_desc));
   }
   return ret;
 }

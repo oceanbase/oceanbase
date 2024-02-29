@@ -5250,6 +5250,7 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       ObRawExpr *child1 = op->get_param_expr(0);
       ObRawExpr *child2 = op->get_param_expr(1);
       if (OB_ISNULL(child1) || OB_ISNULL(child2)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("parameter of EQ expr should not be null", K(ret), K(child1), K(child2));
       } else if (!child1->has_flag(CNT_COLUMN) || !child2->has_flag(CNT_COLUMN)){
         /* do nothing */
@@ -5947,6 +5948,7 @@ int ObTransformUtils::check_relations_containment(ObDMLStmt *stmt,
       TableItem *source_table = source_rels.at(i);
       ObStmtMapInfo stmt_map_info;
       if (OB_ISNULL(source_table)){
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("can not find table item", K(source_rels.at(i)));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && !is_matched && j < target_rels.count(); ++j){
@@ -5955,6 +5957,7 @@ int ObTransformUtils::check_relations_containment(ObDMLStmt *stmt,
           } else {
             TableItem *target_table = target_rels.at(j);
             if (OB_ISNULL(target_table)){
+              ret = OB_ERR_UNEXPECTED;
               LOG_WARN("can not find table item", K(target_rels.at(j)));
             } else if (OB_FAIL(check_table_item_containment(stmt,
                                                             source_table,
@@ -11550,6 +11553,9 @@ int ObTransformUtils::check_correlated_where_expr_can_pullup(
       // do nothing
     } else if (has_special_expr) {
       can_pullup = false;
+    } else if (subquery.is_scala_group_by()) {
+      // for scalar GROUP BY, pull-up cannot be performed when there are correlated conditions in WHERE clause.
+      can_pullup = false;
     } else if (!is_valid) {
       //No group by and window function
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
@@ -14240,6 +14246,41 @@ int ObTransformUtils::get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
                                                    new_child_stmts.at(i),
                                                    stmt_map)))) {
       LOG_WARN("failed to get child stmt map", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> exprs;
+  is_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < exprs.count(); i++) {
+    if (OB_ISNULL(exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (exprs.at(i)->has_flag(CNT_RAND_FUNC) ||
+               exprs.at(i)->has_flag(CNT_STATE_FUNC) ||
+               exprs.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
+      is_valid = false;
+    }
+  }
+  if (OB_SUCC(ret) && is_valid) {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); i++) {
+      if (OB_FAIL(SMART_CALL(check_expand_temp_table_valid(child_stmts.at(i), is_valid)))) {
+        LOG_WARN("failed to check expand temp table valid", K(ret));
+      }
     }
   }
   return ret;

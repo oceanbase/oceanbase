@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.0.0"
-#current_data_version = "4.3.0.0"
+#current_cluster_version = "4.3.0.1"
+#current_data_version = "4.3.0.1"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -2058,6 +2058,15 @@
 #    fail_list.append('has abnormal tenant info, should stop')
 #  else:
 #    logging.info('check tenant info success')
+#
+#   # check tenant lock status
+#  (desc, results) = query_cur.exec_query("""select count(*) from DBA_OB_TENANTS where LOCKED = 'YES'""")
+#  if len(results) != 1 or len(results[0]) != 1:
+#    fail_list.append('results len not match')
+#  elif 0 != results[0][0]:
+#    fail_list.append('has locked tenant, should unlock')
+#  else:
+#    logging.info('check tenant lock status success')
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):

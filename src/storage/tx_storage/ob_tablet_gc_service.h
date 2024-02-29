@@ -115,12 +115,12 @@ private:
 public:
   static const int64_t GC_LOCK_TIMEOUT = 100_ms; // 100ms
   obsys::ObRWLock wait_lock_;
-  lib::ObMutex gc_lock_;
 
 private:
   storage::ObLS *ls_;
   uint8_t tablet_persist_trigger_;
   bool update_enabled_;
+  mutable common::RWLock gc_rwlock_;
   bool is_inited_;
 };
 

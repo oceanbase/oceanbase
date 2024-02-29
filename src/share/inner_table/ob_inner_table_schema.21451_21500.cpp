@@ -710,7 +710,7 @@ int ObInnerTableSchema::v_ob_tenant_runtime_info_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM     oceanbase.GV$OB_TENANT_RUNTIME_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT SVR_IP,     SVR_PORT,     TENANT_ID,     COMPAT_MODE,     UNIT_MIN_CPU,     UNIT_MAX_CPU,     SLICE,     REMAIN_SLICE,     TOKEN_CNT,     ASS_TOKEN_CNT,     LQ_TOKENS,     USED_LQ_TOKENS,     STOPPED,     IDLE_US,     RECV_HP_RPC_CNT,     RECV_NP_RPC_CNT,     RECV_LP_RPC_CNT,     RECV_MYSQL_CNT,     RECV_TASK_CNT,     RECV_LARGE_REQ_CNT,     RECV_LARGE_QUERIES,     ACTIVES,     WORKERS,     LQ_WAITING_WORKERS,     REQ_QUEUE_TOTAL_SIZE,     QUEUE_0,     QUEUE_1,     QUEUE_2,     QUEUE_3,     QUEUE_4,     QUEUE_5,     LARGE_QUEUED   FROM     oceanbase.GV$OB_TENANT_RUNTIME_INFO   WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -810,7 +810,7 @@ int ObInnerTableSchema::v_ob_cgroup_config_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   * FROM oceanbase.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,     SVR_PORT,     CFS_QUOTA_US,     CFS_PERIOD_US,     SHARES,     CGROUP_PATH FROM oceanbase.GV$OB_CGROUP_CONFIG WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

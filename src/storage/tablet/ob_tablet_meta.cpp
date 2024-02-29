@@ -510,7 +510,7 @@ int ObTabletMeta::assign(const ObTabletMeta &other)
     max_serialized_medium_scn_ = other.max_serialized_medium_scn_;
     mds_checkpoint_scn_ = other.mds_checkpoint_scn_;
     transfer_info_ = other.transfer_info_;
-
+    space_usage_ = other.space_usage_;
     if (OB_SUCC(ret)) {
       is_inited_ = other.is_inited_;
     }
@@ -1021,6 +1021,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize transfer info", K(ret), K(len), K(new_pos), K_(transfer_info));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_schema_version_))) {
     LOG_WARN("failed to serialize create schema version", K(ret), K(len), K(new_pos), K_(create_schema_version));
+  } else if (new_pos - pos < length && OB_FAIL(space_usage_.serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos), K_(space_usage));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -1037,13 +1039,15 @@ int ObMigrationTabletParam::deserialize_v2(const char *buf, const int64_t len, i
 
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
-  int64_t length = 0;
+  int64_t total_length = 0; // total serialize size
+  int64_t length = 0; // total serialize size expect for the first 2 fields.
 
-  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &length))) {
+  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &total_length))) {
     LOG_WARN("failed to deserialize length", K(ret), K(len), K(new_pos));
-  } else if (OB_UNLIKELY(length - 24 > len - pos)) {
+  } else if (OB_UNLIKELY(total_length - 24 > len - new_pos)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
+    LOG_WARN("buffer's length is not enough", K(ret), K(total_length), K(len - new_pos));
+  } else if (FALSE_IT(length = total_length - 16)) {
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &is_empty_shell_))) {
     LOG_WARN("failed to serialize is empty shell", K(ret), K(len), K(new_pos), K(is_empty_shell_));
   } else if (new_pos - pos < length && OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
@@ -1100,7 +1104,9 @@ int ObMigrationTabletParam::deserialize_v2(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize transfer info", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &create_schema_version_))) {
     LOG_WARN("failed to deserialize create schema version", K(ret), K(len));
-  } else if (OB_UNLIKELY(length - 16 != new_pos - pos)) {
+  } else if (new_pos - pos < length && OB_FAIL(space_usage_.deserialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos));
+  } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
   } else {
@@ -1117,18 +1123,20 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
 
   int64_t new_pos = pos;
   int8_t compat_mode = -1;
-  int64_t length = 0;
+  int64_t total_length = 0; // total serialize size
+  int64_t length = 0; // total serialize size expect for the first 2 fields.
   ObArenaAllocator allocator("MigDeser");
   ObTabletAutoincSeq auto_inc_seq;
   ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletBindingInfo ddl_data;
   ObTabletMdsData mds_data;
 
-  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &length))) {
+  if (OB_FAIL(serialization::decode_i64(buf, len, new_pos, &total_length))) {
     LOG_WARN("failed to deserialize length", K(ret), K(len), K(new_pos));
-  } else if (OB_UNLIKELY(length - 24 > len - pos)) {
+  } else if (OB_UNLIKELY(total_length - 24 > len - new_pos)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
+    LOG_WARN("buffer's length is not enough", K(ret), K(total_length), K(len - new_pos));
+  } else if (FALSE_IT(length = total_length - 16)) {
   } else if (new_pos - pos < length && OB_FAIL(ls_id_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ls id", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(tablet_id_.deserialize(buf, len, new_pos))) {
@@ -1181,7 +1189,9 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize max sync medium snapshot", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ddl commit scn", K(ret), K(len), K(new_pos));
-  } else if (OB_UNLIKELY(length - 16 != new_pos - pos)) {
+  } else if (new_pos - pos < length && OB_FAIL(space_usage_.deserialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos));
+  } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
   } else if (OB_FAIL(ObTabletMdsData::build_mds_data(allocator, auto_inc_seq, tx_data, create_scn_, ddl_data,
@@ -1342,7 +1352,7 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ddl_commit_scn_ = param.ddl_commit_scn_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
-
+    space_usage_ = param.space_usage_;
     if (OB_FAIL(mds_data_.assign(param.mds_data_, allocator_))) {
       LOG_WARN("failed to assign mds data", K(ret), K(param));
     } else if (is_empty_shell()) {

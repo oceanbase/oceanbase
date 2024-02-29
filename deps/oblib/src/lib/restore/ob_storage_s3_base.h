@@ -14,6 +14,7 @@
 #define SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_S3_BASE_H_
 
 #include <openssl/md5.h>
+#include <malloc.h>
 #include "lib/restore/ob_i_storage.h"
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
@@ -61,8 +62,6 @@ int init_s3_env();
 // You need to clean s3 resource when not use cos any more.
 // Thread safe guaranteed by user.
 void fin_s3_env();
-
-bool is_s3_supported_checksum(ObStorageChecksumType checksum_type);
 
 static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
@@ -120,13 +119,20 @@ public:
   virtual void *AllocateMemory(std::size_t blockSize,
       std::size_t alignment, const char *allocationTag = NULL) override
   {
+    // When memory allocation fails, S3 SDK calls abort, causing a program crash.
+    // Replaced ob_malloc_align with memalign,, which retries allocation with ob_malloc_retry,
+    // thus hanging the thread instead of crashing.
+    // The ob_malloc_retry function exits the loop only when it successfully allocates memory or
+    // when the requested allocation is greater than or equal to 2GB. Thus, if an allocation of
+    // 2GB or more fails, it may still cause the program to crash.
+    lib::ObMallocHookAttrGuard guard(attr_);
     UNUSED(allocationTag);
     std::size_t real_alignment = MAX(alignment, 16); // should not be smaller than 16
-    return ob_malloc_align(real_alignment, blockSize, attr_);
+    return memalign(real_alignment, blockSize);
   }
   virtual void FreeMemory(void *memoryPtr) override
   {
-    ob_free_align(memoryPtr);
+    free(memoryPtr);
     memoryPtr = NULL;
   }
 
@@ -288,9 +294,9 @@ protected:
   ObS3Client *s3_client_;
   ObString bucket_;
   ObString object_;
-  // The default is ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-  // The S3 SDK cannot disable checksum, therefore ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
-  // is equivalent to using the SDK's default checksum algorithm, which is md5
+  // The default is ObStorageChecksumType::OB_MD5_ALGO
+  // The S3 SDK cannot disable checksum,
+  // therefore ObStorageChecksumType::OB_NO_CHECKSUM_ALGO is not supported
   ObStorageChecksumType checksum_type_;
 
 private:
@@ -491,7 +497,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3AppendWriter);
 };
 
-class ObStorageS3MultiPartWriter : public ObStorageS3Base, public ObIStorageWriter
+class ObStorageS3MultiPartWriter : public ObStorageS3Base, public ObIStorageMultiPartWriter
 {
 public:
   ObStorageS3MultiPartWriter();
@@ -510,6 +516,14 @@ public:
   {
     return do_safely(&ObStorageS3MultiPartWriter::pwrite_, this, buf, size, offset);
   }
+  virtual int complete() override
+  {
+    return do_safely(&ObStorageS3MultiPartWriter::complete_, this);
+  }
+  virtual int abort() override
+  {
+    return do_safely(&ObStorageS3MultiPartWriter::abort_, this);
+  }
   virtual int close() override
   {
     return do_safely(&ObStorageS3MultiPartWriter::close_, this);
@@ -517,12 +531,12 @@ public:
   virtual int64_t get_length() const override { return file_length_; }
   virtual bool is_opened() const override { return is_opened_; }
 
-  int cleanup();
-
 private:
   int open_(const ObString &uri, ObObjectStorageInfo *storage_info);
   int write_(const char *buf, const int64_t size);
   int pwrite_(const char *buf, const int64_t size, const int64_t offset);
+  int complete_();
+  int abort_();
   int close_();
   int write_single_part_();
 

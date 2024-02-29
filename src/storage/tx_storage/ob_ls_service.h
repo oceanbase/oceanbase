@@ -62,7 +62,7 @@ public:
   int stop();
   int wait();
   void destroy();
-  bool safe_to_destroy();
+  bool is_empty();
   void inc_ls_safe_destroy_task_cnt();
   void dec_ls_safe_destroy_task_cnt();
   void inc_iter_cnt();
@@ -83,8 +83,7 @@ public:
   int replay_create_ls(const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
-  // @param [in] create_type, the create type, it is maybe a normal ls/migrate ls/restore ls
-  int replay_create_ls_commit(const share::ObLSID &ls_id, const int64_t create_type);
+  int replay_create_ls_commit(const share::ObLSID &ls_id);
   // create a LS for replay or update LS's meta
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
   int replay_update_ls(const ObLSMeta &ls_meta);
@@ -187,12 +186,11 @@ private:
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
   int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id,
-                                   const int64_t create_type) const;
+  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk = true);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
   int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
   int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
@@ -213,7 +211,8 @@ private:
 
 private:
   bool is_inited_;
-  bool is_running_;
+  bool is_running_; // used by create/remove, only can be used after start and before stop.
+  bool is_stopped_; // only for ls iter, get ls iter will cause OB_NOT_RUNNING after stop.
   uint64_t tenant_id_;
   // a map from ls id to ls
   ObLSMap ls_map_;

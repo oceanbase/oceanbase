@@ -194,6 +194,7 @@ public:
   {
     return field_type_;
   }
+
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
@@ -380,6 +381,10 @@ public:
   */
   int rebuild();
 
+  int get_parent(ObIJsonBase *& parent) const override
+  {
+    return OB_NOT_SUPPORTED;
+  }
   /*
   Rebuild the json binary at iter position, and copy to string
   This function won't change the data itself.
@@ -397,6 +402,12 @@ public:
 
   // release resource
   void destroy();
+
+  virtual uint64_t member_count() const override
+  {
+    return (json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT) ?
+      element_count() : 1;
+  }
 
 private:
   // used as stack

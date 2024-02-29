@@ -1,4 +1,4 @@
-# owner: xiaochu.yh
+# owner: kaizhan.dkz
 # owner group: sql2
 # 测试 parallel update
 # tags: pdml,optimizer 

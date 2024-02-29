@@ -417,8 +417,9 @@ public:
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int rollback(const transaction::ObTxSEQ seq_no, const transaction::ObTxSEQ from_seq_no,
                const share::SCN replay_scn);
-  void set_parallel_logging(const share::SCN serial_final_scn) {
-    trans_mgr_.set_parallel_logging(serial_final_scn);
+  void set_parallel_logging(const share::SCN serial_final_scn,
+                            const transaction::ObTxSEQ serial_final_seq_no) {
+    trans_mgr_.set_parallel_logging(serial_final_scn, serial_final_seq_no);
   }
   void set_skip_checksum_calc() {
     trans_mgr_.set_skip_checksum_calc();

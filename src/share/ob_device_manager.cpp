@@ -167,7 +167,7 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
     }
 
     if (-1 == avai_idx && -1 == last_no_ref_idx) {
-      OB_LOG(WARN, "devices too mang!", K(MAX_DEVICE_INSTANCE), K(storage_info), K(storage_type_prefix));
+      OB_LOG(WARN, "devices too mang!", K(MAX_DEVICE_INSTANCE), KP(storage_info.ptr()), K(storage_type_prefix));
       //cannot insert into device manager
       ret = OB_OUT_OF_ELEMENT;
     } else {
@@ -176,9 +176,11 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
         //erase from map
         ObString old_key(device_ins_[last_no_ref_idx].storage_info_);
         if (OB_FAIL(device_map_.erase_refactored(old_key))) {
-          OB_LOG(WARN, "fail to erase device from device map", K(old_key), K(ret), K(storage_info), K(storage_type_prefix));
+          OB_LOG(WARN, "fail to erase device from device map",
+              KP(old_key.ptr()), K(ret), KP(storage_info.ptr()), K(storage_type_prefix));
         } else if (OB_FAIL(handle_map_.erase_refactored((int64_t)(device_ins_[last_no_ref_idx].device_)))) {
-          OB_LOG(WARN, "fail to erase device from handle map", K(device_ins_[last_no_ref_idx].device_), K(ret), K(storage_info), K(storage_type_prefix));
+          OB_LOG(WARN, "fail to erase device from handle map", K(ret),
+              K(device_ins_[last_no_ref_idx].device_), KP(storage_info.ptr()), K(storage_type_prefix));
         } else {
           /*free the resource*/
           ObIODevice* del_device = device_ins_[last_no_ref_idx].device_;
@@ -188,7 +190,8 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
           abort_unless(device_count_ == MAX_DEVICE_INSTANCE);
           device_count_--;
           avai_idx = last_no_ref_idx;
-          OB_LOG(INFO, "release one device for realloc another!", K(old_key), K(storage_info), K(storage_type_prefix));
+          OB_LOG(INFO, "release one device for realloc another!",
+              KP(old_key.ptr()), KP(storage_info.ptr()), K(storage_type_prefix));
         }
       }
 
@@ -197,11 +200,14 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
         STRCPY(device_ins_[avai_idx].storage_info_, storage_info.ptr());
         ObString cur_key(device_ins_[avai_idx].storage_info_);
         if (OB_FAIL(device_map_.set_refactored(cur_key, &(device_ins_[avai_idx])))) {
-          OB_LOG(WARN, "fail to set device to device map!", K(ret), K(cur_key), K(storage_type_prefix));
+          OB_LOG(WARN, "fail to set device to device map!",
+              K(ret), KP(storage_info.ptr()), K(storage_type_prefix));
         } else if (OB_FAIL(handle_map_.set_refactored((int64_t)(device_handle), &(device_ins_[avai_idx])))) {
-          OB_LOG(WARN, "fail to set device to handle map!", K(ret), K(storage_info), K(storage_type_prefix));
+          OB_LOG(WARN, "fail to set device to handle map!",
+              K(ret), KP(storage_info.ptr()), K(storage_type_prefix));
         } else {
-          OB_LOG(INFO, "success insert into map!", K(storage_info), K(storage_type_prefix));
+          OB_LOG(INFO, "success insert into map!",
+              KP(storage_info.ptr()), K(storage_type_prefix));
         }
       }
     }
@@ -216,7 +222,8 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
     device_ins_[avai_idx].device_ = device_handle;
     device_ins_[avai_idx].ref_cnt_ = 0;
     device_count_++;
-    OB_LOG(INFO, "alloc a new device!", K(storage_info), K(storage_type_prefix), K(avai_idx), K(device_count_), K(device_handle));
+    OB_LOG(INFO, "alloc a new device!", KP(storage_info.ptr()),
+        K(storage_type_prefix), K(avai_idx), K(device_count_), K(device_handle));
     device_info = &(device_ins_[avai_idx]);
   }
 
@@ -254,10 +261,12 @@ int ObDeviceManager::get_device(const common::ObString& storage_info,
     if (OB_HASH_NOT_EXIST == ret) {
       //alloc a device, and set into the map
       if (OB_FAIL(alloc_device(dev_info, storage_info_tmp, storage_type_prefix))) {
-        OB_LOG(WARN, "fail to alloc device!", K(ret), K(storage_info_tmp), K(storage_type_prefix));
+        OB_LOG(WARN, "fail to alloc device!",
+            K(ret), KP(storage_info_tmp.ptr()), K(storage_type_prefix));
       }
     } else {
-      OB_LOG(WARN, "fail to get device from device manager ", K(ret), K(storage_info_tmp), K(storage_type_prefix));
+      OB_LOG(WARN, "fail to get device from device manager ",
+          K(ret), KP(storage_info_tmp.ptr()), K(storage_type_prefix));
     }
   }
 
@@ -300,7 +309,7 @@ int ObDeviceManager::release_device(ObIODevice*& device_handle)
         abort_unless(device_info->ref_cnt_ > 0);
         device_info->ref_cnt_--;
         if (0 == device_info->ref_cnt_) {
-          OB_LOG(DEBUG, "A Device has no others ref", K(device_info->device_), K(device_info->storage_info_));
+          OB_LOG(DEBUG, "A Device has no others ref", K(device_info->device_), KP(device_info->storage_info_));
         } else {
           OB_LOG(DEBUG, "released dev info", K(device_info->device_), K(device_info->ref_cnt_));
         }

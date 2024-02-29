@@ -506,6 +506,7 @@ int ObMergeResolver::resolve_insert_clause(const ParseNode *insert_node)
   ParseNode *columns_node = NULL;
   ParseNode *value_node = NULL;
   ParseNode *where_node = NULL;
+  ObArray<uint64_t> label_se_columns;
   if (OB_ISNULL(merge_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge stmt is NULL", K(ret));
@@ -525,7 +526,9 @@ int ObMergeResolver::resolve_insert_clause(const ParseNode *insert_node)
     } else if (OB_FAIL(check_insert_clause())) {
       LOG_WARN("failed to check insert columns", K(ret));
     } else if (FALSE_IT(resolve_clause_ = INSERT_VALUE_CLAUSE)) {
-    } else if (OB_FAIL(resolve_insert_values(value_node, merge_stmt->get_merge_table_info()))) {
+    } else if (OB_FAIL(get_label_se_columns(merge_stmt->get_merge_table_info(), label_se_columns))) {
+      LOG_WARN("failed to get label se columns", K(ret));
+    } else if (OB_FAIL(resolve_insert_values(value_node, merge_stmt->get_merge_table_info(), label_se_columns))) {
       LOG_WARN("fail to resolve values", K(ret));
     } else if (OB_FAIL(generate_column_conv_function(merge_stmt->get_merge_table_info()))) {
       LOG_WARN("failed to generate column conv function", K(ret));

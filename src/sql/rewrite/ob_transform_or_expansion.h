@@ -66,6 +66,7 @@ class ObTransformOrExpansion: public ObTransformRule
       : trans_id_(OB_INVALID_ID),
         or_expand_type_(INVALID_OR_EXPAND_TYPE),
         is_set_distinct_(false),
+        is_valid_topk_(false),
         is_unique_(false),
         orig_expr_(NULL),
         hint_(NULL) {}
@@ -75,6 +76,7 @@ class ObTransformOrExpansion: public ObTransformRule
       trans_id_ = OB_INVALID_ID;
       or_expand_type_ = INVALID_OR_EXPAND_TYPE;
       is_set_distinct_ = false;
+      is_valid_topk_ = false;
       is_unique_ = false;
       orig_expr_ = NULL;
       hint_ = NULL;
@@ -82,6 +84,7 @@ class ObTransformOrExpansion: public ObTransformRule
     uint64_t trans_id_;
     uint64_t or_expand_type_;
     bool is_set_distinct_; // trans or expansion use distinct set
+    bool is_valid_topk_; // determine whether to do or classify when is_topk
     bool is_unique_; // spj stmt before trans is unique
     const ObRawExpr *orig_expr_;
     const ObOrExpandHint *hint_;
@@ -92,13 +95,16 @@ class ObTransformOrExpansion: public ObTransformRule
     OrExpandInfo()
       : pos_(-1),
         or_expand_type_(INVALID_OR_EXPAND_TYPE),
-        is_set_distinct_(false) {}
+        is_set_distinct_(false),
+        is_valid_topk_(false) {}
     int64_t pos_;
     uint64_t or_expand_type_;
     bool is_set_distinct_;
+    bool is_valid_topk_;
     TO_STRING_KV(K_(pos),
                  K_(or_expand_type),
-                 K_(is_set_distinct));
+                 K_(is_set_distinct),
+                 K_(is_valid_topk));
   };
 
 public:
@@ -163,6 +169,9 @@ private:
                                    StmtUniqueKeyProvider &unique_key_provider,
                                    ObSqlBitSet<> &left_unique_pos,
                                    ObSqlBitSet<> &right_flag_pos);
+  int remove_temp_table_select_item(ObSelectStmt *stmt,
+                                    const uint64_t flag_table_id,
+                                    ObSqlBitSet<> &right_flag_pos);
 
   int create_row_number_window_function(ObIArray<ObRawExpr *> &partition_exprs,
                                         ObIArray<ObRawExpr *> &order_exprs,
@@ -200,6 +209,7 @@ private:
   bool reached_max_times_for_or_expansion() { return try_times_ >= MAX_TIMES_FOR_OR_EXPANSION; }
 
   int check_upd_del_stmt_validity(const ObDelUpdStmt &stmt, bool &is_valid);
+  int disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt);
 
   int has_odd_function(const ObDMLStmt &stmt, bool &has);
 
@@ -297,7 +307,6 @@ private:
   int transform_or_expansion(ObSelectStmt *stmt,
                              const uint64_t trans_id,
                              const int64_t expr_pos,
-                             bool is_topk,
                              ObCostBasedRewriteCtx &ctx,
                              ObSelectStmt *&trans_stmt,
                              StmtUniqueKeyProvider &unique_key_provider);
@@ -361,6 +370,7 @@ private:
   int get_candi_match_index_exprs(ObRawExpr *expr,
                                   ObIArray<ObRawExpr*> &candi_exprs);
 
+  int pre_classify_or_expr(const ObRawExpr *expr, int &count);
   int classify_or_expr(const ObDMLStmt &stmt, ObRawExpr *&expr);
   int merge_expr_class(ObRawExpr *&expr_class, ObRawExpr *expr);
   int get_condition_related_tables(ObSelectStmt &stmt,
@@ -384,6 +394,7 @@ private:
                               TableItem *rel_table,
                               TableItem *table,
                               bool &left_bottom);
+  int check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid);
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 private:
   int64_t try_times_;

@@ -1062,7 +1062,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(ctx.get_sql_ctx()->is_sensitive_ ?
                                                    ObString(OB_MASKED_STR) : sql_text),
-                     "return_code", ret);
+                     "return_code", ret,
+                     "tenant_id", MTL_ID());
   }
 
   if (is_ddl_or_dcl_stmt) {

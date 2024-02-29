@@ -537,8 +537,6 @@ int MockTenantModuleEnv::prepare_io()
     SERVER_LOG(ERROR, "init log pool fail", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "fail to start io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
-    STORAGE_LOG(WARN, "add tenant io config failed", K(ret));
   } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(&getter_,
       bucket_num,
       max_cache_size,
@@ -678,7 +676,7 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
-      MTL_BIND2(nullptr, ObTenantIOManager::mtl_init, nullptr, nullptr, nullptr, ObTenantIOManager::mtl_destroy);
+      MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);

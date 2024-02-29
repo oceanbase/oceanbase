@@ -369,7 +369,8 @@ int ObTransformViewMerge::check_semi_right_table_can_be_merged(ObDMLStmt *stmt,
              || ref_query->has_sequence()
              || ref_query->is_hierarchical_query()
              || ref_query->has_ora_rowscn()
-             || (lib::is_mysql_mode() && ref_query->has_for_update())) {
+             || (lib::is_mysql_mode() && ref_query->has_for_update())
+             || ref_query->is_values_table_query()) {
     can_be = false;
   } else if (OB_FAIL(ref_query->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));

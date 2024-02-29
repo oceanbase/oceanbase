@@ -1388,6 +1388,7 @@ int ObIndexBuildTask::clean_on_failed()
     bool state_finished = true;
     ObSchemaGetterGuard schema_guard;
     bool drop_index_on_failed = true; // TODO@wenqu: index building triggered by truncate partition may need keep the failed index schema
+    bool index_status_is_available = false;
     if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, is_index_exist))) {
@@ -1410,6 +1411,7 @@ int ObIndexBuildTask::clean_on_failed()
       int64_t tmp_snapshot_version = 0;
       if (ObIndexStatus::INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
         LOG_INFO("index take effect but ddl task failed", K(ret), K(ret_code_), K(index_table_id_));
+        index_status_is_available = true;
         state_finished = true;
       } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR != index_schema->get_index_status()) {
         state_finished = false;
@@ -1490,6 +1492,9 @@ int ObIndexBuildTask::clean_on_failed()
       }
     }
     if (OB_SUCC(ret) && state_finished) {
+      if (index_status_is_available) {
+        ret_code_ = OB_SUCCESS;
+      }
       if (OB_FAIL(cleanup())) {
         LOG_WARN("cleanup failed", K(ret));
       }
@@ -1500,6 +1505,7 @@ int ObIndexBuildTask::clean_on_failed()
 
 int ObIndexBuildTask::succ()
 {
+  ret_code_ = OB_SUCCESS;
   return cleanup();
 }
 

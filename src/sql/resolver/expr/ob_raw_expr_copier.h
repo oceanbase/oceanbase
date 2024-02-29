@@ -219,6 +219,43 @@ int ObRawExprCopier::add_skipped_expr(const ObIArray<T *> &targets, bool include
   return ret;
 }
 
+/**
+ * ReplaceExprByType is used to generate new expr when contain some special type node
+ * as following case, when we need to copy a medium expr: T_OP_ROW, need to deep copy parents
+ * expr:(c1,c2)!=(1,2)
+ * ReplaceExprByType(T_OP_ROW)
+ * old expr:(c1,c2)!=(1,2)                           new expr:(c1,c2)!=(1,2)
+ *          T_OP_NE                                        T_OP_NE(new)
+ *   T_OP_ROW        T_OP_ROW                     (new)T_OP_ROW        T_OP_ROW(new)
+ *  c1      c2   const(1)  const(2)             (old)c1   (old)c2  (old)const(1)  const(2)(old)
+ */
+class ReplaceExprByType : public ObIRawExprReplacer
+{
+public:
+  ReplaceExprByType(ObItemType expr_type) : expr_type_(expr_type) {}
+  virtual int generate_new_expr(ObRawExprFactory &expr_factory,
+                                ObRawExpr *old_expr,
+                                ObRawExpr *&new_expr)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(old_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "old expr is null", K(ret));
+    } else if (old_expr->get_expr_type() == expr_type_) {
+      if (OB_FAIL(ObRawExprCopier::copy_expr_node(expr_factory,
+                                                  old_expr,
+                                                  new_expr))) {
+        SQL_RESV_LOG(WARN, "failed to copy calc urowid expr", K(ret));
+      } else if (OB_ISNULL(new_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "failed to build new calc rowid expr", K(ret));
+      }
+    }
+    return ret;
+  }
+  ObItemType expr_type_;
+};
+
 }
 }
 

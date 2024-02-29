@@ -120,6 +120,7 @@ int ObHTableFilterParser::create_comparator(const SimpleString &bytes, hfilter::
       //comparator = OB_NEWx(hfilter::RegexStringComparator, allocator_, comparator_value);
       LOG_WARN("regexstring comparator not supported yet", K(ret));
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "regexstring comparator");
     } else if (comparator_type == SUB_STRING_TYPE) {
       comparator = OB_NEWx(hfilter::SubStringComparator, allocator_, comparator_value);
     } else {

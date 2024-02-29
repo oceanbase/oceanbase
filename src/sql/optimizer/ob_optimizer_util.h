@@ -1535,6 +1535,8 @@ public:
                                          ObRawExpr *&temp_table_filter,
                                          ObSelectStmt *temp_table_query = NULL);
 
+  static int check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false);
+
   static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
 private:
   //disallow construct

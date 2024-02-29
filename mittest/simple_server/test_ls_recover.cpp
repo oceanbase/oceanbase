@@ -356,7 +356,6 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_103(103);
   palf::PalfBaseInfo palf_base_info;
-  int64_t create_type = ObLSCreateType::NORMAL;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
@@ -379,7 +378,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id()));
 }
 
 // this ls will be offlined state after restart
@@ -418,7 +417,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id()));
   ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
   ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
 
@@ -462,7 +461,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id()));
   ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
   ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
 

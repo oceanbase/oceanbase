@@ -639,11 +639,10 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     if (OB_SUCC(ret) && NULL != piece_cache_) {
-      if (OB_FAIL((static_cast<observer::ObPieceCache*>(piece_cache_))
-                      ->close_all(*this))) {
+      if (OB_FAIL(piece_cache_->close_all(*this))) {
         LOG_WARN("failed to close all piece", K(ret));
       }
-      static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
+      piece_cache_->~ObPieceCache();
       get_session_allocator().free(piece_cache_);
       piece_cache_ = NULL;
     }
@@ -2250,8 +2249,8 @@ int ObSQLSessionInfo::replace_user_variable(
     // we should only reset_all_package, do not need set_user_variable
     OZ (reset_all_package_state_by_dbms_session(false));
   } else if (is_package_variable && OB_NOT_NULL(get_pl_engine())) {
-    OZ (set_package_variable(ctx, name, value.value_, true));
     OZ (ObBasicSessionInfo::replace_user_variable(name, value, false));
+    OZ (set_package_variable(ctx, name, value.value_, true));
   } else {
     OZ (ObBasicSessionInfo::replace_user_variable(name, value));
   }
@@ -2793,6 +2792,13 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
                   K_(saved_tenant_info), K(effective_tenant_id));
       ATOMIC_STORE(&saved_tenant_info_, effective_tenant_id);
     }
+    // 缓存data version 用于性能优化
+    uint64_t data_version = 0;
+    if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(effective_tenant_id, data_version))) {
+      LOG_WARN_RET(tmp_ret, "get data version fail", "ret", tmp_ret, K(effective_tenant_id));
+    } else {
+      ATOMIC_STORE(&data_version_, data_version);
+    }
       // 1.是否支持外部一致性
     is_external_consistent_ = transaction::ObTsMgr::get_instance().is_external_consistent(effective_tenant_id);
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(effective_tenant_id));
@@ -2860,15 +2866,14 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return ret;
 }
 
-void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+observer::ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   if (NULL == piece_cache_ && need_init) {
     void *buf = get_session_allocator().alloc(sizeof(observer::ObPieceCache));
     if (NULL != buf) {
       MEMSET(buf, 0, sizeof(observer::ObPieceCache));
       piece_cache_ = new (buf) observer::ObPieceCache();
-      if (OB_SUCCESS != (static_cast<observer::ObPieceCache*>(piece_cache_))->init(
-                            get_effective_tenant_id())) {
-        static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
+      if (OB_SUCCESS != piece_cache_->init(get_effective_tenant_id())) {
+        piece_cache_->~ObPieceCache();
         get_session_allocator().free(piece_cache_);
         piece_cache_ = NULL;
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "init piece cache fail");

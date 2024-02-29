@@ -169,7 +169,7 @@ protected:
   ObPxTaskChSet task_ch_set_;
   bool iter_end_;
   bool channel_linked_;
-  common::ObArray<dtl::ObDtlChannel *> task_channels_;
+  ObTMArray<dtl::ObDtlChannel *> task_channels_;
   ObReceiveRowReader row_reader_;
   ObPxReceiveRowP px_row_msg_proc_;
   dtl::ObDtlFlowControl dfc_;

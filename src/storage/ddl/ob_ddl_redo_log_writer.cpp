@@ -863,6 +863,7 @@ int ObDDLRedoLogWriter::local_write_ddl_commit_log(
     const share::ObLSID &ls_id,
     ObLogHandler *log_handler,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletDirectLoadMgrHandle &lob_direct_load_mgr_handle,
     ObDDLCommitLogHandle &handle,
     uint32_t &lock_tid)
 {
@@ -890,7 +891,7 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
   } else if (OB_ISNULL(cb = op_alloc(ObDDLCommitClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(ls_id, log.get_table_key().tablet_id_, log.get_start_scn(), lock_tid, direct_load_mgr_handle))) {
+  } else if (OB_FAIL(cb->init(ls_id, log.get_table_key().tablet_id_, log.get_start_scn(), lock_tid, direct_load_mgr_handle, lob_direct_load_mgr_handle))) {
     LOG_WARN("init ddl commit log callback failed", K(ret), K(ls_id), K(log));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("failed to serialize log base header", K(ret));
@@ -942,6 +943,11 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
     }
   }
   return ret;
+}
+
+bool ObDDLRedoLogWriter::need_retry(int ret_code)
+{
+  return OB_NOT_MASTER == ret_code;
 }
 
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
@@ -1129,7 +1135,8 @@ int ObDDLRedoLogWriter::write_start_log(
   } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type));
-  } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id, direct_load_type))) {
+  } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id, direct_load_type,
+          lob_kv_mgr_handle.is_valid() ? lob_kv_mgr_handle.get_obj()->get_tablet_id() : ObTabletID()))) {
     LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(data_format_version));
   }  else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
@@ -1223,11 +1230,43 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
   return ret;
 }
 
+int ObDDLRedoLogWriter::write_commit_log_with_retry(
+    const bool allow_remote_write,
+    const ObITable::TableKey &table_key,
+    const share::SCN &start_scn,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletHandle &tablet_handle,
+    SCN &commit_scn,
+    bool &is_remote_write,
+    uint32_t &lock_tid)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
+  const int64_t timeout_us = ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US;
+  int64_t retry_count = 0;
+  do {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_FAIL(write_commit_log(allow_remote_write, table_key, start_scn, direct_load_mgr_handle, tablet_handle, commit_scn, is_remote_write, lock_tid))) {
+      LOG_WARN("write ddl commit log failed", K(ret));
+    }
+    if (ObDDLRedoLogWriter::need_retry(ret)) {
+      usleep(1000L * 1000L); // 1s
+      ++retry_count;
+      LOG_INFO("retry write ddl commit log", K(ret), K(table_key), K(retry_count));
+    } else {
+      break;
+    }
+  } while (ObTimeUtility::fast_current_time() - start_ts < timeout_us);
+  return ret;
+}
+
 int ObDDLRedoLogWriter::write_commit_log(
     const bool allow_remote_write,
     const ObITable::TableKey &table_key,
     const share::SCN &start_scn,
     ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+    ObTabletHandle &tablet_handle,
     SCN &commit_scn,
     bool &is_remote_write,
     uint32_t &lock_tid)
@@ -1244,14 +1283,17 @@ int ObDDLRedoLogWriter::write_commit_log(
   ObLS *ls = nullptr;
   ObDDLCommitLog log;
   ObDDLCommitLogHandle handle;
+  ObTabletBindingMdsUserData ddl_data;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redo log writer has not been inited", K(ret));
   } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn));
-  } else if (OB_FAIL(log.init(table_key, start_scn))) {
-    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn));
+  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(log.init(table_key, start_scn, ddl_data.lob_meta_tablet_id_))) {
+    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn), K(ddl_data.lob_meta_tablet_id_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -1260,9 +1302,29 @@ int ObDDLRedoLogWriter::write_commit_log(
   } else if (start_scn != direct_load_mgr_handle.get_obj()->get_start_scn()) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("current task is restarted", K(ret), K(start_scn), "current_start_scn", direct_load_mgr_handle.get_obj()->get_start_scn());
+  } else if (direct_load_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
+    commit_scn = direct_load_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
+    LOG_WARN("already committed", K(ret), K(start_scn), K(commit_scn), K(direct_load_mgr_handle.get_obj()->get_start_scn()), K(log));
   } else if (!remote_write_) {
-    if (OB_FAIL(local_write_ddl_commit_log(
-      log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), direct_load_mgr_handle, handle, lock_tid))) {
+    ObTabletBindingMdsUserData ddl_data;
+    ObTabletDirectLoadMgrHandle lob_direct_load_mgr_handle;
+    if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+    } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+      bool is_lob_major_sstable_exist = false;
+      if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr_and_check_major(ls_id_, ddl_data.lob_meta_tablet_id_,
+              true/* is_full_direct_load */, lob_direct_load_mgr_handle, is_lob_major_sstable_exist))) {
+        if (OB_ENTRY_NOT_EXIST == ret && is_lob_major_sstable_exist) {
+          ret = OB_SUCCESS;
+          LOG_INFO("lob meta tablet exist major sstable, skip", K(ret), K(ddl_data.lob_meta_tablet_id_));
+        } else {
+          LOG_WARN("get tablet mgr failed", K(ret), K(ddl_data.lob_meta_tablet_id_));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(local_write_ddl_commit_log(
+      log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), direct_load_mgr_handle, lob_direct_load_mgr_handle, handle, lock_tid))) {
       if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
@@ -1510,6 +1572,14 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     }
     if (OB_FAIL(ddl_writer_->write_macro_block_log(redo_info_, macro_block_id_, true/*allow remote write*/, task_id_))) {
       LOG_WARN("fail to write ddl redo log", K(ret));
+      if (ObDDLRedoLogWriter::need_retry(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(retry(ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US))) {
+          LOG_WARN("retry wirte ddl macro redo log failed", K(ret), K(tmp_ret), K(task_id_), K(table_key_));
+        } else {
+          ret = OB_SUCCESS; // overwrite the return code
+        }
+      }
     }
   }
   return ret;
@@ -1523,6 +1593,51 @@ int ObDDLRedoLogWriterCallback::wait()
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
   } else if (OB_FAIL(ddl_writer_->wait_macro_block_log_finish(redo_info_, macro_block_id_))) {
     LOG_WARN("fail to wait redo log finish", K(ret));
+    if (ObDDLRedoLogWriter::need_retry(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(retry(ObDDLRedoLogWriter::DEFAULT_RETRY_TIMEOUT_US))) {
+        LOG_WARN("retry wirte ddl macro redo log failed", K(ret), K(tmp_ret), K(task_id_), K(table_key_));
+      } else {
+        ret = OB_SUCCESS; // overwrite the return code
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedoLogWriterCallback::retry(const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_count = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
+  } else if (timeout_us <= 0) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout less than 0", K(ret), K(timeout_us));
+  } else if (OB_UNLIKELY(!macro_block_id_.is_valid() || !redo_info_.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("macro block id or redo info not valid", K(ret), K(macro_block_id_), K(redo_info_));
+  } else {
+    int64_t start_ts = ObTimeUtility::fast_current_time();
+    while (ObTimeUtility::fast_current_time() - start_ts < timeout_us) { // ignore ret
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(ddl_writer_->write_macro_block_log(redo_info_, macro_block_id_, true/*allow remote write*/, task_id_))) {
+        LOG_WARN("fail to write ddl redo log", K(ret));
+      } else if (OB_FAIL(ddl_writer_->wait_macro_block_log_finish(redo_info_, macro_block_id_))) {
+        LOG_WARN("wait ddl redo log finish failed", K(ret));
+      } else {
+        FLOG_INFO("retry write ddl macro redo success", K(ret), K(table_key_), K(macro_block_id_));
+      }
+      if (ObDDLRedoLogWriter::need_retry(ret)) {
+        usleep(1000L * 1000L); // 1s
+        ++retry_count;
+        LOG_INFO("retry write ddl macro redo log", K(ret), K(table_key_), K(retry_count));
+      } else {
+        break;
+      }
+    }
   }
   return ret;
 }

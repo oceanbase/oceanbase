@@ -68,6 +68,10 @@ public:
   // get特有的逻辑，单独处理
   static int process_get(ObTableCtx &tb_ctx, ObNewRow *&row);
   static int process_get_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObNewRow *&row);
+  static int get_insert_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
+  static int get_insert_up_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
+  static int process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
+  static int process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
 private:
   static int process_affected_entity(ObTableCtx &tb_ctx,
                                      const ObTableApiSpec &spec,
@@ -91,7 +95,9 @@ public:
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret
         || OB_BAD_NULL_ERROR == ret
         || OB_OBJ_TYPE_ERROR == ret
+        || OB_KV_COLUMN_TYPE_NOT_MATCH == ret
         || OB_ERR_COLLATION_MISMATCH == ret
+        || OB_KV_COLLATION_MISMATCH == ret
         || OB_ERR_DATA_TOO_LONG == ret
         || OB_DATA_OUT_OF_RANGE == ret) {
       ret = OB_SUCCESS;

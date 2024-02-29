@@ -52,6 +52,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
   ObRpcPacket tmp_pkt;
+  char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_request_create", 200 * 1000);
   const int64_t alloc_payload_sz = sz;
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
@@ -70,7 +71,8 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
         tenant_id = OB_SERVER_TENANT_ID;
       }
-      timeguard.click();
+      IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
+      timeguard.click(rpc_timeguard_str);
       ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
       void *temp = NULL;
 
@@ -114,8 +116,9 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
 
           const int64_t fly_ts = receive_ts - pkt->get_timestamp();
           if (fly_ts > oceanbase::common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+            ObAddr peer = ctx->get_peer();
             RPC_LOG(WARN, "PNIO packet wait too much time between proxy and server_cb", "pcode", pkt->get_pcode(),
-                    "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp());
+                    "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), K(peer), K(sz));
           }
         }
       }
@@ -131,13 +134,21 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   char reserve_buf[2048]; // reserve stack memory for response packet buf
   char* buf = reserve_buf;
   int64_t sz = 0;
+  char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
+  ObTimeGuard timeguard("rpc_resp", 10 * 1000);
   if (NULL == pkt) {
     // do nothing
   } else if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, buf, sz, sizeof(reserve_buf)))) {
     RPC_LOG(WARN, "rpc_encode_ob_packet fail", KP(pkt), K(sz));
     buf = NULL;
     sz = 0;
+  } else {
+    IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld",
+                          sz,
+                          pkt->get_pcode(),
+                          pkt->get_tenant_id());
   }
+  timeguard.click(rpc_timeguard_str);
   if ((sys_err = pn_resp(resp_id_, buf, sz, resp_expired_abs_us_)) != 0) {
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
   }

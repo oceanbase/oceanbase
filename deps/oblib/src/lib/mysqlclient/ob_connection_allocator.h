@@ -376,6 +376,7 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
     _OB_LOG(DEBUG, "try to free conn_array, conn_array=%p, count=%ld", conn_array, array_size);
     while (OB_SUCC(ret) && OB_SUCCESS == conn_array->pop_back(conn)) {
       conn->close(); //close immedately
+      _OB_LOG(TRACE, "close connection, conn=%p", conn);
       if (OB_FAIL(free_conn_array_.push_back(conn))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         _OB_LOG(WARN, "push_back conn to free_conn_array_ failed, sessid=%u, ret=%d", sessid, ret);
@@ -390,6 +391,7 @@ int ObLruConnectionAllocator<T>::free_session_conn_array(uint32_t sessid, int64_
       fail_recycled_conn_count = array_size - succ_count;
       while (OB_SUCCESS == conn_array->pop_back(conn)) {
         conn->close(); //close immedately
+        _OB_LOG(TRACE, "close connection, conn=%p", conn);
         ObLruConnectionAllocator<T>::free(conn);
       }
       if (OB_SUCCESS != sessionid_to_conns_map_.erase_refactored(sessid)) {
@@ -465,9 +467,11 @@ int ObLruConnectionAllocator<T>::get_cached(T *&conn, uint32_t sessid)
     } else if (OB_FAIL(conn_array_erase(conn_array, conn))) {
       ObLruConnectionAllocator<T>::free(conn);
       _OB_LOG(WARN, "failed to erase conn from conn_array, other_sessid=%u, sessid=%u, ret=%d", other_sessid, sessid, ret);
-    } else if (!is_session_share_conns_) { // get conn from other seesion, need close it.
-      conn->close();
-      _OB_LOG(TRACE, "get conn from other seesion, need close it, other_sessid=%u, sessid=%u, ret=%d", other_sessid, sessid, ret);
+    } else if (!is_session_share_conns_) {
+      conn->set_sessid(0);
+      // get conn from other seesion, set sessid as 0,
+      // and will close it at ObServerConnectionPool::acquire() and int ObOciServerConnectionPool::acquire(ObOciConnection *&conn, uint32_t sessid).
+      _OB_LOG(TRACE, "get conn from other seesion, other_sessid=%u, sessid=%u, ret=%d", other_sessid, sessid, ret);
     }
   } else if (NULL == conn) {
     ret = OB_ERR_UNEXPECTED;

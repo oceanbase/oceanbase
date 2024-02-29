@@ -75,18 +75,19 @@ public:
         has_hidden_rowid_(false),
         stmt_sql_(),
         is_bulk_(false),
-        has_link_table_(false) {}
+        has_link_table_(false),
+        is_skip_locked_(false) {}
     virtual ~ExternalRetrieveInfo() {}
 
     int build(ObStmt &stmt,
               ObSQLSessionInfo &session_info,
               pl::ObPLBlockNS *ns,
               bool is_dynamic_sql,
-              common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>> &param_info);
+              common::ObIArray<ExternalParamInfo> &param_info);
     int build_into_exprs(ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql);
     int check_into_exprs(ObStmt &stmt, ObArray<ObDataType> &basic_types, ObBitSet<> &basic_into);
     const ObIArray<ObRawExpr*>& get_into_exprs() const { return into_exprs_; }
-    int recount_dynamic_param_info(ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info);
+    int recount_dynamic_param_info(ObIArray<ExternalParamInfo> &param_info);
 
     common::ObIAllocator &allocator_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> external_params_;
@@ -98,6 +99,7 @@ public:
     ObString stmt_sql_;
     bool is_bulk_;
     bool has_link_table_;
+    bool is_skip_locked_;
   };
 
   enum PsMode
@@ -173,6 +175,7 @@ public:
   inline bool has_hidden_rowid();
   inline bool is_bulk();
   inline bool is_link_table();
+  inline bool is_skip_locked();
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
@@ -329,6 +332,7 @@ public:
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
   void set_close_fail_callback(ObFunction<void(const int, int&)> func) { close_fail_cb_ = func; }
+  void set_will_retry() { will_retry_ = true; }
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
@@ -346,7 +350,7 @@ private:
   bool transaction_set_violation_and_retry(int &err, int64_t &retry);
   int init_cmd_exec_context(ObExecContext &exec_ctx);
   int on_cmd_execute();
-  int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool &async);
+  int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool is_tx_active, bool &async);
   int do_close(int *client_ret = NULL);
   void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
   void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
@@ -370,7 +374,7 @@ private:
     oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
     req_timeinfo.update_end_time();
   }
-
+  bool is_will_retry_() const { return will_retry_; }
 protected:
   // 区分本ResultSet是为User还是Inner SQL服务, 服务于EndTrans异步回调
   bool is_user_sql_;
@@ -430,6 +434,7 @@ private:
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
   bool need_revert_tx_; //dblink
+  bool will_retry_; // the query will retry, to figure out the final close
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
@@ -506,6 +511,7 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       is_returning_(false),
       is_com_filed_list_(false),
       need_revert_tx_(false),
+      will_retry_(false),
       wild_str_(),
       ps_sql_(),
       is_init_(false),
@@ -642,6 +648,11 @@ inline bool ObResultSet::is_bulk()
 inline bool ObResultSet::is_link_table()
 {
   return external_retrieve_info_.has_link_table_;
+}
+
+inline bool ObResultSet::is_skip_locked()
+{
+  return external_retrieve_info_.is_skip_locked_;
 }
 
 inline bool ObResultSet::is_with_rows() const

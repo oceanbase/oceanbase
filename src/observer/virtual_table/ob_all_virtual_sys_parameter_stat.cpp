@@ -117,7 +117,12 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow *&row)
             break;
           }
         case VALUE: {
-            cells[i].set_varchar(sys_iter_->second->str());
+            if ((!is_sys_tenant(effective_tenant_id_) || session_->is_inner()) &&
+                (0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(sys_iter_->first.str()))) {
+              cells[i].set_varchar("");
+            } else {
+              cells[i].set_varchar(sys_iter_->second->str());
+            }
             cells[i].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;

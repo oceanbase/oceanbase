@@ -59,6 +59,7 @@ datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
+data_disk_write_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
 ddl_thread_score
@@ -79,6 +80,7 @@ dump_data_dictionary_to_log_interval
 enable_async_syslog
 enable_cgroup
 enable_crazy_medium_compaction
+enable_dblink
 enable_ddl
 enable_early_lock_release
 enable_kv_ttl
@@ -143,6 +145,7 @@ ls_gc_delay_time
 ls_meta_table_check_interval
 major_compact_trigger
 major_freeze_duty_time
+max_partition_num
 max_stale_time_for_weak_consistency
 max_string_print_length
 max_syslog_file_count
@@ -173,12 +176,10 @@ optimizer_index_cost_adj
 opt_tab_stat_cache_priority
 partition_balance_schedule_interval
 plan_cache_evict_interval
-plsql_ccflags
 plsql_code_type
 plsql_debug
 plsql_optimize_level
 plsql_v2_compatibility
-plsql_warnings
 px_task_size
 px_workers_per_cpu_quota
 query_response_time_flush
@@ -269,6 +270,8 @@ _ctx_memory_limit
 _datafile_usage_lower_bound_percentage
 _datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
+_delay_resource_recycle_after_correctness_issue
+_enable_active_txn_transfer
 _enable_adaptive_compaction
 _enable_adaptive_merge_schedule
 _enable_backtrace_function
@@ -277,6 +280,7 @@ _enable_block_file_punch_hole
 _enable_column_store
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
+_enable_dblink_reuse_connection
 _enable_decimal_int_type
 _enable_defensive_check
 _enable_easy_keepalive
@@ -308,10 +312,11 @@ _enable_tenant_sql_net_thread
 _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing
-_enable_transfer_active_tx
 _enable_values_table_folding
 _enable_var_assign_use_das
 _endpoint_tenant_mapping
+_faststack_min_interval
+_faststack_req_queue_size_threshold
 _fast_commit_callback_count
 _follower_snapshot_read_retry_duration
 _force_explict_500_malloc

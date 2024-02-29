@@ -197,6 +197,7 @@ ObServer::ObServer()
     refresh_active_time_task_(),
     refresh_network_speed_task_(),
     refresh_cpu_frequency_task_(),
+    refresh_io_calibration_task_(),
     schema_status_proxy_(sql_proxy_),
     is_log_dir_empty_(false),
     conn_res_mgr_(),
@@ -437,6 +438,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init refresh network speed task failed", KR(ret));
     } else if (OB_FAIL(init_refresh_cpu_frequency())) {
       LOG_ERROR("init refresh cpu frequency failed", KR(ret));
+    } else if (OB_FAIL(init_refresh_io_calibration())) {
+      LOG_ERROR("init refresh io calibration failed", KR(ret));
     } else if (OB_FAIL(ObOptStatManager::get_instance().init(
                          &sql_proxy_, &config_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
@@ -1015,37 +1018,26 @@ int ObServer::start()
       FLOG_INFO("success to refresh server configure");
     }
 
-    bool synced = false;
-    while (OB_SUCC(ret) && !stop_ && !synced) {
-      synced = multi_tenant_.has_synced();
-      if (!synced) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
-
-    bool schema_ready = false;
-    while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-      schema_ready = schema_service_.is_sys_full_schema();
-      if (!schema_ready) {
-        SLEEP(1);
-      }
-    }
-    FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
-
-    bool timezone_usable = false;
-    if (FAILEDx(tenant_timezone_mgr_.start())) {
-      LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+    // check if multi tenant synced
+    if (FAILEDx(check_if_multi_tenant_synced())) {
+      LOG_ERROR("fail to check if multi tenant synced", KR(ret));
     } else {
-      FLOG_INFO("success to start tenant timezone mgr");
+      FLOG_INFO("success to check if multi tenant synced");
     }
-    while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
-      timezone_usable = tenant_timezone_mgr_.is_usable();
-      if (!timezone_usable) {
-        SLEEP(1);
-      }
+
+    // check if schema ready
+    if (FAILEDx(check_if_schema_ready())) {
+      LOG_ERROR("fail to check if schema ready", KR(ret));
+    } else {
+      FLOG_INFO("success to check if schema ready");
     }
-    FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+
+    // check if timezone usable
+    if (FAILEDx(check_if_timezone_usable())) {
+      LOG_ERROR("fail to check if timezone usable", KR(ret));
+    } else {
+      FLOG_INFO("success to check if timezone usable");
+    }
 
     // check log replay and user tenant schema refresh status
     if (OB_SUCC(ret)) {
@@ -1120,6 +1112,52 @@ int ObServer::try_update_hidden_sys()
   return ret;
 }
 
+int ObServer::check_if_multi_tenant_synced()
+{
+  int ret = OB_SUCCESS;
+  bool synced = false;
+  while (OB_SUCC(ret) && !stop_ && !synced) {
+    synced = multi_tenant_.has_synced();
+    if (!synced) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if multi tenant synced", KR(ret), K(stop_), K(synced));
+  return ret;
+}
+
+int ObServer::check_if_schema_ready()
+{
+  int ret = OB_SUCCESS;
+  bool schema_ready = false;
+  while (OB_SUCC(ret) && !stop_ && !schema_ready) {
+    schema_ready = schema_service_.is_sys_full_schema();
+    if (!schema_ready) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready));
+  return ret;
+}
+
+int ObServer::check_if_timezone_usable()
+{
+  int ret = OB_SUCCESS;
+  bool timezone_usable = false;
+  if (FAILEDx(tenant_timezone_mgr_.start())) {
+    LOG_ERROR("fail to start tenant timezone mgr", KR(ret));
+  } else {
+    FLOG_INFO("success to start tenant timezone mgr");
+  }
+  while (OB_SUCC(ret) && !stop_ && !timezone_usable) {
+    timezone_usable = tenant_timezone_mgr_.is_usable();
+    if (!timezone_usable) {
+      SLEEP(1);
+    }
+  }
+  FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+  return ret;
+}
 void ObServer::prepare_stop()
 {
   prepare_stop_ = true;
@@ -2118,7 +2156,6 @@ int ObServer::init_io()
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
       const int64_t max_io_depth = 256;
-      ObTenantIOConfig server_tenant_io_config = ObTenantIOConfig::default_instance();
       if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
         LOG_ERROR("config io manager fail, ", KR(ret));
       } else {
@@ -2196,9 +2233,6 @@ int ObServer::init_io()
                                                                             io_config.disk_io_thread_count_ / 2,
                                                                             max_io_depth))) {
             LOG_ERROR("add device channel failed", KR(ret));
-          } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID,
-                                                                               server_tenant_io_config))) {
-            LOG_ERROR("add server tenant io manager failed", KR(ret));
           }
         }
       }
@@ -3338,6 +3372,62 @@ int ObServer::refresh_network_speed()
   return ret;
 }
 
+ObServer::ObRefreshIOCalibrationTimeTask::ObRefreshIOCalibrationTimeTask()
+: obs_(nullptr), tg_id_(-1), is_inited_(false)
+{}
+
+int ObServer::ObRefreshIOCalibrationTimeTask::init(ObServer *obs, int tg_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has already been inited", KR(ret));
+  } else if (OB_ISNULL(obs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask init with null ptr", KR(ret), K(obs));
+  } else {
+    obs_ = obs;
+    tg_id_ = tg_id;
+    is_inited_ = true;
+    if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, REFRESH_INTERVAL, true /*schedule repeatly*/))) {
+      LOG_ERROR("fail to schedule task ObRefreshIOCalibrationTimeTask", KR(ret));
+    }
+  }
+  return ret;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::destroy()
+{
+  is_inited_ = false;
+  tg_id_ = -1;
+  obs_ = nullptr;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has not been inited", KR(ret));
+  } else if (OB_ISNULL(obs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask task got null ptr", KR(ret));
+  } else if (OB_FAIL(obs_->refresh_io_calibration())) {
+    LOG_WARN("ObRefreshIOCalibrationTimeTask task failed", KR(ret));
+  } else {
+    TG_CANCEL(tg_id_, *this);
+  }
+}
+
+int ObServer::refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIOCalibration::get_instance().read_from_table())) {
+    LOG_WARN("fail to refresh io calibration from table", KR(ret));
+  }
+  return ret;
+}
+
 int ObServer::init_refresh_active_time_task()
 {
   int ret = OB_SUCCESS;
@@ -3388,6 +3478,15 @@ int ObServer::init_refresh_cpu_frequency()
   int ret = OB_SUCCESS;
   if (OB_FAIL(refresh_cpu_frequency_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
     LOG_ERROR("fail to init refresh cpu frequency task", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(refresh_io_calibration_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("fail to init refresh io calibration task", KR(ret));
   }
   return ret;
 }

@@ -805,7 +805,9 @@ public:
   virtual int set_election_priority(election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
   // ==================== Callback end ========================
-  virtual int revoke_leader(const int64_t proposal_id) = 0;
+  virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                            const int64_t downgrade_priority_time_us,
+                                                            const char *reason) = 0;
   virtual int flashback(const int64_t mode_version,
                         const share::SCN &flashback_scn,
                         const int64_t timeout_us) = 0;
@@ -1139,7 +1141,9 @@ public:
   int handle_config_change_pre_check(const ObAddr &server,
                                      const LogGetMCStReq &req,
                                      LogGetMCStResp &resp) override final;
-  int revoke_leader(const int64_t proposal_id) override final;
+  int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                    const int64_t downgrade_priority_time_us,
+                                                    const char *reason) override final;
   int stat(PalfStat &palf_stat) override final;
   int handle_register_parent_req(const LogLearner &child,
                                  const bool is_to_leader) override final;

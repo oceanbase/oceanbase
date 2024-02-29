@@ -111,7 +111,7 @@ static int acquire_local_decoder(ObDecoderPool &local_decoder_pool,
                            const char *meta_data,
                            const ObIColumnDecoder *&decoder);
 template <class Decoder>
-static void release_local_decoder(ObDecoderPool &local_decoder_pool, ObIColumnDecoder *decoder);
+static int release_local_decoder(ObDecoderPool &local_decoder_pool, ObIColumnDecoder *decoder);
 class ObIEncodeBlockReader
 {
 public:
@@ -130,7 +130,7 @@ protected:
   int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
   int init_decoders();
   int add_decoder(const int64_t store_idx, const common::ObObjMeta &obj_meta, ObColumnDecoder &dest);
-  void free_decoders();
+  int free_decoders();
   int acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder);
   int setup_row(const uint64_t row_id, int64_t &row_len, const char *&row_data);
 protected:
@@ -373,7 +373,7 @@ private:
   int add_decoder(const int64_t store_idx,
                   const common::ObObjMeta &obj_meta,
                   ObColumnDecoder &dest);
-  void free_decoders();
+  int free_decoders();
   int decode_cells(const uint64_t row_id,
                    const int64_t row_len,
                    const char *row_data,

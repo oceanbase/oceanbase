@@ -199,6 +199,9 @@ void ObTransferOutTxCtx::on_commit(const share::SCN &commit_version, const share
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferOutTxCtx on_commit fail", KR(ret), K(commit_version), K(commit_scn), K(tx_id), KPC(this));
+      }
     }
   }
 }
@@ -216,9 +219,9 @@ void ObTransferOutTxCtx::on_abort(const share::SCN &abort_scn)
       int64_t active_tx_count = 0;
       int64_t op_tx_count = 0;
 
-      if (!is_valid()) {
+      if (!src_ls_id_.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("transfer out tx ctx invalid state", KR(ret), K(tx_id), KP(this));
+        LOG_WARN("transfer out tx ctx invalid state", KR(ret), K(tx_id), KPC(this));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
         LOG_WARN("fail to get ls", KR(ret), K(tx_id), KP(this));
       } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
@@ -239,6 +242,9 @@ void ObTransferOutTxCtx::on_abort(const share::SCN &abort_scn)
         break;
       } else {
         ob_usleep(10 * 1000);
+        if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+          LOG_ERROR("ObTransferOutTxCtx on_abort fail", KR(ret), K(abort_scn), K(tx_id), KPC(this));
+        }
       }
     }
   }
@@ -460,6 +466,9 @@ void ObTransferMoveTxCtx::on_redo(const share::SCN &redo_scn)
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferMoveTxCtx on_redo fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }
@@ -502,6 +511,9 @@ void ObTransferMoveTxCtx::on_commit(const share::SCN &commit_version, const shar
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferMoveTxCtx on_commit fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }
@@ -515,9 +527,9 @@ void ObTransferMoveTxCtx::on_abort(const share::SCN &abort_scn)
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
     CollectTxCtxInfo &collect_tx_info = collect_tx_info_;
-    if (!collect_tx_info.is_valid() || !op_scn_.is_valid()) {
+    if (!collect_tx_info.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("TRANSFER collect_tx_info is invalid", KR(ret), K(collect_tx_info), K(op_scn_));
+      LOG_WARN("TRANSFER collect_tx_info is invalid", KR(ret), K(collect_tx_info), K(op_scn_), K(abort_scn));
     } else if (OB_FAIL(MTL(ObLSService*)->get_ls(collect_tx_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       LOG_WARN("get ls failed", KR(ret), K(collect_tx_info));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
@@ -544,6 +556,9 @@ void ObTransferMoveTxCtx::on_abort(const share::SCN &abort_scn)
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferMoveTxCtx on_abort fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }
@@ -664,6 +679,9 @@ void ObTransferDestPrepareTxCtx::on_redo(const share::SCN &redo_scn)
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferDestPrepareTxCtx on_redo fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }
@@ -690,6 +708,9 @@ void ObTransferDestPrepareTxCtx::on_commit(const share::SCN &commit_version, con
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferDestPrepareTxCtx on_commit fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }
@@ -715,6 +736,9 @@ void ObTransferDestPrepareTxCtx::on_abort(const share::SCN &abort_scn)
       break;
     } else {
       ob_usleep(10 * 1000);
+      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+        LOG_ERROR("ObTransferDestPrepareTxCtx on_abort fail", KR(ret), K(tx_id), KP(this));
+      }
     }
   }
 }

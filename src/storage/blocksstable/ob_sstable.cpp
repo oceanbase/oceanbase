@@ -1674,9 +1674,11 @@ int ObSSTable::get_index_tree_root(
     LOG_WARN("can not get index tree rot from an unloaded sstable", K(ret));
   } else if (is_ddl_merge_empty_sstable()) {
     // mock here, skip valid_check
+    index_data.reset();
     index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
     index_data.buf_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
     index_data.size_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
+    LOG_INFO("empty ddl merge sstable", K(index_data));
   } else if (OB_UNLIKELY(!meta_->get_root_info().get_addr().is_valid()
                       || !meta_->get_root_info().get_block_data().is_valid())) {
     ret = OB_STATE_NOT_MATCH;
@@ -1693,7 +1695,7 @@ int ObSSTable::get_index_tree_root(
   }
   if (OB_SUCC(ret) && is_ddl_merge_sstable()) {
     index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
-    LOG_INFO("empty ddl merge sstable", K(index_data));
+    LOG_INFO("ddl merge sstable get root", K(index_data));
   }
   return ret;
 }

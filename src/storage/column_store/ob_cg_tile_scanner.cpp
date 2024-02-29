@@ -23,6 +23,7 @@ namespace storage
 int ObCGTileScanner::init(
     const ObIArray<ObTableIterParam*> &iter_params,
     const bool project_single_row,
+    const bool project_without_filter,
     ObTableAccessContext &access_ctx,
     ObITable *table)
 {
@@ -58,6 +59,8 @@ int ObCGTileScanner::init(
         LOG_WARN("Unexpected cg scanner", K(ret), K(cg_scanner->get_type()));
       } else if (OB_FAIL(cg_scanners_.push_back(cg_scanner))) {
         LOG_WARN("Fail to push back cg scanner", K(ret), K(i), KPC(iter_param));
+      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+        static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }
     if (OB_SUCC(ret)) {
@@ -72,6 +75,7 @@ int ObCGTileScanner::init(
 int ObCGTileScanner::switch_context(
     const ObIArray<ObTableIterParam*> &iter_params,
     const bool project_single_row,
+    const bool project_without_filter,
     ObTableAccessContext &access_ctx,
     ObITable *table,
     const bool col_cnt_changed)
@@ -109,6 +113,8 @@ int ObCGTileScanner::switch_context(
       } else if (OB_FAIL(cg_scanner->switch_context(
           cg_param, access_ctx, cg_wrapper))) {
         LOG_WARN("Fail to switch context for cg iter", K(ret));
+      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+        static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }
   }

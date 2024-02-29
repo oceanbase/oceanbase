@@ -947,6 +947,7 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      alloc,
                                                       param.part_infos_,
                                                       param.subpart_infos_,
                                                       part_ids,

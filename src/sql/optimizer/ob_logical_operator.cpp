@@ -50,7 +50,7 @@
 #include "ob_log_json_table.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "ob_log_err_log.h"
 #include "ob_log_temp_table_transformation.h"
 #include "ob_log_expr_values.h"
@@ -60,6 +60,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
+#include "sql/optimizer/ob_opt_est_parameter_normal.h"
 
 
 using namespace oceanbase::sql;
@@ -501,6 +502,18 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
   return selectivity;
 }
 
+int ObLogicalOperator::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_NOT_NULL(child_op = get_child(ObLogicalOperator::first_child))) {
+    card = child_op->get_card();
+  } else {
+    card = 1.0;
+  }
+  return ret;
+}
+
 // Add a child to the end of the array
 int ObLogicalOperator::add_child(ObLogicalOperator *child_op)
 {
@@ -709,30 +722,31 @@ int ObLogicalOperator::compute_op_parallel_and_server_info()
 }
 
 
-int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise)
+int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
   const ObLogicalOperator *max_parallel_child = NULL;
-  bool parallel_is_different = false;
-  int64_t op_parallel = ObGlobalHint::UNSET_PARALLEL;
+  bool max_parallel_from_exch = false;
   int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     if (OB_ISNULL(child = get_child(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
-    } else if (child->is_match_all()) {
-      max_parallel_child = (NULL == max_parallel_child && (get_num_of_child() - 1) == i)
-                           ? child : max_parallel_child;
-    } else if (ObGlobalHint::UNSET_PARALLEL == op_parallel) {
-      op_parallel = child->get_parallel();
+    } else if (0 == i) {
       max_parallel_child = child;
-      max_available_parallel = child->get_available_parallel();
+      max_available_parallel = max_parallel_child->get_available_parallel();
+      max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+    } else if (!max_parallel_from_exch &&
+               LOG_EXCHANGE == child->get_type()) {
+      //do nothing
     } else {
-      parallel_is_different |= child->get_parallel() != op_parallel;
-      max_available_parallel = std::max(max_available_parallel, child->get_available_parallel());
-      max_parallel_child = max_parallel_child->get_parallel() < child->get_parallel()
-                           ? child : max_parallel_child;
+      if (max_parallel_child->get_parallel() < child->get_parallel() ||
+          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type())) {
+        max_available_parallel = child->get_available_parallel();
+        max_parallel_child = child;
+        max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+      }
     }
   }
 
@@ -740,9 +754,6 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool 
   } else if (OB_ISNULL(max_parallel_child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ", K(ret), K(max_parallel_child));
-  } else if (OB_UNLIKELY(parallel_is_different && !is_partition_wise)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child op has different parallel except partition wise", K(ret));
   } else if (OB_FAIL(get_server_list().assign(max_parallel_child->get_server_list()))) {
     LOG_WARN("failed to assign server list", K(ret));
   } else {
@@ -1097,6 +1108,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
   param.need_row_count_ = (get_card() <= param.need_row_count_ || 0 > param.need_row_count_)
                           ? -1 : param.need_row_count_;
   double op_cost = 0.0;
+  bool contain_false_filter = false;
   card = 0.0;
   cost = 0.0;
   if (!param.need_re_est(get_parallel(), get_card())) {  // no need to re est cost
@@ -1106,6 +1118,10 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
     LOG_WARN("failed to check need parallel valid", K(ret));
   } else if (OB_FAIL(SMART_CALL(do_re_est_cost(param, card, op_cost, cost)))) {
     LOG_WARN("failed to do re est operator", K(ret));
+  } else if (OB_FAIL(check_contain_false_startup_filter(contain_false_filter))) {
+    LOG_WARN("failed to check startup filter", K(ret));
+  } else if (contain_false_filter && FALSE_IT(card = 0.0)) {
+    // never reach
   } else if (!param.override_) {
     /* do nothing */
   } else if (OB_ISNULL(get_plan())) {
@@ -2521,9 +2537,60 @@ int ObLogicalOperator::reorder_filter_exprs()
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpeced null", K(ret), K(get_plan()));
-  } else {
-    FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
-    std::sort(filter_exprs_.begin(), filter_exprs_.end(), filter_compare);
+  } else if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                           filter_exprs_))) {
+    LOG_WARN("reorder filter exprs failed", K(ret));
+  } else if (log_op_def::LOG_JOIN == get_type()) {
+    ObLogJoin *join_op = static_cast<ObLogJoin *>(this);
+    if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                      join_op->get_join_filters()))) {
+      LOG_WARN("reorder join filters failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                                             ObIArray<ObRawExpr *> &filter_exprs)
+{
+  int ret = OB_SUCCESS;
+  double card = 0;
+  FilterCompare filter_compare(predicate_selectivities);
+  common::ObSEArray<ObExprRankPair, 4> filter_ranks;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(get_card_without_filter(card))) {
+    LOG_WARN("get num of rows to be filtered failed", K(ret));
+  } else if (card < 1.0) {
+    card = 1.0;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    double cost_per_tuple = 0.0;
+    double sel = filter_compare.get_selectivity(filter_exprs.at(i));
+    double rank = 0;
+    if (sel < 0) {
+      // security filter should be calc firstly
+      rank = -NAN;
+    } else if (OB_FAIL(ObOptEstCost::calc_pred_cost_per_row(filter_exprs.at(i),
+                                                            card,
+                                                            cost_per_tuple,
+                                                            get_plan()->get_optimizer_context()))) {
+      LOG_WARN("calc pred cost failed", K(ret));
+    } else {
+      rank = (sel - 1) / cost_per_tuple;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(filter_ranks.push_back(ObExprRankPair(rank, filter_exprs.at(i))))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    std::sort(filter_ranks.begin(), filter_ranks.end(), ObExprRankPairCompare());
+    for(int64_t i = 0; i < filter_ranks.count(); ++i) {
+      filter_exprs.at(i) = filter_ranks.at(i).second;
+    }
   }
   return ret;
 }
@@ -4947,6 +5014,7 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
     const JoinFilterInfo &info)
 {
   int ret = OB_SUCCESS;
+  int64_t op_id = -1;
   bool can_extract_query_range = false;
   ObSEArray<int64_t, 4> prefix_col_idxs;
 
@@ -4966,6 +5034,7 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
       LOG_WARN("scan_node type dismatch", K(ret), K(scan_node->get_type()));
     } else {
       ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(scan_node);
+      op_id = table_scan->get_op_id();
       ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
       int64_t range_column_cnt = table_scan->get_range_columns().count();
       join_filter_create->set_probe_table_id(info.ref_table_id_);
@@ -4998,7 +5067,8 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
       }
     }
   }
-  LOG_TRACE("check runtime filter can extract query range", K(ret), K(can_extract_query_range), K(prefix_col_idxs));
+  LOG_TRACE("check runtime filter can extract query range", K(ret), K(op_id),
+            K(can_extract_query_range), K(prefix_col_idxs));
   return ret;
 }
 
@@ -5653,6 +5723,60 @@ int ObLogicalOperator::collect_batch_exec_param_post(void* ctx)
                                          join_op->get_above_pushdown_right_params()))) {
       LOG_WARN("failed to collect batch exec param", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::pick_out_startup_filters()
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = get_plan();
+  const ParamStore *params = NULL;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObArray<ObRawExpr *> filter_exprs;
+  if (OB_ISNULL(plan)
+      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
+      || OB_ISNULL(params = opt_ctx->get_params())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
+  } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+    LOG_WARN("assign filter exprs failed", K(ret));
+  } else {
+    filter_exprs_.reset();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    ObRawExpr *qual = filter_exprs.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (qual->is_static_const_expr()) {
+      if (OB_FAIL(startup_exprs_.push_back(qual))) {
+        LOG_WARN("add filter expr failed", K(i), K(ret));
+      } else { /* Do nothing */ }
+    } else if (OB_FAIL(filter_exprs_.push_back(qual))) {
+      LOG_WARN("add filter expr failed", K(i), K(ret));
+    } else { /* Do nothing */ }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_contain_false_startup_filter(bool &contain_false)
+{
+  int ret = OB_SUCCESS;
+  contain_false = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL pointer error", K(get_plan()), K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < startup_exprs_.count(); ++i) {
+    ObRawExpr *qual = startup_exprs_.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::check_is_static_false_expr(
+        get_plan()->get_optimizer_context(), *qual, contain_false))) {
+      LOG_WARN("failed to check is static false", K(ret));
+    } else { /* Do nothing */ }
   }
   return ret;
 }

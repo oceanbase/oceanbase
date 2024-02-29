@@ -41,11 +41,14 @@ void ussl_on_accept(int fd, ussl_sf_t *sf, ussl_eloop_t *ep)
     }
   }
   if (!add_succ) {
-    if (fd >= 0) {
-      close(fd);
-    }
     if (NULL != ns) {
+      ns->has_error = 1;
+      ns->fd = fd;
       sf->destroy(sf, ns);
+    } else {
+      if (fd >= 0) {
+        close(fd);
+      }
     }
   }
 }

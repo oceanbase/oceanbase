@@ -621,7 +621,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_projector_(allocator),
     enable_lob_locator_v2_(false),
-    is_spatial_index_(false)
+    is_spatial_index_(false),
+    is_fts_index_(false)
 {
   reset();
 }
@@ -645,6 +646,7 @@ void ObTableParam::reset()
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
+  is_fts_index_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -664,7 +666,8 @@ OB_DEF_SERIALIZE(ObTableParam)
               main_read_info_,
               enable_lob_locator_v2_,
               is_spatial_index_,
-              group_by_projector_);
+              group_by_projector_,
+              is_fts_index_);
   return ret;
 }
 
@@ -697,6 +700,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
       LOG_WARN("Fail to deserialize group by projector", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, is_fts_index_);
+  }
   return ret;
 }
 
@@ -718,7 +724,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               main_read_info_,
               enable_lob_locator_v2_,
               is_spatial_index_,
-              group_by_projector_);
+              group_by_projector_,
+              is_fts_index_);
   return len;
 }
 

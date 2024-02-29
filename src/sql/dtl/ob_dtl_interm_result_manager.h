@@ -215,11 +215,12 @@ public:
 class ObDTLIntermResultGCTask : public common::ObTimerTask
 {
 public:
-  ObDTLIntermResultGCTask() : dtl_interm_result_manager_(NULL) {}
+  ObDTLIntermResultGCTask() : dtl_interm_result_manager_(NULL), is_start_(false) {}
   virtual ~ObDTLIntermResultGCTask() {}
   virtual void runTimerTask() override;
   const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L; // 10秒间隔
   ObDTLIntermResultManager *dtl_interm_result_manager_;
+  bool is_start_;
 };
 
 class ObDTLIntermResultManager

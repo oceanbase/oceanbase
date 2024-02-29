@@ -1523,6 +1523,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       table_flags_ = src_schema.table_flags_;
       name_generated_type_ = src_schema.name_generated_type_;
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
+      auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       mlog_tid_ = src_schema.mlog_tid_;
@@ -3337,6 +3338,7 @@ void ObTableSchema::reset()
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  auto_increment_cache_size_ = 0;
 
   is_column_store_supported_ = false;
   max_used_column_group_id_ = COLUMN_GROUP_START_ID;
@@ -6011,8 +6013,10 @@ bool ObTableSchema::has_generated_and_partkey_column() const
       if (generated_columns_.has_member(i)) {
         uint64_t generated_column_id = i + OB_APP_MIN_COLUMN_ID;
         const ObColumnSchemaV2 *generated_column = get_column_schema(generated_column_id);
-        if (generated_column->is_tbl_part_key_column()) {
-          result = true;
+        if (OB_NOT_NULL(generated_column)) {
+          if (generated_column->is_tbl_part_key_column()) {
+            result = true;
+          }
         }
       }
     }
@@ -6363,7 +6367,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(max_used_column_group_id),
     K_(column_group_cnt),
     "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
-    K_(mlog_tid));
+    K_(mlog_tid),
+    K_(auto_increment_cache_size));
   J_OBJ_END();
 
   return pos;
@@ -6643,6 +6648,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   }();
 
   OB_UNIS_ENCODE(mlog_tid_);
+  OB_UNIS_ENCODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -7071,6 +7077,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }();
 
   OB_UNIS_DECODE(mlog_tid_);
+  OB_UNIS_DECODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -7220,6 +7227,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(is_column_store_supported_);
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
+  OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   return len;
 }
 
@@ -8680,9 +8688,9 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
         }
-      } else if (1 < cg_column_cnt) {
+      } else if (1 < cg_column_cnt || column_group_arr_[i]->get_column_group_type() != ObColumnGroupType::SINGLE_COLUMN_GROUP) {
         iter_cg_idx++;
-        // ignore column group with more than one column
+        // ignore column group with more than one column or not each column group cg
       } else if (OB_ISNULL(cg_column_ids = column_group_arr_[i]->get_column_ids())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected error for null column ids", K(ret), KPC(column_group_arr_[i]));

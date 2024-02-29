@@ -237,9 +237,6 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      tenant_id_, ObTenantIOConfig::default_instance());
-
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(tenant_id_, ObLSID(ls_id_), ls_handle);

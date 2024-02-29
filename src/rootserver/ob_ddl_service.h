@@ -72,6 +72,7 @@ class ObTableSchema;
 class ObMultiVersionSchemaService;
 class ObNeedPriv;
 class ObSchemaMgr;
+class ObMViewInfo;
 }
 }
 
@@ -1177,6 +1178,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   // lock table, unlock when ddl trans end
   int lock_table(ObMySQLTransaction &trans,
                  const ObSimpleTableSchemaV2 &table_schema);
+  // lock mview object, unlock when ddl trans end
+  // Must before locking the container table
+  int lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchemaV2 &table_schema);
   int recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans);
   int recompile_all_views_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t > &view_ids);
   int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
@@ -2698,6 +2702,7 @@ private:
                                         const ObIArray<ObDependencyInfo> *dep_infos,
                                         common::ObIAllocator &allocator,
                                         const uint64_t tenant_data_version,
+                                        const share::schema::ObMViewInfo &mview_info,
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;

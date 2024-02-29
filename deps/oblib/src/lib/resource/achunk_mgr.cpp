@@ -437,3 +437,27 @@ int AChunkMgr::madvise(void *addr, size_t length, int advice)
 {
   return ::madvise(addr, length, advice);
 }
+
+int64_t AChunkMgr::sync_wash()
+{
+  int64_t washed_size = 0;
+  AChunk *free_lists[2] = {};
+  free_lists[0] = free_list_.popall();
+  free_lists[1] = large_free_list_.popall();
+  for (int i = 0; i < ARRAYSIZEOF(free_lists); ++i) {
+    AChunk *head = free_lists[i];
+    if (OB_NOT_NULL(head)) {
+      AChunk *chunk = head;
+      do {
+        const int64_t hold_size = chunk->hold();
+        const int64_t all_size = chunk->aligned();
+        AChunk *next_chunk = chunk->next_;
+        direct_free(chunk, all_size);
+        IGNORE_RETURN update_hold(-hold_size, false);
+        washed_size += hold_size;
+        chunk = next_chunk;
+      } while (chunk != head);
+    }
+  }
+  return washed_size;
+}

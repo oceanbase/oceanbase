@@ -118,7 +118,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -127,14 +127,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:1
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -179,7 +180,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -188,14 +189,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:1
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -205,7 +207,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -240,7 +242,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -249,14 +251,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:2
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -266,7 +269,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|5       |363         |
+|0 |TABLE FULL SCAN|t(idx)|1       |363         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -302,7 +305,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -311,14 +314,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:5
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -328,7 +332,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -363,7 +367,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -372,14 +376,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:2
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -389,7 +394,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|3       |359         |
+|0 |TABLE FULL SCAN|t(idx)|1       |359         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -425,7 +430,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -434,14 +439,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:3
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -451,7 +457,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|6       |351         |
+|0 |TABLE FULL SCAN|t(idx)|1       |351         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -487,7 +493,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -496,14 +502,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:6
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -513,7 +520,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|3       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -548,7 +555,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -557,14 +564,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:3
+      index_back_rows:2
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -668,7 +676,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -677,14 +685,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:2
+      index_back_rows:3
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -729,7 +738,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -738,14 +747,15 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:8
-      output_rows:1
+      index_back_rows:0
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -999,7 +1009,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1008,14 +1018,15 @@ Optimization Info:
       table_rows:2
       physical_range_rows:2
       logical_range_rows:2
-      index_back_rows:2
-      output_rows:1
+      index_back_rows:0
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1068,7 +1079,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1077,14 +1088,15 @@ Optimization Info:
       table_rows:2
       physical_range_rows:2
       logical_range_rows:2
-      index_back_rows:2
-      output_rows:1
+      index_back_rows:0
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1115,8 +1127,8 @@ Query Plan
 ============================================================
 |ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |SORT             |               |2       |299         |
-|1 |└─TABLE FULL SCAN|geo_table(geom)|2       |299         |
+|0 |SORT             |               |1       |299         |
+|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |299         |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1153,7 +1165,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1162,14 +1174,15 @@ Optimization Info:
       table_rows:6
       physical_range_rows:6
       logical_range_rows:6
-      index_back_rows:6
-      output_rows:2
+      index_back_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table]
       pruned_index_name:[geo_table]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1335,7 +1348,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|7       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1370,7 +1383,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1379,14 +1392,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:7
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1396,7 +1410,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|6       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1431,7 +1445,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1440,14 +1454,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:6
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1457,7 +1472,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1492,7 +1507,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1501,14 +1516,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:4
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1555,7 +1571,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1564,14 +1580,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1581,7 +1598,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|5       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1616,7 +1633,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1625,14 +1642,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:5
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1642,7 +1660,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1678,7 +1696,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1687,14 +1705,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1740,7 +1759,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1749,14 +1768,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1766,7 +1786,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1801,7 +1821,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1810,14 +1830,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1974,7 +1995,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1983,14 +2004,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2035,7 +2057,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2044,14 +2066,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2096,7 +2119,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2105,14 +2128,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2122,7 +2146,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|9       |531         |
+|0 |TABLE FULL SCAN|t(idx)|1       |531         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2158,7 +2182,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2167,14 +2191,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:9
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2184,7 +2209,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2219,7 +2244,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2228,14 +2253,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:3
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2245,7 +2271,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2281,7 +2307,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2290,14 +2316,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2307,7 +2334,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|6       |519         |
+|0 |TABLE FULL SCAN|t(idx)|1       |519         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2343,7 +2370,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2352,14 +2379,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:6
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2369,7 +2397,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2404,7 +2432,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2413,14 +2441,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2430,7 +2459,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2465,7 +2494,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2474,14 +2503,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:3
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2491,7 +2521,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2526,7 +2556,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2535,14 +2565,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:4
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2552,7 +2583,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2587,7 +2618,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2596,14 +2627,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:4
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2650,7 +2682,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2659,14 +2691,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2676,7 +2709,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2711,7 +2744,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2720,14 +2753,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:3
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2737,7 +2771,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2773,7 +2807,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2782,14 +2816,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2835,7 +2870,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2844,14 +2879,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:1
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2861,7 +2897,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2896,7 +2932,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2905,14 +2941,15 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:14
-      output_rows:2
+      index_back_rows:3
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2979,7 +3016,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2996,6 +3033,7 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:

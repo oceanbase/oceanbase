@@ -3539,7 +3539,11 @@ int ObNumber::to_sci_str_(ObString &num_str, char *buf,
           }
           buf[digit_start_pos] = '1';
           buf[digit_start_pos + 1] = '.';
-          ++pow_size;
+          if ('-' == pow_str[1]) {
+            --pow_size;
+          } else {
+            ++pow_size;
+          }
         }
       }
     }

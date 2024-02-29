@@ -67,6 +67,7 @@ int ObTableBatchExecuteP::check_arg()
   if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
       arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid consistency level");
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_);
   }
@@ -79,6 +80,7 @@ int ObTableBatchExecuteP::check_arg2() const
   if (arg_.returning_rowkey()
       || arg_.returning_affected_entity()) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "returning rowkey or returning affected entity");
     LOG_WARN("some options not supported yet", K(ret),
              "returning_rowkey", arg_.returning_rowkey(),
              "returning_affected_entity", arg_.returning_affected_entity());
@@ -97,10 +99,14 @@ void ObTableBatchExecuteP::audit_on_finish()
 {
   audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
       ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = arg_.returning_affected_rows_ ? result_.count() : 0;
   audit_record_.table_scan_ = false;
-  audit_record_.affected_rows_ = result_.count();
   audit_record_.try_cnt_ = retry_count_ + 1;
+  audit_record_.return_rows_ = 0;
+  audit_record_.affected_rows_ = 0;
+  for (int i = 0; i < result_.count(); i++) {
+    audit_record_.return_rows_ += result_.at(i).get_return_rows();
+    audit_record_.affected_rows_ += result_.at(i).get_affected_rows();
+  }
 }
 
 uint64_t ObTableBatchExecuteP::get_request_checksum()
@@ -182,6 +188,7 @@ int ObTableBatchExecuteP::try_process()
     LOG_WARN("fail to check index supported", K(ret), K(table_id_));
   } else if (OB_UNLIKELY(!is_index_supported)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index");
     LOG_WARN("index type is not supported by table api", K(ret));
   } else {
     if (batch_operation.is_readonly()) {
@@ -255,10 +262,10 @@ int ObTableBatchExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count));
+  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count),
+  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count),
             "receive_ts", get_receive_timestamp());
 #endif
   return ret;
@@ -345,10 +352,8 @@ int ObTableBatchExecuteP::htable_put()
     LOG_WARN("fail to get htable lock handle", K(ret));
   } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(table_id, batch_operation, *lock_handle, ObHTableLockMode::SHARED))) {
     LOG_WARN("fail to lock htable rows", K(ret), K(table_id), K(batch_operation));
-  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT_UP>(tb_ctx_,
-                                                                                    cache_guard,
-                                                                                    spec))) {
-    LOG_WARN("fail to get or create spec", K(ret));
+  } else if (OB_FAIL(ObTableOpWrapper::get_insert_up_spec(tb_ctx_, cache_guard, spec))) {
+    LOG_WARN("fail to get insert up spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
       const ObTableOperation &table_operation = batch_operation.at(i);
@@ -368,7 +373,7 @@ int ObTableBatchExecuteP::htable_put()
     ObTableOperationResult op_result;
     op_result.set_type(ObTableOperationType::INSERT_OR_UPDATE);
     op_result.set_entity(result_entity_);
-    op_result.set_errno(ret);
+    op_result.set_err(ret);
     op_result.set_affected_rows(affected_rows);
     result_.reset();
     if (OB_FAIL(result_.push_back(op_result))) {
@@ -440,9 +445,11 @@ int ObTableBatchExecuteP::multi_get()
         }
       }
       op_result.set_entity(*result_entity);
-      op_result.set_errno(ret);
+      op_result.set_err(ret);
       op_result.set_type(tb_ctx_.get_opertion_type());
-      if (OB_FAIL(result_.push_back(op_result))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back op result", K(ret), K(i));
       } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
         LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));
@@ -573,7 +580,7 @@ int ObTableBatchExecuteP::htable_delete()
     ObTableOperationResult single_op_result;
     single_op_result.set_entity(result_entity_);
     single_op_result.set_type(ObTableOperationType::DEL);
-    single_op_result.set_errno(ret);
+    single_op_result.set_err(ret);
     single_op_result.set_affected_rows(affected_rows);
     result_.reset();
     if (OB_FAIL(result_.push_back(single_op_result))) {
@@ -610,10 +617,8 @@ int ObTableBatchExecuteP::multi_insert()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx_,
-                                                                                 cache_guard,
-                                                                                 spec))) {
-    LOG_WARN("fail to get or create spec", K(ret));
+  } else if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx_, cache_guard, spec))) {
+    LOG_WARN("fail to get or create insert spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
       const ObTableOperation &table_operation = batch_operation.at(i);
@@ -766,7 +771,7 @@ int ObTableBatchExecuteP::batch_execute_internal(const ObTableBatchOperation &ba
             ret = process_get(op_tb_ctx, op_result);
             break;
           case ObTableOperationType::INSERT:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT>(op_tb_ctx, op_result);
+            ret = ObTableOpWrapper::process_insert_op(op_tb_ctx, op_result);
             break;
           case ObTableOperationType::DEL:
             ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(op_tb_ctx, op_result);
@@ -774,15 +779,13 @@ int ObTableBatchExecuteP::batch_execute_internal(const ObTableBatchOperation &ba
           case ObTableOperationType::UPDATE:
             ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(op_tb_ctx, op_result);
             break;
-          case ObTableOperationType::INSERT_OR_UPDATE:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(op_tb_ctx, op_result);
-            break;
           case ObTableOperationType::REPLACE:
             ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(op_tb_ctx, op_result);
             break;
+          case ObTableOperationType::INSERT_OR_UPDATE:
           case ObTableOperationType::APPEND:
           case ObTableOperationType::INCREMENT:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(op_tb_ctx, op_result);
+            ret = ObTableOpWrapper::process_insert_up_op(op_tb_ctx, op_result);
             break;
           default:
             ret = OB_ERR_UNEXPECTED;
@@ -914,7 +917,7 @@ int ObTableBatchExecuteP::process_get(table::ObTableCtx &op_tb_ctx,
                                                                result_entity))) {
     LOG_WARN("fail to cosntruct result entity", K(ret));
   }
-  result.set_errno(ret);
+  result.set_err(ret);
   result.set_type(op_tb_ctx.get_opertion_type());
   return ret;
 }
@@ -978,6 +981,7 @@ int ObTableBatchExecuteP::htable_mutate_row()
 
           default: {
             ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
             LOG_WARN("not supported mutation type", K(ret), K(table_operation));
             break;
           }
@@ -1040,7 +1044,7 @@ int ObTableBatchExecuteP::execute_htable_delete(const ObTableBatchOperation &bat
       ObTableOperationResult single_op_result;
       single_op_result.set_entity(result_entity_);
       single_op_result.set_type(ObTableOperationType::DEL);
-      single_op_result.set_errno(ret);
+      single_op_result.set_err(ret);
       single_op_result.set_affected_rows(affected_rows);
       result_.reset();
       if (OB_FAIL(result_.push_back(single_op_result))) {
@@ -1066,7 +1070,7 @@ int ObTableBatchExecuteP::execute_htable_put(const ObTableBatchOperation &batch_
       LOG_WARN("fail to init table ctx", K(ret));
     } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(tb_ctx, single_op_result))) {
+    } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, single_op_result))) {
       LOG_WARN("fail to process insertup op", K(ret));
     } else if (FALSE_IT(result_.reset())) {
     } else if (OB_FAIL(result_.push_back(single_op_result))) {

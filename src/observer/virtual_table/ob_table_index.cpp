@@ -552,7 +552,7 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                                                   col_count,
                                                   dep_column_ids[ft_dep_col_idx_]))) {
               ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN, "fail to addd normal index column", K(ret), K(col_count), K(ft_dep_col_idx_));
+              SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(ft_dep_col_idx_));
             }
           } else {
             if (OB_FAIL(add_normal_index_column(database_name,
@@ -562,7 +562,7 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                                                 col_count,
                                                 is_sub_end))) {
               ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN, "fail to addd normal index column", K(ret), K(col_count), K(is_sub_end));
+              SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(is_sub_end));
             }
           }
           if (OB_SUCC(ret)) {
@@ -610,7 +610,24 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
     ObString index_name;
     char *buf = NULL;
     int64_t buf_len = number::ObNumber::MAX_PRINTABLE_SIZE;
-    if (OB_UNLIKELY(NULL == rowkey_column)) {
+    const ObTableSchema *real_table_schema = &table_schema;
+    if (table_schema.is_materialized_view()) {
+      // a mview's indexes are built upon its container table
+      const ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+          table_schema.get_data_table_id(), container_table_schema))) {
+        SERVER_LOG(WARN, "failed to get table schema", KR(ret), K(table_schema));
+      } else if (OB_ISNULL(container_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid container table id", KR(ret),
+            "container table id", table_schema.get_data_table_id());
+      } else {
+        real_table_schema = container_table_schema;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(NULL == rowkey_column)) {
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "fail to get rowkey column", K(ret));
     } else if (index_schema->is_spatial_index()) {
@@ -622,12 +639,12 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
         if (OB_ISNULL(cellid_column = index_schema->get_column_schema(rowkey_column->column_id_))) {
           ret = OB_SCHEMA_ERROR;
           SERVER_LOG(WARN, "fail to get data table cellid column schema", K(ret), K(rowkey_column->column_id_));
-        } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(cellid_column->get_geo_col_id()))) {
+        } else if (OB_ISNULL(column_schema = real_table_schema->get_column_schema(cellid_column->get_geo_col_id()))) {
           ret = OB_SCHEMA_ERROR;
           SERVER_LOG(WARN, "fail to get data table geo column schema", K(ret), K(cellid_column->get_geo_col_id()));
         }
       }
-    } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
+    } else if (OB_ISNULL(column_schema = real_table_schema->get_column_schema(rowkey_column->column_id_))) { // 索引表的column_id跟数据表的对应列的column_id是相等的
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "fail to get data table column schema", K(ret), K_(rowkey_column->column_id));
     }

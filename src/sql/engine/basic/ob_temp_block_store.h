@@ -57,6 +57,7 @@ class ObIOEventObserver;
 class ObTempBlockStore
 {
   OB_UNIS_VERSION_V(1);
+  static const int64_t TRUNCATE_THRESHOLD = 2L << 20;
 public:
   /*
    * ShrinkBuffer, a buffer wrapper class supporting bidirectional writing,
@@ -281,15 +282,12 @@ public:
     static const int AIO_BUF_CNT = 2;
   public:
     BlockReader() : store_(NULL), idx_blk_(NULL), ib_pos_(0), file_size_(0), age_(NULL),
-                    try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(), cur_file_offset_(0),
+                    try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(),
                     is_async_(true), aio_buf_idx_(0), aio_blk_(nullptr) {}
     virtual ~BlockReader() { reset(); }
 
     int init(ObTempBlockStore *store, const bool async = true);
-    inline int get_block(const int64_t block_id, const Block *&blk)
-    { return store_->get_block(*this, block_id, blk); }
-    inline int64_t get_cur_file_offset() const { return cur_file_offset_; }
-    inline void set_cur_file_offset(int64_t file_offset) { cur_file_offset_ = file_offset; }
+    int get_block(const int64_t block_id, const Block *&blk);
     inline int64_t get_block_cnt() const { return store_->get_block_cnt(); }
     void set_iteration_age(IterationAge *age) { age_ = age; }
     void set_blk_holder(BlockHolder *holder) { blk_holder_ptr_ = holder; }
@@ -353,7 +351,8 @@ public:
            uint64_t tenant_id,
            int64_t mem_ctx_id,
            const char *label,
-           common::ObCompressorType compressor_type = NONE_COMPRESSOR);
+           common::ObCompressorType compressor_type = NONE_COMPRESSOR,
+           const bool enable_trunc = false);
   void reset();
   void reuse();
   void reset_block_cnt();
@@ -408,12 +407,19 @@ public:
   int alloc_dir_id();
   int dump(const bool all_dump, const int64_t target_dump_size=INT64_MAX);
   int finish_add_row(bool need_dump = true);
+  void set_enable_truncate(bool enable_trunc)
+  {
+    enable_trunc_ = enable_trunc;
+  }
+  bool is_truncate() { return enable_trunc_; }
+  inline int64_t get_cur_file_offset() const { return cur_file_offset_; }
+  inline void set_cur_file_offset(int64_t file_offset) { cur_file_offset_ = file_offset; }
   // include index blocks and data blocks
 
   TO_STRING_KV(K_(inited), K_(enable_dump), K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
     K_(mem_hold), K_(mem_used), K_(io_.fd), K_(io_.dir_id), K_(file_size), K_(block_cnt),
     K_(index_block_cnt), K_(block_cnt_on_disk), K_(block_id_cnt), K_(dumped_block_id_cnt),
-    K_(alloced_mem_size));
+    K_(alloced_mem_size), K_(enable_trunc), K_(last_trunc_offset), K_(cur_file_offset));
 
   void *alloc(const int64_t size)
   {
@@ -526,6 +532,8 @@ protected:
   int64_t saved_block_id_cnt_;
   int64_t dumped_block_id_cnt_;
   bool enable_dump_;
+  bool enable_trunc_; // if true, the read contents of tmp file we be removed from disk.
+  int64_t last_trunc_offset_;
 
 private:
   uint64_t tenant_id_;
@@ -559,6 +567,7 @@ private:
   blocksstable::ObTmpFileIOHandle write_io_handle_;
   blocksstable::ObTmpFileIOInfo io_;
   bool last_block_on_disk_;
+  int64_t cur_file_offset_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTempBlockStore);
 };

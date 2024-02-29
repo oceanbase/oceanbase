@@ -77,9 +77,8 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
-    // 4. stop merger
+    ctx->store_ctx_->insert_table_ctx_->cancel();
     ctx->store_ctx_->merger_->stop();
-    // 5. stop task_scheduler
     ctx->store_ctx_->task_scheduler_->stop();
     is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped();
   }

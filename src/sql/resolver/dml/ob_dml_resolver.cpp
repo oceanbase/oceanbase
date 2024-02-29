@@ -47,9 +47,9 @@
 #include "sql/optimizer/ob_opt_est_utils.h"
 #include "objit/expr/ob_iraw_expr.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/parser/ob_item_type_str.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
@@ -1555,7 +1555,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         !params_.is_resolve_table_function_expr_ &&
         !expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
       bool is_new = false;
-      if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new))) {
+      bool dummp_bool = false;
+      if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new, dummp_bool))) {
         LOG_WARN("failed to get shared instance", K(ret));
       }
     }
@@ -2598,7 +2599,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
              || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
              || real_ref_expr->is_sys_func_expr()
              || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type()) { //允许CURSOR%ROWID通过
-    if (OB_FAIL(ObResolverUtils::revert_external_param_info(params_.external_param_info_, real_ref_expr))) {
+    if (OB_FAIL(ObResolverUtils::revert_external_param_info(params_.external_param_info_, *params_.expr_factory_, real_ref_expr))) {
       LOG_WARN("failed to revert external param info", K(ret), KPC(real_ref_expr));
     } else if (OB_FAIL(ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
                                                              *params_.expr_factory_,
@@ -2618,7 +2619,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
                         params_.external_param_info_, *params_.expr_factory_, params_.prepare_param_count_, self))) {
         LOG_WARN("failed to resolve external param info", K(ret), KPC(self));
       } else if (OB_FAIL(ObResolverUtils::revert_external_param_info(
-                        params_.external_param_info_, real_ref_expr->get_param_expr(0)))) {
+                        params_.external_param_info_, *params_.expr_factory_, real_ref_expr->get_param_expr(0)))) {
         LOG_WARN("failed to revert external param info", K(ret), KPC(self));
       } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(
                         real_ref_expr, real_ref_expr->get_param_expr(0), self))) {
@@ -4375,6 +4376,9 @@ int ObDMLResolver::resolve_generate_table(const ParseNode &table_node,
   select_resolver.set_current_level(current_level_);
   select_resolver.set_current_view_level(current_view_level_);
   select_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
+  if (upper_insert_resolver_ != NULL && upper_insert_resolver_->is_mock_for_row_alias()) {
+    select_resolver.set_upper_insert_resolver(upper_insert_resolver_);
+  }
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -5408,7 +5412,7 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(), parent_column_ids, fk_scan_tid))) {
           LOG_WARN("failed to get table id to perform scan task for foreign key check", K(ret));
         } else if (OB_INVALID_ID == fk_scan_tid) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("invalid table id to perform scan task for foregin key check", K(ret));
         } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), fk_scan_tid, resolve_table_schema))) {
           LOG_WARN("failed to get table schema to perform foreign key check", K(ret), K(fk_scan_tid));
@@ -7320,7 +7324,7 @@ int ObDMLResolver::try_add_padding_expr_for_column_conv(const ColumnItem *column
     if (OB_SUCC(ret)) {
       ObRawExpr *&ori_child = expr->get_param_expr(4);
       ObRawExpr *real_child = NULL;
-      OZ(ObRawExprUtils::erase_inner_added_exprs(ori_child, real_child));
+      OZ(ObRawExprUtils::erase_inner_cast_exprs(ori_child, real_child));
       CK(OB_NOT_NULL(real_child));
       if (OB_SUCC(ret) && real_child->get_expr_type() != T_FUN_PAD
           && real_child->get_expr_type() != T_FUN_INNER_TRIM) {
@@ -9809,6 +9813,10 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
           col_expr->set_column_attr(table_item.get_table_name(), ref_select_item.alias_name_);
           col_expr->set_database_name(table_item.database_name_);
           col_expr->set_unpivot_mocked_column(ref_select_item.is_unpivot_mocked_column_);
+          if (table_item.alias_name_.empty()) {
+            col_expr->set_synonym_db_name(table_item.synonym_db_name_);
+            col_expr->set_synonym_name(table_item.synonym_name_);
+          }
           //set enum_set_values
           if (ob_is_enumset_tc(select_expr->get_data_type())) {
             if (OB_FAIL(col_expr->set_enum_set_values(select_expr->get_enum_set_values()))) {
@@ -10820,8 +10828,10 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (table_item.is_basic_table() || table_item.is_link_table()) {
-    if (OB_FAIL(sql.append_fmt(" FROM %.*s", table_item.table_name_.length(),
-                                             table_item.table_name_.ptr()))) {
+    if (OB_FAIL(sql.append_fmt(" FROM \"%.*s\".\"%.*s\"", table_item.database_name_.length(),
+                                                          table_item.database_name_.ptr(),
+                                                          table_item.table_name_.length(),
+                                                          table_item.table_name_.ptr()))) {
       LOG_WARN("fail to append_fmt", K(table_item.table_name_), K(ret));
     } else if (OB_FAIL(get_partition_for_transpose(table_item, sql))) {
       LOG_WARN("fail to get_partition_for_transpose", K(table_item), K(ret));
@@ -10839,10 +10849,12 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     }
   } else {
     int64_t pos = 0;
+    ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
+    obj_print_params.print_origin_stmt_ = true;
     ObSelectStmtPrinter stmt_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
                                      static_cast<ObSelectStmt*>(table_item.ref_query_),
                                      schema_checker_->get_schema_guard(),
-                                     params_.query_ctx_->get_timezone_info());
+                                     obj_print_params, true);
     if (OB_FAIL(stmt_printer.do_print())) {
       LOG_WARN("fail to print generated table", K(ret));
     } else if (OB_FAIL(sql.append_fmt(" FROM (%.*s)", static_cast<int32_t>(pos), expr_str_buf))) {
@@ -11350,7 +11362,7 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
       OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
                                               *params_.schema_checker_->get_schema_guard(),
                                               *expr,
-                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
+                                              *stmt_->get_query_ctx()));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
       OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
       if (OB_SUCC(ret) &&
@@ -11431,7 +11443,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          expr,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
-                                                         true /*is_sql_scope*/))) {
+                                                         current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -13173,7 +13185,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_OPTIMIZER_FEATURES_ENABLE: {
       CHECK_HINT_PARAM(hint_node, 1) {
         uint64_t version = 0;
-        if (OB_FAIL(ObClusterVersion::get_version(child0->str_value_, version))) {
+        ObString ver_str(child0->str_len_, child0->str_value_);
+        if (ver_str.empty()) {
+          global_hint.merge_opt_features_version_hint(LASTED_COMPAT_VERSION);
+        } else if (OB_FAIL(ObClusterVersion::get_version(ver_str, version))) {
           ret = OB_SUCCESS; // just ignore this invalid hint
           LOG_WARN("failed to get version in hint");
         } else {
@@ -15650,6 +15665,7 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
   ParseNode *alias_node = NULL;
   ObString alias_name;
   uint64_t data_version = 0;
+  bool is_mock = (upper_insert_resolver_ != NULL && upper_insert_resolver_->is_mock_for_row_alias());
   if (OB_ISNULL(dml_stmt) ||  OB_ISNULL(allocator_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -15673,14 +15689,24 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
     int64_t column_cnt = 0;
     ObSEArray<ObExprResType, 8> res_types;
     //common values table: values row(...), row(...),...
-    if (upper_insert_resolver_ == NULL &&
+    /*
+    1.upper_insert_resolver_ != NULL && !is_mock
+      ->insert values table: insert into ....values row(...), row(...),...
+    2. upper_insert_resolver_ == NULL
+      ->select * from (values row(...), row(...))
+    3.is_mock
+      ->insert into ....values (...,...) as alias on duplicate key set ...
+      ->insert into ....select * from (values table) as alias on ...
+      is_mock use to resolve the generated values table
+    */
+    if ((upper_insert_resolver_ == NULL || is_mock) &&
         OB_FAIL(resolve_table_values_for_select(table_node,
                                                 new_table_item->table_values_,
                                                 res_types,
                                                 column_cnt))) {
       LOG_WARN("failed to resolve table values for select", K(ret));
     //insert values table: insert into ....values row(...), row(...),...
-    } else if (upper_insert_resolver_ != NULL &&
+    } else if (upper_insert_resolver_ != NULL && !is_mock &&
                OB_FAIL(resolve_table_values_for_insert(table_node,
                                                        new_table_item->table_values_,
                                                        res_types,
@@ -15714,6 +15740,9 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
   const ParseNode *values_node = NULL;
   ObSEArray<int64_t, 8> value_idxs;
   column_cnt = 0;
+  ObInsertStmt *insert_stmt = NULL;
+  bool is_mock_for_row_alias = (upper_insert_resolver_!= NULL &&
+                                upper_insert_resolver_->is_mock_for_row_alias());
   if (OB_UNLIKELY(T_VALUES_TABLE_EXPRESSION != table_node.type_ || 1 != table_node.num_child_) ||
       OB_ISNULL(table_node.children_) || OB_ISNULL(values_node = table_node.children_[0]) ||
       OB_UNLIKELY(T_VALUES_ROW_LIST != values_node->type_) ||
@@ -15729,7 +15758,8 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
           OB_UNLIKELY(T_VALUE_VECTOR != vector_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid node children", K(i), K(vector_node), K(ret));
-      } else if (OB_UNLIKELY(vector_node->num_child_ > common::OB_USER_ROW_MAX_COLUMNS_COUNT)) {
+      } else if (OB_UNLIKELY(vector_node->num_child_ > common::OB_USER_ROW_MAX_COLUMNS_COUNT) &&
+                !is_mock_for_row_alias) {
         ret = OB_ERR_TOO_MANY_COLUMNS;
         LOG_WARN("too many columns", K(ret));
       } else {
@@ -15758,8 +15788,37 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("fail to resolve sql expr", K(ret), K(expr));
             } else if (expr->get_expr_type() == T_DEFAULT) {
-              ret = OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES;
-              LOG_WARN("A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.", K(ret));
+              if (is_mock_for_row_alias) {
+                insert_stmt = upper_insert_resolver_->get_insert_stmt();
+                ObInsertTableInfo &table_info = insert_stmt->get_insert_table_info();
+                ColumnItem *column_item = NULL;
+                uint64_t column_id = table_info.values_desc_.at(j)->get_column_id();
+                if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(table_info.table_id_,
+                                                                              column_id))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get column item by id failed", K(table_info.table_id_), K(column_id), K(ret));
+                } else if (table_info.values_desc_.at(j)->is_generated_column()) {
+                  if (OB_FAIL(copy_schema_expr(*params_.expr_factory_,
+                                                column_item->expr_->get_dependant_expr(),
+                                                expr))) {
+                    LOG_WARN("copy expr failed", K(ret));
+                  } else if (expr->has_flag(CNT_COLUMN)) {
+                    if (OB_FAIL(replace_column_ref(cur_values_vector, table_info.values_desc_, expr))) {
+                      LOG_WARN("replace column reference failed", K(ret));
+                    } else {
+                      LOG_TRACE("succeed to replace column ref", KPC(expr), K(cur_values_vector), K(table_info.values_desc_));
+                    }
+                  }
+                } else {
+                  ObDefaultValueUtils utils(insert_stmt, &params_, upper_insert_resolver_);
+                  if (OB_FAIL(utils.resolve_default_expr(*column_item, expr, T_INSERT_SCOPE))) {
+                    LOG_WARN("fail to resolve default value", "table_id", table_info.table_id_, K(column_id), K(ret));
+                  }
+                }
+              } else {
+                ret = OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES;
+                LOG_WARN("A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.", K(ret));
+              }
             }
             if (OB_SUCC(ret)) {
               if (OB_ISNULL(expr)) {

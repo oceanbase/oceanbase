@@ -438,7 +438,8 @@ private:
                                   ObSelectLogPlan *&sub_plan,
                                   ObIArray<ObRawExpr*> &pushdown_filters,
                                   const uint64_t child_offset,
-                                  const bool is_set_distinct);
+                                  const bool is_set_distinct,
+                                  ObSelectLogPlan *nonrecursive_plan);
 
   /**
    *  @brief  GENERATE the PLAN tree FOR PLAIN SELECT stmt

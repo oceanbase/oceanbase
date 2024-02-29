@@ -82,6 +82,9 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
       }
     }
+    if (retry_ctrl_.need_retry()) {
+      result.set_will_retry();
+    }
     cret = result.close(cli_ret);
     if (cret != OB_SUCCESS &&
         cret != OB_TRANSACTION_SET_VIOLATION &&
@@ -114,6 +117,9 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
         ret = cli_ret;
       } else {
         result.refresh_location_cache_by_errno(true, ret);
+      }
+      if (retry_ctrl_.need_retry()) {
+        result.set_will_retry();
       }
       int cret = result.close(ret);
       if (cret != OB_SUCCESS) {

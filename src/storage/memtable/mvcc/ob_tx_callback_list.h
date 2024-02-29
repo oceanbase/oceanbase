@@ -194,6 +194,7 @@ public:
   {
     return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > limit;
   }
+  // *NOTICE* this _only_ account MvccRowCallback on memtable
   bool has_pending_log() const {
     return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > 0;
   }

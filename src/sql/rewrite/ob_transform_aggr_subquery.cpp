@@ -1301,8 +1301,8 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     }
   } else if (stmt.is_update_stmt()) {
     ObUpdateStmt &upd_stmt = static_cast<ObUpdateStmt &>(stmt);
-    if (OB_FAIL(upd_stmt.get_assign_values(pre_group_by_exprs, true))) {
-      LOG_WARN("failed to get assign values", K(ret));
+    if (OB_FAIL(ObTransformUtils::get_post_join_exprs(&stmt, pre_group_by_exprs, true))) {
+      LOG_WARN("failed to get post join exprs", K(ret));
     }
   }
   int64_t pre_count = pre_group_by_exprs.count();
@@ -1407,7 +1407,10 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
   int ret = OB_SUCCESS;
   is_valid = true;
   bool can_set_unique = false;
-  if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
+  if (stmt.is_set_stmt()
+      || stmt.is_hierarchical_query()
+      || stmt.has_for_update()
+      || !stmt.is_sel_del_upd()) {
     is_valid = false;
   } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
@@ -1810,7 +1813,7 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
     select_exprs.assign(temp_expr);
     // replace parent_expr_of_query_ref with subquery comparison operator to the one of common comparison operator
     ObItemType value_cmp_type = T_INVALID;
-    if (OB_FAIL(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
+    if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
       LOG_WARN("unexpected root_expr type", K(ret), K(value_cmp_type));
     } else {
       ObOpRawExpr *new_parent_expr = NULL;

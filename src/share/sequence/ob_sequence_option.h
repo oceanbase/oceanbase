@@ -138,7 +138,11 @@ public:
   }
 };
 
-
+enum ObSequenceCacheOrderMode
+{
+  OLD_ACTION = 0,
+  NEW_ACTION = 1,
+};
 
 class ObSequenceOption
 {
@@ -153,7 +157,8 @@ public:
       minvalue_(),
       cache_(static_cast<int64_t>(20)),
       cycle_(false),
-      order_(false)
+      order_(false),
+      flag_(0)
   {
     set_nomaxvalue();
     set_nominvalue();
@@ -172,6 +177,8 @@ public:
   OB_INLINE int set_cache_size(const common::number::ObNumber & value)   { return cache_.set(value); }
   OB_INLINE void set_cycle_flag(bool flag) { cycle_ = flag; }
   OB_INLINE void set_order_flag(bool flag) { order_ = flag; }
+  OB_INLINE void set_flag(int64_t flag) { flag_ = flag; }
+  OB_INLINE void set_cache_order_mode(ObSequenceCacheOrderMode mode) { cache_order_mode_ = mode; }
 
   OB_INLINE const common::number::ObNumber &get_increment_by() const { return increment_by_.val(); }
   OB_INLINE const common::number::ObNumber &get_start_with()   const { return start_with_.val(); }
@@ -180,6 +187,8 @@ public:
   OB_INLINE const common::number::ObNumber &get_cache_size()   const { return cache_.val(); }
   OB_INLINE bool get_cycle_flag() const { return cycle_; }
   OB_INLINE bool get_order_flag() const { return order_; }
+  OB_INLINE int64_t get_flag() const { return flag_; }
+  OB_INLINE ObSequenceCacheOrderMode get_cache_order_mode() const { return cache_order_mode_; }
 
 
   // helper func
@@ -212,6 +221,7 @@ public:
     cache_.set(static_cast<int64_t>(20));
     cycle_ = false;
     order_ = false;
+    flag_ = 0;
   }
 
   /* 如果 bitset 中未设置，则使用 from 中的值，
@@ -254,6 +264,10 @@ public:
         !opt_bitset.has_member(ObSequenceArg::NOORDER)) {
       order_ = from.order_;
     }
+    // The flag field will not be modified through alter, just copy the value in from.
+    if (OB_SUCC(ret)) {
+      flag_ = from.flag_;
+    }
     return ret;
   }
 
@@ -275,6 +289,12 @@ private:
   ObSequenceValue cache_;
   bool cycle_;
   bool order_;
+  union {
+    int64_t flag_;
+    struct {
+      ObSequenceCacheOrderMode cache_order_mode_:1;
+    };
+  };
 };
 
 

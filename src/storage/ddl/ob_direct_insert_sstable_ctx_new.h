@@ -85,6 +85,11 @@ public:
       const ObTabletDirectLoadInsertParam &param,
       const share::SCN checkpoint_scn = share::SCN::min_scn());
 
+  int replay_create_tablet_direct_load(
+      const ObTabletHandle &tablet_handle,
+      const int64_t execution_id,
+      const ObTabletDirectLoadInsertParam &param);
+
   // to start the direct load, write start log in actually.
   // @param [in] is_full_direct_load.
   // @param [in] ls_id.
@@ -184,7 +189,7 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const bool is_full_direct_load);
-  int gc_tablet_direct_load(ObLS &ls);
+  int gc_tablet_direct_load();
   // remove tablet direct load mgr from hashmap,
   // for full direct load, it will be called when physical major generates,
   // for incremental direct load, it will be called when all KVs dump.
@@ -193,12 +198,13 @@ public:
 private:
   struct GetGcCandidateOp final {
   public:
-    GetGcCandidateOp(ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs) : candidate_mgrs_(candidate_mgrs) {}
+    GetGcCandidateOp(ObIArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>> &candidate_mgrs)
+      : candidate_mgrs_(candidate_mgrs) {}
     ~GetGcCandidateOp() {}
     int operator() (common::hash::HashMapPair<ObTabletDirectLoadMgrKey, ObTabletDirectLoadMgr *> &kv);
   private:
     DISALLOW_COPY_AND_ASSIGN(GetGcCandidateOp);
-    ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs_;
+    ObIArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>> &candidate_mgrs_;
   };
 
   int try_create_tablet_direct_load_mgr(
@@ -241,6 +247,7 @@ private:
   TABLET_EXEC_CONTEXT_MAP tablet_exec_context_map_;
   int64_t slice_id_generator_;
   int64_t context_id_generator_;
+  volatile int64_t last_gc_time_;
 DISALLOW_COPY_AND_ASSIGN(ObTenantDirectLoadMgr);
 };
 
@@ -385,6 +392,7 @@ protected:
   ObArray<common::ObObjMeta> lob_col_types_;
   ObTabletHandle tablet_handle_;
   ObTableSchemaItem schema_item_;
+  int64_t dir_id_;
 };
 
 class ObTabletFullDirectLoadMgr final : public ObTabletDirectLoadMgr
@@ -426,6 +434,12 @@ public:
       const uint64_t table_id,
       const int64_t ddl_task_id,
       const bool is_replay); // schedule build a major sstable
+  int replay_commit(
+      ObTablet &tablet,
+      const share::SCN &start_scn,
+      const share::SCN &commit_scn,
+      const uint64_t table_id,
+      const int64_t ddl_task_id);
 
   void set_commit_scn_nolock(const share::SCN &scn);
   int set_commit_scn(const share::SCN &scn);

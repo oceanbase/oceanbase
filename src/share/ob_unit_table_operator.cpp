@@ -169,6 +169,7 @@ int ObUnitTableOperator::check_server_empty(const common::ObAddr &server, bool &
     LOG_WARN("fail to get units", KR(ret), K(server));
   } else if (units.count() > 0) {
     is_empty = false;
+    LOG_DEBUG("server exists in the server list or migrate_from_server list", K(server), K(units));
   }
   return ret;
 }
@@ -743,6 +744,44 @@ int ObUnitTableOperator::get_units_by_unit_group_id(
 
   return ret;
 }
+
+int ObUnitTableOperator::get_unit_in_group(
+    const uint64_t unit_group_id,
+    const common::ObZone &zone,
+    share::ObUnit &unit)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<share::ObUnit> unit_array;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(zone.is_empty() || OB_INVALID_ID == unit_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone), K(unit_group_id));
+  } else if (OB_FAIL(get_units_by_unit_group_id(unit_group_id, unit_array))) {
+    LOG_WARN("fail to get unit group", KR(ret), K(unit_group_id));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; !found && OB_SUCC(ret) && i < unit_array.count(); ++i) {
+      const share::ObUnit &this_unit = unit_array.at(i);
+      if (this_unit.zone_ != zone) {
+        // bypass
+      } else if (OB_FAIL(unit.assign(this_unit))) {
+        LOG_WARN("fail to assign unit info", KR(ret));
+      } else {
+        found = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // failed
+    } else if (!found) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("unit not found", KR(ret), K(unit_group_id), K(zone));
+    } else {} // good
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_units_by_resource_pools(
     const ObIArray<share::ObResourcePoolName> &pools,
     common::ObIArray<ObUnit> &units)

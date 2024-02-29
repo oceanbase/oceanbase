@@ -430,7 +430,7 @@ int LockForReadFunctor::check_clog_disk_full_()
 
   if (NULL != detector && detector->is_clog_disk_has_fatal_error()) {
     if (detector->is_clog_disk_has_full_error()) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      ret = OB_LOG_OUTOF_DISK_SPACE;
       TRANS_LOG(ERROR, "disk full error", K(ret), KPC(this));
     } else if (detector->is_clog_disk_has_hang_error()) {
       ret = OB_CLOG_DISK_HANG;

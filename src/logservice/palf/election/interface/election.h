@@ -41,7 +41,6 @@ enum class RoleChangeReason
   LeaseExpiredToRevoke = 3, // 有主连任失败，Lease超时，从Leader变为Follower
   ChangeLeaderToRevoke = 4, // 切主流程旧主从Leader变为Follower
   StopToRevoke = 5,// 选举leader调用stop接口后leader卸任
-  AskToRevoke = 6,// 有人要求选举卸任(???)
 };
 
 class ElectionProposer;
@@ -63,6 +62,7 @@ class Election
 public:
   virtual ~Election() {}
   virtual void stop() = 0;
+  virtual int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const = 0;
   // 设置成员列表
   virtual int set_memberlist(const MemberList &new_member_list) = 0;
   // 获取选举当前的角色
@@ -72,7 +72,7 @@ public:
                                         int64_t &cur_leader_epoch) const = 0;
   // 供role change service使用
   virtual int change_leader_to(const common::ObAddr &dest_addr) = 0;
-  virtual int revoke(const RoleChangeReason &reason) = 0;
+  virtual int temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason) = 0;
   // 拿本机地址
   virtual const common::ObAddr &get_self_addr() const = 0;
   // 打印日志

@@ -1306,10 +1306,26 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
         if (OB_FAIL(ret)) {
         } else if (member->member_type_.is_obj_type() || OB_INVALID_INDEX != member->get_default()) {
           //不论基础类型还是复杂类型，如果有default，直接把default值存入即可
-          OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
-          OZ (generator.generate_check_not_null(*stmt,
-                                                member->member_type_.get_not_null(),
-                                                result));
+          if (OB_INVALID_INDEX != member->get_default()) {
+            ObLLVMValue allocator;
+            ObLLVMValue src_datum;
+            ObLLVMValue dst_datum;
+            OZ (generator.generate_null(ObIntType, allocator));
+            OZ (generator.extract_obobj_ptr_from_objparam(result, src_datum));
+            OZ (member->member_type_.generate_copy(generator,
+                                                   stmt->get_block()->get_namespace(),
+                                                   allocator,
+                                                   src_datum,
+                                                   ptr_elem,
+                                                   stmt->get_block()->in_notfound(),
+                                                   stmt->get_block()->in_warning(),
+                                                   OB_INVALID_ID));
+            OZ (generator.generate_check_not_null(*stmt,
+                                                  member->member_type_.get_not_null(),
+                                                  result));
+          } else {
+            OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
+          }
           if (OB_SUCC(ret) && !member->member_type_.is_obj_type()) { // process complex null value
             ObLLVMBasicBlock null_branch;
             ObLLVMBasicBlock final_branch;
@@ -5300,8 +5316,19 @@ int ObPLJsonBaseType::deep_copy(ObPLOpaque *dst)
   OZ (ObPLOpaque::deep_copy(dst));
   CK (OB_NOT_NULL(copy = new(dst)ObPLJsonBaseType()));
   OX (copy->set_err_behavior(static_cast<int32_t>(behavior_)));
-  if (OB_NOT_NULL(data_)) {
-    OX (copy->set_data(data_));
+  if (OB_SUCC(ret) && OB_NOT_NULL(data_)) {
+    if (need_shallow_copy()) {
+      copy->set_data(data_);
+      copy->set_shallow_copy(1);
+    } else {
+      ObJsonNode *json_dst = data_->clone(&copy->get_allocator(), true);
+      if (OB_ISNULL(json_dst)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for clone json node failed", K(ret));
+      } else {
+        copy->set_data(json_dst);
+      }
+    }
   }
 
   return ret;

@@ -147,9 +147,9 @@ int ObDDLKVHandle::set_obj(ObDDLKV *ddl_kv)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_kv));
   } else {
+    ddl_kv->inc_ref();
     reset();
     ddl_kv_ = ddl_kv;
-    ddl_kv_->inc_ref();
   }
   return ret;
 }
@@ -264,12 +264,12 @@ ObTabletDirectLoadMgrHandle::~ObTabletDirectLoadMgrHandle()
 int ObTabletDirectLoadMgrHandle::set_obj(ObTabletDirectLoadMgr *mgr)
 {
   int ret = OB_SUCCESS;
-  reset();
   if (OB_ISNULL(mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret));
   } else {
     mgr->inc_ref();
+    reset();
     tablet_mgr_ = mgr;
   }
   return ret;
@@ -285,12 +285,12 @@ const ObTabletDirectLoadMgr *ObTabletDirectLoadMgrHandle::get_obj() const
   return tablet_mgr_;
 }
 
-ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj()
+ObTabletFullDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_full_obj() const
 {
   return static_cast<ObTabletFullDirectLoadMgr *>(tablet_mgr_);
 }
 
-ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj()
+ObTabletIncDirectLoadMgr* ObTabletDirectLoadMgrHandle::get_inc_obj() const
 {
   return static_cast<ObTabletIncDirectLoadMgr *>(tablet_mgr_);
 }
@@ -315,11 +315,10 @@ int ObTabletDirectLoadMgrHandle::assign(const ObTabletDirectLoadMgrHandle &other
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_UNLIKELY(!other.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(other));
-  } else if (OB_FAIL(set_obj(other.tablet_mgr_))) {
-    LOG_WARN("set obj failed", K(ret));
+  if (OB_LIKELY(other.is_valid())) {
+    if (OB_FAIL(set_obj(other.tablet_mgr_))) {
+      LOG_WARN("set obj failed", K(ret));
+    }
   }
   return ret;
 }

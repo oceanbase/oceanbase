@@ -692,6 +692,47 @@ DEF_TO_STRING(ObLockForReadArg)
 DEFINE_TO_STRING_AND_YSON(ObTransKey, OB_ID(hash), hash_val_,
                                       OB_ID(trans_id), trans_id_);
 
+bool is_transfer_ctx(PartCtxSource ctx_source)
+{
+  return PartCtxSource::TRANSFER == ctx_source || PartCtxSource::TRANSFER_RECOVER == ctx_source;
+}
+
+const char *to_str(PartCtxSource src)
+{
+  const char *str = "INVALID";
+  switch (src) {
+  case PartCtxSource::UNKOWN: {
+    str = "UNKOWN";
+    break;
+  }
+  case PartCtxSource::MVCC_WRITE: {
+    str = "MVCC_WRITE";
+    break;
+  }
+  case PartCtxSource::REGISTER_MDS: {
+    str = "REGISTER_MDS";
+    break;
+  }
+  case PartCtxSource::REPLAY: {
+    str = "REPLAY";
+    break;
+  }
+  case PartCtxSource::RECOVER: {
+    str = "RECOVER";
+    break;
+  }
+  case PartCtxSource::TRANSFER: {
+    str = "TRANSFER";
+    break;
+  }
+  case PartCtxSource::TRANSFER_RECOVER: {
+    str = "TRANSFER_RECOVER";
+    break;
+  }
+  }
+  return str;
+}
+
 void ObTxExecInfo::reset()
 {
   state_ = ObTxState::INIT;
@@ -907,8 +948,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applied_log_ts_,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
-                    checksum_[0],
-                    checksum_scn_[0],
+                    checksum_[0],       // FARM COMPAT WHITELIST
+                    checksum_scn_[0],   // FARM COMPAT WHITELIST
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,

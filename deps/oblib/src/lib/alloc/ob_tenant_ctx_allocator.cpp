@@ -137,7 +137,7 @@ void ObTenantCtxAllocator::print_usage() const
       if (l_item->count_ != 0) {
         ret = databuff_printf(
             buf, BUFLEN, pos,
-            "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld block_cnt=% '8ld chunk_cnt=% '8ld mod=%s\n",
+            "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld block_cnt=% '8d chunk_cnt=% '8d mod=%s\n",
             l_item->hold_, l_item->used_, l_item->count_, l_item->used_ / l_item->count_, l_item->block_cnt_, l_item->chunk_cnt_,
             label.str_);
       }
@@ -147,7 +147,7 @@ void ObTenantCtxAllocator::print_usage() const
     if (OB_SUCC(ret) && sum_item.count_ > 0) {
       ret = databuff_printf(
           buf, BUFLEN, pos,
-          "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld mod=%s\n",
+          "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld mod=%s\n",
           sum_item.hold_, sum_item.used_, sum_item.count_,
           sum_item.used_ / sum_item.count_,
           "SUMMARY");
@@ -430,10 +430,18 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.alloc_object(alloc_size, attr);
-    if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
-      int64_t total_size = ta.sync_wash();
-      ObMallocTimeMonitor::click("SYNC_WASH_END");
-      obj = allocator.alloc_object(alloc_size, attr);
+    if (OB_ISNULL(obj)) {
+      int64_t total_size = 0;
+      if (g_alloc_failed_ctx().need_wash_block()) {
+        total_size += ta.sync_wash();
+        ObMallocTimeMonitor::click("WASH_BLOCK_END");
+      } else if (g_alloc_failed_ctx().need_wash_chunk()) {
+        total_size += CHUNK_MGR.sync_wash();
+        ObMallocTimeMonitor::click("WASH_CHUNK_END");
+      }
+      if (total_size > 0) {
+        obj = allocator.alloc_object(alloc_size, attr);
+      }
     }
   }
 
@@ -504,10 +512,18 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.realloc_object(obj, alloc_size, attr);
-    if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
-      int64_t total_size = ta.sync_wash();
-      ObMallocTimeMonitor::click("SYNC_WASH_END");
-      obj = allocator.realloc_object(obj, alloc_size, attr);
+    if(OB_ISNULL(obj)) {
+      int64_t total_size = 0;
+      if (g_alloc_failed_ctx().need_wash_block()) {
+        total_size += ta.sync_wash();
+        ObMallocTimeMonitor::click("WASH_BLOCK_END");
+      } else if (g_alloc_failed_ctx().need_wash_chunk()) {
+        total_size += CHUNK_MGR.sync_wash();
+        ObMallocTimeMonitor::click("WASH_CHUNK_END");
+      }
+      if (total_size > 0) {
+        obj = allocator.realloc_object(obj, alloc_size, attr);
+      }
     }
   }
 

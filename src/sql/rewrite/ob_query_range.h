@@ -100,7 +100,8 @@ private:
         params_(params),
         use_in_optimization_(false),
         row_in_offsets_(),
-        only_one_expr_(false)
+        only_one_expr_(false),
+        is_oracle_char_gt_varchar_(false)
     {
     }
     ~ObQueryRangeCtx()
@@ -123,6 +124,7 @@ private:
     bool use_in_optimization_;
     ObSEArray<int64_t, 4> row_in_offsets_;
     bool only_one_expr_;
+    bool is_oracle_char_gt_varchar_;
   };
 public:
   enum ObQueryRangeState
@@ -899,6 +901,9 @@ private:
   int check_null_param_compare_in_row(const ObRawExpr *l_expr,
                                       const ObRawExpr *r_expr,
                                       ObKeyPart *&out_key_part);
+  int check_inner_row_cmp_type(const ObRawExpr *l_expr,
+                               const ObRawExpr *r_expr,
+                               bool &use_ori_cmp_type);
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;

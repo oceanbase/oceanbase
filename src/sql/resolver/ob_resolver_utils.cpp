@@ -28,7 +28,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/ob_sql_utils.h"
 #include "pl/ob_pl_resolver.h"
@@ -1082,7 +1082,9 @@ int ObResolverUtils::match_vacancy_parameters(
         ret = OB_ERR_SP_WRONG_ARG_NUM;
         LOG_WARN("argument count not match",
                K(ret),
-               K(routine_info.get_param_count()), K(i));
+               K(routine_info.get_param_count()),
+               K(i),
+               K(match_info));
       } else {
         OX (match_info.match_info_.at(i) =
           ObRoutineMatchInfo::MatchInfo(routine_param->is_default_cast(),
@@ -6710,45 +6712,52 @@ int ObResolverUtils::check_foreign_key_columns_type(const bool is_mysql_compat_m
     LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
     LOG_WARN("the count of foreign key columns should be between [1,64]", K(ret), K(child_columns.count()), K(parent_columns.count()));
   } else {
+    uint64_t child_table_id = child_table_schema.get_table_id();
+    uint64_t parent_table_id = parent_table_schema.get_table_id();
     for (int64_t i = 0; OB_SUCC(ret) && i < parent_columns.count(); ++i) {
-      const ObColumnSchemaV2 *child_col = NULL;
-      const ObColumnSchemaV2 *parent_col = parent_table_schema.get_column_schema(parent_columns.at(i));
-      if (NULL == column) { // table-level fk
-        child_col = child_table_schema.get_column_schema(child_columns.at(i));
-      } else { // column level fk
-        child_col = column;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(child_col)) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("child column is not exist", K(ret));
-      } else if (OB_ISNULL(parent_col)) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
-        LOG_WARN("parent column is not exist", K(ret));
-      } else if ((child_col->get_data_type() != parent_col->get_data_type())
-                    && !is_synonymous_type(child_col->get_data_type(),
-                                            parent_col->get_data_type())) {
-        // 这里类型必须相同的
+      if (child_table_id == parent_table_id && 0 == parent_columns.at(i).compare(child_columns.at(i))) {
         ret = OB_ERR_CANNOT_ADD_FOREIGN;
-        LOG_WARN("Column data types between child table and parent table are different", K(ret),
-            K(child_col->get_data_type()),
-            K(parent_col->get_data_type()));
-      } else if (ob_is_string_type(child_col->get_data_type())) {
-        // 列类型一致，对于数据宽度要求子表大于父表, 目前只考虑 string 类型,
-        if (child_col->get_collation_type() != parent_col->get_collation_type()) {
+        LOG_WARN("Child table is same as parent table and child column is same as parant column", K(ret), K(child_table_id), K(parent_table_id), K(parent_columns.at(i)), K(child_columns.at(i)));
+      } else {
+        const ObColumnSchemaV2 *child_col = NULL;
+        const ObColumnSchemaV2 *parent_col = parent_table_schema.get_column_schema(parent_columns.at(i));
+        if (NULL == column) { // table-level fk
+          child_col = child_table_schema.get_column_schema(child_columns.at(i));
+        } else { // column level fk
+          child_col = column;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(child_col)) {
+          ret = OB_ERR_COLUMN_NOT_FOUND;
+          LOG_WARN("child column is not exist", K(ret));
+        } else if (OB_ISNULL(parent_col)) {
+          ret = OB_ERR_COLUMN_NOT_FOUND;
+          LOG_WARN("parent column is not exist", K(ret));
+        } else if ((child_col->get_data_type() != parent_col->get_data_type())
+                      && !is_synonymous_type(child_col->get_data_type(),
+                                              parent_col->get_data_type())) {
+          // 这里类型必须相同的
           ret = OB_ERR_CANNOT_ADD_FOREIGN;
-          LOG_WARN("The collation types are different", K(ret),
-              K(child_col->get_collation_type()),
-              K(parent_col->get_collation_type()));
-        } else if (is_mysql_compat_mode &&
-                   (child_col->get_data_length() < parent_col->get_data_length())) {
-          ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
-          LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
-              child_col->get_column_name_str().length(),
-              child_col->get_column_name_str().ptr(),
-              parent_col->get_column_name_str().length(),
-              parent_col->get_column_name_str().ptr());
-        } else { } // 对于其他bit/int/number /datetime/time/year 不做data_length要求
+          LOG_WARN("Column data types between child table and parent table are different", K(ret),
+              K(child_col->get_data_type()),
+              K(parent_col->get_data_type()));
+        } else if (ob_is_string_type(child_col->get_data_type())) {
+          // 列类型一致，对于数据宽度要求子表大于父表, 目前只考虑 string 类型,
+          if (child_col->get_collation_type() != parent_col->get_collation_type()) {
+            ret = OB_ERR_CANNOT_ADD_FOREIGN;
+            LOG_WARN("The collation types are different", K(ret),
+                K(child_col->get_collation_type()),
+                K(parent_col->get_collation_type()));
+          } else if (is_mysql_compat_mode &&
+                    (child_col->get_data_length() < parent_col->get_data_length())) {
+            ret = OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK;
+            LOG_USER_ERROR(OB_ERR_INVALID_CHILD_COLUMN_LENGTH_FK,
+                child_col->get_column_name_str().length(),
+                child_col->get_column_name_str().ptr(),
+                parent_col->get_column_name_str().length(),
+                parent_col->get_column_name_str().ptr());
+          } else { } // 对于其他bit/int/number /datetime/time/year 不做data_length要求
+        }
       }
     }
   }
@@ -6881,7 +6890,7 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       bool &contain_select_stmt)
+                                       ObQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6918,7 +6927,25 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
         enable_parallel = false;
       }
       if (routine_info->is_reads_sql_data()) {
-        contain_select_stmt = true;
+        ctx.udf_has_select_stmt_ = true;
+      }
+      /*
+      create table t1(c0 int);
+      create function f1() returns int deterministic
+      begin
+      insert into t1 value(2);
+      insert into t1 value('dd');
+      return 1;
+      end
+
+      create function f2() returns int deterministic
+      begin
+      set @a = f1();
+      return 2;
+      end
+      f2 can not know whether f1 has dml, so if external_state is true, we assume f2 has dml */
+      if (routine_info->is_modifies_sql_data() || routine_info->is_external_state()) {
+        ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
     }
@@ -6991,23 +7018,39 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExpr *expr)
+int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExprFactory &expr_factory, ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (NULL == expr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
-    for (int64_t i = 0; i < expr->get_param_count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *&child = expr->get_param_expr(i);
-      for (int64_t j = 0; j < param_infos.count(); ++j) {
-        if (child == param_infos.at(j).second) {
-          child = param_infos.at(j).first;
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_infos.count(); ++j) {
+        if (child == param_infos.at(j).element<1>()) {
+          child = param_infos.at(j).element<0>();
+          param_infos.at(j).element<2>()--;
+          if (0 == param_infos.at(j).element<2>()) {
+            ObConstRawExpr *null_expr = nullptr;
+            if (OB_FAIL(expr_factory.create_raw_expr(T_NULL, null_expr))) {
+              LOG_WARN("fail to create null expr", K(ret));
+            } else {
+              ObObjParam null_val;
+              null_val.set_null();
+              null_val.set_param_meta();
+              null_expr->set_param(null_val);
+              null_expr->set_value(null_val);
+              param_infos.at(j).element<0>() = null_expr;
+            }
+          }
           break;
         }
       }
-      if (OB_FAIL(revert_external_param_info(param_infos, child))) {
-        LOG_WARN("failed to revert external param info", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(revert_external_param_info(param_infos, expr_factory, child))) {
+          LOG_WARN("failed to revert external param info", K(ret));
+        }
       }
     }
   }
@@ -7025,7 +7068,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
     for (int64_t i = 0;
         OB_SUCC(ret) && OB_INVALID_INDEX == same_idx && i < param_infos.count();
         ++i) {
-      ObRawExpr *original_expr = param_infos.at(i).first;
+      ObRawExpr *original_expr = param_infos.at(i).element<0>();
       if (OB_ISNULL(original_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
@@ -7034,43 +7077,71 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
       } else { /*do nothing*/ }
     }
   }
+#define SET_RESULT_TYPE(encode_num)  \
+  do {   \
+    if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, encode_num, expr))) {   \
+      LOG_WARN("create param expr failed", K(ret));   \
+    } else if (OB_ISNULL(expr)) {   \
+      ret = OB_ERR_UNEXPECTED;  \
+      LOG_WARN("access idxs is empty", K(ret));  \
+    } else {  \
+      sql::ObExprResType result_type = expr->get_result_type();  \
+      if (result_type.get_length() == -1) {   \
+        if (result_type.is_varchar() || result_type.is_nvarchar2()) {  \
+          result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);   \
+        } else if (result_type.is_char() || result_type.is_nchar()) {  \
+          result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
+        }  \
+      }  \
+      expr->set_result_type(result_type); \
+      param_expr = static_cast<ObConstRawExpr*>(expr); \
+      const_cast<sql::ObExprResType &>(param_expr->get_result_type()).set_param(param_expr->get_value());  \
+    }  \
+  } while (0)
+
   if (OB_SUCC(ret)) {
+    ObRawExpr *original_ref = expr;
+    ObConstRawExpr *param_expr = nullptr;
     if (OB_INVALID_INDEX != same_idx) {
-      expr = param_infos.at(same_idx).second;
-    } else {
-      /*
-       * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
-       * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
-       * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
-       */
-      std::pair<ObRawExpr*, ObConstRawExpr*> param_info;
-      ObRawExpr *original_ref = expr;
-      if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, prepare_param_count++, expr))) {
-        LOG_WARN("create param expr failed", K(ret));
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("access idxs is empty", K(ret));
+      if (param_infos.at(same_idx).element<2>() > 0) {
+        expr = param_infos.at(same_idx).element<1>();
+        param_infos.at(same_idx).element<2>()++;
       } else {
-        sql::ObExprResType result_type = expr->get_result_type();
-        if (result_type.get_length() == -1) {
-          if (result_type.is_varchar() || result_type.is_nvarchar2()) {
-            result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
-          } else if (result_type.is_char() || result_type.is_nchar()) {
-            result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
-          }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref count unexpected", K(ret));
+      }
+    } else {
+      int64_t available_idx = OB_INVALID_INDEX;
+      for (int64_t i = 0;
+          OB_SUCC(ret) && OB_INVALID_INDEX == available_idx && i < param_infos.count();
+          ++i) {
+        if (0 == param_infos.at(i).element<2>()) {
+          available_idx = i;
         }
-        expr->set_result_type(result_type);
-        ObConstRawExpr *param_expr = static_cast<ObConstRawExpr*>(expr);
-        const_cast<sql::ObExprResType &>(param_expr->get_result_type())
-                                          .set_param(param_expr->get_value());
-        param_info.first = original_ref;
-        param_info.second = param_expr;
-        if (OB_FAIL(param_infos.push_back(param_info))) {
-          LOG_WARN("push_back error", K(ret));
+      }
+      if (OB_INVALID_INDEX != available_idx) {
+        int64_t encode_num = param_infos.at(available_idx).element<1>()->get_value().get_unknown();
+        SET_RESULT_TYPE(encode_num);
+        if (OB_SUCC(ret)) {
+          param_infos.at(available_idx) = ExternalParamInfo(original_ref, param_expr, 1);
+        }
+      } else {
+        /*
+        * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
+        * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
+        * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
+        */
+        SET_RESULT_TYPE(prepare_param_count++);
+        if (OB_SUCC(ret)) {
+          ExternalParamInfo param_info(original_ref, param_expr, 1);
+          if (OB_FAIL(param_infos.push_back(param_info))) {
+            LOG_WARN("push_back error", K(ret));
+          }
         }
       }
     }
   }
+#undef SET_RESULT_TYPE
   return ret;
 }
 
@@ -7791,9 +7862,9 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 {
   int ret = OB_SUCCESS;
 
-  const char *access_denied_notice_message = 
+  const char *access_denied_notice_message =
     "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'";
-  
+
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
     FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
@@ -8529,6 +8600,11 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
       // supported operations
+    } else if (!arg.is_alter_columns_
+        && ((ObAlterTableArg::ADD_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::DROP_CONSTRAINT == arg.alter_constraint_type_)
+        || (ObAlterTableArg::ALTER_CONSTRAINT_STATE == arg.alter_constraint_type_))) {
+      // add/drop constraint is supported
     } else {
       // unsupported operations
       ret = OB_NOT_SUPPORTED;
@@ -8571,6 +8647,34 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
             KR(ret), K(table_schema.get_table_name()), K(arg));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
       }
+    }
+  }
+  return ret;
+}
+
+int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
+{
+  int64_t max_partition_num = OB_MAX_PARTITION_NUM_MYSQL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    max_partition_num = tenant_config->max_partition_num;
+  }
+  return max_partition_num;
+}
+
+int ObResolverUtils::check_schema_valid_for_mview(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < table_schema.get_column_count()); ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_ISNULL(column_schema = table_schema.get_column_schema_by_idx(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", KR(ret));
+    } else if (column_schema->is_xmltype()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create materialized view on xmltype columns is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          "create materialized view on xmltype columns is");
     }
   }
   return ret;

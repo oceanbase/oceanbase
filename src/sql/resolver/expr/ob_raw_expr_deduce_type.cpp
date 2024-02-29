@@ -471,6 +471,9 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     if (op->get_result_type().has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
       result_type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
     }
+    if (ob_is_decimal_int_tc(expr.get_result_type().get_type())) {
+      result_type.add_cast_mode(expr.get_result_type().get_cast_mode());
+    }
 
     // 预先把所有参数的calc_type都设置成和type一致，
     // 以防calc_result_typeX没有对其进行设置
@@ -3588,6 +3591,13 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
           && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
+      }
+
+      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
+      if (ObStringTC == ori_tc && ObJsonTC == expect_tc
+          && IS_BASIC_CMP_OP(parent.get_expr_type())) {
+        uint64_t extra = new_expr->get_extra();
+        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
       }
       OZ(parent.replace_param_expr(child_idx, new_expr));
       if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {

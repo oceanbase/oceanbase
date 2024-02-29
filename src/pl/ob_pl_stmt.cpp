@@ -316,7 +316,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const ObPLDataType& cursor_type, // cursor返回值类型(record)
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
                                 ObPLCursor::CursorState state,
-                                bool has_dup_column_name)
+                                bool has_dup_column_name,
+                                bool skip_locked)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -339,6 +340,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_cursor_type(cursor_type);
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
+      cursor->set_skip_locked(skip_locked);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
@@ -918,7 +920,7 @@ int ObPLUDTNS::get_user_type(uint64_t type_id,
   const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
   CK (OB_NOT_NULL(allocator));
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info));
-  CK (OB_NOT_NULL(udt_info));
+  OV (OB_NOT_NULL(udt_info), OB_ERR_OBJECT_INVALID, ret, tenant_id, type_id);
   OZ (udt_info->transform_to_pl_type(*allocator, user_type));
   CK (OB_NOT_NULL(user_type));
   return ret;
@@ -982,6 +984,9 @@ int ObPLBlockNS::add_symbol(const ObString &name,
   } else if (is_dup && lib::is_mysql_mode()) {
     ret = OB_ERR_SP_DUP_VAR;
     LOG_USER_ERROR(OB_ERR_SP_DUP_VAR, name.length(), name.ptr());
+  } else if (is_dup && is_formal_param) {
+    ret = OB_ERR_DUPLICATE_FILED;
+    LOG_WARN("duplicate fields in argument list are not permitted", K(ret), K(name), K(is_dup), K(is_formal_param));
   } else {
     OZ (symbols_.push_back(get_symbol_table()->get_count()));
     CK (OB_NOT_NULL(exprs_));
@@ -1138,7 +1143,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const common::ObIArray<int64_t> &formal_params,
                             ObPLCursor::CursorState state,
                             bool has_dup_column_name,
-                            int64_t &index)
+                            int64_t &index,
+                            bool skip_locked)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1170,7 +1176,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       cursor_type,
                                                       formal_params,
                                                       state,
-                                                      has_dup_column_name))) {
+                                                      has_dup_column_name,
+                                                      skip_locked))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);
@@ -1790,6 +1797,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         LOG_WARN("self or resolve package not exist", K(ret));
       } else {
         if (OB_NOT_NULL(parent_ns_)
+            && parent_ns_->get_database_id() == package_info_resolve->get_database_id()
             && ObCharset::case_compat_mode_equal(parent_ns_->get_package_name(), package_info_resolve->get_package_name())) {
           if (OB_FAIL(
               SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
@@ -1824,7 +1832,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               type = ObPLExternalNS::PKG_TYPE;
             }
           } else {
-            OX (data_type = var->get_type());
+            data_type = var->get_type();
+            type = ObPLExternalNS::PKG_VAR;
           }
           if (OB_SUCC(ret) && type != ObPLExternalNS::INVALID_VAR) {
             if (OB_NOT_NULL(dependency_table_)) {
@@ -2926,16 +2935,13 @@ bool ObPLBlockNS::search_routine_local(const ObString &db_name,
     search_local = true;
   } else if (!db_name.empty() && !package_name.empty()) {
     if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && ObCharset::case_compat_mode_equal(package_name_, package_name)) {
+        && ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   } else if (db_name.empty() && !package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(package_name_, package_name)) {
-      search_local = true;
-    }
-  } else if (!db_name.empty() && package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && package_name_.empty()) {
+    if (ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   }
@@ -4155,25 +4161,33 @@ const ObIArray<ObPLCursor *>* ObPLStmt::get_cursors() const
   return NULL == get_cursor_table() ? NULL : &(get_cursor_table()->get_cursors());
 }
 
-const ObString *ObPLStmt::get_label() const
+const ObString* ObPLStmt::get_label(int64_t idx) const
 {
-  return NULL == get_label_table() ? NULL : get_label_table()->get_label(label_);
+  return NULL == get_label_table() ? NULL : get_label_table()->get_label(idx);
 }
 
 int ObPLStmt::set_label_idx(int64_t idx)
 {
   int ret = OB_SUCCESS;
+
   if (OB_ISNULL(get_label_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null label table", K(ret));
+  } else if (label_cnt_ >= FUNC_MAX_LABELS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected label_cnt count, out of range", K(ret), K(label_cnt_));
   } else {
     ObPLLabelTable *pl_label = const_cast<ObPLLabelTable *>(get_label_table());
     if (0 <= idx && idx < pl_label->get_count()) {
       const ObPLStmt *ls = pl_label->get_next_stmt(idx);
-      if (OB_ISNULL(ls)) {
+      if (OB_NOT_NULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set label idx", K(ret));
+      } else {
         pl_label->set_next_stmt(idx, this);
+        labels_[label_cnt_] = idx;
+        label_cnt_++;
       }
-      label_ = idx;
     }
   }
 

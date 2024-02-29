@@ -361,6 +361,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
         op->get_monitor_info().set_plan_depth(plan_depth_);
         op->get_monitor_info().set_tenant_id(GET_MY_SESSION(exec_ctx)->get_effective_tenant_id());
         op->get_monitor_info().open_time_ = oceanbase::common::ObClockGenerator::getClock();
+        op->get_monitor_info().set_rich_format(use_rich_format_);
       }
     }
 
@@ -1328,6 +1329,17 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           ret = spec_.use_rich_format_ ? (*e)->eval_vector(eval_ctx_, brs_)
                                        : (*e)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_);
           (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        }
+      }
+
+      if (brs_.end_ && 0 == brs_.size_) {
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          if (UINT32_MAX != (*e)->vector_header_off_) {
+            if (OB_FAIL((*e)->init_vector(eval_ctx_, (*e)->is_batch_result()
+                                          ? VEC_UNIFORM : VEC_UNIFORM_CONST, brs_.size_))) {
+              LOG_WARN("failed to init vector", K(ret));
+            }
+          }
         }
       }
 

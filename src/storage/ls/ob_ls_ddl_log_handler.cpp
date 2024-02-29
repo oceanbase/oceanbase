@@ -132,7 +132,8 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
         ret = OB_ITER_END;
       } else {
         ObTabletID &tablet_id = active_ddl_tablets_.at(idx_);
-        if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
+        if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle,
+            ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
           if (OB_TABLET_NOT_EXIST == ret) {
             if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
               LOG_WARN("push back to delete tablet id failed", K(ret));
@@ -228,13 +229,20 @@ int ObLSDDLLogHandler::online()
     } else {
       while (OB_SUCC(ret)) {
         ObTabletHandle tablet_handle;
-        if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+        ObDDLKvMgrHandle ddl_kv_mgr_handle;
+        if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
           } else {
-            LOG_WARN("get next tablet failed", K(ret));
+            LOG_WARN("failed to get next ddl kv mgr", K(ret));
           }
+        } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
+        } else if (OB_FAIL(ls_->get_tablet(ddl_kv_mgr_handle.get_obj()->get_tablet_id(), tablet_handle,
+            ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+          LOG_WARN("get tablet handle failed", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
         } else if (OB_FAIL(tablet_handle.get_obj()->start_direct_load_task_if_need())) {
           LOG_WARN("start ddl if need failed", K(ret));
         }
@@ -401,16 +409,14 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           param.data_format_version_ = direct_load_mgr_hdl.get_full_obj()->get_data_format_version();
           param.snapshot_version_    = direct_load_mgr_hdl.get_full_obj()->get_table_key().get_snapshot_version();
           LOG_INFO("schedule ddl merge dag", K(param));
-          if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-            if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-              LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-            }
+          if (OB_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+            LOG_WARN("try to freeze ddl kv failed", K(ret), K(param));
+          } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+            LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(ret), K(param));
           }
         }
       }
-      (void)tenant_direct_load_mgr->gc_tablet_direct_load(*ls_);
+      (void)tenant_direct_load_mgr->gc_tablet_direct_load();
     }
   }
   return OB_SUCCESS;
@@ -452,6 +458,13 @@ SCN ObLSDDLLogHandler::get_rec_scn()
   } else if (!rec_scn.is_max()) {
     last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
   }
+
+  // gc tablet direct load periodically
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  if (OB_NOT_NULL(tenant_direct_load_mgr)) {
+    (void)tenant_direct_load_mgr->gc_tablet_direct_load();
+  }
+
   LOG_INFO("[CHECKPOINT] ObLSDDLLogHandler::get_rec_scn", K(ret),
       "ls_id", OB_ISNULL(ls_) ? ObLSID() : ls_->get_ls_id(),
       K(barrier_tablet_id), K(rec_scn), K_(last_rec_scn));

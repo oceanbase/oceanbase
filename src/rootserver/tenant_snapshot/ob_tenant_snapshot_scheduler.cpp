@@ -571,7 +571,7 @@ int ObTenantSnapshotScheduler::process_create_tenant_snapshot_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(create_job));
   } else if (cur_time > create_job.get_create_expire_ts()) {
-    ret = OB_TIMEOUT;
+    ret = OB_TENANT_SNAPSHOT_TIMEOUT;
     LOG_WARN("create tenant snapshot timeout", KR(ret), K(create_job), K(cur_time));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -618,7 +618,7 @@ int ObTenantSnapshotScheduler::process_create_tenant_snapshot_(
     }
   }
 
-  if (OB_FAIL(ret) && OB_REPLICA_NUM_NOT_ENOUGH != ret) {
+  if (OB_FAIL(ret) && OB_REPLICA_NUM_NOT_ENOUGH != ret && OB_TIMEOUT != ret) {
     int tmp_ret = OB_SUCCESS;
     // if create_job is not valid, we should not delete the tenant snapshot
     // because we don't know whether the tenant_snapshot_id it contains is valid

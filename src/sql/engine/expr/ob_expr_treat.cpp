@@ -110,7 +110,11 @@ static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllo
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get json doc is null", K(ret), K(jsontype));
   } else {
-    if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_, json_doc, new_jsontype))) {
+    ObJsonNode * json_node_copy = nullptr;
+    if (OB_ISNULL(json_node_copy = json_doc->clone(&ctx.exec_ctx_.get_allocator()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to clone json node", K(ret));
+    } else if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_, json_node_copy, new_jsontype))) {
       LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
     } else if(OB_ISNULL(new_jsontype)) {
       ret = OB_ERR_UNEXPECTED;

@@ -635,7 +635,7 @@ private:
     if (__pos < buf_size) {                                                                   \
       buf[__pos-1] = '\0';                                                                    \
     } else {                                                                                  \
-      buf[__pos] = '\0';                                                                      \
+      buf[buf_size - 1] = '\0';                                                               \
     }                                                                                         \
     return ret;                                                                               \
   }

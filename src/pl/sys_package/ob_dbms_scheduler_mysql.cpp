@@ -111,7 +111,7 @@ int ObDBMSSchedulerMysql::disable(
   OZ (dml.add_column("enabled", false));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (execute_sql(ctx, sql, affected_rows));
-  CK (OB_LIKELY(1 == affected_rows));
+  CK (OB_LIKELY(1 == affected_rows || 2 == affected_rows));
   return ret;
 }
 
@@ -135,7 +135,7 @@ int ObDBMSSchedulerMysql::enable(
   OZ (dml.add_column("enabled", true));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (execute_sql(ctx, sql, affected_rows));
-  CK (OB_LIKELY(1 == affected_rows));
+  CK (OB_LIKELY(1 == affected_rows || 2 == affected_rows));
   return ret;
 }
 
@@ -171,7 +171,7 @@ int ObDBMSSchedulerMysql::set_attribute(
     } else if (is_stat_window_attr) {
       OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
       OZ (execute_sql(ctx, sql, affected_rows));
-      CK (1 == affected_rows);
+      CK (1 == affected_rows || 2 == affected_rows);
     } else {
       OZ (params.at(1).get_varchar(attr_name));
       OZ (params.at(2).get_varchar(attr_val));
@@ -223,7 +223,7 @@ int ObDBMSSchedulerMysql::_generate_job_id(int64_t tenant_id, int64_t &max_job_i
   if (OB_FAIL(storage::ObCommonIDUtils::gen_unique_id(tenant_id, raw_id))) {
     LOG_WARN("gen unique id failed", K(ret), K(tenant_id));
   } else {
-    max_job_id = raw_id.id() + JOB_ID_OFFSET;
+    max_job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
   }
   return ret;
 }

@@ -878,9 +878,8 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
       }
       case (ConfigChangeState::CHANGING): {
         if (is_reach_majority_()) {
-          (void) state_mgr_->reset_changing_config_with_arb();
+          (void) after_config_log_majority_(proposal_id, config_version);
           state_ = INIT;
-          (void) update_match_lsn_map_(running_args_, log_ms_meta_.curr_);
           ms_ack_list_.reset();
           resend_config_version_ = log_ms_meta_.curr_.config_.config_version_;
           last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
@@ -2061,9 +2060,11 @@ int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConf
 
 int LogConfigMgr::ack_config_log(const common::ObAddr &sender,
                                  const int64_t proposal_id,
-                                 const LogConfigVersion &config_version)
+                                 const LogConfigVersion &config_version,
+                                 bool &is_majority)
 {
   int ret = OB_SUCCESS;
+  is_majority = false;
   SpinLockGuard guard(lock_);
   const bool is_in_memberlist = alive_paxos_memberlist_.contains(sender);
   if (IS_NOT_INIT) {
@@ -2084,10 +2085,41 @@ int LogConfigMgr::ack_config_log(const common::ObAddr &sender,
     } else {
       ret = OB_SUCCESS;
       // NB: can set majority repeatedly.
-      bool majority = is_reach_majority_();
+      is_majority = is_reach_majority_();
       PALF_LOG(INFO, "ack_config_log success", KR(ret), K_(palf_id), K_(self), K(config_version), K(sender),
-          K(majority), K_(ms_ack_list), K(alive_paxos_replica_num_));
+          K(is_majority), K_(ms_ack_list), K(alive_paxos_replica_num_));
     }
+  }
+  return ret;
+}
+
+int LogConfigMgr::after_config_log_majority(const int64_t proposal_id,
+                                            const LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  SpinLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else {
+    ret = after_config_log_majority_(proposal_id, config_version);
+  }
+  return ret;
+}
+
+// do not change LogConfigMgr::state_
+int LogConfigMgr::after_config_log_majority_(const int64_t proposal_id,
+                                             const LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  if (proposal_id != log_ms_meta_.proposal_id_ ||
+      config_version != log_ms_meta_.curr_.config_.config_version_) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "config_version has been changed", KR(ret), K_(palf_id),
+        K_(self), K_(log_ms_meta), K(proposal_id), K_(state), K(config_version));
+  } else if (is_reach_majority_()) {
+    (void) state_mgr_->reset_changing_config_with_arb();
+    (void) update_match_lsn_map_(running_args_, log_ms_meta_.curr_);
   }
   return ret;
 }
@@ -2711,6 +2743,16 @@ int LogConfigMgr::check_parent_health()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
+    {
+      SpinLockGuard parent_guard(parent_lock_);
+      SpinLockGuard child_guard(child_lock_);
+      // break learner loop
+      if (parent_.is_valid() &&
+          children_.contains(parent_) &&
+          OB_FAIL(retire_parent_())) {
+        PALF_LOG(WARN, "retire_parent_ failed", KR(ret), K_(palf_id), K_(self));
+      }
+    }
     SpinLockGuard guard(parent_lock_);
     const int64_t curr_time_us = common::ObTimeUtility::current_time();
     const bool is_registering_timeout = (is_registering_() && curr_time_us - last_submit_register_req_time_us_ > PALF_CHILD_RESEND_REGISTER_INTERVAL_US);
@@ -2822,6 +2864,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     }
   }
   if (OB_SUCC(ret)){
+    SpinLockGuard guard(child_lock_);
     LogLearner parent(self_, region_, child.register_time_us_);
     if (reg_ret == REGISTER_DONE ||
         reg_ret == REGISTER_CONTINUE ||

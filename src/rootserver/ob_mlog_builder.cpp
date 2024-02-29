@@ -41,6 +41,26 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
                    "create materialized view log on generated columns is");
     LOG_WARN("create materialized view log on generated columns is not supported",
         KR(ret), K(column_schema.get_column_name_str()));
+  } else if (column_schema.is_xmltype()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on xmltype columns is");
+    LOG_WARN("create materialized view log on xmltype columns is not supported",
+        KR(ret), K(column_schema.get_column_name_str()));
+  } else if (column_schema.is_json()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on json columns is");
+    LOG_WARN("create materialized view log on json columns is not supported",
+        KR(ret), K(column_schema.get_column_name_str()));
+  } else if (column_schema.is_geometry()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on geometry columns is");
+    LOG_WARN("create materialized view log on geometry columns is not supported",
+        KR(ret), K(column_schema.get_column_name_str()));
+  } else if (column_schema.is_udt_related_column()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on udt columns is");
+    LOG_WARN("create materialized view log on udt columns is not supported",
+        KR(ret), K(column_schema.get_column_name_str()));
   }
   return ret;
 }

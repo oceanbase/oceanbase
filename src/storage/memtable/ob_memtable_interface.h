@@ -148,7 +148,6 @@ public:
       storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey,
       blocksstable::ObDatumRow &row) = 0;
-
   virtual int64_t get_frozen_trans_version() { return 0; }
   virtual int major_freeze(const common::ObVersion &version)
   { UNUSED(version); return common::OB_SUCCESS; }

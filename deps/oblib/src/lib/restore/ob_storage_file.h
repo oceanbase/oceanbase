@@ -103,8 +103,9 @@ public:
   virtual ~ObStorageFileWriter();
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
   virtual int close() override;
-private:
+protected:
   char real_path_[OB_MAX_URI_LENGTH];
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileWriter);
 };
 
@@ -127,12 +128,33 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileAppender);
 };
 
-class ObStorageFileMultiPartWriter : public ObStorageFileWriter
+class ObStorageFileMultiPartWriter : public ObStorageFileWriter, public ObIStorageMultiPartWriter
 {
 public:
   ObStorageFileMultiPartWriter() {}
   virtual ~ObStorageFileMultiPartWriter() {}
+
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override
+  {
+    return ObStorageFileWriter::open(uri, storage_info);
+  }
+  virtual int write(const char *buf, const int64_t size) override
+  {
+    return ObStorageFileWriter::write(buf, size);
+  }
+  virtual int64_t get_length() const override
+  {
+    return ObStorageFileWriter::get_length();
+  }
+  virtual bool is_opened() const override
+  {
+    return ObStorageFileWriter::is_opened();
+  }
+
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
+  virtual int complete() override;
+  virtual int abort() override;
+  virtual int close() override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileMultiPartWriter);

@@ -1079,6 +1079,14 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     CK (OB_NOT_NULL(iparam));
     OX (mode = static_cast<pl::ObPLRoutineParamMode>(iparam->get_mode()));
     if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+      if (iparam->is_nocopy_param()
+          && pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode
+          && OB_NOT_NULL(udf_raw_expr->get_param_expr(i))
+          && pl::ObPlJsonUtil::is_pl_jsontype(udf_raw_expr->get_param_expr(i)->get_udt_id())) {
+        OZ (udf_raw_expr->add_param_desc(ObUDFParamDesc()));
+      } else
+#endif
       if (pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode
           || pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode) {
         ObRawExpr* iexpr = udf_raw_expr->get_param_expr(i);
@@ -1111,8 +1119,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             ExternalParams& extern_params = params.external_param_info_;
             for (int i = 0; OB_SUCC(ret) && i < extern_params.count(); ++i) {
-              if (extern_params.at(i).second->same_as(*c_expr)) {
-                ObRawExpr *rawexpr = extern_params.at(i).first;
+              if (extern_params.at(i).element<1>()->same_as(*c_expr)) {
+                ObRawExpr *rawexpr = extern_params.at(i).element<0>();
                 if (T_OBJ_ACCESS_REF == rawexpr->get_expr_type()) {
                   OZ (pl::ObPLResolver::set_write_property(
                     rawexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
@@ -4207,6 +4215,19 @@ int ObRawExprUtils::erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out
   return ret;
 }
 
+int ObRawExprUtils::erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(src_expr));
+  OX(out_expr = src_expr);
+  if (OB_SUCC(ret) && src_expr->has_flag(IS_INNER_ADDED_EXPR) &&
+      T_FUN_SYS_CAST == src_expr->get_expr_type()) {
+      CK(2 == src_expr->get_param_count());
+      OZ(erase_inner_added_exprs(src_expr->get_param_expr(0), out_expr));
+  }
+  return ret;
+}
+
 int ObRawExprUtils::erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out)
 {
   int ret = OB_SUCCESS;
@@ -4576,24 +4597,47 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
   // we create a new one here
   if (OB_SUCC(ret) && NULL == param_expr) {
     ObExecParamRawExpr *exec_param = NULL;
-    if (OB_FAIL(expr_factory.create_raw_expr(T_QUESTIONMARK, exec_param))) {
-      LOG_WARN("failed to create raw expr", K(ret));
-    } else if (OB_ISNULL(exec_param)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec param is null", K(ret), K(exec_param));
+    if (OB_FAIL(ObRawExprUtils::create_new_exec_param(expr_factory,
+                                                      outer_val_expr,
+                                                      exec_param,
+                                                      false))) {
+      LOG_WARN("failed to create new exec param", K(ret));
     } else if (OB_FAIL(query_ref->add_exec_param_expr(exec_param))) {
       LOG_WARN("failed to add exec param expr", K(ret));
-    } else if (OB_FAIL(exec_param->set_enum_set_values(outer_val_expr->get_enum_set_values()))) {
-      LOG_WARN("failed to set enum set values", K(ret));
-    } else if (OB_FAIL(exec_param->add_flag(IS_CONST))) {
-      LOG_WARN("failed to add flag", K(ret));
-    } else if (OB_FAIL(exec_param->add_flag(IS_DYNAMIC_PARAM))) {
-      LOG_WARN("failed to add flag", K(ret));
     } else {
-      exec_param->set_ref_expr(outer_val_expr);
-      exec_param->set_param_index(-1);
-      exec_param->set_result_type(outer_val_expr->get_result_type());
       param_expr = exec_param;
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::create_new_exec_param(ObRawExprFactory &expr_factory,
+                                          ObRawExpr *ref_expr,
+                                          ObExecParamRawExpr *&exec_param,
+                                          bool is_onetime /*=false*/)
+{
+  int ret = OB_SUCCESS;
+  exec_param = NULL;
+  if (OB_ISNULL(ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(ref_expr));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_QUESTIONMARK, exec_param))) {
+    LOG_WARN("failed to create exec param expr", K(ret));
+  } else if (OB_ISNULL(exec_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec param is null", K(ret), K(exec_param));
+  } else if (OB_FAIL(exec_param->set_enum_set_values(ref_expr->get_enum_set_values()))) {
+    LOG_WARN("failed to set enum set values", K(ret));
+  } else if (OB_FAIL(exec_param->add_flag(IS_CONST))) {
+    LOG_WARN("failed to add flag", K(ret));
+  } else if (OB_FAIL(exec_param->add_flag(IS_DYNAMIC_PARAM))) {
+    LOG_WARN("failed to add flag", K(ret));
+  } else {
+    exec_param->set_ref_expr(ref_expr, is_onetime);
+    exec_param->set_param_index(-1);
+    exec_param->set_result_type(ref_expr->get_result_type());
+    if (is_onetime) {
+      exec_param->add_flag(IS_ONETIME);
     }
   }
   return ret;
@@ -7679,6 +7723,8 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
       }
       if (OB_FAIL(func_expr->add_param_expr(dst_expr))) {
         LOG_WARN("add dest type expr failed", K(ret));
+      } else {
+        func_expr->set_result_type(dst_type);
       }
       LOG_DEBUG("create_cast_expr debug", K(ret), K(*src_expr), K(dst_type),
                                           K(*func_expr), K(lbt()), K(func_expr));
@@ -8462,6 +8508,40 @@ int ObRawExprUtils::build_pack_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
+                                             const ObSQLSessionInfo *session_info,
+                                             ObRawExpr *cast_expr,
+                                             ObRawExpr *input_expr,
+                                             ObRawExpr *next_expr,
+                                             const uint64_t ret_code,
+                                             ObSysFunRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info) || OB_ISNULL(cast_expr) ||
+        OB_ISNULL(input_expr) || OB_ISNULL(next_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), K(session_info), K(cast_expr), K(input_expr),
+                                    K(next_expr));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_INNER_ROW_CMP_VALUE, new_expr))) {
+    LOG_WARN("create inner row cmp value expr failed", K(ret));
+  } else if (OB_ISNULL(new_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner row cmp value expr is null", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(cast_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(input_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(next_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->formalize(session_info))) {
+    LOG_WARN("fail to formalize expr", K(*new_expr), K(ret));
+  } else {
+    new_expr->set_func_name("INTERNAL_FUNCTION");
+    new_expr->set_extra(ret_code);
+  }
+  return ret;
+}
+
 // 这个函数只会在 pl 里被调到，会设置 ObRawExpr 的被调用模式，用于区分是在 pl 还是 sql 中被调用
 int ObRawExprUtils::set_call_in_pl(ObRawExpr *&raw_expr)
 {
@@ -9000,10 +9080,16 @@ int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
     }
     if (has_char_dep_col) {
       //add sql mode
-      ObSessionSysVar *local_var = NULL;
-      if (OB_FAIL(gen_col.get_local_session_var().get_local_var(SYS_VAR_SQL_MODE, local_var))) {
-        LOG_WARN("get local var failed", K(ret));
-      } else if (NULL == local_var) {
+      bool is_sql_mode_solidified = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_sql_mode_solidified && i < var_array.count(); ++i) {
+        if (OB_ISNULL(var_array.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (share::SYS_VAR_SQL_MODE == var_array.at(i)->type_) {
+          is_sql_mode_solidified = true;
+        }
+      }
+      if (OB_SUCC(ret) && !is_sql_mode_solidified) {
         local_sql_mode.type_ = SYS_VAR_SQL_MODE;
         local_sql_mode.val_.set_uint64(sql_mode);
         if (OB_FAIL(var_array.push_back(&local_sql_mode))) {

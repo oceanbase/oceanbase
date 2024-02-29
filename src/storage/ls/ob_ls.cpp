@@ -106,7 +106,8 @@ ObLS::ObLS()
     switch_epoch_(0),
     ls_meta_(),
     rs_reporter_(nullptr),
-    startup_transfer_info_()
+    startup_transfer_info_(),
+    need_delay_resource_recycle_(false)
 {}
 
 ObLS::~ObLS()
@@ -211,6 +212,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("register to service failed", K(ret));
     } else {
       election_priority_.set_ls_id(ls_id);
+      need_delay_resource_recycle_ = false;
       is_inited_ = true;
       LOG_INFO("ls init success", K(ls_id));
     }
@@ -456,7 +458,7 @@ bool ObLS::is_need_gc() const
     bool_ret = true;
   } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
     LOG_WARN("get migration status failed", K(ret), K(ls_meta_.ls_id_));
-  } else if (ObMigrationStatusHelper::check_allow_gc_abandoned_ls(migration_status)) {
+  } else if (ObMigrationStatusHelper::can_gc_ls_without_check_dependency(migration_status)) {
     bool_ret = true;
   }
   if (bool_ret) {
@@ -740,6 +742,7 @@ void ObLS::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   startup_transfer_info_.reset();
   ls_transfer_status_.reset();
+  need_delay_resource_recycle_ = false;
 }
 
 int ObLS::offline_tx_(const int64_t start_ts)
@@ -1320,7 +1323,8 @@ int ObLS::get_replica_status(ObReplicaStatus &replica_status)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is not valid", K(ret), K(migration_status));
   } else if (OB_MIGRATION_STATUS_NONE == migration_status
-      || OB_MIGRATION_STATUS_REBUILD == migration_status) {
+      || OB_MIGRATION_STATUS_REBUILD == migration_status
+      || OB_MIGRATION_STATUS_REBUILD_WAIT == migration_status) {
     replica_status = REPLICA_STATUS_NORMAL;
   } else {
     replica_status = REPLICA_STATUS_OFFLINE;
@@ -2507,12 +2511,27 @@ int ObLS::set_ls_migration_gc(
   } else if (OB_FAIL(ls_meta_.set_migration_status(change_status, write_slog))) {
     LOG_WARN("failed to set migration status", K(ret), K(change_status));
   } else {
-    ls_tablet_svr_.disable_to_read();
     allow_gc = true;
   }
   return ret;
 }
 
+bool ObLS::need_delay_resource_recycle() const
+{
+  LOG_INFO("need delay resource recycle", KPC(this));
+  return need_delay_resource_recycle_;
+}
 
+void ObLS::set_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = true;
+  LOG_INFO("set delay resource recycle", KPC(this));
+}
+
+void ObLS::clear_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = false;
+  LOG_INFO("clear delay resource recycle", KPC(this));
+}
 }
 }

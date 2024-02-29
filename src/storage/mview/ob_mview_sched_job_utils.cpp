@@ -14,6 +14,7 @@
 
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "storage/ob_common_id_utils.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
@@ -29,6 +30,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -52,7 +54,7 @@ int ObMViewSchedJobUtils::generate_job_id(
     if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
       LOG_WARN("failed to gen unique id by rpc", KR(ret), K(tenant_id));
     } else {
-      job_id = raw_id.id() + ObMViewSchedJobUtils::JOB_ID_OFFSET;
+      job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
     }
   }
   return ret;
@@ -128,15 +130,12 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const ObString &exec_env)
 {
   int ret = OB_SUCCESS;
-  int64_t max_end_date_us = -1;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(share::ObTimeUtility2::str_to_usec("9999-01-01 00:00:00.000", max_end_date_us))) {
-     LOG_WARN("fail to get max_end_date_us", KR(ret));
   } else {
     int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() : start_date.get_timestamp();
-    int64_t end_date_us = repeat_interval.empty() ? start_date_us : max_end_date_us;
+    int64_t end_date_us = 64060560000000000; // 4000-01-01
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
       job_info.job_ = job_id;
@@ -175,11 +174,14 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
                                                          const ObString &db_name,
                                                          const ObString &table_name,
                                                          const ObMVRefreshInfo *refresh_info,
-                                                         const int64_t schema_version)
+                                                         const int64_t schema_version,
+                                                         ObMViewInfo &mview_info)
 {
   int ret = OB_SUCCESS;
   ObString refresh_job;
   ObArenaAllocator allocator("CreateMVTmp");
+  SCN curr_ts;
+  mview_info.reset();
   if (refresh_info == nullptr) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh_info is null", KR(ret));
@@ -222,15 +224,25 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                      GCONF.rpc_timeout,
+                                      curr_ts))) {
+      LOG_WARN("fail to get gts sync", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!curr_ts.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected curr_scn", KR(ret), K(tenant_id), K(curr_ts));
+    }
+  }
 
   if (OB_SUCC(ret)) {
-    ObMViewInfo mview_info;
     mview_info.set_tenant_id(tenant_id);
     mview_info.set_mview_id(mview_id);
     mview_info.set_build_mode(ObMViewBuildMode::IMMEDIATE);
     mview_info.set_refresh_mode(refresh_info->refresh_mode_);
     mview_info.set_refresh_method(refresh_info->refresh_method_);
     mview_info.set_refresh_job(refresh_job);
+    mview_info.set_last_refresh_scn(curr_ts.get_val_for_inner_table_field());
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {
       mview_info.set_refresh_start(refresh_info->start_time_.get_timestamp());
@@ -246,7 +258,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   return ret;
 }
 
-int ObMViewSchedJobUtils::disable_mview_refresh_job(
+int ObMViewSchedJobUtils::remove_mview_refresh_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const uint64_t table_id)
@@ -262,15 +274,15 @@ int ObMViewSchedJobUtils::disable_mview_refresh_job(
     }
     LOG_WARN("failed to fetch mview info", KR(ret), K(tenant_id), K(table_id));
   } else if (!mview_info.get_refresh_job().empty()
-      && OB_FAIL(ObDBMSSchedJobUtils::disable_dbms_sched_job(
+      && OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
               sql_client, tenant_id, mview_info.get_refresh_job(), true/*if_exists*/))) {
-    LOG_WARN("failed to disable dbms sched job",
+    LOG_WARN("failed to remove dbms sched job",
         KR(ret), K(tenant_id), K(mview_info.get_refresh_job()));
   }
   return ret;
 }
 
-int ObMViewSchedJobUtils::disable_mlog_purge_job(
+int ObMViewSchedJobUtils::remove_mlog_purge_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const uint64_t table_id)
@@ -286,9 +298,9 @@ int ObMViewSchedJobUtils::disable_mlog_purge_job(
     }
     LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id), K(table_id));
   } else if (!mlog_info.get_purge_job().empty()
-      && OB_FAIL(ObDBMSSchedJobUtils::disable_dbms_sched_job(
+      && OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
               sql_client, tenant_id, mlog_info.get_purge_job(), true/*if_exists*/))) {
-    LOG_WARN("failed to disable dbms sched job",
+    LOG_WARN("failed to remove dbms sched job",
         KR(ret), K(tenant_id), K(mlog_info.get_purge_job()));
   }
   return ret;

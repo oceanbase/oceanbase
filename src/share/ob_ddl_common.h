@@ -64,6 +64,11 @@ enum ObDDLType
   DDL_DROP_MLOG = 9,
   DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
   DDL_DROP_LOB = 11,
+  ///< @note tablet split.
+  DDL_AUTO_SPLIT_BY_RANGE = 100,
+  DDL_AUTO_SPLIT_NON_RANGE = 101,
+  DDL_MANUAL_SPLIT_BY_RANGE = 102,
+  DDL_MANUAL_SPLIT_NON_RANGE = 103,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -143,6 +148,11 @@ enum ObDDLTaskStatus {
   WAIT_CHILD_TASK_FINISH = 16,
   REPENDING = 17,
   START_REFRESH_MVIEW_TASK = 18,
+  WAIT_FROZE_END = 19,
+  WAIT_COMPACTION_END = 20,
+  WAIT_DATA_TABLE_SPLIT_END = 21,
+  WAIT_LOCAL_INDEX_SPLIT_END = 22,
+  WAIT_LOB_TABLE_SPLIT_END = 23,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -217,6 +227,21 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::START_REFRESH_MVIEW_TASK:
       str = "START_REFRESH_MVIEW_TASK";
       break;
+    case ObDDLTaskStatus::WAIT_FROZE_END:
+      str = "WAIT_FROZE_END";
+      break;
+    case ObDDLTaskStatus::WAIT_COMPACTION_END:
+      str = "WAIT_COMPACTION_END";
+      break;
+    case ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END:
+      str = "WAIT_DATA_TABLE_SPLIT_END";
+      break;
+    case ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END:
+      str = "WAIT_LOCAL_INDEX_SPLIT_END";
+      break;
+    case ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END:
+      str = "WAIT_LOB_TABLE_SPLIT_END";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -272,6 +297,7 @@ static inline bool is_direct_load_retry_err(const int ret)
   return is_ddl_stmt_packet_retry_err(ret) || ret == OB_TABLET_NOT_EXIST || ret == OB_LS_NOT_EXIST
     || ret == OB_NOT_MASTER
     || ret == OB_TASK_EXPIRED
+    || ret == OB_REPLICA_NOT_READABLE
     ;
 }
 
@@ -363,11 +389,6 @@ public:
                               const int64_t table_id,
                               int64_t &tablet_count);
 
-  // get all tablets of a table by table_schema
-  static int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids);
-
   // check if the major sstable of a table are exist in all needed replicas
   static int check_major_sstable_complete(
       const uint64_t data_table_id,
@@ -444,12 +465,7 @@ public:
       const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
-  
-  static bool is_table_lock_retry_ret_code(int ret)
-  {
-    return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
-           || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret;
-  }
+
   static bool need_remote_write(const int ret_code);
 
   static int check_can_convert_character(const ObObjMeta &obj_meta)
@@ -560,6 +576,9 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+
+  static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
+
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
@@ -673,7 +692,7 @@ private:
       const uint64_t index_table_id,
       const uint64_t ddl_task_id,
       const int64_t execution_id,
-      ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &tablet_ids,
       bool &tablet_checksum_status);
 
 };

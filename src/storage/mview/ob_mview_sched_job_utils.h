@@ -24,6 +24,7 @@ namespace schema
 class ObMVRefreshInfo;
 class ObSchemaGetterGuard;
 class ObUserInfo;
+class ObMViewInfo;
 }
 }
 namespace common
@@ -76,13 +77,14 @@ public:
                                             const common::ObString &db_name,
                                             const common::ObString &table_name,
                                             const share::schema::ObMVRefreshInfo *refresh_info,
-                                            const int64_t schema_version);
+                                            const int64_t schema_version,
+                                            share::schema::ObMViewInfo &mview_info);
 
-  static int disable_mview_refresh_job(common::ObISQLClient &sql_client,
+  static int remove_mview_refresh_job(common::ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
                                        const uint64_t table_id);
 
-  static int disable_mlog_purge_job(common::ObISQLClient &sql_client,
+  static int remove_mlog_purge_job(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const uint64_t table_id);
 
@@ -99,9 +101,6 @@ public:
                                             const ParseNode &node,
                                             common::ObIAllocator &allocator,
                                             int64_t &timestamp);
-
-public:
-  static constexpr int64_t JOB_ID_OFFSET = 1000000L;
 };
 } // namespace storage
 } // namespace oceanbase

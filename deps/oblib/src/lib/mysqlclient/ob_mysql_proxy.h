@@ -51,6 +51,8 @@ public:
   bool is_ddl_check_default_value() const { return is_ddl_check_default_value_bit_; }
   void set_mview_complete_refresh(const bool flag) { is_mview_complete_refresh_ = flag; }
   bool is_mview_complete_refresh() const { return is_mview_complete_refresh_; }
+  void set_refreshing_mview(const bool flag) { is_refreshing_mview_ = flag; }
+  bool is_refreshing_mview() const { return is_refreshing_mview_; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
 public:
@@ -59,7 +61,8 @@ public:
   static const int64_t IS_HEAP_TABLE_DDL_BIT = 1;
   static const int64_t IS_DDL_CHECK_DEFAULT_VALUE_BIT = 1;
   static const int64_t IS_MVIEW_COMPLETE_REFRESH_BIT = 1;
-  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT;
+  static const int64_t IS_REFRESHING_MVIEW_BIT = 1;
+  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -69,6 +72,7 @@ public:
       uint64_t is_heap_table_ddl_: IS_HEAP_TABLE_DDL_BIT;
       uint64_t is_ddl_check_default_value_bit_ : IS_DDL_CHECK_DEFAULT_VALUE_BIT;
       uint64_t is_mview_complete_refresh_: IS_MVIEW_COMPLETE_REFRESH_BIT;
+      uint64_t is_refreshing_mview_: IS_REFRESHING_MVIEW_BIT;
       uint64_t reserved_bit : RESERVED_BIT;
     };
   };

@@ -62,7 +62,7 @@ int ObCompactBlockReader::get_row(const ObChunkDatumStore::StoredRow *&sr)
     ret = OB_ITER_END;
   } else if (cur_pos_in_blk_ > cur_blk_->raw_size_ - sizeof(ObTempBlockStore::Block)) {
     ret = OB_INDEX_OUT_OF_RANGE;
-    LOG_WARN("invalid index", K(ret), K(cur_pos_in_blk_), KP(cur_blk_));
+    LOG_WARN("invalid index", K(ret), K(cur_pos_in_blk_), KP(cur_blk_), K(cur_row_in_blk_), K(cur_blk_->cnt_), K(row_meta_->column_offset_));
   } else {
     int64_t size = 0;
     sr = nullptr;

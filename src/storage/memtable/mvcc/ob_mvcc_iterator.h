@@ -95,10 +95,11 @@ class ObMvccValueIterator
 {
 public:
   ObMvccValueIterator()
-      : is_inited_(false),
-        ctx_(NULL),
-        value_(NULL),
-        version_iter_(NULL)
+    : is_inited_(false),
+    ctx_(NULL),
+    value_(NULL),
+    memtable_ls_id_(),
+    version_iter_(NULL)
   {
   }
   virtual ~ObMvccValueIterator() {}
@@ -106,6 +107,7 @@ public:
   int init(ObMvccAccessCtx &ctx,
            const ObMemtableKey *key,
            ObMvccRow *value,
+           const share::ObLSID memtable_ls_id,
            const ObQueryFlag &query_flag);
   OB_INLINE bool is_exist()
   {
@@ -117,6 +119,7 @@ public:
     is_inited_ = false;
     ctx_ = NULL;
     value_ = NULL;
+    memtable_ls_id_.reset();
     version_iter_ = NULL;
   }
   int check_row_locked(storage::ObStoreRowLockState &lock_state);
@@ -138,7 +141,7 @@ public:
   transaction::ObTransID get_reader_tx_id() const { return ctx_->tx_id_; }
   transaction::ObTransID get_snapshot_tx_id() const { return ctx_->snapshot_.tx_id_; }
 
-  TO_STRING_KV(KPC_(value), KPC_(version_iter), KPC_(ctx));
+  TO_STRING_KV(KPC_(value), KPC_(version_iter), KPC_(ctx), K_(memtable_ls_id));
 private:
   int lock_for_read_(const ObQueryFlag &flag);
   int lock_for_read_inner_(const ObQueryFlag &flag, ObMvccTransNode *&iter);
@@ -153,6 +156,7 @@ private:
   bool is_inited_;
   ObMvccAccessCtx *ctx_;
   ObMvccRow *value_;
+  share::ObLSID memtable_ls_id_;
   ObMvccTransNode *version_iter_;
 };
 
@@ -167,6 +171,7 @@ public:
   int init(ObQueryEngine &query_engine,
            ObMvccAccessCtx &ctx,
            const ObMvccScanRange &range,
+           const share::ObLSID memtable_ls_id,
            const ObQueryFlag &query_flag);
   int get_next_row(const ObMemtableKey *&key,
                    ObMvccValueIterator *&value_iter,
@@ -187,6 +192,7 @@ private:
 private:
   bool is_inited_;
   ObMvccAccessCtx *ctx_;
+  share::ObLSID memtable_ls_id_;
   ObQueryFlag query_flag_;
   ObMvccValueIterator value_iter_;
   ObQueryEngine *query_engine_;

@@ -72,6 +72,7 @@ class ObCdcService: public lib::TGRunnable
 {
 public:
   static int get_backup_dest(const share::ObLSID &ls_id, share::ObBackupDest &backup_dest);
+  static int init_archive_source(const ObLSID &ls_id, ClientLSCtx &ctx);
 public:
   ObCdcService();
   ~ObCdcService();
@@ -138,6 +139,8 @@ private:
 private:
   bool is_inited_;
   volatile bool stop_flag_ CACHE_ALIGNED;
+  uint64_t tenant_id_;
+
   ObCdcStartLsnLocator locator_;
   ObCdcFetcher fetcher_;
 

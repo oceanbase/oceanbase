@@ -18,14 +18,17 @@ namespace oceanbase
 namespace transaction
 {
 
-int ObTxMDSCache::init(int64_t tenant_id)
+int ObTxMDSCache::init(const int64_t tenant_id, const share::ObLSID ls_id, const ObTransID tx_id)
 {
   int ret = OB_SUCCESS;
 
-  ObMemAttr attr(tenant_id, "MdsMemHash");
-  if (OB_FAIL(mem_stat_hash_.create(16, attr, attr))) {
-    TRANS_LOG(WARN, "create mds mem stat failed", K(ret), K(tenant_id));
-  }
+#ifdef  ENABLE_DEBUG_LOG
+  tenant_id_ = tenant_id;
+  ls_id_ = ls_id;
+  tx_id_ = tx_id;
+  record_mem_ret_ = OB_SUCCESS;
+
+#endif
 
   return ret;
 }
@@ -38,7 +41,13 @@ void ObTxMDSCache::reset()
   submitted_iterator_ = mds_list_.end(); // ObTxBufferNodeList::iterator();
   need_retry_submit_mds_ = false;
   max_register_no_ = 0;
+#ifdef  ENABLE_DEBUG_LOG
+  tenant_id_ = 0;
+  ls_id_.reset();
+  tx_id_.reset();
   mem_stat_hash_.destroy();
+  record_mem_ret_ = OB_SUCCESS;
+#endif
 }
 
 void ObTxMDSCache::destroy()
@@ -52,7 +61,14 @@ void ObTxMDSCache::destroy()
     }
     tmp_node.get_buffer_ctx_node().destroy_ctx();
   }
+
+#ifdef ENABLE_DEBUG_LOG
+  tenant_id_ = 0;
+  ls_id_.reset();
+  tx_id_.reset();
   mem_stat_hash_.destroy();
+  record_mem_ret_ = OB_SUCCESS;
+#endif
 }
 
 int ObTxMDSCache::alloc_mds_node(const ObPartTransCtx *tx_ctx,
@@ -84,22 +100,36 @@ int ObTxMDSCache::alloc_mds_node(const ObPartTransCtx *tx_ctx,
     data.assign_ptr(reinterpret_cast<char *>(ptr), buf_len);
   }
 
-  if (OB_TMP_FAIL(mem_stat_hash_.get_refactored(cur_register_no, tmp_mem_stat))) {
-    if (OB_HASH_NOT_EXIST != tmp_ret) {
-      TRANS_LOG(ERROR, "get tmp_mem_stat from mem_stat_hash failed", K(ret), K(tmp_ret),
-                K(cur_register_no), K(tmp_mem_stat), KPC(tx_ctx));
+#ifdef ENABLE_DEBUG_LOG
+  if (!mem_stat_hash_.created()) {
+    ObMemAttr attr(tenant_id_, "MdsMemHash");
+    if (OB_TMP_FAIL(mem_stat_hash_.create(16, attr, attr))) {
+      record_mem_ret_ = tmp_ret;
+      TRANS_LOG(WARN, "create mds mem stat failed", K(ret), K(tmp_ret), K(tenant_id_), K(ls_id_),
+                K(tx_id_), K(record_mem_ret_));
     }
-    tmp_mem_stat.reset();
+  }
+  if (OB_SUCCESS == tmp_ret) {
+    if (OB_TMP_FAIL(mem_stat_hash_.get_refactored(cur_register_no, tmp_mem_stat))) {
+      if (OB_HASH_NOT_EXIST != tmp_ret) {
+        TRANS_LOG(ERROR, "get tmp_mem_stat from mem_stat_hash failed", K(ret), K(tmp_ret),
+                  K(cur_register_no), K(tmp_mem_stat), K(tenant_id_), K(ls_id_), K(tx_id_),
+                  K(record_mem_ret_));
+      }
+      tmp_mem_stat.reset();
+    }
   }
 
   if (OB_SUCCESS == tmp_ret || OB_HASH_NOT_EXIST == tmp_ret) {
     tmp_mem_stat.alloc_cnt_++;
     if (OB_TMP_FAIL(mem_stat_hash_.set_refactored(cur_register_no, tmp_mem_stat, 1))) {
-      TRANS_LOG(ERROR, "insert mem_stat_ into hash table failed", K(ret), K(tmp_ret),
-                K(cur_register_no), K(tmp_mem_stat),KPC(tx_ctx) );
+      record_mem_ret_ = tmp_ret;
+      TRANS_LOG(WARN, "insert mem_stat_ into hash table failed", K(ret), K(tmp_ret),
+                K(cur_register_no), K(tmp_mem_stat), K(tenant_id_), K(ls_id_), K(tx_id_),
+                K(record_mem_ret_));
     }
-
   }
+#endif
 
   return ret;
 }
@@ -119,9 +149,17 @@ void ObTxMDSCache::free_mds_node(common::ObString &data, uint64_t register_no)
 
   MultiTxDataFactory::free(data.ptr());
 
+#ifdef ENABLE_DEBUG_LOG
   if (OB_TMP_FAIL(mem_stat_hash_.get_refactored(cur_register_no, tmp_mem_stat))) {
-    TRANS_LOG_RET(ERROR, tmp_ret, "get tmp_mem_stat from mem_stat_hash failed", K(ret), K(tmp_ret),
-                  K(cur_register_no), K(tmp_mem_stat));
+    if (record_mem_ret_ != OB_SUCCESS) {
+      TRANS_LOG_RET(WARN, tmp_ret, "get tmp_mem_stat from mem_stat_hash failed", K(ret), K(tmp_ret),
+                    K(cur_register_no), K(tmp_mem_stat), K(tenant_id_), K(ls_id_), K(tx_id_),
+                    K(record_mem_ret_));
+    } else {
+      TRANS_LOG_RET(ERROR, tmp_ret, "get tmp_mem_stat from mem_stat_hash failed", K(ret),
+                    K(tmp_ret), K(cur_register_no), K(tmp_mem_stat), K(tenant_id_), K(ls_id_),
+                    K(tx_id_), K(record_mem_ret_));
+    }
     tmp_mem_stat.reset();
   }
 
@@ -130,22 +168,33 @@ void ObTxMDSCache::free_mds_node(common::ObString &data, uint64_t register_no)
     if (tmp_mem_stat.free_cnt_ >= tmp_mem_stat.alloc_cnt_) {
       if (OB_TMP_FAIL(mem_stat_hash_.erase_refactored(cur_register_no))) {
         TRANS_LOG_RET(ERROR, tmp_ret, "insert mem_stat_ into hash table failed", K(ret), K(tmp_ret),
-                      K(cur_register_no), K(tmp_mem_stat));
+                      K(cur_register_no), K(tmp_mem_stat), K(tmp_mem_stat), K(tenant_id_),
+                      K(ls_id_), K(tx_id_), K(record_mem_ret_));
       }
     }
   }
+#endif
 }
 
 bool ObTxMDSCache::is_mem_leak()
 {
-  bool mem_leak = !mem_stat_hash_.empty();
+  bool mem_leak = false;
 
+#ifdef ENABLE_DEBUG_LOG
+  mem_leak = !mem_stat_hash_.empty();
   if (mem_leak) {
     for (ObTxMDSMemStatHash::iterator iter = mem_stat_hash_.begin(); iter != mem_stat_hash_.end();
          iter++) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mds node mem leak", K(iter->first), K(iter->second));
+      if (record_mem_ret_ != OB_SUCCESS) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds node mem leak", K(iter->first), K(iter->second),
+                      K(tenant_id_), K(ls_id_), K(tx_id_), K(record_mem_ret_));
+      } else {
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mds node mem leak", K(iter->first),
+                      K(iter->second), K(tenant_id_), K(ls_id_), K(tx_id_), K(record_mem_ret_));
+      }
     }
   }
+#endif
 
   return mem_leak;
 }

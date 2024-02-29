@@ -594,7 +594,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
-          if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
+          if (pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.session_info_->is_user_session()) {
             // do nothing
           } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id,
                                                                                  read_only))) {
@@ -2266,7 +2266,7 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {
     uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
     bool read_only = false;
-    if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
+    if (pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.session_info_->is_user_session()) {
       // do nothing
     } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
       SQL_PC_LOG(WARN, "fail to get tenant read only attribute", K(tenant_id), K(ret));
@@ -2312,7 +2312,17 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.namespace_ = ns;
   pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
   pc_key.config_str_ = session.get_config_in_pc_str();
-  pc_key.use_rich_vector_format_ = session.use_rich_format();
+  // here we use `initial_use_rich_format` instead of `use_rich_format` as part of key
+  // consider scenario of binding outline:
+  // ```
+  //   set _enable_rich_vector_format = true;
+  //   create outline xx on select /*+opt_param('enable_rich_vector_format', 'false')*/ * from t on select * from t;
+  //   select * from t;
+  // ```
+  // rich_format is forced off by hint, thus `use_rich_format() = false`, `initial_use_rich_format() = true`
+  // added plan's key will be `true + other_info`, same as key constructed for getting plan.
+  // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
+  pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }

@@ -30,6 +30,7 @@ ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
     dest_ls_id_(),
     tablet_list_(),
+    task_id_(),
     data_end_scn_()
 {
 }
@@ -39,6 +40,7 @@ void ObTXStartTransferOutInfo::reset()
   src_ls_id_.reset();
   dest_ls_id_.reset();
   tablet_list_.reset();
+  task_id_.reset();
   data_end_scn_.reset();
   transfer_epoch_ = 0;
 }
@@ -48,7 +50,6 @@ bool ObTXStartTransferOutInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && !tablet_list_.empty()
-      && data_end_scn_.is_valid()
       && transfer_epoch_ > 0;
 }
 
@@ -63,19 +64,21 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
+    task_id_ = start_transfer_out_info.task_id_;
     data_end_scn_ = start_transfer_out_info.data_end_scn_;
     transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, data_end_scn_, transfer_epoch_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_, data_end_scn_, transfer_epoch_);
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
     dest_ls_id_(),
     start_scn_(),
-    tablet_meta_list_()
+    tablet_meta_list_(),
+    task_id_()
 {
 }
 
@@ -85,6 +88,7 @@ void ObTXStartTransferInInfo::reset()
   dest_ls_id_.reset();
   start_scn_.reset();
   tablet_meta_list_.reset();
+  task_id_.reset();
 }
 
 bool ObTXStartTransferInInfo::is_valid() const
@@ -107,20 +111,22 @@ int ObTXStartTransferInInfo::assign(const ObTXStartTransferInInfo &start_transfe
     src_ls_id_ = start_transfer_in_info.src_ls_id_;
     dest_ls_id_ = start_transfer_in_info.dest_ls_id_;
     start_scn_ = start_transfer_in_info.start_scn_;
+    task_id_ = start_transfer_in_info.task_id_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_, task_id_);
 
 /* ObTXFinishTransferInInfo */
 
-OB_SERIALIZE_MEMBER(ObTXFinishTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_list_);
+OB_SERIALIZE_MEMBER(ObTXFinishTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_list_, task_id_);
 ObTXFinishTransferInInfo::ObTXFinishTransferInInfo()
   : src_ls_id_(),
     dest_ls_id_(),
     start_scn_(),
-    tablet_list_()
+    tablet_list_(),
+    task_id_()
 {
 }
 
@@ -130,6 +136,7 @@ void ObTXFinishTransferInInfo::reset()
   dest_ls_id_.reset();
   start_scn_.reset();
   tablet_list_.reset();
+  task_id_.reset();
 }
 
 bool ObTXFinishTransferInInfo::is_valid() const
@@ -152,17 +159,19 @@ int ObTXFinishTransferInInfo::assign(const ObTXFinishTransferInInfo &finish_tran
     src_ls_id_ = finish_transfer_in_info.src_ls_id_;
     dest_ls_id_ = finish_transfer_in_info.dest_ls_id_;
     start_scn_ = finish_transfer_in_info.start_scn_;
+    task_id_ = finish_transfer_in_info.task_id_;
   }
   return ret;
 }
 
 /* ObTXFinishTransferOutInfo */
-OB_SERIALIZE_MEMBER(ObTXFinishTransferOutInfo, src_ls_id_, dest_ls_id_, finish_scn_, tablet_list_);
+OB_SERIALIZE_MEMBER(ObTXFinishTransferOutInfo, src_ls_id_, dest_ls_id_, finish_scn_, tablet_list_, task_id_);
 ObTXFinishTransferOutInfo::ObTXFinishTransferOutInfo()
   : src_ls_id_(),
     dest_ls_id_(),
     finish_scn_(),
-    tablet_list_()
+    tablet_list_(),
+    task_id_()
 {
 }
 void ObTXFinishTransferOutInfo::reset()
@@ -171,6 +180,7 @@ void ObTXFinishTransferOutInfo::reset()
   dest_ls_id_.reset();
   finish_scn_.reset();
   tablet_list_.reset();
+  task_id_.reset();
 }
 bool ObTXFinishTransferOutInfo::is_valid() const
 {
@@ -192,6 +202,7 @@ int ObTXFinishTransferOutInfo::assign(const ObTXFinishTransferOutInfo &finish_tr
     src_ls_id_ = finish_transfer_out_info.src_ls_id_;
     dest_ls_id_ = finish_transfer_out_info.dest_ls_id_;
     finish_scn_ = finish_transfer_out_info.finish_scn_;
+    task_id_ = finish_transfer_out_info.task_id_;
   }
   return ret;
 }

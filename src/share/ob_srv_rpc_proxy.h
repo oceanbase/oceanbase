@@ -80,6 +80,7 @@ public:
   RPC_S(PR5 ls_remove_nonpaxos_replica, OB_LS_REMOVE_NONPAXOS_REPLICA, (ObLSDropNonPaxosReplicaArg));
   RPC_S(PR5 ls_modify_paxos_replica_number, OB_LS_MODIFY_PAXOS_REPLICA_NUMBER, (ObLSModifyPaxosReplicaNumberArg));
   RPC_S(PR5 ls_check_dr_task_exist, OB_LS_CHECK_DR_TASK_EXIST, (ObDRTaskExistArg), obrpc::Bool);
+  RPC_S(PR5 ob_exec_drtask_obadmin_command, OB_EXEC_DRTASK_OBADMIN_COMMAND, (ObAdminCommandArg));
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 add_arb, OB_ADD_ARB, (ObAddArbArg), obrpc::ObAddArbResult);
   RPC_S(PR5 remove_arb, OB_REMOVE_ARB, (ObRemoveArbArg), obrpc::ObRemoveArbResult);
@@ -250,6 +251,8 @@ public:
   RPC_S(PR5 client_session_create_time, OB_CLIENT_SESSION_CONNECT_TIME, (ObClientSessionCreateTimeAndAuthArg), ObClientSessionCreateTimeAndAuthRes);
   RPC_AP(PR5 tablet_location_send, OB_TABLET_LOCATION_BROADCAST, (obrpc::ObTabletLocationSendArg), obrpc::ObTabletLocationSendResult);
   RPC_S(PR5 cancel_gather_stats, OB_CANCEL_GATHER_STATS, (ObCancelGatherStatsArg));
+  RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
+  RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

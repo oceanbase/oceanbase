@@ -302,7 +302,8 @@ public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
       macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
-      cg_macro_cnt_arr_(), cg_micro_cnt_arr_()
+      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(),
+      stat_locked_(false)
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
@@ -318,6 +319,8 @@ public:
   const ObIArray<int64_t> &get_cg_macro_arr() const { return cg_macro_cnt_arr_; }
   const ObIArray<int64_t> &get_cg_micro_arr() const { return cg_micro_cnt_arr_; }
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
+  void set_stat_locked(bool locked) { stat_locked_ = locked; }
+  bool get_stat_locked() const { return stat_locked_; }
 
 
   TO_STRING_KV(K(row_count_),
@@ -328,7 +331,8 @@ public:
                K(part_cnt_),
                K(last_analyzed_),
                K(cg_macro_cnt_arr_),
-               K(cg_micro_cnt_arr_));
+               K(cg_micro_cnt_arr_),
+               K(stat_locked_));
 
 private:
   int64_t row_count_;
@@ -340,6 +344,7 @@ private:
   int64_t last_analyzed_;
   ObArray<int64_t> cg_macro_cnt_arr_;
   ObArray<int64_t> cg_micro_cnt_arr_;
+  bool stat_locked_;
 };
 
 class ObGlobalNullEval

@@ -108,7 +108,6 @@ public:
   int init(
       common::ObAddr &self_addr,
       common::ObServerConfig &cfg,
-      ObUnitManager &unit_mgr,
       ObZoneManager &zone_mgr,
       ObDRTaskMgr &task_mgr,
       share::ObLSTableOperator &lst_operator,
@@ -122,7 +121,6 @@ public:
       int64_t &acc_dr_task);
   static int check_tenant_locality_match(
       const uint64_t tenant_id,
-      ObUnitManager &unit_mgr,
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
@@ -516,30 +514,28 @@ private:
     UnitProvider()
       : inited_(false),
         tenant_id_(OB_INVALID_ID),
-        unit_mgr_(nullptr),
         unit_set_() {}
     int init(
         const uint64_t tenant_id,
-        DRLSInfo &dr_ls_info,
-        ObUnitManager *unit_mgr);
+        DRLSInfo &dr_ls_info);
     int allocate_unit(
         const common::ObZone &zone,
         const uint64_t unit_group_id,
-        share::ObUnitInfo &unit_info);
+        share::ObUnit &unit);
     int init_unit_set(
         DRLSInfo &dr_ls_info);
 
   private:
     int inner_get_valid_unit_(
         const common::ObZone &zone,
-        const common::ObArray<share::ObUnitInfo> &unit_array,
-        share::ObUnitInfo &output_unit_info,
+        const common::ObArray<share::ObUnit> &unit_array,
+        share::ObUnit &output_unit,
         const bool &force_get,
         bool &found);
   private:
     bool inited_;
     uint64_t tenant_id_;
-    ObUnitManager *unit_mgr_;
+    share::ObUnitTableOperator unit_operator_;
     common::hash::ObHashSet<int64_t> unit_set_;
   };
 
@@ -552,7 +548,7 @@ private:
   class LocalityAlignment
   {
   public:
-    LocalityAlignment(ObUnitManager *unit_mgr, ObZoneManager *zone_mgr, DRLSInfo &dr_ls_info);
+    LocalityAlignment(ObZoneManager *zone_mgr, DRLSInfo &dr_ls_info);
     virtual ~LocalityAlignment();
     int build();
     int get_next_locality_alignment_task(
@@ -645,7 +641,6 @@ private:
   private:
     int64_t task_idx_;
     AddReplicaLATask add_replica_task_;
-    ObUnitManager *unit_mgr_;
     ObZoneManager *zone_mgr_;
     DRLSInfo &dr_ls_info_;
     common::ObArray<LATask *> task_array_;
@@ -661,7 +656,6 @@ private:
 
   static int check_ls_locality_match_(
       DRLSInfo &dr_ls_info,
-      ObUnitManager &unit_mgr,
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
@@ -1058,7 +1052,6 @@ private:
   bool dr_task_mgr_is_loaded_;
   common::ObAddr self_addr_;
   common::ObServerConfig *config_;
-  ObUnitManager *unit_mgr_;
   ObZoneManager *zone_mgr_;
   ObDRTaskMgr *disaster_recovery_task_mgr_;
   share::ObLSTableOperator *lst_operator_;

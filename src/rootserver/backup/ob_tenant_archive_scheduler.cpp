@@ -763,6 +763,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   ObDestRoundCheckpointer checkpointer;
   SCN max_checkpoint_scn = SCN::min_scn();
   bool can = false;
+  bool allow_force_stop = false;
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
@@ -776,6 +777,9 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
     LOG_WARN("tenant can not do archive", K(ret), K_(tenant_id));
   } else if (OB_FAIL(checkpointer.init(&round_handler_, piece_generated_cb, round_checkpoint_cb, max_checkpoint_scn))) {
     LOG_WARN("failed to init checkpointer", K(ret), K(round_info));
+  } else if (round_info.state_.is_stopping() && OB_FAIL(check_allow_force_stop_(round_info, allow_force_stop))) {
+    LOG_WARN("failed to check allow force stop", K(ret), K(round_info));
+  } else if (allow_force_stop && OB_FALSE_IT(checkpointer.set_allow_force_stop())) {
   } else if (OB_FAIL(checkpointer.checkpoint(round_info, summary))) {
     LOG_WARN("failed to do checkpoint.", K(ret), K(round_info), K(summary));
   }
@@ -832,6 +836,26 @@ int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBackupUtils::get_backup_scn(tenant_id_, max_checkpoint_scn))) {
     LOG_WARN("failed to get max checkpoint scn.", K(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+
+int ObArchiveHandler::check_allow_force_stop_(const ObTenantArchiveRoundAttr &round, bool &allow_force_stop) const
+{
+  int ret = OB_SUCCESS;
+  int64_t stopping_ts = 0;
+  const int64_t current_ts = ObTimeUtility::current_time();
+#ifdef ERRSIM
+  const int64_t force_stop_threshold = GCONF.errsim_allow_force_archive_threshold;;
+#else
+  const int64_t force_stop_threshold = ALLOW_FORCE_STOP_THRESHOLD;
+#endif
+  allow_force_stop = false;
+  if (OB_FAIL(archive_table_op_.get_round_stopping_ts(*sql_proxy_, round.key_.dest_no_, stopping_ts))) {
+    LOG_WARN("failed to get round stopping ts.", K(ret), K(round));
+  } else {
+    allow_force_stop = force_stop_threshold <= (current_ts - stopping_ts);
   }
   return ret;
 }

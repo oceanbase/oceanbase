@@ -399,6 +399,16 @@ OB_INLINE ObDuplicateType loc_meta_to_duplicate_type(const ObDASTableLocMeta &lo
   }
   return dup_type;
 }
+
+enum ObTSCIRScanType : uint8_t
+{
+  OB_NOT_A_SPEC_SCAN = 0,
+  OB_IR_DOC_ID_IDX_AGG,
+  OB_IR_INV_IDX_AGG,
+  OB_IR_INV_IDX_SCAN,
+  OB_IR_FWD_IDX_AGG,
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_DEFINE_H_ */

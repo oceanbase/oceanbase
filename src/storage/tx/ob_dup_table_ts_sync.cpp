@@ -92,9 +92,9 @@ int ObDupTableLSTsSyncMgr::validate_replay_ts(const common::ObAddr &dst,
     }
   }
 
-  if (replay_all_redo && OB_SUCC(ret)) {
-    DUP_TABLE_LOG(INFO, "replay all dup table redo", K(ls_id_), K(tx_id), K(dst), K(tmp_ts_info),
-                  K(target_replay_scn), K(replay_all_redo), K(max_read_version));
+  if (!replay_all_redo) {
+    DUP_TABLE_LOG(INFO, "the dst follower has not replay all redo", K(ls_id_), K(tx_id), K(dst),
+                  K(tmp_ts_info), K(target_replay_scn), K(replay_all_redo), K(max_read_version));
   }
 
   return ret;

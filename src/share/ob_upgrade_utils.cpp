@@ -47,7 +47,9 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 1UL, 1UL),  // 4.2.1.1
   CALC_VERSION(4UL, 2UL, 1UL, 2UL),  // 4.2.1.2
   CALC_VERSION(4UL, 2UL, 2UL, 0UL),  // 4.2.2.0
-  CALC_VERSION(4UL, 3UL, 0UL, 0UL)   // 4.3.0.0
+  CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
+  CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
+  CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -70,7 +72,9 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_1_1, DATA_VERSION_4_2_1_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_1_2, DATA_VERSION_4_2_1_2)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_2_0, DATA_VERSION_4_2_2_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_0, MOCK_DATA_VERSION_4_2_3_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
@@ -632,7 +636,9 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 2);
     INIT_PROCESSOR_BY_VERSION(4, 2, 2, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
@@ -1147,6 +1153,44 @@ int ObUpgradeFor4200Processor::post_upgrade_for_heartbeat_and_server_zone_op_ser
 
 /* =========== 4200 upgrade processor end ============= */
 
+int ObUpgradeFor4211Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_dbms_scheduler())) {
+    LOG_WARN("post for upgrade dbms scheduler failed", K(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4211Processor::post_upgrade_for_dbms_scheduler()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  bool is_tenant_standby = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_tenant_standby))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (is_tenant_standby) {
+    LOG_INFO("tenant is standby, ignore", K(tenant_id_));
+  } else {
+    OZ (sql.append_fmt(
+                    "insert ignore into %s "
+                    "(tenant_id,job_name,job,lowner,powner,cowner,next_date,`interval#`,flag) "
+                    "select tenant_id, job_name,0,lowner,powner,cowner,next_date,`interval#`,flag from %s where job != 0",
+                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                    OB_ALL_TENANT_SCHEDULER_JOB_TNAME)); // if has new colomn, use default value
+    OZ (sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows));
+    LOG_INFO("insert job_id=0 rows finished for dbms_scheduler old jobs", K(ret), K(tenant_id_), K(affected_rows));
+  }
+
+  return ret;
+}
+/* =========== 4211 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

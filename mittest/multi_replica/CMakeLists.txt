@@ -9,9 +9,11 @@ add_library(simple_replica_test ${OBSERVER_TEST_SRCS})
 target_include_directories(
   simple_replica_test PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
-  target_link_libraries(simple_replica_test PUBLIC
+
+target_link_libraries(simple_replica_test PUBLIC
   oceanbase
-  )
+  mit_env
+)
 
 function(ob_unittest_multi_replica case)
   ob_unittest(${ARGV})
@@ -26,3 +28,4 @@ ob_unittest_multi_replica(test_ob_dup_table_restart)
 ob_unittest_multi_replica(test_ob_dup_table_leader_switch)
 ob_unittest_multi_replica(test_ob_dup_table_tablet_gc)
 ob_unittest_multi_replica(test_mds_replay_from_ctx_table)
+ob_unittest_multi_replica(test_multi_transfer_tx)

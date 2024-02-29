@@ -50,6 +50,8 @@ public:
 
   static int calc_tablet_sstable_macro_block_cnt(
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
+  static int check_tenant_will_be_deleted(
+      bool &is_deleted);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);

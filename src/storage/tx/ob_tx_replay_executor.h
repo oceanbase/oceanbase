@@ -128,9 +128,9 @@ private:
   int replay_multi_source_data_();
   int replay_record_();
   bool is_tx_log_replay_queue() const { return replay_queue_ == 0; }
-  int replay_redo_in_memtable_(ObTxRedoLog &redo);
+  int replay_redo_in_memtable_(ObTxRedoLog &redo, const bool serial_final, ObTxSEQ &max_seq_no);
   virtual int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
-                                  memtable::ObMemtableMutatorIterator *mmi_ptr);
+                                          memtable::ObMemtableMutatorIterator *mmi_ptr);
   int prepare_memtable_replay_(storage::ObStorageTableGuard &w_guard,
                           memtable::ObIMemtable *&mem_ptr);
   int replay_row_(storage::ObStoreCtx &store_ctx,

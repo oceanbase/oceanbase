@@ -67,11 +67,10 @@ int64_t ObMergeProgress::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    const bool merge_finish = is_merge_finished();
-    if (merge_finish) {
-      J_KV(K(merge_finish), K_(total_table_cnt));
+    if (merge_finish_) {
+      J_KV(K_(merge_finish), K_(total_table_cnt));
     } else {
-      J_KV(KP(this), K(merge_finish), K_(unmerged_tablet_cnt), K_(merged_tablet_cnt), K_(total_table_cnt));
+      J_KV(KP(this), K_(merge_finish), K_(unmerged_tablet_cnt), K_(merged_tablet_cnt), K_(total_table_cnt));
       for (int64_t i = 0; i < RECORD_TABLE_TYPE_CNT; ++i) {
         J_COMMA();
         J_KV(ObTableCompactionInfo::TableStatusStr[i], table_cnt_[i]);

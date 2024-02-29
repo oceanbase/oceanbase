@@ -31,6 +31,7 @@ enum BenchmarkTaskType
   BENCHMARK_TASK_MULTIPART_WRITE = 2,
   BENCHMARK_TASK_READ = 3,
   BENCHMARK_TASK_DEL = 4,
+  BENCHMARK_TASK_IS_EXIST = 5,
   BENCHMARK_TASK_MAX_TYPE
 };
 
@@ -191,6 +192,19 @@ public:
 
 private:
   bool is_adaptive_;
+};
+
+class IsExistTaskExecutor : public ITaskExecutor
+{
+public:
+  IsExistTaskExecutor();
+  virtual ~IsExistTaskExecutor() {}
+  virtual int init(const char *base_uri,
+      share::ObBackupStorageInfo *storage_info, const TaskConfig &config) override;
+  virtual int execute() override;
+
+private:
+  int64_t obj_num_;
 };
 
 } //namespace tools

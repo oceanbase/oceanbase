@@ -47,6 +47,7 @@ public:
   bool is_valid() const { return sstable_ != nullptr; }
   int set_sstable(blocksstable::ObSSTable *sstable, ObStorageMetaHandle *meta_handle = nullptr);
   int get_sstable(blocksstable::ObSSTable *&table);
+  int get_merge_row_cnt(const ObTableIterParam &iter_param, int64_t &row_cnt);
   blocksstable::ObSSTable *get_sstable() const { return sstable_; }
   const ObStorageMetaHandle &get_meta_handle() const { return meta_handle_; }
   TO_STRING_KV(KPC_(sstable), K_(meta_handle));
@@ -189,7 +190,7 @@ protected:
   ObCOSSTableBaseType base_type_;
   bool is_empty_co_; // no need to create cg sstable when co sstable is empty
   bool valid_for_cs_reading_;
-  common::ObArenaAllocator tmp_allocator_; // TODO(@cangwu) remove this allocator later
+  common::ObArenaAllocator tmp_allocator_; // TODO(@jiahua.cjh) remove this allocator later
   DISALLOW_COPY_AND_ASSIGN(ObCOSSTableV2);
 };
 

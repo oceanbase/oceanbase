@@ -315,6 +315,7 @@ int ObTenantTabletTTLMgr::report_task_status(ObTTLTaskInfo& task_info, ObTTLTask
     // lock task ctx for update
     common::ObSpinLockGuard ctx_guard(ctx->lock_);
     ctx->last_modify_time_ = ObTimeUtility::current_time();
+    ctx->in_queue_ = false;
     mark_ttl_ctx_dirty(local_tenant_task_, *ctx);
     if (need_copy_task && OB_FAIL(deep_copy_task(ctx, task_info, task_para))) {
       LOG_WARN("fail to deep copy task", KR(ret), K_(tenant_id), K(task_info), K(task_para));
@@ -904,8 +905,10 @@ int ObTenantTabletTTLMgr::sync_sys_table_op(ObTTLTaskCtx* ctx,
     }
   }
 
-  // check tenant ttl status
-  if (OB_SUCC(ret) && OB_FAIL(ObTTLUtil::check_tenant_state(tenant_id_, trans, local_tenant_task_.state_, local_tenant_task_.task_id_, tenant_state_changed))) {
+  // check and ensure the tenant status not change in this transaction
+  // when tablet task is adready in terminal status, do not need check tenant state
+  // beause we won't change tablet status in such case
+  if (OB_SUCC(ret) && !is_end_state && OB_FAIL(ObTTLUtil::check_tenant_state(tenant_id_, trans, local_tenant_task_.state_, local_tenant_task_.task_id_, tenant_state_changed))) {
     FLOG_INFO("local tenant task state is different from sys table", KR(ret), K_(tenant_id), K(local_tenant_task_.state_));
   }
 
@@ -978,7 +981,7 @@ int ObTenantTabletTTLMgr::sync_sys_table(ObTabletID& tablet_id, bool &tenant_sta
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !ctx->in_queue_) {
     switch (ctx->task_status_) {
       case OB_TTL_TASK_PREPARE: {
         if (OB_FAIL(sync_sys_table_op(ctx, false, tenant_state_changed))) {
@@ -1007,15 +1010,10 @@ int ObTenantTabletTTLMgr::sync_sys_table(ObTabletID& tablet_id, bool &tenant_sta
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !ctx->in_queue_) {
     //mark ctx dirty false
-    if (OB_ISNULL(ctx)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("ctx is null", KR(ret));
-    } else {
-      ctx->is_dirty_ = false;
-      LOG_INFO("finish mark ctx dirty false", KR(ret), K(tablet_id), KPC(ctx));
-    }
+    ctx->is_dirty_ = false;
+    LOG_INFO("finish mark ctx dirty false", KR(ret), K(tablet_id), KPC(ctx));
   }
   return ret;
 }
@@ -1191,6 +1189,7 @@ int ObTenantTabletTTLMgr::try_schedule_task(ObTTLTaskCtx* ctx)
       if (ctx->task_start_time_ == OB_INVALID_ID) {
         ctx->task_start_time_ = ObTimeUtility::current_time();
       }
+      ctx->in_queue_ = true;
       ctx->task_status_ = OB_TTL_TASK_RUNNING;
       // mark ctx dirty later in report_task_status in case of watting too long in dag queue
     }

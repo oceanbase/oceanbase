@@ -203,6 +203,8 @@ private:
   int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
 
   int check_tablet_write_allow_(const ObTableLockOp &lock_op);
+  int get_lock_wait_expire_ts_(const int64_t lock_wait_start_ts);
+  int check_and_set_tx_lock_timeout_(const memtable::ObMvccAccessCtx &acc_ctx);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;

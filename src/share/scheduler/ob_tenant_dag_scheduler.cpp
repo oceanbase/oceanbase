@@ -131,9 +131,10 @@ int ObINodeWithChild::add_parent_node(ObINodeWithChild &parent)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
-  inc_indegree();
   if (OB_FAIL(parent_.push_back(&parent))) {
     COMMON_LOG(WARN, "failed to add parent", K(ret), K(parent));
+  } else {
+    inc_indegree();
   }
   return ret;
 }
@@ -1577,6 +1578,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     function_type_(0),
     group_id_(0),
     tg_id_(-1),
+    hold_by_compaction_dag_(false),
     is_inited_(false)
 {
 }
@@ -1709,14 +1711,15 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   return flag;
 }
 
-bool ObTenantDagWorker::hold_by_compaction_dag()
+void ObTenantDagWorker::set_task(ObITask *task)
 {
-  bool bret = false;
+  task_ = task;
+  hold_by_compaction_dag_ = false;
+
   ObIDag *dag = nullptr;
   if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
-    bret = is_compaction_dag(dag->get_type());
+    hold_by_compaction_dag_ = is_compaction_dag(dag->get_type());
   }
-  return bret;
 }
 
 void ObTenantDagWorker::run1()
@@ -4409,20 +4412,21 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID
   int ret = OB_SUCCESS;
   exist = false;
   bool tmp_exist = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < ObIDag::MergeDagPrioCnt; ++i) {
-    tmp_exist = false;
-    if (OB_FAIL(prio_sche_[ObIDag::MergeDagPrio[i]].check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
-      LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
-    } else if (tmp_exist) {
-      exist = true;
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(tmp_exist = false)) {
-  } else if (OB_FAIL(dag_net_sche_.check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
+  if (OB_FAIL(dag_net_sche_.check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
     LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
   } else if (tmp_exist) {
     exist = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObIDag::MergeDagPrioCnt; ++i) {
+      tmp_exist = false;
+      if (OB_FAIL(prio_sche_[ObIDag::MergeDagPrio[i]].check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
+        LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
+      } else if (tmp_exist) {
+        exist = true;
+      }
+    }
   }
   return ret;
 }

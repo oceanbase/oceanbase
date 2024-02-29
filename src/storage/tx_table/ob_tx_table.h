@@ -290,14 +290,12 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const share::SCN &create_scn,
-      const uint64_t tenant_data_version);
+      const share::SCN &create_scn);
   int create_ctx_tablet_(
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const share::SCN &create_scn,
-      const uint64_t tenant_data_version);
+      const share::SCN &create_scn);
   int remove_tablet_(const common::ObTabletID &tablet_id);
   int get_data_table_schema_(
       const uint64_t tenant_id,

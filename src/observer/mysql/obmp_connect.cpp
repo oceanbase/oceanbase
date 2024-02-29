@@ -1407,14 +1407,25 @@ int ObMPConnect::get_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
       LOG_WARN("extract_tenant_id failed", K(ret), K_(tenant_name));
     }
   }
-  if (OB_SUCC(ret) && !is_sys_tenant(tenant_id)) {
+  if (OB_SUCC(ret)) {
     if (is_meta_tenant(tenant_id)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
+    } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.ob_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_service or ob_service is NULL", KR(ret), K(tenant_id));
     } else if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
-      ret = OB_SERVER_IS_INIT;
-      LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      bool is_empty = false;
+      if (is_sys_tenant(tenant_id)
+          && OB_FAIL(GCTX.ob_service_->check_server_empty(is_empty))) {
+        LOG_WARN("fail to check server is empty", KR(ret));
+      } else if (is_sys_tenant(tenant_id) && is_empty) {
+          //in bootstrap, we could use sys to login
+      } else {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      }
     }
   }
   return ret;
@@ -2269,4 +2280,3 @@ int ObMPConnect::set_client_version(ObSMConnection &conn)
   }
   return ret;
 }
-

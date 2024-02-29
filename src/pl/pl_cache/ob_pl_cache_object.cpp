@@ -40,7 +40,7 @@ void ObPLCacheObject::reset()
   expressions_.reset();
 }
 
-int ObPLCacheObject::set_params_info(const ParamStore &params)
+int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
   int64_t N = params.count();
@@ -95,6 +95,13 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else {
       param_info.scale_ = params.at(i).get_scale();
+      if (is_anonymous) {
+        ObPLFunction *func = static_cast<ObPLFunction *>(this);
+        if (func->get_variables().count() > i &&
+            func->get_variables().at(i).is_pl_integer_type()) {
+          param_info.pl_type_ = PL_INTEGER_TYPE;
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(params_info_.push_back(param_info))) {

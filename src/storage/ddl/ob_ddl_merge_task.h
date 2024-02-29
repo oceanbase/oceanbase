@@ -84,6 +84,22 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableMergeTask);
 };
 
+class ObDDLMacroBlockIterator final
+{
+public:
+  ObDDLMacroBlockIterator();
+  ~ObDDLMacroBlockIterator();
+  int open(blocksstable::ObSSTable *sstable, const blocksstable::ObDatumRange &query_range, const ObITableReadInfo &read_info, ObIAllocator &allocator);
+
+  int get_next(blocksstable::ObDataMacroBlockMeta &data_macro_meta, int64_t &end_row_offset);
+private:
+  bool is_inited_;
+  blocksstable::ObSSTable *sstable_;
+  ObIAllocator *allocator_;
+  blocksstable::ObIMacroBlockIterator *macro_block_iter_;
+  blocksstable::ObSSTableSecMetaIterator *sec_meta_iter_;
+  blocksstable::DDLBtreeIterator ddl_iter_;
+};
 
 class ObTabletDDLUtil
 {
@@ -98,10 +114,18 @@ public:
       const ObStorageSchema *storage_schema,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
+  static int get_compact_meta_array(
+      ObTablet &tablet,
+      ObIArray<blocksstable::ObSSTable *> &sstables,
+      const ObTabletDDLParam &ddl_param,
+      const ObITableReadInfo &read_info,
+      const ObStorageSchema *storage_schema,
+      common::ObArenaAllocator &allocator,
+      ObArray<ObDDLBlockMeta> &sorted_metas);
   static int create_ddl_sstable(
       ObTablet &tablet,
       const ObTabletDDLParam &ddl_param,
-      const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
+      const ObIArray<ObDDLBlockMeta> &meta_array,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,

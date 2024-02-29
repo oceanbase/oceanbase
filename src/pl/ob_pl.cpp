@@ -1674,6 +1674,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       } else {
         trans_ctx.buf_size_ = sql.length();
         trans_ctx.p_list_ = parse_result.param_nodes_;
+        CK (OB_NOT_NULL(parse_result.result_tree_));
         CK (T_STMT_LIST == parse_result.result_tree_->type_ && 1 == parse_result.result_tree_->num_child_);
         CK (OB_NOT_NULL(block_node = parse_result.result_tree_->children_[0]));
         CK (T_SP_ANONYMOUS_BLOCK == block_node->type_);
@@ -1710,7 +1711,11 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
   lib::ContextParam param;
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
-  bool is_forbid_anony_parameter = block->is_forbid_anony_parameter_ || (params.count() > 0);
+  bool is_forbid_anony_parameter =
+         block->is_forbid_anony_parameter_
+          || (params.count() > 0)
+          || lib::is_mysql_mode();
+
   int64_t old_worker_timeout_ts = 0;
   /* !!!
    * PL，req_timeinfo_guard一定要在执行前定义
@@ -1744,7 +1749,7 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!is_forbid_anony_parameter && lib::is_oracle_mode()) {
+    } else if (!is_forbid_anony_parameter) {
       OZ (parameter_anonymous_block(ctx, block, exec_params, ctx.get_allocator(), cacheobj_guard));
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       CK (OB_NOT_NULL(routine));
@@ -1768,6 +1773,10 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
         // stmt_id is OB_INVALID_ID for anonymous block from text protocol
         OZ (compiler.compile(block, OB_INVALID_ID, *routine, &params, false));
         OX (routine->set_debug_priv());
+        if (OB_SUCC(ret) && params.count() != routine->get_params_info().count()) {
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("text anonymous can not contain bind variable", K(ret));
+        }
       }
     }
     // restore work timeout
@@ -2443,7 +2452,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
     OZ (compiler.compile(
       block_node, stmt_id, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
-    OZ (routine->set_params_info(params));
+    OZ (routine->set_params_info(params, true));
   }
 
   int64_t compile_end = ObTimeUtility::current_time();
@@ -2829,8 +2838,9 @@ int ObPLExecState::final(int ret)
 }
 
 int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
-                                     const ObPLDataType &pl_type,
-                                     common::ObObjParam &obj)
+                                    const ObPLDataType &pl_type,
+                                    common::ObObjParam &obj,
+                                    bool set_null)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -2838,7 +2848,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
   const ObPLDataType *real_pl_type = &pl_type;
-  bool set_null = pl_type.is_record_type() ? true : (top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) ? false : true;
+  OX (set_null = pl_type.is_record_type() ? true : set_null);
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
@@ -3319,7 +3329,8 @@ do {                                                                  \
           OX (get_params().at(i) = params->at(i));
           OZ (init_complex_obj(*(get_allocator()),
                                func_.get_variables().at(i),
-                               get_params().at(i)));
+                               get_params().at(i),
+                               !(top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_)));
         }
       }
     }

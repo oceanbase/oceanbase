@@ -170,7 +170,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 10;
+  static const int64_t DATA_VERSION_NUM = 12;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -210,10 +210,22 @@ private:
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 1)
+class ObUpgradeFor4211Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4211Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4211Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_dbms_scheduler();
+
+};
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

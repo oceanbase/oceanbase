@@ -2631,6 +2631,8 @@ public:
   inline bool has_table_alias_name() const { return column_flags_ & TABLE_ALIAS_NAME_FLAG; }
   void set_column_flags(uint64_t column_flags) { column_flags_ = column_flags; }
   void set_table_alias_name() { column_flags_ |= TABLE_ALIAS_NAME_FLAG; }
+  void set_table_part_key_column() { column_flags_ |= TABLE_PART_KEY_COLUMN_FLAG; }
+  void set_table_part_key_org_column() { column_flags_ |= TABLE_PART_KEY_COLUMN_ORG_FLAG; }
   inline uint64_t get_column_flags() const { return column_flags_; }
   inline const ObRawExpr *get_dependant_expr() const { return dependant_expr_; }
   inline ObRawExpr *&get_dependant_expr() { return dependant_expr_; }

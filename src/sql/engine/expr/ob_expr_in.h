@@ -264,12 +264,12 @@ public:
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
-  int cg_expr_without_row(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
+  int cg_expr_without_row(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                           ObExpr &rt_expr) const;
-  int cg_expr_with_row(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
+  int cg_expr_with_row(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const;
   // like "select 1 from dual where (select 1, 2) in ((1,2), (3,4))"
-  int cg_expr_with_subquery(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
+  int cg_expr_with_subquery(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const;
   static void set_datum_result(const bool is_expr_in,
                                const bool is_exist,

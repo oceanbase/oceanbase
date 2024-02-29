@@ -286,7 +286,7 @@ bool ObLockObjRequest::is_valid() const
 
 ObUnLockObjRequest::ObUnLockObjRequest() : ObLockObjRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_OBJ_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_OBJ_REQ;
@@ -325,7 +325,7 @@ bool ObLockObjsRequest::is_valid() const
 ObUnLockObjsRequest::ObUnLockObjsRequest()
   : ObLockObjsRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_OBJ_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_OBJ_REQ;
@@ -359,7 +359,7 @@ bool ObLockTableRequest::is_valid() const
 
 ObUnLockTableRequest::ObUnLockTableRequest() : ObLockTableRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_TABLE_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_TABLE_REQ;
@@ -393,7 +393,7 @@ bool ObLockPartitionRequest::is_valid() const
 ObUnLockPartitionRequest::ObUnLockPartitionRequest()
   : ObLockPartitionRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_PARTITION_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_PARTITION_REQ;
@@ -425,7 +425,7 @@ bool ObLockTabletRequest::is_valid() const
 
 ObUnLockTabletRequest::ObUnLockTabletRequest() : ObLockTabletRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_TABLET_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_TABLET_REQ;
@@ -461,7 +461,7 @@ bool ObLockTabletsRequest::is_valid() const
 
 ObUnLockTabletsRequest::ObUnLockTabletsRequest() : ObLockTabletsRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_TABLET_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_TABLET_REQ;
@@ -501,7 +501,7 @@ bool ObLockAloneTabletRequest::is_valid() const
 
 ObUnLockAloneTabletRequest::ObUnLockAloneTabletRequest() : ObLockAloneTabletRequest()
 {
-  if (is_lock_thread_enabled()) {
+  if (!is_lock_thread_enabled()) {
     type_ = ObLockMsgType::LOCK_ALONE_TABLET_REQ;
   } else {
     type_ = ObLockMsgType::UNLOCK_ALONE_TABLET_REQ;

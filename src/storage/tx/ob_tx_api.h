@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-int acquire_tx(ObTxDesc *&tx, const uint32_t session_id = 0);
+int acquire_tx(ObTxDesc *&tx, const uint32_t session_id = 0, const uint64_t data_version = 0);
 
 /**
  * start_tx - explicit start transaction
@@ -100,10 +100,11 @@ int submit_commit_tx(ObTxDesc &tx,
  * this is the end of lifecycle of a transaction
  *
  * @tx:         the target transaction's descriptor
+ * @is_from_xa: whether xa ctx calls this interface
  *
  * Return: OB_SUCCESS - OK
  */
-int release_tx(ObTxDesc &tx);
+int release_tx(ObTxDesc &tx, const bool is_from_xa = false);
 
 /**
  * reuse_tx - reuse transaction descriptor
@@ -111,11 +112,12 @@ int release_tx(ObTxDesc &tx);
  * when txn end, in stead of release txn descriptor, reuse it for
  * better performance.
  *
- * @tx:       the target transaction's descriptor
+ * @tx:           the target transaction's descriptor
+ * @data_version: tx data_version
  *
  * Return: OB_SUCCESS -OK
  */
-int reuse_tx(ObTxDesc &tx);
+int reuse_tx(ObTxDesc &tx, const uint64_t data_version);
 
 /**
  * stop_tx - stop txn immediately (for admin reason)

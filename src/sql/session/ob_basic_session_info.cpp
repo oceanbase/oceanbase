@@ -73,6 +73,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       proxy_sessid_(VALID_PROXY_SESSID),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
+      proxy_user_id_(OB_INVALID_ID),
       tx_desc_(NULL),
       tx_result_(),
       reserved_read_snapshot_version_(),
@@ -155,7 +156,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       last_update_tz_time_(0),
       is_client_sessid_support_(false),
       use_rich_vector_format_(false),
-      last_refresh_schema_version_(OB_INVALID_VERSION)
+      last_refresh_schema_version_(OB_INVALID_VERSION),
+      force_rich_vector_format_(ForceRichFormatStatus::Disable)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -443,6 +445,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
   use_rich_vector_format_ = true;
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -457,6 +460,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   }
   client_identifier_.reset();
   last_refresh_schema_version_ = OB_INVALID_VERSION;
+  proxy_user_id_ = OB_INVALID_ID;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -3312,7 +3316,7 @@ int ObBasicSessionInfo::check_optimizer_features_enable_valid(const ObObj &val)
   } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
     LOG_WARN("failed to get version");
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
-  } else if (version < CLUSTER_VERSION_4_0_0_0 || version > CLUSTER_CURRENT_VERSION) {
+  } else if (OB_UNLIKELY(!ObGlobalHint::is_valid_opt_features_version(version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
   }
@@ -3526,6 +3530,13 @@ int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool i
   } else {
     ret = get_bool_sys_var(SYS_VAR__FORCE_ORDER_PRESERVE_SET, force_set_order);
   }
+  return ret;
+}
+
+int ObBasicSessionInfo::is_storage_estimation_enabled(bool &storage_estimation_enabled) const
+{
+  int ret = OB_SUCCESS;
+  ret = get_bool_sys_var(SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION, storage_estimation_enabled);
   return ret;
 }
 
@@ -4443,6 +4454,13 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               is_client_sessid_support_,
               use_rich_vector_format_);
   }();
+  OB_UNIS_ENCODE(ObString(sql_id_));
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+  }
   return ret;
 }
 
@@ -4686,7 +4704,16 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     }
   }
   release_to_pool_ = OB_SUCC(ret);
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   }();
+  ObString sql_id;
+  OB_UNIS_DECODE(sql_id);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+  }
   return ret;
 }
 
@@ -4960,6 +4987,11 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               exec_min_cluster_version_,
               is_client_sessid_support_,
               use_rich_vector_format_);
+  OB_UNIS_ADD_LEN(ObString(sql_id_));
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              proxy_user_id_,
+              thread_data_.proxy_user_name_,
+              thread_data_.proxy_host_name_);
   return len;
 }
 
@@ -5299,6 +5331,26 @@ int ObBasicSessionInfo::get_auto_increment_cache_size(int64_t &auto_increment_ca
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_sys_variable(SYS_VAR_AUTO_INCREMENT_CACHE_SIZE, auto_increment_cache_size))) {
     LOG_WARN("fail to get variables", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_optimizer_features_enable_version(uint64_t &version) const
+{
+  int ret = OB_SUCCESS;
+  // if OPTIMIZER_FEATURES_ENABLE is set as '', use LASTED_COMPAT_VERSION
+  version = LASTED_COMPAT_VERSION;
+  ObString version_str;
+  uint64_t tmp_version = 0;
+  if (OB_FAIL(get_string_sys_var(SYS_VAR_OPTIMIZER_FEATURES_ENABLE, version_str))) {
+    LOG_WARN("failed to update session_timeout", K(ret));
+  } else if (version_str.empty()
+             || OB_FAIL(ObClusterVersion::get_version(version_str, tmp_version))
+             || !ObGlobalHint::is_valid_opt_features_version(tmp_version)) {
+    LOG_WARN("fail invalid optimizer features version", K(ret), K(version_str), K(tmp_version));
+    ret = OB_SUCCESS;
+  } else {
+    version = tmp_version;
   }
   return ret;
 }

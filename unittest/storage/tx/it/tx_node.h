@@ -19,6 +19,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/ls/ob_ls_tx_service.h"
@@ -47,7 +48,7 @@ class QueueConsumer : public share::ObThreadPool
 {
 public:
   QueueConsumer(ObString name,
-                ObSpScLinkQueue *q,
+                ObLinkQueue *q,
                 std::function<int(T*)> func):
     name_(name), queue_(q), func_(func), cond_() {}
   virtual int start() {
@@ -65,8 +66,14 @@ public:
     ObThreadPool::stop();
   }
   void run1() {
+    {
+      char name_buf[128];
+      snprintf(name_buf, 128, "QConsumer:%s", name_.ptr());
+      set_thread_name(name_buf);
+    }
     while(!stop_) {
-      ObLink *e = queue_->pop();
+      ObLink *e = NULL;
+      queue_->pop(e);
       if (e) {
         T *t = static_cast<T*>(e);
         func_(t);
@@ -80,11 +87,11 @@ public:
   }
   void wakeup() { if (ATOMIC_BCAS(&is_sleeping_, true, false)) { cond_.signal(); } }
   void set_name(ObString &name) { name_ = name; }
-  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->empty()), K_(stop));
+  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->size()), K_(stop));
 private:
   ObString name_;
   bool stop_;
-  ObSpScLinkQueue *queue_;
+  ObLinkQueue *queue_;
   std::function<int(T*)> func_;
   common::SimpleCond cond_;
   bool is_sleeping_ = false;
@@ -131,7 +138,8 @@ public:
   }
 
 public:
-  TO_STRING_KV(KP(this), K(addr_), K_(ls_id));
+  TO_STRING_KV(KP(this), K(addr_), K_(ls_id), K(msg_queue_.size()));
+  ObString get_identifer_str() const;
   ObTxDescGuard get_tx_guard();
   // the simple r/w interface
   int read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso = ObTxIsolationLevel::RC);
@@ -271,13 +279,13 @@ public:
   ObAddr addr_;
   ObLSID ls_id_;
   int64_t tenant_id_;
-  ObTenantBase tenant_;
+  omt::ObTenant tenant_;
   common::ObServerObjectPool<ObPartTransCtx> fake_part_trans_ctx_pool_;
   ObTransService txs_;
   memtable::ObMemtable *memtable_;
   ObSEArray<ObColDesc, 2> columns_;
   // msg_handler
-  ObSpScLinkQueue msg_queue_;
+  ObLinkQueue msg_queue_;
   QueueConsumer<MsgPack> msg_consumer_;
   // fake objects
   storage::ObTenantMetaMemMgr t3m_;

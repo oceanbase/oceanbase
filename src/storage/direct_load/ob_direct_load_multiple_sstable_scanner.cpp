@@ -60,7 +60,6 @@ int ObDirectLoadMultipleSSTableScanner::init(ObDirectLoadMultipleSSTable *sstabl
     if (OB_FAIL(data_block_scanner_.init(sstable, table_data_desc, range, datum_utils))) {
       LOG_WARN("fail to init data block scanner", KR(ret));
     } else if (OB_FAIL(data_block_reader_.init(table_data_desc.sstable_data_block_size_,
-                                               sstable->get_meta().max_data_block_size_,
                                                table_data_desc.compressor_type_))) {
       LOG_WARN("fail to init data block reader", KR(ret));
     } else {

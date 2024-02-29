@@ -40,7 +40,7 @@
 #include "sql/parser/ob_parser.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
 
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -586,7 +586,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         } else {
           int64_t refresh_time = ObTimeUtility::current_time();
           if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-              ctx, tenant_id, res.schema_version_))) {
+              ctx, my_session, tenant_id, res.schema_version_))) {
             LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();
@@ -2254,7 +2254,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
           } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-                     ctx, tenant_id, res.task_id_))) {
+                     ctx, my_session, tenant_id, res.task_id_))) {
             LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();

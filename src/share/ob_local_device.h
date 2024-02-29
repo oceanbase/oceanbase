@@ -70,6 +70,8 @@ public:
 
   //file/dir interfaces
   virtual int open(const char *pathname, const int flags, const mode_t mode, common::ObIOFd &fd, common::ObIODOpts *opts = NULL) override;
+  virtual int complete(const ObIOFd &fd) override;
+  virtual int abort(const ObIOFd &fd) override;
   virtual int close(const common::ObIOFd &fd) override;
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;

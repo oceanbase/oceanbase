@@ -1111,7 +1111,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
 template <typename TextVec, typename ResVec>
 int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &ctx,
                                            const ObBitVector &skip, const EvalBound &bound,
-                                           ObExpr &text)
+                                           ObExpr &text, ObDatum *pattern_inrow)
 {
   int ret = OB_SUCCESS;
   const bool do_optimization = true;
@@ -1119,16 +1119,12 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
   const ObCollationType coll_type = expr.args_[0]->datum_meta_.cs_type_;
   const ObCollationType escape_coll = expr.args_[2]->datum_meta_.cs_type_;
   ConstUniformFormat *pattern_vector = static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
-  ObDatum pattern_inrow = pattern_vector->get_datum(0);
-  if (!pattern_inrow.is_null() && !pattern_inrow.is_nop()) {
-    pattern_inrow.set_string(pattern_vector->get_string(0));
-  }
   ConstUniformFormat *escape_vector = static_cast<ConstUniformFormat *>(expr.args_[2]->get_vector(ctx));
-  if (OB_FAIL(check_pattern_valid<true>(pattern_inrow, escape_vector->get_datum(0),
+  if (OB_FAIL(check_pattern_valid<true>(*pattern_inrow, escape_vector->get_datum(0),
                                         escape_coll, coll_type,
                                         &ctx.exec_ctx_, like_id, do_optimization))) {
     LOG_WARN("check pattern valid failed", K(ret));
-  } else if (OB_UNLIKELY(pattern_inrow.is_null())) {
+  } else if (OB_UNLIKELY(pattern_inrow->is_null())) {
     ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     for (int64_t i = bound.start(); i < bound.end(); i++) {
@@ -1139,7 +1135,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     }
     expr.get_eval_info(ctx).notnull_ = false;
   } else {
-    ObString pattern_val = pattern_inrow.get_string();
+    ObString pattern_val = pattern_inrow->get_string();
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
     bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
@@ -1272,22 +1268,26 @@ int ObExprLike::vector_like(VECTOR_EVAL_FUNC_ARG_DECL)
   ObExpr &text = *expr.args_[0];
   ObExpr &pattern = *expr.args_[1];
   ObExpr &escape = *expr.args_[2];
+  const ConstUniformFormat *pattern_vector =
+    static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
+  ObDatum pattern_inrow = pattern_vector->get_datum(0);
   if ((!ob_is_text_tc(text.datum_meta_.type_) && !ob_is_text_tc(pattern.datum_meta_.type_))) {
-    ret = like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text);
+    ret =
+      like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text, &pattern_inrow);
   } else  {
-    ConstUniformFormat *pattern_vector =
-      static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
-    ConstUniformFormat *escape_vector =
-      static_cast<ConstUniformFormat *>(expr.args_[2]->get_vector(ctx));
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObString pattern_val = pattern_vector->get_string(0);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(
           temp_allocator, pattern_vector->get_datum(0), expr.args_[1]->datum_meta_,
           expr.args_[1]->obj_meta_.has_lob_header(), pattern_val))) {
       LOG_WARN("failed to read pattern", K(ret), K(pattern_val));
     } else {
-      ret = like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text);
+      if (!pattern_inrow.is_null() && !pattern_inrow.is_nop()) {
+        pattern_inrow.set_string(pattern_val);
+      }
+      ret = like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text,
+                                                             &pattern_inrow);
     }
   }
   return ret;

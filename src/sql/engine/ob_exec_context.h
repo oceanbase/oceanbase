@@ -603,7 +603,7 @@ protected:
   // expression evaluating allocator
   common::ObArenaAllocator eval_res_allocator_;
   common::ObArenaAllocator eval_tmp_allocator_;
-  ObSEArray<ObSqlTempTableCtx, 2> temp_ctx_;
+  ObTMArray<ObSqlTempTableCtx> temp_ctx_;
 
   // 用于 NLJ 场景下对右侧分区表 TSC 扫描做动态 pruning
   ObGIPruningInfo gi_pruning_info_;

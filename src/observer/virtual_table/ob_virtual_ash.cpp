@@ -269,6 +269,78 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         cells[cell_idx].set_bool(node.in_das_remote_exec_);
         break;
       }
+      case PROGRAM: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case TM_DELTA_TIME: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case TM_DELTA_CPU_TIME: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case TM_DELTA_DB_TIME: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case TOP_LEVEL_SQL_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case IN_PLSQL_COMPILATION: {
+        cells[cell_idx].set_bool(false);
+        break;
+      }
+      case IN_PLSQL_EXECUTION: {
+        cells[cell_idx].set_bool(false);
+        break;
+      }
+      case PLSQL_ENTRY_OBJECT_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLSQL_ENTRY_SUBPROGRAM_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLSQL_ENTRY_SUBPROGRAM_NAME: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLSQL_OBJECT_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLSQL_SUBPROGRAM_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLSQL_SUBPROGRAM_NAME: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case EVENT_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case IN_FILTER_ROWS: {
+        cells[cell_idx].set_bool(false);
+        break;
+      }
+      case GROUP_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case TX_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case BLOCKING_SESSION_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),

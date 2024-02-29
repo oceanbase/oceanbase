@@ -323,9 +323,10 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
-  } else if (OB_ISNULL(stmt_task)) {
+  } else if (OB_ISNULL(stmt_task) || OB_ISNULL(rv)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arguments", K(ret), KPC(stmt_task));
+    LOG_ERROR("invalid arguments", K(ret), KPC(stmt_task), KPC(rv));
+  } else if (FALSE_IT(rv->reset_column_num())) {
   } else if (OB_UNLIKELY(! stmt_task->is_dml_stmt()) || OB_ISNULL(dml_stmt_task)) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("stmt_task is not DML statement", KR(ret), "stmt_task", *stmt_task);
@@ -761,6 +762,11 @@ int ObLogFormatter::format_row_(
         dml_stmt_task.get_dml_flag(),
         &table_schema))) {
       LOG_ERROR("build_binlog_record_ fail", KR(ret), K(br), K(row_value), K(new_column_cnt), K(dml_stmt_task));
+    } else if (OB_UNLIKELY(!br.is_valid())) {
+      // 1. not found valid column(heap table with all column virtual generated)
+      // 2. dml_falg is DF_LOCK
+      // 3. tenant has been dropped
+      // 4. not user_table or table in recyclebin
     } else {
       if (OB_NOT_NULL(br.get_data())
           && OB_UNLIKELY(SRC_FULL_RECORDED != br.get_data()->getSrcCategory())) {
@@ -1581,10 +1587,6 @@ int ObLogFormatter::build_binlog_record_(
   } else if (OB_ISNULL(br_data = br->get_data())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("binlog record data is invalid", KR(ret), K(br));
-  } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
-        K(rv->new_column_array_), K(rv->old_column_array_));
   } else if (OB_FAIL(is_hbase_mode_put_(table_id, dml_flag, rv->column_num_, new_column_cnt,
           rv->contain_old_column_, is_hbase_mode_put))) {
     LOG_ERROR("is_hbase_mode_put_ fail", KR(ret), K(table_id), K(dml_flag),
@@ -1599,10 +1601,14 @@ int ObLogFormatter::build_binlog_record_(
     br->set_is_valid(true);
 
     if (rv->column_num_ <= 0) {
-      LOG_INFO("ignore non-user-column table", "table_name", simple_table_schema->get_table_name(),
+      LOG_INFO("[IGNORE_DATA] ignore non-user-column table", "table_name", simple_table_schema->get_table_name(),
           "table_id", simple_table_schema->get_table_id());
       // ignore table with no columns
       br->set_is_valid(false);
+    } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
+          K(rv->new_column_array_), K(rv->old_column_array_));
     } else {
       br_data->setNewColumn(rv->new_column_array_, static_cast<int>(rv->column_num_));
       br_data->setOldColumn(rv->old_column_array_, static_cast<int>(rv->column_num_));

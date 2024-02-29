@@ -301,6 +301,27 @@ int ObTabletMediumCompactionInfoRecorder::submit_trans_on_mds_table(const bool i
   return ret;
 }
 
+int64_t ObTabletMediumCompactionInfoRecorder::cal_buf_len(
+    const common::ObTabletID &tablet_id,
+    const ObMediumCompactionInfo &medium_info,
+    const logservice::ObLogBaseHeader *log_header)
+{
+  int64_t buf_len = 0;
+  if (OB_NOT_NULL(log_header)) {
+    buf_len += log_header->get_serialize_size();
+  } else {
+    const logservice::ObLogBaseHeader tmp_log_header(
+      logservice::ObLogBaseType::MEDIUM_COMPACTION_LOG_BASE_TYPE,
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER,
+      tablet_id.id());
+    buf_len += tmp_log_header.get_serialize_size();
+  }
+  buf_len += (tablet_id.get_serialize_size()
+      + serialization::encoded_length_i64(medium_info.medium_snapshot_)
+      + medium_info.get_serialize_size());
+  return buf_len;
+}
+
 // log_header + tablet_id + medium_snapshot + medium_compaction_info
 int ObTabletMediumCompactionInfoRecorder::prepare_struct_in_lock(
     int64_t &update_version,
@@ -322,10 +343,7 @@ int ObTabletMediumCompactionInfoRecorder::prepare_struct_in_lock(
   char *buf = nullptr;
   char *alloc_clog_buf = nullptr;
   int64_t alloc_buf_offset = 0;
-  const int64_t buf_len = log_header.get_serialize_size()
-      + tablet_id_.get_serialize_size()
-      + serialization::encoded_length_i64(medium_info_->medium_snapshot_)
-      + medium_info_->get_serialize_size();
+  const int64_t buf_len = cal_buf_len(tablet_id_, *medium_info_, &log_header);
   const int64_t alloc_buf_size = buf_len + sizeof(ObTabletHandle) + sizeof(ObStorageCLogCb) + sizeof(mds::MdsCtx);
 
   if (OB_UNLIKELY(nullptr == medium_info_ || nullptr == allocator)) {

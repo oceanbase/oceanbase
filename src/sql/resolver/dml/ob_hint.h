@@ -107,6 +107,8 @@ struct ObOptParamHint
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
     DEF(COMPACT_SORT_LEVEL,)              \
     DEF(WORKAREA_SIZE_POLICY,)         \
+    DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
+    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -124,6 +126,7 @@ struct ObOptParamHint
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }
+  int check_and_get_bool_opt_param(const OptParamType param_type, bool &has_opt_param, bool &val) const;
   void reset();
   TO_STRING_KV(K_(param_types), K_(param_vals));
   common::ObSEArray<OptParamType, 1, common::ModulePageAllocator, true> param_types_;
@@ -137,12 +140,21 @@ struct ObGlobalHint {
   void reset();
   int assign(const ObGlobalHint &other);
 
+// optimizer version define, move defines below to other file later
+#define COMPAT_VERSION_4_0        (oceanbase::common::cal_version(4, 0, 0, 0))
+#define COMPAT_VERSION_4_2_1      (oceanbase::common::cal_version(4, 2, 1, 0))
+//#define COMPAT_VERSION_4_2_1_BP3  (oceanbase::common::cal_version(4, 2, 1, 3))
+#define COMPAT_VERSION_4_2_1_BP4  (oceanbase::common::cal_version(4, 2, 1, 4))
+#define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
+#define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_0
+  static bool is_valid_opt_features_version(uint64_t version)
+  { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
+
   static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
   static const int64_t UNSET_QUERY_TIMEOUT = -1;
   static const int64_t UNSET_MAX_CONCURRENT = -1;
   static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
-  static const uint64_t MIN_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
-  static const uint64_t CURRENT_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
   static const int64_t DEFAULT_PARALLEL = 1;
   static const int64_t UNSET_PARALLEL = 0;
   static const int64_t SET_ENABLE_AUTO_DOP = -1;
@@ -184,8 +196,6 @@ struct ObGlobalHint {
   bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
   bool has_valid_opt_features_version() const { return is_valid_opt_features_version(opt_features_version_); }
-  static bool is_valid_opt_features_version(uint64_t version)
-  { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
   bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
   inline bool has_dbms_stats_hint() const { return has_dbms_stats_hint_; }

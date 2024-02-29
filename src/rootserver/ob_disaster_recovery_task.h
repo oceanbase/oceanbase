@@ -54,6 +54,22 @@ namespace drtask
   const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH = "migrate replica due to unit not match";
 };
 
+namespace drtasklog
+{
+  const static char * const START_MIGRATE_LS_REPLICA_STR = "start_migrate_ls_replica";
+  const static char * const FINISH_MIGRATE_LS_REPLICA_STR = "finish_migrate_ls_replica";
+  const static char * const START_ADD_LS_REPLICA_STR = "start_add_ls_replica";
+  const static char * const FINISH_ADD_LS_REPLICA_STR = "finish_add_ls_replica";
+  const static char * const START_TYPE_TRANSFORM_LS_REPLICA_STR = "start_type_transform_ls_replica";
+  const static char * const FINISH_TYPE_TRANSFORM_LS_REPLICA_STR = "finish_type_transform_ls_replica";
+  const static char * const START_REMOVE_LS_PAXOS_REPLICA_STR = "start_remove_ls_paxos_replica";
+  const static char * const FINISH_REMOVE_LS_PAXOS_REPLICA_STR = "finish_remove_ls_paxos_replica";
+  const static char * const START_REMOVE_LS_NON_PAXOS_REPLICA_STR = "start_remove_ls_non_paxos_replica";
+  const static char * const FINISH_REMOVE_LS_NON_PAXOS_REPLICA_STR = "finish_remove_ls_non_paxos_replica";
+  const static char * const START_MODIFY_PAXOS_REPLICA_NUMBER_STR = "start_modify_paxos_replica_number";
+  const static char * const FINISH_MODIFY_PAXOS_REPLICA_NUMBER_STR = "finish_modify_paxos_replica_number";
+}
+
 enum class ObDRTaskType : int64_t;
 enum class ObDRTaskPriority : int64_t;
 
@@ -453,8 +469,8 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
-  virtual const char* get_log_start_str() const override { return "start_migrate_ls_replica"; }
-  virtual const char* get_log_finish_str() const override { return "finish_migrate_ls_replica"; }
+  virtual const char* get_log_start_str() const override { return drtasklog::START_MIGRATE_LS_REPLICA_STR; }
+  virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_MIGRATE_LS_REPLICA_STR; }
   virtual int64_t get_clone_size() const override;
   virtual int clone(
       void *input_ptr,
@@ -563,8 +579,8 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
-  virtual const char* get_log_start_str() const override { return "start_add_ls_replica"; }
-  virtual const char* get_log_finish_str() const override { return "finish_add_ls_replica"; }
+  virtual const char* get_log_start_str() const override { return drtasklog::START_ADD_LS_REPLICA_STR; }
+  virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_ADD_LS_REPLICA_STR; }
   virtual int64_t get_clone_size() const override;
   virtual int clone(
       void *input_ptr,
@@ -676,8 +692,8 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
-  virtual const char* get_log_start_str() const override { return "start_type_transform_ls_replica"; }
-  virtual const char* get_log_finish_str() const override { return "finish_type_transform_ls_replica"; }
+  virtual const char* get_log_start_str() const override { return drtasklog::START_TYPE_TRANSFORM_LS_REPLICA_STR; }
+  virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_TYPE_TRANSFORM_LS_REPLICA_STR; }
   virtual int64_t get_clone_size() const override;
   virtual int clone(
       void *input_ptr,
@@ -799,14 +815,14 @@ public:
   virtual const char* get_log_start_str() const override
   {
     return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
-            ? "start_remove_ls_paxos_replica"
-            : "start_remove_ls_non_paxos_replica";
+            ? drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR
+            : drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR;
   }
   virtual const char* get_log_finish_str() const override
   {
     return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
-            ? "finish_remove_ls_paxos_replica"
-            : "finish_remove_ls_non_paxos_replica";
+            ? drtasklog::FINISH_REMOVE_LS_PAXOS_REPLICA_STR
+            : drtasklog::FINISH_REMOVE_LS_NON_PAXOS_REPLICA_STR;
   }
 
   virtual int64_t get_clone_size() const override;
@@ -907,8 +923,8 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
-  virtual const char* get_log_start_str() const override { return "start_modify_paxos_replica_number"; }
-  virtual const char* get_log_finish_str() const override { return "finish_modify_paxos_replica_number"; }
+  virtual const char* get_log_start_str() const override { return drtasklog::START_MODIFY_PAXOS_REPLICA_NUMBER_STR; }
+  virtual const char* get_log_finish_str() const override { return drtasklog::FINISH_MODIFY_PAXOS_REPLICA_NUMBER_STR; }
   virtual int64_t get_clone_size() const override;
   virtual int clone(
       void *input_ptr,

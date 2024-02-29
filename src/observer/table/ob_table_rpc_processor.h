@@ -192,6 +192,7 @@ protected:
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;
+  ObSessionStatEstGuard sess_stat_guard_;
 };
 
 template<class T>

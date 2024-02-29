@@ -1583,7 +1583,7 @@ int ObTenantRoleTransitionService::check_tenant_server_online_()
     LOG_WARN("fail to append sql", KR(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("fail to read the tenant's online servers", KR(ret), K(sql), K(tenant_id_));
       } else if (NULL == (result = res.get_result())) {

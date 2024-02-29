@@ -63,10 +63,6 @@ void TestSharedBlockRWriter::TearDownTestCase()
 void TestSharedBlockRWriter::SetUp()
 {
   int ret = OB_SUCCESS;
-  const ObTenantIOConfig &io_config = ObTenantIOConfig::default_instance();
-  if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
-    STORAGE_LOG(WARN, "add tenant io config failed");
-  }
 }
 
 void TestSharedBlockRWriter::TearDown()

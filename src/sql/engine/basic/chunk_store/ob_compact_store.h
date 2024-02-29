@@ -31,13 +31,12 @@ namespace sql
 class ObCompactStore final : public ObTempBlockStore
 {
   OB_UNIS_VERSION_V(1);
-  static const int64_t TRUNCATE_SIZE = 2L * 1024 * 1024;
 public:
   explicit ObCompactStore(common::ObIAllocator *alloc = NULL) : ObTempBlockStore(alloc),
                         compact_level_(share::SORT_DEFAULT_LEVEL),
                         writer_(nullptr), reader_(nullptr), batch_ctx_(nullptr),
                         row_meta_(*allocator_), row_cnt_(0), block_reader_(), start_iter_(false),
-                        cur_blk_id_(0), last_truncate_offset_(0), enable_truncate_(true)
+                        cur_blk_id_(0)
   {
   };
   virtual ~ObCompactStore() {reset();};
@@ -77,7 +76,7 @@ public:
   int add_row(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx, ObChunkDatumStore::StoredRow **stored_row = nullptr);
   int add_row(const ObChunkDatumStore::StoredRow &src_sr, ObChunkDatumStore::StoredRow **dst_sr = nullptr);
   // for chunkslicestore.
-  int add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+  int add_row(const blocksstable::ObDatumRow &datum_row, const ObStorageColumnGroupSchema &cg_schema,
               const int64_t extra_size, ObChunkDatumStore::StoredRow **stored_row = nullptr);
   int get_next_row(const ObChunkDatumStore::StoredRow *&sr);
 
@@ -88,8 +87,7 @@ public:
   ObTempBlockStore::BlockReader* get_block_reader() { return &block_reader_; }
   ObBlockIWriter* get_writer() { return writer_; }
   int64_t get_row_cnt() const { return row_cnt_; }
-  void set_enable_truncate(bool enable_trunc) { enable_truncate_ = enable_trunc; }
-  bool enable_truncate() { return enable_truncate_; }
+
   int has_next(bool &has_next);
   ChunkRowMeta *get_row_meta() { return &row_meta_; }
   void set_meta(ChunkRowMeta *row_meta) { writer_->set_meta(row_meta); reader_->set_meta(row_meta); }
@@ -124,8 +122,6 @@ private:
   ObTempBlockStore::BlockReader block_reader_;
   bool start_iter_;
   int64_t cur_blk_id_;
-  int64_t last_truncate_offset_;
-  bool enable_truncate_;
 }
 ;
 

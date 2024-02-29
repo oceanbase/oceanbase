@@ -1292,6 +1292,22 @@ int ObSimpleLogClusterTestEnv::wait_until_has_committed(PalfHandleImplGuard &lea
   return ret;
 }
 
+int ObSimpleLogClusterTestEnv::wait_lsn_until_slide(const LSN &lsn, PalfHandleImplGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t print_log_time = OB_INVALID_TIMESTAMP;
+  LSN last_slide_end_lsn = guard.palf_handle_impl_->sw_.last_slide_end_lsn_;
+  while (lsn > last_slide_end_lsn) {
+    usleep(1*1000);
+    if (palf_reach_time_interval(1*1000*1000, print_log_time)) {
+      PALF_LOG(WARN, "wait_lsn_until_slide", K(last_slide_end_lsn), K(lsn));
+    }
+    last_slide_end_lsn = guard.palf_handle_impl_->sw_.last_slide_end_lsn_;
+  }
+  return ret;
+}
+
 int ObSimpleLogClusterTestEnv::wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard)
 {
   int ret = OB_SUCCESS;

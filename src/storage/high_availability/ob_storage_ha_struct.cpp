@@ -547,10 +547,17 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_(
   SCN max_decided_scn(SCN::base_scn());
   ObLSService *ls_service = NULL;
   ObLSHandle dest_ls_handle;
+  bool is_tenant_deleted = false;
 
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mysql proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(ObStorageHAUtils::check_tenant_will_be_deleted(is_tenant_deleted))) {
+    LOG_WARN("failed to check tenant deleted", K(ret), K(ls));
+  } else if (is_tenant_deleted) {
+    need_check_allow_gc = true;
+    need_wait_dest_ls_replay = false;
+    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
       *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
@@ -779,6 +786,7 @@ int ObMigrationStatusHelper::trans_rebuild_fail_status(
     const ObMigrationStatus &cur_status,
     const bool is_in_member_list,
     const bool is_ls_deleted,
+    const bool is_tenant_dropped,
     ObMigrationStatus &fail_status)
 {
   int ret = OB_SUCCESS;
@@ -787,7 +795,7 @@ int ObMigrationStatusHelper::trans_rebuild_fail_status(
   if (OB_MIGRATION_STATUS_REBUILD != cur_status && OB_MIGRATION_STATUS_REBUILD_WAIT != cur_status) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(cur_status));
-  } else if (!is_in_member_list || is_ls_deleted) {
+  } else if (is_tenant_dropped || !is_in_member_list || is_ls_deleted) {
     fail_status = OB_MIGRATION_STATUS_REBUILD_FAIL;
   } else {
     fail_status = OB_MIGRATION_STATUS_REBUILD;
@@ -825,6 +833,16 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
     in_final_state = false;
   }
   return ret;
+}
+
+bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
+    const ObMigrationStatus &cur_status)
+{
+  bool allow_gc = false;
+  if (check_migration_status_is_fail_(cur_status)) {
+    allow_gc = true;
+  }
+  return allow_gc;
 }
 
 /******************ObMigrationOpArg*********************/

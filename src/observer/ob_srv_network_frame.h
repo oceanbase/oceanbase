@@ -132,6 +132,7 @@ static int get_default_net_thread_count()
     cnt = 7;
   } else {
     cnt = max(8, cpu_num / 6);
+    cnt = min(cnt, 64);
   }
   return cnt;
 }

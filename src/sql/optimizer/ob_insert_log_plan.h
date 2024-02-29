@@ -56,7 +56,7 @@ protected:
   int build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_expr);
   int create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
                           ObTablePartitionInfo *insert_table_part,
-                          ObShardingInfo *insert_sharding,
+                          ObShardingInfo *insert_table_sharding,
                           ObConstRawExpr *lock_row_flag_expr,
                           const bool force_no_multi_part,
                           const bool force_multi_part,
@@ -65,22 +65,21 @@ protected:
   int allocate_insert_as_top(ObLogicalOperator *&top,
                              ObRawExpr *lock_row_flag_expr,
                              ObTablePartitionInfo *table_partition_info,
-                             ObShardingInfo *insert_sharding,
+                             ObShardingInfo *insert_op_sharding,
                              bool is_multi_part);
   int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
   int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
-  virtual int check_insert_need_multi_partition_dml(ObLogicalOperator &top,
-                                                    ObTablePartitionInfo *insert_table_partition,
-                                                    ObShardingInfo *insert_sharding,
-                                                    bool &is_multi_part_dml);
-  virtual int check_insert_stmt_need_multi_partition_dml(bool &is_multi_part_dml,
-                                                         bool &is_one_part_table);
-  virtual int check_insert_location_need_multi_partition_dml(ObLogicalOperator &top,
-                                                             ObTablePartitionInfo *insert_table_partition,
-                                                             ObShardingInfo *insert_sharding,
-                                                             bool is_one_part_table,
-                                                             bool &is_multi_part_dml);
+  virtual int get_best_insert_dist_method(ObLogicalOperator &top,
+                                          ObTablePartitionInfo *insert_table_partition,
+                                          ObShardingInfo *insert_table_sharding,
+                                          const bool force_no_multi_part,
+                                          const bool force_multi_part,
+                                          int64_t &distributed_methods,
+                                          bool &is_multi_part_dml);
+  virtual int check_insert_plan_need_multi_partition_dml(ObTablePartitionInfo *insert_table_partition,
+                                                        ObShardingInfo *insert_table_sharding,
+                                                        bool &is_multi_part_dml);
   int check_basic_sharding_for_insert_stmt(ObShardingInfo &target_sharding,
                                            ObLogicalOperator &child,
                                            bool &is_basic);

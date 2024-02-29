@@ -55,6 +55,8 @@ private:
                            const share::SCN op_scn,
                            const transaction::NotifyType op_type,
                            const transaction::ObTxDataSourceType mds_type);
+  int enable_upper_trans_calculation_(const share::SCN op_scn);
+  int disable_upper_trans_calculation_();
 private:
   bool is_inited_;
   ObLS *ls_;

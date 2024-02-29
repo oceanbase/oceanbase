@@ -110,13 +110,6 @@ bool ObLSLocationUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObLSLocationUpdateTask::assign_when_equal(
-    const ObLSLocationUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 int ObTabletLSUpdateTask::init(
     const uint64_t tenant_id,
     const ObTabletID &tablet_id,
@@ -185,13 +178,6 @@ bool ObTabletLSUpdateTask::compare_without_version(
     const ObTabletLSUpdateTask &other) const
 {
   return (*this == other);
-}
-
-int ObTabletLSUpdateTask::assign_when_equal(
-    const ObTabletLSUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
 }
 
 ObLSLocationTimerTask::ObLSLocationTimerTask(
@@ -318,13 +304,6 @@ bool ObVTableLocUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObVTableLocUpdateTask::assign_when_equal(
-    const ObVTableLocUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 ObClearTabletLSCacheTimerTask::ObClearTabletLSCacheTimerTask(
     ObTabletLSService &tablet_ls_service)
     : tablet_ls_service_(tablet_ls_service)
@@ -425,13 +404,6 @@ bool ObTabletLocationBroadcastTask::compare_without_version
     (const ObTabletLocationBroadcastTask &other) const
 {
   return (*this == other);
-}
-
-int ObTabletLocationBroadcastTask::assign_when_equal(
-    const ObTabletLocationBroadcastTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
 }
 
 OB_SERIALIZE_MEMBER(ObTabletLocationBroadcastTask,

@@ -342,14 +342,17 @@ int ObCOSSTableRowScanner::init_project_iter(
         LOG_WARN("Failed to cg scan", K(ret));
       } else {
         project_iter_ = cg_scanner;
+        if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+          static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(nullptr == rows_filter_);
+        }
       }
     } else if (OB_ISNULL(project_iter_ = OB_NEWx(ObCGTileScanner, context.stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(project_iter_)->init(iter_params, false, context, co_sstable))) {
+    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(project_iter_)->init(iter_params, false, nullptr == rows_filter_, context, co_sstable))) {
       LOG_WARN("Fail to init cg tile scanner", K(ret), K(iter_params));
     }
-  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, false, co_sstable, context, iter_params,
+  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, false, nullptr == rows_filter_, co_sstable, context, iter_params,
       column_group_cnt_ != co_sstable->get_cs_meta().get_column_group_count(), project_iter_))) {
     LOG_WARN("Fail to switch context for cg iter", K(ret));
   }
@@ -388,10 +391,10 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
     } else if (OB_ISNULL(getter_project_iter_ = OB_NEWx(ObCGTileScanner, context.stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(getter_project_iter_)->init(iter_params, true, context, co_sstable))) {
+    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(getter_project_iter_)->init(iter_params, true, false, context, co_sstable))) {
       LOG_WARN("Failed to init cg tile scanner", K(ret), K(iter_params));
     }
-  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, true, co_sstable, context, iter_params,
+  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, true, false, co_sstable, context, iter_params,
       column_group_cnt_ != co_sstable->get_cs_meta().get_column_group_count(), getter_project_iter_))) {
     LOG_WARN("Failed to switch context for cg iter", K(ret));
   }
@@ -563,7 +566,9 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
   if (iter_param_->has_lob_column_out()) {
     access_ctx_->reuse_lob_locator_helper();
   }
-  if (nullptr != group_by_cell_) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("query interrupt", K(ret));
+  } else if (nullptr != group_by_cell_) {
     ret = filter_group_by_rows();
   } else if (nullptr != access_ctx_->limit_param_) {
     ret = filter_rows_with_limit(blockscan_state);
@@ -785,7 +790,7 @@ int ObCOSSTableRowScanner::fetch_output_rows()
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && !batched_row_store_->is_end()) {
     uint64_t count = 0;
-    uint64_t batch_size = iter_param_->op_->get_batch_size();
+    uint64_t batch_size = iter_param_->op_->eval_ctx_.get_batch_size();
     if (nullptr != access_ctx_->limit_param_)  {
       batch_size = MIN(batch_size,
                        access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_);
@@ -1005,6 +1010,8 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   ObVectorStore *vector_store = dynamic_cast<ObVectorStore *>(batched_row_store_);
   ObICGGroupByProcessor *group_by_processor = group_by_iters_.at(0);
   bool can_group_by = false;
+  bool already_init_uniform = false;
+  sql::ObEvalCtx &eval_ctx = iter_param_->op_->get_eval_ctx();
   if (group_by_cell_->is_processing()) {
     can_group_by = true;
   } else {
@@ -1018,18 +1025,26 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
   } else if (can_group_by) {
     int64_t output_cnt = 0;
     if (!group_by_cell_->is_processing()) {
-      if (OB_FAIL(do_group_by())) {
+      if (iter_param_->use_uniform_format() &&
+          OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx))) {
+        LOG_WARN("Failed to init uniform header", K(ret));
+      } else if (OB_FAIL(do_group_by())) {
         LOG_WARN("Failed to do group by", K(ret));
       } else if (!group_by_cell_->is_exceed_sql_batch()) {
         output_cnt = group_by_cell_->get_distinct_cnt();
       } else {
         group_by_cell_->reset_projected_cnt();
         group_by_cell_->set_is_processing(true);
+        already_init_uniform = true;
       }
     }
     if (OB_FAIL(ret)) {
     } else if (group_by_cell_->is_processing()) {
-      if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
+      if (!already_init_uniform &&
+          iter_param_->use_uniform_format() &&
+          OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx))) {
+        LOG_WARN("Failed to init uniform header", K(ret));
+      } else if (OB_FAIL(group_by_cell_->output_extra_group_by_result(output_cnt))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
           ret = OB_SUCCESS;
           group_by_cell_->set_is_processing(false);
@@ -1053,6 +1068,9 @@ int ObCOSSTableRowScanner::fetch_group_by_rows()
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to fetch output rows", K(ret));
     }
+  } else if (iter_param_->use_uniform_format() &&
+      OB_FAIL(group_by_cell_->init_uniform_header(iter_param_->output_exprs_, iter_param_->aggregate_exprs_, eval_ctx, false))) {
+    LOG_WARN("Failed to init uniform header", K(ret));
   } else if (OB_FAIL(group_by_cell_->copy_output_rows(vector_store->get_row_count()))) {
     LOG_WARN("Failed to copy output rows", K(ret));
   }

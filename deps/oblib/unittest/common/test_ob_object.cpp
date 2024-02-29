@@ -791,7 +791,7 @@ TEST_F(TestObObj, test_serialize)
   const char * cases[] =
       {
         "",
-        "10.244.4.30:55412;10.244.4.31:55412"
+        "127.0.0.1:55412;127.0.0.2:55412"
       };
   for (int64_t i = 0; i < ARRAYSIZEOF(cases); ++i) {
     obj1.set_varchar(cases[i]);

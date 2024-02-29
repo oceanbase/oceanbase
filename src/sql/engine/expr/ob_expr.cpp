@@ -1132,7 +1132,10 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
   //TODO shengle CHECK_BOUND(bound); check skip and all_rows_active wheth match
   ObEvalInfo &info = get_eval_info(ctx);
   char *frame = ctx.frames_[frame_idx_];
-  int64_t const_skip = 0;
+  int64_t const_skip = 1;
+  if (skip.accumulate_bit_cnt(bound) < bound.range_size()) {
+    const_skip = 0;
+  }
   const ObBitVector *rt_skip = batch_result_ ? &skip : to_bit_vector(&const_skip);
   bool need_evaluate = false;
   // in old operator, rowset_v2 expr eval param use eval_vector,
@@ -1147,7 +1150,8 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
              || (!batch_result_ && info.evaluated_)) {
     // expr values is projected by child or has no evaluate func, do nothing.
   } else if (!info.evaluated_) {
-    need_evaluate = true;
+    // if const_skip == 1, no need to evaluated expr, just `init_vector`
+    need_evaluate = batch_result_ || (const_skip == 0);
     get_evaluated_flags(ctx).reset(BATCH_SIZE());
     info.notnull_ = false;
     info.point_to_frame_ = true;

@@ -221,7 +221,10 @@ int ObShowCreateTable::fill_row_cells_inner(const uint64_t show_table_id,
                                                             show_table_id,
                                                             table_def_buf,
                                                             table_def_buf_size,
-                                                            pos))) {
+                                                            pos,
+                                                            TZ_INFO(session_),
+                                                            false,
+                                                            session_->get_sql_mode()))) {
               SERVER_LOG(WARN, "Generate view definition failed",
                          KR(ret), K(effective_tenant_id_), K(show_table_id));
             }

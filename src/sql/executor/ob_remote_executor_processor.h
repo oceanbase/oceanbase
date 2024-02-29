@@ -77,6 +77,12 @@ protected:
                                  int &err,
                                  ObSQLSessionInfo &session,
                                  int64_t &retry_times);
+private:
+  // if inner sql goes through this func, we should wait refresh schema until worker timeout,
+  // otherwise we will wait time in range of min(10ms, timeout_remain)
+  int try_refresh_schema_(const uint64_t tenant_id,
+                          const int64_t schema_version,
+                          const bool is_inner_sql);
 
 protected:
   const observer::ObGlobalContext &gctx_;

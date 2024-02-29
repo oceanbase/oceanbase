@@ -112,6 +112,7 @@ class ObIndexBlockIterParam final
 {
 public:
   ObIndexBlockIterParam();
+  ObIndexBlockIterParam(const ObSSTable *sstable, const ObTablet *tablet);
   ~ObIndexBlockIterParam();
   ObIndexBlockIterParam &operator=(const ObIndexBlockIterParam &other);
   int assign(const ObIndexBlockIterParam &other);
@@ -157,7 +158,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) = 0;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) = 0;
   //todo @hanling :refactor these OB_NOT_SUPPORTED interface
   virtual int get_idx_row_header_in_target_idx(const int64_t idx,
                                                const ObIndexBlockRowHeader *&idx_row_header) { return OB_NOT_SUPPORTED; }
@@ -231,7 +233,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObRAWIndexBlockRowIterator",

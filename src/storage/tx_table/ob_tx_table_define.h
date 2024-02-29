@@ -74,6 +74,9 @@ public:
                   ObTxDataTable &tx_data_table);
   int64_t get_serialize_size() const;
 
+  void set_compatible_version(const int32_t version) {
+    compatible_version_ = version;
+  }
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(const char *buf,
@@ -95,16 +98,21 @@ public:
     tx_data_guard_.reset();
     exec_info_.reset();
     table_lock_info_.reset();
+    compatible_version_ = -1;
   }
   void destroy() { reset(); }
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard), K_(exec_info), K_(cluster_version));
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard),
+               K_(exec_info), K_(table_lock_info), K_(cluster_version));
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t cluster_id_;
-  int64_t cluster_version_;
+  uint64_t cluster_version_;
   ObTxDataGuard tx_data_guard_;
   transaction::ObTxExecInfo exec_info_;
   transaction::tablelock::ObTableLockInfo table_lock_info_;
+  // used to handle compatible issue when deserialize,
+  // not serialized, set from ObTxCtxTableMeta
+  int32_t compatible_version_;
 };
 
 struct ObTxCtxTableMeta
@@ -123,6 +131,7 @@ public:
 
   void reset()
   {
+    version_ = VERSION_1;
     tx_id_.reset();
     ls_id_.reset();
     tx_ctx_serialize_size_ = 0;
@@ -132,6 +141,7 @@ public:
   void destroy() { reset(); }
   ObTxCtxTableMeta &operator=(const ObTxCtxTableMeta &r)
   {
+    version_ = r.version_;
     tx_id_ = r.tx_id_;
     ls_id_ = r.ls_id_;
     tx_ctx_serialize_size_ = r.tx_ctx_serialize_size_;
@@ -189,14 +199,24 @@ public:
   {
     return tx_ctx_serialize_size_;
   }
-
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(tx_ctx_serialize_size), K_(row_num), K_(row_idx));
+  int32_t get_version() const
+  {
+    return version_;
+  }
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(tx_ctx_serialize_size), K_(row_num), K_(row_idx), K_(version));
 private:
   int serialize_(char* buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(const char* buf, const int64_t buf_len, int64_t &pos);
   int64_t get_serialize_size_() const;
-
+public:
+  static constexpr int VERSION_0 = 0;
+  // V1, fix bug:
+  //   ctx serialized size record in header not equals to real serialized size
+  //   it is because of the CommonID's get serialize_size always return 8
+  //   but it use variant encoding
+  static constexpr int VERSION_1 = 1;
 private:
+  int32_t version_;
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t tx_ctx_serialize_size_;
@@ -224,7 +244,8 @@ class ObITxDataCheckFunctor
 {
 public:
   ObITxDataCheckFunctor()
-    : tx_data_check_data_() {}
+    : tx_data_check_data_(),
+    may_exist_undecided_state_in_tx_data_table_(false) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) = 0;
   virtual bool recheck() { return false; }
   virtual bool is_decided() const;
@@ -233,6 +254,15 @@ public:
                                            const share::SCN commit_version,
                                            const share::SCN end_scn,
                                            const bool is_rollback);
+  // In the tx_data_table, defensive error reporting strategies are implemented,
+  // which means that potential errors are proactively handled and reported
+  // before they can escalate. Concurrently, there might be cases where
+  // information is retrieved directly from the tx data table without undergoing
+  // these checks. To address this scenario, we utilize configuration settings
+  // to govern the behavior of error reporting, determining when and how such
+  // errors should be reported or managed.
+  bool may_exist_undecided_state_in_tx_data_table() const;
+  void set_may_exist_undecided_state_in_tx_data_table();
 
   VIRTUAL_TO_STRING_KV(K_(tx_data_check_data));
 public:
@@ -276,6 +306,14 @@ public:
   //     determined from the txn state, commit version, or rollback sequence on
   //     the destination side.
   ObTxDataCheckData tx_data_check_data_;
+  // In the tx_data_table, defensive error reporting strategies are implemented,
+  // which means that potential errors are proactively handled and reported
+  // before they can escalate. Concurrently, there might be cases where
+  // information is retrieved directly from the tx data table without undergoing
+  // these checks. To address this scenario, we utilize configuration settings
+  // to govern the behavior of error reporting, determining when and how such
+  // errors should be reported or managed.
+  bool may_exist_undecided_state_in_tx_data_table_;
 };
 
 class ObCommitVersionsArray

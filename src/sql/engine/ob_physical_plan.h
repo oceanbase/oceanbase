@@ -439,7 +439,7 @@ public:
   }
   inline bool is_plain_select() const
   {
-    return stmt::T_SELECT == stmt_type_ && !has_for_update() && !contain_pl_udf_or_trigger_;
+    return stmt::T_SELECT == stmt_type_ && !has_for_update() && !(contain_pl_udf_or_trigger_ && udf_has_dml_stmt_);
   }
 
   inline bool contain_paramed_column_field() const { return contain_paramed_column_field_; }
@@ -461,7 +461,8 @@ public:
 
   void set_need_serial_exec(bool need_serial_exec) { need_serial_exec_ = need_serial_exec; }
   bool get_need_serial_exec() const { return need_serial_exec_; }
-
+  void set_udf_has_dml_stmt(bool v) { udf_has_dml_stmt_ = v; }
+  bool udf_has_dml_stmt() { return udf_has_dml_stmt_; }
   void set_contain_pl_udf_or_trigger(bool v) { contain_pl_udf_or_trigger_ = v; }
   bool contain_pl_udf_or_trigger() { return contain_pl_udf_or_trigger_; }
   bool contain_pl_udf_or_trigger() const { return contain_pl_udf_or_trigger_; }
@@ -671,6 +672,9 @@ public:
   bool disable_auto_memory_mgr_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
+
+public:
+  bool udf_has_dml_stmt_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

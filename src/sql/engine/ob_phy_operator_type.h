@@ -154,22 +154,18 @@ namespace sql
 #include "sql/engine/ob_phy_operator_type.h"
 #undef PHY_OP_DEF
   };
-  const char *get_phy_op_name(ObPhyOperatorType type);
+  const char *get_phy_op_name(ObPhyOperatorType type, bool enable_rich_format = false);
 struct ObPhyOperatorTypeDescSet
 {
   struct ObPhyOperatorTypeDesc
   {
     const char *name_;
-    ObPhyOperatorTypeDesc() : name_(NULL) {}
+    const char *vec_name_;
+    ObPhyOperatorTypeDesc() : name_(NULL), vec_name_(NULL) {}
   };
-  ObPhyOperatorTypeDescSet()
-  {
-#define PHY_OP_DEF(type) set_type_str(type, #type);
-#include "sql/engine/ob_phy_operator_type.h"
-#undef PHY_OP_DEF
-  }
-  void set_type_str(ObPhyOperatorType type, const char *type_str);
-  const char *get_type_str(ObPhyOperatorType type) const;
+  ObPhyOperatorTypeDescSet();
+  void set_type_str(ObPhyOperatorType type, const char *type_str, const char *vec_name);
+  const char *get_type_str(ObPhyOperatorType type, bool enable_rich_format = false) const;
 private:
   ObPhyOperatorTypeDesc set_[PHY_END];
 };
@@ -179,7 +175,7 @@ OB_INLINE bool is_phy_op_type_valid(ObPhyOperatorType type)
   return PHY_INVALID < type && type < PHY_END;
 }
 
-const char *ob_phy_operator_type_str(ObPhyOperatorType type);
+const char *ob_phy_operator_type_str(ObPhyOperatorType type, bool enable_rich_format = false);
 }
 }
 

@@ -191,8 +191,13 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                   SQL_RESV_LOG(WARN, "failed to check table or view exists", K(db_name),
                                 K(table_name), K(ret));
                 } else if (!is_exists) {
-                  ret = OB_TABLE_NOT_EXIST;
-                  LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                  if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
+                    ret = OB_ERR_MVIEW_NOT_EXIST;
+                    LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                  } else {
+                    ret = OB_TABLE_NOT_EXIST;
+                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                  }
                 } else {
                   uint64_t db_id = OB_INVALID_ID;
                   const share::schema::ObSimpleTableSchemaV2 *table_view_schema = NULL;
@@ -231,8 +236,14 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                                 stmt::T_DROP_TABLE : stmt::T_DROP_VIEW,
                                 session_info_->get_enable_role_array()))) {
                     if (OB_TABLE_NOT_EXIST == ret) {
-                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
+                      if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
+                        ret = OB_ERR_MVIEW_NOT_EXIST;
+                        LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name),
+                            to_cstring(table_name));
+                      } else {
+                        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
+                            to_cstring(table_name));
+                      }
                     }
                     SQL_RESV_LOG(WARN, "failed to check ora ddl priv",
                                   K(db_name), K(parse_tree.type_),

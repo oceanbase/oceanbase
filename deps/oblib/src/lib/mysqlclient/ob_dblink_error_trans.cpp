@@ -34,6 +34,15 @@ const char* __attribute__((weak)) get_mysql_str_error(int index)
   return NULL;
 }
 
+bool __attribute__((weak)) get_dblink_reuse_connection_cfg()
+{
+  return true;
+}
+
+bool __attribute__((weak)) get_enable_dblink_cfg()
+{
+  return true;
+}
 
 namespace oceanbase
 {

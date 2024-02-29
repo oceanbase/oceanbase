@@ -13,13 +13,13 @@
 #pragma once
 
 #include "lib/container/ob_array.h"
-#include "lib/task/ob_timer.h"
+#include "rootserver/mview/ob_mview_timer_task.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
-class ObMViewMaintenanceTask : public common::ObTimerTask
+class ObMViewMaintenanceTask : public ObMViewTimerTask
 {
 public:
   ObMViewMaintenanceTask();

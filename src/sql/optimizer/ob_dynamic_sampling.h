@@ -13,7 +13,7 @@
 #ifndef _OB_DYNAMIC_SAMPLING_H_
 #define _OB_DYNAMIC_SAMPLING_H_
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_define.h"
@@ -199,6 +199,7 @@ static T *copy_ds_stat_item(ObIAllocator &allocator, const T &src)
 
 const int64_t OB_DS_BASIC_SAMPLE_MICRO_CNT = 32;
 const int64_t OB_DS_MAX_FILTER_EXPR_COUNT = 10000;
+const int64_t OB_DS_MIN_QUERY_TIMEOUT = 1000;//Dynamic sampling requires a minimum timeout of 1ms.
 //const int64_t OB_OPT_DS_ADAPTIVE_SAMPLE_MICRO_CNT = 200;
 //const int64_t OB_OPT_DS_MAX_TIMES = 7;
 
@@ -349,7 +350,6 @@ public:
   static int get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                               const ObTableDynamicSamplingHint *table_ds_hint,
                                               const int64_t global_ds_level,
-                                              bool has_opt_stat,
                                               int64_t &ds_level,
                                               int64_t &sample_block_cnt,
                                               bool &specify_ds);
@@ -357,7 +357,6 @@ public:
   static int get_ds_table_param(ObOptimizerContext &ctx,
                                 const ObLogPlan *log_plan,
                                 const OptTableMeta *table_meta,
-                                bool ignore_opt_stat,
                                 ObDSTableParam &ds_table_param,
                                 bool &specify_ds);
 
@@ -368,8 +367,7 @@ public:
                                                   uint64_t index_id,
                                                   const ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
-                                              int64_t &max_ds_timeout);
+  static int64_t get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx);
 
   static int add_failed_ds_table_list(const uint64_t table_id,
                                       const common::ObIArray<int64_t> &used_part_id,
@@ -383,6 +381,10 @@ public:
                                  const uint64_t ref_table_id,
                                  int64_t &degree);
 
+  static bool check_is_failed_ds_table(const uint64_t table_id,
+                                       const common::ObIArray<int64_t> &used_part_id,
+                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
+
 private:
   static int check_ds_can_use_filter(const ObRawExpr *filter,
                                      bool &no_use,
@@ -394,9 +396,6 @@ private:
                                     bool &need_specify_partition,
                                     ObIArray<PartInfo> &partition_infos);
 
-  static bool check_is_failed_ds_table(const uint64_t table_id,
-                                       const common::ObIArray<int64_t> &used_part_id,
-                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
 }
 ;
 

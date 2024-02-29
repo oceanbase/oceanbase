@@ -236,14 +236,14 @@ int ObIndexUsageReportTask::check_and_delete(const ObIArray<ObIndexUsageKey> &ca
         if (deleted_map_.size() >= MAX_DELETE_HASHMAP_SIZE) {
           LOG_INFO("reach max deleted map upper limited", K(deleted_map_.size()));
           break;
-        } else if (OB_FAIL(deleted_map_.set_refactored(key, 1))) {
+        } else if (OB_FAIL(deleted_map_.set_refactored(key, 1, true /* overwrite */))) {
           LOG_WARN("fail to set delete map", K(ret), K(key));
         }
       } else {
         LOG_WARN("fail to get from deleted map", K(ret));
       }
-    } else if (++value < MAX_CHECK_NOT_EXIST_CNT) { // update
-      if (OB_FAIL(deleted_map_.set_refactored(key, value))) {
+    } else if (++value <= MAX_CHECK_NOT_EXIST_CNT) { // update
+      if (OB_FAIL(deleted_map_.set_refactored(key, value, true /* overwrite */))) {
         LOG_WARN("fail to set deleted map", K(ret), K(key), K(value));
       }
     } else { // delete

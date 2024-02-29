@@ -736,6 +736,7 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;  // initialize
   if (ObQueryFlag::Reverse == scan_order_ && (-1 != limit_per_row_per_cf_ || 0 != offset_per_row_per_cf_)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan");
     LOG_WARN("server don't support set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan yet",
               K(ret), K(scan_order_), K(limit_per_row_per_cf_), K(offset_per_row_per_cf_));
   }

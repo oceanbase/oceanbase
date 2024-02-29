@@ -27,7 +27,6 @@ public:
   virtual ~ObDBMSSchedulerMysql() {}
 
 public:
- static constexpr int64_t JOB_ID_OFFSET = 1000000L;
 #define DECLARE_FUNC(func) \
   static int func(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
 

@@ -8,7 +8,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #
 #alter system set balance_worker_idle_sleep_seconds=33 COMMENT 'new all balance_worker_idle_sleep_seconds' SERVer_TYPE = ROOTSERVER cluster = 0;
 
-#alter system set balance_worker_idle_sleep_seconds=39 COMMENT 'new1 root balance_worker_idle_sleep_seconds' SERVer_TYPE = ROOTSERVER server_ip = '10.235.162.3' server_port = 47051;
+#alter system set balance_worker_idle_sleep_seconds=39 COMMENT 'new1 root balance_worker_idle_sleep_seconds' SERVer_TYPE = ROOTSERVER server_ip = '127.0.0.1' server_port = 47051;
 
 create table t_status(id int primary key, chunkserver char(90), mergesrver char(90), rootserver char(90), updateserver char(90), tablet_max_size int, status int);
 

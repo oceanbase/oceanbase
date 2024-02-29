@@ -45,11 +45,13 @@ public:
   int init(
       const ObIArray<ObTableIterParam*> &iter_params,
       const bool project_single_row,
+      const bool project_without_filter,
       ObTableAccessContext &access_ctx,
       ObITable *table);
   int switch_context(
       const ObIArray<ObTableIterParam*> &iter_params,
       const bool project_single_row,
+      const bool project_without_filter,
       ObTableAccessContext &access_ctx,
       ObITable *table,
       const bool col_cnt_changed);

@@ -260,7 +260,7 @@ int ObInnerTableSchema::dba_scheduler_windows_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.ALL_SCHEDULER_WINDOWS)__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT OWNER,                              WINDOW_NAME,                              RESOURCE_PLAN,                              SCHEDULE_OWNER,                              SCHEDULE_NAME,                              SCHEDULE_TYPE,                              START_DATE,                              REPEAT_INTERVAL,                              END_DATE,                              DURATION,                              WINDOW_PRIORITY,                              NEXT_RUN_DATE,                              LAST_START_DATE,                              ENABLED,                              ACTIVE,                              MANUAL_OPEN_TIME,                              MANUAL_DURATION,                              COMMENTS  FROM SYS.ALL_SCHEDULER_WINDOWS)__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::dba_wr_active_session_history_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        ASH.CLUSTER_ID AS CLUSTER_ID,        ASH.TENANT_ID AS TENANT_ID,        ASH.SNAP_ID AS SNAP_ID,        ASH.SVR_IP AS SVR_IP,        ASH.SVR_PORT AS SVR_PORT,        ASH.SAMPLE_ID AS SAMPLE_ID,        ASH.SESSION_ID AS SESSION_ID,        ASH.SAMPLE_TIME AS SAMPLE_TIME,        ASH.USER_ID AS USER_ID,        ASH.SESSION_TYPE AS SESSION_TYPE,        CAST(DECODE(ASH.EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,       ASH.SQL_ID AS SQL_ID,        ASH.TRACE_ID AS TRACE_ID,        ASH.EVENT_NO AS EVENT_NO,        ASH.TIME_WAITED AS TIME_WAITED,        ASH.P1 AS P1,        ASH.P2 AS P2,        ASH.P3 AS P3,        ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,        ASH.TIME_MODEL AS TIME_MODEL,        CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PARSE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PL_PARSE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLAN_CACHE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 8) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_OPTIMIZE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 16) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_EXECUTION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 32) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PX_EXECUTION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 64) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 128) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_COMMITTING,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 256) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_READ,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 512) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_WRITE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1024) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,       ASH.MODULE AS MODULE,        ASH.ACTION AS ACTION,        ASH.CLIENT_ID AS CLIENT_ID,        ASH.BACKTRACE AS BACKTRACE,        ASH.PLAN_ID AS PLAN_ID    FROM      SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,      SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP    WHERE      ASH.TENANT_ID = EFFECTIVE_TENANT_ID()      AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID      AND ASH.TENANT_ID = SNAP.TENANT_ID      AND ASH.SNAP_ID = SNAP.SNAP_ID      AND ASH.SVR_IP = SNAP.SVR_IP      AND ASH.SVR_PORT = SNAP.SVR_PORT      AND SNAP.STATUS = 0;   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        ASH.CLUSTER_ID AS CLUSTER_ID,        ASH.TENANT_ID AS TENANT_ID,        ASH.SNAP_ID AS SNAP_ID,        ASH.SVR_IP AS SVR_IP,        ASH.SVR_PORT AS SVR_PORT,        ASH.SAMPLE_ID AS SAMPLE_ID,        ASH.SESSION_ID AS SESSION_ID,        ASH.SAMPLE_TIME AS SAMPLE_TIME,        ASH.USER_ID AS USER_ID,        ASH.SESSION_TYPE AS SESSION_TYPE,        CAST(DECODE(ASH.EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,       ASH.SQL_ID AS SQL_ID,        ASH.TRACE_ID AS TRACE_ID,        ASH.EVENT_NO AS EVENT_NO,        ASH.EVENT_ID AS EVENT_ID,        ASH.TIME_WAITED AS TIME_WAITED,        ASH.P1 AS P1,        ASH.P2 AS P2,        ASH.P3 AS P3,        ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,        ASH.GROUP_ID AS GROUP_ID,        ASH.TX_ID AS TX_ID,        ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,        ASH.TIME_MODEL AS TIME_MODEL,        CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PARSE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PL_PARSE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLAN_CACHE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 8) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_OPTIMIZE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 16) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_EXECUTION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 32) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PX_EXECUTION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 64) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 128) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_COMMITTING,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 256) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_READ,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 512) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_WRITE,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1024) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_FILTER_ROWS,       ASH.PROGRAM AS PROGRAM,       ASH.MODULE AS MODULE,        ASH.ACTION AS ACTION,        ASH.CLIENT_ID AS CLIENT_ID,        ASH.BACKTRACE AS BACKTRACE,        ASH.PLAN_ID AS PLAN_ID,       ASH.TM_DELTA_TIME AS TM_DELTA_TIME,       ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,       ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,       ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_COMPILATION,       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4096) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_EXECUTION,       ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,       ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,       ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,       ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,       ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME   FROM      SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,      SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP    WHERE      ASH.TENANT_ID = EFFECTIVE_TENANT_ID()      AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID      AND ASH.TENANT_ID = SNAP.TENANT_ID      AND ASH.SNAP_ID = SNAP.SNAP_ID      AND SNAP.STATUS = 0;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1560,7 +1560,7 @@ int ObInnerTableSchema::dba_wr_sysstat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT      STAT.CLUSTER_ID AS CLUSTER_ID,      STAT.TENANT_ID AS TENANT_ID,      STAT.SNAP_ID AS SNAP_ID,      STAT.SVR_IP AS SVR_IP,      STAT.SVR_PORT AS SVR_PORT,      STAT.STAT_ID AS STAT_ID,      STAT.VALUE AS VALUE    FROM      SYS.ALL_VIRTUAL_WR_SYSSTAT STAT,      SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP    WHERE      STAT.TENANT_ID = EFFECTIVE_TENANT_ID()      AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID      AND STAT.TENANT_ID = SNAP.TENANT_ID      AND STAT.SNAP_ID = SNAP.SNAP_ID      AND STAT.SVR_IP = SNAP.SVR_IP      AND STAT.SVR_PORT = SNAP.SVR_PORT      AND SNAP.STATUS = 0;   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT      STAT.CLUSTER_ID AS CLUSTER_ID,      STAT.TENANT_ID AS TENANT_ID,      STAT.SNAP_ID AS SNAP_ID,      STAT.SVR_IP AS SVR_IP,      STAT.SVR_PORT AS SVR_PORT,      STAT.STAT_ID AS STAT_ID,      STAT.VALUE AS VALUE    FROM      SYS.ALL_VIRTUAL_WR_SYSSTAT STAT,      SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP    WHERE      STAT.TENANT_ID = EFFECTIVE_TENANT_ID()      AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID      AND STAT.TENANT_ID = SNAP.TENANT_ID      AND STAT.SNAP_ID = SNAP.SNAP_ID      AND SNAP.STATUS = 0;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2110,7 +2110,7 @@ int ObInnerTableSchema::v_ob_px_p2p_datahub_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT * FROM SYS.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT SVR_IP,           SVR_PORT,           TRACE_ID,           DATAHUB_ID,           MESSAGE_TYPE,           TENANT_ID,           HOLD_SIZE,           TIMEOUT_TS,           START_TIME FROM SYS.GV$OB_PX_P2P_DATAHUB     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2210,7 +2210,7 @@ int ObInnerTableSchema::v_sql_join_filter_ora_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,           SVR_PORT,           QC_SESSION_ID,           QC_INSTANCE_ID,           SQL_PLAN_HASH_VALUE,           FILTER_ID,           BITS_SET,           FILTERED,           PROBED,           ACTIVE,           CON_ID,           TRACE_ID FROM SYS.GV$SQL_JOIN_FILTER     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2261,106 +2261,6 @@ int ObInnerTableSchema::dba_ob_table_stat_stale_info_ora_schema(ObTableSchema &t
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(table_schema.set_view_definition(R"__( WITH V AS (SELECT   NVL(T.TABLE_ID, VT.TABLE_ID) AS TABLE_ID,   NVL(T.TABLET_ID, VT.TABLET_ID) AS TABLET_ID,   NVL(T.INSERTS, 0) + NVL(VT.INSERT_ROW_COUNT, 0) - NVL(T.LAST_INSERTS, 0) AS INSERTS,   NVL(T.UPDATES, 0) + NVL(VT.UPDATE_ROW_COUNT, 0) - NVL(T.LAST_UPDATES, 0) AS UPDATES,   NVL(T.DELETES, 0) + NVL(VT.DELETE_ROW_COUNT, 0) - NVL(T.LAST_DELETES, 0) AS DELETES   FROM   SYS.ALL_VIRTUAL_MONITOR_MODIFIED_REAL_AGENT T   FULL JOIN   SYS.ALL_VIRTUAL_DML_STATS VT   ON T.TABLE_ID = VT.TABLE_ID   AND T.TABLET_ID = VT.TABLET_ID   AND T.TENANT_ID = EFFECTIVE_TENANT_ID()   AND VT.TENANT_ID = EFFECTIVE_TENANT_ID() ) SELECT   CAST(TM.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,   CAST(TM.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,   CAST(TM.PART_NAME AS VARCHAR2(128)) AS PARTITION_NAME,   CAST(TM.SUB_PART_NAME AS VARCHAR2(128)) AS SUBPARTITION_NAME,   CAST(TS.ROW_CNT AS NUMBER) AS LAST_ANALYZED_ROWS,   TS.LAST_ANALYZED AS LAST_ANALYZED_TIME,   CAST(TM.INSERTS AS NUMBER) AS INSERTS,   CAST(TM.UPDATES AS NUMBER) AS UPDATES,   CAST(TM.DELETES AS NUMBER) AS DELETES,   CAST(NVL(CAST(UP.VALCHAR AS NUMBER), CAST(GP.SPARE4 AS NUMBER)) AS NUMBER) STALE_PERCENT,   CAST(CASE WHEN TS.ROW_CNT IS NOT NULL        THEN CASE WHEN (TM.INSERTS + TM.UPDATES + TM.DELETES) > TS.ROW_CNT * NVL(CAST(UP.VALCHAR AS NUMBER), CAST(GP.SPARE4 AS NUMBER)) / 100             THEN 'YES' ELSE 'NO' END        ELSE CASE WHEN (TM.INSERTS + TM.UPDATES + TM.DELETES) > 0             THEN 'YES' ELSE 'NO' END        END AS VARCHAR2(3)) AS IS_STALE FROM (SELECT   T.TENANT_ID,   T.TABLE_ID,   CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END AS PARTITION_ID,   DB.DATABASE_NAME,   T.TABLE_NAME,   P.PART_NAME,   SP.SUB_PART_NAME,   NVL(V.INSERTS, 0) AS INSERTS,   NVL(V.UPDATES, 0) AS UPDATES,   NVL(V.DELETES, 0) AS DELETES FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB   ON DB.DATABASE_ID = T.DATABASE_ID   AND T.TENANT_ID = EFFECTIVE_TENANT_ID()   AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)   AND DB.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P   ON T.TABLE_ID = P.TABLE_ID   AND P.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP   ON T.TABLE_ID = SP.TABLE_ID   AND P.PART_ID = SP.PART_ID   AND SP.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN V ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLET_ID WHEN 1 THEN P.TABLET_ID WHEN 2 THEN SP.TABLET_ID END WHERE T.TABLE_TYPE IN (0, 3, 8, 9) UNION ALL SELECT   MIN(T.TENANT_ID),   MIN(T.TABLE_ID),   -1 AS PARTITION_ID,   DB.DATABASE_NAME,   T.TABLE_NAME,   NULL AS PART_NAME,   NULL AS SUB_PART_NAME,   SUM(NVL(V.INSERTS, 0)) AS INSERTS,   SUM(NVL(V.UPDATES, 0)) AS UPDATES,   SUM(NVL(V.DELETES, 0)) AS DELETES FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB   ON DB.DATABASE_ID = T.DATABASE_ID   AND T.TENANT_ID = EFFECTIVE_TENANT_ID()   AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()   AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1) JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P   ON T.TABLE_ID = P.TABLE_ID   AND P.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN V ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = P.TABLET_ID WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 1 GROUP BY DB.DATABASE_NAME,          T.TABLE_NAME UNION ALL SELECT   MIN(T.TENANT_ID),   MIN(T.TABLE_ID),   MIN(P.PART_ID) AS PARTITION_ID,   DB.DATABASE_NAME,   T.TABLE_NAME,   P.PART_NAME,   NULL AS SUB_PART_NAME,   SUM(NVL(V.INSERTS, 0)) AS INSERTS,   SUM(NVL(V.UPDATES, 0)) AS UPDATES,   SUM(NVL(V.DELETES, 0)) AS DELETES FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB   ON DB.DATABASE_ID = T.DATABASE_ID   AND T.TENANT_ID = EFFECTIVE_TENANT_ID()   AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()   AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1) JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P   ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP   ON T.TENANT_ID = SP.TENANT_ID AND T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID LEFT JOIN V ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 2 GROUP BY DB.DATABASE_NAME,         T.TABLE_NAME,         P.PART_NAME UNION ALL SELECT   MIN(T.TENANT_ID),   MIN(T.TABLE_ID),   -1 AS PARTITION_ID,   DB.DATABASE_NAME,   T.TABLE_NAME,   NULL AS PART_NAME,   NULL AS SUB_PART_NAME,   SUM(NVL(V.INSERTS, 0)) AS INSERTS,   SUM(NVL(V.UPDATES, 0)) AS UPDATES,   SUM(NVL(V.DELETES, 0)) AS DELETES FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB   ON DB.DATABASE_ID = T.DATABASE_ID   AND T.TENANT_ID = EFFECTIVE_TENANT_ID()   AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()   AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1) JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P   ON T.TABLE_ID = P.TABLE_ID   AND P.TENANT_ID = EFFECTIVE_TENANT_ID() JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP   ON T.TABLE_ID = SP.TABLE_ID   AND P.PART_ID = SP.PART_ID   AND SP.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN V ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 2 GROUP BY DB.DATABASE_NAME,         T.TABLE_NAME ) TM LEFT JOIN SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS   ON TM.TABLE_ID = TS.TABLE_ID   AND TM.PARTITION_ID = TS.PARTITION_ID   AND TM.TENANT_ID = EFFECTIVE_TENANT_ID() LEFT JOIN SYS.ALL_VIRTUAL_OPTSTAT_USER_PREFS_REAL_AGENT UP   ON TM.TABLE_ID = UP.TABLE_ID   AND UP.PNAME = 'STALE_PERCENT'   AND UP.TENANT_ID = EFFECTIVE_TENANT_ID() JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP   ON GP.SNAME = 'STALE_PERCENT' )__"))) {
-      LOG_ERROR("fail to set view_definition", K(ret));
-    }
-  }
-  table_schema.set_index_using_type(USING_BTREE);
-  table_schema.set_row_store_type(ENCODING_ROW_STORE);
-  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
-  table_schema.set_progressive_merge_round(1);
-  table_schema.set_storage_format_version(3);
-  table_schema.set_tablet_id(0);
-
-  table_schema.set_max_used_column_id(column_id);
-  return ret;
-}
-
-int ObInnerTableSchema::dba_ob_mlogs_ora_schema(ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
-
-  //generated fields:
-  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
-  table_schema.set_tablegroup_id(OB_INVALID_ID);
-  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_OB_MLOGS_ORA_TID);
-  table_schema.set_rowkey_split_pos(0);
-  table_schema.set_is_use_bloomfilter(false);
-  table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(0);
-  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
-  table_schema.set_table_type(SYSTEM_VIEW);
-  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
-  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_MLOGS_ORA_TNAME))) {
-      LOG_ERROR("fail to set table_name", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
-      LOG_ERROR("fail to set compress_func_name", K(ret));
-    }
-  }
-  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
-  table_schema.set_charset_type(ObCharset::get_default_charset());
-  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       MLOG_ID,       CASE PURGE_MODE         WHEN 0 THEN 'IMMEDIATE SYNCHRONOUS'         WHEN 1 THEN 'IMMEDIATE ASYNCHRONOUS'         WHEN 2 THEN 'DEFERRED'         ELSE NULL       END AS PURGE_MODE,       PURGE_START,       PURGE_NEXT,       PURGE_JOB,       LAST_PURGE_SCN,       LAST_PURGE_DATE,       LAST_PURGE_TIME,       LAST_PURGE_ROWS,       LAST_PURGE_TRACE_ID,       gmt_create AS CREATE_TIME,       gmt_modified AS MODIFY_TIME     FROM SYS.ALL_VIRTUAL_MLOG_REAL_AGENT;   )__"))) {
-      LOG_ERROR("fail to set view_definition", K(ret));
-    }
-  }
-  table_schema.set_index_using_type(USING_BTREE);
-  table_schema.set_row_store_type(ENCODING_ROW_STORE);
-  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
-  table_schema.set_progressive_merge_round(1);
-  table_schema.set_storage_format_version(3);
-  table_schema.set_tablet_id(0);
-
-  table_schema.set_max_used_column_id(column_id);
-  return ret;
-}
-
-int ObInnerTableSchema::dba_ob_mviews_ora_schema(ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
-
-  //generated fields:
-  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
-  table_schema.set_tablegroup_id(OB_INVALID_ID);
-  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_OB_MVIEWS_ORA_TID);
-  table_schema.set_rowkey_split_pos(0);
-  table_schema.set_is_use_bloomfilter(false);
-  table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(0);
-  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
-  table_schema.set_table_type(SYSTEM_VIEW);
-  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
-  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_MVIEWS_ORA_TNAME))) {
-      LOG_ERROR("fail to set table_name", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
-      LOG_ERROR("fail to set compress_func_name", K(ret));
-    }
-  }
-  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
-  table_schema.set_charset_type(ObCharset::get_default_charset());
-  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       MVIEW_ID,       CASE BUILD_MODE         WHEN 0 THEN 'IMMEDIATE'         WHEN 1 THEN 'DEFERRED'         WHEN 2 THEN 'PERBUILT'         ELSE NULL       END AS BUILD_MODE,       CASE REFRESH_MODE         WHEN 0 THEN 'NEVER'         WHEN 1 THEN 'ON DEMAND'         WHEN 2 THEN 'ON COMMIT'         WHEN 3 THEN 'ON STATMENT'         ELSE NULL       END AS REFRESH_MODE,       CASE REFRESH_METHOD         WHEN 0 THEN 'NEVER'         WHEN 1 THEN 'COMPLETE'         WHEN 2 THEN 'FAST'         WHEN 3 THEN 'FORCE'         ELSE NULL       END AS REFRESH_METHOD,       REFRESH_START,       REFRESH_NEXT,       REFRESH_JOB,       LAST_REFRESH_SCN,       CASE LAST_REFRESH_TYPE         WHEN 0 THEN 'COMPLETE'         WHEN 1 THEN 'FAST'         ELSE NULL       END AS LAST_REFRESH_TYPE,       LAST_REFRESH_DATE,       LAST_REFRESH_TIME,       LAST_REFRESH_TRACE_ID,       gmt_create AS CREATE_TIME,       gmt_modified AS MODIFY_TIME     FROM SYS.ALL_VIRTUAL_MVIEW_REAL_AGENT;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

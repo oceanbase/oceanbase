@@ -928,10 +928,17 @@ int ObChunkRowStore::append_block(char *buf, int size,  bool need_swizzling)
     } else if (OB_FAIL(add_block(new_block, need_swizzling, &added))) {
       LOG_WARN("fail to add block", K(ret));
     } else {
-      LOG_TRACE("trace append block", K(src_block->rows_), K(size));
+      LOG_TRACE("trace append block", K(src_block->rows_), K(size), K(mem_used_), K(mem_hold_));
     }
     if (OB_FAIL(ret) && !added) {
       free_blk_mem(new_block, block_buffer->mem_size());
+    }
+  }
+  // dump data if mem used > 16MB
+  const int64_t dump_threshold = 1 << 24;
+  if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
+    if (OB_FAIL(dump(false /* reuse */, true /* all_dump */))) {
+      LOG_WARN("dump failed", K(ret));
     }
   }
   return ret;

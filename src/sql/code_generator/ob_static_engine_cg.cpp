@@ -3374,12 +3374,10 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       }
 
       bool enable_extract_query_range = true;
-#ifdef ERRSIM
       int tmp_ret = OB_E(EventTable::EN_PX_DISABLE_RUNTIME_FILTER_EXTRACT_QUERY_RANGE) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         enable_extract_query_range = false;
       }
-#endif
       if (OB_FAIL(ret)) {
       } else if (enable_extract_query_range
                  && OB_FAIL(spec.px_query_range_info_.init(
@@ -3387,6 +3385,8 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
                         op.get_rf_prefix_col_idxs(), prefix_col_obj_metas))) {
         LOG_WARN("failed to init px_query_range_info_ in join filter spec");
       }
+      LOG_TRACE("cg runtime filter extract query range", K(enable_extract_query_range),
+                K(op.get_op_id()), K(op.get_rf_prefix_col_idxs()));
     }
   }
   return ret;
@@ -4726,7 +4726,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     spec.output_row_count_ = static_cast<int64_t>(op.get_output_row_count());
     spec.query_range_row_count_ = static_cast<int64_t>(op.get_logical_query_range_row_count());
     spec.index_back_row_count_ = static_cast<int64_t>(op.get_index_back_row_count());
-    spec.estimate_method_ = op.get_estimate_method();
+    spec.estimate_method_ = INVALID_METHOD;
     spec.table_name_ = tbl_name;
     spec.index_name_ = index_name;
     // das path not under gi control (TODO: separate gi_above flag from das tsc spec)
@@ -7982,6 +7982,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       phy_plan_->set_contain_pl_udf_or_trigger(log_plan.get_stmt()->get_query_ctx()->has_pl_udf_);
+      phy_plan_->set_udf_has_dml_stmt(log_plan.get_stmt()->get_query_ctx()->udf_has_dml_stmt_);
     }
   }
   if (OB_SUCC(ret)) {

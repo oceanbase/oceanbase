@@ -467,7 +467,7 @@ Outline Data:
       OUTER_TO_INNER(@"SEL$CFEA49FE")
       PRED_DEDUCE(@"SEL$A7A036C9")
       SIMPLIFY_EXPR(@"SEL$AC33F27C")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -483,6 +483,7 @@ Optimization Info:
       avaiable_index_name:[t11]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t21:
       table_rows:1
       physical_range_rows:1
@@ -494,6 +495,7 @@ Optimization Info:
       avaiable_index_name:[t21]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Note:

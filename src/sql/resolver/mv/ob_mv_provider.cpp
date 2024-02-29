@@ -116,7 +116,7 @@ int ObMVProvider::check_mv_refreshable(bool &can_fast_refresh) const
     // column type for mv is changed after it is created
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can not refresh mv", K(ret), K(refreshable_type_));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support refresh mv after column types change");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh mv after column types change is");
   } else if (ObMVRefreshableType::OB_MV_COMPLETE_REFRESH == refreshable_type_) {
     can_fast_refresh = false;
   } else {

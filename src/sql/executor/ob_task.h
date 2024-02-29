@@ -97,6 +97,7 @@ protected:
   // 本Task涉及到的扫描范围，默认涉及的一张表（一个或者多个partition）
   common::ObSEArray<ObNewRange, 32> ranges_;
   int64_t max_sql_no_;
+  char sql_string_[common::OB_TINY_SQL_LENGTH + 1];
   //DISALLOW_COPY_AND_ASSIGN(ObTask);
 };
 

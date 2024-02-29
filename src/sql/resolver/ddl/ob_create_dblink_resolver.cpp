@@ -43,6 +43,9 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       || OB_UNLIKELY(node->num_child_ != DBLINK_NODE_COUNT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret), KP(node), K(node->type_), K(T_CREATE_DBLINK), K(node->num_child_));
+  } else if (!GCONF.enable_dblink) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("dblink is disabled", K(ret));
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));

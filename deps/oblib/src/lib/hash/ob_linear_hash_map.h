@@ -781,6 +781,7 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::Cnter::init(HashMapMemMgr<MemMgrTag>
 template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::Cnter::destroy()
 {
+  // Double destroy. Support it.
   if (NULL != mem_mgr_ && NULL != cnter_) {
     mem_mgr_->get_cnter_alloc().free(cnter_);
   }
@@ -795,7 +796,7 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::Cnter::add(const int64_t cnt,
                                                const int64_t th_id)
 {
   if (NULL == cnter_) {
-    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid cnter, not init", K(cnter_));
+    //LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid cnter, not init", K(cnter_));
   } else {
     // Use thread id mod counter cnt to assign counter.
     // get cpu id may be used in the future.
@@ -908,6 +909,15 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::init(uint64_t m_seg_sz, uint64_t s_s
     init_ = true;
     mem_mgr_.add_map(this);
   }
+  // destory when init failed
+  if (!init_) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = destroy())) {
+      LIB_LOG(ERROR, "clear init fail memory failed", K(tmp_ret), K(ret));
+    } else {
+      LIB_LOG(ERROR, "init counter failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -915,9 +925,8 @@ template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::destroy()
 {
   int ret = OB_SUCCESS;
-  if (!init_) {
-    // Double destroy. Support it.
-  } else if (OB_SUCCESS == (ret = do_clear_())) {
+  // Double destroy. Support it.
+  if (OB_SUCCESS == (ret = do_clear_())) {
     mem_mgr_.rm_map(this);
     cnter_.destroy();
     des_d_arr_();
@@ -1177,7 +1186,8 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::des_d_arr_()
       Bucket *seg = dir_[idx];
       if (seg != NULL) { des_seg_(seg);  }
     }
-    des_dir_(dir_);
+    mem_mgr_.get_dir_alloc().free(dir_);
+    dir_ = NULL;
   }
 }
 
@@ -1782,20 +1792,16 @@ template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::do_clear_()
 {
   int ret = OB_SUCCESS;
-  if (!init_) {
-    ret = OB_NOT_INIT;
-  } else {
-    if (dir_ != NULL) {
-      uint64_t seg_idx = 0;
-      while (seg_idx < dir_seg_n_lmt_ && dir_[seg_idx] != NULL) {
-        uint64_t bkt_n = (seg_idx < m_seg_n_lmt_) ? m_seg_bkt_n_ : s_seg_bkt_n_;
-        uint64_t clear_cnt = do_clear_seg_(dir_[seg_idx], bkt_n);
-        add_cnt_(-1 * (int64_t)clear_cnt);
-        seg_idx += 1;
-      }
-    } else { /*Fatal err.*/}
-    while (ES_SUCCESS == shrink_()) { }
-  }
+  if (dir_ != NULL) {
+    uint64_t seg_idx = 0;
+    while (seg_idx < dir_seg_n_lmt_ && dir_[seg_idx] != NULL) {
+      uint64_t bkt_n = (seg_idx < m_seg_n_lmt_) ? m_seg_bkt_n_ : s_seg_bkt_n_;
+      uint64_t clear_cnt = do_clear_seg_(dir_[seg_idx], bkt_n);
+      add_cnt_(-1 * (int64_t)clear_cnt);
+      seg_idx += 1;
+    }
+  } else { /*Fatal err.*/}
+  while (ES_SUCCESS == shrink_()) { }
   return ret;
 }
 

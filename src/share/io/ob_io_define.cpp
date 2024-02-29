@@ -2007,7 +2007,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   req = nullptr;
   while (OB_SUCC(ret) && !gl_heap_.empty() && !gl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = gl_heap_.top();
-    deadline_ts = 0 == iter_count ? tmp_phy_queue->tenant_limitation_ts_ : deadline_ts;
+    deadline_ts = 0 == iter_count ? tmp_phy_queue->group_limitation_ts_ : deadline_ts;
     ++iter_count;
     if (tmp_phy_queue->group_limitation_ts_ > current_ts) {
       break;

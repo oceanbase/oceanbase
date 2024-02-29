@@ -1238,7 +1238,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   } else if (!is_valid) {
     // do nothing
     OPT_TRACE("hint reject transform");
-  } else if (!subquery->is_spj() || subquery->has_subquery()) {
+  } else if (!subquery->is_spj() || subquery->has_subquery() || subquery->is_values_table_query()) {
     is_valid = false;
     OPT_TRACE("subquery is not spj or has subquery");
   } else if (OB_FAIL(subquery->get_column_exprs(columns))) {

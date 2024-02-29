@@ -1215,13 +1215,12 @@ int ObTenantCheckpointSlogHandler::inner_replay_create_ls_commit_slog(
   int ret = OB_SUCCESS;
 
   ObLSID ls_id;
-  int64_t create_type = ObLSCreateType::NORMAL;
-  ObCreateLSCommitSLog slog_entry(ls_id, create_type);
+  ObCreateLSCommitSLog slog_entry(ls_id);
   int64_t pos = 0;
   const bool is_replay = true;
   if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
     LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
-  } else if (OB_FAIL(MTL(ObLSService *)->replay_create_ls_commit(ls_id, slog_entry.get_create_type()))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->replay_create_ls_commit(ls_id))) {
     LOG_WARN("fail to replay create ls commit slog", K(ret), K(param), K(pos));
   } else {
     LOG_INFO("successfully replay create ls commit slog");
@@ -1471,6 +1470,19 @@ int ObTenantCheckpointSlogHandler::parse(
         }
         break;
       }
+
+      case ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET: {
+        ObEmptyShellTabletLog slog_entry;
+        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "empty shell tablet slog: ");
+        if (OB_FAIL(slog_entry.deserialize_id(buf, len, pos))) {
+          LOG_WARN("failed to deserialize empty shell tablet_id_", K(ret));
+        } else if (0 > fprintf(stream, "%s\n%s\n", slog_name, to_cstring(slog_entry))) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("Fail to print slog to file.", K(ret));
+        }
+        break;
+      }
+
       case ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS: {
         ObDupTableCkptLog slog_entry;
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update dup table ls meta slog: ");

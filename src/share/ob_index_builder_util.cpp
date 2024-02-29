@@ -22,7 +22,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 namespace oceanbase
 {
 using namespace common;

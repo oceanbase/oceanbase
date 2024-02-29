@@ -171,7 +171,6 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
   } else {
     LOG_INFO("try check migrate unit finish by tenant", K(tenant_id));
     DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
-                        unit_mgr_,
                         zone_mgr_,
                         schema_service_);
     ObLSStatusInfoArray ls_status_info_array;
@@ -252,11 +251,11 @@ int ObMigrateUnitFinishChecker::statistic_migrate_unit_by_ls(
                  KP(server_stat_info),
                  KP(unit_stat_info),
                  KP(unit_in_group_stat_info));
-      } else if (server_stat_info->get_server() != unit_stat_info->get_unit_info().unit_.server_
+      } else if (server_stat_info->get_server() != unit_stat_info->get_unit().server_
           && (ls_replica->is_in_service() || ls_status_info.ls_is_creating())) {
         unit_stat_info->inc_outside_replica_cnt();
         if (unit_stat_info->get_outside_replica_cnt() <= 2) { // print the first two outside replica
-          LOG_INFO("outside replica", KPC(ls_replica), "unit", unit_stat_info->get_unit_info().unit_);
+          LOG_INFO("outside replica", KPC(ls_replica), "unit", unit_stat_info->get_unit());
         }
       }
     }
@@ -280,12 +279,12 @@ int ObMigrateUnitFinishChecker::try_finish_migrate_unit(
     for (; OB_SUCC(ret) && iter != inner_hash_table.end(); ++iter) {
       const DRUnitStatInfo &unit_stat_info = iter->v_;
       if (unit_stat_info.is_in_pool()
-          && unit_stat_info.get_unit_info().unit_.migrate_from_server_.is_valid()
+          && unit_stat_info.get_unit().migrate_from_server_.is_valid()
           && 0 == unit_stat_info.get_outside_replica_cnt()) {
         if (OB_FAIL(unit_mgr_->finish_migrate_unit(
-                unit_stat_info.get_unit_info().unit_.unit_id_))) {
+                unit_stat_info.get_unit().unit_id_))) {
           LOG_WARN("fail to set unit migrate finish", KR(ret),
-                   "unit_id", unit_stat_info.get_unit_info().unit_.unit_id_);
+                   "unit_id", unit_stat_info.get_unit().unit_id_);
         }
       }
     }

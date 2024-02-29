@@ -12,9 +12,11 @@
 
 #include "ob_share_throttle_define.h"
 
+#include "share/throttle/ob_throttle_info.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/alloc/alloc_func.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+
 
 namespace oceanbase {
 
@@ -77,8 +79,8 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
 
   int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_update_limit_ts;
-  if (OB_UNLIKELY(old_ts - cur_ts > UPDATE_LIMIT_INTERVAL)) {
-    SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid timestamp", K(cur_ts), K(old_ts));
+  if (OB_UNLIKELY(old_ts - cur_ts > (1LL * 1000LL * 1000LL /* 1 second */))) {
+    SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid timestamp", K(cur_ts), K(old_ts));
   } else if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
     int64_t remain_memory = lib::get_tenant_memory_remain(tenant_id);
     int64_t usable_remain_memory = remain_memory / 100 * USABLE_REMAIN_MEMORY_PERCETAGE;
@@ -110,6 +112,60 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
                 "Last Update Limit Timestamp", last_update_limit_ts,
                 "Is Updated", is_updated);
     }
+  }
+}
+
+void PrintThrottleUtil::pirnt_throttle_info(const int err_code,
+                                            const char *throttle_unit_name,
+                                            const int64_t sleep_time,
+                                            const int64_t left_interval,
+                                            const int64_t expected_wait_time,
+                                            const int64_t abs_expire_time,
+                                            const ObThrottleInfoGuard &share_ti_guard,
+                                            const ObThrottleInfoGuard &module_ti_guard,
+                                            bool &has_printed_lbt)
+{
+  int ret = err_code;
+  const int64_t WARN_LOG_INTERVAL = 1LL * 60L * 1000L * 1000L /* one minute */;
+  if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
+    SHARE_LOG(WARN,
+              "[Throttling] Attention!! Sleep More Than One Minute!!",
+              "Throttle Unit Name",
+              throttle_unit_name,
+              K(sleep_time),
+              K(left_interval),
+              K(expected_wait_time),
+              K(abs_expire_time),
+              KPC(share_ti_guard.throttle_info()),
+              KPC(module_ti_guard.throttle_info()));
+    if (!has_printed_lbt) {
+      has_printed_lbt = true;
+      oceanbase::share::ObTaskController::get().allow_next_syslog();
+      SHARE_LOG(INFO,
+                "[Throttling] (report write throttle info) LBT Info",
+                "Throttle Unit Name",
+                throttle_unit_name,
+                K(lbt()));
+    }
+  }
+}
+
+void PrintThrottleUtil::print_throttle_statistic(const int err_code,
+                                                 const char *throttle_unit_name,
+                                                 const int64_t sleep_time,
+                                                 const int64_t throttle_memory_size)
+{
+  int ret = err_code;
+  const int64_t THROTTLE_LOG_INTERVAL = 1L * 1000L * 1000L; /*one seconds*/
+  if (sleep_time > 0 && REACH_TIME_INTERVAL(THROTTLE_LOG_INTERVAL)) {
+    SHARE_LOG(INFO,
+              "[Throttling] (report write throttle info) Time Info",
+              "Throttle Unit Name",
+              throttle_unit_name,
+              "Throttle Sleep Time(us)",
+              sleep_time,
+              "Throttle Memory Size",
+              throttle_memory_size);
   }
 }
 

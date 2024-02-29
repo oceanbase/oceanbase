@@ -26,7 +26,7 @@
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "logservice/ob_log_service.h"
-#include "mittest/simple_server/env/ob_simple_server_helper.h"
+#include "mittest/env/ob_simple_server_helper.h"
 
 namespace oceanbase
 {
