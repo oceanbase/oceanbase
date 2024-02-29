@@ -2533,16 +2533,10 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         result_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
       }
       expr.set_result_type(result_type);
+    } else if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
+      LOG_WARN("deduce type failed", K(ret));
     } else {
-      // agg函数func_params也为空，此时需要置成agg的result_type
-      if (expr.get_agg_expr()->get_result_type().is_invalid()) {
-        if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
-          LOG_WARN("deduce type failed", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        expr.set_result_type(expr.get_agg_expr()->get_result_type());
-      }
+      expr.set_result_type(expr.get_agg_expr()->get_result_type());
     }
   //here pl_agg_udf_expr_ in win_expr must be null, defensive check!!!
   } else if (OB_UNLIKELY(expr.get_pl_agg_udf_expr() != NULL)) {
