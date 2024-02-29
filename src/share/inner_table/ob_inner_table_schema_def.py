@@ -13743,7 +13743,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
 # 12480: __all_virtual_service
-#
+# 12481: __all_virtual_tenant_resource_limit
+# 12482: __all_virtual_tenant_resource_limit_detail
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -32874,6 +32876,10 @@ def_table_schema(
 # 21547: CDB_OB_RSRC_DIRECTIVES
 # 21548: DBA_OB_SERVICES
 # 21549: CDB_OB_SERVICES
+# 21550: GV$OB_TENANT_RESOURCE_LIMIT
+# 21551: V$OB_TENANT_RESOURCE_LIMIT
+# 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
