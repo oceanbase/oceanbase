@@ -1149,5 +1149,12 @@ bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
       0 == tmp_str.case_compare("COMPOUND");
 }
 
+bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("idc")
+      || 0 == v_str.case_compare("region");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

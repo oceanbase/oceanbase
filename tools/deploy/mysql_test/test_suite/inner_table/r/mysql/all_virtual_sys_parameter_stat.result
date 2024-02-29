@@ -38,6 +38,7 @@ bf_cache_miss_count_threshold
 bf_cache_priority
 builtin_db_data_verify_cycle
 cache_wash_threshold
+choose_migration_source_policy
 clog_sync_time_warn_threshold
 cluster
 cluster_id
@@ -277,6 +278,7 @@ _enable_adaptive_merge_schedule
 _enable_backtrace_function
 _enable_balance_kill_transaction
 _enable_block_file_punch_hole
+_enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal

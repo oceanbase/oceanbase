@@ -731,6 +731,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
+class ObConfigMigrationChooseSourceChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigMigrationChooseSourceChecker() {}
+  virtual ~ObConfigMigrationChooseSourceChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common
