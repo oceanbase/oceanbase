@@ -230,7 +230,7 @@ void TestCGGroupByScanner::prepare_cg_access_param(const bool is_reverse_scan)
   cg_access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   cg_access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
   cg_access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
-  cg_access_param_.iter_param_.read_info_ = cg_read_info_handle_.get_read_info();
+  cg_access_param_.iter_param_.read_info_ = &cg_read_info_;
 
   //just for test
   ObQueryFlag query_flag(ObQueryFlag::Forward,

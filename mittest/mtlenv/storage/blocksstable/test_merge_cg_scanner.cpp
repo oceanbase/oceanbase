@@ -90,15 +90,7 @@ void TestCGScanner::prepare_cg_query_param(const bool is_reverse_scan, const ObV
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
-  /*
-     ObSEArray<ObColDesc, 1> cg_col_descs;
-     ObTableReadInfo *cg_read_info = nullptr;
-     ASSERT_EQ(OB_SUCCESS, tablet_handle_.get_obj()->get_cg_col_descs(cg_idx, cg_col_descs));
-     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(cg_col_descs.at(0),
-     ObTabletID(tablet_id_),
-     cg_read_info));
-     */
-  access_param_.iter_param_.read_info_ = cg_read_info_handle_.get_read_info();
+  access_param_.iter_param_.read_info_ = &cg_read_info_;
 
   //jsut for test
   ObQueryFlag query_flag(ObQueryFlag::Forward,

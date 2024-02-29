@@ -320,6 +320,8 @@ public:
   inline const common::ObIArray<int32_t> &get_pad_col_projector() const { return pad_col_projector_; }
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
+  inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
+  { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
 
   DECLARE_TO_STRING;
 
@@ -379,7 +381,10 @@ private:
   Projector pad_col_projector_;
 
   // need to serialize
+  // version of the mixture read info
+  int16_t read_param_version_;
   storage::ObTableReadInfo main_read_info_;
+  storage::ObFixedMetaObjArray<storage::ObTableReadInfo *> cg_read_infos_;
 
   bool has_virtual_column_;
   // specified to use lob locator or not

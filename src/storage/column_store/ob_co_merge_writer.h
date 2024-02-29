@@ -180,7 +180,7 @@ public:
       progressive_merge_helper_(nullptr),
       write_helper_(),
       row_(),
-      cg_read_info_handle_()
+      single_read_info_()
   {}
   ~ObCOMergeRowWriter();
   virtual int init(
@@ -206,7 +206,7 @@ private:
   ObProgressiveMergeHelper *progressive_merge_helper_;
   ObWriteHelper write_helper_;
   blocksstable::ObDatumRow row_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo single_read_info_;
 };
 
 class ObCOMergeSingleWriter : public ObCOMergeWriter

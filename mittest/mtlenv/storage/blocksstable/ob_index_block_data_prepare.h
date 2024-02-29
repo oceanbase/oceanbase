@@ -82,12 +82,13 @@ public:
   void prepare_merge_ddl_kvs();
   void close_builder_and_prepare_sstable(const int64_t column_cnt);
   void prepare_partial_sstable(const int64_t column_cnt);
+  int prepare_cg_read_info(const ObColDesc &col_desc);
   int gen_create_tablet_arg(const int64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    obrpc::ObBatchCreateTabletArg &arg,
-    share::schema::ObTableSchema &table_schema,
-    const int64_t count = 1);
+                            const share::ObLSID &ls_id,
+                            const ObTabletID &tablet_id,
+                            obrpc::ObBatchCreateTabletArg &arg,
+                            share::schema::ObTableSchema &table_schema,
+                            const int64_t count = 1);
 protected:
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t MAX_TEST_COLUMN_CNT = TEST_COLUMN_CNT + 3;
@@ -133,7 +134,7 @@ protected:
   ObTabletHandle tablet_handle_;
   ObFixedArray<ObSkipIndexColMeta, common::ObIAllocator> agg_col_metas_;
   bool need_agg_data_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo cg_read_info_;
   ObDatumRowkey start_key_;
   ObDatumRowkey end_key_;
   int64_t rows_per_mirco_block_;
@@ -321,7 +322,7 @@ void TestIndexBlockDataPrepare::TearDown()
   ddl_kv_.reset();
   ddl_kvs_.reset();
   ddl_kv_ptr_ = nullptr;
-  cg_read_info_handle_.reset();
+  cg_read_info_.reset();
   if (nullptr != root_block_data_buf_.buf_) {
     allocator_.free((void *)root_block_data_buf_.buf_);
     root_block_data_buf_.buf_ = nullptr;
@@ -651,6 +652,17 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   prepare_ddl_kv();
 }
 
+int TestIndexBlockDataPrepare::prepare_cg_read_info(const ObColDesc &col_desc)
+{
+  int ret = OB_SUCCESS;
+  cg_read_info_.reset();
+  if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->construct_cg_read_info(
+              allocator_, lib::is_oracle_mode(), col_desc, nullptr, cg_read_info_))) {
+    STORAGE_LOG(WARN, "Fail to construct cg read info", K(ret));
+  }
+  return ret;
+}
+
 void TestIndexBlockDataPrepare::prepare_cg_data()
 {
   // need_aggregate_data is ignored temporarily
@@ -691,8 +703,8 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
   ASSERT_NE(nullptr, root_index_builder_);
   data_desc.get_desc().sstable_index_builder_ = root_index_builder_;
-  OK(MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(data_desc.get_desc().get_col_desc_array().at(0),//column count always 1
-                                                    nullptr, data_desc.get_desc().get_tablet_id(), cg_read_info_handle_));
+
+  OK(prepare_cg_read_info(data_desc.get_desc().get_col_desc_array().at(0)));
 
   ASSERT_TRUE(data_desc.is_valid());
 
