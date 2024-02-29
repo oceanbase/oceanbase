@@ -2157,6 +2157,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_LOCK_TABLE;
       }
       break;
+      case T_SP_CALL_STMT: {
+        type = stmt::T_CALL_PROCEDURE;
+      }
       default: {
         type = stmt::T_NONE;
       }
