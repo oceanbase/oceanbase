@@ -359,6 +359,12 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
       } else {
         meta.set_scale(data_type->get_accuracy().get_scale());
       }
+      if (meta.is_string_or_lob_locator_type() ||
+          meta.is_enum_or_set() ||
+          meta.is_json() ||
+          meta.is_geometry()) {
+        meta.set_collation_level(CS_LEVEL_IMPLICIT);
+      }
     }
   } else {
     ObParamExternType type = iparam->get_extern_type_flag();
