@@ -492,7 +492,7 @@ int ObPLCompiler::update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp
   ObMySQLProxy *sql_proxy = nullptr;
   ObMySQLTransaction trans;
   bool skip = false;
-  if (GCTX.is_standby_cluster()) {
+  if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     skip = true;
   } else if (ObTriggerInfo::is_trigger_package_id(dep_obj_id)) {
     if (lib::is_oracle_mode()) {
