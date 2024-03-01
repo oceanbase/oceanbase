@@ -5444,8 +5444,6 @@ int ObDDLService::check_drop_column_with_drop_constraint(
         iter != orig_table_schema.constraint_end(); iter++) {
         if (CONSTRAINT_TYPE_CHECK != (*iter)->get_constraint_type()) {
         } else if (0 == (*iter)->get_column_cnt()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("check cst don't have column info", K(ret), K(**iter));
         } else {
           const ObString &cst_name = (*iter)->get_constraint_name_str();
           for (ObConstraint::const_cst_col_iterator cst_col_iter = (*iter)->cst_col_begin();
