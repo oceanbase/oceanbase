@@ -210,7 +210,7 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
   CK (OB_NOT_NULL(session));
   if (OB_SUCCESS != ret) {
     // do nothing
-  } else if (session->associated_xa()) {
+  } else if (!session->is_inner() && session->associated_xa()) {
     // NOTE that not support dblink trans in this interface
     // PLEASE handle implicit cases for dblink trans instead of this interface
     ret = OB_ERR_UNEXPECTED;
@@ -448,7 +448,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
     ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(tx_ptr->tid(),
                                     ObTransDeadlockDetectorAdapter::UnregisterPath::DO_END_TRANS);
   }
-  if (session->associated_xa() && !is_explicit) {
+  if (!session->is_inner() && session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
     LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
   } else {
