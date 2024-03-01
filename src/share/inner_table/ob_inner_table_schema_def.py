@@ -4304,6 +4304,9 @@ def_table_schema(
     ('generate_time', 'timestamp:6', 'false', 0),
     ('schedule_time', 'timestamp:6', 'false', 0),
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('data_source_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('data_source_svr_port', 'int', 'true'),
+    ('is_manual', 'bool', 'true', '0'),
   ],
 )
 
