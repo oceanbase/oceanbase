@@ -1660,9 +1660,12 @@ int ObTabletDirectLoadMgr::calc_range(const ObStorageSchema *storage_schema, con
 int ObTabletDirectLoadMgr::calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt)
 {
   int ret = OB_SUCCESS;
+  sqc_build_ctx_.sorted_slice_writers_.reset();
   if (thread_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invali thread cnt", K(ret), K(thread_cnt));
+  } else if (OB_FAIL(sqc_build_ctx_.sorted_slice_writers_.assign(sorted_slices))) {
+    LOG_WARN("copy slice array failed", K(ret), K(sorted_slices.count()));
   } else {
     common::ObArray<ObTabletDirectLoadBuildCtx::AggregatedCGInfo> sorted_slices_idx;
     int64_t slice_idx = 0;
@@ -1689,6 +1692,7 @@ int ObTabletDirectLoadMgr::calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sor
     if (OB_FAIL(ret)) {
     } else if (sorted_slices_idx.count() > thread_cnt) {
       // thread_cnt cannot handle aggregated group, re_calc by thread_cnt
+      LOG_INFO("[DIRECT_LOAD_FILL_CG] re_calc by thread_cnt", K(sorted_slices_idx.count()), K(thread_cnt), K(sqc_build_ctx_.sorted_slice_writers_.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < thread_cnt; ++i) {
         ObTabletDirectLoadBuildCtx::AggregatedCGInfo cur_info;
         calc_cg_idx(thread_cnt, i, cur_info.start_idx_, cur_info.last_idx_);
@@ -1699,14 +1703,8 @@ int ObTabletDirectLoadMgr::calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sor
     } else if (OB_FAIL(sqc_build_ctx_.sorted_slices_idx_.assign(sorted_slices_idx))) {
       LOG_WARN("fail to assign array", K(ret));
     }
-
-    sqc_build_ctx_.sorted_slice_writers_.reset();
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sqc_build_ctx_.sorted_slice_writers_.assign(sorted_slices))) {
-      LOG_WARN("copy slice array failed", K(ret), K(sorted_slices.count()));
-    }
   }
-  FLOG_INFO("calc_cg_range", K(ret), K(sorted_slices.count()), K(thread_cnt), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.sorted_slices_idx_.count()));
+  FLOG_INFO("[DIRECT_LOAD_FILL_CG]calc_cg_range", K(ret), K(thread_cnt), K(sqc_build_ctx_.sorted_slice_writers_.count()), K(sqc_build_ctx_.sorted_slices_idx_.count()));
   return ret;
 }
 
