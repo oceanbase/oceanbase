@@ -2158,6 +2158,8 @@ end_scn	bigint(20) unsigned	NO		NULL
 is_active	varchar(3)	NO		NULL	
 retire_clock	bigint(20)	NO		NULL	
 mt_protection_clock	bigint(20)	NO		NULL	
+address	varchar(32)	NO		NULL	
+ref_count	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_memstore_allocator_info;
 IF(count(*) >= 0, 1, 0)
 1

@@ -9931,7 +9931,9 @@ def_table_schema(
   ('end_scn', 'uint'),
   ('is_active', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
   ('retire_clock', 'int'),
-  ('mt_protection_clock', 'int')
+  ('mt_protection_clock', 'int'),
+  ('address', 'varchar:OB_MAX_POINTER_ADDR_LEN'),
+  ('ref_count', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

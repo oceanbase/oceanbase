@@ -287,6 +287,7 @@ const int64_t OB_MAX_OBJECT_NAME_LENGTH = 128; //should include index_name
 const int64_t OB_MAX_ORIGINAL_NANE_LENGTH = 256; //max length of tenant_name, table_name, db_name
 
 const int64_t OB_MAX_CHAR_LEN = 3;
+const int64_t OB_MAX_POINTER_ADDR_LEN = 32;
 const int64_t OB_MAX_TRIGGER_NAME_LENGTH = 128;  // Compatible with Oracle
 const int64_t OB_MAX_WHEN_CONDITION_LENGTH = 4000;  // Compatible with Oracle
 const int64_t OB_MAX_UPDATE_COLUMNS_LENGTH = 4000;  // Compatible with Oracle
