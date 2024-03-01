@@ -336,7 +336,7 @@ int ObArchiveFetcher::handle_single_task_()
     if (OB_FAIL(handle_log_fetch_task_(*task))) {
       ARCHIVE_LOG(WARN, "handle failed", K(ret), K(id));
     } else {
-      ARCHIVE_LOG(INFO, "handle task succ", K(id));
+      ARCHIVE_LOG(TRACE, "handle task succ", K(id));
     }
 
     if (OB_SUCC(ret)) {
@@ -344,7 +344,7 @@ int ObArchiveFetcher::handle_single_task_()
         ARCHIVE_LOG(WARN, "try consume task status failed", K(ret), K(id));
       } else {
         archive_sequencer_->signal();
-        ARCHIVE_LOG(INFO, "try consume task status succ", K(id));
+        ARCHIVE_LOG(TRACE, "try consume task status succ", K(id));
       }
     }
 
@@ -891,7 +891,7 @@ int ObArchiveFetcher::try_consume_fetch_log_(const ObLSID &id)
         ARCHIVE_LOG(WARN, "get sorted fetch log failed", K(ret), K(id));
       } else if (! task_exist) {
         need_break = true;
-        ARCHIVE_LOG(INFO, "no log fetch task exist, just skip", K(ret), K(id), K(task_exist));
+        ARCHIVE_LOG(TRACE, "no log fetch task exist, just skip", K(ret), K(id), K(task_exist));
       } else if (OB_ISNULL(send_task = task->get_send_task())) {
         ret = OB_ERR_UNEXPECTED;
         ARCHIVE_LOG(ERROR, "send task is NULL", K(ret), K(send_task), KPC(task));
@@ -983,7 +983,7 @@ int ObArchiveFetcher::submit_residual_log_fetch_task_(ObArchiveLogFetchTask &tas
   } else if (OB_FAIL(task_queue_.push(&task))) {
     ARCHIVE_LOG(WARN, "push task failed", K(ret), K(task));
   } else {
-    ARCHIVE_LOG(INFO, "submit residual log fetch task succ", KP(&task));
+    ARCHIVE_LOG(TRACE, "submit residual log fetch task succ", KP(&task));
   }
   return ret;
 }
