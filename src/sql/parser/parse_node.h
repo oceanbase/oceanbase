@@ -315,6 +315,7 @@ typedef struct
     uint32_t is_multi_values_parser_           : 1;
     uint32_t is_for_udr_                       : 1;
     uint32_t is_for_remap_                     : 1;
+    uint32_t is_external_table_                : 1;
   };
 
   ParseNode *result_tree_;
