@@ -253,7 +253,8 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
     CK (OB_NOT_NULL(udf_expr));
     if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
       OZ (schema_guard.get_database_id(session_info->get_effective_tenant_id(),
-                                        udf_expr->get_database_name().empty() ? session_info->get_database_name() : udf_expr->get_database_name(),
+                                        (udf_expr->get_database_name().empty() || (0 == udf_expr->get_database_name().case_compare(OB_SYS_DATABASE_NAME)))
+                                        ? session_info->get_database_name() : udf_expr->get_database_name(),
                                         database_id));
       if (OB_SUCC(ret)) {
         bool exist = false;

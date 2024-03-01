@@ -5687,7 +5687,7 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
             }
           }
           if (!func.is_modifies_sql_data()) {
-            if (has_real_table) {
+            if (has_real_table || lib::is_oracle_mode()) {
               func.set_reads_sql_data();
             } else if (!func.is_reads_sql_data()) {
               func.set_contains_sql();
