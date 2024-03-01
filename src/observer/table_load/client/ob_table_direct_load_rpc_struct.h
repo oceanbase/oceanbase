@@ -32,11 +32,12 @@ public:
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       timeout_(0),
       heartbeat_timeout_(0),
-      force_create_(false)
+      force_create_(false),
+      is_async_(false)
   {
   }
   TO_STRING_KV(K_(table_name), K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout),
-                K_(heartbeat_timeout), K_(force_create));
+               K_(heartbeat_timeout), K_(force_create), K_(is_async));
 public:
   ObString table_name_;
   int64_t parallel_;
@@ -44,7 +45,8 @@ public:
   sql::ObLoadDupActionType dup_action_;
   int64_t timeout_;
   int64_t heartbeat_timeout_;
-  bool force_create_;
+  bool force_create_; // unused
+  bool is_async_;
 };
 
 struct ObTableDirectLoadBeginRes
@@ -62,7 +64,7 @@ public:
 public:
   uint64_t table_id_;
   int64_t task_id_;
-  common::ObSArray<ObString> column_names_;
+  common::ObSArray<ObString> column_names_; // unused
   table::ObTableLoadClientStatus status_;
   int32_t error_code_;
 };

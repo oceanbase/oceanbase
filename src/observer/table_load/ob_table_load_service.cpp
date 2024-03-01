@@ -315,9 +315,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
         ObTableLoadClientTask *client_task = client_task_array.at(i);
         if (OB_UNLIKELY(ObTableLoadClientStatus::ERROR == client_task->get_status() ||
                         client_task->get_exec_ctx()->check_status() != OB_SUCCESS)) {
-          if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-            LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-          }
+          client_task->abort();
         }
         ObTableLoadClientService::revert_task(client_task);
       }
@@ -641,9 +639,7 @@ void ObTableLoadService::abort_all_client_task()
   } else {
     for (int i = 0; i < client_task_array.count(); ++i) {
       ObTableLoadClientTask *client_task = client_task_array.at(i);
-      if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-        LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-      }
+      client_task->abort();
       ObTableLoadClientService::revert_task(client_task);
     }
   }

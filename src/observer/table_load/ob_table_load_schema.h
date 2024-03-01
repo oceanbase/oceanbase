@@ -41,9 +41,12 @@ public:
   static int get_column_names(const share::schema::ObTableSchema *table_schema,
                               common::ObIAllocator &allocator,
                               common::ObIArray<common::ObString> &column_names);
+  static int get_column_idxs(uint64_t tenant_id, uint64_t table_id,
+                             common::ObIArray<int64_t> &column_idxs);
   static int get_column_idxs(const share::schema::ObTableSchema *table_schema,
                              common::ObIArray<int64_t> &column_idxs);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

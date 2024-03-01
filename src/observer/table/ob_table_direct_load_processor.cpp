@@ -45,6 +45,7 @@ int ObTableDirectLoadP::try_process()
   exec_ctx_.set_tenant_id(credential_.tenant_id_);
   exec_ctx_.set_user_id(credential_.user_id_);
   exec_ctx_.set_database_id(credential_.database_id_);
+  exec_ctx_.set_user_client_addr(user_client_addr_);
   if (OB_FAIL(ObTableLoadClientService::direct_load_operate(exec_ctx_, arg_, result_))) {
     LOG_WARN("fail to do direct load operate", KR(ret), K(arg_));
   }
