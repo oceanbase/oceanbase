@@ -9042,6 +9042,26 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 LOG_WARN("fail to check drop constraint caused by drop column", K(ret), K(alter_table_arg));
               } else {/* do nothing. */}
             }
+
+            if (OB_SUCC(ret)) {
+              if (OB_ISNULL(orig_column_schema = origin_table_schema.get_column_schema(orig_column_name))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid null column schema", K(ret), KPC(orig_column_schema));
+              } else if (is_oracle_mode && orig_column_schema->is_xmltype()) {
+                ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+                if (OB_FAIL(new_table_schema.get_column_schema_in_same_col_group(
+                    orig_column_schema->get_column_id(), orig_column_schema->get_udt_set_id(), hidden_cols))) {
+                  LOG_WARN("failed to get column schema", K(ret));
+                } else {
+                  for (int64_t i = 0; OB_SUCC(ret) && i < hidden_cols.count(); i++) {
+                    if (OB_FAIL(drop_column_online(schema_guard, origin_table_schema, hidden_cols.at(i)->get_column_name_str(),
+                          new_table_cols_cnt, ddl_operator, trans, new_table_schema, update_column_name_set))) {
+                      LOG_WARN("online drop column failed", K(ret));
+                    }
+                  }
+                }
+              }
+            }
             if (FAILEDx(drop_column_online(schema_guard, origin_table_schema, orig_column_name,
                   new_table_cols_cnt, ddl_operator, trans, new_table_schema, update_column_name_set))) {
               LOG_WARN("online drop column failed", K(ret));
