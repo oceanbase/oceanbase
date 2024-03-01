@@ -32884,6 +32884,10 @@ def_table_schema(
 # 21551: V$OB_TENANT_RESOURCE_LIMIT
 # 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
 # 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21554: INNODB_LOCK_WAITS
+# 21555: INNODB_LOCKS
+# 21556: INNODB_TRX
+# 21557: ndb_transid_mysql_connection_map
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
