@@ -14,34 +14,25 @@ on:
       - 'CONTRIBUTING.md'
 
 jobs:
-  centos-build:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Install centos environment
-      shell: bash
-      run: yum install -y git wget rpm* cpio make glibc-devel glibc-headers binutils m4
-
-    - name: Cache deps
-      id: cache-deps
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-deps
-      with:
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-el7.x86_64-${{ hashFiles('deps/init/oceanbase.el7.x86_64.deps') }}
-        path: deps/3rd
-
-    - name: Build
-      uses: ./.github/workflows/buildbase
-      with:
-        save_cache: ${{github.event_name == 'push'}}
-        os: 'centos7'
-
   ubuntu-build:
     runs-on: ubuntu-22.04
     steps:
+    - name: Free Disk Space
+      uses: insightsengineering/disk-space-reclaimer@v1
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tools-cache: false
+
+        # all of these default to true, but feel free to set to
+        # "false" if necessary for your workflow
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        swap-storage: true
+        docker-images: true
+        
     - uses: actions/checkout@v3
 
     - name: Install ubuntu environment
