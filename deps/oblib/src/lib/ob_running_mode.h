@@ -29,6 +29,7 @@ struct ObRunningModeConfig
   bool mini_mode_ = false;
   bool mini_cpu_mode_ = false;
   int64_t memory_limit_ = 0;
+  bool use_ipv6_ = false;
   static ObRunningModeConfig &instance();
 private:
   ObRunningModeConfig() = default;
@@ -70,6 +71,21 @@ inline void update_mini_mode(int64_t memory_limit, int64_t cpu_cnt)
   ObRunningModeConfig::instance().mini_cpu_mode_ = (cpu_cnt <= lib::ObRunningModeConfig::MINI_CPU_UPPER);
 }
 
+inline bool use_ipv6()
+{
+  return ObRunningModeConfig::instance().use_ipv6_;
+}
+
+inline void enable_use_ipv6()
+{
+  ObRunningModeConfig::instance().use_ipv6_ = true;
+}
+
 } //lib
 } //oceanbase
+
+extern "C" {
+  bool use_ipv6_c();
+} /* extern "C" */
+
 #endif // OB_RUNNING_MODE_H_

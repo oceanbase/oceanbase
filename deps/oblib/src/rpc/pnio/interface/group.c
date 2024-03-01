@@ -49,6 +49,7 @@ typedef struct pn_t
 static int next_pn_listen_idx;
 static pn_listen_t pn_listen_array[MAX_PN_LISTEN];
 static pn_grp_t* pn_grp_array[MAX_PN_GRP];
+static int pn_has_listened = 0;
 int64_t pnio_keepalive_timeout;
 PN_API int64_t pn_set_keepalive_timeout(int64_t user_timeout) {
   if (user_timeout >= 0) {
@@ -88,19 +89,27 @@ static void* pn_thread_func(void* arg)
 }
 
 static int pnl_dispatch_accept(int fd, const void* b, int sz);
+extern bool is_support_ipv6_c();
 PN_API int pn_listen(int port, serve_cb_t cb)
 {
   int idx = FAA(&next_pn_listen_idx, 1);
   pn_listen_t* pnl = locate_listen(idx);
   addr_t addr;
+  addr_t addr6;
   addr_init(&addr, "0.0.0.0", port);
-
-  if (listen_create(addr) <= 0) {
-    idx = -1;
-  } else {
-    pnl->serve_cb = cb;
+  if (is_support_ipv6_c()) {
+    addr_init(&addr6, "::", port);
   }
 
+  if (ATOMIC_BCAS(&pn_has_listened, 0, 1)) {
+    if (listen_create(addr) <= 0 ||
+        (is_support_ipv6_c() && listen_create(addr6) <= 0)) {
+      idx = -1;
+      ATOMIC_STORE(&pn_has_listened, 0);
+    } else {
+      pnl->serve_cb = cb;
+    }
+  }
   return idx;
 }
 
@@ -376,7 +385,8 @@ static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
   return pgrp->pn_array[tid % pgrp->count];
 }
 
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
+extern bool is_valid_sockaddr_c(struct sockaddr_storage *sock_addr);
+PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
 {
   int err = 0;
   const char* buf = pkt->buf;
@@ -387,11 +397,12 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt,
 
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
-  addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
+  addr_t dest;
+  sockaddr_to_addr(sock_addr, &dest);
   uint32_t pkt_id = gen_pkt_id();
-  if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
+  if (!is_valid_sockaddr_c(sock_addr)) {
     err = -EINVAL;
-    rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
+    rk_warn("invalid sin_addr");
   } else if (expire_us < 0) {
     err = -EINVAL;
     rk_error("invalid rpc timeout: %ld, it might be that the up-layer rpc timeout is too large, categ_id=%d", expire_us, categ_id);
@@ -603,10 +614,7 @@ PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
       err = -EINVAL;
       rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
     } else {
-      struct sockaddr_in* sin = (typeof(sin))addr;
-      sin->sin_family = AF_INET;
-      sin->sin_addr.s_addr = sock->peer.ip;
-      sin->sin_port = htons(sock->peer.port);
+      make_sockaddr(addr, sock->peer);
     }
   }
   return err;

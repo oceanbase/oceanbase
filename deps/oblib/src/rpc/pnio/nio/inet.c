@@ -28,19 +28,19 @@ int check_connect_result(int fd) {
 
 int async_connect(addr_t dest, uint64_t dispatch_id) {
   int fd = -1;
-  struct sockaddr_in sin;
+  struct sockaddr_storage sock_addr;
   const int ssl_ctx_id = 0;
   socklen_t ssl_ctx_id_len = sizeof(ssl_ctx_id);
   socklen_t dispatch_id_len = sizeof(dispatch_id);
   int send_negotiation_flag = 1;
   socklen_t send_negotiation_len = sizeof(send_negotiation_flag);
-  ef((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0);
+  ef((fd = socket(!dest.is_ipv6 ? AF_INET : AF_INET6, SOCK_STREAM, 0)) < 0);
   ef(make_fd_nonblocking(fd));
   set_tcpopt(fd, TCP_SYNCNT, PNIO_TCP_SYNCNT);
   ef(ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_CLIENT_GID, &dispatch_id, dispatch_id_len));
   ef(ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_CLIENT_SSL_CTX_ID, &ssl_ctx_id, ssl_ctx_id_len));
   ef(ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_SEND_NEGOTIATION_FLAG, &send_negotiation_flag, send_negotiation_len));
-  ef(ussl_connect(fd, (struct sockaddr*)make_sockaddr(&sin, dest), sizeof(sin)) < 0 && EINPROGRESS != errno);
+  ef(ussl_connect(fd, make_sockaddr(&sock_addr, dest), sizeof(sock_addr)) < 0 && EINPROGRESS != errno);
   set_tcp_nodelay(fd);
   return fd;
   el();
@@ -53,14 +53,22 @@ int async_connect(addr_t dest, uint64_t dispatch_id) {
 int listen_create(addr_t src) {
   int fd = -1;
   int err = 0;
-  struct sockaddr_in sin;
-  if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0)) < 0) {
+  struct sockaddr_storage sock_addr;
+  int ipv6_only_on = 1; /* Disable IPv4-mapped IPv6 addresses */
+  if ((fd = socket(!src.is_ipv6 ? AF_INET : AF_INET6, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0)) < 0) {
     rk_warn("create socket failed, src=%s, errno=%d", T2S(addr, src), errno);
     err = PNIO_LISTEN_ERROR;
   } else if (set_tcp_reuse_addr(fd) != 0) {
     err = PNIO_LISTEN_ERROR;
     rk_warn("reuse_addr failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
-  } else if (bind(fd,  (const struct sockaddr*)make_sockaddr(&sin, src), sizeof(sin)) != 0) {
+  } else if (set_tcp_reuse_port(fd) != 0) {
+    err = PNIO_LISTEN_ERROR;
+    rk_warn("reuse_port failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
+  } else if (src.is_ipv6 &&
+             ussl_setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &ipv6_only_on, sizeof(ipv6_only_on)) != 0) {
+    err = PNIO_LISTEN_ERROR;
+    rk_warn("set sock opt IPV6_V6ONLY failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
+  } else if (bind(fd,  (const struct sockaddr*)make_sockaddr(&sock_addr, src), sizeof(sock_addr)) != 0) {
     err = PNIO_LISTEN_ERROR;
     rk_warn("bind failed, src=%s, fd=%d, errno=%d", T2S(addr, src), fd, errno);
   } else if (ussl_listen(fd, 1024) != 0) {

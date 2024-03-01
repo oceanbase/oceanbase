@@ -682,7 +682,6 @@ int ObLogger::log_head(const int64_t ts,
     ts_to_tv(ts, tv);
     struct tm tm;
     ob_fast_localtime(last_unix_sec_, last_localtime_, static_cast<time_t>(tv.tv_sec), &tm);
-    const uint64_t *trace_id = ObCurTraceId::get();
     const int32_t errcode_buf_size = 32;
     char errcode_buf[errcode_buf_size];
     errcode_buf[0] = '\0';
@@ -696,20 +695,20 @@ int ObLogger::log_head(const int64_t ts,
       //forbid modify the format of logdata_printf
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "[%ld][%s][T%lu][" TRACE_ID_FORMAT_V2 "] ",
+                           "[%ld][%s][T%lu][%s] ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                           tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id));
+                           tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
     } else {
       constexpr int cluster_id_buf_len = 8;
       char cluster_id_buf[cluster_id_buf_len] = {'\0'};
       (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
       ret = logdata_printf(buf, buf_len, pos,
                            "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][" TRACE_ID_FORMAT_V2 "] [lt=%ld]%s ",
+                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][%s] [lt=%ld]%s ",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
                            base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), TRACE_ID_FORMAT_PARAM(trace_id),
+                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
                            last_logging_cost_time_us_, errcode_buf);
     }
   }

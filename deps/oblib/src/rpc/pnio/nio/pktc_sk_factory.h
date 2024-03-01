@@ -59,7 +59,7 @@ static int pktc_sk_init(pktc_sf_t* sf, pktc_sk_t* s) {
 static void pktc_sk_destroy(pktc_sf_t* sf, pktc_sk_t* s) {
   pktc_t* pc = structof(sf, pktc_t, sf);
   if (s) {
-    ihash_del(&pc->sk_map, *(uint64_t*)&s->dest);
+    ihash_del(&pc->sk_map, &s->dest);
     dlink_delete(&s->list_link);
   }
 }

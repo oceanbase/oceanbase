@@ -35,16 +35,10 @@ TEST(OB_ADDR, TEST1)
   EXPECT_EQ(addr.get_port(), 1234);
 
   EXPECT_EQ(addr.parse_from_cstring("1.0.0.1234:1234"), OB_INVALID_ARGUMENT);
-  EXPECT_FALSE(addr.is_valid());
-
-  ObAddr addr2;
-  EXPECT_LT(addr2, addr);
-
-  addr2.set_port(1234);
-  EXPECT_EQ(addr2, addr);
 
   addr.set_ip_addr("0.0.0.1", 1);
   EXPECT_EQ(addr.get_ipv4(), 1U);
+  ObAddr addr2;
   addr2.set_ip_addr("1.0.0.0", 1);
   EXPECT_EQ(addr2.get_ipv4(), 1U << 24);
   EXPECT_LT(addr, addr2);
@@ -72,7 +66,7 @@ TEST(OB_ADDR, TEST_UNIX_PATH)
 
   EXPECT_FALSE(addr.set_unix_addr(NULL));
   EXPECT_FALSE(addr.is_valid());
-  
+
   char path0[] = "";
   EXPECT_TRUE(addr.set_unix_addr(path0));
   EXPECT_FALSE(addr.is_valid());

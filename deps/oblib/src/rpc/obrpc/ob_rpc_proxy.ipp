@@ -60,7 +60,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;
     ObRpcPacket resp_pkt;
-    sockaddr_in sock_addr;
+    sockaddr_storage sock_addr;
     uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     int pn_err = 0;
@@ -82,7 +82,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
         &cb
       };
       cb.gtid_ = (pnio_group_id<<32) + thread_id;
-      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_), &pkt, &cb.pkt_id_))) {
+      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
         ret = ObPocClientStub::translate_io_error(pn_err);
         RPC_LOG(WARN, "pnio post fail", K(pn_err));
       }
@@ -201,7 +201,7 @@ int SSHandle<pcodeStruct>::abort()
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;
     ObRpcPacket resp_pkt;
-    sockaddr_in sock_addr;
+    sockaddr_storage sock_addr;
     uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     int pn_err = 0;
@@ -223,7 +223,7 @@ int SSHandle<pcodeStruct>::abort()
         &cb
       };
       cb.gtid_ = (pnio_group_id<<32) + thread_id;
-      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_), &pkt, &cb.pkt_id_))) {
+      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
         ret = ObPocClientStub::translate_io_error(pn_err);
         RPC_LOG(WARN, "pnio post fail", K(pn_err));
       }

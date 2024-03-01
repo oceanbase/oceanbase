@@ -43,6 +43,60 @@ static int pktc_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
 #include "pktc_sk_factory.h"
 #include "pktc_post.h"
 
+void* sk_key_func(link_t* link)
+{
+  pktc_sk_t *sk = structof(link, pktc_sk_t, hash);
+  return &sk->dest;
+}
+
+uint64_t sk_hash_func(void* key)
+{
+  addr_t* addr = (addr_t*)key;
+  uint64_t hash = addr->port;
+  if (!addr->is_ipv6) {
+    hash += addr->ip;
+  } else {
+    for (int i = 0; i < sizeof(addr->ipv6)/sizeof(addr->ipv6[0]); i++) {
+      hash += addr->ipv6[i];
+    }
+  }
+  return hash;
+}
+
+bool sk_equal_func(void* l_key, void* l_right)
+{
+  addr_t *l = (addr_t*)l_key;
+  addr_t *r = (addr_t*)l_right;
+  bool eq = true;
+  if (l->is_ipv6 != r->is_ipv6) {
+    eq = false;
+  } else if (!l->is_ipv6) {
+    eq = l->ip == r->ip;
+  } else {
+    for (int i = 0; eq && i < sizeof(l->ipv6)/sizeof(l->ipv6[0]); i++) {
+      eq = l->ipv6[i] == r->ipv6[i];
+    }
+  }
+  return eq;
+}
+
+void* cb_key_func(link_t* link)
+{
+  pktc_cb_t *cb = structof(link, pktc_cb_t, hash_link);
+  return &cb->id;
+}
+
+uint64_t cb_hash_func(void* key)
+{
+  uint64_t id = *(uint64_t*)key;
+  return fasthash64(&id, sizeof(id), 0);
+}
+
+bool cb_equal_func(void* l_key, void* l_right)
+{
+  return *(uint64_t*)l_key == *(uint64_t*)l_right;
+}
+
 int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id) {
   int err = 0;
   io->ep = ep;
@@ -52,8 +106,8 @@ int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id) {
   sc_queue_init(&io->req_queue);
   ef(err = timerfd_init_tw(io->ep, &io->cb_timerfd));
   tw_init(&io->cb_tw, pktc_resp_cb_on_timeout);
-  hash_init(&io->sk_map, arrlen(io->sk_table));
-  hash_init(&io->cb_map, arrlen(io->cb_table));
+  hash_init(&io->sk_map, arrlen(io->sk_table), sk_key_func, sk_hash_func, sk_equal_func);
+  hash_init(&io->cb_map, arrlen(io->cb_table), cb_key_func, cb_hash_func, cb_equal_func);
   dlink_init(&io->sk_list);
   rk_info("pktc init succ");
   el();

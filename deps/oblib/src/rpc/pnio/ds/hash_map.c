@@ -10,16 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-hash_t* hash_create(int64_t capacity) {
-  int64_t alloc_size = sizeof(hash_t) + capacity * sizeof(link_t);
-  hash_t* p = (hash_t*)malloc(alloc_size);
-  hash_init(p, capacity);
-  return p;
-}
-
-void hash_init(hash_t* h, int64_t capacity) {
+void hash_init(hash_t* h, int64_t capacity,
+               _key_func key_func,
+               _hash_func hash_func,
+               _equal_func equal_func) {
   h->capacity = capacity;
   memset(&h->table, 0, sizeof(link_t) * capacity);
+  h->key_func = key_func;
+  h->hash_func = hash_func;
+  h->equal_func = equal_func;
 }
 
 static uint64_t __hash_calc(link_t* k) { return str_hash((str_t*)(k + 1)); }

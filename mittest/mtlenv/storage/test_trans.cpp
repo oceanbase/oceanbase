@@ -215,7 +215,7 @@ void TestTrans::prepare_tx_desc(ObTxDesc *&tx_desc, ObTxReadSnapshot &snapshot)
 TEST_F(TestTrans, create_ls_and_tablet)
 {
   int ret = OB_SUCCESS;
-  ASSERT_EQ(OB_SUCCESS, ObCurTraceId::get_trace_id()->set("Y1-1111111111111111"));
+  ASSERT_EQ(OB_SUCCESS, ObCurTraceId::get_trace_id()->set("Y1-1111111111111111-0-0"));
   ObLSID ls_id(100);
   ObLS *ls = nullptr;
   uint64_t tenant_id = MTL_ID();
@@ -310,7 +310,7 @@ TEST_F(TestTrans, basic)
 
 TEST_F(TestTrans, dist_trans)
 {
-  ASSERT_EQ(OB_SUCCESS, ObCurTraceId::get_trace_id()->set("Y2-2222222222222222222222"));
+  ASSERT_EQ(OB_SUCCESS, ObCurTraceId::get_trace_id()->set("Y2-2222222222222222-0-0"));
   uint64_t tenant_id = MTL_ID();
   ObLSID ls_id(100);
   ObTabletID tablet_id(1001);

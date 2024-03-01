@@ -21,13 +21,13 @@
 typedef struct uloop_t
 {
   ussl_eloop_t ep;
-  ussl_listenfd_t listenfd;
+  ussl_listenfd_t listenfd4;
+  ussl_listenfd_t listenfd6;
   pipefd_t pipefd;
   ussl_dlink_t timeout_list;
 } uloop_t;
 
 uloop_t global_ussl_loop_struct;
-static int ussl_has_listened = 0;
 static ussl_sf_t acceptfd_fty;
 static ussl_sf_t clientfd_fty;
 static void *ussl_bg_thread_id;
@@ -59,19 +59,37 @@ static int uloop_run(uloop_t *loop)
 static int uloop_add_listen(uloop_t *l, int listen_fd, int backlog)
 {
   int ret = 0;
-  if (libc_listen(listen_fd, backlog) < 0) {
-    ret = -EIO;
-    ussl_log_error("listen failed, fd:%d, errno:%d", listen_fd, errno);
-  } else if (0 != acceptfd_sf_init(&acceptfd_fty)) {
+  in_port_t net_port = 0;
+  struct sockaddr_storage ussl_listened_addr;
+  socklen_t ussl_listened_addrlen = sizeof(ussl_listened_addr);
+  if (0 != acceptfd_sf_init(&acceptfd_fty)) {
     ret = -1;
     ussl_log_error("acceptfd_sf_init failed, fd:%d", listen_fd);
-  } else if (0 != ussl_listenfd_init(&l->ep, &l->listenfd, (ussl_sf_t *)&acceptfd_fty, listen_fd)) {
+  } else if (0 != getsockname(listen_fd, (struct sockaddr *)&ussl_listened_addr,
+                              &ussl_listened_addrlen)) {
     ret = -1;
-    ussl_log_error("listenfd_init failed, fd:%d", listen_fd);
-  }
-  if (0 != ret) {
-    if (listen_fd >= 0) {
-      close(listen_fd);
+    ussl_log_error("getsockname failed, fd:%d, errno:%d", listen_fd, errno);
+  } else if (AF_INET != ussl_listened_addr.ss_family && AF_INET6 != ussl_listened_addr.ss_family) {
+    ret = -1;
+    ussl_log_error("the protocol is not supported, fd:%d, family:%hu", listen_fd,
+                   ussl_listened_addr.ss_family);
+  } else {
+    int fd = listen_fd;
+    int ret = 0;
+    if (AF_INET == ussl_listened_addr.ss_family) {
+      net_port = ((struct sockaddr_in *)(&ussl_listened_addr))->sin_port;
+    } else {
+      net_port = ((struct sockaddr_in6 *)(&ussl_listened_addr))->sin6_port;
+    }
+    if (libc_listen(fd, backlog) < 0) {
+      ret = -1;
+      ussl_log_error("listen failed, fd:%d, port:%hu", fd, ntohs(net_port));
+    } else if (0 != ussl_listenfd_init(&l->ep,
+                                       AF_INET == ussl_listened_addr.ss_family ? &l->listenfd4 : &l->listenfd6, (ussl_sf_t *)&acceptfd_fty, fd)) {
+      ret = -1;
+      ussl_log_error("listenfd_init failed, fd:%d, port:%hu", fd, ntohs(net_port));
+    } else {
+      ussl_log_info("listen success, fd:%d, port:%hu", fd, ntohs(net_port));
     }
   }
   return ret;
@@ -188,38 +206,33 @@ void check_and_handle_timeout_event()
   }
 }
 
-int ussl_loop_add_listen_once(int listen_fd, int backlog)
+int ussl_loop_add_listen(int listen_fd, int backlog)
 {
   int ret = 0;
-  if (ATOMIC_BCAS(&ussl_has_listened, 0, 1)) {
-    // get addr from fd
-    struct sockaddr_storage ussl_listened_addr;
-    socklen_t ussl_listened_addrlen = sizeof(ussl_listened_addr);
-    if (0 !=
-        getsockname(listen_fd, (struct sockaddr *)&ussl_listened_addr, &ussl_listened_addrlen)) {
-      ret = -1;
-      ussl_log_error("getsockname failed, fd:%d, errno:%d", listen_fd, errno);
-      ATOMIC_STORE(&ussl_has_listened, 0);
-    } else if (AF_INET != ussl_listened_addr.ss_family &&
-               AF_INET6 != ussl_listened_addr.ss_family) {
-      ret = -1;
-      ussl_log_info("the protocol family is not IPv4 or IPv6, fd:%d", listen_fd);
-      ATOMIC_STORE(&ussl_has_listened, 0);
-    } else if (0 != uloop_add_listen(&global_ussl_loop_struct, listen_fd, backlog)) {
-      ret = -1;
-      ussl_log_error("uloop_add_listen failed, fd:%d errno:%d", listen_fd, errno);
-      ATOMIC_STORE(&ussl_has_listened, 0);
-    } else {
-      int port = 0;
-      if (AF_INET == ussl_listened_addr.ss_family) {
-        struct sockaddr_in *s = (struct sockaddr_in *)(&ussl_listened_addr);
-        port = s->sin_port;
-      } else if (AF_INET6 == ussl_listened_addr.ss_family) {
-        struct sockaddr_in6 * s = (struct sockaddr_in6 *)(&ussl_listened_addr);
-        port = s->sin6_port;
-      }
-      ussl_log_info("uloop add listen success! port:%d", ntohs(port));
+  // get addr from fd
+  struct sockaddr_storage ussl_listened_addr;
+  socklen_t ussl_listened_addrlen = sizeof(ussl_listened_addr);
+  if (0 !=
+      getsockname(listen_fd, (struct sockaddr *)&ussl_listened_addr, &ussl_listened_addrlen)) {
+    ret = -1;
+    ussl_log_error("getsockname failed, fd:%d, errno:%d", listen_fd, errno);
+  } else if (AF_INET != ussl_listened_addr.ss_family &&
+             AF_INET6 != ussl_listened_addr.ss_family) {
+    ret = -1;
+    ussl_log_info("the protocol family is not IPv4 or IPv6, fd:%d", listen_fd);
+  } else if (0 != uloop_add_listen(&global_ussl_loop_struct, listen_fd, backlog)) {
+    ret = -1;
+    ussl_log_error("uloop_add_listen failed, fd:%d errno:%d", listen_fd, errno);
+  } else {
+    int port = 0;
+    if (AF_INET == ussl_listened_addr.ss_family) {
+      struct sockaddr_in *s = (struct sockaddr_in *)(&ussl_listened_addr);
+      port = s->sin_port;
+    } else if (AF_INET6 == ussl_listened_addr.ss_family) {
+      struct sockaddr_in6 * s = (struct sockaddr_in6 *)(&ussl_listened_addr);
+      port = s->sin6_port;
     }
+    ussl_log_info("uloop add listen success! port:%d", ntohs(port));
   }
   return ret;
 }

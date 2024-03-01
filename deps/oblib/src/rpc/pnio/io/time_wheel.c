@@ -65,8 +65,8 @@ void keepalive_check(pktc_t* io) {
     // walks through pktc_t skmap, refresh tcp keepalive params and check server keepalive
     dlink_for(&io->sk_list, p) {
       pktc_sk_t *sk = structof(p, pktc_sk_t, list_link);
-      struct sockaddr_in sin;
-      if (sk->conn_ok && SERVER_IN_BLACK((struct sockaddr*)make_sockaddr(&sin, sk->dest))) {
+      struct sockaddr_storage sock_addr;
+      if (sk->conn_ok && SERVER_IN_BLACK((struct sockaddr*)make_sockaddr(&sock_addr, sk->dest))) {
         // mark the socket as waiting for destroy
         rk_info("socket dest server in blacklist, it will be destroyed, sock=(ptr=%p,dest=%d:%d)", sk, sk->dest.ip, sk->dest.port);
         sk->mask |= EPOLLERR;

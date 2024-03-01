@@ -2102,6 +2102,9 @@ int ObServer::init_pre_setting()
     LOG_INFO("set stack_size", K(stack_size));
     global_thread_stack_size = stack_size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
   }
+  if (OB_SUCC(ret) && GCONF.use_ipv6) {
+    enable_use_ipv6();
+  }
   return ret;
 }
 

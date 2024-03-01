@@ -698,9 +698,13 @@ int ObWebServiceRootAddr::to_json(
       } else if (!is_strong_leader(role) && !is_follower(role)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid role type", K(ret), K(role));
-      } else if (OB_FAIL(json.append_fmt("{\"%s\":\"%s:%d\",\"%s\":\"%s\",\"%s\":%ld}",
+      } else if (OB_FAIL(json.append_fmt("{\"%s\":\"%s%s%s:%d\",\"%s\":\"%s\",\"%s\":%ld}",
 
-          JSON_ADDRESS, ip_buf, addr_list.at(i).get_server().get_port(),
+          JSON_ADDRESS,
+          addr_list.at(i).get_server().using_ipv4() ? "" : "[",
+          ip_buf,
+	        addr_list.at(i).get_server().using_ipv4() ? "" : "]",
+	        addr_list.at(i).get_server().get_port(),
           JSON_ROLE, is_strong_leader(role) ? "LEADER" : "FOLLOWER",
           JSON_SQL_PORT, addr_list.at(i).get_sql_port()))) {
         LOG_WARN("append string failed", K(ret));

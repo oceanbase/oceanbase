@@ -10,12 +10,15 @@
  * See the Mulan PubL v2 for more details.
  */
 
-static uint64_t __ihash_calc(uint64_t k) { return fasthash64(&k, sizeof(k), 0); }
-static link_t* __ihash_locate(hash_t* map, uint64_t k) { return &map->table[__ihash_calc(k) % map->capacity]; }
-static uint64_t __ihash_key(link_t* l) { return *(uint64_t*)(l + 1); }
-static link_t* __ihash_list_search(link_t* start, uint64_t k, link_t** prev) {
+static link_t* __ihash_locate(hash_t* map, void* key)
+{
+  return &map->table[map->hash_func(key) % map->capacity];
+}
+
+static link_t* __ihash_list_search(hash_t* map, void* key, link_t** prev) {
+  link_t* start = __ihash_locate(map, key);
   link_t* p = start;
-  while(p->next != NULL && __ihash_key(p->next) != k) {
+  while(p->next != NULL && !map->equal_func(map->key_func(p->next), key)) {
     p = p->next;
   }
   if (NULL != prev) {
@@ -26,8 +29,8 @@ static link_t* __ihash_list_search(link_t* start, uint64_t k, link_t** prev) {
 
 link_t* ihash_insert(hash_t* map, link_t* klink) {
   link_t* prev = NULL;
-  uint64_t k = __ihash_key(klink);
-  if(!__ihash_list_search(__ihash_locate(map, k), k, &prev)) {
+  void* key = map->key_func(klink);
+  if(!__ihash_list_search(map, key, &prev)) {
     link_insert(prev, klink);
   } else {
     klink = NULL;
@@ -35,15 +38,15 @@ link_t* ihash_insert(hash_t* map, link_t* klink) {
   return klink;
 }
 
-link_t* ihash_del(hash_t* map, uint64_t k) {
+link_t* ihash_del(hash_t* map, void* key) {
   link_t* ret = NULL;
   link_t* prev = NULL;
-  if((ret = __ihash_list_search(__ihash_locate(map, k), k, &prev))) {
+  if((ret = __ihash_list_search(map, key, &prev))) {
     link_delete(prev);
   }
   return ret;
 }
 
-link_t* ihash_get(hash_t* map, uint64_t k) {
-  return __ihash_list_search(__ihash_locate(map, k), k, NULL);
+link_t* ihash_get(hash_t* map, void* key) {
+  return __ihash_list_search(map, key, NULL);
 }

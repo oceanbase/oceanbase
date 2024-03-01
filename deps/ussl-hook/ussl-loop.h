@@ -16,7 +16,7 @@
 // the client communicates with the background thread through this pipe
 int client_comm_pipe[2];
 
-extern int ussl_loop_add_listen_once(int listen_fd, int backlog);
+extern int ussl_loop_add_listen(int listen_fd, int backlog);
 extern int ussl_loop_add_clientfd(int client_fd, uint64_t gid, int ctx_id, int send_negotiation, int auth_methods, int epfd,
                                   struct epoll_event *event);
 int  __attribute__((weak)) dispatch_accept_fd_to_certain_group(int fd, uint64_t gid);
