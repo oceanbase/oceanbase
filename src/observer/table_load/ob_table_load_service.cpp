@@ -810,6 +810,20 @@ int ObTableLoadService::assign_memory(bool is_sort, int64_t assign_memory)
   return ret;
 }
 
+int ObTableLoadService::recycle_memory(bool is_sort, int64_t assign_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.recycle_memory(is_sort, assign_memory);
+  }
+
+  return ret;
+}
+
 int ObTableLoadService::get_sort_memory(int64_t &sort_memory)
 {
   int ret = OB_SUCCESS;

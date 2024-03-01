@@ -103,19 +103,23 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
-    LOG_WARN("fail to add ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::assign_memory(param.need_sort_, param.avail_memory_))) {
     LOG_WARN("fail to assign_memory", KR(ret));
-  } else {
-    table_ctx->set_assigned_memory();
-    if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
-                                           arg_.target_partition_id_array_))) {
-      LOG_WARN("fail to store init ctx", KR(ret));
-    }
+  } else if (FALSE_IT(table_ctx->set_assigned_memory())) {
+  } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
+                                                arg_.target_partition_id_array_))) {
+    LOG_WARN("fail to store init ctx", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
+    LOG_WARN("fail to add ctx", KR(ret));
   }
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx) {
+      if (table_ctx->is_assigned_memory()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(param.need_sort_, param.avail_memory_))) {
+          LOG_WARN("fail to recycle_memory", KR(tmp_ret), K(param));
+        }
+      }
       ObTableLoadService::free_ctx(table_ctx);
       table_ctx = nullptr;
     }
