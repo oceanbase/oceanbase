@@ -314,7 +314,7 @@ private:
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
-  const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
+  const static int64_t PRINT_INTERVAL = 1000L * 1000L;
 
 private:
   uint64_t tenant_id_;

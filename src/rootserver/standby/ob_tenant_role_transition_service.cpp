@@ -410,14 +410,12 @@ int ObTenantRoleTransitionService::do_prepare_flashback_(share::ObAllTenantInfo 
   }
   return ret;
 }
-
 int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
     share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
-
+  ObLSStatusOperator status_op;
   DEBUG_SYNC(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY);
-
   LOG_INFO("start to do_prepare_flashback_for_switch_to_primary_", KR(ret), K_(tenant_id));
 
   if (OB_FAIL(check_inner_stat())) {
@@ -426,9 +424,18 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("switchover status not match, switch to primary not allow", KR(ret), K(tenant_info));
     TENANT_ROLE_TRANS_USER_ERR_WITH_SUFFIX(OB_OP_NOT_ALLOW, "switchover status not match", switch_optype_);
+  } else if (OB_UNLIKELY(obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_PRIMARY != switch_optype_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operation type is not SWITCH_TO_PRIMARY", KR(ret), K(switch_optype_));
   } else if (OB_UNLIKELY(switchover_epoch_ != tenant_info.get_switchover_epoch())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info), K_(switchover_epoch));
+  } else if (OB_FAIL(status_op.create_abort_ls_in_switch_tenant(
+      tenant_id_, tenant_info.get_switchover_status(),
+      tenant_info.get_switchover_epoch(), *sql_proxy_))) {
+    // SYS LS has been synced, all current CTREATING/CTREATED LS cannot become NORMAL
+    // These LS should become CREATE_ABORT, otherwise tenant cannot be synced
+    LOG_WARN("failed to create abort ls", KR(ret), K_(tenant_id), K(tenant_info));
   } else if (OB_FAIL(wait_tenant_sync_to_latest_until_timeout_(tenant_id_, tenant_info))) {
     LOG_WARN("fail to execute wait_tenant_sync_to_latest_until_timeout_", KR(ret), K(tenant_info));
     SOURCE_TENANT_CHECK_USER_ERROR_FOR_SWITCHOVER_TO_PRIMARY;
@@ -448,7 +455,6 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
                                               tenant_info))) {
     LOG_WARN("failed to switchover_update_tenant_status", KR(ret), K_(tenant_id), K(tenant_info));
   }
-
   return ret;
 }
 
@@ -508,9 +514,10 @@ int ObTenantRoleTransitionService::do_flashback_()
                              tenant_info.get_switchover_epoch())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info), K(switchover_epoch_));
-  } else if (OB_FAIL(status_op.create_abort_ls_in_switch_tenant(
-                 tenant_id_, tenant_info.get_switchover_status(),
-                 tenant_info.get_switchover_epoch(), *sql_proxy_))) {
+  } else if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY == switch_optype_
+        && OB_FAIL(status_op.create_abort_ls_in_switch_tenant(
+              tenant_id_, tenant_info.get_switchover_status(),
+              tenant_info.get_switchover_epoch(), *sql_proxy_))) {
     LOG_WARN("failed to create abort ls", KR(ret), K_(tenant_id), K(tenant_info));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(
                  ctx, GCONF.internal_sql_execute_timeout))) {
