@@ -628,9 +628,17 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
       int64_t uncertain_bound = 0;
       if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
-      } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
-        TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
-      } else {
+      } else if (tx.access_mode_ != ObTxAccessMode::STANDBY_RD_ONLY &&
+                 !tx.tx_id_.is_valid()
+                 && OB_FAIL(tx_desc_mgr_.add(tx))) {
+        if (OB_STANDBY_READ_ONLY == ret) {
+          tx.access_mode_ = ObTxAccessMode::STANDBY_RD_ONLY;
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
+        }
+      }
+      if (OB_SUCC(ret)) {
         tx.snapshot_version_ = version;
         tx.snapshot_uncertain_bound_ = uncertain_bound;
         tx.snapshot_scn_ = tx.get_tx_seq(ObSequence::get_max_seq_no() + 1);
@@ -990,6 +998,7 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
                                                       const bool release)
 {
   int ret = OB_SUCCESS;
+  // tx is idle, update tx parameters
   if (tx.state_ == ObTxDesc::State::IDLE) {
     tx.cluster_id_      = tx_param.cluster_id_;
     tx.access_mode_     = tx_param.access_mode_;

@@ -183,7 +183,7 @@ extern const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation);
 
 enum class ObTxAccessMode
 {
-  INVL = -1, RW = 0, RD_ONLY = 1
+  INVL = -1, RW = 0, RD_ONLY = 1, STANDBY_RD_ONLY = 2
 };
 
 struct ObTxParam
@@ -687,8 +687,8 @@ public:
   ObTxIsolationLevel get_isolation_level() const { return isolation_; }
   const ObTransID &tid() const { return tx_id_; }
   bool is_valid() const { return !is_in_tx() || tx_id_.is_valid(); }
-  ObTxAccessMode get_access_mode() const { return access_mode_; }
-  bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
+  ObTxAccessMode get_tx_access_mode() const { return access_mode_; }
+  bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY || access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY; }
   bool is_clean() const { return parts_.empty(); }
   bool is_shadow() const  { return flags_.SHADOW_; }
   bool is_explicit() const { return flags_.EXPLICIT_; }
