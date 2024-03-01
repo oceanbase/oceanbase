@@ -1256,7 +1256,7 @@ _Pragma("GCC diagnostic pop")
       check_reset_force_allows();
     } /* not allow */
   }
-#ifndef OB_BUILD_RPM
+#ifndef OB_BUILD_PACKAGE
   const int64_t threshold_us = 500 * 1000;
 #else
   const int64_t threshold_us = 1000 * 1000;
