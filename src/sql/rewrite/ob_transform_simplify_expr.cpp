@@ -28,18 +28,26 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   bool is_happened = false;
   UNUSED(parent_stmts);
-  if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
-    LOG_WARN("failed to flatten stmt exprs", K(is_happened));
-  } else {
-    trans_happened |= is_happened;
-    LOG_TRACE("succeed to flatten stmt exprs", K(is_happened));
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret), K(stmt));
   }
-  if (OB_FAIL(replace_is_null_condition(stmt, is_happened))) {
-    LOG_WARN("failed to replace is null condition", K(is_happened));
-  } else {
-    trans_happened |= is_happened;
-    OPT_TRACE("replace is null condition:", is_happened);
-    LOG_TRACE("succeed to replace is null condition", K(is_happened));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
+      LOG_WARN("failed to flatten stmt exprs", K(is_happened));
+    } else {
+      trans_happened |= is_happened;
+      LOG_TRACE("succeed to flatten stmt exprs", K(is_happened));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(replace_is_null_condition(stmt, is_happened))) {
+      LOG_WARN("failed to replace is null condition", K(is_happened));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("replace is null condition:", is_happened);
+      LOG_TRACE("succeed to replace is null condition", K(is_happened));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(replace_op_null_condition(stmt, is_happened))) {
@@ -113,7 +121,8 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to remove subquery when filter is false", K(is_happened));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) &&
+      stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3) {
     if (OB_FAIL(convert_case_when_predicate(stmt, is_happened))) {
       LOG_WARN("failed to convert case when predicate", K(ret));
     } else {
@@ -3842,23 +3851,27 @@ int ObTransformSimplifyExpr::add_constraint_for_convert_case_when_by_then(ObIArr
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param is NULL",K(ret));
-  } else if (false_null_exprs.count() == 0) {
-    // do nothing
-  } else if (OB_FAIL(build_nvl_bool_exprs(false_null_exprs, false))) {
-    LOG_WARN("failed to build nvl bool exprs",K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_,
-                                                    false_null_exprs,
-                                                    false_cons_expr))) {
-    LOG_WARN("failed to build or expr", K(ret));
-  } else if (OB_ISNULL(false_cons_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null expr", K(ret));
-  } else if (OB_FAIL(false_cons_expr->formalize(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize expr", K(ret), K(false_cons_expr));
-  } else {
-    ObExprConstraint false_cons(false_cons_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE);
-    if (OB_FAIL(ctx_->expr_constraints_.push_back(false_cons))) {
-      LOG_WARN("failed to push back constraints");
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < false_null_exprs.count(); i++) {
+    ObRawExpr *lnnvl_expr = NULL;
+    if (OB_ISNULL(false_null_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*ctx_->expr_factory_,
+                                                        false_null_exprs.at(i),
+                                                        lnnvl_expr))) {
+      LOG_WARN("failed to build lnnvl expr", K(ret));
+    } else if (OB_ISNULL(lnnvl_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(lnnvl_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret), K(lnnvl_expr));
+    } else {
+      ObExprConstraint true_cons(lnnvl_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
+      if (OB_FAIL(ctx_->expr_constraints_.push_back(true_cons))) {
+        LOG_WARN("failed to push back expr constraints", K(ret));
+      }
     }
   }
 
@@ -3872,52 +3885,6 @@ int ObTransformSimplifyExpr::add_constraint_for_convert_case_when_by_then(ObIArr
         LOG_WARN("failed to push back expr constraints", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObTransformSimplifyExpr::build_nvl_bool_exprs(ObIArray<ObRawExpr*> &exprs,
-                                            const bool boolean) {
-  int ret = OB_SUCCESS;
-  ObRawExpr *nvl_bool_expr = NULL;
-  ObSEArray<ObRawExpr *, 4> tmp_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    if (OB_FAIL(build_nvl_bool_expr(exprs.at(i), boolean, nvl_bool_expr))) {
-      LOG_WARN("failed to build nvl bool expr", K(ret));
-    } else if (OB_FAIL(tmp_exprs.push_back(nvl_bool_expr))) {
-      LOG_WARN("failed to push back nvl bool expr", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(exprs.assign(tmp_exprs))) {
-    LOG_WARN("failed to assign exprs", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformSimplifyExpr::build_nvl_bool_expr(ObRawExpr *expr,
-                                            const bool is_true,
-                                            ObRawExpr *&nvl_expr) {
-  int ret = OB_SUCCESS;
-  ObRawExpr *true_false_expr = NULL;
-  nvl_expr = NULL;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param is NULL", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(
-                                    ctx_->expr_factory_,
-                                    true_false_expr, is_true))) {
-    LOG_WARN("failed to build const bool expr", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_nvl_expr(*ctx_->expr_factory_,
-                                                    expr,
-                                                    true_false_expr,
-                                                    nvl_expr))) {
-    LOG_WARN("failed to build nvl expr", K(ret));
-  } else if (OB_ISNULL(nvl_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nvl expr is NULL", K(ret));
-  } else if (OB_FAIL(nvl_expr->formalize(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize nvl expr", K(ret));
   }
   return ret;
 }

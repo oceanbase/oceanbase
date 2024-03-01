@@ -224,8 +224,6 @@ private:
                                               ObIArray<ObRawExpr*> &extracted_preds);
   int add_constraint_for_convert_case_when_by_then(ObIArray<ObRawExpr *> &false_null_exprs,
                                                    ObIArray<ObRawExpr *> &true_exprs);
-  int build_nvl_bool_exprs(ObIArray<ObRawExpr *> &exprs, const bool boolean);
-  int build_nvl_bool_expr(ObRawExpr *expr, const bool boolean, ObRawExpr *&nvl_expr);
 };
 }
 }
