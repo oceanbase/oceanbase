@@ -1710,7 +1710,11 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
   lib::ContextParam param;
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
-  bool is_forbid_anony_parameter = block->is_forbid_anony_parameter_ || (params.count() > 0);
+  bool is_forbid_anony_parameter =
+         block->is_forbid_anony_parameter_
+          || (params.count() > 0)
+          || lib::is_mysql_mode();
+
   int64_t old_worker_timeout_ts = 0;
   /* !!!
    * PL，req_timeinfo_guard一定要在执行前定义
@@ -1744,7 +1748,7 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!is_forbid_anony_parameter && lib::is_oracle_mode()) {
+    } else if (!is_forbid_anony_parameter) {
       OZ (parameter_anonymous_block(ctx, block, exec_params, ctx.get_allocator(), cacheobj_guard));
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       CK (OB_NOT_NULL(routine));
