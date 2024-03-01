@@ -359,7 +359,7 @@ int ObDDLTableMergeTask::process()
         skip_major_process = true;
       }
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      skip_major_process = true;
+      ret = OB_TASK_EXPIRED;
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
