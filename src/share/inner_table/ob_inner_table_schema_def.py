@@ -13150,6 +13150,7 @@ def_table_schema(
   ('end_scn', 'uint'),
   ('commit_version', 'uint'),
   ('undo_status', 'varchar:MAX_UNDO_LIST_CHAR_LENGTH'),
+  ('tx_op', 'varchar:MAX_TX_OP_CHAR_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

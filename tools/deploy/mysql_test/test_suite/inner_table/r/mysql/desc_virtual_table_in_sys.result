@@ -7992,6 +7992,7 @@ start_scn	bigint(20) unsigned	NO		NULL
 end_scn	bigint(20) unsigned	NO		NULL	
 commit_version	bigint(20) unsigned	NO		NULL	
 undo_status	varchar(4096)	NO		NULL	
+tx_op	varchar(4096)	NO		NULL	
 desc oceanbase.__all_virtual_task_opt_stat_gather_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
