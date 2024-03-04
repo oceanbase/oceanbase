@@ -30,6 +30,7 @@ enum class LogFormatFlag
   FILTER_FORMAT = 2,
   STAT_FORMAT = 3,
   META_FORMAT = 4,
+  DECOMPRESS_FORMAT = 5,
 };
 
 class ObAdminLogDumperInterface
