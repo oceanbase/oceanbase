@@ -85,6 +85,9 @@ public:
   static const int64_t MEMORY_TO_LOG_DISK_FACTOR = 3;
   static const int64_t INVALID_LOG_DISK_SIZE = -1;
 
+  ////////////////////////// DATA DISK ////////////////////////////
+  static const int64_t INVALID_DATA_DISK_SIZE = -1;
+
   ////////////////////////// IOPS ////////////////////////////
   // IOPS is shared by META and USER tenant.
   static const int64_t UNIT_MIN_IOPS = 1024;
@@ -382,6 +385,7 @@ protected:
   int64_t max_iops_;
   int64_t min_iops_;
   int64_t iops_weight_;
+  int64_t data_disk_size_;    // not used, only as placeholder
 };
 
 
