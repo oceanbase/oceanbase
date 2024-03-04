@@ -222,12 +222,14 @@ void ObLogCompressor::log_compress_loop_()
     char compress_files[OB_SYSLOG_COMPRESS_TYPE_COUNT][OB_MAX_SYSLOG_FILE_NAME_SIZE] = {{0}};
     int64_t log_file_count[OB_SYSLOG_COMPRESS_TYPE_COUNT] = {0};
     int64_t log_min_time[OB_SYSLOG_COMPRESS_TYPE_COUNT] = {0};
+    int64_t compressed_file_count = 0;
+    int64_t deleted_file_count = 0;
 
     while (!stopped_) {
       // wait until stoped or needing to work
       {
         common::ObThreadCondGuard guard(log_compress_cond_);
-        while (!stopped_ && !is_enable_compress() && max_disk_size_ <= 0) {
+        while (!stopped_ && !is_enable_compress() && max_disk_size_ <= 0 && OB_LOGGER.get_max_file_index() <= 0) {
           log_compress_cond_.wait_us(loop_interval_);
         }
       }
@@ -242,6 +244,8 @@ void ObLogCompressor::log_compress_loop_()
         struct dirent* entry;
         struct stat stat_info;
         DIR* dir = NULL;
+        compressed_file_count = 0;
+        deleted_file_count = 0;
         for (int i = 0; i < OB_SYSLOG_COMPRESS_TYPE_COUNT; i++) {
           log_file_count[i] = 0;
           log_min_time[i] = INT64_MAX;
@@ -313,6 +317,7 @@ void ObLogCompressor::log_compress_loop_()
                 } else {
                   // estimated value
                   total_size -= file_size;
+                  compressed_file_count++;
                 }
                 log_file_count[i]--;
               }
@@ -337,6 +342,8 @@ void ObLogCompressor::log_compress_loop_()
                 LOG_DEBUG("log compressor unlink file", K(delete_file), K(need_delete_size), K(delete_file_size));
                 unlink(delete_file);
                 need_delete_size = need_delete_size - delete_file_size;
+                disk_remaining_size += delete_file_size;
+                deleted_file_count++;
               }
               delete_file = NULL;
               ret = oldest_files_.pop();
@@ -346,7 +353,8 @@ void ObLogCompressor::log_compress_loop_()
 
         // record cost time, sleep
         int64_t cost_time = ObClockGenerator::getClock() - start_time;
-        LOG_DEBUG("log compressor cost time", K(ret), K(cost_time));
+        LOG_INFO("log compressor cycles once. ", K(ret), K(cost_time),
+                 K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size));
         cost_time = cost_time >= 0 ? cost_time:0;
         if (!stopped_ && cost_time < loop_interval_) {
           usleep(loop_interval_ - cost_time);
@@ -524,9 +532,9 @@ int64_t ObLogCompressor::get_disk_remaining_size_()
   if (statfs(syslog_dir_, &file_system) == -1) {
     remaining_size = -1;
     ret = OB_ERR_SYS;
-    LOG_ERROR("Fail to get_compressor", K(ret), K(strerror(errno)), K(syslog_dir_));
+    LOG_ERROR("fail to get disk remaining size", K(ret), K(strerror(errno)), K(syslog_dir_));
   } else {
-    remaining_size = file_system.f_bsize * file_system.f_bfree;
+    remaining_size = file_system.f_bsize * file_system.f_bavail;
   }
   return remaining_size;
 }

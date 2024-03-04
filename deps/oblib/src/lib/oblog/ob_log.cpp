@@ -1308,6 +1308,10 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
       FileName tmp_file;
       struct dirent *dir_entry = NULL;//dir_entry is from dir_pointer stream, need not to be freed.
       int64_t print_len = 0;
+      bool enable_delete_compressed_file = true;
+      if (OB_NOT_NULL(log_compressor_) && log_compressor_->is_enable_compress()) {
+        enable_delete_compressed_file = false;
+      }
       while (OB_SUCC(ret) && (dir_entry = readdir(dir_pointer)) != NULL) {
         if (DT_DIR != dir_entry->d_type) {
           if (prefix_match(wf_file_prefix, dir_entry->d_name)) {
@@ -1320,7 +1324,7 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
           } else if (prefix_match(wf_file, dir_entry->d_name)) {
             //.wf file, do nothing.
           } else if (prefix_match(file_prefix, dir_entry->d_name)
-                     && regexec(&uncompressed_regex, dir_entry->d_name, 0, NULL, 0) == 0) {
+                     && (enable_delete_compressed_file || regexec(&uncompressed_regex, dir_entry->d_name, 0, NULL, 0) == 0)) {
             print_len = snprintf(tmp_file.file_name_, ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE, "%s/%s", dir_name, dir_entry->d_name);
             if (OB_UNLIKELY(print_len <0) || OB_UNLIKELY(print_len >= ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE)) {
               //do nothing
