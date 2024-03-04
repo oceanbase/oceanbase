@@ -223,6 +223,11 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_max_task_id_from_history(sql_proxy, tenant_id_, max_task_id));
   ASSERT_TRUE(!max_task_id.is_valid());
 
+  // getget_last_task_by_balance_task_id when history is empty
+  ObTransferTask last_task;
+  int64_t finish_time = OB_INVALID_TIMESTAMP;
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_last_task_by_balance_task_id(sql_proxy, tenant_id_, ObBalanceTaskID(1), last_task, finish_time));
+
   // insert
   ObTransferTask other_task;
   ObTransferTaskID other_task_id(222);
@@ -250,7 +255,7 @@ TEST_F(TestTransferTaskOperator, test_operator)
 
   // get_task_with_time
   int64_t create_time = OB_INVALID_TIMESTAMP;
-  int64_t finish_time = OB_INVALID_TIMESTAMP;
+  finish_time = OB_INVALID_TIMESTAMP;
   task.reset();
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_task_with_time(sql_proxy, tenant_id_, task_id_, true, task, create_time, finish_time));
   ASSERT_TRUE(OB_INVALID_TIMESTAMP != create_time);
@@ -384,6 +389,12 @@ TEST_F(TestTransferTaskOperator, test_operator)
   max_task_id.reset();
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_max_task_id_from_history(sql_proxy, tenant_id_, max_task_id));
   ASSERT_TRUE(max_task_id == task_id_);
+
+  last_task.reset();
+  finish_time = OB_INVALID_TIMESTAMP;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_last_task_by_balance_task_id(sql_proxy, tenant_id_, task_.get_balance_task_id(), last_task, finish_time));
+  ASSERT_TRUE(last_task.is_valid() && last_task.get_task_id() == task_id_);
+  ASSERT_TRUE(finish_time > 0);
 }
 
 } // namespace share

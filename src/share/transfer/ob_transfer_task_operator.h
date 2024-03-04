@@ -408,6 +408,26 @@ public:
       ObTransferTaskID &max_task_id);
 
   /*
+   * get last transfer task from __all_transfer_task_history by balance_task_id
+   *
+   * @param [in] sql_proxy:       sql client
+   * @param [in] tenant_id:       target tenant_id
+   * @param [in] balance_task_id: target balance task id
+   * @param [out] last_task:      transfer task with max transfer_id in history
+   * @param [out] finish_time:    finish time of the last task
+   * @return
+   * - OB_SUCCESS:          successful
+   * - OB_ENTRY_NOT_EXIST:  no history
+   * - other:               failed
+   */
+  static int get_last_task_by_balance_task_id(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const ObBalanceTaskID &balance_task_id,
+      ObTransferTask &last_task,
+      int64_t &finish_time);
+
+  /*
    * update comment in __all_transfer_task according to task_id
    *
    * @param [in] sql_proxy: sql client
