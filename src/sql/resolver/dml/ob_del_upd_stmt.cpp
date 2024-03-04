@@ -561,8 +561,7 @@ int ObDelUpdStmt::update_base_tid_cid()
 
         if (OB_SUCC(ret) && dml_table->loc_table_id_ != base_tid) {
           for (int64_t k = 0; OB_SUCC(ret) && k < part_expr_items_.count(); ++k) {
-            if (part_expr_items_.at(k).table_id_ == dml_table->loc_table_id_ &&
-                part_expr_items_.at(k).index_tid_ == dml_table->ref_table_id_) {
+            if (part_expr_items_.at(k).table_id_ == dml_table->loc_table_id_) {
               part_expr_items_.at(k).table_id_ = base_tid;
             }
           }
