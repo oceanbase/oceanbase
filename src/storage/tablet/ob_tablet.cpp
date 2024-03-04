@@ -1001,6 +1001,8 @@ int ObTablet::init_with_update_medium_info(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else {
     ALLOC_AND_INIT(allocator, storage_schema_addr_, *old_storage_schema);
     if (OB_FAIL(ret)) {

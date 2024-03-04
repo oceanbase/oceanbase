@@ -632,12 +632,14 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
   } else {
     const int64_t macro_block_cnt = first_sstable->get_data_macro_block_count();
     int64_t inc_row_cnt = 0;
+    int64_t inc_macro_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
       ObSSTableMetaHandle inc_handle;
       if (OB_FAIL(static_cast<const ObSSTable*>(result.handle_.get_table(i))->get_meta(inc_handle))) {
         LOG_WARN("sstable get meta fail", K(ret));
       } else {
         inc_row_cnt += inc_handle.get_sstable_meta().get_row_count();
+        inc_macro_cnt += inc_handle.get_sstable_meta().get_data_macro_block_count();
       }
     }
 
@@ -645,7 +647,8 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
     } else if ((0 == macro_block_cnt && inc_row_cnt > SCHEDULE_RANGE_ROW_COUNT_THRESHOLD)
         || (meta_handle.get_sstable_meta().get_row_count() >= SCHEDULE_RANGE_ROW_COUNT_THRESHOLD
             && inc_row_cnt >= meta_handle.get_sstable_meta().get_row_count() * SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD)) {
-      if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, macro_block_cnt, expected_task_count))) {
+      const int64_t estimate_macro_cnt = macro_block_cnt + inc_macro_cnt / 5;
+      if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, estimate_macro_cnt, expected_task_count))) {
         STORAGE_LOG(WARN, "failed to get concurrent cnt", K(ret), K(tablet_size), K(expected_task_count),
           KPC(first_sstable), K(meta_handle));
       }
@@ -936,10 +939,14 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
   } else if (OB_FAIL(tablet_op.init(share::OBCG_STORAGE /*group_list*/, *GCTX.sql_proxy_))) {
     LOG_WARN("failed to init tablet table operator", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(tablet_op.get_tablet_info(MTL_ID(), tablet_id, ls_id, tablet_info))) {
-    LOG_WARN("failed to get tablet info", K(ret), K(ls_id), K(tablet_id));
+    if (OB_STATE_NOT_MATCH == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get tablet info", K(ret), K(ls_id), K(tablet_id));
+    }
   } else if (OB_UNLIKELY(!tablet_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tabled_id is invalid", K(ret), K(ls_id), K(tablet_id));
+    LOG_WARN("tablet_info is invalid", K(ret), K(ls_id), K(tablet_id), K(tablet_info));
   } else {
     const ObArray<ObTabletReplica> &replica_array = tablet_info.get_replicas();
     int64_t unfinish_cnt = 0;
