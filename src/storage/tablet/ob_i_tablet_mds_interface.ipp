@@ -180,7 +180,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletCreateDeleteM
       MDS_LOG_GET(WARN, "failed to do read op", K(tablet_status_cache));
     }
   } else {
-#ifndef OB_BUILD_RPM
+#ifndef OB_BUILD_PACKAGE
     // for debug perf issue
     if (tablet_status_addr.is_disk_object()) {
       MDS_LOG_GET(ERROR, "tablet status addr is disk, but cache is invalid", K(tablet_status_addr), K(tablet_status_cache));

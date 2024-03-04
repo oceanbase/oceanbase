@@ -10,7 +10,7 @@
 #include "src/share/scn.h"
 #include "src/share/ob_occam_time_guard.h"
 
-#ifdef OB_BUILD_RPM
+#ifdef OB_BUILD_PACKAGE
   #define MDS_ASSERT(x) (void)(x)
 #else
   #define MDS_ASSERT(x) \
