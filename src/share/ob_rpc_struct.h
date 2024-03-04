@@ -4118,7 +4118,8 @@ public:
       dst_(),
       data_source_(),
       paxos_replica_number_(0),
-      skip_change_member_list_() {}
+      skip_change_member_list_(),
+      force_use_data_source_(false) {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -4139,7 +4140,8 @@ public:
                K_(dst),
                K_(data_source),
                K_(paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4159,6 +4161,7 @@ public:
   common::ObReplicaMember data_source_;
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
 };
 
 struct ObLSAddReplicaArg
@@ -4174,7 +4177,8 @@ public:
       data_source_(),
       orig_paxos_replica_number_(0),
       new_paxos_replica_number_(0),
-      skip_change_member_list_(false) {}
+      skip_change_member_list_(false),
+      force_use_data_source_(false) {}
 public:
   int assign(const ObLSAddReplicaArg &that);
 
@@ -4195,7 +4199,8 @@ public:
                K_(data_source),
                K_(orig_paxos_replica_number),
                K_(new_paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4215,6 +4220,7 @@ public:
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
 };
 
 struct ObLSChangeReplicaArg

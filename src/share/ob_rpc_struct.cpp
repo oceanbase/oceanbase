@@ -3723,7 +3723,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     dst_,
                     data_source_,
                     paxos_replica_number_,
-                    skip_change_member_list_);
+                    skip_change_member_list_,
+                    force_use_data_source_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3737,6 +3738,7 @@ int ObLSMigrateReplicaArg::assign(
   data_source_ = that.data_source_;
   paxos_replica_number_ = that.paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
+  force_use_data_source_ = that.force_use_data_source_;
   return ret;
 }
 
@@ -3770,7 +3772,8 @@ OB_SERIALIZE_MEMBER(ObLSAddReplicaArg,
                     data_source_,
                     orig_paxos_replica_number_,
                     new_paxos_replica_number_,
-                    skip_change_member_list_);
+                    skip_change_member_list_,
+                    force_use_data_source_);
 
 int ObLSAddReplicaArg::assign(
     const ObLSAddReplicaArg &that)
@@ -3784,6 +3787,7 @@ int ObLSAddReplicaArg::assign(
   orig_paxos_replica_number_ = that.orig_paxos_replica_number_;
   new_paxos_replica_number_ = that.new_paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
+  force_use_data_source_ = that.force_use_data_source_;
   return ret;
 }
 
