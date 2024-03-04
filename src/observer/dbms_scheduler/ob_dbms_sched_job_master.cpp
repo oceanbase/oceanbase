@@ -280,7 +280,7 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
     if (is_server_down_error(ret)) {
       int tmp = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp = table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "send job rpc failed"))) {
+      if (OB_SUCCESS != (tmp = table_operator_.update_for_rollback(job_info))) {
         LOG_WARN("update for end failed for send rpc failed job", K(tmp), K(job_info), KPC(job_key));
       }
     }
@@ -365,7 +365,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
     } else if (job_info.is_running()) {
       LOG_INFO("job is running now, retry later", K(job_info));
       if (now > job_info.get_this_date() + TO_TS(job_info.get_max_run_duration())) {
-        if (OB_FAIL(table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "check job timeout"))) {
+        if (OB_FAIL(table_operator_.update_for_timeout(job_info))) {
           LOG_WARN("update for end failed for timeout job", K(ret));
         } else {
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
@@ -373,7 +373,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       }
     } else if (now > job_info.get_end_date()) {
       int tmp = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp = table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "check expired job"))) {
+      if (OB_SUCCESS != (tmp = table_operator_.update_for_enddate(job_info))) {
         LOG_WARN("update for end failed for auto drop job", K(tmp), K(job_info));
       } else {
         LOG_WARN("update for end for expired job", K(job_info), K(now));
@@ -392,7 +392,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
         LOG_WARN("job maybe missed, ignore it", K(now), K(job_info));
         int64_t new_next_date = calc_next_date(job_info);
         int tmp = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp = table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"))) {
+        if (OB_SUCCESS != (tmp = table_operator_.update_for_missed(job_info))) {
           LOG_WARN("update for end failed for missed job", K(tmp));
         } else if (OB_SUCCESS != (tmp = table_operator_.update_next_date(job_info.get_tenant_id(), job_info, new_next_date))){
           LOG_WARN("update next date failed", K(tmp), K(job_info));
