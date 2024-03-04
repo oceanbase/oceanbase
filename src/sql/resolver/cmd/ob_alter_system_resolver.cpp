@@ -45,6 +45,7 @@
 #include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 #include "sql/resolver/cmd/ob_kill_stmt.h"
 #include "share/table/ob_table_config_util.h"
+#include "share/restore/ob_import_util.h"
 
 namespace oceanbase
 {
@@ -5539,7 +5540,7 @@ int ObRecoverTableResolver::resolve_tenant_(
       LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
       LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_tenant_name_case_mode(tenant_id, case_mode))) {
+    } else if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(tenant_id, case_mode))) {
       LOG_WARN("failed to get name case mode", K(ret), K(tenant_id));
     }
   }
