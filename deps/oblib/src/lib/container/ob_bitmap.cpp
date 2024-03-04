@@ -10,14 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#if defined(__SSE2__)
-#include <emmintrin.h>
-#endif
-#if defined(__AVX512F__) || defined(__AVX512BW__) || defined(__AVX__) || defined(__AVX2__) || defined(__BMI2__)
-#include <immintrin.h>
-#endif
 #include "lib/container/ob_bitmap.h"
 #include "common/ob_target_specific.h"
+
+#if OB_USE_MULTITARGET_CODE
+#include <emmintrin.h>
+#include <immintrin.h>
+#endif
 
 namespace oceanbase
 {
@@ -25,42 +24,77 @@ namespace common
 {
 
 // Transform 64-byte mask to 64-bit mask
-OB_INLINE static uint64_t bytes64mask_to_bits64mask(
+
+OB_DECLARE_AVX512_SPECIFIC_CODE(
+inline static uint64_t bytes64mask_to_bits64mask(
     const uint8_t *bytes64,
     const bool need_flip = false)
 {
-#if defined(__AVX512F__) && defined(__AVX512BW__)
   const __m512i vbytes = _mm512_loadu_si512(reinterpret_cast<const void *>(bytes64));
   uint64_t res = _mm512_testn_epi8_mask(vbytes, vbytes);
-#elif defined(__AVX__) && defined(__AVX2__)
-  const __m256i zero32 = _mm256_setzero_si256();
-  uint64_t res =
-    (static_cast<uint64_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
-    _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64)), zero32))) & 0xffffffff)
-    | (static_cast<uint64_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
-    _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64 + 32)), zero32))) << 32);
-#elif defined(__SSE2__)
-  const __m128i zero16 = _mm_setzero_si128();
-  uint64_t res =
-    (static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
-    _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16))) & 0xffff)
-    | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
-    _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16) & 0xffff0000)
-    | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
-    _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32) & 0xffff00000000)
-    | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
-    _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48) & 0xffff000000000000);
-#else
-  uint64_t res = 0;
-  for (int64_t i = 0; i < 64; ++i) {
-    res |= static_cast<uint64_t>(0 == bytes64[i]) << i;
-  }
-#endif
   if (!need_flip) {
     res = ~res;
   }
   return res;
 }
+)
+
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+inline static uint64_t bytes64mask_to_bits64mask(
+    const uint8_t *bytes64,
+    const bool need_flip = false)
+{
+  const __m256i zero32 = _mm256_setzero_si256();
+  uint64_t res =
+      (static_cast<uint64_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                      _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64)), zero32))) & 0xffffffff)
+      | (static_cast<uint64_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                      _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes64 + 32)), zero32))) << 32);
+  if (!need_flip) {
+    res = ~res;
+  }
+  return res;
+}
+)
+
+OB_DECLARE_SSE42_SPECIFIC_CODE(
+inline static uint64_t bytes64mask_to_bits64mask(
+    const uint8_t *bytes64,
+    const bool need_flip = false)
+{
+  const __m128i zero16 = _mm_setzero_si128();
+  uint64_t res =
+      (static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                      _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64)), zero16))) & 0xffff)
+      | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                          _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 16)), zero16))) << 16) & 0xffff0000)
+      | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                          _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 32)), zero16))) << 32) & 0xffff00000000)
+      | ((static_cast<uint64_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(
+                          _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes64 + 48)), zero16))) << 48) & 0xffff000000000000);
+
+  if (!need_flip) {
+    res = ~res;
+  }
+  return res;
+}
+)
+
+OB_DECLARE_DEFAULT_CODE(
+inline static uint64_t bytes64mask_to_bits64mask(
+    const uint8_t *bytes64,
+    const bool need_flip = false)
+{
+  uint64_t res = 0;
+  for (int64_t i = 0; i < 64; ++i) {
+    res |= static_cast<uint64_t>(0 == bytes64[i]) << i;
+  }
+  if (!need_flip) {
+    res = ~res;
+  }
+  return res;
+}
+)
 
 OB_INLINE static uint8_t is_bit_set(
     const uint8_t *src_byte,
@@ -260,9 +294,7 @@ inline static void bitmap_to_bits_mask(
     }
   }
 }
-)
 
-OB_DECLARE_DEFAULT_CODE(
 inline static void uint64_mask_to_bits_mask(
     const uint64_t *data,
     const int64_t size,
@@ -470,6 +502,8 @@ int ObBitmap::bit_and(const ObBitmap &right)
 #if OB_USE_MULTITARGET_CODE
   } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
     SelectOpImpl<SelectAndOp>::apply_op_avx2(data_, right.data_, valid_bytes_);
+  } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    SelectOpImpl<SelectAndOp>::apply_op_sse42(data_, right.data_, valid_bytes_);
 #endif
   } else {
     SelectOpImpl<SelectAndOp>::apply_op(data_, right.data_, valid_bytes_);
@@ -489,6 +523,8 @@ int ObBitmap::bit_or(const ObBitmap &right)
 #if OB_USE_MULTITARGET_CODE
   } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
     SelectOpImpl<SelectOrOp>::apply_op_avx2(data_, right.data_, valid_bytes_);
+  } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    SelectOpImpl<SelectOrOp>::apply_op_sse42(data_, right.data_, valid_bytes_);
 #endif
   } else {
     SelectOpImpl<SelectOrOp>::apply_op(data_, right.data_, valid_bytes_);
@@ -505,6 +541,8 @@ int ObBitmap::bit_not()
 #if OB_USE_MULTITARGET_CODE
   } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
     SelectOpImpl<SelectNotOp>::apply_not_op_avx2(data_, valid_bytes_);
+  } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    SelectOpImpl<SelectNotOp>::apply_not_op_sse42(data_, valid_bytes_);
 #endif
   } else {
     SelectOpImpl<SelectNotOp>::apply_not_op(data_, valid_bytes_);
@@ -657,6 +695,61 @@ int ObBitmap::set_bitmap_batch(const int64_t offset, const int64_t count, const 
   return ret;
 }
 
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+inline static void inner_from_bits_mask(
+    const int64_t from,
+    const int64_t to,
+    uint8_t* bits,
+    uint8_t* data)
+{
+  const uint64_t size = to - from;
+  const uint8_t *pos = bits;
+  const uint8_t *end_pos32 = pos + size / 32 * 4;
+  uint8_t *out = data + from;
+  for (; pos < end_pos32; pos += 4) {
+    // we only use the low 32bits of each lane, but this is fine with AVX2
+    __m256i xbcast = _mm256_set1_epi32(*(reinterpret_cast<const int32_t *>(pos)));
+    // Each byte gets the source byte containing the corresponding bit
+    __m256i shufmask = _mm256_set_epi64x(
+        0x0303030303030303, 0x0202020202020202,
+        0x0101010101010101, 0x0000000000000000);
+    __m256i shuf  = _mm256_shuffle_epi8(xbcast, shufmask);
+    __m256i andmask  = _mm256_set1_epi64x(0x8040201008040201);  // every 8 bits -> 8 bytes, pattern repeats.
+    __m256i isolated_inverted = _mm256_andnot_si256(shuf, andmask);
+    // this is the extra step: compare each byte == 0 to produce 0 or -1
+    __m256i z = _mm256_cmpeq_epi8(isolated_inverted, _mm256_setzero_si256());
+    // alternative: compare against the AND mask to get 0 or -1,
+    // avoiding the need for a vector zero constant.
+    _mm256_storeu_si256((__m256i*)out,z);
+
+    out += 32;
+  }
+  const int64_t remain_size = (to - from) % 32;
+  for (int64_t idx = 0; idx < remain_size; ++idx) {
+    *(out++) = is_bit_set(pos, idx);
+  }
+}
+)
+
+OB_DECLARE_DEFAULT_CODE(
+inline static void inner_from_bits_mask(
+    const int64_t from,
+    const int64_t to,
+    uint8_t* bits,
+    uint8_t* data)
+{
+  const uint64_t size = to - from;
+  uint8_t *out = data + from;
+  uint64_t *bits64 = reinterpret_cast<uint64_t *>(bits);
+  for (uint64_t i = 0; i < size; ++i) {
+    if (bits64[i / 64] & (1LU << (i % 64))) {
+      *out = 1;
+    }
+    ++out;
+  }
+}
+)
+
 int ObBitmap::from_bits_mask(
     const int64_t from,
     const int64_t to,
@@ -666,55 +759,14 @@ int ObBitmap::from_bits_mask(
   if (OB_UNLIKELY(valid_bytes_ < to || nullptr == bits)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument", K_(valid_bytes), K(to), KP(bits));
-  } else {
-    const uint64_t size = to - from;
-#if defined(__BMI2__) && defined(__AVX512BW__) && defined(__AVX512F__)
-  const uint8_t *pos = bits;
-  const uint8_t *end_pos64 = pos + size / 64 * 8;
-  const uint8_t *end_pos8 = pos + size / 8;
-  uint8_t *out = data_ + from;
-  for (; pos < end_pos64; pos += 8) {
-    const int64_t *bit_mask = reinterpret_cast<const int64_t *>(pos);
-    __m512i zeros = _mm512_set1_epi64(0);
-    __m512i ones = _mm512_set1_epi64(0x0101010101010101ULL);
-    __m512i z = _mm512_mask_blend_epi8(*bit_mask, zeros, ones);
-    _mm512_storeu_si512((__m512i*)out, z);
-    out += 64;
-  }
-  for (; pos < end_pos8; ++pos) {
-    uint64_t *out64 = reinterpret_cast<uint64_t *>(out);
-    *out64 = static_cast<uint64_t>(_pdep_u64(static_cast<uint64_t>(*pos), 0x0101010101010101ULL));
-    out += 8;
-  }
-  const int64_t remain_size = (to - from) % 8;
-  for (int64_t idx = 0; idx < remain_size; ++idx) {
-    *(out++) = is_bit_set(pos, idx);
-  }
-#elif defined(__BMI2__)
-  const uint8_t *pos = bits;
-  const uint8_t *end_pos8 = pos + size / 8;
-  uint8_t *out = data_ + from;
-  for (; pos < end_pos8; ++pos) {
-    uint64_t *out64 = reinterpret_cast<uint64_t *>(out);
-    *out64 = static_cast<uint64_t>(_pdep_u64(static_cast<uint64_t>(*pos), 0x0101010101010101ULL));
-    out += 8;
-  }
-  const int64_t remain_size = (to - from) % 8;
-  for (int64_t idx = 0; idx < remain_size; ++idx) {
-    *(out++) = is_bit_set(pos, idx);
-  }
-#else
-  // TODO(hanling): Optimize the scenario that SIMD and BMI2 instructions are not supported in the future.
-  uint8_t *out = data_ + from;
-  uint64_t *bits64 = reinterpret_cast<uint64_t *>(bits);
-  for (uint64_t i = 0; i < size; ++i) {
-    if (bits64[i / 64] & (1LU << (i % 64))) {
-      *out = 1;
-    }
-    ++out;
-  }
+#if OB_USE_MULTITARGET_CODE
+  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+    common::specific::avx2::inner_from_bits_mask(from, to, bits, data_);
 #endif
+  } else {
+    common::specific::normal::inner_from_bits_mask(from, to, bits, data_);
   }
+
   return ret;
 }
 
@@ -747,6 +799,8 @@ void ObBitmap::filter(
 {
   if (!has_null) {
 #if OB_USE_MULTITARGET_CODE
+  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+    SelectOpImpl<SelectOrOp>::apply_op_avx2(skip, nulls, (size + 7) / 8);
   } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
     SelectOpImpl<SelectOrOp>::apply_op_sse42(skip, nulls, (size + 7) / 8);
 #endif
@@ -757,6 +811,8 @@ void ObBitmap::filter(
 #if OB_USE_MULTITARGET_CODE
   if (common::is_arch_supported(ObTargetArch::AVX512)) {
     common::specific::avx512::uint64_mask_to_bits_mask(data, size, skip);
+  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+    common::specific::avx2::uint64_mask_to_bits_mask(data, size, skip);
   } else {
 #endif
     common::specific::normal::uint64_mask_to_bits_mask(data, size, skip);

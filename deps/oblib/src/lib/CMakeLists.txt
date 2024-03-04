@@ -284,12 +284,6 @@ ob_set_subtarget(oblib_lib_bitmap common
 )
 
 ob_lib_add_target(oblib_lib_bitmap)
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(oblib_lib_bitmap
-    PRIVATE
-    -mbmi2
-  )
-endif()
 
 ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/abit_set.cpp
