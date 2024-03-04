@@ -25,6 +25,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "storage/high_availability/ob_tablet_ha_status.h"
 
 namespace oceanbase
 {
@@ -1162,6 +1163,7 @@ int ObTabletTableStore::build_new_table_store(
   int ret = OB_SUCCESS;
   const ObITable *new_table = static_cast<ObITable *>(const_cast<ObSSTable *>(param.sstable_)); //table can be null
   int64_t inc_base_snapshot_version = -1;
+  const ObTabletHAStatus &ha_status = tablet.get_tablet_meta().ha_status_;
 
   if (OB_UNLIKELY(!major_tables_.empty() || !minor_tables_.empty())) {
     ret = OB_ERR_SYS;
@@ -1182,7 +1184,7 @@ int ObTabletTableStore::build_new_table_store(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_major_tables(allocator, param, old_store, inc_base_snapshot_version))) {
     LOG_WARN("failed to build major_tables", K(ret));
-  } else if (OB_FAIL(build_minor_tables(allocator, param, old_store, inc_base_snapshot_version))) {
+  } else if (OB_FAIL(build_minor_tables(allocator, param, old_store, inc_base_snapshot_version, ha_status))) {
     if (OB_UNLIKELY(OB_NO_NEED_MERGE != ret)) {
       LOG_WARN("failed to build minor_tables", K(ret));
     }
@@ -1313,7 +1315,8 @@ int ObTabletTableStore::build_minor_tables(
     common::ObArenaAllocator &allocator,
     const ObUpdateTableStoreParam &param,
     const ObTabletTableStore &old_store,
-    const int64_t inc_base_snapshot_version)
+    const int64_t inc_base_snapshot_version,
+    const ObTabletHAStatus &ha_status)
 {
   int ret = OB_SUCCESS;
   ObSSTable *new_sstable = const_cast<ObSSTable *>(param.sstable_);
@@ -1387,10 +1390,15 @@ int ObTabletTableStore::build_minor_tables(
       LOG_WARN("failed to sort minor tables", K(ret));
     } else {
       int64_t inc_pos = -1;
-      for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
-        if (minor_tables.at(i)->get_upper_trans_version() > inc_base_snapshot_version) {
-          inc_pos = i;
-          break;
+      if (!ha_status.is_none()) {
+        inc_pos = 0; //in ha status do not recycle minor sstable
+        LOG_INFO("tablet in ha status, no need recycle minor sstable", K(ha_status));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
+          if (minor_tables.at(i)->get_upper_trans_version() > inc_base_snapshot_version) {
+            inc_pos = i;
+            break;
+          }
         }
       }
       if (OB_FAIL(ret)) {
