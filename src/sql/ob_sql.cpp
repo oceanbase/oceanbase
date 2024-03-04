@@ -4093,7 +4093,6 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = pc_ctx.allocator_;
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
   bool is_stack_overflow = false;
   bool is_show_variables = false;
@@ -4648,12 +4647,15 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
                          bool &need_add_plan)
 {
   int ret = OB_SUCCESS;
+  result.get_exec_context().get_stmt_factory()->get_query_ctx();
   if (false == need_add_plan) {
     //do nothing
   } else if (!is_enable_pc || !pc_ctx.should_add_plan_) {
     need_add_plan = false;
-  } else if (OB_NOT_NULL(result.get_physical_plan()) &&
-             result.get_physical_plan()->has_link_table()) {
+  } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()) || OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), KP(result.get_exec_context().get_stmt_factory()));
+  } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_dblink()) {
     need_add_plan = false;
   }
   return ret;

@@ -8229,13 +8229,20 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
 {
   int ret = OB_SUCCESS;
   bool has_dblink_node = false;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
+  } else if (OB_ISNULL(get_stmt()) || OB_ISNULL(query_ctx = get_stmt()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Stmt and query ctx should not be NULL. ", K(ret), K(get_stmt()), K(query_ctx));
   } else if (OB_FAIL(resolve_dblink_name(node, tenant_id, dblink_name, is_reverse_link, has_dblink_node))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
-    LOG_DEBUG("resolve dblink name", K(dblink_name), K(is_reverse_link));
+    LOG_WARN("resolve dblink name", K(has_dblink_node), K(dblink_name), K(is_reverse_link));
+    if (has_dblink_node) {
+      query_ctx->set_has_dblink(true);
+    }
     if (!is_reverse_link && dblink_name.empty()) {
       if (OB_FAIL(resolve_table_relation_factor_normal(node, tenant_id, database_id,
                                                        table_name, synonym_name,
