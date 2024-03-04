@@ -1963,6 +1963,7 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
   int ret = OB_SUCCESS;
   fill_cg_finish_count = -1;
   fill_row_cnt = 0;
+  int64_t fill_aggregated_cg_cnt = 0;
   if (OB_ISNULL(cur_writer) || OB_ISNULL(storage_schema) || OB_UNLIKELY(start_idx < 0 || last_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(cur_writer), KP(storage_schema), K(start_idx), K(last_idx));
@@ -1994,8 +1995,9 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
               LOG_WARN("slice writer rescan failed", K(ret), K(cg_idx), KPC(cur_writer));
             } else if (cg_idx == cg_schemas.count() - 1) {
               // after fill last cg, inc finish cnt
-              fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, 1);
               fill_row_cnt += slice_writer->get_row_count();
+              ++fill_aggregated_cg_cnt;
+
             }
           }
         }
@@ -2014,6 +2016,13 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
         }
       }
       // next cg
+    }
+    if (OB_SUCC(ret)) {
+      /*
+      To avoid concurrent release of slice_writer (datum_store) with slice_mgr_map_.destroy()
+       we must reset datum_store first and then increase fill_column_group_finish_count_.
+      */
+      fill_cg_finish_count = ATOMIC_AAF(&sqc_build_ctx_.fill_column_group_finish_count_, fill_aggregated_cg_cnt);
     }
   }
   return ret;
