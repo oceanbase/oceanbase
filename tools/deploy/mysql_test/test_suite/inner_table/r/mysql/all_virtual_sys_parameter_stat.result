@@ -118,6 +118,7 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota
 location_cache_refresh_min_interval

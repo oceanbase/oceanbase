@@ -62,6 +62,9 @@ struct ObLobAccessParam {
     }
   }
 public:
+
+  bool enable_block_cache() const;
+
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   int64_t get_inrow_threshold();
   TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common),

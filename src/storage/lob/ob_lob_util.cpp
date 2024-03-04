@@ -59,6 +59,18 @@ int64_t ObLobAccessParam::get_inrow_threshold()
   return res;
 }
 
+bool ObLobAccessParam::enable_block_cache() const
+{
+  bool res = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    res = false;
+  } else {
+    res = byte_size_ <= tenant_config->lob_enable_block_cache_threshold;
+  }
+  return res;
+}
+
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,
                                          const bool is_for_read,
                                          const int64_t timeout_ts,

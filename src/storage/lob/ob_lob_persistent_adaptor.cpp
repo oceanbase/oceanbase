@@ -937,6 +937,7 @@ int ObPersistentLobApator::build_common_scan_param(
                           false // read_latest
                         );
   query_flag.disable_cache();
+  if (param.enable_block_cache()) query_flag.set_use_block_cache();
   query_flag.scan_order_ = param.scan_backward_ ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
   scan_param.scan_flag_.flag_ = query_flag.flag_;
   // set column ids
