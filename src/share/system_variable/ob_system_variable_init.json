@@ -3756,5 +3756,40 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "query_rewrite_enabled": {
+    "id": 10179,
+    "name": "query_rewrite_enabled",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "enum",
+    "info": "Whether to enable the materialized view rewriting",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "enum_names": [
+      "FALSE",
+      "TRUE",
+      "FORCE"
+    ],
+    "publish_version": "431",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "query_rewrite_integrity": {
+    "id": 10180,
+    "name": "query_rewrite_integrity",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Control the data integrity of materialized view rewriting",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "enum_names": [
+      "ENFORCED",
+      "STALE_TOLERATED"
+    ],
+    "publish_version": "431",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

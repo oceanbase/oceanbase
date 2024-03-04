@@ -149,6 +149,17 @@ const char *ObSysVarCardinalityEstimationModel::CARDINALITY_ESTIMATION_MODEL_NAM
   "FULL",
   0
 };
+const char *ObSysVarQueryRewriteEnabled::QUERY_REWRITE_ENABLED_NAMES[] = {
+  "FALSE",
+  "TRUE",
+  "FORCE",
+  0
+};
+const char *ObSysVarQueryRewriteIntegrity::QUERY_REWRITE_INTEGRITY_NAMES[] = {
+  "ENFORCED",
+  "STALE_TOLERATED",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -352,6 +363,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "query_cache_size",
   "query_cache_type",
   "query_cache_wlock_invalidate",
+  "query_rewrite_enabled",
+  "query_rewrite_integrity",
   "read_only",
   "recyclebin",
   "regexp_stack_limit",
@@ -618,6 +631,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_QUERY_CACHE_SIZE,
   SYS_VAR_QUERY_CACHE_TYPE,
   SYS_VAR_QUERY_CACHE_WLOCK_INVALIDATE,
+  SYS_VAR_QUERY_REWRITE_ENABLED,
+  SYS_VAR_QUERY_REWRITE_INTEGRITY,
   SYS_VAR_READ_ONLY,
   SYS_VAR_RECYCLEBIN,
   SYS_VAR_REGEXP_STACK_LIMIT,
@@ -945,7 +960,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_compatibility_control",
   "ob_compatibility_version",
   "ob_security_version",
-  "cardinality_estimation_model"
+  "cardinality_estimation_model",
+  "query_rewrite_enabled",
+  "query_rewrite_integrity"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1377,6 +1394,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObCompatibilityVersion)
         + sizeof(ObSysVarObSecurityVersion)
         + sizeof(ObSysVarCardinalityEstimationModel)
+        + sizeof(ObSysVarQueryRewriteEnabled)
+        + sizeof(ObSysVarQueryRewriteIntegrity)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3750,6 +3769,24 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CARDINALITY_ESTIMATION_MODEL))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarCardinalityEstimationModel));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryRewriteEnabled())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryRewriteEnabled", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_ENABLED))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarQueryRewriteEnabled));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryRewriteIntegrity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryRewriteIntegrity", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_INTEGRITY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarQueryRewriteIntegrity));
       }
     }
 
@@ -6652,6 +6689,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCardinalityEstimationModel())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarCardinalityEstimationModel", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_QUERY_REWRITE_ENABLED: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarQueryRewriteEnabled)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarQueryRewriteEnabled)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryRewriteEnabled())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryRewriteEnabled", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_QUERY_REWRITE_INTEGRITY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarQueryRewriteIntegrity)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarQueryRewriteIntegrity)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryRewriteIntegrity())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarQueryRewriteIntegrity", K(ret));
       }
       break;
     }

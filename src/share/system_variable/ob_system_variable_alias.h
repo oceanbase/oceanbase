@@ -279,6 +279,8 @@ namespace share
   static const char* const OB_SV_COMPATIBILITY_VERSION = "ob_compatibility_version";
   static const char* const OB_SV_SECURITY_VERSION = "ob_security_version";
   static const char* const OB_SV_CARDINALITY_ESTIMATION_MODEL = "cardinality_estimation_model";
+  static const char* const OB_SV_QUERY_REWRITE_ENABLED = "query_rewrite_enabled";
+  static const char* const OB_SV_QUERY_REWRITE_INTEGRITY = "query_rewrite_integrity";
 
 }
 }
