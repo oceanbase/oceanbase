@@ -2970,6 +2970,10 @@ uint64_t ObCreateTableResolver::gen_column_group_id()
   return ++cur_column_group_id_;
 }
 
+/*
+* only when default columns store is column_store
+* have to add each column group
+*/
 int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
 {
   int ret = OB_SUCCESS;
@@ -2989,137 +2993,55 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
       LOG_WARN("fail to reserve", KR(ret), K(column_cnt));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-    } else if ((compat_version >= DATA_VERSION_4_3_0_0)
+    } else if (!(compat_version >= DATA_VERSION_4_3_0_0)
               && can_add_column_group(table_schema)) {
+      if (OB_NOT_NULL(cg_node) && (T_COLUMN_GROUP == cg_node->type_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can't support column store if version less than 4_1_0_0", KR(ret), K(compat_version));
+      }
+    } else {
       table_schema.set_column_store(true);
+      bool is_each_cg_exist = false;
       if (OB_NOT_NULL(cg_node)) {
-        // handle all_type column_group & single_type column_group
-        bool exist_all_column_group = false;
-        if (OB_FAIL(parse_cg_node(*cg_node, exist_all_column_group))) {
-          LOG_WARN("fail to parse cg node", KR(ret));
-        } else {
-          ObColumnGroupSchema tmp_cg;
-          ObArray<uint64_t> tmp_column_ids;
-          ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
-          ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
-          for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
-            ObColumnSchemaV2 *column = (*tmp_begin);
-            if (column->is_virtual_generated_column()){
-              /*skip virtual generated column group*/
-            } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
-                        table_schema, column, session_info_->get_effective_tenant_id(),
-                        gen_column_group_id(), tmp_cg))) {
-              LOG_WARN("fail to build single column group");
-            } else if (tmp_cg.is_valid()) {
-              if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-                LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
-              } else if (column->is_rowkey_column() || exist_all_column_group) { //if not exist all cg, build rowkey cg
-                if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
-                  LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-                }
-              }
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            tmp_cg.reset();
-            const ObColumnGroupType cg_type = exist_all_column_group ?
-                ObColumnGroupType::ALL_COLUMN_GROUP : ObColumnGroupType::ROWKEY_COLUMN_GROUP;
-            const ObString cg_name = exist_all_column_group ?
-                OB_ALL_COLUMN_GROUP_NAME : OB_ROWKEY_COLUMN_GROUP_NAME;
-            if (OB_FAIL(build_column_group(table_schema, cg_type, cg_name, column_ids,
-                                           gen_column_group_id(), tmp_cg))) {
-              LOG_WARN("fail to build all type column_group", KR(ret), K(column_ids));
-            } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-              LOG_WARN("fail to add all type column group", KR(ret), K(tmp_cg));
-            }
-          }
+        if (OB_FAIL(parse_column_group(cg_node, table_schema, table_schema))) {
+          LOG_WARN("fail to parse column group", K(ret));
         }
-      } else {
-        ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
-        if (OB_SUCC(ret) && OB_LIKELY(tenant_config.is_valid())) {
-          if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
-                      tenant_config->default_table_store_format.get_value_string(),
-                      table_store_type))) {
-            LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (ObTableStoreFormat::is_with_column(table_store_type)) {
-            // add all_type column_group or each_type column_group
-            ObColumnGroupSchema tmp_cg;
-            ObArray<uint64_t> tmp_column_ids;
-            ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
-            ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
-            for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
-              ObColumnSchemaV2 *column = (*tmp_begin);
-              if (column->is_virtual_generated_column()){
-                /*skip virtual generated column group*/
-              } else if(OB_FAIL(ObSchemaUtils::build_single_column_group(
-                          table_schema, column, session_info_->get_effective_tenant_id(),
-                          gen_column_group_id(), tmp_cg))) {
-                LOG_WARN("fail to build single column group", K(ret));
-              } else if (tmp_cg.is_valid()) {
-                if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-                  LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
-                } else if (column->is_rowkey_column() || ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
-                  if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
-                    LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-                  }
-                }
-              }
-            }
+      }
 
-            if (OB_SUCC(ret)) {
-              tmp_cg.reset();
-              const ObColumnGroupType cg_type = ObTableStoreFormat::is_column_store(table_store_type) ?
-                  ObColumnGroupType::ROWKEY_COLUMN_GROUP : ObColumnGroupType::ALL_COLUMN_GROUP;
-              const ObString cg_name = ObTableStoreFormat::is_column_store(table_store_type) ?
-                  OB_ROWKEY_COLUMN_GROUP_NAME : OB_ALL_COLUMN_GROUP_NAME;
-              if (OB_FAIL(build_column_group(table_schema, cg_type, cg_name, column_ids,
-                                             gen_column_group_id(), tmp_cg))) {
-                LOG_WARN("fail to build all type column_group", KR(ret), K(column_ids));
-              } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-                LOG_WARN("fail to add all type column group", KR(ret), K(tmp_cg));
-              }
-            }
+      // for deafult is column, must add default cg
+      ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      if (OB_SUCC(ret) && OB_LIKELY(tenant_config.is_valid())) {
+        if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
+                    tenant_config->default_table_store_format.get_value_string(),
+                    table_store_type))) {
+          LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
+        } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
+          /* for default is column store, must add each column group*/
+          bool is_each_column_exist = false;
+          if (OB_FAIL(table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_column_exist))) {
+            LOG_WARN("fail to check is each column group exist", K(ret));
+          } else if (is_each_column_exist) {
+          } else if(OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
+            LOG_WARN("fail to add eacch column group", K(ret));
           }
         }
       }
 
-      // add default_type column_group
+      // add default_type column_group, build a empty and then use alter_deafult_cg
       if (OB_SUCC(ret)) {
         ObColumnGroupSchema tmp_cg;
-        if (OB_NOT_NULL(cg_node) || ObTableStoreFormat::is_with_column(table_store_type)) {
-          column_ids.reuse(); // if exists cg node, column_ids in default_type will be empty
-        } else {
-          ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
-          ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
-          for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
-            ObColumnSchemaV2 *column = (*tmp_begin);
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column should not be null", KR(ret));
-            } else if (column->is_virtual_generated_column()) {
-              // skip virtual column
-            } else if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
-              LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-            }
-          }
-        }
-
-        if (FAILEDx(build_column_group(table_schema, ObColumnGroupType::DEFAULT_COLUMN_GROUP,
+        column_ids.reuse();
+        if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::DEFAULT_COLUMN_GROUP,
             OB_DEFAULT_COLUMN_GROUP_NAME, column_ids, DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
           LOG_WARN("fail to build default type column_group", KR(ret), K(table_store_type),
                    "table_id", table_schema.get_table_id());
         } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
           LOG_WARN("fail to add default column group", KR(ret), "table_id", table_schema.get_table_id());
+        } else if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(table_schema))) {
+          LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
+        } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(table_schema))) {
+          LOG_WARN("fail to adjust default column group", K(ret));
         }
-      }
-    } else {
-      if (OB_NOT_NULL(cg_node) && (T_COLUMN_GROUP == cg_node->type_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can't support column store if version less than 4_1_0_0", KR(ret), K(compat_version));
       }
     }
   }

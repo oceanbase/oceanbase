@@ -4467,139 +4467,6 @@ int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alte
   return ret;
 }
 
-/*use default column group to save column not exist in other column group*/
-int ObDDLService::alter_default_column_group(share::schema::ObTableSchema &new_table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObColumnGroupSchema* default_cg = nullptr;
-  hash::ObHashSet<uint64_t> cg_column_ids;
-  ObArray<ObColumnGroupSchema*> column_groups;
-  bool is_all_cg_exist = false;
-  ObColumnGroupSchema* all_column_group = nullptr;
-  column_groups.reset();
-  if (new_table_schema.get_column_group_count() < 1) {
-    // TODO, wait to support table update from 4.1 or lesss to support alter_column_group
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("there is no column group in the table schema", K(ret), K(new_table_schema));
-  } else if (OB_FAIL(cg_column_ids.create(new_table_schema.get_column_count()))) {
-    LOG_WARN("fail to create hashmap", K(ret));
-  }
-
-  ObTableSchema::const_column_group_iterator iter_begin = new_table_schema.column_group_begin();
-  ObTableSchema::const_column_group_iterator iter_end = new_table_schema.column_group_end();
-
-
-  for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
-    const ObColumnGroupSchema *column_group = *iter_begin;
-    if (OB_ISNULL(column_group)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column group should not be null", K(ret), K(new_table_schema));
-    } else if (column_group->get_column_group_type() != ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
-      for (int64_t col_index = 0;
-        OB_SUCC(ret) && col_index < column_group->get_column_id_count();
-        col_index++) {
-        if (OB_FAIL(cg_column_ids.set_refactored((column_group->get_column_ids())[col_index],
-                                              1 /*overwrite*/))) {
-          LOG_WARN("fail to add column id", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(new_table_schema.get_column_group_by_name(OB_DEFAULT_COLUMN_GROUP_NAME, default_cg))) {
-      LOG_WARN("fail to get all columns in column groups", K(ret), K(new_table_schema));
-    } else {
-      default_cg->remove_all_cols();
-      ObArray<ObColDesc> col_ids;
-
-      if (OB_FAIL(new_table_schema.get_column_ids(col_ids, true /* no virtual col*/))) {
-        LOG_WARN("fail to get not virtual col ids", K(ret));
-      }
-      ObArray<ObColDesc>::iterator iter_begin = col_ids.begin();
-      ObArray<ObColDesc>::iterator iter_end = col_ids.end();
-      for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
-        int hash_ret = cg_column_ids.exist_refactored(iter_begin->col_id_);
-        if (hash_ret != OB_HASH_EXIST && hash_ret != OB_HASH_NOT_EXIST) {
-          ret = hash_ret;
-          LOG_WARN("fail to check key exist", K(ret));
-        } else if (OB_HASH_EXIST == hash_ret) {
-          /*skip, column exist in other column group don't need to be added*/
-        } else if (OB_HASH_NOT_EXIST == hash_ret) {
-          if (OB_FAIL(default_cg->add_column_id(iter_begin->col_id_))) {
-            LOG_WARN("fail to add column to default cg", KPC(default_cg), KPC(iter_begin));
-          }
-        }
-      }
-
-      /*default cg check, used when only support all/each column group*/
-      if (OB_SUCC(ret) && default_cg->get_column_id_count() != 0 && default_cg->get_column_id_count() != col_ids.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("default column group have invalid column id count", K(ret), KPC(default_cg));
-      }
-
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::alter_rowkey_column_group(share::schema::ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  bool is_each_cg_exist = false;
-  bool is_all_cg_exist = false;
-  ObColumnGroupSchema *rowkey_cg = nullptr;
-  /* scan all column column group*/
-
-  /*get rowkey_cg*/
-  if (OB_FAIL(table_schema.get_column_group_by_name(OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_cg))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      rowkey_cg = nullptr;
-    } else {
-      LOG_WARN("Fail to get rowkey column group", K(ret), K(table_schema));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
-      LOG_WARN("Fail to check whetehre all column group exist", K(ret));
-    } else if (OB_FAIL(table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_cg_exist))) {
-      LOG_WARN("Fail to check whether each column group exist", K(ret));
-    }
-  }
-
-
-  if (OB_SUCC(ret)) {
-    /* only when only each exist, rowkey_cg is needed*/
-    if (is_each_cg_exist && (!is_all_cg_exist)) {
-      if (OB_ISNULL(rowkey_cg)) {
-        ObColumnGroupSchema new_rowkey_cg;
-        ObArray<uint64_t> rowkey_ids;
-        uint64_t rowkey_cg_id =  table_schema.get_max_used_column_group_id() + 1;
-        if (OB_FAIL(table_schema.get_rowkey_column_ids(rowkey_ids))) {
-          LOG_WARN("fail to get rowkey column ids", K(ret));
-        } else if (OB_FAIL(ObSchemaUtils::build_column_group(
-                               table_schema, table_schema.get_tenant_id(),ObColumnGroupType::ROWKEY_COLUMN_GROUP,
-                               OB_ROWKEY_COLUMN_GROUP_NAME, rowkey_ids, rowkey_cg_id, new_rowkey_cg))) {
-          LOG_WARN("fail to build rowkey column group", K(ret));
-        } else if (OB_FAIL(table_schema.add_column_group(new_rowkey_cg))) {
-          LOG_WARN("fail to add rowkey column group to table_schema", K(ret));
-        }
-      } else {
-        /*rowkey cg exist skip*/
-      }
-    } else {
-      /*other situation, rowkey column group should not exist*/
-      if (OB_NOT_NULL(rowkey_cg)) {
-        if (OB_FAIL(table_schema.remove_column_group(rowkey_cg->get_column_group_id()))){
-          LOG_WARN("fail to remove rowkey cg", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                                    const share::schema::ObTableSchema &ori_table_schema,
                                    share::schema::ObTableSchema &new_table_schema)
@@ -4649,9 +4516,9 @@ int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg
     }
     if (OB_SUCC(ret)) {
       /* note must alter rowkey cg first, else will affect default cg*/
-      if (OB_FAIL(alter_rowkey_column_group(new_table_schema))) {
+      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
         LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
-      } else if (OB_FAIL(alter_default_column_group(new_table_schema))) {
+      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
         LOG_WARN("fail to alter default column group", K(ret));
       }
     }
@@ -4710,9 +4577,9 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(alter_rowkey_column_group(new_table_schema))) {
+      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
         LOG_WARN("fail to alter rowkey column group", K(ret));
-      } else if (OB_FAIL(alter_default_column_group(new_table_schema))) {
+      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
         LOG_WARN("fail to alter default column group", K(ret));
       }
     }
@@ -4830,9 +4697,9 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
         LOG_WARN("fail to build column group", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(default_cg))) {
         LOG_WARN("failt to add default column group", K(ret));
-      } else if (OB_FAIL(alter_rowkey_column_group(new_table_schema))) {
+      } else if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
         LOG_WARN("fail to alter rowkey column group", K(ret));
-      } else if (OB_FAIL(alter_default_column_group(new_table_schema))) {
+      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
         LOG_WARN("fail to alter default column grouop schema", K(ret));
       }
     }

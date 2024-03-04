@@ -140,6 +140,12 @@ public:
              const uint64_t tenant_id,
              const uint64_t column_group_id,
              share::schema::ObColumnGroupSchema &column_group_schema);
+
+  static int build_add_each_column_group(const share::schema::ObTableSchema &table_schema,
+                                         share::schema::ObTableSchema &dst_table_schema);
+  static int alter_rowkey_column_group(share::schema::ObTableSchema &table_schema);
+  static int alter_default_column_group(share::schema::ObTableSchema &new_table_schema);
+
   static int mock_default_cg(
               const uint64_t tenant_id,
               share::schema::ObTableSchema &new_table_schema);

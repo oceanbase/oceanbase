@@ -2071,7 +2071,6 @@ public:
 #endif
 private:
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
-  int alter_default_column_group(share::schema::ObTableSchema &new_table_schema);
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,
                        share::schema::ObTableSchema &new_table_schema);
@@ -2079,7 +2078,6 @@ private:
   int drop_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                         const share::schema::ObTableSchema &ori_table_schema,
                         share::schema::ObTableSchema &new_table_schema);
-  int alter_rowkey_column_group(share::schema::ObTableSchema &table_schema);
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
                                      share::schema::ObSAuditSchema &audit_schema);
   int handle_security_audit_for_object(const obrpc::ObSecurityAuditArg &arg,

@@ -6091,83 +6091,9 @@ int ObAlterTableResolver::resolve_alter_column_groups(const ParseNode &node)
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree ", K(ret), K(column_group_node->type_));
       }
-      if (OB_SUCC(ret)) {
-        ObColumnGroupSchema column_group_schema;
-        bool sql_exist_all_column_group = false;
-        bool sql_exist_single_column_group = false;
-        alter_table_schema.set_max_used_column_group_id(table_schema_->get_max_used_column_group_id());
-
-        /* check exist type and whether exist repeation of column group type*/
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_group_node->num_child_; ++i) {
-          if (OB_ISNULL(column_group_node->children_[i])) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "column group node children is null", K(ret), K(i));
-          } else if (column_group_node->children_[i]->type_ == T_ALL_COLUMN_GROUP) {
-            if (sql_exist_all_column_group) {
-              ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
-              SQL_RESV_LOG(WARN, "all column group already exist in sql",
-                           K(ret), K(column_group_node->children_[i]->type_));
-              const ObString error_msg = "all column group";
-              LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
-            } else {
-              sql_exist_all_column_group = true;
-            }
-          } else if (column_group_node->children_[i]-> type_ == T_SINGLE_COLUMN_GROUP) {
-            if (sql_exist_single_column_group) {
-              ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
-              SQL_RESV_LOG(WARN, "single column group already exist in sql",
-                           K(ret), K(column_group_node->children_[i]->type_));
-              const ObString error_msg = "single column group";
-              LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
-            } else {
-              sql_exist_single_column_group = true;
-            }
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "Resovle unsupported column group type",
-                         K(ret), K(column_group_node->children_[i]->type_));
-          }
-        }
-
-        /* all column group */
-        /* column group in resolver do not use real column group id*/
-        /* ddl service use column group name to distingush them*/
-        if (OB_SUCC(ret) && sql_exist_all_column_group) {
-          column_group_schema.reset();
-          if (OB_FAIL(ObSchemaUtils::build_all_column_group(*table_schema_, session_info_->get_effective_tenant_id(),
-                                                            alter_table_schema.get_max_used_column_group_id() + 1,
-                                                            column_group_schema))) {
-            SQL_RESV_LOG(WARN, "build all column group failed", K(ret));
-          } else if (OB_FAIL(alter_table_schema.add_column_group(column_group_schema))) {
-            SQL_RESV_LOG(WARN, "fail to add column group schema", K(ret));
-          }
-        }
-
-        /* single column group*/
-        if (OB_SUCC(ret) && sql_exist_single_column_group) {
-          column_group_schema.reset();
-          ObTableSchema::const_column_iterator iter_begin = table_schema_->column_begin();
-          ObTableSchema::const_column_iterator iter_end = table_schema_->column_end();
-          for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
-            ObColumnSchemaV2 *column = (*iter_begin);
-            uint64_t cg_id = alter_table_schema.get_max_used_column_group_id() + 1;
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column schema should not be null", K(ret));
-            } else if (column->is_virtual_generated_column()) {
-              /* skip virtual column*/
-            } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
-                                         *table_schema_, column, session_info_->get_effective_tenant_id(),
-                                         cg_id, column_group_schema))) {
-              LOG_WARN("fail to build single column group", K(ret));
-            } else if (column_group_schema.is_valid()) {
-              if (OB_FAIL(alter_table_schema.add_column_group(column_group_schema))) {
-                LOG_WARN("fail to add single column group to table schema", K(ret), K(column_group_schema));
-              }
-            }
-
-          }
-        }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(parse_column_group(column_group_node, *table_schema_, alter_table_schema))) {
+        LOG_WARN("fail to parse column gorup list", K(ret));
       }
     }
   }
