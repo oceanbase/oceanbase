@@ -1971,6 +1971,7 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
     for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx < cg_schemas.count(); ++cg_idx) {
       cur_writer->reset();
       common::ObArray<sql::ObCompactStore *> datum_stores;
+      datum_stores.set_attr(ObMemAttr(MTL_ID(), "TDL_Agg_CG"));
       if (start_idx == last_idx || start_idx >= sqc_build_ctx_.sorted_slice_writers_.count() || last_idx > sqc_build_ctx_.sorted_slice_writers_.count()) {
         // skip
       } else {
