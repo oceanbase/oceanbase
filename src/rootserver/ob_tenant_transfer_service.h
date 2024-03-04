@@ -233,6 +233,10 @@ private:
   int construct_ls_member_list_(
       common::sqlclient::ObMySQLResult &res,
       share::ObLSReplica::MemberList &ls_member_list);
+  int check_if_need_wait_due_to_last_failure_(
+      common::ObISQLClient &sql_proxy,
+      const share::ObTransferTask &task,
+      bool &need_wait);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms

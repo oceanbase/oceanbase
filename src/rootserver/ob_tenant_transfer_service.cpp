@@ -188,6 +188,7 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
   ObTransferPartList lock_conflict_part_list;
   ObDisplayTabletList table_lock_tablet_list;
   ObTimeoutCtx ctx;
+  bool need_wait = false;
 
   const int64_t start_time = ObTimeUtil::current_time();
   TTS_INFO("start to process init task", K(task_id), K(start_time));
@@ -216,6 +217,13 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status is not init", KR(ret), K(task));
   } else if (FALSE_IT(ObCurTraceId::set(task.get_trace_id()))) {
+  } else if (OB_FAIL(check_if_need_wait_due_to_last_failure_(*sql_proxy_, task, need_wait))) {
+    LOG_WARN("check if need wait due to last failure failed", KR(ret), K(task), K(need_wait));
+  } else if (need_wait) {
+    result_comment = WAIT_DUE_TO_LAST_FAILURE;
+    ret = OB_NEED_RETRY;
+    TTS_INFO("last task failed, need to process task later",
+        KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
   } else if (OB_FAIL(check_ls_member_list_(
       *sql_proxy_,
       task.get_src_ls(),
@@ -303,6 +311,58 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
   TTS_INFO("process init task finish", KR(ret), K(task_id),
       "cost_time", ObTimeUtil::current_time() - start_time, K(task),
       K(not_exist_part_list), K(lock_conflict_part_list), K(table_lock_tablet_list));
+  return ret;
+}
+
+int ObTenantTransferService::check_if_need_wait_due_to_last_failure_(
+    common::ObISQLClient &sql_proxy,
+    const ObTransferTask &task,
+    bool &need_wait)
+{
+  int ret = OB_SUCCESS;
+  need_wait = false;
+  ObTransferTask last_task;
+  int64_t finish_time = OB_INVALID_TIMESTAMP;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid task", KR(ret), K(task));
+  } else {
+    int64_t wait_interval = 60 * 1000 * 1000L; // default 1m
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+      if (tenant_config.is_valid()) {
+        wait_interval = tenant_config->_transfer_task_retry_interval;
+      }
+    } // release guard
+    if (OB_FAIL(ret)) {
+    } else if (0 == wait_interval) {
+      need_wait = false;
+    } else if (OB_FAIL(ObTransferTaskOperator::get_last_task_by_balance_task_id(
+        sql_proxy,
+        tenant_id_,
+        task.get_balance_task_id(),
+        last_task,
+        finish_time))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        need_wait = false;
+      } else {
+        LOG_WARN("get last task by balance task id failed",
+            KR(ret), K(tenant_id_), K(task), K(last_task));
+      }
+    } else if (OB_UNLIKELY(!last_task.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("last task should be valid", KR(ret), K(task), K(last_task));
+    } else if (last_task.get_status().is_failed_status()
+        && ObTimeUtil::current_time() - finish_time < wait_interval) {
+      need_wait = true;
+      LOG_TRACE("last task failed, need wait", KR(ret),
+          K(task), K(last_task), K(finish_time), K(wait_interval));
+    }
+  }
   return ret;
 }
 
@@ -1627,7 +1687,7 @@ int ObTenantTransferService::update_comment_for_expected_errors_(
   } else if (OB_TRANS_TIMEOUT == err || OB_TIMEOUT == err) {
     actual_comment = TRANSACTION_TIMEOUT;
   } else if (OB_NEED_RETRY == err) {
-    if (WAIT_FOR_MEMBER_LIST != result_comment && INACTIVE_SERVER_IN_MEMBER_LIST != result_comment) {
+    if (result_comment < EMPTY_COMMENT || result_comment >= MAX_COMMENT) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected comment with err", KR(ret), K(err), K(result_comment));
     } else {
