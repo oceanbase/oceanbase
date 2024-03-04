@@ -21,6 +21,7 @@
 #include "common/row/ob_row.h"
 #include "lib/ob_define.h"
 #include "share/schema/ob_part_mgr_util.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -865,7 +866,8 @@ int ObSlaveMapPkeyRangeIdxCalc::build_partition_range_channel_map(
 {
   int ret = OB_SUCCESS;
   part_range_channel_map.destroy();
-  const Ob2DArray<ObPxTabletRange> &part_ranges = exec_ctx_.get_partition_ranges();
+  ObPxSqcHandler *handler = exec_ctx_.get_sqc_handler();
+  const Ob2DArray<ObPxTabletRange> &part_ranges = handler->get_partition_ranges();
   if (OB_FAIL(part_range_channel_map.create(DEFAULT_PARTITION_COUNT, common::ObModIds::OB_SQL_PX))) {
     LOG_WARN("create part range map failed", K(ret));
   } else {

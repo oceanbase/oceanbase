@@ -355,7 +355,8 @@ int ObPxDistTransmitOp::do_range_dist()
     }
   }
   if (OB_SUCC(ret)) {
-    range = ctx_.get_partition_ranges().empty() ? NULL : &ctx_.get_partition_ranges().at(0);
+    ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+    range = handler->get_partition_ranges().empty() ? NULL : &handler->get_partition_ranges().at(0);
     ObRangeSliceIdCalc slice_id_calc(ctx_.get_allocator(), task_channels_.count(),
       range, &MY_SPEC.dist_exprs_, MY_SPEC.sort_cmp_funs_, MY_SPEC.sort_collations_);
     if (ObPxSampleType::OBJECT_SAMPLE == MY_SPEC.sample_type_) {

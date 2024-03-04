@@ -218,6 +218,7 @@ void ObPxSqcHandler::reset()
   process_flags_ = 0;
   end_ret_ = OB_SUCCESS;
   reference_count_ = 1;
+  part_ranges_.reset();
   call_dtor(sub_coord_);
   call_dtor(sqc_init_args_);
   call_dtor(des_phy_plan_);
@@ -432,6 +433,42 @@ int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
         LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
       } else {
         sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxSqcHandler::set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_ranges,
+                                        char *buf, int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(part_ranges.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("part ranges is empty", K(ret), K(part_ranges.count()));
+  } else {
+    bool part_ranges_empty = false;
+    {
+      SpinRLockGuard rlock_guard(part_ranges_spin_lock_);
+      part_ranges_empty = part_ranges_.empty();
+    }
+    // If the worker thread has already set the part_ranges_;
+    // there is no need to repeat the setup.
+    if (part_ranges_empty) {
+      SpinWLockGuard wlock_guard(part_ranges_spin_lock_);
+      if (part_ranges_.empty()) {
+        int64_t pos = 0;
+        ObPxTabletRange tmp_range;
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_ranges.count(); ++i) {
+          const ObPxTabletRange &cur_range = part_ranges.at(i);
+          if (0 == size && OB_FAIL(tmp_range.deep_copy_from<true>(cur_range, get_safe_allocator(), buf, size, pos))) {
+            LOG_WARN("deep copy partition range failed", K(ret), K(cur_range));
+          } else if (0 != size && OB_FAIL(tmp_range.deep_copy_from<false>(cur_range, get_safe_allocator(), buf, size, pos))) {
+            LOG_WARN("deep copy partition range failed", K(ret), K(cur_range));
+          } else if (OB_FAIL(part_ranges_.push_back(tmp_range))) {
+            LOG_WARN("push back partition range failed", K(ret), K(tmp_range));
+          }
+        }
       }
     }
   }
