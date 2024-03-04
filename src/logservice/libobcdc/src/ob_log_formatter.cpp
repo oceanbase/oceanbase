@@ -1581,10 +1581,6 @@ int ObLogFormatter::build_binlog_record_(
   } else if (OB_ISNULL(br_data = br->get_data())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("binlog record data is invalid", KR(ret), K(br));
-  } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
-        K(rv->new_column_array_), K(rv->old_column_array_));
   } else if (OB_FAIL(is_hbase_mode_put_(table_id, dml_flag, rv->column_num_, new_column_cnt,
           rv->contain_old_column_, is_hbase_mode_put))) {
     LOG_ERROR("is_hbase_mode_put_ fail", KR(ret), K(table_id), K(dml_flag),
@@ -1603,6 +1599,10 @@ int ObLogFormatter::build_binlog_record_(
           "table_id", simple_table_schema->get_table_id());
       // ignore table with no columns
       br->set_is_valid(false);
+    } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
+          K(rv->new_column_array_), K(rv->old_column_array_));
     } else {
       br_data->setNewColumn(rv->new_column_array_, static_cast<int>(rv->column_num_));
       br_data->setOldColumn(rv->old_column_array_, static_cast<int>(rv->column_num_));
