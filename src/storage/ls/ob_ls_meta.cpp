@@ -813,7 +813,7 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get restore status", K(ret), K(*this));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_) {
+  } else if (!ObMigrationStatusHelper::need_online(migration_status_)) {
     create_type = ObLSCreateType::MIGRATE;
   } else if (restore_status_.is_in_clone()) {
     create_type = ObLSCreateType::CLONE;

@@ -308,7 +308,6 @@ public:
   int finish_create_ls();
 
   bool is_create_committed() const;
-  bool is_need_gc() const;
   bool is_in_gc();
   bool is_restore_first_step() const;
   bool is_clone_first_step() const;
