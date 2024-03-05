@@ -1825,7 +1825,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
     // case2: palf epoch has been changed during after_consume
     IOTaskConsumeCond consume_cond(id, leader.palf_env_impl_->last_palf_epoch_);
     EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&consume_cond));
-    sleep(1);
+    sleep(3);
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->set_base_lsn(end_lsn));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
     EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_GET_MC_REQ));
@@ -1851,6 +1851,43 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
     need_stop = true;
     throttling_th.join();
   }
+}
+
+TEST_F(TestObSimpleLogClusterSingleReplica, test_log_service_interface)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_log_service_interface");
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  ObSimpleLogServer *log_server = dynamic_cast<ObSimpleLogServer*>(get_cluster()[0]);
+  ASSERT_NE(nullptr, log_server);
+  ObLogService *log_service = &log_server->log_service_;
+  ObTenantRole tenant_role; tenant_role.value_ = ObTenantRole::Role::PRIMARY_TENANT;
+  PalfBaseInfo palf_base_info; palf_base_info.generate_by_default();
+  ObLogHandler log_handler; ObLogRestoreHandler restore_handler;
+  ObLogApplyService *apply_service = &log_service->apply_service_;
+  ObReplicaType replica_type;
+  ObLSID ls_id(id);
+  ObApplyStatus *apply_status = nullptr;
+  ASSERT_NE(nullptr, apply_status = static_cast<ObApplyStatus*>(mtl_malloc(sizeof(ObApplyStatus), "mittest")));
+  new (apply_status) ObApplyStatus();
+  apply_status->inc_ref();
+  EXPECT_EQ(OB_SUCCESS, log_service->start());
+  EXPECT_EQ(OB_SUCCESS, apply_service->apply_status_map_.insert(ls_id, apply_status));
+  apply_service->is_running_ = true;
+  EXPECT_EQ(OB_ENTRY_EXIST, log_service->create_ls(ls_id, REPLICA_TYPE_FULL, tenant_role, palf_base_info, true, log_handler, restore_handler));
+  bool is_exist = false;
+  EXPECT_EQ(OB_SUCCESS, log_service->check_palf_exist(ls_id, is_exist));
+  EXPECT_EQ(is_exist, false);
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, apply_service->apply_status_map_.erase(ls_id));
+  EXPECT_EQ(OB_SUCCESS, log_service->create_ls(ls_id, REPLICA_TYPE_FULL, tenant_role, palf_base_info, true, log_handler, restore_handler));
+  EXPECT_EQ(OB_ENTRY_EXIST, log_service->create_ls(ls_id, REPLICA_TYPE_FULL, tenant_role, palf_base_info, true, log_handler, restore_handler));
+  EXPECT_EQ(OB_SUCCESS, log_service->check_palf_exist(ls_id, is_exist));
+  EXPECT_EQ(is_exist, true);
+  const char *log_dir = log_service->palf_env_->palf_env_impl_.log_dir_;
+  bool result = false;
+  EXPECT_EQ(OB_SUCCESS, FileDirectoryUtils::is_empty_directory(log_dir, result));
+  EXPECT_EQ(false, result);
+  EXPECT_EQ(OB_SUCCESS, log_service->remove_ls(ls_id, log_handler, restore_handler));
+  EXPECT_EQ(OB_SUCCESS, log_service->check_palf_exist(ls_id, is_exist));
 }
 
 } // namespace unittest
