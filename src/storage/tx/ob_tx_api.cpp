@@ -1298,11 +1298,8 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   bool blockable = expire_ts > 0;
-  const int64_t seq_abs = ObSequence::inc_and_get_max_seq_no();
-  const ObTxSEQ from_scn = specified_from_scn.is_valid() ? specified_from_scn
-    : savepoint.clone_with_seq(seq_abs, tx_seq_base);
   do {
-    ret = part_ctx->rollback_to_savepoint(op_sn, from_scn, savepoint, downstream_parts);
+    ret = part_ctx->rollback_to_savepoint(op_sn, specified_from_scn, savepoint, tx_seq_base, downstream_parts);
     if (OB_NEED_RETRY == ret && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;

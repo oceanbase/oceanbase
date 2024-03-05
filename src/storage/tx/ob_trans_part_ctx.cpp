@@ -7884,8 +7884,10 @@ int ObPartTransCtx::end_access()
  *
  * @op_sn       - operation sequence number, used to reject out of order msg
  * @from_scn    - the start position of rollback, inclusive
+ *                generally not specified, and generated in callee
  * @to_scn      - the end position of rollback, exclusive
-  *
+ * @seq_base    - the baseline of TxSEQ of current transaction
+ *
  * savepoint may be created in these ways:
  * 1) created at txn scheduler, named Global-Savepoint
  * 2) created at txn participant server, named Local-Savepoint
@@ -7904,8 +7906,9 @@ int ObPartTransCtx::end_access()
  *   when start_access was called
  */
 int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
-                                          const ObTxSEQ from_scn,
+                                          ObTxSEQ from_scn,
                                           const ObTxSEQ to_scn,
+                                          const int64_t seq_base,
                                           ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
@@ -7921,8 +7924,7 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
     } else if (!leader) {
       ret = OB_NOT_MASTER;
     }
-    TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret),
-              K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
+    TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret), K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
   } else if (is_2pc_blocking()) {
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "rollback_to need retry because of 2pc blocking", K(trans_id_), K(ls_id_), KP(this), K(ret));
@@ -7932,15 +7934,15 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   } else if ((to_scn.get_branch() == 0) && pending_write_ > 0) {
     // for branch savepoint rollback, pending_write !=0 almostly
     ret = OB_NEED_RETRY;
-    TRANS_LOG(WARN, "has pending write, rollback blocked",
-              K(ret), K(pending_write_), KPC(this));
+    TRANS_LOG(WARN, "has pending write, rollback blocked", K(ret), K(to_scn), K(pending_write_), KPC(this));
   } else if (last_scn_ <= to_scn) {
-    TRANS_LOG(INFO, "rollback succeed trivially", K_(trans_id),
-              K_(ls_id), K(op_sn), K(to_scn), K_(last_scn));
+    TRANS_LOG(INFO, "rollback succeed trivially", K_(trans_id), K_(ls_id), K(op_sn), K(to_scn), K_(last_scn));
+  } else if (!from_scn.is_valid() &&
+             // generate from if not specified
+             FALSE_IT(from_scn = to_scn.clone_with_seq(ObSequence::inc_and_get_max_seq_no(), seq_base))) {
   } else if (OB_FAIL(rollback_to_savepoint_(from_scn, to_scn, share::SCN::invalid_scn()))) {
-    TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret),
-              K(from_scn), K(to_scn), K(op_sn), KPC(this));
-  } else if (to_scn.get_branch() == 0){
+    TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret), K(from_scn), K(to_scn), K(op_sn), KPC(this));
+  } else if (to_scn.get_branch() == 0) {
     last_scn_ = to_scn;
   }
   // must add downstream parts when return success
