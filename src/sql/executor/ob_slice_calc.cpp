@@ -337,9 +337,22 @@ int ObRepartRandomSliceIdxCalc::get_slice_idx(const ObIArray<ObExpr*> &exprs,
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(get_task_idx_by_tablet_id(tablet_id, slice_idx))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      // 没有找到对应的分区，返回OB_NO_PARTITION_FOR_GIVEN_VALUE
-      ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-      LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx));
+      if (tablet_id <= 0) {
+        // tablet_id <= means this row matches no partition
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      } else {
+        // there are two scenarios tablet_id > 0.
+        // 1. insert into t partition (p0) select * from t partition (p1).
+        //    tablet_id equals to tablet id of p1 but the map only contains tablet id of p0.
+        // 2. insert into t and truncate t concurrently. truncate t will make t maps to a new group of tablets.
+        // It's hard to distinct these two scenarios, so we report OB_SCHEMA_ERROR
+        //    and record error msg of OB_NO_PARTITION_FOR_GIVEN_VALUE.
+        // As a result, if schema has changed, this query will be retried.
+        // Otherwise, error msg of OB_NO_PARTITION_FOR_GIVEN_VALUE will be reported to the client.
+        ret = OB_SCHEMA_ERROR;
+        LOG_USER_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+      }
+      LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx), K(repart_type_));
     }
   }
   return ret;
@@ -983,7 +996,7 @@ int ObSlaveMapPkeyRangeIdxCalc::get_task_idx(
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(tablet_id <= 0)) {
     ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-    LOG_WARN("can't get the right partition", K(ret), K(tablet_id));
+    LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(repart_type_));
   } else if (OB_UNLIKELY(sort_key.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(sort_key));
@@ -1100,9 +1113,13 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_idx(
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(get_task_idx_by_tablet_id(eval_ctx, tablet_id, slice_idx))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      // 没有找到对应的分区，返回OB_NO_PARTITION_FOR_GIVEN_VALUE
-      ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-      LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx));
+      if (tablet_id <= 0) {
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      } else {
+        ret = OB_SCHEMA_ERROR;
+        LOG_USER_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+      }
+      LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx), K(repart_type_));
     }
   }
   return ret;

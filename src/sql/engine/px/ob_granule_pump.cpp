@@ -1111,7 +1111,8 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         if (is_virtual_table(table_schema->get_table_id())) {
           tablet_idx = tablet_loc.tablet_id_.id() + 1;
         } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
-          LOG_WARN("fail to get tablet idx", K(ret));
+          ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
+          LOG_WARN("fail to get tablet idx", K(ret), K(tablet_loc), KPC(table_schema));
         }
       }
       if (OB_FAIL(ret)) {
