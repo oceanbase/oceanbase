@@ -2769,10 +2769,16 @@ void ObPrefixSortImpl::reset()
   selector_size_ = 0;
   sort_prefix_rows_ = 0;
   immediate_prefix_store_.reset();
-  immediate_prefix_rows_ = 0;
   immediate_prefix_pos_ = 0;
   brs_ = NULL;
-
+  if (nullptr != mem_context_ && nullptr != selector_) {
+    mem_context_->get_malloc_allocator().free(selector_);
+    selector_ = nullptr;
+  }
+  if (nullptr != mem_context_ && nullptr != immediate_prefix_rows_) {
+    mem_context_->get_malloc_allocator().free(immediate_prefix_rows_);
+    immediate_prefix_rows_ = nullptr;
+  }
   ObSortOpImpl::reset();
 }
 
@@ -2833,10 +2839,10 @@ int ObPrefixSortImpl::init(const int64_t tenant_id,
         LOG_WARN("fetch rows failed");
       }
     } else {
-      selector_ = (typeof(selector_))eval_ctx->exec_ctx_.get_allocator().alloc(
+      selector_ = (typeof(selector_))mem_context_->get_malloc_allocator().alloc(
           batch_size * sizeof(*selector_));
       immediate_prefix_rows_ = (typeof(immediate_prefix_rows_))
-          eval_ctx->exec_ctx_.get_allocator().alloc(batch_size * sizeof(*immediate_prefix_rows_));
+          mem_context_->get_malloc_allocator().alloc(batch_size * sizeof(*immediate_prefix_rows_));
       if (NULL == selector_ || NULL == immediate_prefix_rows_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed",
