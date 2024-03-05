@@ -273,7 +273,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                               dtc_params))) {
       LOG_WARN("failed to calculate table location", K(ret));
     } else {
-      LOG_INFO("succeed to calculate base table sharding info", K(table_id), K(ref_table_id),
+      LOG_TRACE("succeed to calculate base table sharding info", K(table_id), K(ref_table_id),
           K(is_global_index));
     }
   }
@@ -12476,7 +12476,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
           table_meta_info_.average_row_size_ = static_cast<double>(stat.get_avg_row_size());
           table_meta_info_.micro_block_count_ = stat.get_micro_block_count();
           table_meta_info_.has_opt_stat_ = has_opt_stat;
-          LOG_INFO("total rowcount, use statistics", K(table_meta_info_.table_row_count_),
+          LOG_TRACE("total rowcount, use statistics", K(table_meta_info_.table_row_count_),
               K(table_meta_info_.average_row_size_), K(table_meta_info_.micro_block_count_),
               K(table_meta_info_.part_size_));
         }
