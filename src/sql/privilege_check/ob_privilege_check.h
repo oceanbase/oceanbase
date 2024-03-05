@@ -18,6 +18,7 @@
 namespace oceanbase {
 namespace sql {
 struct ObSqlCtx;
+struct ObDmlTableInfo;
 class ObStmt;
 
 typedef int (*ObGetStmtNeedPrivsFunc) (const share::schema::ObSessionPrivInfo &session_priv,
@@ -53,6 +54,9 @@ public:
 
   static int can_do_operation_on_db(const share::schema::ObSessionPrivInfo &session_priv,
                                     const common::ObString &db_name);
+  static int can_do_operation_on_db(const share::schema::ObSessionPrivInfo &session_priv,
+                                    const common::ObIArray<const ObDmlTableInfo*> &table_infos,
+                                    const common::ObString &op_literal);
   static int can_do_grant_on_db_table(const share::schema::ObSessionPrivInfo &session_priv,
                                       const ObPrivSet priv_set,
                                       const common::ObString &db_name,
