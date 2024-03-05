@@ -510,6 +510,7 @@ int ObTrace::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
 int ObTrace::deserialize(const char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  reset();
   if (OB_FAIL(trace_id_.deserialize(buf, buf_len, pos))) {
     // LOG_WARN("deserialize failed", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(root_span_id_.deserialize(buf, buf_len, pos))) {
