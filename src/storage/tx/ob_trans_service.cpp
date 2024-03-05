@@ -260,6 +260,8 @@ void ObTransService::stop()
     TRANS_LOG(WARN, "ObTransTimer stop error", K(ret));
   } else if (OB_FAIL(dup_table_scan_timer_.stop())) {
     TRANS_LOG(WARN, "dup_table_scan_timer_ stop error", K(ret));
+  } else if (OB_FAIL(ts_mgr_->remove_dropped_tenant(tenant_id_))) {
+    TRANS_LOG(WARN, "gts_mgr stop error", K(ret));
   } else {
     rpc_->stop();
     dup_table_rpc_->stop();
