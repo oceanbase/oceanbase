@@ -4624,6 +4624,7 @@ TEMPORARY
 | EXTERNAL
 {
   result->contain_sensitive_data_ = true;
+	result->is_external_table_ = true;
   malloc_terminal_node($$, result->malloc_pool_, T_EXTERNAL);
 }
 | /* EMPTY */
@@ -6953,12 +6954,17 @@ hash_partition_option
 external_table_partition_option: /* list partition without partition defines*/
 PARTITION BY '(' column_name_list ')'
 {
-  ParseNode *column_names = NULL;
-  ParseNode *partition_defs = NULL;
-  merge_nodes(column_names, result, T_EXPR_LIST, $4);
-  malloc_terminal_node(partition_defs, result->malloc_pool_, T_PARTITION_LIST);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, column_names, partition_defs, NULL, NULL, NULL);
-  dup_expr_string($$, result, @4.first_column, @4.last_column);
+  if (result->is_external_table_) {
+    ParseNode *column_names = NULL;
+    ParseNode *partition_defs = NULL;
+    merge_nodes(column_names, result, T_EXPR_LIST, $4);
+    malloc_terminal_node(partition_defs, result->malloc_pool_, T_PARTITION_LIST);
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, column_names, partition_defs, NULL, NULL, NULL);
+    dup_expr_string($$, result, @4.first_column, @4.last_column);
+  } else {
+    yyerror(NULL, result, "paritition by column is not allowed");
+    YYERROR;
+  }
 }
 ;
 
