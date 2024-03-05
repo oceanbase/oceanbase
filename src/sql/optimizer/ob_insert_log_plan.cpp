@@ -811,10 +811,6 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   } else if (has_rand_part_key || has_subquery_part_key || has_auto_inc_part_key) {
     is_multi_part_dml = true;
     OPT_TRACE("part key with rand/subquery/auto_inc expr, force use multi part dml");
-  }  else if (!insert_table_sharding->is_single() &&
-              (insert_stmt->is_insert_up() || insert_stmt->is_replace())) {
-    is_multi_part_dml = true;
-    OPT_TRACE("insert up/replace force use multi part dml");
   } else { /*do nothing*/ }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check insert_stmt need multi-partition-dml", K(is_multi_part_dml));
