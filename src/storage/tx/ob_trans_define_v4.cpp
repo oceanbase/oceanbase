@@ -1267,11 +1267,13 @@ const char* ObTxReadSnapshot::get_source_name() const
 /*
  * format snapshot info for sql audit display
  * contains: src, ls_id, ls_role, parts
- * when shorter than 128 char like:
- * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(id:1001,epoch:1111),(id:1002,epoch:12222)]"
- * when longer than 128 char, with "..." in the end
- * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(lsid:1001,epoch:1111),(lsid:1002,epoch:122..."
-*/
+ * 1. local select:
+ *   "src:LOCAL;ls_id:1001;ls_role:LEADER;parts:[1001,1002]"
+ * 2. glocal select, with no ls and ls_role: "src:GTS;parts[1001]"
+ * 3. insert: "NONE"
+ * 4. longer than 128 chars, with "..." in the end
+ *   "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[1001,1002,102..."
+ */
 int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
@@ -1283,24 +1285,55 @@ int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len
     const char *snapshot_src = get_source_name();
     const char *ls_role = role_to_string(snapshot_ls_role_);
     uint64_t ls_id = snapshot_lsid_.id();
-    int n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:",
-                     snapshot_src, ls_id, ls_role);
+    int n = 0;
+    bool need_fill = true;
+    if (SRC::NONE == source_) {
+      // insert has no stmt snapshot
+      need_fill = false;
+      n = snprintf(buf, buf_len, "NONE");
+    } else if (SRC::GLOBAL != source_) {
+      n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:[",
+                   snapshot_src, ls_id, ls_role);
+    } else {
+      // GLOBAL snapshot not display ls_id and ls_role
+      n = snprintf(buf, buf_len, "src:%s;parts:[", snapshot_src);
+    }
     if (n < 0){
       ret = OB_UNEXPECT_INTERNAL_ERROR;
       TRANS_LOG(WARN, "fail to fill snapshot source", K(ret), KPC(this), K(n), K(pos), K(buf_len));
-    } else {
+    } else if(need_fill) {
       pos += n;
-      pos += parts_.to_string(buf + pos, buf_len - pos);
-      if (pos >= buf_len - 1) {
-        // buf full, parts fill not complete
-        // replace end 3 chars with ...
-        buf[pos - 2] = '.';
-        buf[pos - 3] = '.';
-        buf[pos - 4] = '.';
+      bool buf_not_enough = false;
+      for (int i = 0; i < parts_.count(); i++) {
+        n = snprintf(buf + pos, buf_len - pos, "%ld,", parts_[i].left_.id());
+        if (n < 0) {
+          ret = OB_UNEXPECT_INTERNAL_ERROR;
+          TRANS_LOG(WARN, "fail to fill snapshot source", K(ret), KPC(this), K(n), K(pos), K(buf_len));
+        } else if (n > buf_len - pos) {
+          buf_not_enough = true;
+          break;
+        } else {
+          pos += n;
+        }
       }
-      buf[pos - 1] = '\0';
-      TRANS_LOG(DEBUG, "succeed to generate snapshot source", KPC(this), K(pos), K(buf_len), K(ObString(buf)));
+      if (buf_not_enough) {
+        // buf full, parts fill not complete
+        int remain_cnt = buf_len - pos;
+        pos = remain_cnt < 4 ? buf_len - 4 : pos;
+        buf[pos] = '.';
+        buf[pos + 1] = '.';
+        buf[pos + 2] = '.';
+        buf[pos + 3] = '\0';
+      } else if(parts_.count() > 0) {
+        buf[pos - 1] = ']';
+      } else {
+        buf[pos] = ']';
+        buf[pos + 1] = '\0';
+      }
     }
+  }
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "fail to generate snapshot source", KPC(this), K(pos), K(buf_len), K(ObString(buf)));
   }
   return ret;
 }

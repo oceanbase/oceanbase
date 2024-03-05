@@ -722,6 +722,8 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
       snapshot.parts_.reset();
       if(acquire_from_follower) {
         snapshot.snapshot_ls_role_ = common::ObRole::FOLLOWER;
+      } else {
+        snapshot.snapshot_ls_role_ = common::ObRole::LEADER;
       }
       // If tx id is valid , record tx_id and scn
       if (tx.tx_id_.is_valid()) {

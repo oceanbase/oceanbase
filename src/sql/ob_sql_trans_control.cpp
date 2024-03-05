@@ -268,6 +268,7 @@ int ObSqlTransControl::end_trans(ObExecContext &exec_ctx,
   LOG_INFO("end_trans", K(session->is_in_transaction()),
                         K(session->has_explicit_start_trans()),
                         K(exec_ctx.get_execution_id()),
+                        KPC(session->get_tx_desc()),
                         KP(callback));
 #endif
   if (OB_ISNULL(session) || OB_ISNULL(plan_ctx)) {
@@ -1051,6 +1052,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   bool is_plain_select = false;
   transaction::ObTxSEQ savepoint = das_ctx.get_savepoint();
   int exec_errcode = exec_ctx.get_errcode();
+  int64_t tx_id = 0;
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1063,6 +1065,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     CK (OB_NOT_NULL(tx_desc));
     ObTransID tx_id_before_rollback;
     OX (tx_id_before_rollback = tx_desc->get_tx_id());
+    tx_id = tx_id_before_rollback.get_id();
     OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
     auto &tx_result = session->get_trans_result();
     if (OB_FAIL(ret)) {
@@ -1122,8 +1125,10 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #endif
   if (print_log
       && OB_NOT_NULL(session)
-      && OB_TRY_LOCK_ROW_CONFLICT != exec_ctx.get_errcode()) {
+      && (OB_TRY_LOCK_ROW_CONFLICT != exec_ctx.get_errcode()
+          || REACH_TIME_INTERVAL(1 * 1000 * 1000))) {
     LOG_INFO("end stmt", K(ret),
+             "tx_id", tx_id,
              "plain_select", is_plain_select,
              "stmt_type", stmt_type,
              K(savepoint),
