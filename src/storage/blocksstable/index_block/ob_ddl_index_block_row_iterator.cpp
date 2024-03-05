@@ -721,8 +721,9 @@ int ObDDLSStableAllRangeIterator::get_index_row_count(const ObDatumRange &range,
     bool tmp_reach_cursor_end = false;
     ObMicroIndexRowItem tmp_index_item;
     int64_t tmp_row_offset = 0;
+    ObArenaAllocator idx_row_allocator("DDL_Row_Cnt", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(tmp_index_macro_iter.get_next_idx_row(idx_row_allocator_, tmp_index_item, tmp_row_offset, tmp_reach_cursor_end))) {
+      if (OB_FAIL(tmp_index_macro_iter.get_next_idx_row(idx_row_allocator, tmp_index_item, tmp_row_offset, tmp_reach_cursor_end))) {
         if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next idx info", K(ret), K(tmp_index_item), K(tmp_reach_cursor_end), K(tmp_index_macro_iter));
         } else {
@@ -736,6 +737,8 @@ int ObDDLSStableAllRangeIterator::get_index_row_count(const ObDatumRange &range,
     if (OB_FAIL(ret)) {
       index_row_count = 0;
     }
+    tmp_index_item.reset();
+    idx_row_allocator.reset();
   }
   return ret;
 }
