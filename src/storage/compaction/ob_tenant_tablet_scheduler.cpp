@@ -1603,11 +1603,10 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       ls_time_guard.add_time_guard(tablet_time_guard);
     } // end of while
 
-    // TODO(@chengkong): submit a async task
-    FOREACH(need_freeze_tablet_id, need_freeze_tablets) {
-      if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(*need_freeze_tablet_id, true/*force_freeze*/, true/*is_sync*/))) {
-          LOG_WARN("failed to force freeze tablet", KR(tmp_ret), K(ls_id), K(*need_freeze_tablet_id));
-      }
+    if (OB_FAIL(ret) || need_freeze_tablets.empty()) {
+    } else if (OB_TMP_FAIL(schedule_batch_freeze_dag(merge_version, ls_id, need_freeze_tablets))) {
+      LOG_WARN("failed to schedule batch force freeze tablets dag", K(tmp_ret), K(ls_id),
+               "tablet_count", need_freeze_tablets.count());
     }
 
     ls_time_guard.click(ObCompactionScheduleTimeGuard::FAST_FREEZE);
@@ -2047,6 +2046,34 @@ void ObTenantTabletScheduler::report_blocking_medium(
     }
   }
 }
+
+int ObTenantTabletScheduler::schedule_batch_freeze_dag(
+    const int64_t merge_version,
+    const share::ObLSID &ls_id,
+    const common::ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObBatchFreezeTabletsParam param;
+
+  if (OB_UNLIKELY(!ls_id.is_valid() || tablet_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(ls_id), K(tablet_ids));
+  } else if (FALSE_IT(param.ls_id_ = ls_id)) {
+  } else if (FALSE_IT(param.compaction_scn_ = merge_version)) {
+  } else if (OB_FAIL(param.tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign tablet ids", K(ret));
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->create_and_add_dag<ObBatchFreezeTabletsDag>(&param, true/*is_emergency*/))) {
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      LOG_WARN("failed to create merge dag", K(ret), K(param));
+    } else if (OB_EAGAIN == ret) {
+      LOG_WARN("curr ls exists batch freeze dag, wait the dag to finish", K(ret), K(ls_id));
+    }
+  } else {
+    LOG_INFO("Succ to create tablet batch freeze dag", K(ret), K(param));
+  }
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

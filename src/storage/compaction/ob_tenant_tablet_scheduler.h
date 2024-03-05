@@ -294,6 +294,10 @@ private:
     const bool &tablet_could_schedule_medium,
     const bool &could_major_merge,
     const share::ObLSID &ls_id);
+  int schedule_batch_freeze_dag(
+      const int64_t merge_version,
+      const share::ObLSID &ls_id,
+      const common::ObIArray<ObTabletID> &tablet_ids);
 public:
   static const int64_t INIT_COMPACTION_SCN = 1;
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;

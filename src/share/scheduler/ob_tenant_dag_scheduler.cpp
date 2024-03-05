@@ -2585,6 +2585,8 @@ int ObDagPrioScheduler::finish_dag_(
     if (need_add) {
       if (OB_TMP_FAIL(MTL(ObDagWarningHistoryManager*)->add_dag_warning_info(&dag))) {
         COMMON_LOG(WARN, "failed to add dag warning info", K(tmp_ret), K(dag));
+      } else if (ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag.get_type()) {
+        // no need to add diagnose
       } else {
         compaction::ObTabletMergeDag *merge_dag = static_cast<compaction::ObTabletMergeDag*>(&dag);
         if (OB_SUCCESS != dag.get_dag_ret()) {
@@ -2957,7 +2959,6 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  compaction::ObTabletMergeDag *dag = nullptr;
   exist = false;
   ObDagListIndex loop_list[2] = { READY_DAG_LIST, RANK_DAG_LIST };
   ObIDag *cancel_dag = nullptr;
@@ -2971,8 +2972,9 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
     ObIDag *head = dag_list_[list_idx].get_header();
     ObIDag *cur = head->get_next();
     while (head != cur) {
-      dag = static_cast<compaction::ObTabletMergeDag *>(cur);
-      cancel_flag = (ls_id == dag->get_ls_id());
+      cancel_flag = ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == cur->get_type()
+                  ? (ls_id == static_cast<compaction::ObBatchFreezeTabletsDag *>(cur)->get_param().ls_id_)
+                  : (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());
 
       if (cancel_flag) {
         if (cur->get_dag_status() == ObIDag::DAG_STATUS_READY) {

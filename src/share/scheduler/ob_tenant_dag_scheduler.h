@@ -210,6 +210,7 @@ public:
     TASK_TYPE_TTL_DELETE = 54,
     TASK_TYPE_TENANT_SNAPSHOT_CREATE = 55,
     TASK_TYPE_TENANT_SNAPSHOT_GC = 56,
+    TASK_TYPE_BATCH_FREEZE_TABLETS = 57,
     TASK_TYPE_MAX,
   };
 
@@ -1389,7 +1390,8 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
          ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||
          ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
-         ObDagType::DAG_TYPE_MDS_TABLE_MERGE == dag_type;
+         ObDagType::DAG_TYPE_MDS_TABLE_MERGE == dag_type ||
+         ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type;
 }
 
 inline int dag_yield()

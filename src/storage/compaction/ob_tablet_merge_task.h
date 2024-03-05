@@ -352,6 +352,71 @@ public:
   virtual ~ObTabletMiniMergeDag();
 };
 
+
+struct ObBatchFreezeTabletsParam : public share::ObIDagInitParam
+{
+public:
+  ObBatchFreezeTabletsParam();
+  virtual ~ObBatchFreezeTabletsParam() { tablet_ids_.reset(); }
+  virtual bool is_valid() const override { return ls_id_.is_valid() && compaction_scn_ > 0 && tablet_ids_.count() > 0; }
+  int assign(const ObBatchFreezeTabletsParam &other);
+  bool operator == (const ObBatchFreezeTabletsParam &other) const;
+  bool operator != (const ObBatchFreezeTabletsParam &other) const { return !this->operator==(other); }
+  int64_t get_hash() const;
+  VIRTUAL_TO_STRING_KV(K_(ls_id), K_(compaction_scn), "tablet_count", tablet_ids_.count(), K_(tablet_ids));
+public:
+  static constexpr int64_t DEFAULT_BATCH_SIZE = 16;
+  share::ObLSID ls_id_;
+  int64_t compaction_scn_;
+  common::ObSEArray<common::ObTabletID, DEFAULT_BATCH_SIZE> tablet_ids_;
+};
+
+
+class ObBatchFreezeTabletsDag : public share::ObIDag
+{
+public:
+  ObBatchFreezeTabletsDag();
+  virtual ~ObBatchFreezeTabletsDag();
+  int init_by_param(const share::ObIDagInitParam *param);
+  virtual int create_first_task() override;
+  virtual bool operator == (const ObIDag &other) const override;
+  virtual int64_t hash() const override;
+  virtual int fill_info_param(
+      compaction::ObIBasicInfoParam *&out_param,
+      ObIAllocator &allocator) const override;
+  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return lib::Worker::CompatMode::MYSQL; }
+  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  const ObBatchFreezeTabletsParam &get_param() const { return param_; }
+  virtual bool ignore_warning() override
+  {
+    return OB_PARTIAL_FAILED != dag_ret_;
+  }
+
+  INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(param));
+private:
+  bool is_inited_;
+  ObBatchFreezeTabletsParam param_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBatchFreezeTabletsDag);
+};
+
+
+class ObBatchFreezeTabletsTask : public share::ObITask
+{
+public:
+  ObBatchFreezeTabletsTask();
+  virtual ~ObBatchFreezeTabletsTask();
+  int init();
+  virtual int process() override;
+private:
+  bool is_inited_;
+  ObBatchFreezeTabletsDag *base_dag_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBatchFreezeTabletsTask);
+};
+
+
 } // namespace compaction
 } // namespace oceanbase
 
