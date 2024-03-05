@@ -150,6 +150,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       case ObLongTextType: {
         precision = -1;
         scale = -1;
+        length = 0;
         break;
       }
       default:
