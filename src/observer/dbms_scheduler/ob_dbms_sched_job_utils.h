@@ -295,6 +295,7 @@ public:
                             sql::ObSQLSessionInfo *&session_info);
   static int destroy_session(sql::ObFreeSessionCtx &free_session_ctx,
                              sql::ObSQLSessionInfo *session_info);
+  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
 };
 }
 }
