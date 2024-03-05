@@ -932,8 +932,6 @@ TEST_F(TestLSTabletService, test_migrate_param)
   ASSERT_TRUE(de_tablet_meta.storage_schema_.is_valid());
   ASSERT_TRUE(de_tablet_meta.is_valid());
   ASSERT_FALSE(de_tablet_meta.is_empty_shell());
-  ASSERT_EQ(tablet_meta.space_usage_.occupy_bytes_, de_tablet_meta.space_usage_.occupy_bytes_);
-  ASSERT_EQ(tablet_meta.space_usage_.required_bytes_, de_tablet_meta.space_usage_.required_bytes_);
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, de_tablet_meta.serialize(buf, serialize_size, pos));
 

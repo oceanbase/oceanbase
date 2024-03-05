@@ -275,7 +275,6 @@ int ObTabletMeta::init(
     ddl_data_format_version_ = param.ddl_data_format_version_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
-    space_usage_ = param.space_usage_;
     is_inited_ = true;
   }
 
@@ -878,7 +877,6 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     mds_data_(),
     transfer_info_(),
     create_schema_version_(0),
-    space_usage_(),
     allocator_()
 {
 }
@@ -893,7 +891,6 @@ bool ObMigrationTabletParam::is_valid() const
       && ls_id_.is_valid()
       && tablet_id_.is_valid()
       && data_tablet_id_.is_valid()
-      && space_usage_.is_valid()
       && create_scn_ != ObTabletMeta::INVALID_CREATE_SCN;
     if (!bool_ret) {
       LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid param", K_(ls_id), K_(tablet_id), K_(data_tablet_id), K_(create_scn),
@@ -1027,8 +1024,6 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize transfer info", K(ret), K(len), K(new_pos), K_(transfer_info));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_schema_version_))) {
     LOG_WARN("failed to serialize create schema version", K(ret), K(len), K(new_pos), K_(create_schema_version));
-  } else if (new_pos - pos < length && OB_FAIL(space_usage_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos), K_(space_usage));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -1110,8 +1105,6 @@ int ObMigrationTabletParam::deserialize_v2(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize transfer info", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &create_schema_version_))) {
     LOG_WARN("failed to deserialize create schema version", K(ret), K(len));
-  } else if (new_pos - pos < length && OB_FAIL(space_usage_.deserialize(buf, len, new_pos))) {
-    LOG_WARN("failed to deserialize tablet space usage", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1195,8 +1188,6 @@ int ObMigrationTabletParam::deserialize_v1(const char *buf, const int64_t len, i
     LOG_WARN("failed to deserialize max sync medium snapshot", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(ddl_commit_scn_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize ddl commit scn", K(ret), K(len), K(new_pos));
-  } else if (new_pos - pos < length && OB_FAIL(space_usage_.deserialize(buf, len, new_pos))) {
-    LOG_WARN("failed to deserialize tablet space usage", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1285,7 +1276,6 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
   size += mds_data_.get_serialize_size();
   size += transfer_info_.get_serialize_size();
   size += serialization::encoded_length_i64(create_schema_version_);
-  size += space_usage_.get_serialize_size();
   return size;
 }
 
@@ -1320,7 +1310,6 @@ void ObMigrationTabletParam::reset()
   transfer_info_.reset();
   create_schema_version_ = 0;
   allocator_.reset();
-  space_usage_.reset();
 }
 
 int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
@@ -1360,7 +1349,6 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ddl_commit_scn_ = param.ddl_commit_scn_;
     mds_checkpoint_scn_ = param.mds_checkpoint_scn_;
     transfer_info_ = param.transfer_info_;
-    space_usage_ = param.space_usage_;
 
     if (OB_FAIL(mds_data_.assign(param.mds_data_, allocator_))) {
       LOG_WARN("failed to assign mds data", K(ret), K(param));

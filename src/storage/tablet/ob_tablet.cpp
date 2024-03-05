@@ -534,9 +534,6 @@ int ObTablet::init_with_migrate_param(
 
   if (OB_SUCC(ret)) {
 
-    // init tablet space usage
-    tablet_meta_.space_usage_ = param.space_usage_;
-
     if (param.is_empty_shell()) {
       int64_t pos = 0;
       ObString data = param.mds_data_.tablet_status_committed_kv_.v_.user_data_;
@@ -3856,7 +3853,6 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.report_status_ = tablet_meta_.report_status_;
     mig_tablet_param.mds_checkpoint_scn_ = tablet_meta_.mds_checkpoint_scn_;
     mig_tablet_param.transfer_info_ = tablet_meta_.transfer_info_;
-    mig_tablet_param.space_usage_ = tablet_meta_.space_usage_;
     mig_tablet_param.is_empty_shell_ = is_empty_shell();
 
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "BuildMigParam"));
@@ -4984,7 +4980,6 @@ int ObTablet::build_transfer_tablet_param(
     mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.mds_checkpoint_scn_ = user_data.transfer_scn_;
-    mig_tablet_param.space_usage_ = tablet_meta_.space_usage_;
     mig_tablet_param.report_status_.reset();
 
     const int64_t transfer_seq = tablet_meta_.transfer_info_.transfer_seq_ + 1;
