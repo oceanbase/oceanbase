@@ -4165,7 +4165,6 @@ int ObPLFunction::update_cache_obj_stat(ObILibCacheCtx &ctx)
   PLCacheObjStat &stat = get_stat_for_update();
   stat.pl_schema_id_ = pc_ctx.key_.key_id_;
   stat.gen_time_ = ObTimeUtility::current_time();
-  stat.last_active_time_ = ObTimeUtility::current_time();
   stat.hit_count_ = 0;
   MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
 
@@ -4178,6 +4177,11 @@ int ObPLFunction::update_cache_obj_stat(ObILibCacheCtx &ctx)
     } else {
       stat.sql_cs_type_ = pc_ctx.session_info_->get_local_collation_connection();
     }
+  }
+  if (OB_SUCC(ret)) {
+    // Update last_active_time_ last, because last_active_time_ is used to
+    // indicate whether the cache stat has been updated.
+    stat.last_active_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
