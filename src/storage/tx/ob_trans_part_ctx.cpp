@@ -7541,7 +7541,6 @@ int ObPartTransCtx::end_access()
  * rollback_to_savepoint - rollback to savepoint
  *
  * @op_sn    - operation sequence number, used to reject out of order msg
- * @from_scn - the start position of rollback, inclusive
  * @to_scn   - the end position of rollback, exclusive
  *
  * savepoint may be created in these ways:
@@ -7561,12 +7560,11 @@ int ObPartTransCtx::end_access()
  *   than the sequence passed to start_access. and the last_scn was only set
  *   when start_access was called
  */
-int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
-                                          const ObTxSEQ from_scn,
-                                          const ObTxSEQ to_scn)
+int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ to_scn)
 {
   int ret = OB_SUCCESS;
   bool need_write_log = false;
+  ObTxSEQ from_scn;
   CtxLockGuard guard(lock_);
   if (OB_FAIL(check_status_())) {
   } else if(is_logging_()) {
@@ -7585,10 +7583,10 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   } else if (FALSE_IT(last_op_sn_ = op_sn)) {
   } else if (pending_write_ > 0) {
     ret = OB_NEED_RETRY;
-    TRANS_LOG(WARN, "has pending write, rollback blocked",
-              K(ret), K(pending_write_), KPC(this));
+    TRANS_LOG(WARN, "has pending write, rollback blocked", K(ret), K(to_scn), K(pending_write_), KPC(this));
   } else if (last_scn_ <= to_scn) {
     TRANS_LOG(INFO, "rollback succeed trivially", K(op_sn), K(to_scn), K_(last_scn));
+  } else if (FALSE_IT(from_scn = to_scn.clone_with_seq(ObSequence::inc_and_get_max_seq_no()))) {
   } else if (OB_FAIL(rollback_to_savepoint_(from_scn, to_scn))) {
     TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret),
               K(from_scn), K(to_scn), K(op_sn), KPC(this));
