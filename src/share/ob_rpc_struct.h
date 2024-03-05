@@ -3998,6 +3998,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchTabletSeqRes);
 };
 
+using ObClearTabletAutoincSeqCacheArg = ObBatchRemoveTabletArg;
+
 struct ObGetMinSSTableSchemaVersionRes
 {
   OB_UNIS_VERSION(1);
