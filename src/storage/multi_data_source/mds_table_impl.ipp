@@ -13,6 +13,8 @@
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_IPP
 
+#include "lib/ob_errno.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "ob_clock_generator.h"
 #include "share/ob_errno.h"
 #include "storage/multi_data_source/mds_table_base.h"
@@ -947,8 +949,6 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   if (!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max()) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG_FLUSH(WARN, "invalid recycle scn");
-  } else if (flushing_scn_.is_valid()) {
-    MDS_LOG_FLUSH(TRACE, "no need do flush cause another flush dag is running");
   } else if (get_rec_scn().is_max()) {
     MDS_LOG_FLUSH(TRACE, "no need do flush cause rec_scn is MAX already");
   } else if (need_advanced_rec_scn_lower_limit < get_rec_scn()) {// no need dump this mds table to advance rec_scn
@@ -968,20 +968,22 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   } else {
 #ifndef UNITTEST_DEBUG
     if (MDS_FAIL(merge(construct_sequence_, do_flush_scn))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
         if (REACH_TIME_INTERVAL(100_ms)) {
-          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause already exist");
+          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause already exist or queue already full");
           ret = OB_SUCCESS;
-        } else if (OB_SIZE_OVERFLOW == ret) {// throw out
-          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause queue already full");
         }
       } else {
         MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag");
       }
     } else {
+      if (flushing_scn_.is_valid()) {
+        MDS_LOG_FLUSH(WARN, "flushing_scn is valid scn, that means last committed dag not scheduled, and dropped for some unknown reason");
+      }
       flushing_scn_ = do_flush_scn;
       report_flush_event_("DO_FLUSH", flushing_scn_);
-      debug_info_.last_flush_ts_ = ObClockGenerator::getClock();
+      // if commit dag success, there is no guarantee that dag will be executed finally
+      debug_info_.last_flush_ts_ = ObClockGenerator::getClock();// record commit dag ts to debug
     }
 #else
     flushing_scn_ = do_flush_scn;
