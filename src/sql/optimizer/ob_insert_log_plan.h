@@ -66,7 +66,8 @@ protected:
                              ObRawExpr *lock_row_flag_expr,
                              ObTablePartitionInfo *table_partition_info,
                              ObShardingInfo *insert_op_sharding,
-                             bool is_multi_part);
+                             bool is_multi_part,
+                             bool is_partition_wise);
   int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
   int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
