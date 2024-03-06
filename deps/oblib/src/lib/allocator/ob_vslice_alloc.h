@@ -241,14 +241,20 @@ public:
 #endif
   }
   void purge_extra_cached_block(Arena &arena) {
+    arena.ref(1);
     Block* old_blk = arena.clear();
     if (NULL != old_blk) {
       if (old_blk->freeze()) {
+        arena.ref(-1);
         arena.sync();
         if (old_blk->retire()) {
           destroy_block(old_blk);
         }
+      } else {
+        arena.ref(-1);
       }
+    } else {
+     arena.ref(-1);
     }
   }
   void purge_extra_cached_block(int keep) {
