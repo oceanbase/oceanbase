@@ -251,6 +251,160 @@ int ObFixedQueue<T>::head_unsafe(T *&ptr)
   }
   return ret;
 }
+template <typename T>
+class ObOrderedFixedQueue
+{
+public:
+  ObOrderedFixedQueue() : is_inited_(false),
+                                  max_num_(0),
+                                  array_(NULL),
+                                  allocator_(NULL),
+                                  consumer_(0),
+                                  producer_(0)
+  {}
+  ~ObOrderedFixedQueue()
+  {
+    destroy();
+  }
+public:
+  int init(const int64_t max_num,
+           ObIAllocator *allocator = global_default_allocator,
+           const lib::ObLabel &label = ObModIds::OB_FIXED_QUEUE);
+  int init(const int64_t max_num, ObIAllocator *allocator, const lib::ObMemAttr &attr);
+  void destroy();
+public:
+  int push(T *ptr);
+  int pop(T *&ptr);
+  inline int64_t get_total() const
+  {
+    return producer_ - consumer_;
+  }
+  bool is_inited() const {return is_inited_;};
+  int64_t capacity()const { return max_num_; }
+private:
+  struct ArrayItem
+  {
+    int64_t idx_;
+    T *data_;
+  };
+private:
+  bool is_inited_;
+  int64_t max_num_;
+  ArrayItem *array_;
+  ObIAllocator *allocator_;
+  uint64_t consumer_ CACHE_ALIGNED;
+  uint64_t producer_ CACHE_ALIGNED;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObOrderedFixedQueue);
+};
+template <typename T>
+int ObOrderedFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObLabel &label)
+{
+  lib::ObMemAttr attr;
+  attr.label_ = label;
+  return init(max_num, allocator, attr);
+}
+template <typename T>
+int ObOrderedFixedQueue<T>::init(const int64_t max_num, ObIAllocator *allocator, const lib::ObMemAttr &attr)
+{
+  int ret = common::OB_SUCCESS;
+  if (NULL == allocator || 0 >= max_num) {
+    ret = common::OB_INVALID_ARGUMENT;
+  } else if (is_inited_) {
+    ret = common::OB_INIT_TWICE;
+  } else if (NULL == (array_ = static_cast<ArrayItem *>(allocator->alloc(
+                                                            sizeof(ArrayItem) * max_num, attr)))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    for (int i = 0; i < max_num; i++) {
+      array_[i].data_ = NULL;
+      array_[i].idx_ = i;
+    }
+    max_num_ = max_num;
+    allocator_ = allocator;
+    consumer_ = 0;
+    producer_ = 0;
+    is_inited_ = true;
+  }
+  return ret;
+}
+template <typename T>
+void ObOrderedFixedQueue<T>::destroy()
+{
+  if (is_inited_) {
+    if (NULL != allocator_) {
+      allocator_->free(array_);
+      array_ = NULL;
+    }
+    array_ = NULL;
+    max_num_ = 0;
+    consumer_ = 0;
+    producer_ = 0;
+    allocator_ = NULL;
+    is_inited_ = false;
+  }
+}
+template <typename T>
+int ObOrderedFixedQueue<T>::push(T *ptr)
+{
+  int ret = common::OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = common::OB_NOT_INIT;
+  } else if (NULL == ptr) {
+    ret = common::OB_INVALID_ARGUMENT;
+  } else {
+    uint64_t push = ATOMIC_LOAD(&producer_);
+    uint64_t push_limit = ATOMIC_LOAD(&consumer_) + max_num_;
+    uint64_t old_push = 0;
+    while (((old_push = push) < push_limit || push < (push_limit = ATOMIC_LOAD(&consumer_) + max_num_))
+           && old_push != (push = ATOMIC_CAS(&producer_, old_push, old_push + 1))) {
+      PAUSE();
+    }
+    if (push < push_limit) {
+      while (push != ATOMIC_LOAD(&array_[push % max_num_].idx_)) {
+        PAUSE(); // ensure that only one push thread holding the array slot
+      }
+      T **pdata = &array_[push % max_num_].data_;
+      while (NULL != ATOMIC_CAS(pdata, NULL, ptr)) {
+        PAUSE();
+      }
+    } else {
+      ret = common::OB_SIZE_OVERFLOW;
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int ObOrderedFixedQueue<T>::pop(T *&ptr)
+{
+  int ret = common::OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = common::OB_NOT_INIT;
+  } else {
+    uint64_t pop = ATOMIC_LOAD(&consumer_);
+    uint64_t pop_limit = ATOMIC_LOAD(&producer_);
+    uint64_t old_pop = 0;
+    while (((old_pop = pop) < pop_limit || pop < (pop_limit = ATOMIC_LOAD(&producer_)))
+           && old_pop != (pop = ATOMIC_CAS(&consumer_, old_pop, old_pop + 1))) {
+      PAUSE();
+    }
+    if (pop < pop_limit) {
+      while (pop != ATOMIC_LOAD(&array_[pop % max_num_].idx_)) {
+        PAUSE(); // ensure that only one pop thread holding the array slot
+      }
+      T **pdata = &array_[(pop % max_num_)].data_;
+      while (NULL == (ptr = static_cast<T *>(ATOMIC_TAS(pdata, NULL)))) {
+        PAUSE();
+      }
+      ATOMIC_AAF(&array_[(pop % max_num_)].idx_, max_num_);
+    } else {
+      ret = common::OB_ENTRY_NOT_EXIST;
+    }
+  }
+  return ret;
+}
+
 } // namespace common
 } // namespace oceanbase
 #endif //OCEANBASE_COMMON_FIXED_QUEUE_
