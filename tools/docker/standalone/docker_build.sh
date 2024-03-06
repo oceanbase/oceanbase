@@ -17,7 +17,7 @@ cd "${CWD}"
 function fast_boot_docker_build() {
     rm -rf boot
     cp -r step_1_boot boot
-    docker build $BUILD_ARG --build-arg STEP=1 -t raw_observer .
+    docker build --no-cache $BUILD_ARG --build-arg STEP=1 -t raw_observer .
     if [ $? == 0 ]; then
         echo "================== build prepare docker ok ==============="
     else
@@ -39,7 +39,7 @@ function fast_boot_docker_build() {
 
     cd "${CWD}"
     cp -r step_2_boot/* boot
-    docker build $BUILD_ARG --build-arg STEP=2 -t oceanbase-ce .
+    docker build --no-cache $BUILD_ARG --build-arg STEP=2 -t oceanbase-ce .
     if [ $? == 0 ]; then
         echo "================== docker build ok ==============="
     else
