@@ -346,7 +346,7 @@ ObTxDesc::ObTxDesc()
     xa_tightly_couple_(true),
     xa_start_addr_(),
     isolation_(ObTxIsolationLevel::RC), // default is RC
-    access_mode_(ObTxAccessMode::RW),   // default is RW
+    access_mode_(ObTxAccessMode::INVL),   // default is INVL
     snapshot_version_(),
     snapshot_uncertain_bound_(0),
     snapshot_scn_(),

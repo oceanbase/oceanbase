@@ -899,7 +899,9 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
 
   // decide free-route flag for newly started txn
   if (is_tx_start || is_tx_switch) {
-    if (proxy_support) {
+    if (OB_UNLIKELY(tx->access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY)) {
+      // read only transaction on standby tenant, disable free route
+    } else if (proxy_support) {
       if (!is_xa_tightly_couple) {
         omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
         if (OB_LIKELY(tenant_config.is_valid())) {
