@@ -176,7 +176,10 @@ public:
           && schema_meta.get_type() != value.get_type()
           && !(lib::is_mysql_mode()
             && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
-              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta)))) { // small integer -> big integer; mysql mode;
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) // small integer -> big integer; mysql mode;
+          && !(lib::is_oracle_mode()
+            && ((common::ObNumberType == schema_meta.get_type() && common::ObNumberFloatType == value.get_type())
+              || (common::ObNumberType == value.get_type() && common::ObNumberFloatType == schema_meta.get_type())))) { // number -> float; oracle mode;
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),

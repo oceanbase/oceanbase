@@ -8557,6 +8557,7 @@ int ObDDLService::check_can_alter_column_type(
     const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   bool is_change_column_type = false;
   bool is_in_index = false;
   bool has_generated_depend = src_column.has_generated_column_deps();
@@ -8565,20 +8566,24 @@ int ObDDLService::check_can_alter_column_type(
   } else if (is_change_column_type) {
     if (OB_FAIL(check_column_in_index(src_column.get_column_id(), table_schema, is_in_index))) {
       LOG_WARN("fail to check column is in index table", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(table_schema.get_tenant_id()));
     } else if (is_in_index || has_generated_depend) {
       // is_in_index==true means : src_column is 'the index column' or 'index create by user'.
       const common::ObObjMeta &src_meta = src_column.get_meta_type();
       const common::ObObjMeta &dst_meta = dst_column.get_meta_type();
-      if (is_oracle_mode) {
-        // in oracle mode
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cannot modify column in index table", K(ret), K(src_column), K(dst_column), K(table_schema));
+      if (is_oracle_mode) {        // in oracle mode
+        if (is_in_index
+          && data_version >= DATA_VERSION_4_3_0_1
+          && common::ObNumberType == src_column.get_meta_type().get_type() && common::ObNumberFloatType == dst_column.get_meta_type().get_type()) {
+          // support number -> float in oracle mode in version 4.3
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("cannot modify column in index table", K(ret), K(src_column), K(dst_column), K(table_schema));
+        }
       } else {
         // in mysql mode
-        uint64_t data_version = 0;
-        if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
-          LOG_WARN("fail to get data version", KR(ret), K(table_schema.get_tenant_id()));
-        } else if (((has_generated_depend && !is_in_index) || data_version >= DATA_VERSION_4_2_2_0)
+        if (((has_generated_depend && !is_in_index) || data_version >= DATA_VERSION_4_2_2_0)
             && common::is_match_alter_integer_column_online_ddl_rules(src_meta, dst_meta)) {
             // support online ddl with index, generated column depended:
             // smaller integer -> big integer in mysql mode in version 4.2.2
