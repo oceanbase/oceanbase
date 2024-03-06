@@ -515,7 +515,11 @@ int ObNLConnectByOp::calc_pseudo_flags(ObConnectByOpPump::PumpNode &node)
     connect_by_pump_.cur_level_ = next_node.level_;
     while(OB_SUCC(ret) && false == finished) {
       clear_evaluated_flag();
-      OZ(row_fetcher.get_next_row(next_node.pump_row_));
+      if (OB_FAIL(row_fetcher.get_next_row(next_node.pump_row_))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to exec row_fetcher.get_next_row", K(ret));
+        }
+      }
       OZ(next_node.pump_row_->to_expr(MY_SPEC.right_prior_exprs_, eval_ctx_));
 
       if (OB_FAIL(ret)) {
