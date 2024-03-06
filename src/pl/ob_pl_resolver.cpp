@@ -11941,6 +11941,10 @@ int ObPLResolver::resolve_udf_info(
                                             &is_public));
       if (OB_FAIL(ret) || !exist) {
         ret = OB_SUCCESS; // some case may not be synonym.
+      } else if (!is_public) {
+        if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
+          db_name = resolve_ctx_.session_info_.get_database_name();
+        }
       } else {
         db_name = OB_SYS_DATABASE_NAME;
       }
