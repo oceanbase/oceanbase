@@ -14220,6 +14220,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15447: __all_user_proxy_role_info
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
 # 15449: __all_virtual_service
+# 15450: __all_virtual_tenant_resource_limit
+# 15451: __all_virtual_tenant_resource_limit_detail
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -59932,6 +59934,10 @@ def_table_schema(
 # 28221: GV$OB_TRACEPOINT_INFO
 # 28222: V$OB_TRACEPOINT_INFO
 # 28223: DBA_OB_RSRC_DIRECTIVES
+# 28224: GV$OB_TENANT_RESOURCE_LIMIT
+# 28225: V$OB_TENANT_RESOURCE_LIMIT
+# 28226: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 28227: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
