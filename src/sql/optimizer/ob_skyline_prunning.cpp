@@ -395,6 +395,35 @@ int ObQueryRangeDim::add_rowkey_ids(const common::ObIArray<uint64_t> &rowkey_ids
   return ret;
 }
 
+int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) const
+{
+  int ret = OB_SUCCESS;
+  if (other.get_dim_type() != get_dim_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dimension type is different",
+             "dim_type", get_dim_type(), "other.dim_type", other.get_dim_type());
+  } else {
+    status = ObSkylineDim::EQUAL;
+    const ObShardingInfoDim &tmp = static_cast<const ObShardingInfoDim &>(other);
+    DominateRelation strong_relation = DominateRelation::OBJ_UNCOMPARABLE;
+    EqualSets dummy;
+    if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(sharding_info_,
+                                              tmp.sharding_info_,
+                                              dummy,
+                                              strong_relation))) {
+      LOG_WARN("failed to compute sharding relationship", K(ret));
+    } else if (strong_relation == DominateRelation::OBJ_EQUAL) {
+      status = ObSkylineDim::EQUAL;
+    } else if (strong_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
+      status = ObSkylineDim::LEFT_DOMINATED;
+    } else if (strong_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
+      status = ObSkylineDim::RIGHT_DOMINATED;
+    } else {
+      status = ObSkylineDim::UNCOMPARABLE;
+    }
+  }
+  return ret;
+}
 
 /*
  * 对三个维度进行比较
@@ -413,7 +442,9 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
     const ObSkylineDim *left_dim = skyline_dims_[i];
     const ObSkylineDim *right_dim = other.skyline_dims_[i];
     ObSkylineDim::CompareStat tmp_status = ObSkylineDim::UNCOMPARABLE;
-    if (OB_ISNULL(left_dim) || OB_ISNULL(right_dim)) {
+    if (OB_ISNULL(left_dim) && OB_ISNULL(right_dim)) {
+      //do nothing
+    } else if (OB_ISNULL(left_dim) || OB_ISNULL(right_dim)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("skyline dimension should not be null", K(ret), K(i), K(left_dim), K(right_dim));
     } else if (OB_FAIL(left_dim->compare(*right_dim, tmp_status))) {
@@ -575,6 +606,27 @@ int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_rang
       } else {
         LOG_TRACE("add query range dim success", K(ret), K(*dim));
       }
+    }
+  }
+  return ret;
+}
+
+int ObIndexSkylineDim::add_sharding_info_dim(ObShardingInfo *sharding_info,
+                                             ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObShardingInfoDim *dim = NULL;
+  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim))) {
+    LOG_WARN("failed to create key prefix dimension", K(ret));
+  } else if (OB_ISNULL(dim)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to create dimension", K(ret));
+  } else {
+    dim->set_sharding_info(sharding_info);
+    if (OB_FAIL(add_skyline_dim(*dim))) {
+      LOG_WARN("failed to add_skylined_dim", K(ret));
+    } else {
+      LOG_TRACE("add partition num dim success", K(ret), K(*dim));
     }
   }
   return ret;

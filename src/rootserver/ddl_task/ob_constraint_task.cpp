@@ -106,6 +106,13 @@ int ObCheckConstraintValidationTask::process()
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), is_oracle_mode, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
+      } else if (OB_FAIL(ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(database_name.length()),
+            database_name.ptr(),
+            static_cast<int>(table_name.length()),
+            table_name.ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
       } else if (OB_FAIL(sql_string.assign_fmt(
           is_oracle_mode ?
               "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT (%.*s) AND ROWNUM = 1" // for oracle mode
@@ -384,6 +391,20 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
         LOG_WARN("failed to generate ddl schema hint", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(parent_table_schema.get_table_name_str(), parent_table_schema.get_schema_version(), is_oracle_mode, parent_ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint", K(ret));
+      } else if (OB_FAIL(child_ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(child_database_schema.get_database_name_str().length()),
+            child_database_schema.get_database_name_str().ptr(),
+            static_cast<int>(child_table_schema.get_table_name_str().length()),
+            child_table_schema.get_table_name_str().ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
+      } else if (OB_FAIL(parent_ddl_schema_hint_str.append_fmt(is_oracle_mode ?
+                  " INDEX(\"%.*s\".\"%.*s\" PRIMARY)" : " INDEX(`%.*s`.`%.*s` PRIMARY)",
+            static_cast<int>(parent_database_schema.get_database_name_str().length()),
+            parent_database_schema.get_database_name_str().ptr(),
+            static_cast<int>(parent_table_schema.get_table_name_str().length()),
+            parent_table_schema.get_table_name_str().ptr()))) {
+        LOG_WARN("fail to assign index hint", K(ret));
       }
       if (OB_SUCC(ret)) {
         // print "select "
