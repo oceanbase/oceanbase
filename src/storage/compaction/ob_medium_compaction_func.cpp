@@ -851,7 +851,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
   } else {
     medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version();
-    LOG_INFO("success to prepare medium info", K(ret), K(medium_info));
+    LOG_TRACE("success to prepare medium info", K(ret), K(medium_info));
   }
   return ret;
 }
