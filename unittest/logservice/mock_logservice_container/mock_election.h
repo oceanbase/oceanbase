@@ -81,6 +81,13 @@ public:
     UNUSED(dest_addr);
     return ret;
   }
+  virtual int temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason) override final
+  {
+    int ret = OB_SUCCESS;
+    UNUSED(time_us);
+    UNUSED(reason);
+    return OB_SUCCESS;
+  }
   // 拿本机地址
   const common::ObAddr &get_self_addr() const override final
   {
