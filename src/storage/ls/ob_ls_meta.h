@@ -28,6 +28,7 @@
 #include "storage/tx/ob_id_service.h"
 #include "storage/ls/ob_ls_saved_info.h"
 #include "share/scn.h"
+#include "storage/high_availability/ob_ls_transfer_info.h"
 
 namespace oceanbase
 {
@@ -159,7 +160,7 @@ public:
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
-               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info));
+               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info));
 private:
   int check_can_update_();
 public:
@@ -199,6 +200,7 @@ private:
   ObLSSavedInfo saved_info_;
   share::SCN transfer_scn_;
   ObLSRebuildInfo rebuild_info_;
+  ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
 };
 
 }  // namespace storage
