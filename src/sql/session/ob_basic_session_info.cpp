@@ -2809,6 +2809,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_tx_read_only(int_val != 0));
       break;
     }
+    case SYS_VAR_OB_ENABLE_PL_CACHE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_ob_enable_pl_cache(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_PLAN_CACHE: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -5107,6 +5113,7 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_
       case SYS_VAR_AUTO_INCREMENT_OFFSET:
       case SYS_VAR_LAST_INSERT_ID:
       case SYS_VAR_TX_READ_ONLY:
+      case SYS_VAR_OB_ENABLE_PL_CACHE:
       case SYS_VAR_OB_ENABLE_PLAN_CACHE:
       case SYS_VAR_OB_ENABLE_SQL_AUDIT:
       case SYS_VAR_AUTOCOMMIT:
