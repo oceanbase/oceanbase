@@ -23,6 +23,7 @@ endif()
 
 set(BITCODE_TO_ELF_LIST "")
 
+# systemd define on package
 if (OB_BUILD_OPENSOURCE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh
