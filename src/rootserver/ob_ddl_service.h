@@ -1415,7 +1415,8 @@ private:
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
   int alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                           obrpc::ObAlterTableRes &res);
+                           obrpc::ObAlterTableRes &res,
+                           const uint64_t tenant_data_version);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
                                                bool &is_add_not_null_col,
                                                bool &need_modify) const;
@@ -1704,7 +1705,8 @@ private:
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                            obrpc::ObAlterTableRes &res);
+                                            obrpc::ObAlterTableRes &res,
+                                            const uint64_t tenant_data_version);
   int truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                               const share::schema::ObTableSchema &orig_table_schema,
                               common::ObIArray<share::schema::ObTableSchema> &table_schemas,
@@ -2002,6 +2004,11 @@ private:
                               ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
                                 ObMySQLTransaction &trans);
+  int build_rw_defense_for_table_(
+      const ObTableSchema &table_schema,
+      const int64_t new_data_table_schema_version,
+      const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
+      ObDDLSQLTransaction &trans);
 
 public:
   int check_parallel_ddl_conflict(

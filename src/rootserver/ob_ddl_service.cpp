@@ -10794,7 +10794,8 @@ int ObDDLService::check_enable_sys_table_ddl(const ObTableSchema &table_schema,
 
 // FIXME: this function should move to observer
 int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                                        obrpc::ObAlterTableRes &res)
+                                                        obrpc::ObAlterTableRes &res,
+                                                        const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -10847,7 +10848,7 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
                     LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg));;
                   }
                 } else {
-                  if (OB_FAIL(alter_table_in_trans(alter_table_arg, res))) {
+                  if (OB_FAIL(alter_table_in_trans(alter_table_arg, res, tenant_data_version))) {
                     LOG_WARN("refresh sess active time of temporary table failed", K(alter_table_arg), K(ret));
                   } else {
                     LOG_INFO("a temporary table just refreshed sess active time", K(alter_table_arg));
@@ -10892,7 +10893,8 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
 //fix me :Check whether the newly added index column covers the partition column --by rongxuan.lc
 // It can be repaired after the featrue that add index in alter_table statement
 int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                       obrpc::ObAlterTableRes &res)
+                                       obrpc::ObAlterTableRes &res,
+                                       const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
   ObDDLType &ddl_type = res.ddl_type_;
@@ -11030,6 +11032,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       }
 
       ObDDLSQLTransaction trans(schema_service_);
+      bool is_rename_and_need_table_lock =
+          alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME) && // is rename table;
+          orig_table_schema->is_user_table() && // only user table
+          (tenant_data_version >= DATA_VERSION_4_2_3_0);  // need table lock and rw defense;
       if (OB_FAIL(ret)) {
         //do nothing
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -11042,6 +11048,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                     orig_table_schema->get_table_id(),
                                                                     ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
+      } else if (is_rename_and_need_table_lock &&
+                 OB_FAIL(lock_table(trans, *orig_table_schema))) {
+        LOG_WARN("failed to get the table_lock of origin table schema for rename op", K(ret), KPC(orig_table_schema));
       } else {
         ObArray<ObTableSchema> global_idx_schema_array;
         //table columns
@@ -11066,15 +11075,26 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         if (0 == new_table_schema.get_autoinc_column_id()) {
           new_table_schema.set_auto_increment(1);
         }
-        if (OB_SUCC(ret) && OB_FAIL(ddl_operator.alter_table_options(
+        ObSArray<std::pair<uint64_t, int64_t>> idx_schema_versions;
+        if (OB_FAIL(ret)) {
+          // error occur
+        } else if (OB_FAIL(ddl_operator.alter_table_options(
                 schema_guard,
                 new_table_schema,
                 *orig_table_schema,
-                need_update_index_table,
+                (need_update_index_table || is_rename_and_need_table_lock),
                 trans,
-                &global_idx_schema_array))) {
+                &global_idx_schema_array,
+                &idx_schema_versions))) {
           ObString origin_table_name = alter_table_schema.get_origin_table_name();
           LOG_WARN("failed to alter table options,", K(origin_table_name), K(ret));
+        } else if (is_rename_and_need_table_lock &&
+            OB_FAIL(build_rw_defense_for_table_(
+                new_table_schema,
+                new_table_schema.get_schema_version(),
+                idx_schema_versions,
+                trans))) {
+          LOG_WARN("failed to add rw defense for table", K(ret), K(new_table_schema));
         }
         if (OB_SUCC(ret) && !alter_table_schema.alter_option_bitset_.is_empty()) {
           if (OB_FAIL(ObDDLLock::lock_for_common_ddl_in_trans(*orig_table_schema, trans))) {
@@ -12205,6 +12225,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         }
       }
       if (OB_SUCC(ret)) {
+        DEBUG_SYNC(RENAME_TABLE_BEFORE_PUBLISH_SCHEMA);
         int tmp_ret = OB_SUCCESS;
         if (OB_FAIL(publish_schema(tenant_id))) {
           LOG_WARN("publish_schema failed", K(ret));
@@ -13862,15 +13883,16 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       uint64_t data_version = 0;
       bool is_oracle_mode_add_column_not_null_ddl = false;
       bool is_default_value_null = false;
-      if (is_alter_sess_active_time) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id), K(data_version));
+      } else if (is_alter_sess_active_time) {
         if (OB_FAIL(alter_table_sess_active_time_in_trans(alter_table_arg,
-                                                          res))) {
+                                                          res,
+                                                          data_version))) {
           LOG_WARN("alter_table_in_trans failed", K(ret));
         } else {
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-        LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id), K(data_version));
       } else if (DATA_VERSION_4_2_1_2 <= data_version
                  && OB_FAIL(check_is_oracle_mode_add_column_not_null_ddl(alter_table_arg,
                                                                          schema_guard,
@@ -13894,7 +13916,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg), K(ddl_type));
           }
         } else {
-          if (OB_FAIL(alter_table_in_trans(alter_table_arg, res))) {
+          if (OB_FAIL(alter_table_in_trans(alter_table_arg, res, data_version))) {
             LOG_WARN("alter_table_in_trans failed", K(ret));
           }
         }
@@ -13992,12 +14014,15 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
         }
       }
       ObDDLSQLTransaction trans(schema_service_);
+      uint64_t tenant_data_version = OB_INVALID_VERSION;
       int64_t refreshed_schema_version = 0;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+        LOG_WARN("fail to get data version", K(ret), K(tenant_id), K(tenant_data_version));
       } else {
         //todo use array to replace hashmap and hashset @hualong
         //record table already be renamed in the schema mgr
@@ -14221,7 +14246,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
             if (OB_SUCC(ret)) {
               ObSqlString sql;
               if (!is_oracle_mode) {
-                if (OB_FAIL(sql.append_fmt("RENAME TABLE %.*s.%.*s TO %.*s.%.*s",
+                if (OB_FAIL(sql.append_fmt("RENAME TABLE `%.*s`.`%.*s` TO `%.*s`.`%.*s`",
                             rename_item.origin_db_name_.length(),
                             rename_item.origin_db_name_.ptr(),
                             rename_item.origin_table_name_.length(),
@@ -14233,7 +14258,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                   LOG_WARN("failed to append sql", K(ret));
                 }
               } else { // oracle mode
-                if (OB_FAIL(sql.append_fmt("RENAME %.*s TO %.*s",
+                if (OB_FAIL(sql.append_fmt("RENAME \"%.*s\" TO \"%.*s\"",
                             rename_item.origin_table_name_.length(),
                             rename_item.origin_table_name_.ptr(),
                             rename_item.new_table_name_.length(),
@@ -14252,8 +14277,22 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                   }
                 }
               }
+
+              // example case : create sequence s1; rename s1 to s3;
+              bool need_table_lock_and_defense = false; // need table lock and rw defense
+              if (OB_FAIL(ret) || nullptr == from_table_schema) {
+                 // OB_FAIL(ret) : error occur
+                 // OB_SUCC(ret) but nullptr == from_table_schema : oracle mode rename A to B
+              } else if (OB_FALSE_IT(need_table_lock_and_defense = from_table_schema->is_user_table() && (tenant_data_version >= DATA_VERSION_4_2_3_0))) {
+              } else if (need_table_lock_and_defense &&
+                         OB_FAIL(lock_table(trans, *from_table_schema))) {
+                LOG_WARN("lock table failed", K(ret), K(from_table_schema->get_table_id()));
+              }
+
               if (OB_SUCC(ret) && !is_oracle_mode) {
                 ObString rename_sql = sql.string();
+                ObSArray<std::pair<uint64_t, int64_t>> idx_schema_versions;
+                int64_t new_table_schema_version = 0;
                 if (database_schema->is_in_recyclebin()) {
                   ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
                   LOG_WARN("can not rename table in recyclebin", K(ret), K(to_table_item), K(tenant_id));
@@ -14262,8 +14301,17 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                                                              database_schema->get_database_id(),
                                                              need_reset_object_status,
                                                              trans,
-                                                             &rename_sql))) {
+                                                             &rename_sql,
+                                                             new_table_schema_version,
+                                                             idx_schema_versions))) {
                   LOG_WARN("failed to rename table!", K(rename_item), K(table_id), K(ret));
+                } else if (need_table_lock_and_defense &&
+                           OB_FAIL(build_rw_defense_for_table_(
+                              *from_table_schema,
+                              new_table_schema_version,
+                              idx_schema_versions,
+                              trans))) {
+                  LOG_WARN("fail to build rw defense for table", K(ret), K(new_table_schema_version), KPC(from_table_schema), KPC(database_schema));
                 } else if (OB_FAIL(rebuild_trigger_package(schema_guard,
                                                            tenant_id,
                                                            from_table_schema->get_trigger_list(),
@@ -14293,6 +14341,8 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
               }
               if (OB_SUCC(ret) && is_oracle_mode) {
                 ObString rename_sql = sql.string();
+                ObSArray<std::pair<uint64_t, int64_t>> idx_schema_versions;
+                int64_t new_table_schema_version = 0;
                 if (database_schema->is_in_recyclebin()) {
                   ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
                   LOG_WARN("can not rename table in recyclebin", K(ret), K(to_table_item), K(tenant_id));
@@ -14303,8 +14353,17 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                                                           database_schema->get_database_id(),
                                                           false,/*oracle mode can not rename multiple table*/
                                                           trans,
-                                                          &rename_sql))) {
+                                                          &rename_sql,
+                                                          new_table_schema_version,
+                                                          idx_schema_versions))) {
                       LOG_WARN("failed to rename table!", K(ret), K(rename_item), K(table_id));
+                    } else if (need_table_lock_and_defense &&
+                              OB_FAIL(build_rw_defense_for_table_(
+                                  *from_table_schema,
+                                  new_table_schema_version,
+                                  idx_schema_versions,
+                                  trans))) {
+                      LOG_WARN("fail to build rw defense for table", K(ret), K(new_table_schema_version), KPC(from_table_schema), KPC(database_schema));
                     } else if (OB_FAIL(rebuild_trigger_package(schema_guard,
                                                                tenant_id,
                                                                from_table_schema->get_trigger_list(),
@@ -14424,12 +14483,81 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
       }
       //refresh table schema
       if (OB_SUCC(ret)) {
+        DEBUG_SYNC(RENAME_TABLE_BEFORE_PUBLISH_SCHEMA);
         if (OB_FAIL(publish_schema(tenant_id))) {
           LOG_WARN("refresh_schema failed", K(ret));
         }
       }
     } // get_schema_guard
   } // ddl_operator
+  return ret;
+}
+
+/*
+ * Emphasize: Build read and write defense by new_schema_version through registing mds.
+ * This function is design for building rw defense during renaming table,
+ * table_schema may be an origin_table_schema, please be careful when using this interface.
+ * (An origin_table_schema has no updated tablet info compared to a new table schema, e.g. tablet split)
+*/
+int ObDDLService::build_rw_defense_for_table_(
+      const ObTableSchema &table_schema,
+      const int64_t new_data_table_schema_version,
+      const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions, // pair: table_id, schema_version
+      ObDDLSQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (!table_schema.is_valid() ||
+      OB_INVALID_SCHEMA_VERSION == new_data_table_schema_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is invalid", K(ret), K(table_schema), K(new_data_table_schema_version), K(aux_schema_versions));
+  } else {
+    for (int64_t i = 0; i < aux_schema_versions.count(); ++i) {
+      if (OB_INVALID_ID == aux_schema_versions.at(i).first ||
+          OB_INVALID_SCHEMA_VERSION == aux_schema_versions.at(i).second) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("argument is in-valid", K(ret), K(aux_schema_versions));
+      }
+    }
+  }
+
+  ObSchemaGetterGuard schema_guard;
+  ObArray<ObTabletID> tablet_ids;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  ObSchemaService *schema_service = nullptr;
+
+  if (OB_FAIL(ret)) {
+    // error occur
+  } else if (!table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("do not support add rw defense for non-user_table during rename table operations", K(ret), K(table_schema));
+  } else if (OB_ISNULL(schema_service = schema_service_->get_schema_service())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema sql service must not be null", K(schema_service), K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+    LOG_WARN("failed to get tablet_ids", K(ret), K(table_schema));
+  } else if (OB_FAIL(build_single_table_rw_defensive(tenant_id, tablet_ids, new_data_table_schema_version, trans))) {
+    LOG_WARN("failed to build defense ", K(ret), K(table_schema), K(tablet_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aux_schema_versions.count(); ++i) {
+      tablet_ids.reuse();
+      const ObTableSchema *aux_table_schema = NULL;
+      const uint64_t table_id = aux_schema_versions.at(i).first;
+      const int64_t schema_version = aux_schema_versions.at(i).second;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, aux_table_schema))) {
+        LOG_WARN("get_table_schema failed", K(ret), K(tenant_id), K(table_id));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(ret));
+      } else if (OB_FAIL(aux_table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("failed to get tablet_ids", K(ret), KPC(aux_table_schema));
+      } else if (OB_FAIL(build_single_table_rw_defensive(tenant_id, tablet_ids, schema_version, trans))) {
+        LOG_WARN("failed to build defense ", K(ret), KPC(aux_table_schema), K(i), K(schema_version));
+      }
+    }
+  }
   return ret;
 }
 

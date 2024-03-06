@@ -368,9 +368,10 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObTableSchema &table_schema,
-      const bool update_index_table,
+      const bool need_update_aux_table,
       common::ObMySQLTransaction &trans,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL,
+      common::ObIArray<std::pair<uint64_t, int64_t>> *idx_schema_versions = NULL);
 
   virtual int update_aux_table(
       const share::schema::ObTableSchema &table_schema,
@@ -378,7 +379,9 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableType table_type,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      bool &has_aux_table_updated,
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL,
+      common::ObIArray<std::pair<uint64_t, int64_t>> *idx_schema_versions = NULL);
 
   virtual int update_table_attribute(share::schema::ObTableSchema &new_table_schema,
                                      common::ObMySQLTransaction &trans,
@@ -509,12 +512,15 @@ public:
                            const uint64_t new_db_id,
                            const bool need_reset_object_status,
                            common::ObMySQLTransaction &trans,
-                           const common::ObString *ddl_stmt_str);
+                           const common::ObString *ddl_stmt_str,
+                           int64_t &new_data_table_schema_version /*OUTPUT*/,
+                           ObIArray<std::pair<uint64_t, int64_t>> &idx_schema_versions /*OUTPUT*/);
   virtual int rename_aux_table(const ObTableSchema &new_table_schema,
                                const uint64_t table_id,
                                ObSchemaGetterGuard &schema_guard,
                                ObMySQLTransaction &trans,
-                               ObTableSchema &new_aux_table_schema);
+                               ObTableSchema &new_aux_table_schema,
+                               bool &has_aux_table_updated);
   virtual int update_index_status(
               const uint64_t tenant_id,
               const uint64_t data_table_id,

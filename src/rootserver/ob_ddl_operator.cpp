@@ -3624,9 +3624,10 @@ int ObDDLOperator::alter_table_options(
     ObSchemaGetterGuard &schema_guard,
     ObTableSchema &new_table_schema,
     const ObTableSchema &table_schema,
-    const bool update_index_table,
+    const bool need_update_aux_table,
     ObMySQLTransaction &trans,
-    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
+    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/,
+    common::ObIArray<std::pair<uint64_t, int64_t>> *idx_schema_versions /*=NULL*/) // pair : <table_id, schema_version>
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -3646,45 +3647,77 @@ int ObDDLOperator::alter_table_options(
         new_table_schema,
         OB_DDL_ALTER_TABLE))) {
       RS_LOG(WARN, "failed to alter table option!", K(ret));
-    } else if (update_index_table) {
+    } else if (need_update_aux_table) {
+      bool has_aux_table_updated = false;
+      if (nullptr != idx_schema_versions) {
+        idx_schema_versions->reset();
+      }
       if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
           schema_guard,
           trans,
           USER_INDEX,
-          global_idx_schema_array))) {
+          has_aux_table_updated,
+          global_idx_schema_array,
+          idx_schema_versions))) {
         RS_LOG(WARN, "failed to update_index_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
           schema_guard,
           trans,
-          AUX_VERTIAL_PARTITION_TABLE))) {
+          AUX_VERTIAL_PARTITION_TABLE,
+          has_aux_table_updated,
+          NULL,
+          idx_schema_versions))) {
         RS_LOG(WARN, "failed to update_aux_vp_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
           schema_guard,
           trans,
-          AUX_LOB_META))) {
+          AUX_LOB_META,
+          has_aux_table_updated,
+          NULL,
+          idx_schema_versions))) {
         RS_LOG(WARN, "failed to update_aux_vp_table!", K(ret), K(table_schema), K(new_table_schema));
       } else if (OB_FAIL(update_aux_table(table_schema,
           new_table_schema,
           schema_guard,
           trans,
-          AUX_LOB_PIECE))) {
+          AUX_LOB_PIECE,
+          has_aux_table_updated,
+          NULL,
+          idx_schema_versions))) {
         RS_LOG(WARN, "failed to update_aux_vp_table!", K(ret), K(table_schema), K(new_table_schema));
       }
-    }
+      if (OB_SUCC(ret) && has_aux_table_updated) {
+        // update data table schema version
+        if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(trans, tenant_id,
+                    new_table_schema.get_table_id(), table_schema.get_in_offline_ddl_white_list(), new_schema_version))) {
+          LOG_WARN("update data table schema version failed", K(ret));
+        } else {
+          new_table_schema.set_schema_version(new_schema_version);
+        }
+      }
+    } // need_update_aux_table
   }
   return ret;
 }
-
+/*
+ * the input value of has_aux_table_updated maybe true or false.
+ * has_aux_table_updated represents that if any aux_table updated schema version,
+ * aux_table including index table(s), lob meta table, lob piece table.
+*/
 int ObDDLOperator::update_aux_table(
     const ObTableSchema &table_schema,
     const ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
     ObMySQLTransaction &trans,
     const ObTableType table_type,
-    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
+    bool &has_aux_table_updated, /*OUTPUT*/
+    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/,
+    common::ObIArray<std::pair<uint64_t, int64_t>> *idx_schema_versions /*=NULL*/) // pair : <table_id, schema_version>
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -3816,14 +3849,17 @@ int ObDDLOperator::update_aux_table(
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else {
+          has_aux_table_updated = true;
           new_aux_table_schema.set_schema_version(new_schema_version);
-          if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
+          if (OB_FAIL(schema_service->get_table_sql_service().only_update_table_options(
                   trans,
-                  *aux_table_schema,
                   new_aux_table_schema,
                   OB_DDL_ALTER_TABLE))) {
             RS_LOG(WARN, "schema service update_table_options failed",
                 K(*aux_table_schema), K(ret));
+          } else if ((nullptr != idx_schema_versions) &&
+              OB_FAIL(idx_schema_versions->push_back(std::make_pair(new_aux_table_schema.get_table_id(), new_schema_version)))) {
+            RS_LOG(WARN, "fail to push_back array", K(ret), KPC(idx_schema_versions), K(new_schema_version));
           }
         }
       }
@@ -3837,11 +3873,14 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
                                 const uint64_t new_db_id,
                                 const bool need_reset_object_status,
                                 ObMySQLTransaction &trans,
-                                const ObString *ddl_stmt_str)
+                                const ObString *ddl_stmt_str,
+                                int64_t &new_data_table_schema_version /*OUTPUT*/,
+                                ObIArray<std::pair<uint64_t, int64_t>> &idx_schema_versions /*OUTPUT*/) // pair : table_id, schema_version
 {
   int ret = OB_SUCCESS;
+  idx_schema_versions.reset();
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  int64_t new_schema_version = OB_INVALID_VERSION;
+  new_data_table_schema_version = OB_INVALID_VERSION;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
@@ -3853,15 +3892,14 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
     LOG_WARN("not allow rename for depend table", K(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     RS_LOG(WARN, "get schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_data_table_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else {
-    bool update_aux_table = false;
     ObTableSchema new_table_schema;
     if (OB_FAIL(new_table_schema.assign(table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else {
-      new_table_schema.set_schema_version(new_schema_version);
+      new_table_schema.set_schema_version(new_data_table_schema_version);
     }
     if (need_reset_object_status) {
       new_table_schema.set_object_status(ObObjectStatus::INVALID);
@@ -3869,8 +3907,7 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(new_table_schema.set_table_name(new_table_name))) {
       RS_LOG(WARN, "failed to set new table name!", K(new_table_name), K(table_schema), K(ret));
-    } else if (new_db_id != table_schema.get_database_id()) {
-      update_aux_table = true;
+    } else {
       new_table_schema.set_database_id(new_db_id);
     }
 
@@ -3882,7 +3919,8 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
           OB_DDL_TABLE_RENAME,
           ddl_stmt_str))) {
         RS_LOG(WARN, "failed to alter table option!", K(ret));
-      } else if (update_aux_table) {
+      } else {
+        bool has_aux_table_updated = false;
         HEAP_VAR(ObTableSchema, new_aux_table_schema) {
           { // update index table
             ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -3894,8 +3932,11 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
                                              simple_index_infos.at(i).table_id_,
                                              schema_guard,
                                              trans,
-                                             new_aux_table_schema))) {
+                                             new_aux_table_schema,
+                                             has_aux_table_updated))) {
                   RS_LOG(WARN, "fail to rename update index table", K(ret));
+                } else if (OB_FAIL(idx_schema_versions.push_back(std::make_pair(new_aux_table_schema.get_table_id(), new_aux_table_schema.get_schema_version())))) {
+                  RS_LOG(WARN, "fail to push_back array", K(ret), K(idx_schema_versions), K(new_aux_table_schema.get_schema_version()));
                 }
               }
             }
@@ -3910,15 +3951,30 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
                                                 mtid,
                                                 schema_guard,
                                                 trans,
-                                                new_aux_table_schema))) {
+                                                new_aux_table_schema,
+                                                has_aux_table_updated))) {
               RS_LOG(WARN, "fail to rename update lob meta table", KR(ret), K(mtid));
+            } else if (OB_FAIL(idx_schema_versions.push_back(std::make_pair(new_aux_table_schema.get_table_id(), new_aux_table_schema.get_schema_version())))) {
+              RS_LOG(WARN, "fail to push_back array", K(ret), K(idx_schema_versions), K(new_aux_table_schema.get_schema_version()));
             } else if (OB_FAIL(rename_aux_table(new_table_schema,
                                                 ptid,
                                                 schema_guard,
                                                 trans,
-                                                new_aux_table_schema))) {
+                                                new_aux_table_schema,
+                                                has_aux_table_updated))) {
               RS_LOG(WARN, "fail to rename update lob piece table", KR(ret), K(ptid));
+            } else if (OB_FAIL(idx_schema_versions.push_back(std::make_pair(new_aux_table_schema.get_table_id(), new_aux_table_schema.get_schema_version())))) {
+              RS_LOG(WARN, "fail to push_back array", K(ret), K(idx_schema_versions), K(new_aux_table_schema.get_schema_version()));
             }
+          }
+        }
+        if (OB_SUCC(ret) && has_aux_table_updated) {
+          // update data table schema version
+          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_data_table_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(trans, tenant_id,
+                      new_table_schema.get_table_id(), table_schema.get_in_offline_ddl_white_list(), new_data_table_schema_version))) {
+            LOG_WARN("update data table schema version failed", K(ret));
           }
         }
       }
@@ -3927,12 +3983,18 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
   return ret;
 }
 
+/*
+ * the input value of has_aux_table_updated maybe true or false.
+ * has_aux_table_updated represents that if any aux_table updated schema version,
+ * aux_table including index table(s), lob meta table, lob piece table.
+*/
 int ObDDLOperator::rename_aux_table(
     const ObTableSchema &new_table_schema,
     const uint64_t table_id,
     ObSchemaGetterGuard &schema_guard,
     ObMySQLTransaction &trans,
-    ObTableSchema &new_aux_table_schema)
+    ObTableSchema &new_aux_table_schema,
+    bool &has_aux_table_updated /*OUTPUT*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
@@ -3960,10 +4022,10 @@ int ObDDLOperator::rename_aux_table(
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
       LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
     } else {
+      has_aux_table_updated = true;
       new_aux_table_schema.set_schema_version(new_schema_version);
-      if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
+      if (OB_FAIL(schema_service->get_table_sql_service().only_update_table_options(
               trans,
-              *aux_table_schema,
               new_aux_table_schema,
               OB_DDL_TABLE_RENAME))) {
         RS_LOG(WARN, "schema service update_table_options failed",

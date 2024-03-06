@@ -217,6 +217,7 @@ int ObServerSchemaUpdater::batch_process_tasks(
   } else if (OB_FAIL(tasks.assign(batch_tasks))) {
     LOG_WARN("fail to assign task", KR(ret), "task_cnt", batch_tasks.count());
   } else {
+    DEBUG_SYNC(BEFORE_SET_NEW_SCHEMA_VERSION);
     std::sort(tasks.begin(), tasks.end(), ObServerSchemaTask::greator_than);
     ObServerSchemaTask::TYPE type = tasks.at(0).type_;
     if ((ObServerSchemaTask::REFRESH == type || ObServerSchemaTask::RELEASE == type)
