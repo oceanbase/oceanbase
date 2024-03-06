@@ -128,6 +128,7 @@ private:
   int advance_status_(ObMySQLTransaction &trans, const share::ObBackupStatus &next_status, const int result = OB_SUCCESS,
       const share::SCN &scn = share::SCN::min_scn(), const int64_t end_ts = 0);
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
+  int get_backup_end_scn_(share::SCN &end_scn) const;
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

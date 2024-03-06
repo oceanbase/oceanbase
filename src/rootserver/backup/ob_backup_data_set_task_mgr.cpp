@@ -1072,6 +1072,40 @@ int ObBackupSetTaskMgr::backup_data_()
   return ret;
 }
 
+int ObBackupSetTaskMgr::get_backup_end_scn_(share::SCN &end_scn) const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = job_attr_->tenant_id_;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObAllTenantInfo tenant_info;
+  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, false/*for update*/, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, tenant_id, false/*is backup start*/, end_scn))) {
+    LOG_WARN("failed to get end scn", K(ret), K(tenant_id));
+  } else if (tenant_info.is_standby() && end_scn > tenant_info.get_standby_scn()) {
+    // For standby tenant, make sure snapshot of end_scn is readable. Otherwise, we
+    // can not backup table list.
+    int64_t abs_timeout = ObTimeUtility::current_time() + 10 * 60 * 1000 * 1000;
+    while (OB_SUCC(ret)) {
+      sleep(1); // sleep 1s
+      if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, false/*for update*/, tenant_info))) {
+        LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+      } else if (!tenant_info.is_standby()) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("tenant is not standby", K(ret), K(tenant_info));
+      } else if (end_scn <= tenant_info.get_standby_scn()) {
+        break;
+      } else if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("failed to wait readable scn", K(ret), K(tenant_id));
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupSetTaskMgr::backup_data_finish_(
     const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
     const ObBackupLSTaskAttr &build_index_attr)
@@ -1079,8 +1113,8 @@ int ObBackupSetTaskMgr::backup_data_finish_(
   int ret = OB_SUCCESS;
   share::ObBackupStatus next_status;
   SCN end_scn = SCN::min_scn();
-  if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, false/*end scn*/, end_scn))) {
-    LOG_WARN("[DATA_BACKUP]failed to get end ts", K(ret), "tenant_id", job_attr_->tenant_id_);
+  if (OB_FAIL(get_backup_end_scn_(end_scn))) {
+    LOG_WARN("failed to get backup end scn", K(ret), K_(job_attr));
   } else if (ObBackupStatus::Status::BACKUP_DATA_MAJOR == set_task_attr_.status_.status_
              && OB_FAIL(write_table_list_(end_scn))) {
     LOG_WARN("[DATA_BACKUP] fail to write table list", K(ret), "tenant_id", job_attr_->tenant_id_);
