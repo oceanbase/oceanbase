@@ -162,7 +162,7 @@ int64_t ObFatalErrExtraInfoGuard::to_string(char* buf, const int64_t buf_len) co
   J_OBJ_END();
   return pos;
 }
-
+__thread bool ObBasicTimeGuard::tl_enable_time_guard = true;
 __thread ObBasicTimeGuard *ObBasicTimeGuard::tl_time_guard = NULL;
 int64_t ObBasicTimeGuard::to_string(char *buf, const int64_t buf_len) const
 {
