@@ -174,6 +174,11 @@ public:
   const ObDatumDesc &desc() const { return *this; };
 
   ObDatum() : ObDatumPtr(), ObDatumDesc() {}
+  ObDatum(const char *ptr, const uint32_t len, const bool null) {
+    ptr_ = ptr;
+    len_ = len;
+    null_ = null;
+  }
 
   inline void reset() { new (this) ObDatum(); }
   static bool binary_equal(const ObDatum &r, const ObDatum &l)

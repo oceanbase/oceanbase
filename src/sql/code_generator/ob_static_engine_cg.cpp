@@ -147,6 +147,7 @@
 #endif
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
+#include "share/ob_ddl_common.h"
 
 namespace oceanbase
 {
@@ -1861,6 +1862,40 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         spec.enable_encode_sortkey_opt_ = op.enable_encode_sortkey_opt();
         spec.part_cnt_ = op.get_part_cnt();
         LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
+      }
+      if (OB_SUCC(ret)) {
+        if (opt_ctx_->is_online_ddl()) {
+          int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+          // for normal sort we use default compress type. for online ddl, we use the compress type in source table
+          ObLogicalOperator *child_op = op.get_child(0);
+          ObCompressorType tmp_compr_type = NONE_COMPRESSOR;
+          while(OB_SUCC(ret) && OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
+            child_op = child_op->get_child(0);
+            if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
+              share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
+              const share::schema::ObTableSchema *table_schema = nullptr;
+              uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
+              if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to get schema guard", K(ret));
+              } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+                LOG_WARN("fail to get table schema", K(ret));
+              } else if (OB_ISNULL(table_schema)) {
+                ret = OB_TABLE_NOT_EXIST;
+                LOG_WARN("can't find table schema", K(ret), K(table_id));
+              } else {
+                tmp_compr_type = table_schema->get_compressor_type();
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(tmp_compr_type,
+                                                      op.get_parallel(),
+                                                      spec.compress_type_))) {
+              LOG_WARN("fail to get compress type", K(ret));
+            }
+          }
+        }
       }
       if (OB_SUCC(ret)) {
         if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()

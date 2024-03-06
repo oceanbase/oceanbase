@@ -163,6 +163,12 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_stat_collector_op.cpp
   engine/basic/ob_values_table_access_op.cpp
   engine/basic/ob_hp_infrastructure_manager.ipp
+  engine/basic/chunk_store/ob_compact_store.cpp
+  engine/basic/chunk_store/ob_store_row_convertor.cpp
+  engine/basic/chunk_store/ob_chunk_block_compressor.cpp
+  engine/basic/ob_temp_block_store.cpp
+  engine/basic/ob_temp_row_store.cpp
+  engine/basic/ob_compact_row.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd

@@ -576,7 +576,8 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
     io_event_observer_(nullptr), buckets_(NULL), max_bucket_cnt_(0), part_hash_nodes_(NULL),
     max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX), outputted_rows_cnt_(0),
     is_fetch_with_ties_(false), topn_heap_(NULL), ties_array_pos_(0), ties_array_(),
-    last_ties_row_(NULL), rows_(NULL)
+    last_ties_row_(NULL), rows_(NULL), sort_exprs_(nullptr),
+    compress_type_(NONE_COMPRESSOR)
 {
 }
 
@@ -599,7 +600,9 @@ int ObSortOpImpl::init(
   const int64_t part_cnt /* = 0 */,
   const int64_t topn_cnt /* = INT64_MAX */,
   const bool is_fetch_with_ties /* = false */,
-  const int64_t default_block_size /* = 64KB */)
+  const int64_t default_block_size /* = 64KB */,
+  const ObCompressorType compress_type /* = NONE_COMPRESS */,
+  const ExprFixedArray *exprs /* =nullptr */)
 {
   int ret = OB_SUCCESS;
   if (is_inited()) {
@@ -627,6 +630,8 @@ int ObSortOpImpl::init(
     exec_ctx_ = exec_ctx;
     part_cnt_ = part_cnt;
     topn_cnt_ = topn_cnt;
+    compress_type_ = compress_type;
+    sort_exprs_ = exprs;
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = is_fetch_with_ties;
     int64_t batch_size = eval_ctx_->max_batch_size_;
@@ -696,6 +701,8 @@ void ObSortOpImpl::reuse()
 {
   sorted_ = false;
   iter_.reset();
+  default_blk_holder_.release();
+  compact_blk_holder_.release();
   quick_sort_array_.reuse();
   datum_store_.reset();
   inmem_row_size_ = 0;
@@ -767,6 +774,8 @@ void ObSortOpImpl::reset()
   is_fetch_with_ties_ = false;
   rows_ = NULL;
   ties_array_pos_ = 0;
+  compress_type_ = NONE_COMPRESSOR;
+  sort_exprs_ = nullptr;
   if (0 != ties_array_.count()) {
     for (int64_t i = 0; i < ties_array_.count(); ++i) {
       mem_context_->get_malloc_allocator().free(ties_array_[i]);
@@ -830,12 +839,13 @@ int ObSortOpImpl::build_chunk(const int64_t level, Input &input, int64_t extra_s
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(chunk = OB_NEWx(ObSortOpChunk,
-      (&mem_context_->get_malloc_allocator()), level))) {
+      (&mem_context_->get_malloc_allocator()), level,  use_compact_store()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else if (OB_FAIL(chunk->datum_store_.init(1/*+ mem limit, small limit for dump immediately */,
                         tenant_id_, ObCtxIds::WORK_AREA, ObModIds::OB_SQL_SORT_ROW,
-                        true/*+ enable dump */, extra_size/* for InMemoryTopnSort */))) {
+                        true/*+ enable dump */, extra_size/* for InMemoryTopnSort */, true,
+                        compress_type_, sort_exprs_))) {
     LOG_WARN("init row store failed", K(ret));
   } else {
     chunk->datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -845,14 +855,14 @@ int ObSortOpImpl::build_chunk(const int64_t level, Input &input, int64_t extra_s
     while (OB_SUCC(ret)) {
       if (!is_fetch_with_ties_ && stored_row_cnt >= topn_cnt_) {
         break;
-      } else if (OB_FAIL(input(datum_store, src_store_row))) {
+      } else if (OB_FAIL(input(src_store_row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get input row failed", K(ret));
         } else {
           ret = OB_SUCCESS;
         }
         break;
-      } else if (OB_FAIL(chunk->datum_store_.add_row(*src_store_row, &dst_store_row))) {
+      } else if (OB_FAIL(chunk->datum_store_.add_row(*src_store_row))) {
         LOG_WARN("copy row to row store failed");
       } else {
         stored_row_cnt++;
@@ -1410,18 +1420,16 @@ int ObSortOpImpl::do_dump()
     if (!need_imms()) {
       int64_t row_pos = 0;
       int64_t ties_array_pos = 0;
-      auto input = [&](ObChunkDatumStore *&rs, const ObChunkDatumStore::StoredRow *&row) {
+      auto input = [&](const ObChunkDatumStore::StoredRow *&row) {
         int ret = OB_SUCCESS;
         if (row_pos >= rows_->count()
             && ties_array_pos >= ties_array_.count()) {
           ret = OB_ITER_END;
         } else if (row_pos < rows_->count()) {
           row = rows_->at(row_pos);
-          rs = &datum_store_;
           row_pos += 1;
         } else {
           row = ties_array_.at(ties_array_pos);
-          rs = &datum_store_;
           ties_array_pos += 1;
         }
         return ret;
@@ -1430,14 +1438,12 @@ int ObSortOpImpl::do_dump()
         LOG_WARN("build chunk failed", K(ret));
       }
     } else {
-      auto input = [&](ObChunkDatumStore *&rs, const ObChunkDatumStore::StoredRow *&row) {
+      auto input = [&](const ObChunkDatumStore::StoredRow *&row) {
         int ret = OB_SUCCESS;
         if (OB_FAIL(imms_heap_next(row))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("get row from memory heap failed", K(ret));
           }
-        } else {
-          rs = &datum_store_;
         }
         return ret;
       };
@@ -1548,10 +1554,8 @@ int ObSortOpImpl::build_ems_heap(int64_t &merge_ways)
     if (OB_SUCC(ret)) {
       ObSortOpChunk *chunk = sort_chunks_.get_first();
       for (int64_t i = 0; i < merge_ways && OB_SUCC(ret); i++) {
-        chunk->iter_.reset();
-        if (OB_FAIL(chunk->iter_.init(&chunk->datum_store_))) {
-          LOG_WARN("init iterator failed", K(ret));
-        } else if (OB_FAIL(chunk->iter_.get_next_row(chunk->row_))
+        chunk->datum_store_.reset();
+        if (OB_FAIL(chunk->datum_store_.get_next_row(chunk->row_))
             || NULL == chunk->row_) {
           if (OB_ITER_END == ret || OB_SUCCESS == ret) {
             ret = OB_ERR_UNEXPECTED;
@@ -1617,7 +1621,7 @@ int ObSortOpImpl::ems_heap_next(ObSortOpChunk *&chunk)
 {
   const auto f = [](ObSortOpChunk *&c, bool &is_end) {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(c->iter_.get_next_row(c->row_))) {
+    if (OB_FAIL(c->datum_store_.get_next_row(c->row_))) {
       if (OB_ITER_END == ret) {
         is_end = true;
         ret = OB_SUCCESS;
@@ -1766,8 +1770,12 @@ int ObSortOpImpl::sort()
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (sort_chunks_.get_size() >= 2) {
-    blk_holder_.release();
-    set_blk_holder(nullptr);
+    if (use_compact_store()) {
+      compact_blk_holder_.release();
+    } else {
+      default_blk_holder_.release();
+    }
+    set_blk_holder(nullptr, nullptr);
     // do merge sort
     int64_t ways = 0;
     while (OB_SUCC(ret)) {
@@ -1778,7 +1786,7 @@ int ObSortOpImpl::sort()
         if (ways == sort_chunks_.get_size()) {
           break;
         }
-        auto input = [&](ObChunkDatumStore *&rs, const ObChunkDatumStore::StoredRow *&row) {
+        auto input = [&](const ObChunkDatumStore::StoredRow *&row) {
           int ret = OB_SUCCESS;
           ObSortOpChunk *chunk = NULL;
           if (OB_FAIL(ems_heap_next(chunk))) {
@@ -1789,7 +1797,6 @@ int ObSortOpImpl::sort()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get chunk from heap is NULL", K(ret));
           } else {
-            rs = &chunk->datum_store_;
             row = chunk->row_;
           }
           return ret;
@@ -1811,7 +1818,7 @@ int ObSortOpImpl::sort()
     }
 
     if (OB_SUCC(ret)) {
-      set_blk_holder(&blk_holder_);
+      set_blk_holder(&compact_blk_holder_, &default_blk_holder_);
       next_stored_row_func_ = &ObSortOpImpl::ems_heap_next_stored_row;
     }
   }
@@ -1888,7 +1895,11 @@ int ObSortOpImpl::get_next_batch_stored_rows(int64_t max_cnt, int64_t &read_rows
     LOG_WARN("get next batch failed", K(ret));
   } else {
     read_rows = 0;
-    blk_holder_.release();
+    if (use_compact_store()) {
+      compact_blk_holder_.release();
+    } else {
+      default_blk_holder_.release();
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < max_cnt; i++) {
       const ObChunkDatumStore::StoredRow *sr = NULL;
       if (OB_FAIL((this->*next_stored_row_func_)(sr))) {
@@ -1903,6 +1914,10 @@ int ObSortOpImpl::get_next_batch_stored_rows(int64_t max_cnt, int64_t &read_rows
         }
       } else {
         stored_rows_[read_rows++] = const_cast<ObChunkDatumStore::StoredRow *>(sr);
+        if (use_compact_store()) {
+          // can't hold multi rows for get_batch, if we use compact/encoding
+          break;
+        }
       }
     }
     if (OB_ITER_END == ret && !need_rewind_) {
@@ -2323,10 +2338,11 @@ int ObSortOpImpl::adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_ro
   return ret;
 }
 
-void ObSortOpImpl::set_blk_holder(ObChunkDatumStore::IteratedBlockHolder *blk_holder)
+void ObSortOpImpl::set_blk_holder(ObTempBlockStore::BlockHolder *compact_blk_holder,
+                                  ObChunkDatumStore::IteratedBlockHolder *default_blk_holder)
 {
   DLIST_FOREACH_NORET(chunk, sort_chunks_) {
-    chunk->iter_.set_blk_holder_ptr(blk_holder);
+    chunk->datum_store_.set_blk_holder(compact_blk_holder, default_blk_holder);
   }
 }
 

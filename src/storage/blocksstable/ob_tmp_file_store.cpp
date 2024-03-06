@@ -801,7 +801,7 @@ int ObTmpTenantMacroBlockManager::get_macro_block(const int64_t block_id, ObTmpM
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(blocks_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret));
+    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret), K(block_id));
   }
   return ret;
 }

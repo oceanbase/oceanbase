@@ -350,7 +350,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_hints(nullptr/*do not use parallel hint in alter table*/,
+      if (OB_FAIL(resolve_hints(parse_tree.children_[ALTER_HINT],
           *alter_table_stmt, nullptr == index_schema_ ? *table_schema_ : *index_schema_))) {
         LOG_WARN("resolve hints failed", K(ret));
       }
