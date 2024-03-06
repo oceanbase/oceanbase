@@ -62,6 +62,11 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
           row.byte_len_ = 0;
           row.char_len_ = 0;
           row.seq_id_ = ObString();
+          // when get iter end, do deep copy for last scan result
+          int tmp_ret = cur_info_.deep_copy(*param_.allocator_, cur_info_);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("fail to do deep copy for cur info", K(tmp_ret), K(cur_info_));
+          }
         } else {
           LOG_WARN("failed to get next row.", K(ret));
         }
