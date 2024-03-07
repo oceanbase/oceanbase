@@ -8768,6 +8768,8 @@ CAST_FUNC_NAME(geometry, decimalint)
     } else {
       ObDecimalIntBuilder res_val;
       res_val.from((int32_t)0);
+      ObPrecision out_prec = expr.datum_meta_.precision_;
+      res_val.extend(wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec));
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
     }
   }

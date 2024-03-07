@@ -53,6 +53,10 @@ int ObExprAssign::calc_result_type2(ObExprResType &type,
     type.set_varchar();
     type.set_collation_level(common::CS_LEVEL_IMPLICIT);
     type.set_collation_type(common::CS_TYPE_BINARY);
+  } else if (ob_is_enum_or_set_type(value.get_type())) {
+    type.set_varchar();
+    type.set_collation_level(value.get_collation_level());
+    type.set_collation_type(value.get_collation_type());
   } else {
     type.set_type(val_type);
     type.set_collation_level(common::CS_LEVEL_IMPLICIT);
