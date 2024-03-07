@@ -316,4 +316,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObKillClientSessionP, gctx_);
   // client session create time
   RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
+
+  // ddl
+  RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 }
