@@ -287,8 +287,8 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
 
     tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
     tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1;
-    tree_value->header_.row_store_type_ = static_cast<uint8_t>(data_desc_.get_desc().get_row_store_type());
-    tree_value->header_.compressor_type_ = static_cast<uint8_t>(data_desc_.get_desc().get_compressor_type());
+    tree_value->header_.row_store_type_ = static_cast<uint8_t>(insert_meta->val_.row_store_type_);
+    tree_value->header_.compressor_type_ = static_cast<uint8_t>(insert_meta->val_.compressor_type_);
     tree_value->header_.is_data_index_ = true;
     tree_value->header_.is_data_block_ = false;
     tree_value->header_.is_leaf_block_ = true;
@@ -301,10 +301,10 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value->header_.block_size_ = insert_meta->val_.block_size_;
     tree_value->header_.macro_block_count_ = 1;
     tree_value->header_.micro_block_count_ = insert_meta->val_.micro_block_count_;
-    tree_value->header_.master_key_id_ = data_desc_.get_desc().get_master_key_id();
-    tree_value->header_.encrypt_id_ = data_desc_.get_desc().get_encrypt_id();
-    MEMCPY(tree_value->header_.encrypt_key_, data_desc_.get_desc().get_encrypt_key(), sizeof(tree_value->header_.encrypt_key_));
-    tree_value->header_.schema_version_ = data_desc_.get_desc().get_schema_version();
+    tree_value->header_.master_key_id_ = insert_meta->val_.master_key_id_;
+    tree_value->header_.encrypt_id_ = insert_meta->val_.encrypt_id_;
+    MEMCPY(tree_value->header_.encrypt_key_, insert_meta->val_.encrypt_key_, sizeof(tree_value->header_.encrypt_key_));
+    tree_value->header_.schema_version_ = insert_meta->val_.schema_version_;
     tree_value->header_.row_count_ = insert_meta->val_.row_count_;
     if (OB_UNLIKELY(!tree_value->header_.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
