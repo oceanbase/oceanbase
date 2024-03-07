@@ -91,7 +91,7 @@ struct DRUnitStatInfo
 public:
   DRUnitStatInfo() : unit_id_(common::OB_INVALID_ID),
                      in_pool_(false),
-                     unit_info_(),
+                     unit_(),
                      server_stat_(nullptr),
                      outside_replica_cnt_(0) {}
 public:
@@ -101,7 +101,7 @@ public:
   
   TO_STRING_KV(K_(unit_id),
                K_(in_pool),
-               K_(unit_info),
+               K_(unit),
                KPC_(server_stat));
   
   int assign(
@@ -110,20 +110,20 @@ public:
   int init(
       const uint64_t unit_id,
       const bool in_pool,
-      const share::ObUnitInfo &unit_info,
+      const share::ObUnit &unit,
       DRServerStatInfo *server_stat,
       const int64_t outside_replica_cnt);
 public:
   uint64_t get_unit_id() const { return unit_id_; }
   bool is_in_pool() const { return in_pool_; }
-  const share::ObUnitInfo &get_unit_info() const { return unit_info_; }
+  const share::ObUnit &get_unit() const { return unit_; }
   const DRServerStatInfo *get_server_stat() const { return server_stat_; }
   int64_t get_outside_replica_cnt() const { return outside_replica_cnt_; }
   void inc_outside_replica_cnt() { ++outside_replica_cnt_; }
 private:
   uint64_t unit_id_;
   bool in_pool_;
-  share::ObUnitInfo unit_info_;
+  share::ObUnit unit_;
   DRServerStatInfo *server_stat_;
   int64_t outside_replica_cnt_;
 };
@@ -139,12 +139,10 @@ class DRLSInfo
 {
 public:
   DRLSInfo(const uint64_t resource_tenant_id,
-           ObUnitManager *unit_mgr,
            ObZoneManager *zone_mgr,
            share::schema::ObMultiVersionSchemaService *schema_service)
     : resource_tenant_id_(resource_tenant_id),
       sys_schema_guard_(),
-      unit_mgr_(unit_mgr),
       zone_mgr_(zone_mgr),
       schema_service_(schema_service),
       unit_stat_info_map_("DRUnitStatMap"),
@@ -163,7 +161,7 @@ public:
       inited_(false) {}
   virtual ~DRLSInfo() {}
 public:
-  // use user_tenant_id to init unit_info and locality
+  // use user_tenant_id to init unit and locality
   int init();
   int build_disaster_ls_info(
       const share::ObLSInfo &ls_info,
@@ -241,7 +239,7 @@ private:
 private:
   uint64_t resource_tenant_id_;
   share::schema::ObSchemaGetterGuard sys_schema_guard_;
-  ObUnitManager *unit_mgr_;
+  share::ObUnitTableOperator unit_operator_;
   ObZoneManager *zone_mgr_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   UnitStatInfoMap unit_stat_info_map_;
