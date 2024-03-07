@@ -73,8 +73,8 @@ public:
   int release_memtable_and_mds_table_for_ls_offline();
   int get_min_mds_ckpt_scn(share::SCN &scn);
   ObLS *get_ls() const;
-  inline void set_tablet_space_usage(const ObTabletSpaceUsage &space_usage) { space_usage_ = space_usage; }
-  inline const ObTabletSpaceUsage &get_tablet_space_usage() const { return space_usage_; }
+  inline void set_simple_tablet_space_usage(const ObTabletSpaceUsage &space_usage) { space_usage_.init(space_usage); }
+  inline const ObTabletSimpleSpaceUsage &get_simple_tablet_space_usage() const { return space_usage_; }
 private:
   int wash_obj();
   int add_tablet_to_old_version_chain(ObTablet *tablet);
@@ -88,7 +88,7 @@ private:
   ObByteLock ddl_kv_mgr_lock_; // 1B
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
-  ObTabletSpaceUsage space_usage_; // 16B
+  ObTabletSimpleSpaceUsage space_usage_; // 16B
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 288B
 };
 

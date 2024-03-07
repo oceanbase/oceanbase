@@ -69,7 +69,7 @@ int ObMetaPointerMap<ObTabletMapKey, ObTablet>::compare_and_swap_addr_and_object
     if (OB_SUCC(ret)) {
       t_ptr->set_addr_with_reset_obj(new_tablet_handle.get_obj()->get_tablet_addr());
       t_ptr->set_obj(new_tablet_handle);
-      t_ptr->set_tablet_space_usage(new_tablet_handle.get_obj()->get_tablet_meta().space_usage_);
+      t_ptr->set_simple_tablet_space_usage(new_tablet_handle.get_obj()->get_tablet_meta().space_usage_);
     }
   }
 
@@ -162,7 +162,7 @@ int ObMetaPointerMap<ObTabletMapKey, ObTablet>::load_and_hook_meta_obj(
         } else {
           if (OB_FAIL(t_ptr->hook_obj(t, guard))) {
             STORAGE_LOG(WARN, "fail to hook object", K(ret), KP(t_ptr));
-          } else if (FALSE_IT(t_ptr->set_tablet_space_usage(t->get_tablet_meta().space_usage_))) {
+          } else if (FALSE_IT(t_ptr->set_simple_tablet_space_usage(t->get_tablet_meta().space_usage_))) {
           } else if (OB_FAIL(guard.get_obj()->assign_pointer_handle(ptr_hdl))) {
             STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret));
           }

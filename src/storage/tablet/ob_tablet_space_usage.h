@@ -1,4 +1,3 @@
-
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -20,40 +19,54 @@ namespace oceanbase
 {
 namespace storage
 {
-
-
-// used for record data size of a tablet
 struct ObTabletSpaceUsage final
 {
 public:
-  ObTabletSpaceUsage():occupy_bytes_(0), required_bytes_(0) {}
-  ObTabletSpaceUsage(int64_t occupy_bytes, int64_t required_bytes)
+  ObTabletSpaceUsage()
+    : shared_data_size_(0), data_size_(0), shared_meta_size_(0), meta_size_(0), occupy_bytes_(0)
   {
-    occupy_bytes_ = occupy_bytes;
-    required_bytes_ = required_bytes;
   }
+  bool is_valid() const;
   void reset()
   {
+    shared_data_size_ = 0;
+    data_size_ = 0;
+    shared_meta_size_ = 0;
+    meta_size_ = 0;
     occupy_bytes_ = 0;
-    required_bytes_ = 0;
   }
-  bool is_valid() const
-  {
-    return (OB_INVALID_SIZE != occupy_bytes_) && (OB_INVALID_SIZE != required_bytes_);
-  }
-  TO_STRING_KV(K_(occupy_bytes),
-               K_(required_bytes));
-  // serialize & deserialize
-  int serialize(char *buf, const int64_t len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t len, int64_t &pos);
-  int64_t get_serialize_size() const;
+  TO_STRING_KV(K_(shared_data_size), K_(data_size), K_(shared_meta_size), K_(meta_size), K_(occupy_bytes));
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+  int32_t get_serialize_size() const;
 public:
-  int64_t occupy_bytes_; // 8B
-  // required_bytes_ will be upgraded to the field data_size_ in 4.3
-  int64_t required_bytes_; // 8B
-}; // 16B
+  static const int32_t TABLET_SPACE_USAGE_INFO_VERSION = 1;
+public:
+  int64_t shared_data_size_; // compat from master, unused in branch 4_2_x_release 8B
+  int64_t data_size_; // required_size_ 8B
+  int64_t shared_meta_size_; // shared (meta block) size; compat from master, unused in branch 4_2_x_release 8B
+  int64_t meta_size_; // compat from master, unused in branch 4_2_x_release 8B
+  int64_t occupy_bytes_; // real data size 8B
+}; // 5*8=40;
 
-} // storage
-} // oceanbase
+struct ObTabletSimpleSpaceUsage final
+{
+public:
+  ObTabletSimpleSpaceUsage(): occupy_bytes_(0), required_bytes_(0) {}
+  ~ObTabletSimpleSpaceUsage() = default;
+  void init(const ObTabletSpaceUsage &space_usage) {
+    occupy_bytes_ = space_usage.occupy_bytes_;
+    required_bytes_ = space_usage.data_size_;
+  }
+
+  TO_STRING_KV(K_(occupy_bytes), K_(required_bytes));
+
+public:
+  int64_t occupy_bytes_;
+  int64_t required_bytes_;
+};
+
+}
+}
 
 #endif

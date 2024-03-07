@@ -208,10 +208,10 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           }
           break;
         case DATA_OCCUPIED:
-          cur_row_.cells_[i].set_int(tablet_pointer->get_tablet_space_usage().occupy_bytes_);
+          cur_row_.cells_[i].set_int(tablet_pointer->get_simple_tablet_space_usage().occupy_bytes_);
           break;
         case DATA_REQUIRED:
-          cur_row_.cells_[i].set_int(tablet_pointer->get_tablet_space_usage().required_bytes_);
+          cur_row_.cells_[i].set_int(tablet_pointer->get_simple_tablet_space_usage().required_bytes_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

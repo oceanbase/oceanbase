@@ -144,7 +144,7 @@ ObTablet::ObTablet()
     ddl_data_cache_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1592, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTablet) + sizeof(ObRowkeyReadInfo) == 1616, "The size of ObTablet will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -309,7 +309,7 @@ int ObTablet::calc_tablet_data_usage()
   }
   if (OB_SUCC(ret)) {
     tablet_meta_.space_usage_.occupy_bytes_ = occupy_bytes;
-    tablet_meta_.space_usage_.required_bytes_ = required_bytes;
+    tablet_meta_.space_usage_.data_size_ = required_bytes;
   }
   return ret;
 }

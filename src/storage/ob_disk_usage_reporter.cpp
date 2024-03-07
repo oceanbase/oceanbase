@@ -194,8 +194,8 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "failed to cast ptr to ObTabletPointer*", K(ret), K(pointer_handle));
     } else {
-      occupy_size += tablet_pointer->get_tablet_space_usage().occupy_bytes_;
-      required_size += tablet_pointer->get_tablet_space_usage().required_bytes_;
+      occupy_size += tablet_pointer->get_simple_tablet_space_usage().occupy_bytes_;
+      required_size += tablet_pointer->get_simple_tablet_space_usage().required_bytes_;
     }
     pointer_handle.reset();
   }
