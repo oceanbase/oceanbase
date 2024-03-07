@@ -258,6 +258,12 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
       refresh_temp_tables_sess_active_time();
     }
   }
+  if (OB_FAIL(ret)) {
+    package_state_map_.clear();
+    sequence_currval_map_.clear();
+    dblink_sequence_id_map_.clear();
+    contexts_map_.clear();
+  }
   return ret;
 }
 
