@@ -72,9 +72,9 @@ int ObTabletGCService::start()
   int ret = OB_SUCCESS;
   timer_for_tablet_change_.set_run_wrapper(MTL_CTX());
   timer_for_tablet_shell_.set_run_wrapper(MTL_CTX());
-  if (OB_FAIL(timer_for_tablet_change_.init())) {
+  if (OB_FAIL(timer_for_tablet_change_.init("TabletGC", ObMemAttr(MTL_ID(), "TabletGC")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
-  } else if (OB_FAIL(timer_for_tablet_shell_.init("TabletShellTimer", ObMemAttr(MTL_ID(), "TabShellTimer")))) {
+  } else if (OB_FAIL(timer_for_tablet_shell_.init("TabletShell", ObMemAttr(MTL_ID(), "TabletShell")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_change_task_, GC_CHECK_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));
@@ -378,8 +378,8 @@ int ObTabletGCHandler::check_tablet_need_persist_(
 
   if (OB_FAIL(ret)) {
   } else if (tablet->is_empty_shell()) {
-  } else if (OB_FAIL(tablet->get_mds_table_rec_log_scn(rec_scn))) {
-    STORAGE_LOG(WARN, "failed to get_mds_table_rec_log_scn", KR(ret), KPC(tablet));
+  } else if (OB_FAIL(tablet->get_mds_table_rec_scn(rec_scn))) {
+    STORAGE_LOG(WARN, "failed to get mds table rec scn", KR(ret), KPC(tablet));
   } else if (!rec_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "rec_scn is invalid", KR(ret), KPC(tablet));
@@ -401,13 +401,13 @@ int ObTabletGCHandler::check_tablet_need_gc_(
 {
   int ret = OB_SUCCESS;
   need_gc = TabletGCStatus::NOT_NEED_GC;
-  ObTablet *tablet = NULL;
-  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+  ObTablet *tablet = tablet_handle.get_obj();
+  if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tablet is NULL", KR(ret));
   // for tablet shell
   } else if (tablet->is_empty_shell()) {
-    SCN deleted_commit_scn = tablet->get_tablet_meta().mds_checkpoint_scn_;
+    const SCN deleted_commit_scn = tablet->get_tablet_meta().mds_checkpoint_scn_;
     if (!deleted_commit_scn.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "deleted_commit_scn is unvalid", KR(ret), KPC(tablet));
@@ -423,30 +423,53 @@ int ObTabletGCHandler::check_tablet_need_gc_(
     const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
     const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     ObTabletCreateDeleteMdsUserData data;
+    mds::MdsWriter writer;// will be removed later
+    mds::TwoPhaseCommitState trans_stat;// will be removed later
+    share::SCN trans_version;// will be removed later
     bool tablet_status_is_written = false;
-    bool is_finish = false;
     if (OB_FAIL(tablet->check_tablet_status_written(tablet_status_is_written))) {
       STORAGE_LOG(WARN, "failed to check mds written", KR(ret), KPC(tablet));
-    } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(data, is_finish))) {
+    } else if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_SUCCESS;
-        if (tablet_status_is_written) {
-          if (tablet->get_tablet_meta().has_transfer_table()) {
-            need_gc = TabletGCStatus::NEED_GC_IMMEDIATELY;
-          } else {
-            need_gc = TabletGCStatus::NEED_GC_AFTER_MDS_PERSIST;
-          }
-          STORAGE_LOG(INFO, "create tablet abort, need gc", K(ret), K(need_gc), K(ls_id), K(tablet_id), KP(tablet));
-        } else {
-          STORAGE_LOG(INFO, "tablet_status is not commit", K(ret), K(ls_id), K(tablet_id), KP(tablet));
+        if (!tablet_status_is_written) {
+          STORAGE_LOG(INFO, "tablet status has not been written", K(ret), K(ls_id), K(tablet_id), KP(tablet), K(need_gc));
+        } else if (OB_FAIL(check_tablet_from_aborted_tx(*tablet, need_gc))) {
+          STORAGE_LOG(WARN, "failed to check tablet from aborted tx", K(ret), K(ls_id), K(tablet_id));
         }
       } else {
         STORAGE_LOG(WARN, "failed to get CreateDeleteMdsUserData", KR(ret), KPC(tablet));
       }
-    } else if (!is_finish) {
+    } else if (trans_stat != mds::TwoPhaseCommitState::ON_COMMIT) {
       need_retry = true;
     }
   }
+  return ret;
+}
+
+int ObTabletGCHandler::check_tablet_from_aborted_tx(const ObTablet &tablet, TabletGCStatus &gc_status)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  share::SCN rec_scn;
+
+  if (tablet.get_tablet_meta().has_transfer_table()) {
+    gc_status = TabletGCStatus::NEED_GC_IMMEDIATELY;
+    STORAGE_LOG(INFO, "tablet has transfer table, should delete tablet instantly",
+        K(ret), K(ls_id), K(tablet_id), "transfer_info", tablet.get_tablet_meta().transfer_info_);
+  } else if (OB_FAIL(tablet.get_mds_table_rec_scn(rec_scn))) {
+    STORAGE_LOG(WARN, "failed to get mds table rec scn", K(ret), K(ls_id), K(tablet_id));
+  } else if (rec_scn.is_max()) {
+    gc_status = TabletGCStatus::NEED_GC_IMMEDIATELY;
+    STORAGE_LOG(INFO, "mds table rec scn is MAX, redo log has NOT been written, should delete tablet instantly",
+        K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(gc_status));
+  } else {
+    gc_status = TabletGCStatus::NOT_NEED_GC;
+    STORAGE_LOG(INFO, "mds table rec scn is NOT MAX, redo log has been written, try to convert to empty shell",
+        K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(gc_status));
+  }
+
   return ret;
 }
 
@@ -602,8 +625,8 @@ int ObTabletGCHandler::wait_unpersist_tablet_ids_flushed(const common::ObTabletI
       } else if (OB_ISNULL(tablet = handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet is NULL", KR(ret), K(i), KPC(this->ls_), K(unpersist_tablet_ids));
-      } else if (OB_FAIL(tablet->get_mds_table_rec_log_scn(rec_scn))) {
-        STORAGE_LOG(WARN, "fail to get rec log scn", KR(ret), K(handle));
+      } else if (OB_FAIL(tablet->get_mds_table_rec_scn(rec_scn))) {
+        STORAGE_LOG(WARN, "fail to get mds table rec scn", KR(ret), K(handle));
       }
 
       if (OB_FAIL(ret)) {
@@ -670,7 +693,6 @@ int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &delete
   return ret;
 }
 
-
 int ObTabletGCHandler::get_max_tablet_transfer_scn(
     const common::ObIArray<ObTabletHandle> &deleted_tablets,
     share::SCN &transfer_scn)
@@ -691,8 +713,7 @@ int ObTabletGCHandler::get_max_tablet_transfer_scn(
       if (OB_ISNULL(tablet)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is null", K(ret), K(i), "tablet_handle", deleted_tablets.at(i));
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(),
-          mds_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+      } else if (OB_FAIL(tablet->get_latest_committed(mds_data))) {
         if (OB_EMPTY_RESULT == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("create tablet abort, need gc", K(ret),

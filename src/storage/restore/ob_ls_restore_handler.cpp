@@ -2147,7 +2147,9 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
-    bool is_commited = false;
+    mds::MdsWriter writer;// will be removed later
+    mds::TwoPhaseCommitState trans_stat;// will be removed later
+    share::SCN trans_version;// will be removed later
     if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
@@ -2158,21 +2160,27 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
-    } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
-    } else if (tablet->is_empty_shell()) {
-      LOG_INFO("skip empty shell", "tablet_id", tablet->get_tablet_meta().tablet_id_);
-    } else if (!tablet->get_tablet_meta().has_transfer_table()) {
-    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, is_commited))) {
-      LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
-    } else if (!is_commited && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
-      LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
-                                                         restore_status,
-                                                         true/* need reset tranfser flag */))) {
-      LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
     } else {
-      LOG_INFO("update tablet restore status to EMPTY",
-               "tablet_meta", tablet->get_tablet_meta());
+      const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
+      const share::ObLSID &ls_id = tablet_meta.ls_id_;
+      const common::ObTabletID &tablet_id = tablet_meta.tablet_id_;
+      if (tablet_id.is_ls_inner_tablet()) {
+      } else if (tablet->is_empty_shell()) {
+        LOG_INFO("skip empty shell", K(ret), K(ls_id), K(tablet_id));
+      } else if (!tablet->get_tablet_meta().has_transfer_table()) {
+      } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
+        LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
+      } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
+          && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
+        LOG_INFO("skip tablet which transfer in not commit", K(ls_id), K(tablet_id), K(user_data));
+      } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+        LOG_INFO("skip tablet which restore status is not full", K(ls_id), K(tablet_id),
+            "ha_status", tablet_meta.ha_status_);
+      } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet_id, restore_status, true/*need_reset_transfer_flag*/))) {
+        LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
+      } else {
+        LOG_INFO("update tablet restore status to EMPTY", K(ret), K(tablet_meta));
+      }
     }
   }
 

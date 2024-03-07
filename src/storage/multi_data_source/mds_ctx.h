@@ -37,7 +37,8 @@ namespace storage
 namespace mds
 {
 class MdsTableHandle;
-class MdsCtx final : public BufferCtx
+
+class MdsCtx : public BufferCtx
 {
   friend class MdsNode;
   OB_UNIS_VERSION(1);
@@ -52,7 +53,7 @@ public:
   int assign(const MdsCtx &);
   void set_writer(const MdsWriter &writer);
   bool can_write() const;
-  TO_STRING_KV(K_(writer), K_(write_list), K(obj_to_string(state_)));
+  VIRTUAL_TO_STRING_KV(K_(writer), K_(write_list), K(obj_to_string(state_)));
   void record_written_node(ListNode<MdsNode> *node);
   virtual const MdsWriter get_writer() const override;
   virtual void before_prepare() override;

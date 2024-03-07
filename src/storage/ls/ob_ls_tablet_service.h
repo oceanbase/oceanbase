@@ -81,7 +81,6 @@ class ObTabletMapKey;
 struct ObStorageLogParam;
 struct ObTabletCreateSSTableParam;
 struct ObUpdateTableStoreParam;
-class ObTabletTxMultiSourceDataUnit;
 struct ObMigrationTabletParam;
 class ObTableScanRange;
 class ObTabletCreateDeleteMdsUserData;

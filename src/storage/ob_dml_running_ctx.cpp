@@ -192,13 +192,8 @@ int ObDMLRunningCtx::check_schema_version(
     LOG_WARN("table version mismatch", K(ret), K(table_id), K(table_version), K(table_schema->get_schema_version()));
   }
   if (OB_SUCC(ret)) {
-    const int64_t current_time = ObClockGenerator::getClock();
-    const int64_t timeout = dml_param_.timeout_ - current_time;
-    if (OB_UNLIKELY(timeout <= 0)) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("check schema version timeout", K(ret), K(current_time), "dml_param_timeout", dml_param_.timeout_);
-    } else if (OB_FAIL(tablet_handle.get_obj()->check_schema_version_with_cache(table_version, timeout))) {
-      LOG_WARN("failed to check schema version", K(ret), K(table_version), K(timeout));
+    if (OB_FAIL(tablet_handle.get_obj()->check_schema_version_with_cache(table_version))) {
+      LOG_WARN("failed to check schema version", K(ret), K(table_version));
     }
   }
   return ret;

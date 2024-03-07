@@ -178,6 +178,12 @@ int check_for_standby(const share::ObLSID &ls_id,
                       bool &can_read,
                       SCN &trans_version,
                       bool &is_determined_state);
+int mds_infer_standby_trx_state(const ObLS *ls_ptr,
+                                const ObLSID &ls_id,
+                                const ObTransID &tx_id,
+                                const SCN &snapshot,
+                                ObTxCommitData::TxDataState &tx_data_state,
+                                share::SCN &commit_version);
 void register_standby_cleanup_task();
 int do_standby_cleanup();
 void handle_defer_abort(ObTxDesc &tx);

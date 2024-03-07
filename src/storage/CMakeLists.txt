@@ -187,6 +187,7 @@ ob_set_subtarget(ob_storage backup
 ob_set_subtarget(ob_storage tablet
   tablet/ob_batch_create_tablet_pretty_arg.cpp
   tablet/ob_full_tablet_creator.cpp
+  tablet/ob_i_tablet_mds_customized_interface.cpp
   tablet/ob_tablet_binding_helper.cpp
   tablet/ob_tablet_binding_replay_executor.cpp
   tablet/ob_tablet_complex_addr.cpp
@@ -225,6 +226,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_obj_load_helper.cpp
   tablet/ob_tablet.cpp
   tablet/ob_tablet_medium_info_reader.cpp
+  tablet/ob_tablet_abort_transfer_mds_helper.cpp
 )
 
 ob_set_subtarget(ob_storage tx_wrs
@@ -476,6 +478,7 @@ ob_set_subtarget(ob_storage common
   ob_value_row_iterator.cpp
   ob_common_id_utils.cpp
   ob_tenant_tablet_stat_mgr.cpp
+  ob_storage_async_rpc.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -574,6 +577,9 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
+  multi_data_source/ob_start_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
 )
 

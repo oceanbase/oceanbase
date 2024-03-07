@@ -2259,7 +2259,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
   }
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
     if (OB_ISNULL(free_obj)) {
-      LOG_WARN("no object can be washed", K(ret), K(is_large),
+      FLOG_INFO("no object can be washed", K(ret), K(is_large),
           "tablet count", tablet_map_.count(), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_),
           K(time_guard), K(sizeof(ObTablet)), K(sizeof(ObTabletPointer)), K(lbt()));
     } else {

@@ -255,6 +255,21 @@ void MdsTableBase::try_decline_rec_scn(const share::SCN scn)
   }
 }
 
+void MdsTableBase::try_advance_max_aborted_scn(const share::SCN scn)
+{
+  bool success = false;
+  if (scn.is_valid() && !scn.is_max()) {
+    while (!success) {
+      share::SCN old_scn = max_aborted_scn_;
+      if (scn > old_scn) {
+        success = max_aborted_scn_.atomic_bcas(old_scn, scn);
+      } else {
+        break;
+      }
+    }
+  }
+}
+
 common::ObTabletID MdsTableBase::get_tablet_id() const
 {
   return tablet_id_;

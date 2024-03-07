@@ -1024,8 +1024,8 @@ int ObTablet::init_with_update_medium_info(
 }
 
 int ObTablet::init_empty_shell(
-  ObArenaAllocator &allocator,
-  const ObTablet &old_tablet)
+    ObArenaAllocator &allocator,
+    const ObTablet &old_tablet)
 {
   int ret = OB_SUCCESS;
   ObTabletCreateDeleteMdsUserData user_data;
@@ -1035,12 +1035,8 @@ int ObTablet::init_empty_shell(
   } else if (OB_UNLIKELY(old_tablet.get_tablet_meta().has_next_tablet_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("old tablet should not have next tablet", K(ret), K(old_tablet.get_tablet_meta()));
-  } else if (OB_FAIL(old_tablet.ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data))) {
-    LOG_WARN("old tablet get ObTabletCreateDeleteMdsUserData failed", K(ret), K(old_tablet));
-  } else if (user_data.tablet_status_ != ObTabletStatus::DELETED &&
-             user_data.tablet_status_ != ObTabletStatus::TRANSFER_OUT_DELETED) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("old tablet status is not deleted", K(ret), K(user_data.tablet_status_));
+  } else if (OB_FAIL(pre_check_empty_shell(old_tablet, user_data))) {
+    LOG_WARN("failed to pre check empty shell", K(ret));
   } else if (OB_FAIL(tablet_meta_.assign(old_tablet.tablet_meta_))) {
     LOG_WARN("assign old tablet meta to empty shell failed", K(ret), K(old_tablet.tablet_meta_));
   } else if (OB_FAIL(mds_data_.init_empty_shell(user_data))) {
@@ -1059,10 +1055,10 @@ int ObTablet::init_empty_shell(
     tablet_meta_.clog_checkpoint_scn_ = user_data.delete_commit_scn_ > tablet_meta_.clog_checkpoint_scn_ ?
                                         user_data.delete_commit_scn_ : tablet_meta_.clog_checkpoint_scn_;
     tablet_meta_.mds_checkpoint_scn_ = user_data.delete_commit_scn_;
+
     is_inited_ = true;
     LOG_INFO("init empty shell", K(ret), K(old_tablet), KPC(this));
   }
-
 
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
@@ -2482,10 +2478,14 @@ int ObTablet::get_src_tablet_read_tables_(
   ObLSTabletService *tablet_service = nullptr;
   ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
   SCN max_decided_scn;
+  mds::MdsWriter unused_writer;// will be removed later
+  mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
+  share::SCN unused_trans_version;// will be removed later
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+  } else if (OB_FAIL(ObITabletMdsInterface::get_latest(user_data,
+      unused_writer, unused_trans_stat, unused_trans_version))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(tablet), K(user_data));
   } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_) {
     ret = OB_SNAPSHOT_DISCARDED;
@@ -3985,11 +3985,10 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
   ObTabletAutoincSeq autoinc_seq;
   uint64_t auto_inc_seqvalue = 0;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_autoinc_seq(allocator, share::SCN::max_scn(), autoinc_seq, rpc_timeout))) {
+  } else if (OB_FAIL(get_autoinc_seq(autoinc_seq, allocator))) {
     LOG_WARN("fail to get latest autoinc seq", K(ret));
   } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
@@ -4174,11 +4173,10 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
   ObTabletAutoincSeq curr_autoinc_seq;
   uint64_t curr_auto_inc_seqvalue;
   SCN scn;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq, rpc_timeout))) {
+  } else if (OB_FAIL(get_autoinc_seq(curr_autoinc_seq, allocator))) {
     LOG_WARN("fail to get latest autoinc seq", K(ret));
   } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
@@ -4640,7 +4638,7 @@ int ObTablet::get_rec_log_scn(SCN &rec_scn) {
   return ret;
 }
 
-int ObTablet::get_mds_table_rec_log_scn(SCN &rec_scn)
+int ObTablet::get_mds_table_rec_scn(SCN &rec_scn) const
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
@@ -4890,6 +4888,91 @@ int ObTablet::get_medium_info_list(
   return ret;
 }
 
+int ObTablet::pre_check_empty_shell(const ObTablet &old_tablet, ObTabletCreateDeleteMdsUserData &user_data)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = old_tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = old_tablet.get_tablet_meta().tablet_id_;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+
+  if (OB_FAIL(old_tablet.get_latest(user_data, writer, trans_stat, trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      mds::MdsTableHandle mds_table;
+      share::SCN rec_scn;
+      if (OB_FAIL(old_tablet.inner_get_mds_table(mds_table, false/*not_exist_create*/))) {
+        LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(mds_table.get_rec_scn(rec_scn))) {
+        LOG_WARN("failed to get rec scn from mds table", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_UNLIKELY(rec_scn.is_max())) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("mds table exists, but rec scn is max, such kind tablet should be deleted instantly",
+            K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(build_user_data_for_aborted_tx_tablet(rec_scn, user_data))) {
+        LOG_WARN("failed to build user data for aborted tx tablet", K(ret), K(ls_id), K(tablet_id), K(rec_scn));
+      }
+    } else {
+      LOG_WARN("failed to get latest tablet status", K(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
+      || (ObTabletStatus::DELETED != user_data.tablet_status_ && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tablet is not under deleted tx committed status", K(ret), K(ls_id), K(tablet_id), K(trans_stat), K(user_data));
+  }
+
+  return ret;
+}
+
+int ObTablet::build_user_data_for_aborted_tx_tablet(
+    const share::SCN &flush_scn,
+    ObTabletCreateDeleteMdsUserData &user_data)
+{
+  int ret = OB_SUCCESS;
+  user_data.tablet_status_ = ObTabletStatus::DELETED;
+  user_data.delete_commit_scn_ = flush_scn;
+  return ret;
+}
+
+int ObTablet::build_user_data_for_aborted_tx_tablet(
+    common::ObArenaAllocator &allocator,
+    const share::SCN &flush_scn,
+    ObTabletMdsData &mds_data)
+{
+  int ret = OB_SUCCESS;
+  mds_data.reset();
+
+  if (OB_FAIL(mds_data.init_for_first_creation(allocator))) {
+    LOG_WARN("failed to init", K(ret));
+  } else {
+    mds::MdsDumpKV *dump_kv = mds_data.tablet_status_.committed_kv_.ptr_;
+    char *buffer = nullptr;
+    constexpr int64_t len = sizeof(ObTabletCreateDeleteMdsUserData);
+    if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, dump_kv))) {
+      LOG_WARN("failed to alloc and new", K(ret));
+    } else if (OB_ISNULL(buffer = static_cast<char*>(allocator.alloc(len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(len));
+    } else {
+      ObTabletCreateDeleteMdsUserData *user_data = new (buffer) ObTabletCreateDeleteMdsUserData();
+      user_data->tablet_status_ = ObTabletStatus::DELETED;
+      user_data->delete_commit_scn_ = flush_scn;
+      common::ObString &str = dump_kv->v_.user_data_;
+      str.assign(buffer, len);
+    }
+
+    if (OB_FAIL(ret)) {
+      ObTabletObjLoadHelper::free(allocator, dump_kv);
+      if (nullptr != buffer) {
+        allocator.free(buffer);
+        buffer = nullptr;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTablet::prepare_param_ctx(
     ObIAllocator &allocator,
     ObRelativeTable &relative_table,
@@ -4935,7 +5018,9 @@ int ObTablet::build_transfer_tablet_param(
   share::SCN max_data_scn;
   ObTabletMdsData mds_table_data;
   ObTabletMdsData new_mds_data;
-  bool unused_committed_flag = false;
+  mds::MdsWriter unused_writer;// will be removed later
+  mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
+  share::SCN unused_trans_version;// will be removed later
   int64_t finish_medium_scn = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4951,7 +5036,8 @@ int ObTablet::build_transfer_tablet_param(
     //ref tablet id is unused now. So it should be invalid
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref tablet id is valid, unexpected", K(ret), KPC(this), K(tablet_meta_));
-  } else if (OB_FAIL(ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
+  } else if (OB_FAIL(ObITabletMdsInterface::get_latest(user_data,
+      unused_writer, unused_trans_stat, unused_trans_version))) {
     LOG_WARN("failed to get lastest tablet status", K(ret), KPC(this), K(tablet_meta_));
   } else if (OB_FAIL(get_storage_schema_for_transfer_in(mig_tablet_param.allocator_, mig_tablet_param.storage_schema_))) {
     LOG_WARN("failed to get storage schema", K(ret), KPC(this));
@@ -5984,20 +6070,22 @@ int ObTablet::check_tablet_status_for_read_all_committed()
   const ObTabletID &tablet_id = get_tablet_meta().tablet_id_;
   const ObLSID &ls_id = get_tablet_meta().ls_id_;
   ObTabletCreateDeleteMdsUserData user_data;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   // first make sure tablet is in any committed state
   // then check if it is empty shell
-  if (OB_FAIL(get_tablet_status(share::SCN::max_scn(), user_data, 0/*timeout*/))) {
+  if (OB_FAIL(get_latest_committed(user_data))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      bool is_committed = false;
-      if (OB_FAIL(get_latest_tablet_status(user_data, is_committed))) {
+      if (OB_FAIL(get_latest(user_data, writer, trans_stat, trans_version))) {
         if (OB_EMPTY_RESULT == ret) {
           ret = OB_TABLET_NOT_EXIST;
           LOG_WARN("tablet creation has no been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
         }
-      } else if (!is_committed) {
+      } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
         if (transaction::ObTransVersion::INVALID_TRANS_VERSION == user_data.create_commit_version_) {
           ret = OB_TABLET_NOT_EXIST;
           LOG_WARN("create commit version is invalid", K(ret), K(ls_id), K(tablet_id), K(user_data));
@@ -6052,9 +6140,7 @@ int ObTablet::replay_set_tablet_status(
   return ret;
 }
 
-int ObTablet::check_schema_version_with_cache(
-    const int64_t schema_version,
-    const int64_t timeout)
+int ObTablet::check_schema_version_with_cache(const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = get_tablet_meta().tablet_id_;
@@ -6062,9 +6148,6 @@ int ObTablet::check_schema_version_with_cache(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(timeout < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(timeout));
   } else {
     {
       SpinRLockGuard guard(mds_cache_lock_);
@@ -6086,10 +6169,12 @@ int ObTablet::check_schema_version_with_cache(
         ObTabletBindingMdsUserData tmp_ddl_data;
         ObDDLInfoCache tmp_ddl_data_cache;
         ObDDLInfoCache *candidate_cache = nullptr;
-        bool is_committed = false;
-        if (OB_FAIL(ObITabletMdsInterface::get_latest_ddl_data(tmp_ddl_data, is_committed))) {
+        mds::MdsWriter unused_writer;
+        mds::TwoPhaseCommitState trans_stat;
+        share::SCN unused_trans_version;
+        if (OB_FAIL(ObITabletMdsInterface::get_latest(tmp_ddl_data, unused_writer, trans_stat, unused_trans_version))) {
           if (OB_EMPTY_RESULT == ret) {
-            is_committed = true;
+            trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
             tmp_ddl_data.set_default_value(); // use default value
             ret = OB_SUCCESS;
           } else {
@@ -6098,15 +6183,15 @@ int ObTablet::check_schema_version_with_cache(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (is_committed) {
+        } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
           // already get valid tmp_ddl_data
-        } else if (OB_FAIL(ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), tmp_ddl_data, timeout))) {
-          LOG_WARN("failed to get snapshot", KR(ret), K(timeout));
+        } else if (OB_FAIL(get_ddl_data(tmp_ddl_data))) {
+          LOG_WARN("failed to get snapshot", KR(ret));
         }
 
         if (OB_SUCC(ret)) {
           // only enable cache without any on going transaction during the write lock
-          if (is_committed) {
+          if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
             ddl_data_cache_.set_value(tmp_ddl_data);
             candidate_cache = &ddl_data_cache_;
             LOG_INFO("refresh ddl data cache", K(ret), K(tablet_meta_.ls_id_), K(tablet_id), K(ddl_data_cache_));
@@ -6142,8 +6227,7 @@ int ObTablet::check_schema_version_with_cache(
 
 int ObTablet::check_snapshot_readable_with_cache(
     const int64_t snapshot_version,
-    const int64_t schema_version,
-    const int64_t timeout)
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = get_tablet_meta().tablet_id_;
@@ -6151,9 +6235,6 @@ int ObTablet::check_snapshot_readable_with_cache(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(timeout < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(timeout));
   } else {
     {
       SpinRLockGuard guard(mds_cache_lock_);
@@ -6175,10 +6256,12 @@ int ObTablet::check_snapshot_readable_with_cache(
         ObTabletBindingMdsUserData tmp_ddl_data;
         ObDDLInfoCache tmp_ddl_data_cache;
         ObDDLInfoCache *candidate_cache = nullptr;
-        bool is_committed = false;
-        if (OB_FAIL(ObITabletMdsInterface::get_latest_ddl_data(tmp_ddl_data, is_committed))) {
+        mds::MdsWriter unused_writer;
+        mds::TwoPhaseCommitState trans_stat;
+        share::SCN unused_trans_version;
+        if (OB_FAIL(ObITabletMdsInterface::get_latest(tmp_ddl_data, unused_writer, trans_stat, unused_trans_version))) {
           if (OB_EMPTY_RESULT == ret) {
-            is_committed = true;
+            trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
             tmp_ddl_data.set_default_value(); // use default value
             ret = OB_SUCCESS;
           } else {
@@ -6187,15 +6270,15 @@ int ObTablet::check_snapshot_readable_with_cache(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (is_committed) {
+        } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
           // already get valid tmp_ddl_data
-        } else if (OB_FAIL(ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), tmp_ddl_data, timeout))) {
-          LOG_WARN("failed to get snapshot", KR(ret), K(timeout));
+        } else if (OB_FAIL(get_ddl_data(tmp_ddl_data))) {
+          LOG_WARN("failed to get snapshot", KR(ret));
         }
 
         if (OB_SUCC(ret)) {
           // only enable cache without any on going transaction during the write lock
-          if (is_committed) {
+          if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
             ddl_data_cache_.set_value(tmp_ddl_data);
             candidate_cache = &ddl_data_cache_;
             LOG_INFO("refresh ddl data cache", K(ret), K(tablet_meta_.ls_id_), K(tablet_id), K(ddl_data_cache_));

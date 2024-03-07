@@ -104,14 +104,18 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
+    bool is_committed = false;
+    mds::MdsWriter writer;// will be removed later
+    mds::TwoPhaseCommitState trans_stat;// will be removed later
+    share::SCN trans_version;// will be removed later
     ObTabletHAStatus src_tablet_ha_status;
     bool last_is_committed = false;
     while (OB_SUCC(ret)) {
       tablet_handle.reset();
       user_data.reset();
+      is_committed = false;
       tablet = nullptr;
       bool is_ready = false;
-      bool is_committed = false;
       ObTabletBackfillInfo tablet_info;
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
@@ -125,13 +129,15 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
         //do nothing
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+      } else if (OB_FAIL(tablet->get_latest(user_data,
+          writer, trans_stat, trans_version))) {
         if (OB_EMPTY_RESULT == ret) {
           LOG_INFO("tablet_status does not exist", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
           ret = OB_SUCCESS;
         } else {
          LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(user_data));
         }
+      } else if (FALSE_IT(is_committed = (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat))) {
       } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ && !in_migration) {
         // do nothing
       } else if (!tablet->get_tablet_meta().has_transfer_table()) {
@@ -188,7 +194,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                               "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
         if (OB_FAIL(tablet_info.init(tablet->get_tablet_meta().tablet_id_, is_committed))) {
-          LOG_WARN("failed to init ObTabletBackfillInfo", K(ret), "backfilled tablet id", tablet->get_tablet_meta().tablet_id_, K(is_committed));
+          LOG_WARN("failed to init tablet info", K(ret));
         } else if (OB_FAIL(param.tablet_infos_.push_back(tablet_info))) {
           LOG_WARN("failed to push tablet id into array", K(ret), KPC(tablet));
         } else if (src_ls_id.is_valid() && transfer_scn.is_valid()) {

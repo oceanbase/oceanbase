@@ -92,6 +92,8 @@ public:
   template <typename READ_OP>
   int get_latest(READ_OP &&read_operation, const int64_t read_seq) const;
   template <typename READ_OP>
+  int get_latest_committed(READ_OP &&read_operation) const;
+  template <typename READ_OP>
   int get_by_writer(READ_OP &&read_operation,
                     const MdsWriter &writer,
                     const share::SCN snapshot,

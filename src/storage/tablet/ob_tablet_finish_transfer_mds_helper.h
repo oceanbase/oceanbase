@@ -107,6 +107,14 @@ public:
       const int64_t len,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
+  static bool check_can_do_tx_end(
+       const bool is_willing_to_commit,
+       const bool for_replay,
+       const share::SCN &log_scn,
+       const char *buf,
+       const int64_t buf_len,
+       mds::BufferCtx &ctx,
+       const char *&can_not_do_reason);
 private:
   static int on_register_success_(
       const ObTXFinishTransferInInfo &tx_finish_transfer_in_info,
@@ -136,7 +144,10 @@ private:
   static int can_skip_check_transfer_tablets_(
       ObLS &ls,
       bool &can_skip_check);
-
+  static int do_tx_end_before_commit_(
+      const ObTXFinishTransferInInfo &tx_finish_transfer_in_info,
+      const share::SCN &finish_transfer_scn,
+      const char *&can_not_do_reason);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletFinishTransferInHelper);

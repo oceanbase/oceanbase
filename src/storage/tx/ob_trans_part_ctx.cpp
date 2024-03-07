@@ -2302,7 +2302,8 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
                                                                        true /*need_merge_cache*/,
                                                                        true /*allow_log_overflow*/))) {
               TRANS_LOG(WARN, "gen total mds array failed", K(ret));
-            } else if (OB_FAIL(notify_data_source_(type, log_ts, false, mds_cache_.get_final_notify_array()))) {
+            } else if (OB_FAIL(notify_data_source_(type, log_ts, false,
+                                                   mds_cache_.get_final_notify_array(), false/*willing_to_commit*/))) {
               TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
             }
             ObTwoPhaseCommitLogType two_phase_log_type;
@@ -3015,31 +3016,36 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
   int ret = OB_SUCCESS;
   ObTxLogCb *log_cb = NULL;
 
+  logservice::ObReplayBarrierType commit_info_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
   if (sub_state_.is_info_log_submitted()) {
     // state log already submitted, do nothing
   } else if (OB_FAIL(submit_redo_log_(log_block, has_redo, helper))) {
     TRANS_LOG(WARN, "submit redo log failed", KR(ret), K(*this));
   } else if (OB_FAIL(check_dup_trx_with_submitting_all_redo(log_block, helper))) {
     TRANS_LOG(WARN, "check dup trx with submitting all redo failed", K(ret));
+  } else if (OB_FAIL(decide_state_log_barrier_type_(ObTxLogType::TX_COMMIT_INFO_LOG,
+                                                    commit_info_log_barrier_type))) {
+    TRANS_LOG(WARN, "decide commit info log barrier failed", K(ret),
+              K(commit_info_log_barrier_type), KPC(this));
   } else {
     ObTxCommitInfoLog commit_info_log(
         exec_info_.scheduler_, exec_info_.participants_, exec_info_.upstream_,
-        exec_info_.is_sub2pc_,
-        exec_info_.is_dup_tx_, can_elr_, trace_info_.get_app_trace_id(),
+        exec_info_.is_sub2pc_, exec_info_.is_dup_tx_, can_elr_, trace_info_.get_app_trace_id(),
         trace_info_.get_app_trace_info(), exec_info_.prev_record_lsn_, exec_info_.redo_lsns_,
         exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_);
 
     if (OB_SUCC(ret)) {
       if (exec_info_.is_dup_tx_) {
         if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->add_commiting_dup_trx(trans_id_))) {
-          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret),
-                    KPC(this));
+          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret), KPC(this));
         }
       }
     }
 
     if (OB_FAIL(ret)) {
-      //do nothing
+      // do nothing
     } else if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
       TRANS_LOG(WARN, "invalid commit info log", K(ret), K(commit_info_log), K(trans_id_),
                 K(ls_id_));
@@ -3072,12 +3078,23 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                       K(ls_id_));
           } else if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
             TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
+          } else if (commit_info_log_barrier_type
+                         != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+                     && OB_FAIL(log_block.rewrite_barrier_log_block(
+                         trans_id_.get_id(), commit_info_log_barrier_type))) {
+            TRANS_LOG(WARN, "rewrite commit info log barrier type failed", K(ret),
+                      K(commit_info_log_barrier_type), KPC(this));
           }
           has_redo = false;
         }
       } else {
         TRANS_LOG(WARN, "add new log failed", KR(ret), K(this));
       }
+    } else if (commit_info_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+               && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(),
+                                                              commit_info_log_barrier_type))) {
+      TRANS_LOG(WARN, "rewrite commit info log barrier type failed", K(ret),
+                K(commit_info_log_barrier_type), KPC(this));
     }
   }
 
@@ -3579,9 +3596,11 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxLogCb *log_cb = NULL;
   ObTxLogBlock log_block;
 
+  logservice::ObReplayBarrierType abort_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   const int64_t replay_hint = static_cast<int64_t>(trans_id_.get_id());
-  ObTxLogBlockHeader
-    log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
+  ObTxLogBlockHeader log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_,
+                                      exec_info_.scheduler_);
 
   if (OB_FAIL(mds_cache_.reserve_final_notify_array(exec_info_.multi_data_source_))) {
     TRANS_LOG(WARN, "reserve final notify array failed", K(ret), K(mds_cache_), KPC(this));
@@ -3594,9 +3613,19 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxAbortLog abort_log(mds_cache_.get_final_notify_array());
 
   if (OB_SUCC(ret)) {
-    if ((exec_info_.multi_data_source_.count() > 0 || mds_cache_.count() > 0)
-        && OB_FAIL(try_alloc_retain_ctx_func_())) {
-      TRANS_LOG(WARN, "alloc retain ctx func for mds trans failed", K(ret), K(mds_cache_), KPC(this));
+    if ((exec_info_.multi_data_source_.count() > 0 || mds_cache_.count() > 0)) {
+      if (OB_FAIL(try_alloc_retain_ctx_func_())) {
+        TRANS_LOG(WARN, "alloc retain ctx func for mds trans failed", K(ret), K(mds_cache_),
+                  KPC(this));
+      } else if (OB_FAIL(decide_state_log_barrier_type_(ObTxLogType::TX_ABORT_LOG,
+                                                        abort_log_barrier_type))) {
+        TRANS_LOG(WARN, "decide abort log barrier type failed", K(ret), K(abort_log_barrier_type),
+                  KPC(this));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(abort_log.init_tx_data_backup(ctx_tx_data_.get_start_log_ts()))) {
       TRANS_LOG(WARN, "init tx data backup failed", K(ret));
     } else if (exec_info_.redo_lsns_.count() > 0 || exec_info_.max_applying_log_ts_.is_valid()) {
@@ -3612,6 +3641,11 @@ int ObPartTransCtx::submit_abort_log_()
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
   } else if (OB_FAIL(log_block.add_new_log(abort_log))) {
     TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
+  } else if (abort_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+             && OB_FAIL(
+                 log_block.rewrite_barrier_log_block(trans_id_.get_id(), abort_log_barrier_type))) {
+    TRANS_LOG(WARN, "rewrite barrier log block failed", K(ret), K(abort_log_barrier_type),
+              KPC(this));
   } else if (log_block.get_cb_arg_array().count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
@@ -5025,7 +5059,8 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END,
                                          timestamp,
                                          true,
-                                         exec_info_.multi_data_source_))) {
+                                         exec_info_.multi_data_source_,
+                                         true /*willing_to_commit*/))) {
     TRANS_LOG(WARN, "notify data source for TX_END failed", KR(ret), K(*this));
   }
 
@@ -5393,14 +5428,15 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
             exec_info_.multi_data_source_, true /*need_merge_cache*/, true /*allow_log_overflow*/))) {
       TRANS_LOG(WARN, "gen total mds array failed", K(ret));
     } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, timestamp, true,
-                                           exec_info_.multi_data_source_))) {
+                                           exec_info_.multi_data_source_,  false/*willing_to_commit*/))) {
       TRANS_LOG(WARN, "notify data source for TX_END failed", KR(ret), K(*this));
     } else if (OB_FAIL(trans_replay_abort_(timestamp))) {
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), "context", *this);
     } else if (OB_FAIL(trans_clear_())) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true,
-                                           mds_cache_.get_final_notify_array()))) {
+                                           mds_cache_.get_final_notify_array(),
+                                           false/*willing_to_commit*/))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
@@ -6568,7 +6604,8 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
                                                                true /*allow_log_overflo*/))) {
       TRANS_LOG(WARN, "copy total mds array failed", K(ret));
     } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, SCN(), false,
-                                           mds_cache_.get_final_notify_array()))) {
+                                           mds_cache_.get_final_notify_array(),
+                                           is_commit/*willing_to_commit*/))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
     }
   }
@@ -6647,6 +6684,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
                                         const SCN &log_ts,
                                         const bool for_replay,
                                         const ObTxBufferNodeArray &notify_array,
+                                        const bool willing_to_commit,
                                         const bool is_force_kill)
 {
   int ret = OB_SUCCESS;
@@ -6656,9 +6694,10 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
     ObMulSourceDataNotifyArg arg;
     arg.tx_id_ = trans_id_;
     arg.scn_ = log_ts;
-    arg.trans_version_ = ctx_tx_data_.get_commit_version();
+    arg.trans_version_ = (notify_type == NotifyType::ON_PREPARE ? log_ts : ctx_tx_data_.get_commit_version());// standby read needed prepare version
     arg.for_replay_ = for_replay;
     arg.notify_type_ = notify_type;
+    arg.willing_to_commit_ = willing_to_commit;
     arg.is_force_kill_ = is_force_kill;
 
     int64_t total_time = 0;
@@ -8058,7 +8097,8 @@ int ObPartTransCtx::on_local_abort_tx_()
                                                              true /*allow_log_overflow*/))) {
     TRANS_LOG(WARN, "gen total mds array failed", KR(ret), K(*this));
   } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, ctx_tx_data_.get_end_log_ts(), false,
-                                         mds_cache_.get_final_notify_array()))) {
+                                         mds_cache_.get_final_notify_array(),
+                                         false /*willing_to_commit*/))) {
     TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
   } else if (FALSE_IT(set_durable_state_(ObTxState::ABORT))) {
 
@@ -8265,6 +8305,545 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
     }
   }
   TRANS_LOG(INFO, "check for standby", K(ret), K(snapshot), K(can_read), K(trans_version), K(is_determined_state), KPC(this));
+  return ret;
+}
+
+int ObPartTransCtx::infer_standby_trx_state(const share::SCN snapshot,
+                                            const int64_t collect_state_timeout_us,
+                                            const bool filter_unreadable_prepare_trx,
+                                            ObTxCommitData::TxDataState &tx_data_state,
+                                            share::SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  tx_data_state = ObTxCommitData::TxDataState::UNKOWN;
+  commit_version.set_invalid();
+
+  ObTxCommitData::TxDataState local_replica_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+  share::SCN local_replica_trx_commit_version;
+  local_replica_trx_commit_version.set_invalid();
+
+  ObTxCommitData::TxDataState infer_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+  share::SCN infer_trx_commit_version;
+  infer_trx_commit_version.set_invalid();
+
+  ObStateInfoArray cur_trx_state_array;
+
+  share::SCN ls_replica_readable_scn;
+  ls_replica_readable_scn.set_invalid();
+
+  ObTxState ctx_durable_state = ObTxState::UNKNOWN;
+  share::SCN ctx_prepare_version;
+  ctx_prepare_version.set_invalid();
+
+  const int64_t start_time = ObTimeUtility::fast_current_time();
+  int64_t print_log_time = start_time;
+
+  //# 1. Check invalid arguments
+  if (!snapshot.is_valid_and_not_min() || collect_state_timeout_us < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid arguments", K(ret), K(snapshot), K(collect_state_timeout_us),
+              K(get_trans_id()), K(get_ls_id()), KP(this));
+  }
+
+  //# 2. Check the local replica trx state with the lock of this tx_ctx.
+  //     If the local replica trx state is not determined, try to collect state info from all
+  //     participants until timeout.
+  do {
+    cur_trx_state_array.reuse();
+
+    if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_FAIL(ret)) {
+
+    } else if (!get_ls_id().is_valid() || !is_inited()) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "the tx_ctx is not inited, need retry without lock", K(ret), K(snapshot),
+                K(get_trans_id()), K(get_ls_id()), KP(this));
+    } else {
+      //## 2.1 Ensure the ls_replica_readable_scn exceeds the snapshot before accessing tx_ctx
+      // state.
+      //     If we check ls_replica_readable_scn after accessed tx_ctx state:
+      //      +----------------------------------------------------------+
+      //      |                snapshot > ls_replayed_scn                |
+      //      +----------------------------------------------------------+
+      //        |
+      //        |
+      //        v
+      //      +----------------------------------------------------------+
+      //      |                 exec_info.state == init                  |
+      //      +----------------------------------------------------------+
+      //        |
+      //        |
+      //        v
+      //      +----------------------------------------------------------+
+      //      |      Prepare Version > ls_replayed_scn > snapshot?       |
+      //      +----------------------------------------------------------+
+      //        |
+      //        | replay prepare log and get ls_replayed_scn
+      //        v
+      //      +----------------------------------------------------------+
+      //      | ls_replayed_scn > snapshot && prepare_version < snapshot |
+      //      +----------------------------------------------------------+
+      if (!ls_replica_readable_scn.is_valid()) {
+        if (OB_FAIL(get_ls_replica_readable_scn_(get_ls_id(), ls_replica_readable_scn))) {
+          TRANS_LOG(WARN, "get ls replica readable scn failed, retry until timeout", K(ret),
+                    K(get_ls_id()), K(get_trans_id()), KP(this), K(ls_replica_readable_scn));
+          ls_replica_readable_scn.set_invalid();
+          ret = OB_EAGAIN;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!ls_replica_readable_scn.is_valid_and_not_min()) {
+          ret = OB_EAGAIN;
+          TRANS_LOG(WARN, "invalid ls replica readable scn", K(ret), K(get_ls_id()),
+                    K(get_trans_id()), KP(this), K(ls_replica_readable_scn));
+        } else if (ls_replica_readable_scn < snapshot) {
+          ret = OB_REPLICA_NOT_READABLE;
+          TRANS_LOG(WARN, "the standby read cannot execute on a replica that lags behind in replay",
+                    K(ret), K(ret), K(get_ls_id()), K(get_trans_id()), KP(this),
+                    K(ls_replica_readable_scn), K(snapshot));
+        }
+      }
+
+      //## 2.2 Check if the tx_ctx state is 'Prepare', if so, it is necessary to obtain the
+      // collection
+      // results;
+      //     otherwise, the trx state and the trx version can be directly determined.
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(infer_local_standby_replica_trx_state_(
+                snapshot, filter_unreadable_prepare_trx, ls_replica_readable_scn, ctx_durable_state,
+                ctx_prepare_version, local_replica_trx_state, local_replica_trx_commit_version,
+                cur_trx_state_array))) {
+          if (ret != OB_EAGAIN) {
+            TRANS_LOG(WARN, "infer local standy trx state failed, retry until timeout", K(ret),
+                      K(get_ls_id()), K(get_trans_id()), KP(this), K(ls_replica_readable_scn),
+                      K(snapshot));
+            ret = OB_EAGAIN;
+          } else {
+            TRANS_LOG(DEBUG, "state_info_array_ is expired", K(ret), K(get_ls_id()),
+                      K(get_trans_id()), KP(this), K(ls_replica_readable_scn), K(snapshot));
+          }
+        }
+      }
+    }
+
+    const int64_t cur_time = ObTimeUtility::fast_current_time();
+
+    if (cur_time - print_log_time > 1 * 1000 * 1000) {
+      TRANS_LOG(INFO, "collect standby participants state info cost too much time", K(ret),
+                K(get_ls_id()), K(get_trans_id()), KP(this), K(ls_replica_readable_scn),
+                K(snapshot), K(start_time), K(print_log_time), K(cur_time));
+      print_log_time = cur_time;
+    }
+
+    if (ret == OB_EAGAIN && cur_time - start_time > collect_state_timeout_us) {
+      ret = OB_TRANS_RPC_TIMEOUT;
+      TRANS_LOG(WARN, "collect standby participants state info timeout", K(ret), K(get_ls_id()),
+                K(get_trans_id()), KP(this), K(ls_replica_readable_scn), K(snapshot), K(start_time),
+                K(print_log_time), K(cur_time));
+    }
+  } while (ret == OB_EAGAIN);
+
+  //# 3. If we can not confirm the trx_state or commit_version by the local tx_ctx,it must be
+  // infered by the state_info which collected from all participants.
+  if (OB_SUCC(ret)
+      && is_undecied_standby_trx_state_info(local_replica_trx_state,
+                                            local_replica_trx_commit_version)) {
+    if (OB_FAIL(infer_standby_participants_trx_state_(
+            get_trans_id(), get_ls_id(), snapshot, filter_unreadable_prepare_trx,
+            ls_replica_readable_scn, ctx_durable_state, ctx_prepare_version, cur_trx_state_array,
+            infer_trx_state, infer_trx_commit_version))) {
+      TRANS_LOG(WARN, "infer standy participants trx state failed", K(ret), K(snapshot),
+                K(filter_unreadable_prepare_trx), K(infer_trx_state), K(infer_trx_commit_version),
+                K(get_ls_id()), K(get_trans_id()), KP(this), K(ls_replica_readable_scn),
+                K(cur_trx_state_array));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!is_undecied_standby_trx_state_info(local_replica_trx_state,
+                                            local_replica_trx_commit_version)) {
+      tx_data_state = local_replica_trx_state;
+      commit_version = local_replica_trx_commit_version;
+
+    } else if (!is_undecied_standby_trx_state_info(infer_trx_state, infer_trx_commit_version)) {
+      tx_data_state = infer_trx_state;
+      commit_version = infer_trx_commit_version;
+
+    } else {
+      ret = OB_REPLICA_NOT_READABLE;
+      TRANS_LOG(WARN, "we cannot inferred a decided standy trx state info", K(ret),
+                K(local_replica_trx_state), K(local_replica_trx_commit_version), K(infer_trx_state),
+                K(infer_trx_commit_version), K(get_trans_id()), K(get_ls_id()), K(snapshot),
+                K(filter_unreadable_prepare_trx), K(ls_replica_readable_scn), K(ctx_durable_state),
+                K(ctx_prepare_version), K(cur_trx_state_array));
+    }
+  }
+
+  return ret;
+}
+
+bool ObPartTransCtx::is_undecied_standby_trx_state_info(
+    const ObTxCommitData::TxDataState tx_data_state,
+    const share::SCN commit_version)
+{
+  return (tx_data_state == ObTxCommitData::TxDataState::UNKOWN)
+         || (tx_data_state == ObTxCommitData::COMMIT
+             && !commit_version.is_valid_and_not_min());
+}
+
+int ObPartTransCtx::infer_standby_participants_trx_state_(
+    const ObTransID tx_id,
+    const ObLSID ls_id,
+    const share::SCN snapshot,
+    const bool filter_unreadable_prepare_trx,
+    const share::SCN ls_replica_readable_scn,
+    const ObTxState local_ctx_durable_state,
+    const share::SCN local_ctx_prepare_version,
+    const ObStateInfoArray &state_info_array,
+    ObTxCommitData::TxDataState &infer_standby_trx_state,
+    share::SCN &infer_standby_trx_commit_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (!snapshot.is_valid_and_not_min() || !ls_replica_readable_scn.is_valid_and_not_min()
+      || state_info_array.empty() || ls_replica_readable_scn < snapshot) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), K(ls_id), K(snapshot),
+              K(filter_unreadable_prepare_trx), K(ls_replica_readable_scn), K(state_info_array));
+  } else {
+    infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+    infer_standby_trx_commit_version.set_invalid();
+
+    int64_t prepared_participant_cnt = 0;
+    int64_t unknown_participant_cnt = 0;
+    share::SCN max_prepare_version;
+    max_prepare_version.set_min();
+
+    for (int i = 0; i < state_info_array.count() && OB_SUCC(ret)
+                    && infer_standby_trx_state == ObTxCommitData::TxDataState::UNKOWN;
+         i++) {
+      ObStateInfo cur_state_info = state_info_array.at(i);
+      const int64_t stat_idx = (uint8_t)cur_state_info.state_ / 10;
+      if (stat_idx >= 0 && stat_idx < STANDBY_STAT_ARRAY_SIZE) {
+        STANDBY_STAT[stat_idx][0]++;
+      }
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        statistics_for_standby();
+      }
+
+      if (cur_state_info.snapshot_version_ < snapshot) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected state info in participants state info array", K(ret),
+                  K(cur_state_info), K(i), K(tx_id), K(ls_id));
+      } else if (cur_state_info.state_ == ObTxState::UNKNOWN) {
+        // In current state_info, cur_state_info.version_ == ls_replica_readable_scn
+        if (local_ctx_durable_state == ObTxState::PREPARE
+            || local_ctx_durable_state == ObTxState::PRE_COMMIT
+            || local_ctx_durable_state == ObTxState::COMMIT) {
+          if (ls_replica_readable_scn >= cur_state_info.version_) {
+            /*Clear log ts > Commit Log Ts > ls_replica_readable_scn >= Prepare Version >=
+             * cur_state_info.version_ >= snapshot*/
+            infer_standby_trx_state = ObTxCommitData::TxDataState::RUNNING;
+            infer_standby_trx_commit_version.set_invalid();
+
+          } else {
+            if (cur_state_info.ls_id_ == ls_id
+                && local_ctx_prepare_version.is_valid_and_not_min()) {
+              infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+              infer_standby_trx_commit_version.set_invalid();
+              max_prepare_version = share::SCN::max(max_prepare_version, local_ctx_prepare_version);
+              prepared_participant_cnt++;
+            } else {
+              infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+              infer_standby_trx_commit_version.set_invalid();
+              unknown_participant_cnt++;
+              TRANS_LOG(INFO, "unkonwn inferred state with the local_ctx_durable_state of prepare",
+                        K(ret), K(ls_id), K(tx_id), K(infer_standby_trx_state),
+                        K(infer_standby_trx_commit_version), K(local_ctx_durable_state),
+                        K(local_ctx_prepare_version), K(snapshot), K(filter_unreadable_prepare_trx),
+                        K(ls_replica_readable_scn), K(i), K(prepared_participant_cnt),
+                        K(unknown_participant_cnt), K(cur_state_info));
+            }
+          }
+        } else if (local_ctx_durable_state == ObTxState::CLEAR) {
+          // prepare -> abort -> clear : Unkown prepare_version, Unkown tx_data_state, Unkown Commit
+          // Version
+          infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+          infer_standby_trx_commit_version.set_invalid();
+          unknown_participant_cnt++;
+          TRANS_LOG(INFO, "unkonwn inferred state with the local_ctx_durable_state of clear",
+                    K(ret), K(ls_id), K(tx_id), K(infer_standby_trx_state),
+                    K(infer_standby_trx_commit_version), K(local_ctx_durable_state),
+                    K(local_ctx_prepare_version), K(snapshot), K(filter_unreadable_prepare_trx),
+                    K(ls_replica_readable_scn), K(i), K(prepared_participant_cnt),
+                    K(unknown_participant_cnt), K(cur_state_info));
+        } else {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+          infer_standby_trx_commit_version.set_invalid();
+          TRANS_LOG(ERROR,
+                    "The local ctx state is determined with init or abort which need not inferred "
+                    "by participants state info",
+                    K(ret), K(ls_id), K(tx_id), K(local_ctx_durable_state),
+                    K(local_ctx_prepare_version), K(snapshot), K(cur_state_info));
+        }
+
+      } else if (cur_state_info.state_ < ObTxState::PREPARE) {
+        // In current state_info, cur_state_info.version_ == ls_replica_readable_scn
+        // TODO may be collect the state info from a incompleted replay ctx?
+        if (cur_state_info.version_ >= snapshot) {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::RUNNING;
+          infer_standby_trx_commit_version.set_invalid();
+
+        } else {
+          ret = OB_TRANS_RPC_TIMEOUT;
+          DUP_TABLE_LOG(WARN, "collect a state info from a unreplayed particiapnt", K(ret),
+                        K(cur_state_info), K(i), K(tx_id), K(ls_id));
+        }
+
+      } else if (cur_state_info.state_ == ObTxState::PREPARE) {
+        // In current state_info, cur_state_info.version_ == exec_info_.prepare_version_
+        if (cur_state_info.version_ > snapshot && filter_unreadable_prepare_trx) {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::RUNNING;
+          infer_standby_trx_commit_version.set_invalid();
+        } else {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+          infer_standby_trx_commit_version.set_invalid();
+          max_prepare_version = share::SCN::max(max_prepare_version, cur_state_info.version_);
+          prepared_participant_cnt++;
+        }
+
+      } else if (cur_state_info.state_ > ObTxState::PREPARE) {
+
+        // In current state_info, cur_state_info.version_ == ctx_tx_data_.get_commit_version()
+        if (cur_state_info.state_ == ObTxState::PRE_COMMIT
+            || cur_state_info.state_ == ObTxState::COMMIT) {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::COMMIT;
+          infer_standby_trx_commit_version = cur_state_info.version_;
+        } else if (cur_state_info.state_ == ObTxState::ABORT) {
+          infer_standby_trx_state = ObTxCommitData::TxDataState::ABORT;
+          infer_standby_trx_commit_version.set_invalid();
+        } else if (cur_state_info.state_ == ObTxState::CLEAR) {
+          // Compatible with the implementation of the old version.
+          // TODO maybe committed or aborted? maybe aborted without a valid ctx_tx_data_
+          infer_standby_trx_state = ObTxCommitData::TxDataState::COMMIT;
+          infer_standby_trx_commit_version = cur_state_info.version_;
+          if (!infer_standby_trx_commit_version.is_valid()) {
+            TRANS_LOG(WARN, "invalid commit version from a cleared participant", K(ret),
+                      K(cur_state_info), K(i), K(infer_standby_trx_state),
+                      K(infer_standby_trx_commit_version));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && infer_standby_trx_state == ObTxCommitData::TxDataState::UNKOWN) {
+      if (prepared_participant_cnt >= state_info_array.count()) {
+        infer_standby_trx_state = ObTxCommitData::TxDataState::COMMIT;
+        infer_standby_trx_commit_version = max_prepare_version;
+      } else if (unknown_participant_cnt > 0) {
+        ret = OB_SNAPSHOT_DISCARDED;
+        TRANS_LOG(INFO,
+                  "There are some unkown standby participant state info which can not be inferred "
+                  "by the local_ctx_durable_state",
+                  K(ret), K(infer_standby_trx_state), K(infer_standby_trx_commit_version), K(tx_id),
+                  K(ls_id), K(snapshot), K(filter_unreadable_prepare_trx),
+                  K(ls_replica_readable_scn), K(local_ctx_durable_state),
+                  K(local_ctx_prepare_version), K(prepared_participant_cnt),
+                  K(unknown_participant_cnt), K(state_info_array));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (infer_standby_trx_state == ObTxCommitData::TxDataState::UNKOWN
+          || (infer_standby_trx_state == ObTxCommitData::TxDataState::COMMIT
+              && !infer_standby_trx_commit_version.is_valid_and_not_min())) {
+        TRANS_LOG(
+            ERROR,
+            "unkonwn standby state or commit_version which infered by participants's state info",
+            K(ret), K(infer_standby_trx_state), K(infer_standby_trx_commit_version), K(tx_id),
+            K(ls_id), K(snapshot), K(filter_unreadable_prepare_trx), K(ls_replica_readable_scn),
+            K(local_ctx_durable_state), K(local_ctx_prepare_version), K(prepared_participant_cnt),
+            K(unknown_participant_cnt), K(state_info_array));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::infer_local_standby_replica_trx_state_(
+    const share::SCN snapshot,
+    const bool filter_unreadable_prepare_trx,
+    const share::SCN ls_replica_readable_scn,
+    ObTxState &ctx_durable_state,
+    share::SCN &ctx_prepare_version,
+    ObTxCommitData::TxDataState &local_replica_trx_state,
+    share::SCN &local_replica_trx_commit_version,
+    ObStateInfoArray &state_info_array)
+{
+  int ret = OB_SUCCESS;
+
+  CtxLockGuard guard(lock_);
+
+  ctx_durable_state = get_durable_state_();
+  ctx_prepare_version = exec_info_.prepare_version_;
+
+  if (!is_follower_()) {
+    TRANS_LOG(INFO, "Please attention! We are infering the standby trx state on a tx_ctx leader",
+              K(ret), KPC(this));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (exec_info_.max_applied_log_ts_ < exec_info_.max_applying_log_ts_
+             && ls_replica_readable_scn >= exec_info_.max_applying_log_ts_) {
+    /*check if the replayed scn is valid*/
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR,
+              "The ls replayed scn must be smaller than the max_applying_log_ts during the "
+              "retry of the replay task",
+              K(ret), KPC(this));
+    print_trace_log_();
+  } else if (get_durable_state_() == ObTxState::UNKNOWN) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "Unkown durable state in tx_ctx", K(ret), KPC(this));
+    print_trace_log_();
+  } else if (is_incomplete_replay_ctx_) {
+    TRANS_LOG(INFO, "There is a incompleted replay tx ctx. Only tx data state is valid", K(ret),
+              K(snapshot), K(filter_unreadable_prepare_trx), K(ls_replica_readable_scn), KPC(this));
+    if (ctx_tx_data_.get_state() == ObTxCommitData::TxDataState::RUNNING) {
+      // Unkown prepare version or prepare state
+      local_replica_trx_state = ObTxCommitData::TxDataState::RUNNING;
+      local_replica_trx_commit_version.set_invalid();
+    } else if (ctx_tx_data_.get_state() == ObTxCommitData::TxDataState::COMMIT
+               || ctx_tx_data_.get_state() == ObTxCommitData::ABORT) {
+      local_replica_trx_state = static_cast<ObTxCommitData::TxDataState>(ctx_tx_data_.get_state());
+      local_replica_trx_commit_version = ctx_tx_data_.get_commit_version();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "Unexpected tx data state", K(ret), KPC(this));
+      print_trace_log_();
+    }
+  } else if (get_durable_state_() < ObTxState::PREPARE
+             || (get_durable_state_() == ObTxState::PREPARE
+                 && exec_info_.max_applied_log_ts_ > exec_info_.max_applying_log_ts_)) {
+    /*This tx_ctx has not replayed a prepare log --> snapshot <= replayed scn <
+     * prepare_log_ts(prepare version)*/
+    local_replica_trx_commit_version.set_invalid();
+    local_replica_trx_state = ObTxCommitData::TxDataState::RUNNING;
+
+  } else if (get_durable_state_() == ObTxState::PREPARE) {
+    /*This tx_ctx's state is prepared. If the filter_unreadable_prepare_trx is true, we set
+     * tx_data_state as RUNNING to skip this version for read*/
+    if (exec_info_.prepare_version_.is_valid_and_not_min() && filter_unreadable_prepare_trx
+        && snapshot < exec_info_.prepare_version_) {
+      local_replica_trx_state = ObTxCommitData::RUNNING;
+      local_replica_trx_commit_version.set_invalid();
+    } else {
+      local_replica_trx_state = ObTxCommitData::UNKOWN;
+      local_replica_trx_commit_version.set_invalid();
+    }
+
+  } else if (get_durable_state_() > ObTxState::PREPARE) {
+    /*This tx_ctx's state is determined. If we can not get a valid commit_version for a
+     * committed trx, it will be inferred by state_info from all participants*/
+    local_replica_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+    local_replica_trx_commit_version.set_invalid();
+
+    if (get_durable_state_() == ObTxState::PRE_COMMIT
+        || get_durable_state_() == ObTxState::COMMIT) {
+      if (ctx_tx_data_.get_commit_version().is_valid_and_not_min()
+          && ctx_tx_data_.get_state() == ObTxCommitData::TxDataState::COMMIT) {
+        local_replica_trx_commit_version = ctx_tx_data_.get_commit_version();
+        local_replica_trx_state = ObTxCommitData::TxDataState::COMMIT;
+      } else {
+        TRANS_LOG(WARN,
+                  "invalid commit_version with a commited trx, infer the trx commit_version "
+                  "by state_info_array",
+                  K(ret), K(ctx_tx_data_), KPC(this));
+        local_replica_trx_commit_version.set_invalid();
+        local_replica_trx_state = ObTxCommitData::TxDataState::COMMIT;
+      }
+    } else if (get_durable_state_() == ObTxState::ABORT) {
+      local_replica_trx_commit_version.set_invalid();
+      local_replica_trx_state = ObTxCommitData::TxDataState::ABORT;
+    } else if (get_durable_state_() == ObTxState::CLEAR) {
+      // maybe committed or aborted
+      local_replica_trx_state = static_cast<ObTxCommitData::TxDataState>(ctx_tx_data_.get_state());
+      local_replica_trx_commit_version = ctx_tx_data_.get_commit_version();
+      if (local_replica_trx_state != ObTxCommitData::TxDataState::COMMIT
+          || local_replica_trx_state != ObTxCommitData::TxDataState::ABORT) {
+        // TODO try to access tx data table for tx data state
+        TRANS_LOG_RET(WARN, OB_STATE_NOT_MATCH,
+                      "Unkown tx data state in ctx_tx_data. It is possile that replaying clear log "
+                      "after replaying abort log",
+                      K(ret), K(local_replica_trx_state), K(local_replica_trx_commit_version),
+                      KPC(this));
+        local_replica_trx_state = ObTxCommitData::TxDataState::UNKOWN;
+        local_replica_trx_commit_version.set_invalid();
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)
+      && is_undecied_standby_trx_state_info(local_replica_trx_state,
+                                            local_replica_trx_commit_version)) {
+    if (OB_FAIL(check_and_copy_participant_state_info_(snapshot, state_info_array))) {
+      if (OB_EAGAIN != ret) {
+        TRANS_LOG(WARN, "check and copy participants state info failed", K(ret), K(snapshot),
+                  K(local_replica_trx_state), K(local_replica_trx_commit_version), KPC(this));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::check_and_copy_participant_state_info_(const share::SCN snapshot,
+                                                           ObStateInfoArray &cur_state_info_array)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  share::SCN min_state_info_version;
+
+  cur_state_info_array.reuse();
+  if (!snapshot.is_valid_and_not_min()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(snapshot));
+  } else if (get_durable_state_() < ObTxState::REDO_COMPLETE) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "invalid state for upstream or participants", K(ret), K(snapshot), KPC(this));
+  } else {
+    min_state_info_version.set_max();
+    for (int i = 0; i < state_info_array_.count() && OB_SUCC(ret); i++) {
+      min_state_info_version = share::SCN::min(min_state_info_version, state_info_array_[i].snapshot_version_);
+    }
+
+    if (OB_SUCC(ret)) {
+      if (state_info_array_.empty() || min_state_info_version.is_max()
+          || min_state_info_version < snapshot) {
+        ret = OB_EAGAIN;
+        TRANS_LOG(WARN, "the state_info_array is expired, need retry to collect", K(ret),
+                  K(state_info_array_.count()), K(min_state_info_version), K(snapshot), KPC(this));
+        if (ask_state_info_interval_.reach()) {
+          if (OB_SUCCESS != (tmp_ret = build_and_post_ask_state_msg_(snapshot))) {
+            TRANS_LOG(WARN, "ask state from coord fail", K(ret), K(snapshot), KPC(this));
+          }
+        }
+      } else if (OB_FAIL(cur_state_info_array.assign(state_info_array_))) {
+        TRANS_LOG(WARN, "assign state_info_array failed", K(ret), K(state_info_array_.count()),
+                  KPC(this));
+      }
+    }
+  }
+
   return ret;
 }
 

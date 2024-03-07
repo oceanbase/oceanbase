@@ -433,6 +433,32 @@ int MdsRow<K, V>::get_latest(READ_OP &&read_operation, const int64_t read_seq) c
 
 template <typename K, typename V>
 template <typename READ_OP>
+int MdsRow<K, V>::get_latest_committed(READ_OP &&read_operation) const
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(typeid(V).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(5_ms);
+  MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
+  if (MDS_FAIL(get_with_read_wrapper_(read_operation,
+    [&](const UserMdsNode<K, V> &node, bool &can_read) -> int {
+      if (node.is_committed_()) {
+        can_read = true;
+      }
+      return OB_SUCCESS;
+    }
+  ))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsRow get_latest_committed failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsRow get_latest_committed success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename K, typename V>
+template <typename READ_OP>
 int MdsRow<K, V>::get_by_writer(READ_OP &&read_operation,
                                 const MdsWriter &writer,
                                 const share::SCN snapshot,

@@ -216,7 +216,11 @@ int MdsTableHandle::replay(T &&data, MdsCtx &ctx, const share::SCN &scn)
 
 template <typename T, typename OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
-int MdsTableHandle::get_latest(OP &&read_op, bool &is_committed, const int64_t read_seq) const
+int MdsTableHandle::get_latest(OP &&read_op,
+                               MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
@@ -230,10 +234,35 @@ int MdsTableHandle::get_latest(OP &&read_op, bool &is_committed, const int64_t r
     if (OB_FAIL(p_mds_table_base_->get_latest(unit_id,
                                               (void*)&dummy_key,
                                               function,
-                                              is_committed,
+                                              writer,
+                                              trans_stat,
+                                              trans_version,
                                               read_seq))) {
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
         MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(read_seq));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename T, typename OP, typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
+int MdsTableHandle::get_latest_committed(OP &&read_op) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  uint8_t unit_id = INT8_MAX;
+  ret = MdsTableHandleHelper<DummyKey, T>::template get_unit_id<0>(mds_table_id_, unit_id);
+  DummyKey dummy_key;
+  ObFunction<int(void *)> function = [&read_op](void *data) -> int {
+    return read_op(*reinterpret_cast<const T*>(data));
+  };
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(p_mds_table_base_->get_latest_committed(unit_id,
+                                                        (void*)&dummy_key,
+                                                        function))) {
+      if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
       }
     }
   }
@@ -487,7 +516,9 @@ int MdsTableHandle::replay_remove(const Key &key, MdsCtx &ctx, share::SCN &scn)
 template <typename Key, typename Value, typename OP>
 int MdsTableHandle::get_latest(const Key &key,
                                OP &&read_op,
-                               bool &is_committed,
+                               MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                               share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
                                const int64_t read_seq) const
 {
   int ret = OB_SUCCESS;
@@ -501,10 +532,34 @@ int MdsTableHandle::get_latest(const Key &key,
     if (OB_FAIL(p_mds_table_base_->get_latest(unit_id,
                                               (void*)&key,
                                               function,
-                                              is_committed,
+                                              writer,
+                                              trans_stat,
+                                              trans_version,
                                               read_seq))) {
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
         MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(key), K(read_seq));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Key, typename Value, typename OP>
+int MdsTableHandle::get_latest_committed(const Key &key, OP &&read_op) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  uint8_t unit_id = INT8_MAX;
+  ret = MdsTableHandleHelper<Key, Value>::template get_unit_id<0>(mds_table_id_, unit_id);
+  ObFunction<int(void *)> function = [&read_op](void *data) -> int {
+    return read_op(*reinterpret_cast<const Value*>(data));
+  };
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(p_mds_table_base_->get_latest_committed(unit_id,
+                                                        (void*)&key,
+                                                        function))) {
+      if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+        MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
       }
     }
   }

@@ -1736,6 +1736,8 @@ struct ObMulSourceDataNotifyArg
   bool redo_submitted_;
   bool redo_synced_;
 
+  bool willing_to_commit_;
+
   // force kill trans without abort scn
   bool is_force_kill_;
 
@@ -1750,6 +1752,7 @@ struct ObMulSourceDataNotifyArg
     notify_type_ = NotifyType::ON_ABORT;
     redo_submitted_ = false;
     redo_synced_ = false;
+    willing_to_commit_ = false;
     is_force_kill_ = false;
   }
 
@@ -1760,6 +1763,7 @@ struct ObMulSourceDataNotifyArg
                K_(notify_type),
                K_(redo_submitted),
                K_(redo_synced),
+               K_(willing_to_commit),
                K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;

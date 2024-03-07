@@ -34,7 +34,7 @@
 #include "storage/tablet/ob_tablet_mds_data_cache.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
-#include "ob_i_tablet_mds_interface.h"
+#include "ob_i_tablet_mds_customized_interface.h"
 #include <type_traits>
 
 namespace oceanbase
@@ -106,7 +106,7 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;
 
-class ObTablet final : public ObITabletMdsInterface
+class ObTablet final : public ObITabletMdsCustomizedInterface
 {
   friend class ObLSTabletService;
   friend class ObTabletPointer;
@@ -139,7 +139,7 @@ public:
   int get_rec_log_scn(share::SCN &rec_scn);
   int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
-  int get_mds_table_rec_log_scn(share::SCN &rec_scn);
+  int get_mds_table_rec_scn(share::SCN &rec_scn) const;
   int mds_table_flush(const share::SCN &decided_scn);
 
 public:
@@ -464,11 +464,10 @@ public:
 
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int check_tablet_status_for_read_all_committed();
-  int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
+  int check_schema_version_with_cache(const int64_t schema_version);
   int check_snapshot_readable_with_cache(
       const int64_t snapshot_version,
-      const int64_t schema_version,
-      const int64_t timeout);
+      const int64_t schema_version);
   int set_tablet_status(
       const ObTabletCreateDeleteMdsUserData &tablet_status,
       mds::MdsCtx &ctx);
@@ -625,6 +624,8 @@ private:
   int inner_get_mds_table(
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;
+  int pre_check_empty_shell(const ObTablet &old_tablet, ObTabletCreateDeleteMdsUserData &user_data);
+
   static int load_medium_info_list(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
@@ -633,6 +634,13 @@ private:
   int validate_medium_info_list(
       const int64_t finish_medium_scn,
       const ObTabletMdsData &mds_data) const;
+  static int build_user_data_for_aborted_tx_tablet(
+      const share::SCN &flush_scn,
+      ObTabletCreateDeleteMdsUserData &user_data);
+  static int build_user_data_for_aborted_tx_tablet(
+      common::ObArenaAllocator &allocator,
+      const share::SCN &flush_scn,
+      ObTabletMdsData &mds_data);
   int set_initial_state(const bool initial_state);
 
   int load_deserialize_v1(

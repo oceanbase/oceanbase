@@ -216,6 +216,15 @@ public:
                         bool &can_read,
                         share::SCN &trans_version,
                         bool &is_determined_state);
+
+  int infer_standby_trx_state(const share::SCN snapshot,
+                              const int64_t wait_participant_timeout_us,
+                              const bool filter_unreadable_prepare_trx,
+                              ObTxCommitData::TxDataState &tx_data_state,
+                              share::SCN &commit_version);
+  static bool is_undecied_standby_trx_state_info(const ObTxCommitData::TxDataState tx_data_state,
+                                                 const share::SCN commit_version);
+
   int handle_trans_ask_state(const share::SCN &snapshot, ObAskStateRespMsg &resp);
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
   int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
@@ -296,7 +305,28 @@ private:
   int on_success_ops_(ObTxLogCb * log_cb);
   void check_and_register_timeout_task_();
 
-  // bool need_commit_barrier(); 
+
+  static int
+  infer_standby_participants_trx_state_(const ObTransID tx_id,
+                                        const ObLSID ls_id,
+                                        const share::SCN snapshot,
+                                        const bool filter_unreadable_prepare_trx,
+                                        const share::SCN ls_replica_readable_scn,
+                                        const ObTxState local_ctx_durable_state,
+                                        const share::SCN local_ctx_prepare_version,
+                                        const ObStateInfoArray &state_info_array,
+                                        ObTxCommitData::TxDataState &infer_standby_trx_state,
+                                        share::SCN &infer_standby_trx_commit_version);
+  int infer_local_standby_replica_trx_state_(const share::SCN snapshot,
+                                             const bool filter_unreadable_prepare_trx,
+                                             const share::SCN ls_replica_readable_scn,
+                                             ObTxState &ctx_durable_state,
+                                             share::SCN &ctx_prepare_version,
+                                             ObTxCommitData::TxDataState &local_replica_trx_state,
+                                             share::SCN &local_replica_trx_commit_version,
+                                             ObStateInfoArray &state_info_array);
+  int check_and_copy_participant_state_info_(const share::SCN snapshot,
+                                             ObStateInfoArray &cur_state_info_array);
 
 public:
   // ========================================================
@@ -533,6 +563,8 @@ private:
   int check_trans_type_for_replay_(const int32_t &trans_type, const share::SCN &commit_log_ts);
   void set_durable_state_(const ObTxState state)
   { exec_info_.state_ = state; }
+  ObTxState get_durable_state_() const
+  { return exec_info_.state_; }
 
   bool is_2pc_logging_() const
   { return sub_state_.is_state_log_submitting() || sub_state_.is_gts_waiting(); }
@@ -545,6 +577,7 @@ private:
                           const share::SCN &log_ts,
                           const bool for_replay,
                           const ObTxBufferNodeArray &notify_array,
+                          const bool willing_to_commit = true,
                           const bool is_force_kill = false);
   int gen_total_mds_array_(ObTxBufferNodeArray &mds_array);
   int deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,

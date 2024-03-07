@@ -12,6 +12,7 @@
 
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_info.h"
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/scn.h"
 #include "storage/tablet/ob_tablet.h"
@@ -134,9 +135,11 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData latest_user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   bool is_empty_result = false;
-  if (NULL == allocator_) {
+  if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (FALSE_IT(start_to_read_ = true)) {
@@ -152,9 +155,11 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "tablet should not null", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(latest_user_data, is_committed))) {
+  } else if (OB_FAIL(tablet->get_latest(latest_user_data,
+      writer, trans_stat, trans_version))) {
     if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      is_committed = false;
+      trans_stat = mds::TwoPhaseCommitState::STATE_END;
+      trans_version.reset();
       is_empty_result = true;
       ret = OB_SUCCESS;
     } else {
@@ -248,7 +253,7 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
         }
         case OB_APP_MIN_COLUMN_ID + 15:
           // is_committed
-          cur_row_.cells_[i].set_int(is_committed ? 1 : 0);
+          cur_row_.cells_[i].set_int(trans_stat == mds::TwoPhaseCommitState::ON_COMMIT ? 1 : 0);
           break;
         case OB_APP_MIN_COLUMN_ID + 16:
           // is_empty_shell

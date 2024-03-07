@@ -105,41 +105,42 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
 
 int ObMdsTableHandler::try_gc_mds_table()
 {
-  #define PRINT_WRAPPER KR(ret), K(valid_node_cnt), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(valid_node_cnt), K(rec_scn), K(is_flushing), K(handle_ref_cnt), K(*this)
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
   int64_t valid_node_cnt = 0;
+  share::SCN rec_scn;
   bool is_flushing = false;
-  if (!mds_table_handle_.is_valid()) {
-    // do nothing
-  } else if (MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt))) {// 1. check if count is 0
-    MDS_LOG_GC(WARN, "fail to get total valid node cnt");
-  } else if (0 != valid_node_cnt) {
+  int64_t handle_ref_cnt = 0;
+  if (!mds_table_handle_.is_valid()) { // there is no mds_table instance there, so no need do gc action
+  } else if (MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt)) ||
+             MDS_FAIL(mds_table_handle_.get_rec_scn(rec_scn)) ||
+             MDS_FAIL(mds_table_handle_.is_flushing(is_flushing))) {// check gc conditions
+    MDS_LOG_GC(WARN, "fail to get condition state");
+  } else if (0 != valid_node_cnt || // condition1 : there is no nodes on mds_table
+             !rec_scn.is_max() || // condition2 : rec_scn must be MAX(that means aborted scn has been dumped to tablet)
+             is_flushing) { // condition3 : there is no DAG task
     ret = OB_EAGAIN;
-    MDS_LOG_GC(DEBUG, "there are valid nodes remains, maybe later");
-  } else if (OB_FAIL(mds_table_handle_.is_flushing(is_flushing))) {// 2. check if is in flushing process
-    MDS_LOG_GC(WARN, "fail to get mds_table flushing state");
-  } else if (is_flushing) {
-    ret = OB_EAGAIN;
-    MDS_LOG_GC(INFO, "this mds_table is in flushing state, waiting for DAG on_flush() callback");
+    MDS_LOG_GC(TRACE, "can not GC now");
   } else {
-    MdsWLockGuard guard(lock_);// 3. stop incoming incremental accessing to mds_table_handle(there are some stock accessing remain still)
+    MdsWLockGuard guard(lock_);// stop incoming incremental accessing to mds_table_handle(there are some stock accessing remain still)
     CLICK();
-    if (mds_table_handle_.is_valid()) {
-      int64_t handle_ref_cnt = 0;
-      if (MDS_FAIL(mds_table_handle_.get_ref_cnt(handle_ref_cnt))) {// 4. check if this is the last ref
-        MDS_LOG_GC(WARN, "fail to gc mds_table");
-      } else if (handle_ref_cnt != 1) {
-        MDS_LOG_GC(INFO, "althrough valid node cnt is 0, but ref cnt is not 0, wait next scan", K(handle_ref_cnt));
-      } else if (MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt))) {
-        MDS_LOG_GC(WARN, "fail to get total valid node cnt");
-      } else if (0 != valid_node_cnt) {// 5. double check to see if stock accessing write new nodes
-        ret = OB_EAGAIN;
-        MDS_LOG_GC(DEBUG, "there are valid nodes(by concurrent insert), maybe later");
-      } else {
-        MDS_LOG_GC(INFO, "success to gc mds_table");
-        mds_table_handle_.reset();// 6. release the last ref, will do actual destruction and free here
-      }
+    if (!mds_table_handle_.is_valid()) {
+      MDS_LOG_GC(WARN, "mds table handle invalid after add wlock");
+    } else if (MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt)) ||
+        MDS_FAIL(mds_table_handle_.get_rec_scn(rec_scn)) ||
+        MDS_FAIL(mds_table_handle_.is_flushing(is_flushing)) ||
+        MDS_FAIL(mds_table_handle_.get_ref_cnt(handle_ref_cnt))) {// double check
+      MDS_LOG_GC(WARN, "fail to gc mds_table");
+    } else if (0 != valid_node_cnt || // double check condition1
+               !rec_scn.is_max() || // double check condition2
+               is_flushing || // double check condition3
+               handle_ref_cnt != 1) {// make sure this is the last reference of mds_table
+      MDS_LOG_GC(INFO, "double check GC condition failed");
+      ret = OB_EAGAIN;
+    } else {
+      MDS_LOG_GC(INFO, "gc mds_table");
+      mds_table_handle_.reset();// release the last ref, will do actual destruction and free here
     }
   }
   return ret;

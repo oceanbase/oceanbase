@@ -109,6 +109,7 @@ public:
   void advance(TwoPhaseCommitState new_stat);
   void set_dumped();
   bool is_dumped() const;
+  WriterType get_writer_type() const;
   TwoPhaseCommitState get_state() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   union Union {
@@ -250,6 +251,7 @@ public:// conditional compile
   template <typename DATA_TYPE = V, ENABLE_IF_HAS_ON_ABORT(DATA_TYPE)>
   void on_user_data_abort_(const share::SCN abort_scn) { user_data_.on_abort(abort_scn); }
 public:
+  void advance_mds_table_max_aborted_scn_(const share::SCN &scn);
   bool is_valid_scn_(const share::SCN &scn) const;
   bool has_valid_link_back_ptr_() const;
   MdsRowBase<K, V> *p_mds_row_;

@@ -1141,6 +1141,57 @@ void ObStorageConfigChangeOpRes::reset()
 
 OB_SERIALIZE_MEMBER(ObStorageConfigChangeOpRes, palf_lock_owner_, is_locked_, op_succ_);
 
+ObTransferInTabletAbortedRes::ObTransferInTabletAbortedRes()
+  : is_aborted_(false)
+{
+}
+
+void ObTransferInTabletAbortedRes::reset()
+{
+  is_aborted_ = false;
+}
+
+OB_SERIALIZE_MEMBER(ObTransferInTabletAbortedRes, is_aborted_);
+
+
+ObUpdateTransferMetaInfoArg::ObUpdateTransferMetaInfoArg()
+  : tenant_id_(OB_INVALID_ID),
+    dest_ls_id_(),
+    transfer_meta_info_()
+{
+}
+
+void ObUpdateTransferMetaInfoArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  dest_ls_id_.reset();
+  transfer_meta_info_.reset();
+}
+
+bool ObUpdateTransferMetaInfoArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && dest_ls_id_.is_valid()
+      && transfer_meta_info_.is_valid();
+}
+
+int ObUpdateTransferMetaInfoArg::assign(const ObUpdateTransferMetaInfoArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update transfer meta info arg assign invalid arg", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    dest_ls_id_ = other.dest_ls_id_;
+    transfer_meta_info_ = other.transfer_meta_info_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObUpdateTransferMetaInfoArg, tenant_id_, dest_ls_id_, transfer_meta_info_);
+
+
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
   : bandwidth_throttle_(bandwidth_throttle),
@@ -2179,7 +2230,9 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_out_tablets_()
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
       ObTabletCreateDeleteMdsUserData user_data;
-      bool committed_flag = false;
+      mds::MdsWriter writer;// will be removed later
+      mds::TwoPhaseCommitState trans_stat;// will be removed later
+      share::SCN trans_version;// will be removed later
       if (!tablet_info.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet info is invalid", K(ret), K(tablet_info), K(user_data), K(arg_));
@@ -2189,9 +2242,10 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_out_tablets_()
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, committed_flag))) {
+      } else if (OB_FAIL(tablet->get_latest(user_data,
+          writer, trans_stat, trans_version))) {
         LOG_WARN("failed to get lastest tablet status", K(ret), KPC(tablet));
-      } else if (!committed_flag) {
+      } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("transfer src tablet still has uncommitted user data", K(ret), K(user_data), KPC(tablet));
       } else if (ObTabletStatus::NORMAL != user_data.tablet_status_) {
@@ -2215,6 +2269,8 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObLSTransferMetaInfo transfer_meta_info;
+
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
@@ -2228,6 +2284,11 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("src ls migration status is not none", K(ret), K(migration_status), KPC(ls), K(arg_));
+  } else if (OB_FAIL(ls->get_transfer_meta_info(transfer_meta_info))) {
+    LOG_WARN("failed to get transfer meta info", K(ret), KPC(ls));
+  } else if (transfer_meta_info.is_in_trans()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("transfer meta info is in trans status, not match", K(ret), K(transfer_meta_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg_.tablet_list_.count(); ++i) {
       const ObTransferTabletInfo &tablet_info = arg_.tablet_list_.at(i);
@@ -2706,8 +2767,7 @@ OFetchLSReplayScnDelegate::OFetchLSReplayScnDelegate(obrpc::ObFetchLSReplayScnRe
   : is_inited_(false),
     arg_(),
     result_(result)
-{
-}
+{}
 
 int OFetchLSReplayScnDelegate::init(
     const obrpc::ObFetchLSReplayScnArg &arg)
@@ -3206,6 +3266,164 @@ int ObStorageWakeupTransferServiceP::process()
   return ret;
 }
 
+ObCheckTransferInTabletAbortDelegate::ObCheckTransferInTabletAbortDelegate(obrpc::ObTransferInTabletAbortedRes &result)
+  : is_inited_(false),
+    arg_(),
+    result_(result)
+{
+}
+
+int ObCheckTransferInTabletAbortDelegate::init(const obrpc::ObTransferTabletInfoArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("transfer in tablet abort delegate init twice", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(arg_.assign(arg))) {
+    LOG_WARN("failed to assign arg", K(ret), K(arg));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObCheckTransferInTabletAbortDelegate::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = NULL;
+    ObLS *ls = NULL;
+    LOG_INFO("check transfer tablet aborted", K(arg_));
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else {
+      //TODO(muwei.ym) check dest ls replay scn
+      bool is_aborted = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg_.tablet_list_.count(); ++i) {
+        bool has_transfer_table = false;
+        const ObTransferTabletInfo &tablet_info = arg_.tablet_list_.at(i);
+        ObTabletHandle tablet_handle;
+        ObTablet *tablet = nullptr;
+        if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT,
+            ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+          if (OB_TABLET_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            //tablet already deleted
+          } else {
+            LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
+          }
+        } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+        } else if (tablet->is_empty_shell()) {
+          //do nothing
+        } else {
+          is_aborted = false;
+          LOG_INFO("[TRANSFER]tablet need to be aborted", K(tablet_info));
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        result_.is_aborted_ = is_aborted;
+        if (!is_aborted) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = ObTabletCreateDeleteMdsUserData::set_tablet_gc_trigger(arg_.dest_ls_id_))) {
+             LOG_WARN("failed to set_tablet_gc_trigger", K(ret), K(arg_));
+          }
+        }
+        LOG_INFO("[TRANSFER]check transfer in tablet aborted finish", K(is_aborted), K(arg_.tablet_list_), "ls_id", ls->get_ls_id());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCheckTransferInTabletAbortedP::process()
+{
+  int ret = OB_SUCCESS;
+  ObCheckTransferInTabletAbortDelegate delegate(result_);
+  if (OB_FAIL(delegate.init(arg_))) {
+    LOG_WARN("failed to init delegate", K(ret));
+  } else if (OB_FAIL(delegate.process())) {
+    LOG_WARN("failed to do process", K(ret), K_(arg));
+  }
+  return ret;
+}
+
+ObUpdateTransferMetaInfoDelegate::ObUpdateTransferMetaInfoDelegate()
+  : is_inited_(false),
+    arg_()
+{
+}
+
+int ObUpdateTransferMetaInfoDelegate::init(
+    const obrpc::ObUpdateTransferMetaInfoArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("update transfer meta info delegate init twice", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(arg_.assign(arg))) {
+    LOG_WARN("failed to assign arg", K(ret), K(arg));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObUpdateTransferMetaInfoDelegate::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = NULL;
+    ObLS *ls = NULL;
+    const ObTransferInTransStatus::STATUS status = ObTransferInTransStatus::PREPARE;
+    ObArray<ObTabletID> tablet_id_array;
+    LOG_INFO("start update transfer meta info", K(arg_));
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(arg_.transfer_meta_info_.get_tablet_id_array(tablet_id_array))) {
+      LOG_WARN("failed to get tablet id array", K(ret), K(arg_));
+    } else if (OB_FAIL(ls->set_transfer_meta_info(
+        arg_.transfer_meta_info_.src_scn_, arg_.transfer_meta_info_.src_ls_, arg_.transfer_meta_info_.src_scn_,
+        status, tablet_id_array, arg_.transfer_meta_info_.data_version_))) {
+      LOG_WARN("failed to set transfer meta info", K(ret), K(arg_));
+    }
+  }
+  return ret;
+}
+
+int ObUpdateTransferMetaInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  ObUpdateTransferMetaInfoDelegate delegate;
+  if (OB_FAIL(delegate.init(arg_))) {
+    LOG_WARN("failed to init update transfer meta info delegate", K(ret));
+  } else if (OB_FAIL(delegate.process())) {
+    LOG_WARN("failed to do process", K(ret), K_(arg));
+  }
+  return ret;
+}
 
 } //namespace obrpc
 
@@ -3697,5 +3915,6 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
 
   return ret;
 }
+
 } // storage
 } // oceanbase

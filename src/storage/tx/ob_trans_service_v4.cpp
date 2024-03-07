@@ -3466,11 +3466,87 @@ int ObTransService::check_for_standby(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   ObPartTransCtx *ctx = NULL;
   if (OB_SUCC(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
-    ret = ctx->check_for_standby(snapshot, can_read, trans_version, is_determined_state);
+    // ret = ctx->check_for_standby(snapshot, can_read, trans_version, is_determined_state);
+    ObTxCommitData::TxDataState tx_data_state = ObTxCommitData::TxDataState::UNKOWN;
+    if (OB_SUCC(ctx->infer_standby_trx_state(snapshot,
+                                             50_ms /*50ms*/,
+                                             true /*filter_unreadable_prepare_trx*/,
+                                             tx_data_state,
+                                             trans_version))) {
+      if (tx_data_state == ObTxCommitData::TxDataState::ABORT
+          || tx_data_state == ObTxCommitData::TxDataState::RUNNING) {
+        can_read = false;
+        trans_version.set_min();
+        is_determined_state = tx_data_state == ObTxCommitData::TxDataState::ABORT;
+      } else if (tx_data_state == ObTxCommitData::COMMIT && trans_version.is_valid_and_not_min()) {
+        can_read = snapshot >= trans_version;
+        is_determined_state = true;
+      } else {
+        ret = OB_ERR_SHARED_LOCK_CONFLICT;
+      }
+    } else {
+      ret = OB_ERR_SHARED_LOCK_CONFLICT;
+    }
     revert_tx_ctx_(ctx);
   } else {
     ret = OB_ERR_SHARED_LOCK_CONFLICT;
   }
+  return ret;
+}
+
+int ObTransService::mds_infer_standby_trx_state(const ObLS *ls_ptr,
+                                                const ObLSID &ls_id,
+                                                const ObTransID &tx_id,
+                                                const SCN &snapshot,
+                                                ObTxCommitData::TxDataState &tx_data_state,
+                                                share::SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+
+  ObPartTransCtx *ctx = nullptr;
+  ObLSHandle ls_handle;
+
+  if ((OB_ISNULL(ls_ptr) && !ls_id.is_valid())
+      || (OB_NOT_NULL(ls_ptr) && ls_id != ls_ptr->get_ls_id()) || !tx_id.is_valid()
+      || !snapshot.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(ls_ptr), K(ls_id), K(tx_id),K(snapshot) );
+  } else {
+    const ObLS *tmp_ls_ptr = nullptr;
+    if (OB_ISNULL(ls_ptr)) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+      } else {
+        tmp_ls_ptr = ls_handle.get_ls();
+      }
+
+    } else {
+      tmp_ls_ptr = ls_ptr;
+    }
+
+    if (OB_FAIL(ret) || OB_ISNULL(tmp_ls_ptr)) {
+      if (OB_SUCC(ret)) {
+        TRANS_LOG(WARN, "unexpected temp ls ptr", K(ret), KP(tmp_ls_ptr), K(ls_id), K(tx_id),
+                  K(snapshot));
+      }
+
+    } else if (OB_SUCC(tmp_ls_ptr->get_tx_ctx(tx_id, true, ctx))) {
+      if (OB_FAIL(ctx->infer_standby_trx_state(snapshot,
+                                               150_ms /*wait_participant_timeout_us*/,
+                                               false /*filter_unreadable_prepare_trx*/,
+                                               tx_data_state,
+                                               commit_version))) {
+        TRANS_LOG(WARN, "infer standby trx state for mds failed", K(ret), K(ls_id), K(tx_id),
+                  K(snapshot), K(tx_data_state), K(commit_version));
+      }
+
+      tmp_ls_ptr->revert_tx_ctx(ctx);
+
+    } else {
+      TRANS_LOG(WARN, "get tx ctx failed", K(ret), K(ls_id), K(tx_id), K(snapshot));
+    }
+  }
+
   return ret;
 }
 

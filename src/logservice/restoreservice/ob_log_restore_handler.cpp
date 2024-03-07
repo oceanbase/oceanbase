@@ -1027,6 +1027,7 @@ bool ObLogRestoreHandler::restore_to_end_unlock_() const
   } else {
     parent_->get_upper_limit_scn(recovery_end_scn);
     bret = scn >= recovery_end_scn;
+    CLOG_LOG(INFO, "check restore to end", K(recovery_end_scn), K(scn));
   }
   return bret;
 }

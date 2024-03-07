@@ -851,6 +851,11 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
+
+  DELEGATE_WITH_RET(ls_meta_, set_transfer_meta_info, int);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta_info, int);
+  DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
+
   int set_ls_migration_gc(bool &allow_gc);
 
 private:

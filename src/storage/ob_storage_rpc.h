@@ -732,6 +732,36 @@ public:
   uint64_t tenant_id_;
 };
 
+struct ObTransferInTabletAbortedRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTransferInTabletAbortedRes();
+  ~ObTransferInTabletAbortedRes() {}
+  void reset();
+  TO_STRING_KV(K_(is_aborted));
+  bool is_aborted_;
+};
+
+struct ObUpdateTransferMetaInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpdateTransferMetaInfoArg();
+  ~ObUpdateTransferMetaInfoArg() {}
+  bool is_valid() const;
+  void reset();
+  int assign(const ObUpdateTransferMetaInfoArg &other);
+
+  TO_STRING_KV(K_(tenant_id), K_(dest_ls_id), K_(transfer_meta_info));
+  uint64_t tenant_id_;
+  share::ObLSID dest_ls_id_;
+  ObLSTransferMetaInfo transfer_meta_info_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferMetaInfoArg);
+};
+
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -763,6 +793,8 @@ public:
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
   RPC_AP(PR5 get_config_version_and_transfer_scn, OB_HA_CHANGE_MEMBER_SERVICE, (obrpc::ObStorageChangeMemberArg), obrpc::ObStorageChangeMemberRes);
   RPC_AP(PR5 check_start_transfer_tablets, OB_CHECK_START_TRANSFER_TABLETS, (obrpc::ObTransferTabletInfoArg));
+  RPC_AP(PR5 update_transfer_meta_info, OB_HA_UPDATE_TRANSFER_META_INFO, (obrpc::ObUpdateTransferMetaInfoArg), obrpc::Int64);
+  RPC_AP(PR5 check_transfer_in_tablet_aborted, OB_HA_CHECK_TRANSFER_IN_TABLET_ABORTED, (obrpc::ObTransferTabletInfoArg), obrpc::ObTransferInTabletAbortedRes);
   RPC_AP(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (obrpc::ObFetchLSReplayScnArg), obrpc::ObFetchLSReplayScnRes);
 };
 
@@ -1099,6 +1131,56 @@ protected:
   int process();
 };
 
+class ObCheckTransferInTabletAbortedP:
+    public ObStorageRpcProxy::Processor<OB_HA_CHECK_TRANSFER_IN_TABLET_ABORTED>
+{
+public:
+  ObCheckTransferInTabletAbortedP() = default;
+  virtual ~ObCheckTransferInTabletAbortedP() {}
+protected:
+  int process();
+private:
+  int check_has_transfer_table_(const share::ObTransferTabletInfo &tablet_info,
+      storage::ObLS *ls, bool &has_transfer_table);
+};
+
+class ObCheckTransferInTabletAbortDelegate final
+{
+public:
+  ObCheckTransferInTabletAbortDelegate(obrpc::ObTransferInTabletAbortedRes &result);
+  int init(const obrpc::ObTransferTabletInfoArg &arg);
+  int process();
+private:
+  bool is_inited_;
+  obrpc::ObTransferTabletInfoArg arg_;
+  obrpc::ObTransferInTabletAbortedRes &result_;
+  DISALLOW_COPY_AND_ASSIGN(ObCheckTransferInTabletAbortDelegate);
+};
+
+class ObUpdateTransferMetaInfoP:
+    public ObStorageRpcProxy::Processor<OB_HA_UPDATE_TRANSFER_META_INFO>
+{
+public:
+  ObUpdateTransferMetaInfoP() = default;
+  virtual ~ObUpdateTransferMetaInfoP() {}
+protected:
+  int process();
+};
+
+class ObUpdateTransferMetaInfoDelegate final
+{
+public:
+  ObUpdateTransferMetaInfoDelegate();
+  ~ObUpdateTransferMetaInfoDelegate() {}
+  int init(const obrpc::ObUpdateTransferMetaInfoArg &arg);
+  int process();
+private:
+  bool is_inited_;
+  obrpc::ObUpdateTransferMetaInfoArg arg_;
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferMetaInfoDelegate);
+};
+
+
 } // obrpc
 
 
@@ -1162,7 +1244,6 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       int64_t &active_trans_count) = 0;
-
   virtual int get_transfer_start_scn(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1250,7 +1331,6 @@ public:
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       int64_t &active_trans_count);
-
   virtual int get_transfer_start_scn(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1286,7 +1366,6 @@ public:
       const share::ObLSID &ls_id,
       const ObStorageHASrcInfo &src_info,
       obrpc::ObFetchLSMemberAndLearnerListInfo &member_info);
-
 private:
   bool is_inited_;
   obrpc::ObStorageRpcProxy *rpc_proxy_;

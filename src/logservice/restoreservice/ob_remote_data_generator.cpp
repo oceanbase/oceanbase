@@ -423,7 +423,7 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &dest_id,
     if (OB_ARCHIVE_LOG_TO_END == ret) {
       ret = OB_ITER_END;
     } else {
-      LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_));
+      LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_), K(next_fetch_lsn_));
     }
   } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*dest_,
           dest_id, round_id, piece_id, piece_path))) {

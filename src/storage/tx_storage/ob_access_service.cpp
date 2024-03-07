@@ -375,13 +375,22 @@ int ObAccessService::get_source_ls_tx_table_guard_(
   int ret = OB_SUCCESS;
   ObTabletCreateDeleteMdsUserData user_data;
   const ObTablet *tablet = nullptr;
+  mds::MdsWriter unused_writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN unused_trans_version;// will be removed later
+  ObStoreCtx &ctx = ctx_guard.get_store_ctx();
+
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet), K(tablet_handle));
   } else if (OB_LIKELY(!tablet->get_tablet_meta().has_transfer_table())) {
     // do nothing
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+  } else if (OB_FAIL(tablet->get_latest(user_data,
+      unused_writer, trans_stat, unused_trans_version))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(tablet), K(user_data));
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat && ctx.is_write()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet in transfer but user data is uncommit, unexpected", K(ret), K(trans_stat), K(user_data));
   } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ || !user_data.transfer_ls_id_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is unexpected", K(ret), K(user_data));

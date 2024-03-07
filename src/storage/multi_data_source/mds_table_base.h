@@ -20,6 +20,7 @@
 #include "runtime_utility/mds_lock.h"
 #include "storage/multi_data_source/mds_table_mgr.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/multi_data_source/runtime_utility/list_helper.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
@@ -106,6 +107,7 @@ public:
   flushing_scn_(),
   last_inner_recycled_scn_(share::SCN::min_scn()),
   rec_scn_(share::SCN::max_scn()),
+  max_aborted_scn_(share::SCN::min_scn()),
   total_node_cnt_(0),
   construct_sequence_(0),
   lock_(),
@@ -141,8 +143,13 @@ public:
   virtual int get_latest(int64_t unit_id,
                          void *key,
                          ObFunction<int(void *)> &op,
-                         bool &is_committed,
+                         MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                         TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                         share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
                          const int64_t read_seq) const = 0;
+  virtual int get_latest_committed(int64_t unit_id,
+                                   void *key,
+                                   ObFunction<int(void *)> &op) const = 0;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,
@@ -191,6 +198,7 @@ protected:
   void dec_valid_node_cnt();
   void try_advance_rec_scn(const share::SCN scn);
   void try_decline_rec_scn(const share::SCN scn);
+  void try_advance_max_aborted_scn(const share::SCN scn);
   int get_ls_max_consequent_callbacked_scn_(share::SCN &max_consequent_callbacked_scn) const;
   int register_to_mds_table_mgr();
   int unregister_from_mds_table_mgr();// call when marked deleted or released directly
@@ -290,7 +298,7 @@ protected:
       observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
     }
   }
-protected:
+public:
   struct DebugInfo {
     DebugInfo()
     : do_init_tablet_pointer_(nullptr),
@@ -320,6 +328,7 @@ protected:
   share::SCN flushing_scn_;// To tell if this mds table is flushing
   share::SCN last_inner_recycled_scn_;// To filter repeated release operation
   share::SCN rec_scn_;// To CLOG to recycle
+  share::SCN max_aborted_scn_;// To record max aborted scn ever seen, to judge if can advance rec_scn to MAX after flushed(only if flushed scn >= max_aborted_scn_), otherwise rec_scn can only be advanced to flushed_scn
   int64_t total_node_cnt_;// To tell if this mds table is safety to destroy
   int64_t construct_sequence_;// To filter invalid dump DAG
   MdsTableMgrHandle mgr_handle_;

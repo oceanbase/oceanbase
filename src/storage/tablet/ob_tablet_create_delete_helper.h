@@ -28,13 +28,14 @@
 
 namespace oceanbase
 {
-namespace obrpc
-{
-struct ObBatchCreateTabletArg;
-}
 namespace blocksstable
 {
 class ObSSTable;
+}
+
+namespace transaction
+{
+class ObTransID;
 }
 
 namespace storage
@@ -78,32 +79,37 @@ public:
   static int check_read_snapshot_for_normal(
       ObTablet &tablet,
       const int64_t snapshot_version,
-      const int64_t timeout_us,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
-  static int check_read_snapshot_for_deleted(
-      ObTablet &tablet,
-      const int64_t snapshot_version,
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
   static int check_read_snapshot_for_transfer_in(
       ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
-  static int check_read_snapshot_for_transfer_out(
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
+  static int check_read_snapshot_for_deleted_or_transfer_out(
       ObTablet &tablet,
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const mds::MdsWriter &writer,
+      const mds::TwoPhaseCommitState &trans_state,
+      const share::SCN &trans_version);
   static int check_read_snapshot_for_transfer_out_deleted(
       ObTablet &tablet,
       const int64_t snapshot_version,
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      const bool is_committed);
+      const ObTabletCreateDeleteMdsUserData &user_data);
   static int check_read_snapshot_by_commit_version(
       const int64_t snapshot_version,
       const ObTabletCreateDeleteMdsUserData &user_data);
+  static int check_for_standby(
+      const share::ObLSID &ls_id,
+      const transaction::ObTransID &tx_id,
+      const share::SCN &snapshot,
+      ObTxCommitData::TxDataState &tx_data_state,
+      share::SCN &commit_version);
   static int create_tmp_tablet(
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
@@ -155,14 +161,6 @@ public:
              const int64_t len,
              const transaction::ObMulSourceDataNotifyArg &notify_arg);
 private:
-  class ReadMdsFunctor
-  {
-  public:
-    ReadMdsFunctor(ObTabletCreateDeleteMdsUserData &user_data);
-    int operator()(const ObTabletCreateDeleteMdsUserData &data);
-  private:
-    ObTabletCreateDeleteMdsUserData &user_data_;
-  };
   class DummyReadMdsFunctor
   {
   public:

@@ -2788,7 +2788,7 @@ int ObTabletMigrationTask::record_server_event_(const int64_t cost_us, const int
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret));
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
   } else {
     const char *tablet_status = ObTabletStatus::get_str(user_data.tablet_status_);

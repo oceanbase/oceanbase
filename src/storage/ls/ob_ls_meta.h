@@ -28,6 +28,7 @@
 #include "storage/tx/ob_id_service.h"
 #include "storage/ls/ob_ls_saved_info.h"
 #include "share/scn.h"
+#include "storage/high_availability/ob_ls_transfer_info.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,16 @@ public:
       share::ObLSRestoreStatus &ls_restore_status);
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
+  int set_transfer_meta_info(
+      const share::SCN &replay_scn,
+      const share::ObLSID &src_ls,
+      const share::SCN &src_scn,
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const uint64_t data_version);
+  int get_transfer_meta_info(ObLSTransferMetaInfo &trasfer_meta_info) const;
+  int cleanup_transfer_meta_info(
+      const share::SCN &replay_scn);
 
   int init(
       const uint64_t tenant_id,
@@ -119,7 +130,7 @@ public:
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
-               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info));
+               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info));
 private:
   int check_can_update_();
 public:
@@ -155,6 +166,7 @@ private:
   ObLSSavedInfo saved_info_;
   share::SCN transfer_scn_;
   ObLSRebuildInfo rebuild_info_;
+  ObLSTransferMetaInfo transfer_meta_info_;
 };
 
 }  // namespace storage

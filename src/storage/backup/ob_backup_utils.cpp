@@ -2250,7 +2250,7 @@ int ObBackupTabletProvider::check_tablet_status_(const storage::ObTabletHandle &
   ObTablet *tablet = tablet_handle.get_obj();
   ObTabletCreateDeleteMdsUserData user_data;
   is_normal = false;
-  if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+  if (OB_FAIL(tablet->get_latest_committed(user_data))) {
     LOG_WARN("failed to get tablet status", KPC(tablet));
   } else if (user_data.get_tablet_status() == ObTabletStatus::NORMAL) {
     is_normal = true;

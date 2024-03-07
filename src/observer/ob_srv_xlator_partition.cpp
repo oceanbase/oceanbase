@@ -171,6 +171,8 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObStorageWakeupTransferServiceP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObFetchLSMemberAndLearnerListP);
   RPC_PROCESSOR(ObAdminUnlockMemberListP, gctx_);
+  RPC_PROCESSOR(ObCheckTransferInTabletAbortedP);
+  RPC_PROCESSOR(ObUpdateTransferMetaInfoP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {

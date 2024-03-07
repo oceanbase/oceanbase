@@ -52,7 +52,7 @@ static const int64_t MERGE_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 2;
 // static const int64_t MV_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 5;
 // static const int64_t BUILD_INDEX_READ_SNAPSHOT_VERSION = INT64_MAX - 6;
 // static const int64_t WARM_UP_READ_SNAPSHOT_VERSION = INT64_MAX - 7;
-static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
+// static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
 // static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
 
 #ifdef ERRSIM

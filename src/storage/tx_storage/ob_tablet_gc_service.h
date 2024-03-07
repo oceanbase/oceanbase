@@ -84,6 +84,7 @@ public:
       TabletGCStatus &need_gc,
       bool &need_retry,
       const share::SCN &decided_scn);
+  static int check_tablet_from_aborted_tx(const ObTablet &tablet, TabletGCStatus &gc_status);
   int get_unpersist_tablet_ids(
       common::ObIArray<ObTabletHandle> &deleted_tablets,
       common::ObIArray<ObTabletHandle> &immediately_deleted_tablets,

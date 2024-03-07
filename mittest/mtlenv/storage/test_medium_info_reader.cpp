@@ -350,8 +350,6 @@ TEST_F(TestMediumInfoReader, pure_dump_data)
   ASSERT_NE(nullptr, tablet);
 
   ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(tablet->get_pointer_handle().get_resource_ptr());
-  ret = tablet_ptr->try_gc_mds_table();
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   // insert data into tablet
   {

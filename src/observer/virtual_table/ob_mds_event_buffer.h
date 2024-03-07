@@ -80,6 +80,7 @@ struct MdsEvent {
   friend class ObMdsEventBuffer;
   MdsEvent()
   : timestamp_(0),
+  ptr_(nullptr),
   event_(nullptr),
   info_str_(),
   unit_id_(UINT8_MAX),
@@ -109,7 +110,7 @@ struct MdsEvent {
     if (!rhs.is_valid_()) {
       ret = OB_INVALID_ARGUMENT;
       MDS_LOG(WARN, "invalid argument", KR(ret), K(rhs));
-    } else if (OB_FAIL(set_(alloc, rhs.timestamp_, rhs.event_, rhs.info_str_, rhs.unit_id_, rhs.writer_type_,
+    } else if (OB_FAIL(set_(alloc, rhs.timestamp_, rhs.ptr_, rhs.event_, rhs.info_str_, rhs.unit_id_, rhs.writer_type_,
                             rhs.writer_id_, rhs.seq_no_, rhs.redo_scn_, rhs.end_scn_, rhs.trans_version_,
                             rhs.node_type_, rhs.state_, rhs.key_str_))) {
       // don't report 4013, cause alloc use ring buffer, 4013 is expected
@@ -120,12 +121,13 @@ struct MdsEvent {
     }
     return ret;
   }
-  TO_STRING_KV(KP_(alloc), KTIME_(timestamp), K_(event), K_(info_str), K_(unit_id), K_(key_str), K_(writer_type), \
+  TO_STRING_KV(KP_(alloc), KTIME_(timestamp), K_(ptr), K_(event), K_(info_str), K_(unit_id), K_(key_str), K_(writer_type), \
                K_(writer_id), K_(seq_no), K_(redo_scn), K_(end_scn), K_(trans_version), K_(node_type), K_(state));
 private:
   bool is_valid_() const { return OB_NOT_NULL(event_); }
   int set_(ObIAllocator &alloc,
            int64_t timestamp,
+           void *associated_ptr,
            const char *event_str,
            const ObString &info_str,
            uint8_t unit_id,
@@ -174,6 +176,7 @@ private:
       }
     } else {
       timestamp_ = timestamp;
+      ptr_ = associated_ptr;
       event_ = event_str;
       unit_id_ = unit_id;
       writer_type_ = writer_type;
@@ -208,6 +211,7 @@ private:
   char tname_[16] = {0};
   int64_t timestamp_;
   // need fill
+  void *ptr_;
   const char *event_;
   ObString info_str_;
   uint8_t unit_id_;

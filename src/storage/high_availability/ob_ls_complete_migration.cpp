@@ -1288,6 +1288,7 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
     SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
                   "tenant_id", ctx_->tenant_id_,
                   "ls_id", ls->get_ls_id().id());
+
     ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {

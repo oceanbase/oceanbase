@@ -844,7 +844,7 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   }
 
-  if (OB_FAIL(ObBlockManager::read_block(read_info, block_handle))) {
+  if (FAILEDx(ObBlockManager::read_block(read_info, block_handle))) {
     LOG_WARN("fail to read block", K(ret), K(read_info));
   } else if (OB_UNLIKELY(!block_handle.is_valid()
       || sstable.get_macro_read_size() != block_handle.get_data_size())) {

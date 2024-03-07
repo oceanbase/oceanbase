@@ -160,6 +160,22 @@ public:
              sql::ObSQLSessionInfo *session,
              const uint64_t tenant_id,
              const int64_t schema_version);
+
+  // Use to check if the column of sys table (exclude core table) does exist
+  // by querying __all_column when the column is not accessible.
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_id:   sys table_id (exclude core table)
+  // @param[in] column_name:   target column name
+  // @param[out] exist:  whether the column really exists
+  // @return: OB_SUCCESS if success
+  static int check_whether_column_exist(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObObjectID &table_id,
+      const ObString &column_name,
+      bool &exist);
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,
