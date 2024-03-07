@@ -857,7 +857,7 @@ bool ObMigrationOpArg::is_valid() const
       && src_.is_valid()
       && dst_.is_valid()
       && data_src_.is_valid()
-      && paxos_replica_number_ > 0;
+      && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_);
 }
 
 void ObMigrationOpArg::reset()
