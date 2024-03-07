@@ -9346,6 +9346,10 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                           exec_params, call_stmt, *routine_info, udts,
                                           session->get_timezone_info(), &tmp_result), call_stmt);
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params, *result, tmp_result));
+    if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
+      CK (OB_NOT_NULL(exec_ctx.get_pl_ctx()));
+      OZ (exec_ctx.get_pl_ctx()->add(*result));
+    }
   }
 
   return ret;
