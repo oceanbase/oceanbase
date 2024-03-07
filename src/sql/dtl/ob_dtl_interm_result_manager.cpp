@@ -344,6 +344,8 @@ int ObDTLIntermResultManager::atomic_append_block(ObDTLIntermResultKey &key, ObA
   int ret = OB_SUCCESS;
   if (OB_FAIL(map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
+  } else if (OB_FAIL(call.ret_)) {
+    LOG_WARN("ObAtomicAppendBlockCall fail", K(ret), K(call.ret_));
   } else {
     LOG_DEBUG("debug append block to interm result info", K(key));
   }
@@ -355,6 +357,8 @@ int ObDTLIntermResultManager::atomic_append_part_block(ObDTLIntermResultKey &key
   int ret = OB_SUCCESS;
   if (OB_FAIL(map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
+  } else if (OB_FAIL(call.ret_)) {
+    LOG_WARN("ObAtomicAppendPartBlockCall fail", K(ret), K(call.ret_));
   } else {
     LOG_DEBUG("debug append part block to interm result info", K(key));
   }
