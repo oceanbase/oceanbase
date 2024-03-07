@@ -13,7 +13,6 @@
 void format_init(format_t* f, int64_t limit) {
   f->limit = limit;
   f->pos = 0;
-  f->buf[0] = 0;
 }
 
 void format_reset(format_t* f) {

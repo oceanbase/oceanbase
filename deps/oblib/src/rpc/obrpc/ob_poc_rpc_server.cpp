@@ -50,6 +50,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
   ObRpcPacket tmp_pkt;
+  char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_request_create", 200 * 1000);
   const int64_t alloc_payload_sz = sz;
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
@@ -64,7 +65,8 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
       tenant_id = OB_SERVER_TENANT_ID;
     }
-    timeguard.click();
+    IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
+    timeguard.click(rpc_timeguard_str);
     ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
     void *temp = NULL;
 
@@ -135,6 +137,8 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   int pkt_hdr_size = sizeof(ObRpcPacket) + OB_NET_HEADER_LENGTH + rpc_header_size;
   int64_t pos = 0;
   char* pkt_ptr = reinterpret_cast<char*>(pkt);
+  char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
+  ObTimeGuard timeguard("rpc_resp", 10 * 1000);
   if (NULL == pkt) {
     // do nothing
   } else if (OB_UNLIKELY(pkt_ptr != resp_ptr_)) {
@@ -161,7 +165,12 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
     buff = pkt_ptr;
     resp_hdr_size = sizeof(ObRpcPacket) + OB_NET_HEADER_LENGTH;
     resp_buf_size = pkt->get_encoded_size();
+    IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld",
+                      resp_buf_size,
+                      pkt->get_pcode(),
+                      pkt->get_tenant_id());
   }
+  timeguard.click(rpc_timeguard_str);
   if ((sys_err = pn_resp(resp_id_, buff, resp_hdr_size, resp_buf_size, resp_expired_abs_us_)) != 0) {
     ret = tranlate_to_ob_error(sys_err);
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
@@ -315,14 +324,6 @@ void ObPocRpcServer::wait()
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
     pn_wait(gid);
   }
-}
-
-void* ObPocRpcServer::chunk_cache_alloc(int64_t sz) {
-  return pn_chunk_alloc(sz);
-}
-
-void ObPocRpcServer::chunk_cache_free(void* p) {
-  return pn_chunk_free(p);
 }
 
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {

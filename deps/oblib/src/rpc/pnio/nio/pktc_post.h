@@ -66,6 +66,7 @@ static int pktc_do_post(pktc_t* io, pktc_sk_t* sk, pktc_req_t* r) {
     // drop req
   } else {
     if (cb) {
+      sk->sk_diag_info.doing_cnt ++;
       dlink_insert(&sk->cb_head, &cb->sk_dlink);
       ihash_insert(&io->cb_map, &cb->hash_link);
       tw_regist(&io->cb_tw, &cb->timer_dlink);
@@ -79,6 +80,7 @@ static void pktc_post_io(pktc_t* io, pktc_req_t* r) {
   int err = PNIO_OK;
   pktc_sk_t* sk = pktc_try_connect(io, r->dest);
   r->sk = sk;
+  r->resp_cb->sk = sk;
   if (NULL == sk) {
     err = PNIO_CONNECT_FAIL;
   } else if  (PNIO_OK != (err = pktc_do_post(io, sk, r))) {
@@ -95,7 +97,7 @@ static void pktc_post_io(pktc_t* io, pktc_req_t* r) {
 }
 
 int pktc_post(pktc_t* io, pktc_req_t* req) {
-  PNIO_DELAY_WARN(req->ctime_us = rk_get_corse_us());
+  req->ctime_us = rk_get_corse_us();
   if (req->msg.s < (int64_t)sizeof(req->msg)) {
     return -EINVAL;
   }
@@ -115,6 +117,8 @@ int pktc_post(pktc_t* io, pktc_req_t* req) {
 static int pktc_handle_req_queue(pktc_t* io) {
   link_t* l = NULL;
   int cnt = 0;
+  int64_t sz = 0;
+  int64_t sc_queue_time = 0;
   while(cnt < 128 && (l = sc_queue_pop(&io->req_queue))) {
     pktc_req_t* req = structof(l, pktc_req_t, link);
     if (unlikely(PN_NORMAL_PKT != req->pkt_type)) {
@@ -127,11 +131,21 @@ static int pktc_handle_req_queue(pktc_t* io) {
       }
       cfifo_free(cmd_req);
     } else {
-      PNIO_DELAY_WARN(delay_warn("pktc_handle_req_queue", req->ctime_us, HANDLE_DELAY_WARN_US));
-      pktc_post_io(io, req);
+      int64_t cur_time = rk_get_corse_us();
+      int64_t delay_time = cur_time - req->ctime_us;
+      if (delay_time > HANDLE_DELAY_WARN_US && PNIO_REACH_TIME_INTERVAL(500*1000)) {
+        rk_warn("[delay_warn] delay high: %ld", delay_time);
+      }
       cnt++;
+      sz += req->msg.s;
+      sc_queue_time += delay_time;
+      req->ctime_us = cur_time;
+      pktc_post_io(io, req);
     }
   }
+  io->diag_info.send_cnt += cnt;
+  io->diag_info.send_size += sz;
+  io->diag_info.sc_queue_time += sc_queue_time;
   return cnt == 0? EAGAIN: 0;
 }
 

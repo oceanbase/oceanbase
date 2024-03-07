@@ -81,8 +81,6 @@ PN_API int pn_provision(int listen_id, int grp, int thread_count);
 // gid_tid = (gid<<8) | tid
 PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
 PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz);
-PN_API void* pn_chunk_alloc(int64_t sz);
-PN_API void pn_chunk_free(void* p);
 PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t payload_sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);
 PN_API int pn_ratelimit(int grp_id, int64_t value);
@@ -95,6 +93,7 @@ PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
 void pn_release(pn_comm_t* pn_comm);
+void pn_print_diag_info(pn_comm_t* pn_comm);
 
 #define PNIO_OK                     0
 #define PNIO_ERROR                  (-1)

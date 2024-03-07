@@ -256,9 +256,6 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
   int count = 0;
   pn_grp_t* pn_grp = ensure_grp(gid);
   ef(pn_grp == NULL);
-  if (1 == gid) {
-    init_mem_freelists();
-  }
   if (thread_count > MAX_PN_PER_GRP) {
     err = -EINVAL;
     rk_error("thread count is too large, thread_count=%d, MAX_PN_PER_GRP=%d", thread_count, MAX_PN_PER_GRP);
@@ -319,6 +316,10 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
   if (req) {
     req->resp_cb = NULL;
   }
+  if (cb->sk) {
+    cb->sk->sk_diag_info.doing_cnt --;
+    cb->sk->sk_diag_info.done_cnt ++;
+  }
   PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
@@ -346,11 +347,13 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   cb->resp_cb = pn_pktc_resp_cb;
   cb->errcode = PNIO_OK;
   cb->req = r;
+  cb->sk = NULL;
   r->pkt_type = PN_NORMAL_PKT;
   r->flush_cb = pn_pktc_flush_cb;
   r->resp_cb = cb;
   r->dest = dest;
   r->categ_id = pkt->categ_id;
+  r->sk = NULL;
   dlink_init(&r->link);
   eh_copy_msg(&r->msg, cb->id, req, req_sz);
   return r;
@@ -539,15 +542,6 @@ static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
   pn_resp_ctx_t* ctx = (typeof(ctx))structof(req, pn_resp_ctx_t, reserve);
   fifo_free(ctx);
 }
-
-PN_API void* pn_chunk_alloc(int64_t sz)
-{
-  return mod_alloc(sz, MOD_DEFAULT);
-}
-PN_API void pn_chunk_free(void* p)
-{
-  mod_free(p);
-}
 PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz)
 {
   void* p = NULL;
@@ -683,4 +677,39 @@ int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
     ret = dispatch_fd_to(fd, group_id, thread_idx);
   }
   return ret;
+}
+
+void pn_print_diag_info(pn_comm_t* pn_comm) {
+  pn_t* pn = (pn_t*)pn_comm;
+  int64_t client_cnt = 0;
+  int64_t server_cnt = 0;
+  // print socket diag info
+  dlink_for(&pn->pktc.sk_list, p) {
+    pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+    rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+              s, T2S(addr, s->sk_diag_info.local_addr), T2S(addr, s->dest), s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+              s->wq.cnt, s->wq.sz,
+              s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+              s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+              s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+              s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+    client_cnt++;
+  }
+  if (pn->pkts.sk_list.next != NULL) {
+    dlink_for(&pn->pkts.sk_list, p) {
+      pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
+      rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+                s, T2S(addr, s->peer), s->fd, s->sk_diag_info.establish_time,
+                s->wq.cnt, s->wq.sz,
+                s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+                s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+                s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+                s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+      server_cnt++;
+    }
+  }
+  // print pnio diag info
+  rk_info("client_send:%lu/%lu, client_queue_time=%lu, cnt=%ld, server_send:%lu/%lu, server_queue_time=%lu, cnt=%ld",
+            pn->pktc.diag_info.send_cnt, pn->pktc.diag_info.send_size, pn->pktc.diag_info.sc_queue_time, client_cnt,
+            pn->pkts.diag_info.send_cnt, pn->pkts.diag_info.send_size, pn->pkts.diag_info.sc_queue_time, server_cnt);
 }

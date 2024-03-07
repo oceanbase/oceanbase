@@ -12,11 +12,11 @@
 
 #ifndef OCEANBASE_OBRPC_OB_POC_RPC_PROXY_H_
 #define OCEANBASE_OBRPC_OB_POC_RPC_PROXY_H_
-#include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_endec.h"
 #include "rpc/frame/ob_req_transport.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 
 extern "C" {
 #include "rpc/pnio/interface/group.h"
@@ -200,6 +200,7 @@ public:
     const int64_t start_ts = common::ObTimeUtility::current_time();
     ObRpcMemPool* pool = NULL;
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
     ObTimeGuard timeguard("poc_rpc_post", 10 * 1000);
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
     if (OB_LS_FETCH_LOG2 == pcode) {
@@ -237,7 +238,8 @@ public:
           pkt_id_ptr = &newcb->pkt_id_;
         }
       }
-      timeguard.click();
+      IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
+      timeguard.click(rpc_timeguard_str);
       if (OB_SUCC(ret)) {
         sockaddr_storage sock_addr;
         const pn_pkt_t pkt = {

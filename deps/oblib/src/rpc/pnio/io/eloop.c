@@ -133,28 +133,21 @@ int eloop_run(eloop_t* ep) {
     }
 
     PNIO_DELAY_WARN(eloop_delay_warn(start_us, ELOOP_WARN_US));
-    if (unlikely(NULL != pn && 0 == pn->tid && PNIO_REACH_TIME_INTERVAL(1000000))) {
-      static __thread uint64_t last_rx_bytes = 0;
-      static __thread uint64_t last_time = 0;
-      uint64_t rx_bytes = pn_get_rxbytes(pn->gid);
+    if (unlikely(PNIO_REACH_TIME_INTERVAL(1000000))) {
       int64_t cur_time_us = rk_get_us();
-      uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
-      double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
-      rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
-      last_rx_bytes = rx_bytes;
-      last_time = cur_time_us;
-      if (1 == pn->gid) {
-        // reclaim expired memory cache, only the first pnio1 thread will reach here
-        const char* str = mem_freelists_str();
-        refresh_mem_freelists();
-        if (0 == (cur_time_us/1000000%20)) {
-          //print mem cache info each 20 seconds
-          rk_info("print mem cache info %s", str);
-        }
-        int64_t refresh_time = rk_get_us() - cur_time_us;
-        if (refresh_time > 10 * 1000) {
-          rk_warn("refresh_mem_freelists cost too much time, time=%ld, %s", refresh_time, str);
-        }
+      if (NULL != pn && 0 == pn->tid) {
+        static __thread uint64_t last_rx_bytes = 0;
+        static __thread uint64_t last_time = 0;
+        uint64_t rx_bytes = pn_get_rxbytes(pn->gid);
+        uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
+        double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
+        rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
+        last_rx_bytes = rx_bytes;
+        last_time = cur_time_us;
+      }
+      // print debug info each 60 seconds
+      if (0 == cur_time_us/1000000%60) {
+        pn_print_diag_info(pn);
       }
     }
   }

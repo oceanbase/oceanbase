@@ -61,6 +61,7 @@ public:
     RATELIMIT_PNIO_GROUP = 2,
     END_GROUP
   };
+  enum { RPC_TIMEGUARD_STRING_SIZE = 64};
   ObPocRpcServer() : has_start_(false), start_as_client_(false){}
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
@@ -73,8 +74,6 @@ public:
   bool client_use_pkt_nio();
   int64_t get_ratelimit();
   uint64_t get_ratelimit_rxbytes();
-  static void* chunk_cache_alloc(int64_t sz);
-  static void chunk_cache_free(void* p);
 private:
   bool has_start_;
   bool start_as_client_;
