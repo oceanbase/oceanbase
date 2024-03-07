@@ -46,6 +46,7 @@ public:
 
 struct RowMeta {
   OB_UNIS_VERSION_V(1);
+  static const int64_t MAX_LOCAL_BUF_LEN = 128;
 public:
   RowMeta(common::ObIAllocator *allocator = nullptr) : allocator_(allocator), col_cnt_(0), extra_size_(0),
               fixed_cnt_(0), fixed_offsets_(NULL), projector_(NULL),
@@ -93,6 +94,13 @@ public:
 
   TO_STRING_KV(K_(col_cnt), K_(extra_size), K_(fixed_cnt), K_(nulls_off), K_(var_offsets_off),
                K_(extra_off), K_(fix_data_off), K_(var_data_off));
+private:
+  inline bool use_local_allocator() const
+  {
+    return fixed_cnt_ > 0 && ((col_cnt_ + fixed_cnt_ + 1) * sizeof(int32_t) <= MAX_LOCAL_BUF_LEN);
+  }
+private:
+  char buf_[MAX_LOCAL_BUF_LEN];
 public:
   common::ObIAllocator *allocator_;
   int32_t col_cnt_;
