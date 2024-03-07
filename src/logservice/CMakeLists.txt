@@ -235,3 +235,4 @@ ob_set_subtarget(ob_logservice logfetcher
 
 ob_server_add_target(ob_logservice)
 add_subdirectory(libobcdc)
+add_subdirectory(logminer)

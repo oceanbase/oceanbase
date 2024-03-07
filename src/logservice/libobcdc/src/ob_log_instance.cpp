@@ -416,7 +416,9 @@ int ObLogInstance::init_logger_()
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
     OB_LOGGER.set_max_file_index(max_log_file_count);
-    OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
+    if (!OB_LOGGER.is_svr_file_opened()) {
+      OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
+    }
     OB_LOGGER.set_log_level("INFO");
     OB_LOGGER.disable_thread_log_level();
     OB_LOGGER.set_enable_log_limit(enable_log_limit);

@@ -48,6 +48,7 @@ install(PROGRAMS
   tools/import_time_zone_info.py
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+  ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
   tools/ob_admin/io_bench/bench_io.sh
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
@@ -360,6 +361,7 @@ if(OB_BUILD_OBADMIN)
     install(PROGRAMS
       ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
       ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+      ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
       DESTINATION /usr/bin
       COMPONENT utils
     )
