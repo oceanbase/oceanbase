@@ -584,6 +584,7 @@ public:
       new_part_name_()
   {
   }
+  DISABLE_COPY_ASSIGN(AlterTableSchema);
   inline const common::ObString &get_origin_table_name() const { return origin_table_name_; }
   inline int set_origin_table_name(const common::ObString &origin_table_name);
   inline const common::ObString &get_database_name() const { return new_database_name_; }

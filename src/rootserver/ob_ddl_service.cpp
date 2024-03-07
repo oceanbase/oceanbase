@@ -6892,9 +6892,9 @@ int ObDDLService::update_generated_column_schema(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("*col_iter is NULL", K(ret));
     } else if (column->has_cascaded_column_id(orig_column_schema.get_column_id())) {
-      ObColumnSchemaV2 new_generated_column_schema = *column;
-      if (OB_FAIL(new_generated_column_schema.get_err_ret())) {
-        LOG_WARN("failed to copy new gen column", K(ret));
+      ObColumnSchemaV2 new_generated_column_schema;
+      if (OB_FAIL(new_generated_column_schema.assign(*column))) {
+        LOG_WARN("failed to copy new gen column", KR(ret), KPC(column));
       } else if (need_update_session_var
                  && OB_FAIL(modify_generated_column_local_vars(new_generated_column_schema,
                                                               orig_column_schema.get_column_name_str(),
@@ -7889,21 +7889,23 @@ int ObDDLService::check_modify_column_when_upgrade(
   if (obrpc::OB_UPGRADE_STAGE_DBUPGRADE != GCTX.get_upgrade_stage()) {
     // do nothing
   } else {
-    ObColumnSchemaV2 tmp_column = new_column;
-    tmp_column.set_schema_version(orig_column.get_schema_version());
-    tmp_column.set_data_length(orig_column.get_data_length());
-    tmp_column.set_data_precision(orig_column.get_data_precision());
-    tmp_column.set_data_scale(orig_column.get_data_scale());
-    if (OB_FAIL(tmp_column.get_assign_ret())) {
-      LOG_WARN("assign failed", K(ret), K(new_column));
-    } else if (tmp_column != orig_column) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can only modify column's length", K(ret), K(new_column), K(orig_column));
-    } else if (new_column.get_data_length() < orig_column.get_data_length()
-               || new_column.get_data_precision() < orig_column.get_data_precision()
-               || new_column.get_data_scale() < orig_column.get_data_scale()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can only increase column's length", K(ret), K(new_column), K(orig_column));
+    ObColumnSchemaV2 tmp_column;
+    if (OB_FAIL(tmp_column.assign(new_column))) {
+      LOG_WARN("assign failed", KR(ret), K(new_column));
+    } else {
+      tmp_column.set_schema_version(orig_column.get_schema_version());
+      tmp_column.set_data_length(orig_column.get_data_length());
+      tmp_column.set_data_precision(orig_column.get_data_precision());
+      tmp_column.set_data_scale(orig_column.get_data_scale());
+      if (tmp_column != orig_column) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("can only modify column's length", K(ret), K(new_column), K(orig_column));
+      } else if (new_column.get_data_length() < orig_column.get_data_length()
+                 || new_column.get_data_precision() < orig_column.get_data_precision()
+                 || new_column.get_data_scale() < orig_column.get_data_scale()) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("can only increase column's length", K(ret), K(new_column), K(orig_column));
+      }
     }
   }
   return ret;
@@ -7989,17 +7991,20 @@ int ObDDLService::check_new_column_for_index(
                "index_table", index_table_schema->get_table_name_str());
       } else {
         copy_index_column_schema.reset();
-        copy_index_column_schema = new_column_schema;
-        copy_index_column_schema.set_rowkey_position(origin_idx_column_schema->get_rowkey_position());
-        copy_index_column_schema.set_index_position(origin_idx_column_schema->get_index_position());
-        copy_index_column_schema.set_tbl_part_key_pos(origin_idx_column_schema->get_tbl_part_key_pos());
-        if (OB_FAIL(index_table_schema->alter_column(copy_index_column_schema,
-                    ObTableSchema::CHECK_MODE_ONLINE,
-                    for_view))) {
-          RS_LOG(WARN, "failed to alter index column schema", K(copy_index_column_schema), K(ret));
-        } else if (!index_table_schema->is_valid()) {
-          ret = OB_SCHEMA_ERROR;
-          RS_LOG(WARN, "idx table schema is invalid!", K(ret));
+        if (OB_FAIL(copy_index_column_schema.assign(new_column_schema))) {
+          LOG_WARN("fail to assign column schema", KR(ret), K(new_column_schema));
+        } else {
+          copy_index_column_schema.set_rowkey_position(origin_idx_column_schema->get_rowkey_position());
+          copy_index_column_schema.set_index_position(origin_idx_column_schema->get_index_position());
+          copy_index_column_schema.set_tbl_part_key_pos(origin_idx_column_schema->get_tbl_part_key_pos());
+          if (OB_FAIL(index_table_schema->alter_column(copy_index_column_schema,
+                      ObTableSchema::CHECK_MODE_ONLINE,
+                      for_view))) {
+            RS_LOG(WARN, "failed to alter index column schema", K(copy_index_column_schema), K(ret));
+          } else if (!index_table_schema->is_valid()) {
+            ret = OB_SCHEMA_ERROR;
+            RS_LOG(WARN, "idx table schema is invalid!", K(ret));
+          }
         }
       }
     }
@@ -8085,19 +8090,22 @@ int ObDDLService::alter_table_update_aux_column(
             aux_table_schema->get_column_schema(new_column_schema.get_column_id());
         if (NULL != origin_column_schema) {
           // exist such column in aux schema
-          new_aux_column_schema = new_column_schema;
-          new_aux_column_schema.set_table_id(aux_table_schema->get_table_id());
-          new_aux_column_schema.set_autoincrement(false);
-          //save the rowkey postion and aux postion
-          if (is_index) {
-            new_aux_column_schema.set_rowkey_position(origin_column_schema->get_rowkey_position());
-            new_aux_column_schema.set_index_position(origin_column_schema->get_index_position());
-            new_aux_column_schema.set_tbl_part_key_pos(origin_column_schema->get_tbl_part_key_pos());
-            ObIndexBuilderUtil::del_column_flags_and_default_value(new_aux_column_schema);
-          }
-          if (!is_index) {
-            // VP column of primary table need not update.
-            new_aux_column_schema.set_column_flags(AUX_VP_COLUMN_FLAG);
+          if (OB_FAIL(new_aux_column_schema.assign(new_column_schema))) {
+            LOG_WARN("fail to assign column", KR(ret), K(new_column_schema));
+          } else {
+            new_aux_column_schema.set_table_id(aux_table_schema->get_table_id());
+            new_aux_column_schema.set_autoincrement(false);
+            //save the rowkey postion and aux postion
+            if (is_index) {
+              new_aux_column_schema.set_rowkey_position(origin_column_schema->get_rowkey_position());
+              new_aux_column_schema.set_index_position(origin_column_schema->get_index_position());
+              new_aux_column_schema.set_tbl_part_key_pos(origin_column_schema->get_tbl_part_key_pos());
+              ObIndexBuilderUtil::del_column_flags_and_default_value(new_aux_column_schema);
+            }
+            if (!is_index) {
+              // VP column of primary table need not update.
+              new_aux_column_schema.set_column_flags(AUX_VP_COLUMN_FLAG);
+            }
           }
           //will only update some attribute, not include rowkey postion or aux position
           if (OB_FAIL(ret)) {
@@ -25556,9 +25564,11 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sys variable schema is null", K(ret));
     } else {
-      ObSysVariableSchema new_sys_variable = *orig_sys_variable;
-      new_sys_variable.reset_sysvars();
-      if (OB_FAIL(update_sys_variables(arg.sys_var_list_, *orig_sys_variable, new_sys_variable, value_changed))) {
+      ObSysVariableSchema new_sys_variable;
+      if (OB_FAIL(new_sys_variable.assign(*orig_sys_variable))) {
+        LOG_WARN("fail to assign sys variable schema", KR(ret), KPC(orig_sys_variable));
+      } else if (FALSE_IT(new_sys_variable.reset_sysvars())) {
+      } else if (OB_FAIL(update_sys_variables(arg.sys_var_list_, *orig_sys_variable, new_sys_variable, value_changed))) {
         LOG_WARN("failed to update_sys_variables", K(ret));
       } else if (value_changed == true) {
         int64_t refreshed_schema_version = 0;
@@ -25800,8 +25810,9 @@ int ObDDLService::update_sys_variables(const common::ObIArray<obrpc::ObSysVarIdV
           LOG_WARN("sysvar is null", K(sysvar_value), K(ret));
         } else {
           ObSysVarSchema new_sysvar;
-          new_sysvar = *sysvar;
-          if (SYS_VAR_OB_COMPATIBILITY_MODE
+          if (OB_FAIL(new_sysvar.assign(*sysvar))) {
+            LOG_WARN("fail to assign sys var schema", KR(ret), KPC(sysvar));
+          } else if (SYS_VAR_OB_COMPATIBILITY_MODE
               == ObSysVarFactory::find_sys_var_id_by_name(new_sysvar.get_name())) {
             ret = OB_OP_NOT_ALLOW;
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "change tenant compatibility mode");
@@ -31091,7 +31102,9 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
         //copy from the old outline info
         new_outline_info = *orig_outline_info;
         const ObString &outline_name = new_outline_info.get_name_str();
-        if (alter_outline_info.get_alter_option_bitset().has_member(
+        if (OB_FAIL(new_outline_info.get_err_ret())) {
+          LOG_WARN("copy assign failed", KR(ret), KPC(orig_outline_info));
+        } else if (alter_outline_info.get_alter_option_bitset().has_member(
                 obrpc::ObAlterOutlineArg::ADD_OUTLINE_CONTENT))  {
           //add outline_content
           const ObString &orig_outline_content = orig_outline_info->get_outline_content_str();
@@ -37287,12 +37300,15 @@ int ObDDLService::check_new_columns_for_index(ObIArray<ObTableSchema> &idx_schem
         LOG_WARN("push back element failed", K(ret));
       } else {
         ObColumnSchemaV2 copy_index_column_schema;
-        copy_index_column_schema = new_column_schemas.at(j);
-        copy_index_column_schema.set_rowkey_position(orig_idx_col_schema->get_rowkey_position());
-        copy_index_column_schema.set_index_position(orig_idx_col_schema->get_index_position());
-        copy_index_column_schema.set_tbl_part_key_pos(orig_idx_col_schema->get_tbl_part_key_pos());
-        if (OB_FAIL(copy_index_column_schemas.push_back(copy_index_column_schema))) {
-          LOG_WARN("push back element failed", K(ret));
+        if (OB_FAIL(copy_index_column_schema.assign(new_column_schemas.at(j)))) {
+          LOG_WARN("fail to assign column", KR(ret), K(new_column_schemas.at(j)));
+        } else {
+          copy_index_column_schema.set_rowkey_position(orig_idx_col_schema->get_rowkey_position());
+          copy_index_column_schema.set_index_position(orig_idx_col_schema->get_index_position());
+          copy_index_column_schema.set_tbl_part_key_pos(orig_idx_col_schema->get_tbl_part_key_pos());
+          if (OB_FAIL(copy_index_column_schemas.push_back(copy_index_column_schema))) {
+            LOG_WARN("push back element failed", K(ret));
+          }
         }
       }
     } // end for

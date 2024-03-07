@@ -164,14 +164,18 @@ int ObVertialPartitionBuilder::set_aux_vp_table_columns(
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_WARN("get_column_schema failed", K(column_id), K(ret));
       } else {
-        ObColumnSchemaV2 column_schema = *data_column;
-        // 在处理主分区表时，将主表的垂直分区列原地标记为PRIMARY_VP_COLUMN_FLAG
-        // 将主表的rowkey copy进入副表时，应该将该标记清除
-        column_schema.del_column_flag(PRIMARY_VP_COLUMN_FLAG);
-        column_schema.set_is_hidden(true);
-        if (OB_FAIL(ObIndexBuilderUtil::add_column(&column_schema, false /*is_index_column*/, true /*is_rowkey*/,
-            data_column->get_order_in_rowkey(), row_desc, aux_vp_table_schema, false /* is_hidden */, false /* is_specified_storing_col */))) {
-          LOG_WARN("add column failed", K(column_schema), K(ret));
+        ObColumnSchemaV2 column_schema;
+        if (OB_FAIL(column_schema.assign(*data_column))) {
+          LOG_WARN("fail to assign column schema", KR(ret), KPC(data_column));
+        } else {
+          // 在处理主分区表时，将主表的垂直分区列原地标记为PRIMARY_VP_COLUMN_FLAG
+          // 将主表的rowkey copy进入副表时，应该将该标记清除
+          column_schema.del_column_flag(PRIMARY_VP_COLUMN_FLAG);
+          column_schema.set_is_hidden(true);
+          if (OB_FAIL(ObIndexBuilderUtil::add_column(&column_schema, false /*is_index_column*/, true /*is_rowkey*/,
+              data_column->get_order_in_rowkey(), row_desc, aux_vp_table_schema, false /* is_hidden */, false /* is_specified_storing_col */))) {
+            LOG_WARN("add column failed", K(column_schema), K(ret));
+          }
         }
       }
     }
@@ -182,8 +186,10 @@ int ObVertialPartitionBuilder::set_aux_vp_table_columns(
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_WARN("get_column_schema failed", K(column_name), K(ret));
       } else {
-        ObColumnSchemaV2 column_schema = *data_column;
-        if (column_schema.is_rowkey_column()) {
+        ObColumnSchemaV2 column_schema;
+        if (OB_FAIL(column_schema.assign(*data_column))) {
+          LOG_WARN("fail to assign column schema", KR(ret), KPC(data_column));
+        } else if (column_schema.is_rowkey_column()) {
           // 无需添加该列，因为第一步已经添加该列，但仍需要给该列打标
           ObColumnSchemaV2 *rowkey_column = NULL;
           if (NULL == (rowkey_column = aux_vp_table_schema.get_column_schema(column_name))) {

@@ -1928,11 +1928,9 @@ int ObTableSchema::add_column(const ColumnType &column)
       ret = common::OB_ERR_UNEXPECTED;
       SHARE_SCHEMA_LOG(WARN, "Fail to new local_column", KR(ret));
     } else {
-      *local_column = column;
-      ret = local_column->get_err_ret();
-      local_column->set_table_id(table_id_);
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(local_column->assign(column))) {
         SHARE_SCHEMA_LOG(WARN, "failed copy assign column", KR(ret), K(column));
+      } else if (FALSE_IT(local_column->set_table_id(table_id_))) {
       } else if (!local_column->is_valid()) {
         ret = common::OB_ERR_UNEXPECTED;
         SHARE_SCHEMA_LOG(WARN, "The local column is not valid", KR(ret));
