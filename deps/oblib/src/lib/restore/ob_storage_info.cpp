@@ -21,6 +21,17 @@ namespace oceanbase
 
 namespace common
 {
+const char *OB_STORAGE_CHECKSUM_TYPE_STR[] = {CHECKSUM_TYPE_NO_CHECKSUM, CHECKSUM_TYPE_MD5, CHECKSUM_TYPE_CRC32};
+
+const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
+{
+  const char *str = "UNKNOWN";
+  STATIC_ASSERT(static_cast<int64_t>(OB_STORAGE_CHECKSUM_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_CHECKSUM_TYPE_STR), "ObStorageChecksumType count mismatch");
+  if (type >= OB_NO_CHECKSUM_ALGO && type < OB_STORAGE_CHECKSUM_MAX_TYPE) {
+    str = OB_STORAGE_CHECKSUM_TYPE_STR[type];
+  }
+  return str;
+}
 
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
@@ -93,6 +104,11 @@ ObStorageType ObObjectStorageInfo::get_type() const
 ObStorageChecksumType ObObjectStorageInfo::get_checksum_type() const
 {
   return checksum_type_;
+}
+
+const char *ObObjectStorageInfo::get_checksum_type_str() const
+{
+  return get_storage_checksum_type_str(checksum_type_);
 }
 
 // oss:host=xxxx&access_id=xxx&access_key=xxx

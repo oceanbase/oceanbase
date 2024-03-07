@@ -23044,10 +23044,10 @@ static const _error _error_OB_CHECKSUM_TYPE_NOT_SUPPORTED = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "checksum type is not supported",
-      .str_user_error        = "checksum type is not supported",
+      .str_user_error        = "checksum type %s is not supported for the input destination",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9113, checksum type is not supported",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9113, checksum type is not supported"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9113, checksum type %s is not supported for the input destination"
 };
 static const _error _error_OB_INVALID_STORAGE_DEST = {
       .error_name            = "OB_INVALID_STORAGE_DEST",

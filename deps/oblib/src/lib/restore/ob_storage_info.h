@@ -50,11 +50,13 @@ enum ObStorageChecksumType
   OB_NO_CHECKSUM_ALGO = 0,
   OB_MD5_ALGO = 1,
   OB_CRC32_ALGO = 2,
+  OB_STORAGE_CHECKSUM_MAX_TYPE
 };
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
+const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 
 class ObObjectStorageInfo
 {
@@ -69,6 +71,7 @@ public:
   ObStorageType get_type() const;
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
+  const char *get_checksum_type_str() const;
   int get_storage_info_str(char *storage_info, const int64_t info_len) const;
 
   bool is_valid() const;
