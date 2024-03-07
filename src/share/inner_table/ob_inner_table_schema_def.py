@@ -6921,6 +6921,7 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 514 : __all_user_proxy_role_info
 # 515 : __all_user_proxy_role_info_history
 # 516 : __all_service
+# 517 : __all_storage_io_usage
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -13752,6 +13753,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12480: __all_virtual_service
 # 12481: __all_virtual_tenant_resource_limit
 # 12482: __all_virtual_tenant_resource_limit_detail
+# 12483: __all_virtual_group_io_stat
+# 12484: __all_virtual_res_mgr_consumer_group
+# 12485: __all_virtual_storage_io_usage
+# 12486: __all_zone_storage
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14222,6 +14227,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15449: __all_virtual_service
 # 15450: __all_virtual_tenant_resource_limit
 # 15451: __all_virtual_tenant_resource_limit_detail
+# 15452: __all_virtual_group_io_stat
+# 15453: __all_storage_io_usage
+# 15454: __all_virtual_storage_io_usage
+# 15455: __all_zone_storage
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -32893,6 +32902,10 @@ def_table_schema(
 # 21555: INNODB_LOCKS
 # 21556: INNODB_TRX
 # 21557: ndb_transid_mysql_connection_map
+# 21558: V$OB_GROUP_IO_STAT
+# 21559: GV$OB_GROUP_IO_STAT
+# 21560: DBA_OB_STORAGE_IO_USAGE
+# 21561: CDB_OB_STROAGE_IO_USAGE
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -52724,6 +52737,7 @@ def_table_schema(
 
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
+# 25303: DBA_OB_STORAGE_IO_USAGE
 
 #
 # 余留位置（此行之前占位）
@@ -59938,6 +59952,8 @@ def_table_schema(
 # 28225: V$OB_TENANT_RESOURCE_LIMIT
 # 28226: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
 # 28227: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 28228: V$OB_GROUP_IO_STAT
+# 28229: GV$OB_GROUP_IO_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
