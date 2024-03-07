@@ -140,9 +140,6 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else if (OB_STORAGE_COS == device_type && !has_needed_extension) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid cos info, appid do not allow to be empty", K(ret), K_(extension));
-  } else if (OB_STORAGE_S3 == device_type && !has_needed_extension) {
-    ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid s3 info, region do not allow to be empty", K(ret), K_(extension));
   } else if (OB_STORAGE_FILE == device_type
       && (0 != strlen(endpoint_) || 0 != strlen(access_id_) || 0 != strlen(access_key_))) {
     ret = OB_INVALID_BACKUP_DEST;
@@ -190,7 +187,6 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       if (NULL == token) {
         break;
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        has_needed_extension = (OB_STORAGE_S3 == device_type_);
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set region", K(ret), K(token));
         }
@@ -327,6 +323,7 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
   device_type_ = storage_info.device_type_;
+  checksum_type_ = storage_info.checksum_type_;
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
@@ -349,8 +346,9 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (OB_STORAGE_FILE != device_type_) {
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s",
-                                       endpoint_, access_id_, key))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s",
+                                       endpoint_, access_id_, key,
+                                       CHECKSUM_TYPE, get_checksum_type_str()))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }

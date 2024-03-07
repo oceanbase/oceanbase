@@ -231,7 +231,7 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const share::O
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invlaid args", K(ret), K(uri));
+    OB_LOG(WARN, "invalid args", K(ret), K(uri));
   } else if (OB_FAIL(databuff_printf(path, sizeof(path), "%.*s", uri.length(), uri.ptr()))) {
     OB_LOG(WARN, "failed to fill path", K(ret), K(path));
   } else if (path[strlen(path) - 1] == '/') {

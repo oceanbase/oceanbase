@@ -343,7 +343,7 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     STORAGE_LOG(WARN, "double init the storage util", K(ret));
   } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(storage_info));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), KPC(storage_info));
   } else if (OB_FALSE_IT(device_type_ = storage_info->get_type())) {
   } else if (OB_STORAGE_OSS == device_type_) {
     util_ = &oss_util_;
@@ -1370,6 +1370,9 @@ int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (NULL != reader_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type))) {
@@ -1502,6 +1505,9 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
   } else if (NULL != reader_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type))) {
@@ -1701,6 +1707,9 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (NULL != writer_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type))) {
@@ -1842,9 +1851,9 @@ int ObStorageAppender::open(
   } else if (NULL != appender_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
-  } else if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(uri), KP(storage_info));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type_))) {
@@ -2137,9 +2146,9 @@ int ObStorageMultiPartWriter::open(
   } else if (NULL != multipart_writer_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "multipart writer cannot open twice", K(ret), K(uri));
-  } else if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(uri), KPC(storage_info));
+    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type))) {

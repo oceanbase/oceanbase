@@ -537,12 +537,12 @@ int ObStorageCosBase::open(
     ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
+  if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "uri is empty", K(ret), K(uri), KP(storage_info));
+    OB_LOG(WARN, "uri is empty", K(ret), K(uri), KPC(storage_info));
   } else if (FALSE_IT(checksum_type_ = storage_info->get_checksum_type())) {
   } else if (OB_UNLIKELY(!is_cos_supported_checksum(checksum_type_))) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "that checksum algorithm is not supported for cos", K(ret), K_(checksum_type));
   } else if (OB_FAIL(init_handle(*storage_info))) {
     OB_LOG(WARN, "failed to init cos wrapper handle", K(ret), K(uri));
@@ -887,6 +887,7 @@ int ObStorageCosWriter::pwrite(const char *buf, const int64_t size, const int64_
 int ObStorageCosWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "cos writer not opened", K(ret));

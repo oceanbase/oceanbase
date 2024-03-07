@@ -608,7 +608,8 @@ bool ObBackupCheckFile::is_permission_error_(const int32_t result)
   bool is_permission = false;
   if (OB_IO_ERROR == result
       || OB_OSS_ERROR == result
-      || OB_COS_ERROR == result) {
+      || OB_COS_ERROR == result
+      || OB_S3_ERROR == result) {
     is_permission = true; 
   }
   return is_permission;

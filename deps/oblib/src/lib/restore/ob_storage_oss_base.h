@@ -156,7 +156,6 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
-  ObStorageChecksumType checksum_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssWriter);
 };
 
@@ -190,7 +189,6 @@ private:
   int partnum_;
   bool is_opened_;
   int64_t file_length_;
-  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMultiPartWriter);
 };
@@ -285,7 +283,6 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
-  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssAppendWriter);
 };

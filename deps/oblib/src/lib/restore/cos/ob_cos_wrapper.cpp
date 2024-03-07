@@ -45,6 +45,7 @@ constexpr int OB_COS_ERROR                           = -9060;
 constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
+constexpr int OB_INVALID_OBJECT_STORAGE_ENDPOINT     = -9118;
 
 const int COS_BAD_REQUEST = 400;
 const int COS_OBJECT_NOT_EXIST  = 404;
@@ -94,8 +95,12 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
         break;
       }
       case COS_BAD_REQUEST: {
-        if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
+        if (nullptr == cos_ret->error_code) {
+          ob_errcode = OB_COS_ERROR;
+        } else if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
           ob_errcode = OB_CHECKSUM_ERROR;
+        } else if (0 == strcmp("InvalidRegionName", cos_ret->error_code)) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_COS_ERROR;
         }
@@ -185,8 +190,6 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
         if (OB_SUCCESS != (ret = set_field(token + strlen(DELETE_MODE), delete_mode_, sizeof(delete_mode_)))) {
           cos_warn_log("[COS]fail to set delete_mode=%s, ret=%d", token, ret);
         }
-      } else {
-        cos_warn_log("[COS]unkown token:%s\n", token);
       }
     }
 
@@ -245,26 +248,26 @@ static void log_status(cos_status_t *s, const int ob_errcode)
 {
   if (NULL != s) {
     if (OB_CHECKSUM_ERROR == ob_errcode) {
-      cos_error_log("[COS]status->code: %d", s->code);
+      cos_error_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
-        cos_error_log("[COS]status->error_code: %s", s->error_code);
+        cos_error_log("[COS]status->error_code: %s, ret=%d", s->error_code, ob_errcode);
       }
       if (s->error_msg) {
-        cos_error_log("[COS]status->error_msg: %s", s->error_msg);
+        cos_error_log("[COS]status->error_msg: %s, ret=%d", s->error_msg, ob_errcode);
       }
       if (s->req_id) {
-        cos_error_log("[COS]status->req_id: %s", s->req_id);
+        cos_error_log("[COS]status->req_id: %s, ret=%d", s->req_id, ob_errcode);
       }
     } else {
-      cos_warn_log("[COS]status->code: %d", s->code);
+      cos_warn_log("[COS]status->code: %d, ret=%d", s->code, ob_errcode);
       if (s->error_code) {
-        cos_warn_log("[COS]status->error_code: %s", s->error_code);
+        cos_warn_log("[COS]status->error_code: %s, ret=%d", s->error_code, ob_errcode);
       }
       if (s->error_msg) {
-        cos_warn_log("[COS]status->error_msg: %s", s->error_msg);
+        cos_warn_log("[COS]status->error_msg: %s, ret=%d", s->error_msg, ob_errcode);
       }
       if (s->req_id) {
-        cos_warn_log("[COS]status->req_id: %s", s->req_id);
+        cos_warn_log("[COS]status->req_id: %s, ret=%d", s->req_id, ob_errcode);
       }
     }
   }
@@ -341,11 +344,10 @@ int ObCosWrapper::create_cos_handle(
 
       if (check_md5) {
         cos_set_content_md5_enable(ctx->options->ctl, COS_TRUE);
-        ctx->options->ctl->options->enable_crc = false;
       } else {
         cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
-        ctx->options->ctl->options->enable_crc = true;
       }
+      ctx->options->ctl->options->enable_crc = false;
     }
   }
 
