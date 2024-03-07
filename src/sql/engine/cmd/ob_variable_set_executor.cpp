@@ -35,6 +35,7 @@
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
+#include "sql/engine/cmd/ob_set_names_executor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -71,6 +72,16 @@ ObVariableSetExecutor::ObVariableSetExecutor()
 
 ObVariableSetExecutor::~ObVariableSetExecutor()
 {
+}
+
+int ObVariableSetExecutor::do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSetNamesExecutor executor;
+  if (OB_FAIL(executor.execute(ctx, stmt))) {
+    LOG_WARN("fail to set names", K(ret));
+  }
+  return ret;
 }
 
 int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
@@ -114,6 +125,10 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
         ObVariableSetStmt::VariableSetNode &node = tmp_node;
         if (OB_FAIL(stmt.get_variable_node(i, node))) {
           LOG_WARN("fail to get variable node", K(i), K(ret));
+        } else if (OB_NOT_NULL(node.set_names_stmt_)) {
+          if (OB_FAIL(do_set_names(ctx, *node.set_names_stmt_))) {
+            LOG_WARN("fail to set names", K(ret));
+          }
         } else {
           ObObj value_obj;
           ObBasicSysVar *sys_var = NULL;
