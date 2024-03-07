@@ -18027,10 +18027,25 @@ NAME_OB { $$ = $1; }
 ;
 
 id_dot_id:
-ID_DOT_ID { $$ = $1; }
+ID_DOT_ID
+{ $$ = $1; }
 ;
 id_dot_id_dot_id:
 ID_DOT_ID_DOT_ID { $$ = $1; }
+| id_dot_id '.' relation_name
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  ParseNode* col_node = $3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_IDENT, 3, db_node, tb_node, col_node);
+}
+| relation_name '.' id_dot_id
+{
+  ParseNode* db_node = $1;
+  ParseNode* tb_node = $3->children_[0];
+  ParseNode* col_node = $3->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_IDENT, 3, db_node, tb_node, col_node);
+}
 ;
 
 function_name:
