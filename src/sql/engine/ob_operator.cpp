@@ -1106,9 +1106,10 @@ int ObOperator::submit_op_monitor_node()
           }
         }
         // exclude io time cost
-        uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
-        op_monitor_info_.db_time_ = 1000 * db_time / cpu_khz;
-        op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_ / cpu_khz;
+        // Change to divide by cpu_khz when generating the virtual table.
+        // Otherwise, the unit of this field is inconsistent during SQL execution and after SQL execution is completed.
+        op_monitor_info_.db_time_ = 1000 * db_time;
+        op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
 
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
