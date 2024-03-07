@@ -943,7 +943,7 @@ int ObDDLHelper::check_table_udt_exist_(const ObTableSchema &table_schema)
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         const ObUDTTypeInfo *udt_info = NULL;
         const ObUDTTypeInfo *local_udt_info = nullptr;

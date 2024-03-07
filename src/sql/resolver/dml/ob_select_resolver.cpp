@@ -62,7 +62,8 @@ ObSelectResolver::ObSelectResolver(ObResolverParams &params)
     has_grouping_(false),
     has_group_by_clause_(false),
     has_nested_aggr_(false),
-    is_top_stmt_(false)
+    is_top_stmt_(false),
+    has_resolved_field_list_(false)
 {
   params_.is_from_create_view_ = params.is_from_create_view_;
   params_.is_from_create_table_ = params.is_from_create_table_;
@@ -1139,6 +1140,9 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   if (is_oracle_mode()) {
     // oracle resolve: from->where->connect by->group by->having->select_item->order by
     OZ( resolve_field_list(*(parse_tree.children_[PARSE_SELECT_SELECT])) );
+    if (OB_SUCC(ret)) {
+      set_has_resolved_field_list(true);
+    }
   }
   OZ( resolve_order_clause(parse_tree.children_[PARSE_SELECT_ORDER]) );
   OZ( resolve_limit_clause(parse_tree.children_[PARSE_SELECT_LIMIT]) );

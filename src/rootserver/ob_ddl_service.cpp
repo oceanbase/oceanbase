@@ -1317,7 +1317,7 @@ int ObDDLService::check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard
     if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get column schema failed", K(ret));
-    } else if (col->is_extend()) {
+    } else if (col->get_meta_type().is_user_defined_sql_type()) {
       // delete hidden primary key
       if (OB_FAIL(check_udt_id_is_exist(schema_guard, *col, tenant_id))) {
         LOG_WARN("fail to check column udt id", K(ret));

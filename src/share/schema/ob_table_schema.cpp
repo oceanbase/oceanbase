@@ -7860,8 +7860,7 @@ int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(ret));
-    } else if (ObObjType::ObExtendType == column_schema->get_data_type()
-               && ObObjType::ObUserDefinedSQLType == column_schema->get_data_type()) {
+    } else if (ObObjType::ObExtendType == column_schema->get_data_type()) {
       already_invalid = true;
       break;
     } else if (OB_FAIL(new_column_schema.assign(*column_schema))) {

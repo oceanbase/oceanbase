@@ -91,6 +91,8 @@ public:
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
   void set_is_top_stmt(bool is_top_stmt) { is_top_stmt_ = is_top_stmt; }
   bool is_top_stmt() const { return is_top_stmt_; }
+  void set_has_resolved_field_list(bool has_resolved_field_list) { has_resolved_field_list_ = has_resolved_field_list; }
+  bool has_resolved_field_list() const { return has_resolved_field_list_; }
   int check_auto_gen_column_names();
 
   // function members
@@ -98,7 +100,8 @@ public:
                K_(has_top_limit),
                K_(in_set_query),
                K_(is_sub_stmt),
-               K_(is_top_stmt));
+               K_(is_top_stmt),
+               K_(has_resolved_field_list));
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
@@ -379,6 +382,8 @@ protected:
   bool has_nested_aggr_;
   //当前query是否为最外层select, 仅用于star expansion
   bool is_top_stmt_;
+  //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
+  bool has_resolved_field_list_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);
