@@ -464,7 +464,7 @@ int ObExprLike::calc_escape_wc(const ObCollationType escape_coll,
   size_t length = ObCharset::strlen_char(escape_coll, escape.ptr(),
                                          escape.length());
   if (0 == length) {
-    escape_wc = -1;
+    escape_wc = 0;
   } else if (1 != length) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to ESCAPE", K(escape), K(length), K(ret));
