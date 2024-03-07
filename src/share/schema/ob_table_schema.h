@@ -241,6 +241,24 @@ enum ObMVAvailableFlag
   IS_MV_AVAILABLE = 1,
 };
 
+enum ObTableReferencedByMVFlag
+{
+  IS_NOT_REFERENCED_BY_MV = 0,
+  IS_REFERENCED_BY_MV = 1,
+};
+
+enum ObMVEnableQueryRewriteFlag
+{
+  IS_MV_DISABLE_QUERY_REWRITE = 0,
+  IS_MV_ENABLE_QUERY_REWRITE = 1,
+};
+
+enum ObMVOnQueryComputationFlag
+{
+  IS_NOT_MV_ON_QUERY_COMPUTATION = 0,
+  IS_MV_ON_QUERY_COMPUTATION = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -264,7 +282,13 @@ private:
   static const int32_t TM_MV_CONTAINER_TABLE_BITS = 1;
   static const int32_t TM_MV_AVAILABLE_OFFSET = 25;
   static const int32_t TM_MV_AVAILABLE_BITS = 1;
-  static const int32_t TM_RESERVED = 6;
+  static const int32_t TM_TABLE_REFERENCED_BY_MV_OFFSET = 26;
+  static const int32_t TM_TABLE_REFERENCED_BY_MV_BITS = 1;
+  static const int32_t TM_MV_ENABLE_QUERY_REWRITE_OFFSET = 27;
+  static const int32_t TM_MV_ENABLE_QUERY_REWRITE_BITS = 1;
+  static const int32_t TM_MV_ON_QUERY_COMPUTATION_OFFSET = 28;
+  static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
+  static const int32_t TM_RESERVED = 3;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -276,6 +300,9 @@ private:
   static const uint32_t VIEW_COLUMN_FILLED_MASK = (1U << TM_VIEW_COLUMN_FILLED_BITS) - 1;
   static const uint32_t MV_CONTAINER_TABLE_MASK = (1U << TM_MV_CONTAINER_TABLE_BITS) - 1;
   static const uint32_t MV_AVAILABLE_MASK = (1U << TM_MV_AVAILABLE_BITS) - 1;
+  static const uint32_t TABLE_REFERENCED_BY_MV_MASK = (1U << TM_TABLE_REFERENCED_BY_MV_BITS) - 1;
+  static const uint32_t MV_ENABLE_QUERY_REWRITE_MASK = (1U << TM_MV_ENABLE_QUERY_REWRITE_BITS) - 1;
+  static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -327,6 +354,18 @@ public:
   static ObMVAvailableFlag get_mv_available_flag(int32_t table_mode)
   {
     return (ObMVAvailableFlag)((table_mode >> TM_MV_AVAILABLE_OFFSET) & MV_AVAILABLE_MASK);
+  }
+  static ObTableReferencedByMVFlag get_table_referenced_by_mv_flag(int32_t table_mode)
+  {
+      return (ObTableReferencedByMVFlag)((table_mode >> TM_TABLE_REFERENCED_BY_MV_OFFSET) & TABLE_REFERENCED_BY_MV_MASK);
+  }
+  static ObMVEnableQueryRewriteFlag get_mv_enable_query_rewrite_flag(int32_t table_mode)
+  {
+      return (ObMVEnableQueryRewriteFlag)((table_mode >> TM_MV_ENABLE_QUERY_REWRITE_OFFSET) & MV_ENABLE_QUERY_REWRITE_MASK);
+  }
+  static ObMVOnQueryComputationFlag get_mv_on_query_computation_flag(int32_t table_mode)
+  {
+      return (ObMVOnQueryComputationFlag)((table_mode >> TM_MV_ON_QUERY_COMPUTATION_OFFSET) & MV_ON_QUERY_COMPUTATION_MASK);
   }
   inline bool is_user_hidden_table() const
   { return TABLE_STATE_IS_HIDDEN_MASK & state_flag_; }
