@@ -219,7 +219,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
-      SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE
+      SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE USER VALUE
 
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -383,6 +383,7 @@ sql_keyword:
     '(' sql_keyword { $$ = NULL; }
   | SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
+  | USER { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }
   | UPDATE { $$ = NULL; }
@@ -550,14 +551,6 @@ call_sp_stmt:
     CALL sp_call_name opt_sp_cparam_list
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
-    }
-  | CALL sp_proc_stmt
-    {
-      if (!parse_ctx->is_inner_parse_) {
-        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
-        YYERROR; //生成一个语法错误
-      }
-      $$ = $2;
     }
   | CALL PROCEDURE sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
@@ -730,6 +723,7 @@ unreserved_keyword:
   | NO
   | OF
   | OPEN
+  | USER
   | PACKAGE
   | PRAGMA
   | RECORD
