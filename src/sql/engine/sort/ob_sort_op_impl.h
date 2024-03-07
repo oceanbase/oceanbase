@@ -868,7 +868,10 @@ class ObPrefixSortImpl : public ObSortOpImpl
 {
 public:
   explicit ObPrefixSortImpl(ObMonitorNode &op_monitor_info);
-
+  ~ObPrefixSortImpl()
+  {
+    reset();
+  }
   // init && start fetch %op rows
   int init(const int64_t tenant_id,
       const int64_t prefix_pos,
