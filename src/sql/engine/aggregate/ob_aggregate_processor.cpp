@@ -207,6 +207,55 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObAggrInfo::assign(const ObAggrInfo &rhs)
+{
+  int ret = OB_SUCCESS;
+  set_allocator(rhs.alloc_);
+  expr_ = rhs.expr_;
+  real_aggr_type_ = rhs.real_aggr_type_;
+  has_distinct_ = rhs.has_distinct_;
+  is_implicit_first_aggr_ = rhs.is_implicit_first_aggr_;
+  has_order_by_ = rhs.has_order_by_;
+
+  group_concat_param_count_ = rhs.group_concat_param_count_;
+
+  separator_expr_ = rhs.separator_expr_;
+  window_size_param_expr_ = rhs.window_size_param_expr_;
+  item_size_param_expr_ = rhs.item_size_param_expr_;
+  is_need_deserialize_row_ = rhs.is_need_deserialize_row_;
+  pl_agg_udf_type_id_ = rhs.pl_agg_udf_type_id_;
+
+  pl_result_type_ = rhs.pl_result_type_;
+  dll_udf_ = rhs.dll_udf_;
+  bucket_num_param_expr_ = rhs.bucket_num_param_expr_;
+  rollup_idx_ = rhs.rollup_idx_;
+
+  format_json_ = rhs.format_json_;
+  strict_json_ = rhs.strict_json_;
+  absent_on_null_ = rhs.absent_on_null_;
+  returning_type_ = rhs.returning_type_;
+  with_unique_keys_ = rhs.with_unique_keys_;
+  max_disuse_param_expr_ = rhs.max_disuse_param_expr_;
+  if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
+    LOG_WARN("fail to assign param exprs", K(ret));
+  } else if (OB_FAIL(distinct_collations_.assign(rhs.distinct_collations_))) {
+    LOG_WARN("fail to assign distinct_collations_", K(ret));
+  } else if (OB_FAIL(distinct_cmp_funcs_.assign(rhs.distinct_cmp_funcs_))) {
+    LOG_WARN("fail to assign distinct_cmp_funcs_", K(ret));
+  } else if (OB_FAIL(sort_collations_.assign(rhs.sort_collations_))) {
+    LOG_WARN("fail to assign sort_collations_", K(ret));
+  } else if (OB_FAIL(sort_cmp_funcs_.assign(rhs.sort_cmp_funcs_))) {
+    LOG_WARN("fail to assign sort_cmp_funcs_", K(ret));
+  } else if (OB_FAIL(pl_agg_udf_params_type_.assign(rhs.pl_agg_udf_params_type_))) {
+    LOG_WARN("fail to assign pl_agg_udf_params_type_", K(ret));
+  } else if (OB_FAIL(grouping_idxs_.assign(rhs.grouping_idxs_))) {
+    LOG_WARN("fail to assign grouping_idxs_", K(ret));
+  } else if (OB_FAIL(group_idxs_.assign(rhs.group_idxs_))) {
+    LOG_WARN("fail to assign group_idxs_", K(ret));
+  }
+  return ret;
+}
+
 ObAggregateProcessor::AggrCell::~AggrCell()
 {
   destroy();
