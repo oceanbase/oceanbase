@@ -15087,7 +15087,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
       LOG_WARN("fail to resolve basic table with cte", K(ret));
     }
   } else if (OB_FAIL(resolve_basic_table_without_cte(parse_tree, table_item))) {
-    LOG_WARN("fail to resolve basic table with cte", K(ret));
+    LOG_WARN("fail to resolve basic table without cte", K(ret));
   }
   return ret;
 }

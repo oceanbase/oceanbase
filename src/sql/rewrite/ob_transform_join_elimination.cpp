@@ -221,7 +221,7 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
                                         is_from_base_table,
                                         is_on_null_side))) {
     LOG_WARN("failed to check table on null side", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_loseless_join(stmt, ctx_,
+  } else if (OB_FAIL(ObTransformUtils::check_lossless_join(stmt, ctx_,
                                                            source_table,
                                                            target_table,
                                                            ctx_->session_info_,
@@ -234,10 +234,10 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
   } else if (tmp_valid) {
     is_valid = tmp_valid;
   } else {
-    OPT_TRACE("not loseless join");
+    OPT_TRACE("not lossless join");
   }
   if (OB_SUCC(ret) && !is_valid) {
-    OPT_TRACE(source_table, "can not eliminate", target_table, "with loseless join");
+    OPT_TRACE(source_table, "can not eliminate", target_table, "with lossless join");
   }
   return ret;
 }
@@ -2387,7 +2387,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
           can eliminate right table without checking unique. */
         source_table = left_table;
         OPT_TRACE("is simply equal join condition and right table do not have filter, semi join will be eliminated");
-        LOG_TRACE("succeed to check loseless semi join", K(is_simple_join_condition),
+        LOG_TRACE("succeed to check lossless semi join", K(is_simple_join_condition),
                                                         K(right_tables_have_filter));
       } else if (semi_info->is_anti_join() && !(is_simple_join_condition && is_simple_filter)) {
         /* for anti join, all join conditions should be simple condition
@@ -2406,7 +2406,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
         LOG_WARN("check expr unique in semi right tables failed", K(ret));
       } else {
         source_table = source_unique && target_unique ? left_table : NULL;
-        LOG_TRACE("succeed to check loseless semi join", K(source_unique), K(target_unique));
+        LOG_TRACE("succeed to check lossless semi join", K(source_unique), K(target_unique));
       }
     }
   }
@@ -3606,7 +3606,7 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt *stmt,
           if (OB_FAIL(do_join_elimination_self_key(stmt, child_candi_tables.at(j),
                                                    candi_tables.at(i), is_from_base_table,
                                                    is_happened, trans_tables, equal_sets))) {
-            LOG_WARN("failed to do join elimination erlf key", K(ret));
+            LOG_WARN("failed to do join elimination self key", K(ret));
           } else if (!is_happened) {
             /*do nothing*/
           } else if (OB_FAIL(removed_items.add_member(i))) {
