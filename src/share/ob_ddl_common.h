@@ -52,7 +52,7 @@ enum ObDDLType
 {
   DDL_INVALID = 0,
 
-  ///< @note add new normal long running ddl type before this line  
+  ///< @note add new normal long running ddl type before this line
   DDL_CHECK_CONSTRAINT = 1,
   DDL_FOREIGN_KEY_CONSTRAINT = 2,
   DDL_ADD_NOT_NULL_COLUMN = 3,
@@ -155,6 +155,14 @@ enum ObDDLTaskStatus {
   WAIT_LOB_TABLE_SPLIT_END = 23,
   FAIL = 99,
   SUCCESS = 100
+};
+
+const char *const temp_store_format_options[] =
+{
+  "auto",
+  "zstd",
+  "lz4",
+  "none",
 };
 
 enum SortCompactLevel
@@ -414,8 +422,7 @@ public:
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
-      ObSqlString &sql_string,
-      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL);
+      ObSqlString &sql_string);
 
   static int generate_build_mview_replica_sql(
       const uint64_t tenant_id,
@@ -576,9 +583,11 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
-
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
 
+  static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,

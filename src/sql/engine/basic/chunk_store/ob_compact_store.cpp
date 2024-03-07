@@ -195,7 +195,7 @@ int ObCompactStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx
   int ret = OB_SUCCESS;
   CK(is_inited());
   OZ(init_batch_ctx(exprs.count(), ctx.max_batch_size_));
-  bool all_batch_res = (compact_level_ == share::SORT_DEFAULT_LEVEL || compact_level_ == share::SORT_COMPRESSION_LEVEL);
+  bool all_batch_res = false;
   for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
     ObExpr *e = exprs.at(i);
     if (OB_ISNULL(e)) {
@@ -354,21 +354,18 @@ int ObCompactStore::init(const int64_t mem_limit,
                          const bool enable_dump,
                          const uint32_t row_extra_size,
                          const bool enable_trunc,
-                         const share::SortCompactLevel compact_level,
                          const ObCompressorType compress_type,
                          const ExprFixedArray *exprs)
 {
   int ret = OB_SUCCESS;
-  compact_level_ = compact_level;
   inited_ = true;
-  if (OB_ISNULL(exprs) || (compact_level != share::SORT_COMPACT_LEVEL && compact_level != share::SORT_COMPRESSION_COMPACT_LEVEL)) {
-  } else {
-    OZ(row_meta_.init(*exprs, row_extra_size));
-  }
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));
+  if (OB_NOT_NULL(exprs)) {
+    OZ(row_meta_.init(*exprs, row_extra_size));
+  }
   OZ(init_writer_reader());
-  LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compact_level), K(compress_type),
+  LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compress_type),
             K(exprs), K(ret));
   return ret;
 }
@@ -381,20 +378,15 @@ int ObCompactStore::init(const int64_t mem_limit,
                          const bool enable_dump,
                          const uint32_t row_extra_size,
                          const bool enable_trunc,
-                         const share::SortCompactLevel compact_level,
                          const ObCompressorType compress_type)
 {
   int ret = OB_SUCCESS;
-  compact_level_ = compact_level;
   inited_ = true;
-  if (compact_level != share::SORT_COMPACT_LEVEL && compact_level != share::SORT_COMPRESSION_COMPACT_LEVEL) {
-  } else {
-    OZ(row_meta_.init(col_array, row_extra_size));
-  }
+  OZ(row_meta_.init(col_array, row_extra_size));
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, tenant_id, mem_ctx_id, label, compress_type, enable_trunc));
   OZ(block_reader_.init(this));
   OZ(init_writer_reader());
-  LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compact_level), K(compress_type),
+  LOG_INFO("success to init compact store", K(enable_dump), K(enable_trunc), K(compress_type),
             K(col_array), K(ret));
   return ret;
 }
@@ -409,7 +401,6 @@ void ObCompactStore::reset()
     writer_->reset();
     allocator_->free(writer_);
   }
-  compact_level_ = share::SORT_DEFAULT_LEVEL;
   writer_ = nullptr;
   reader_ = nullptr;
   batch_ctx_ = nullptr;
@@ -437,45 +428,14 @@ int ObCompactStore::init_writer_reader()
   int ret = OB_SUCCESS;
   void *writer_buf = nullptr;
   void *reader_buf = nullptr;
-  switch (compact_level_) {
-    case share::SORT_COMPRESSION_LEVEL:
-    case share::SORT_DEFAULT_LEVEL: {
-      writer_buf = allocator_->alloc(sizeof(ObDefaultBlockWriter));
-      reader_buf = allocator_->alloc(sizeof(ObDefaultBlockReader));
-      if (OB_ISNULL(writer_buf) || OB_ISNULL(reader_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory for writer", K(ret), KP(writer_buf), KP(reader_buf));
-      } else {
-        writer_ = new (writer_buf)ObDefaultBlockWriter(this);
-        reader_ = new (reader_buf)ObDefaultBlockReader(this);
-      }
-      break;
-    }
-    case share::SORT_COMPRESSION_COMPACT_LEVEL:
-    case share::SORT_COMPACT_LEVEL: {
-      writer_buf = allocator_->alloc(sizeof(ObCompactBlockWriter));
-      reader_buf = allocator_->alloc(sizeof(ObCompactBlockReader));
-      if (OB_ISNULL(writer_buf) || OB_ISNULL(reader_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory for writer", K(ret));
-      } else {
-        writer_ = new (writer_buf)ObCompactBlockWriter(this, &row_meta_);
-        reader_ = new (reader_buf)ObCompactBlockReader(this, &row_meta_);
-      }
-      break;
-    }
-    case share::SORT_COMPRESSION_ENCODE_LEVEL:
-    case share::SORT_ENCODE_LEVEL: {
-      // TODO
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("encoding is not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "encoding in chunk store");
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to init reader/writer", K(ret), K(compact_level_));
-    }
+  writer_buf = allocator_->alloc(sizeof(ObCompactBlockWriter));
+  reader_buf = allocator_->alloc(sizeof(ObCompactBlockReader));
+  if (OB_ISNULL(writer_buf) || OB_ISNULL(reader_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for writer", K(ret));
+  } else {
+    writer_ = new (writer_buf)ObCompactBlockWriter(this, &row_meta_);
+    reader_ = new (reader_buf)ObCompactBlockReader(this, &row_meta_);
   }
 
   return ret;

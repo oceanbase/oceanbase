@@ -32,6 +32,7 @@
 #include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/ob_ddl_common.h"
 namespace oceanbase
 {
 using namespace share;
@@ -333,6 +334,17 @@ bool ObConfigResourceLimitSpecChecker::check(const ObConfigItem &t) const
   ObResourceLimit rl;
   int ret = rl.load_config(t.str());
   return OB_SUCCESS == ret;
+}
+
+bool ObConfigTempStoreFormatChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(share::temp_store_format_options) && !is_valid; ++i) {
+    if (0 == ObString::make_string(temp_store_format_options[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 bool ObConfigPxBFGroupSizeChecker::check(const ObConfigItem &t) const

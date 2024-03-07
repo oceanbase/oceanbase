@@ -213,6 +213,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigResourceLimitSpecChecker);
 };
 
+class ObConfigTempStoreFormatChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigTempStoreFormatChecker() {}
+  virtual ~ObConfigTempStoreFormatChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTempStoreFormatChecker);
+};
+
 class ObConfigPxBFGroupSizeChecker
   : public ObConfigChecker
 {

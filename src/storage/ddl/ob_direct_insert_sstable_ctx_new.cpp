@@ -1222,7 +1222,8 @@ int ObTabletDirectLoadMgr::open_sstable_slice(
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), KPC(this));
-  } else if (OB_FAIL(prepare_schema_item_on_demand(sqc_build_ctx_.build_param_.runtime_only_param_.table_id_))) {
+  } else if (OB_FAIL(prepare_schema_item_on_demand(sqc_build_ctx_.build_param_.runtime_only_param_.table_id_,
+                                                   sqc_build_ctx_.build_param_.runtime_only_param_.parallel_))) {
     LOG_WARN("prepare table schema item on demand", K(ret), K(sqc_build_ctx_.build_param_));
   } else {
     ObDirectLoadSliceWriter *slice_writer = nullptr;
@@ -1247,7 +1248,8 @@ int ObTabletDirectLoadMgr::open_sstable_slice(
   return ret;
 }
 
-int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id)
+int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id,
+                                                         const int64_t parallel)
 {
   int ret = OB_SUCCESS;
   bool is_schema_item_ready = ATOMIC_LOAD(&is_schema_item_ready_);
@@ -1314,19 +1316,6 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
             }
           }
         }
-        if (OB_SUCC(ret)) {
-          // get compress type
-          uint64_t tenant_id = table_schema->get_tenant_id();
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-          if (OB_UNLIKELY(!tenant_config.is_valid())) {
-            //tenant config获取失败时，租户不存在;返回默认值
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail get tenant_config", K(ret), K(tenant_id));
-          } else if (tenant_config->enable_store_compression) {
-            schema_item_.compress_type_ = table_schema->get_compressor_type();
-          }
-          LOG_INFO("load compress type is:", K(schema_item_.compress_type_), K(tenant_config->enable_store_compression));
-        }
       }
       if (OB_SUCC(ret)) {
         is_schema_item_ready_ = true;
@@ -1378,7 +1367,8 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(slice_info), K(is_schema_item_ready_));
     } else if (OB_FAIL(slice_writer->fill_sstable_slice(start_scn, sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, tablet_id_,
-        tablet_handle_, iter, schema_item_, direct_load_type_, column_items_, dir_id_, affected_rows, insert_monitor))) {
+        tablet_handle_, iter, schema_item_, direct_load_type_, column_items_, dir_id_,
+        sqc_build_ctx_.build_param_.runtime_only_param_.parallel_, affected_rows, insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), KPC(this));
     }
   }

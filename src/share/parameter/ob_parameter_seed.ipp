@@ -1758,9 +1758,14 @@ DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
         "enable the skip index in storage engine",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_store_compression, OB_TENANT_PARAMETER, "False",
-              "enable compression in ObTempBlockStore",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
+        common::ObConfigTempStoreFormatChecker,
+        "specific compression in ObTempBlockStore."\
+        "AUTO: use dop to determine compression;"\
+        "ZSTD: use ZSTD compression algorithm;"\
+        "LZ4: use LZ4 compression algorithm;"\
+        "NONE: do not use compression.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          "enable limiting memory in prefetch for single query",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

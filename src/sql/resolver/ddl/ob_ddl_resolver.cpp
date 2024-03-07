@@ -11199,37 +11199,6 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
           } else {
             hint_parallel = parallel_node->value_;
           }
-        } else if (T_OPT_PARAM_HINT == hint_node->type_) {
-          ParseNode *child0 = nullptr;
-          ParseNode *child1 = nullptr;
-          if (2 != hint_node->num_child_) {
-            ret = OB_ERR_UNEXPECTED;
-            // do not raise error, but print a message
-            LOG_WARN("the opt param hint is illegal", K(ret));
-          } else if (OB_ISNULL(child0 = hint_node->children_[0]) || OB_ISNULL(child1 = hint_node->children_[1])) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null pointer");
-          } else if (child0->type_ == T_VARCHAR){
-            ObString param_name(child0->str_len_, child0->str_value_);
-            ObOptParamHint::OptParamType param_type = ObOptParamHint::get_opt_param_value(param_name);
-            uint64_t data_version = 0;
-            if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
-              SQL_RESV_LOG(WARN, "fail to get min data version", K(ret));
-            } else if (param_type == ObOptParamHint::OptParamType::COMPACT_SORT_LEVEL
-                && data_version >= DATA_VERSION_4_3_0_0) {
-              if (T_INT != child1->type_) {
-                // do not raise error, but print a message
-                LOG_WARN("the second param is not int");
-              } else {
-                ObObj val;
-                val.set_int(child1->value_);
-                if (ObOptParamHint::is_param_val_valid(param_type, val)) {
-                  stmt.set_compact_level(child1->value_);
-                }
-              }
-            } else {
-            }
-          }
         }
       }
     }

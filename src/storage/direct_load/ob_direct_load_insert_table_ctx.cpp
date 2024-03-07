@@ -157,6 +157,7 @@ int ObDirectLoadInsertTabletContext::open()
       direct_load_param.runtime_only_param_.table_id_ = param_.table_id_;
       direct_load_param.runtime_only_param_.schema_version_ = param_.schema_version_;
       direct_load_param.runtime_only_param_.task_cnt_ = 1; // default value.
+      direct_load_param.runtime_only_param_.parallel_ = param_.reserved_parallel_;
       if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(
             param_.context_id_, param_.execution_id_, direct_load_param))) {
         LOG_WARN("create tablet manager failed", K(ret));

@@ -98,7 +98,6 @@ enable_rpc_authentication_bypass
 enable_sql_audit
 enable_sql_extension
 enable_sql_operator_dump
-enable_store_compression
 enable_syslog_recycle
 enable_syslog_wf
 enable_sys_table_ddl
@@ -356,6 +355,7 @@ _min_malloc_sample_interval
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode
+_ob_ddl_temp_file_compress_func
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_direct_load

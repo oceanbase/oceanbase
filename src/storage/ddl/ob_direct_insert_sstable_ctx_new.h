@@ -29,6 +29,7 @@
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/tablet/ob_tablet_meta.h"
+#include "src/share/ob_ddl_common.h"
 
 namespace oceanbase
 {
@@ -374,7 +375,8 @@ public:
                K_(direct_load_type), K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs));
 
 private:
-  int prepare_schema_item_on_demand(const uint64_t table_id);
+  int prepare_schema_item_on_demand(const uint64_t table_id,
+                                    const int64_t parallel);
   void calc_cg_idx(const int64_t thread_cnt, const int64_t thread_id, int64_t &strat_idx, int64_t &end_idx);
   int fill_aggregated_column_group(
       const int64_t start_idx,

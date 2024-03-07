@@ -357,7 +357,8 @@ ObTabletDDLParam::~ObTabletDDLParam()
 }
 
 int ObChunkSliceStore::init(const int64_t rowkey_column_count, ObTabletHandle &tablet_handle,
-    ObArenaAllocator &allocator, const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id)
+    ObArenaAllocator &allocator, const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id,
+    const int64_t parallelism)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -366,7 +367,7 @@ int ObChunkSliceStore::init(const int64_t rowkey_column_count, ObTabletHandle &t
   } else if (OB_UNLIKELY(rowkey_column_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalida argument", K(ret), K(rowkey_column_count));
-  } else if (OB_FAIL(prepare_datum_stores(MTL_ID(), tablet_handle, allocator, col_array, dir_id))) {
+  } else if (OB_FAIL(prepare_datum_stores(MTL_ID(), tablet_handle, allocator, col_array, dir_id, parallelism))) {
     LOG_WARN("fail to prepare datum stores");
   } else {
     arena_allocator_ = &allocator;
@@ -404,7 +405,8 @@ int64_t ObChunkSliceStore::calc_chunk_limit(const ObStorageColumnGroupSchema &cg
   return ((cg_schema.column_cnt_ / basic_column_cnt) + 1) * basic_chunk_memory_limit;
 }
 
-int ObChunkSliceStore::prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator, const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id)
+int ObChunkSliceStore::prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator,
+                                            const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id, const int64_t parallelism)
 {
   int ret = OB_SUCCESS;
   const int64_t chunk_mem_limit = 64 * 1024L; // 64K
@@ -427,6 +429,11 @@ int ObChunkSliceStore::prepare_datum_stores(const uint64_t tenant_id, ObTabletHa
         const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(i);
         ObCompressorType compressor_type = cur_cg_schema.compressor_type_;
         compressor_type = NONE_COMPRESSOR == compressor_type ? (CS_ENCODING_ROW_STORE == cur_cg_schema.row_store_type_ ? ZSTD_1_3_8_COMPRESSOR : NONE_COMPRESSOR) : compressor_type;
+        if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(compressor_type,
+                                                            parallelism,
+                                                            compressor_type))) {
+          LOG_WARN("fail to get temp store compress type", K(ret));
+        }
         if (cur_cg_schema.is_rowkey_column_group() || cur_cg_schema.is_all_column_group()) {
           target_store_idx_ = i;
         }
@@ -450,7 +457,6 @@ int ObChunkSliceStore::prepare_datum_stores(const uint64_t tenant_id, ObTabletHa
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(datum_store->init(chunk_mem_limit, cur_column_items, tenant_id, ObCtxIds::DEFAULT_CTX_ID,
                                               "DL_SLICE_STORE", true/*enable_dump*/, 0, false/*disable truncate*/,
-                                              compressor_type == NONE_COMPRESSOR ? SORT_COMPACT_LEVEL : SORT_COMPRESSION_COMPACT_LEVEL,
                                               compressor_type))) {
             LOG_WARN("failed to init chunk datum store", K(ret));
           } else {
@@ -677,6 +683,7 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     const int64_t schema_rowkey_column_num,
     const bool is_column_store,
     const int64_t dir_id,
+    const int64_t parallelism,
     ObTabletHandle &tablet_handle,
     const SCN &start_scn)
 {
@@ -696,7 +703,8 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
       } else if (OB_ISNULL(chunk_slice_store = OB_NEWx(ObChunkSliceStore, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory for chunk slice store failed", K(ret));
-      } else if (OB_FAIL(chunk_slice_store->init(schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(), tablet_handle, allocator_, tablet_direct_load_mgr_->get_column_info(), dir_id))) {
+      } else if (OB_FAIL(chunk_slice_store->init(schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                                      tablet_handle, allocator_, tablet_direct_load_mgr_->get_column_info(), dir_id, parallelism))) {
         LOG_WARN("init chunk slice store failed", K(ret));
       } else {
         slice_store_ = chunk_slice_store;
@@ -911,7 +919,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
             } else if (OB_FAIL(check_null(false/*is_index_table*/, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
               LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
             } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
-                false/*is_column_store*/, 1L/*unsued*/, unused_tablet_handle, start_scn))) {
+                false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, unused_tablet_handle, start_scn))) {
               LOG_WARN("prepare macro block writer failed", K(ret));
             } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
               LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row));
@@ -946,6 +954,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     const ObDirectLoadType &direct_load_type,
     const ObArray<ObColumnSchemaItem> &column_items,
     const int64_t dir_id,
+    const int64_t parallelism,
     int64_t &affected_rows,
     ObInsertMonitor *insert_monitor)
 {
@@ -996,7 +1005,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_null(schema_item.is_index_table_, schema_item.rowkey_column_num_, *cur_row))) {
         LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
-      } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_, schema_item.is_column_store_, dir_id, tablet_handle, start_scn))) {
+      } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_, schema_item.is_column_store_, dir_id, parallelism, tablet_handle, start_scn))) {
         LOG_WARN("prepare macro block writer failed", K(ret));
       } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
         if (is_full_direct_load_task && OB_ERR_PRIMARY_KEY_DUPLICATE == ret && schema_item.is_unique_index_) {

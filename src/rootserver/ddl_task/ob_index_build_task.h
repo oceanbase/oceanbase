@@ -35,14 +35,11 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr,
-      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
-      const int64_t data_format_version = 0)
+      const common::ObAddr &inner_sql_exec_addr)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
-        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), compact_level_(compact_level),
-        data_format_version_(data_format_version)
+        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
   {
     set_retry_times(0);
   }
@@ -58,7 +55,7 @@ public:
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
-               K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(compact_level), K_(data_format_version));
+               K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
 
 private:
   int64_t task_id_;
@@ -77,9 +74,6 @@ private:
   ObString nls_timestamp_tz_format_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
-  share::SortCompactLevel compact_level_;
-  int64_t data_format_version_;
-
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };
 class ObIndexBuildTask : public ObDDLTask

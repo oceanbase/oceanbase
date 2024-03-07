@@ -110,14 +110,13 @@ public:
            const bool enable_dump = true,
            const uint32_t row_extra_size = 0,
            const bool enable_truncate = true,
-           const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
            const ObCompressorType compress_type = NONE_COMPRESSOR,
            const ExprFixedArray *exprs = nullptr)
   {
     int ret = OB_SUCCESS;
     if (is_compact_) {
       ret = compact_store_.init(mem_limit, tenant_id, mem_ctx_id, label, enable_dump, row_extra_size,
-                          enable_truncate, compact_level, compress_type, exprs);
+                          enable_truncate, compress_type, exprs);
     } else {
       ret = datum_store_.init(mem_limit, tenant_id, mem_ctx_id, label, enable_dump, row_extra_size);
     }
@@ -262,7 +261,6 @@ public:
       const int64_t topn_cnt = INT64_MAX,
       const bool is_fetch_with_ties = false,
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE,
-      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
       const common::ObCompressorType compressor_type = common::NONE_COMPRESSOR,
       const ExprFixedArray *exprs = nullptr);
 
@@ -772,7 +770,6 @@ protected:
                        SortStoredRow *&new_row);
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
-  bool use_compact_store() { return sort_compact_level_ != SORT_DEFAULT_LEVEL; }
   // for partition topn
   int init_partition_topn();
   void reuse_part_topn_heap();
@@ -793,6 +790,7 @@ protected:
                           const int64_t batch_size,
                           const uint16_t selector[],
                           const int64_t size);
+  bool use_compact_store() { return compress_type_ != NONE_COMPRESSOR; }
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
 protected:
@@ -861,7 +859,6 @@ protected:
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
   ObTempBlockStore::BlockHolder compact_blk_holder_;
   ObChunkDatumStore::IteratedBlockHolder default_blk_holder_;
-  share::SortCompactLevel sort_compact_level_;
   const ExprFixedArray *sort_exprs_;
   common::ObCompressorType compress_type_;
 };

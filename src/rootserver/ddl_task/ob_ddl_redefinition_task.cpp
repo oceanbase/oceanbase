@@ -198,35 +198,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
           LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
         } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-          if (ret == OB_SERVER_OUTOF_DISK_SPACE &&
-              data_format_version_ >= DATA_VERSION_4_3_0_0) {
-            // if version >= 4.3.0, would retry with compression.
-            int tmp_ret = OB_SUCCESS;
-            sql_string.reuse();
-            SortCompactLevel compress_level = SORT_COMPRESSION_LEVEL;
-            if (OB_SUCCESS != (tmp_ret = ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
-                                                            dest_table_id_,
-                                                            data_table_schema->get_schema_version(),
-                                                            snapshot_version_,
-                                                            execution_id_,
-                                                            task_id_,
-                                                            parallelism_,
-                                                            use_heap_table_ddl_plan_,
-                                                            true,
-                                                            &col_name_map_,
-                                                            sql_string,
-                                                            compress_level))) {
-              LOG_WARN("fail to generate build replica sql", K(tmp_ret));
-            } else if (OB_SUCCESS != (tmp_ret = user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE,
-                &session_param, sql_exec_addr))) {
-              LOG_WARN("fail to execute build replica sql", K(tmp_ret), K(tenant_id_));
-            } else {
-              ret = OB_SUCCESS;
-            }
-          } else {
-            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-          }
+          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
