@@ -1761,7 +1761,7 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
         if (interrupt_checker()) {
           ret = OB_ERR_INTERRUPTED;
         } else {
-          ob_usleep(500);
+          ob_usleep<common::ObWaitEventIds::SYNC_GET_GTS_WAIT>(500);
         }
       } else {
         TRANS_LOG(WARN, "get gts fail", K(now));
