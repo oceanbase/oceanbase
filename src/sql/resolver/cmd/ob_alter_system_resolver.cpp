@@ -2253,6 +2253,40 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                           LOG_WARN("fail to check param valid", K(ret));
                         }
 #endif
+                      } else if (0 == config_name.case_compare(ARCHIVE_LAG_TARGET)) {
+                        ObSArray <uint64_t> tenant_ids;
+                        bool affect_all;
+                        bool affect_all_user;
+                        bool affect_all_meta;
+                        if (OB_FAIL(ObAlterSystemResolverUtil::resolve_tenant(*n,
+                                                                              tenant_id,
+                                                                              tenant_ids,
+                                                                              affect_all,
+                                                                              affect_all_user,
+                                                                              affect_all_meta))) {
+                          LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
+                        } else if (affect_all || affect_all_user || affect_all_meta) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("all/all_user/all_meta is not supported by ALTER SYSTEM SET ARCHILVE_LAG_TARGET",
+                                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                        "use all/all_user/all_meta in 'ALTER SYSTEM SET ARCHILVE_LAG_TARGET' syntax is");
+                        } else if (tenant_ids.empty()) {
+                          if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+                            LOG_WARN("fail to push back", K(ret), K(tenant_id));
+                          }
+                        }
+                        if (OB_SUCC(ret) && !tenant_ids.empty()) {
+                          bool valid = true;
+                          for (int i = 0; i < tenant_ids.count() && valid; i++) {
+                            const uint64_t tenant_id = tenant_ids.at(i);
+                            valid = valid && ObConfigArchiveLagTargetChecker::check(tenant_id, item);
+                            if (!valid) {
+                              ret = OB_OP_NOT_ALLOW; //log_user_error is handled in checker
+                              LOG_WARN("can not set archive_lag_target", "item", item, K(ret), K(i), K(tenant_id));
+                            }
+                          }
+                        }
                       }
                     }
                   } else {
@@ -2260,7 +2294,13 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     LOG_WARN("resolve tenant name failed", K(ret));
                     break;
                   }
-                } // if
+                } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), ARCHIVE_LAG_TARGET))) {
+                  bool valid = ObConfigArchiveLagTargetChecker::check(item.exec_tenant_id_, item);
+                  if (!valid) {
+                    ret = OB_OP_NOT_ALLOW;
+                    LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                  }
+                }
 
                 if (OB_SUCC(ret)) {
                   if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_mysql_mode(stmt->get_rpc_arg(), item, session_info_))) {
@@ -3997,6 +4037,12 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                   if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_oracle_mode(
                       setconfig_stmt->get_rpc_arg(), item, tenant_id, schema_checker_))) {
                     LOG_WARN("constraint check failed", K(ret));
+                  } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), ARCHIVE_LAG_TARGET))) {
+                    bool valid = ObConfigArchiveLagTargetChecker::check(item.exec_tenant_id_, item);
+                    if (!valid) {
+                      ret = OB_OP_NOT_ALLOW;
+                      LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                    }
                   }
                 }
               }
