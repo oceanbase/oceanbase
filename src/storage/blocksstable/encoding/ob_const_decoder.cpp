@@ -39,7 +39,7 @@ int ObConstDecoder::decode_without_dict(
     int64_t ref = meta_header_->const_ref_;
     if (0 == ref) {
       const int64_t len = ctx.col_header_->length_ - sizeof(*meta_header_);
-      const ObObjType obj_type = ctx.obj_meta_.get_type();
+      const ObObjType obj_type = ctx.col_header_->get_store_obj_type();
       const ObObjTypeClass tc = ob_obj_type_class(obj_type);
       uint64_t integer_mask;
       if (ObIntTC == tc) {
