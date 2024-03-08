@@ -13325,9 +13325,9 @@ static const _error _error_OB_ERR_SPLIT_LIST_LESS_VALUE = {
       .sqlstate              = "HY000",
       .str_error             = "last resulting partition cannot contain bounds",
       .str_user_error        = "last resulting partition cannot contain bounds",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5597, last resulting partition cannot contain bounds",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5597, last resulting partition cannot contain bounds"
+      .oracle_errno          = 14805,
+      .oracle_str_error      = "ORA-14805: last resulting partition cannot contain bounds",
+      .oracle_str_user_error = "ORA-14805: last resulting partition cannot contain bounds"
 };
 static const _error _error_OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST = {
       .error_name            = "OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST",

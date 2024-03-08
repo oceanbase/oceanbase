@@ -5202,7 +5202,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TRUNCATE_ILLEGAL_FK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5594, Cannot truncate a table referenced in a foreign key constraint %.*s"
 #define OB_ERR_DUP_KEY__ORA_USER_ERROR_MSG "ORA-00001: unique constraint (%.*s) violated"
 #define OB_ER_INVALID_USE_OF_NULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5596, Invalid use of NULL value"
-#define OB_ERR_SPLIT_LIST_LESS_VALUE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5597, last resulting partition cannot contain bounds"
+#define OB_ERR_SPLIT_LIST_LESS_VALUE__ORA_USER_ERROR_MSG "ORA-14805: last resulting partition cannot contain bounds"
 #define OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5598, cannot add partition when DEFAULT partition exists"
 #define OB_ERR_SPLIT_INTO_ONE_PARTITION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5599, cannot split partition into one partition, use rename instead"
 #define OB_ERR_NO_TENANT_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5600, can not create user %s in sys tenant, name %.*s"

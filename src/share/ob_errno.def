@@ -1275,7 +1275,7 @@ DEFINE_ERROR_EXT(OB_ER_SP_LILABEL_MISMATCH, -5593, ER_SP_LILABEL_MISMATCH, "4200
 DEFINE_ERROR_EXT(OB_ERR_TRUNCATE_ILLEGAL_FK, -5594, ER_TRUNCATE_ILLEGAL_FK, "42000", "Cannot truncate a table referenced in a foreign key constraint", "Cannot truncate a table referenced in a foreign key constraint %.*s");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DUP_KEY, -5595, ER_DUP_KEY, "23000", "Can't write; duplicate key in table", "Can't write; duplicate key in table \'%.*s\'", 1, "unique constraint violated", "unique constraint (%.*s) violated");
 DEFINE_ERROR(OB_ER_INVALID_USE_OF_NULL, -5596, ER_INVALID_USE_OF_NULL, "22004", "Invalid use of NULL value");
-DEFINE_ERROR(OB_ERR_SPLIT_LIST_LESS_VALUE, -5597, -1, "HY000", "last resulting partition cannot contain bounds");
+DEFINE_ORACLE_ERROR(OB_ERR_SPLIT_LIST_LESS_VALUE, -5597, -1, "HY000", "last resulting partition cannot contain bounds", 14805, "last resulting partition cannot contain bounds");
 DEFINE_ERROR(OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST, -5598, -1, "HY000", "cannot add partition when DEFAULT partition exists");
 DEFINE_ERROR(OB_ERR_SPLIT_INTO_ONE_PARTITION, -5599, -1, "HY000", "cannot split partition into one partition, use rename instead");
 DEFINE_ERROR_EXT(OB_ERR_NO_TENANT_PRIVILEGE, -5600, -1, "HY000", "can not create user in sys tenant", "can not create user %s in sys tenant, name %.*s");
