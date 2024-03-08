@@ -273,7 +273,7 @@ int ObCheckpointExecutor::calculate_recycle_scn_(const LSN clog_checkpoint_lsn,
     recycle_scn = prev_recycle_scn_;
     reuse_recycle_scn_times_++;
     if (reuse_recycle_scn_times_ % 1000 == 0) {
-      STORAGE_LOG_RET(ERROR, 0, "attention! clog checkpiont has not changed for a long time");
+      STORAGE_LOG_RET(WARN, 0, "attention! clog checkpiont has not changed for a long time");
       recycle_scn.set_max();
     }
     STORAGE_LOG(INFO,
