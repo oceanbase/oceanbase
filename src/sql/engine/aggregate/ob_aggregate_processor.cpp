@@ -252,6 +252,8 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign grouping_idxs_", K(ret));
   } else if (OB_FAIL(group_idxs_.assign(rhs.group_idxs_))) {
     LOG_WARN("fail to assign group_idxs_", K(ret));
+  } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
+    LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
   }
   return ret;
 }
