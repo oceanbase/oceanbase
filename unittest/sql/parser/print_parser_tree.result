@@ -2642,58 +2642,65 @@ set names latin1;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_CHAR_CHARSET], str_value_=[latin1], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_CHAR_CHARSET], str_value_=[latin1], value=[9223372036854775807]
 
 **************   Case 135   ***************
 set names 'latin1';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
 
 **************   Case 136   ***************
 set names utf8 collate 'utf8_general_ci';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
-		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
+			|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
 **************   Case 137   ***************
 set names utf8 collate utf8_general_ci;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
-		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
+			|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
 **************   Case 138   ***************
 set character set utf8;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 139   ***************
 set character set 'utf8';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 140   ***************
 set charset utf8;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 141   ***************
 select _utf8 'abc', _utf8mb4 'def' collate utf8mb4_general_ci from t1 where c1 collate utf8_bin = 'xyz' collate utf8_bin;

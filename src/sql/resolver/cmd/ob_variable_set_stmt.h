@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 #include "share/system_variable/ob_system_variable.h"
+#include "sql/resolver/cmd/ob_set_names_stmt.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,8 @@ public:
                         is_system_variable_(false),
                         set_scope_(share::ObSetVar::SET_SCOPE_NEXT_TRANS),
                         value_expr_(NULL),
-                        is_set_default_(false)
+                        is_set_default_(false),
+                        set_names_stmt_(NULL)
     {}
     virtual ~VariableSetNode() {}
     TO_STRING_KV(K_(variable_name), K_(is_system_variable),
@@ -43,6 +45,7 @@ public:
     share::ObSetVar::SetScopeType set_scope_;
     ObRawExpr *value_expr_;
     bool is_set_default_;
+    ObSetNamesStmt *set_names_stmt_;
   };
 
   ObVariableSetStmt() : ObDDLStmt(stmt::T_VARIABLE_SET),
