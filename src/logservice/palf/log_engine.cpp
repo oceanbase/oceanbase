@@ -632,13 +632,14 @@ int LogEngine::read_log(const LSN &lsn,
                         int64_t &out_read_size)
 {
   int ret = OB_SUCCESS;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
   } else if (false == lsn.is_valid() || 0 >= in_read_size || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(in_read_size), K(read_buf));
-  } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size))) {
+  } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(ERROR, "LogEngine read_log failed", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else {
     PALF_LOG(TRACE, "LogEngine read_log success", K(ret), K(lsn), K(read_buf), K(out_read_size));
@@ -1301,12 +1302,13 @@ int LogEngine::construct_log_meta_(const LSN &lsn, block_id_t &expected_next_blo
   ReadBufGuard guard("LogEngine", buf_len);
   ReadBuf &read_buf = guard.read_buf_;
   LogMetaEntry meta_entry;
+  LogIOContext io_ctx(LogIOUser::RESTART);
   if (false == lsn.is_valid()) {
     PALF_LOG(INFO, "there is no meta entry, maybe create palf failed", K(ret), K_(palf_id), K_(is_inited));
   } else if (!read_buf.is_valid()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "allocate memory failed", KPC(this), K(lsn));
-  } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size))) {
+  } else if (OB_FAIL(log_meta_storage_.pread(lsn, buf_len, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "ObLogMetaStorage pread failed", K(ret), K_(palf_id), K_(is_inited));
     // NB: when lsn is invalid, means there is no data on disk.
   } else if (OB_FAIL(meta_entry.deserialize(read_buf.buf_, buf_len, pos))) {

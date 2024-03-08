@@ -88,7 +88,8 @@ public:
   int pread(const LSN &lsn,
             const int64_t in_read_size,
             ReadBuf &read_buf,
-            int64_t &out_read_size) final;
+            int64_t &out_read_size,
+            LogIOContext &io_ctx) final;
 
   int pread_without_block_header(const LSN &read_lsn,
                                  const int64_t in_read_size,
