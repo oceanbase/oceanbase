@@ -46,6 +46,6 @@ devdeps-rocksdb-6.22.1.1-52022100420.el7.aarch64.rpm
 obshell-4.2.2.0-122024022614.el7.aarch64.rpm target=community
 
 [test-utils]
-ob-deploy-1.6.0-41.el7.aarch64.rpm target=community
+ob-deploy-2.6.2-2.el7.aarch64.rpm target=community
 obclient-2.2.2-1.el7.aarch64.rpm target=community
 libobclient-2.2.2-3.el7.aarch64.rpm target=community

@@ -30,6 +30,8 @@ then
     libtool --mode=install cp $SOURCE_DIR/deps/oblib/src/lib/compress/libzlib_1.0.la $LIB_DIR
   fi
   libtool --mode=install cp $SOURCE_DIR/rpm/.dep_create/lib/libstdc++.so.6 $LIB_DIR
+  libtool --mode=install cp $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell
+
   libtool --mode=install cp $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/
   libtool --mode=install cp $BUILD_DIR/src/observer/observer $BIN_DIR/observer
   libtool --mode=install cp $SOURCE_DIR/src/share/inner_table/sys_package/*.sql $ADMIN_DIR
