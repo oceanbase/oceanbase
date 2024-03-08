@@ -732,7 +732,7 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
         // skip
       } else if (OB_FAIL(cur_co_sstable->fetch_cg_sstable(cg_idx, cg_sstable_wrapper))) {
         LOG_WARN("get all tables failed", K(ret));
-      } else if (OB_FAIL(cg_sstable_wrapper.get_sstable(cg_sstable))) {
+      } else if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_ISNULL(cg_sstable)) {
         // skip

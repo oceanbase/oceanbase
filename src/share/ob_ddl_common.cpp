@@ -2525,7 +2525,7 @@ int ObCODDLUtil::get_column_checksums(
         LOG_WARN("unexpected column_group", K(ret), K(i));
       } else if (OB_FAIL(co_sstable->fetch_cg_sstable(i, cg_sstable_wrapper))) {
         LOG_WARN("fail to get cg sstable", K(ret), K(i));
-      } else if (OB_FAIL(cg_sstable_wrapper.get_sstable(cg_sstable))) {
+      } else if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_UNLIKELY(cg_sstable == nullptr || !cg_sstable->is_valid())) {
         ret = OB_ERR_UNEXPECTED;

@@ -69,7 +69,7 @@ int ObSSTableWrapper::set_sstable(
   return ret;
 }
 
-int ObSSTableWrapper::get_sstable(ObSSTable *&table)
+int ObSSTableWrapper::get_loaded_column_store_sstable(ObSSTable *&table)
 {
   int ret = OB_SUCCESS;
   ObSSTable *meta_sstable = nullptr;
@@ -78,8 +78,14 @@ int ObSSTableWrapper::get_sstable(ObSSTable *&table)
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrapper not valid", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!sstable_->is_column_store_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("This func can only be used when fetching column store SSTable", K(ret), KPC(sstable_));
   } else if (sstable_->is_loaded()) {
     table = sstable_;
+  } else if (OB_UNLIKELY(!meta_handle_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta handle is unexpected not valid", K(ret), KPC(sstable_), K(meta_handle_));
   } else if (OB_FAIL(meta_handle_.get_sstable(meta_sstable))) {
     LOG_WARN("failed to get sstable", K(ret), KPC(this));
   } else if (sstable_->get_key() == meta_sstable->get_key()) {
@@ -129,7 +135,7 @@ int ObSSTableWrapper::get_merge_row_cnt(const ObTableIterParam &iter_param, int6
 
       blocksstable::ObSSTable *cur_sstable = nullptr;
       ObDDLMergeBlockRowIterator ddl_merge_iter;
-      if (OB_FAIL(get_sstable(cur_sstable))) {
+      if (OB_FAIL(get_loaded_column_store_sstable(cur_sstable))) {
         LOG_WARN("fail to get sstable", K(ret), K(*this));
       } else if (OB_FAIL((cur_sstable->get_index_tree_root(root_block)))) {
         LOG_WARN("fail to get index tree root", K(ret), K(root_block), K(*this));

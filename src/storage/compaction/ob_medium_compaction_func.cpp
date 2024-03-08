@@ -1246,13 +1246,14 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
 int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
     ObLS &ls,
     ObTablet &tablet,
-    bool &tablet_need_freeze_flag,
+    ObTabletSchedulePair &schedule_pair,
     bool &create_dag_flag,
     const int64_t input_major_snapshot,
     const bool scheduler_called)
 {
   int ret = OB_SUCCESS;
   create_dag_flag = false;
+
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_MEDIUM_CREATE_DAG) ret;
   if (OB_FAIL(ret)) {
@@ -1274,6 +1275,8 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
       const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot; // broadcast scn
       ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
       int64_t schedule_scn = 0; // medium_snapshot in medium info
+      bool tablet_need_freeze_flag = false;
+
       if (OB_FAIL(tablet.read_medium_info_list(temp_allocator, medium_list))) {
         LOG_WARN("failed to load medium info list", K(ret), K(tablet));
       } else if (OB_FAIL(read_medium_info_from_list(*medium_list, last_major_snapshot, major_frozen_snapshot, compaction_type, schedule_scn))) {
@@ -1288,6 +1291,13 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
       if (OB_FAIL(ret) || !schedule_flag) {
       } else if (schedule_scn > 0 && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, tablet_need_freeze_flag, create_dag_flag))) {
         LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
+      }
+
+      if (OB_SUCC(ret) && tablet_need_freeze_flag) {
+        schedule_pair.tablet_id_ = tablet_id;
+        schedule_pair.schedule_merge_scn_ = schedule_scn;
+      } else {
+        schedule_pair.reset();
       }
     }
   }

@@ -23,6 +23,7 @@ namespace oceanbase
 {
 namespace compaction
 {
+struct ObTabletSchedulePair;
 
 class ObMediumCompactionScheduleFunc
 {
@@ -47,7 +48,7 @@ public:
   static int schedule_tablet_medium_merge(
       ObLS &ls,
       ObTablet &tablet,
-      bool &tablet_need_freeze_flag,
+      ObTabletSchedulePair &schedule_pair,
       bool &create_dag_flag,
       const int64_t major_frozen_scn = 0,
       const bool scheduler_called = false);

@@ -62,7 +62,7 @@ int ObCGGetter::init(
                          1 != idx_key.get_datum_cnt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init ObCGGetter", K(ret), K(wrapper), K(iter_param));
-  } else if (OB_FAIL(wrapper.get_sstable(sstable))) {
+  } else if (OB_FAIL(wrapper.get_loaded_column_store_sstable(sstable))) {
     LOG_WARN("fail to get sstable", K(ret), K(wrapper));
   } else {
     is_same_data_block_ = false;

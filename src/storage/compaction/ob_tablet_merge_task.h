@@ -353,22 +353,44 @@ public:
 };
 
 
+struct ObTabletSchedulePair
+{
+public:
+  ObTabletSchedulePair()
+    : tablet_id_(),
+      schedule_merge_scn_(0)
+  { }
+  ObTabletSchedulePair(
+      const common::ObTabletID &tablet_id,
+      const int64_t schedule_merge_scn)
+    : tablet_id_(tablet_id),
+      schedule_merge_scn_(schedule_merge_scn)
+  { }
+  bool is_valid() const { return tablet_id_.is_valid() && schedule_merge_scn_ > 0; }
+  bool need_force_freeze() const { return schedule_merge_scn_ > 0; }
+  void reset() { tablet_id_.reset(); schedule_merge_scn_ = 0; }
+  TO_STRING_KV(K_(tablet_id), K_(schedule_merge_scn));
+public:
+  common::ObTabletID tablet_id_;
+  int64_t schedule_merge_scn_;
+};
+
+
 struct ObBatchFreezeTabletsParam : public share::ObIDagInitParam
 {
 public:
   ObBatchFreezeTabletsParam();
-  virtual ~ObBatchFreezeTabletsParam() { tablet_ids_.reset(); }
-  virtual bool is_valid() const override { return ls_id_.is_valid() && compaction_scn_ > 0 && tablet_ids_.count() > 0; }
+  virtual ~ObBatchFreezeTabletsParam() { tablet_pairs_.reset(); }
+  virtual bool is_valid() const override { return ls_id_.is_valid() && tablet_pairs_.count() > 0; }
   int assign(const ObBatchFreezeTabletsParam &other);
   bool operator == (const ObBatchFreezeTabletsParam &other) const;
   bool operator != (const ObBatchFreezeTabletsParam &other) const { return !this->operator==(other); }
   int64_t get_hash() const;
-  VIRTUAL_TO_STRING_KV(K_(ls_id), K_(compaction_scn), "tablet_count", tablet_ids_.count(), K_(tablet_ids));
+  VIRTUAL_TO_STRING_KV(K_(ls_id), "tablet_pair_cnt", tablet_pairs_.count(), K_(tablet_pairs));
 public:
   static constexpr int64_t DEFAULT_BATCH_SIZE = 16;
   share::ObLSID ls_id_;
-  int64_t compaction_scn_;
-  common::ObSEArray<common::ObTabletID, DEFAULT_BATCH_SIZE> tablet_ids_;
+  common::ObSEArray<ObTabletSchedulePair, DEFAULT_BATCH_SIZE> tablet_pairs_;
 };
 
 
@@ -388,11 +410,6 @@ public:
   virtual lib::Worker::CompatMode get_compat_mode() const override { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   const ObBatchFreezeTabletsParam &get_param() const { return param_; }
-  virtual bool ignore_warning() override
-  {
-    return OB_PARTIAL_FAILED != dag_ret_;
-  }
-
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited), K_(param));
 private:
   bool is_inited_;

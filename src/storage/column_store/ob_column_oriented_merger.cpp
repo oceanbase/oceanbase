@@ -249,7 +249,7 @@ int ObCOMerger::alloc_writers(
         }
       } else if (OB_FAIL(co_sstable.fetch_cg_sstable(idx, cg_wrapper))) {
         STORAGE_LOG(WARN, "failed to get cg sstable", K(ret), K(sstable));
-      } else if (OB_FAIL(cg_wrapper.get_sstable(cg_sstable))) {
+      } else if (OB_FAIL(cg_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         STORAGE_LOG(WARN, "failed to get sstable from wrapper", K(ret), K(cg_wrapper));
       } else if (OB_FAIL(cg_wrappers_.push_back(cg_wrapper))) {
         STORAGE_LOG(WARN, "failed to push cg wrapper", K(ret), K(cg_wrappers_));
