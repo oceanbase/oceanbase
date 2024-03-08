@@ -1049,18 +1049,8 @@ int ObTableLoadCoordinator::heart_beat()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_DEBUG("coordinator heart beat");
-    // 心跳是为了让数据节点感知控制节点存活, 让控制节点感知数据节点是否重启过（返回-4018），忽略其它失败
-    if (OB_FAIL(heart_beat_peer())) {
-      if (ret == OB_ENTRY_NOT_EXIST) {
-        LOG_WARN("store has been restarted", K(ret));
-        if (OB_FAIL(coordinator_ctx_->set_status_abort())) {
-          LOG_WARN("fail to set coordinator status abort", KR(ret));
-        } else {
-          coordinator_ctx_->set_enable_heart_beat(false);
-        }
-      }
-    }
+    // 心跳是为了让数据节点感知控制节点存活, 控制节点不依赖心跳感知数据节点状态, 忽略失败
+    heart_beat_peer();
   }
   return ret;
 }
