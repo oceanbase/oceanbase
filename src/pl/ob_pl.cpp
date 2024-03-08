@@ -646,7 +646,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
          */
         // 如果已经在事务中，则需要创建一个回滚点，用于在PL中的语句失败时回滚到PL的开始点；
         // 如果没有在事务中，则不需要创建回滚点，在PL失败时直接回滚整个事务就可以了；
-        if (session_info.is_in_transaction()) {
+        if (OB_NOT_NULL(session_info.get_tx_desc()) && session_info.get_tx_desc()->in_tx_or_has_extra_state()) {
           OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
           OX (has_implicit_savepoint_ = true);
           LOG_DEBUG("create pl implicit savepoint for oracle", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -660,7 +660,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       // PL/SQL in MySQL mode may need to retry on LOCK_ON_CONFLICT error.
       // for retry PL/SQL, we create a savepoint here,
       // if failed, rollback to this savepoint, and PL/SQL caller will retry.
-      if (session_info.is_in_transaction() && !in_nested_sql_ctrl()) {
+      if (OB_NOT_NULL(session_info.get_tx_desc()) &&
+          session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
         OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
         OX (has_implicit_savepoint_ = true);
         LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
@@ -693,7 +694,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     // 2. 不开事务的dml语句, 没有事务, 无需创建隐式回滚点, 内部无需回滚, 跟随外面的dml语句回滚即可
     // 3. pl内部表达式中调用udf, 没有事务, 无需创建隐式回滚点, 内层udf内部如果开事务了, destory阶段整体回滚或提交即可
     //如果是udf调udf场景, 外层udf已经重置ac, 且内层udf跟随外层udf在destory阶段的回滚或提交
-    if (session_info.is_in_transaction() && !in_nested_sql_ctrl()) {
+    if (OB_NOT_NULL(session_info.get_tx_desc()) &&
+        session_info.get_tx_desc()->in_tx_or_has_extra_state() && !in_nested_sql_ctrl()) {
       OZ (ObSqlTransControl::create_savepoint(ctx, PL_IMPLICIT_SAVEPOINT));
       OX (has_implicit_savepoint_ = true);
       LOG_DEBUG("create pl implicit savepoint for mysql", K(ret), K(PL_IMPLICIT_SAVEPOINT));
