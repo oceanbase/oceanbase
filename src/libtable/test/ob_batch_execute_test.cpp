@@ -6219,6 +6219,44 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   }
 
+  // case : PageFilter
+  fprintf(stderr, "case: PageFilter\n");
+  // check
+  {
+    // page size is 3
+    htable_filter.set_filter(ObString::make_string("PageFilter(3)"));
+    ObTableEntityIterator *iter = nullptr;
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+
+    const ObITableEntity *result_entity = NULL;
+    int cqids_sorted[4] = {1, 3, 4, 7};
+    int64_t timestamps[2] = {7, 6};
+    for (int64_t i = 0; i < 3; ++i) {
+      // only 3 rowkeys (equals to page size)
+      sprintf(rows[i], "row%ld", 50+i);
+      key1.set_varbinary(ObString::make_string(rows[i]));
+      for (int64_t j = 0; j < 4; ++j) {
+        // 4 qualifier
+        sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
+        key2.set_varbinary(ObString::make_string(qualifier2[j]));
+        for (int64_t k = 0; k < 2; ++k)
+        {
+          key3.set_int(timestamps[k]);
+          ASSERT_EQ(OB_SUCCESS, iter->get_next_entity(result_entity));
+          ObObj rk, cq, ts, val;
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, rk));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(Q, cq));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(T, ts));
+          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(V, val));
+          ASSERT_EQ(key1, rk);
+          ASSERT_EQ(key2, cq);
+          ASSERT_EQ(key3, ts);
+        } // end for
+      }
+    }
+    ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
+  }
+
   // case : ColumnCountGetFilter
   fprintf(stderr, "case: ColumnCountGetFilter\n");
   // check

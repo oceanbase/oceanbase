@@ -496,9 +496,9 @@ static const yytype_int8 yyrhs[] =
 static const yytype_uint16 yyrline[] =
 {
        0,    55,    55,    62,    83,   104,   125,   146,   161,   176,
-     183,   185,   207,   229,   251,   273,   301,   329,   336,   351,
-     375,   397,   400,   403,   404,   405,   406,   407,   408,   409,
-     410,   411,   414
+     183,   185,   207,   229,   251,   273,   301,   329,   344,   359,
+     383,   405,   408,   411,   412,   413,   414,   415,   416,   417,
+     418,   419,   422
 };
 #endif
 
@@ -1841,17 +1841,25 @@ yyreduce:
 /* Line 1455 of yacc.c  */
 #line 330 "../../../src/observer/table/htable_filter_tab.yxx"
     {
-                    int &ret = parse_ctx->error_code_ = OB_NOT_SUPPORTED;
-                    UNUSED(ret);
-                    ob_hfilter_error(&((yyloc)), parse_ctx, "PageFilter not supported");
-                    YYABORT;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::PageFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse PageFilter");
+                        YYABORT;
+                    }
                 ;}
     break;
 
   case 18:
 
 /* Line 1455 of yacc.c  */
-#line 337 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 345 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::ColumnCountGetFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
@@ -1871,7 +1879,7 @@ yyreduce:
   case 19:
 
 /* Line 1455 of yacc.c  */
-#line 352 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 360 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1900,7 +1908,7 @@ yyreduce:
   case 20:
 
 /* Line 1455 of yacc.c  */
-#line 376 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 384 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1925,91 +1933,91 @@ yyreduce:
   case 21:
 
 /* Line 1455 of yacc.c  */
-#line 397 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 405 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
   case 22:
 
 /* Line 1455 of yacc.c  */
-#line 400 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 408 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
   case 23:
 
 /* Line 1455 of yacc.c  */
-#line 403 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 411 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::LESS; ;}
     break;
 
   case 24:
 
 /* Line 1455 of yacc.c  */
-#line 404 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 412 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::LESS_OR_EQUAL; ;}
     break;
 
   case 25:
 
 /* Line 1455 of yacc.c  */
-#line 405 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 413 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::EQUAL; ;}
     break;
 
   case 26:
 
 /* Line 1455 of yacc.c  */
-#line 406 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 414 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::NOT_EQUAL; ;}
     break;
 
   case 27:
 
 /* Line 1455 of yacc.c  */
-#line 407 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 415 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::GREATER; ;}
     break;
 
   case 28:
 
 /* Line 1455 of yacc.c  */
-#line 408 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 416 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::GREATER_OR_EQUAL; ;}
     break;
 
   case 29:
 
 /* Line 1455 of yacc.c  */
-#line 409 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 417 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::NO_OP; ;}
     break;
 
   case 30:
 
 /* Line 1455 of yacc.c  */
-#line 410 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 418 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::IS; ;}
     break;
 
   case 31:
 
 /* Line 1455 of yacc.c  */
-#line 411 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 419 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::IS_NOT; ;}
     break;
 
   case 32:
 
 /* Line 1455 of yacc.c  */
-#line 415 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 423 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
 
 
 /* Line 1455 of yacc.c  */
-#line 2013 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 2021 "../../../src/observer/table/htable_filter_tab.cxx"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -2228,6 +2236,6 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 417 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 425 "../../../src/observer/table/htable_filter_tab.yxx"
 
 
