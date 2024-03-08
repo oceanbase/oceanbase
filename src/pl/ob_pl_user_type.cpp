@@ -2668,7 +2668,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
         if (OB_FAIL(ret)) {
           if (OB_NOT_NULL(table_data)) {
             for (int64_t j = 0; j <= n; ++j) {
-              ObObj* value = reinterpret_cast<ObObj*>(table_data + j);
+              ObObj* value = reinterpret_cast<ObObj*>(table_data + j * sizeof(ObObj));
               if (OB_NOT_NULL(value)) {
                 int tmp = ObUserDefinedType::destruct_obj(*value);
                 if (OB_SUCCESS != tmp) {
