@@ -407,7 +407,8 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
       } else if (index_dml_info->is_update_part_key_ ||
-                 index_dml_info->is_update_unique_key_) {
+                 index_dml_info->is_update_unique_key_ ||
+                 index_dml_info->is_update_primary_key_) {
         IndexDMLInfo *index_delete_info = nullptr;
         IndexDMLInfo *index_insert_info = nullptr;
         // 更新了当前索引的分区键，需要做 row-movement
@@ -609,10 +610,11 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   const ObTableSchema* index_schema = NULL;
+  const ObUpdateStmt *update_stmt = get_stmt();
   const ObUpdateTableInfo& update_info = static_cast<const ObUpdateTableInfo&>(table_info);
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info) || OB_ISNULL(update_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info));
+    LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info), K(update_stmt));
   } else if (OB_FAIL(table_dml_info->init_assignment_info(update_info.assignments_,
                                                           optimizer_context_.get_expr_factory()))) {
     LOG_WARN("failed to init assignemt info", K(ret));
@@ -622,6 +624,9 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table schema", K(table_info), K(ret));
+  } else if (!update_stmt->has_instead_of_trigger() &&
+             OB_FAIL(check_update_primary_key(index_schema, table_dml_info))) {
+    LOG_WARN("failed to check update unique key", K(ret));
   } else if (!table_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
     LOG_WARN("failed to check update part key", K(ret));
