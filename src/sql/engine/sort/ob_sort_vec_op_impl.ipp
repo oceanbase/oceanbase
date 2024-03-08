@@ -162,7 +162,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_vec_ptrs(
 template <typename Compare, typename Store_Row, bool has_addon>
 int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   const common::ObIArray<ObExpr *> &exprs, const int64_t mem_limit, const int64_t batch_size,
-  const bool need_callback, const bool enable_dump, const int64_t extra_size,
+  const bool need_callback, const bool enable_dump, const int64_t extra_size, ObCompressorType compress_type,
   ObTempRowStore &row_store)
 {
   int ret = OB_SUCCESS;
@@ -170,7 +170,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   const bool reorder_fixed_expr = true;
   ObMemAttr mem_attr(tenant_id_, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA);
   if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, mem_limit, enable_dump,
-                             extra_size /* row_extra_size */, reorder_fixed_expr, enable_trunc))) {
+                             extra_size /* row_extra_size */, reorder_fixed_expr, enable_trunc, compress_type))) {
     SQL_ENG_LOG(WARN, "init row store failed", K(ret));
   } else {
     row_store.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -190,13 +190,13 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_sort_temp_row_store(
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_temp_row_store(*sk_exprs_, INT64_MAX, batch_size, false /*need_callback*/,
                                   false /*enable dump*/, Store_Row::get_extra_size(true /*is_sk*/),
-                                  sk_store_))) {
+                                  compress_type_, sk_store_))) {
     SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
   } else if (FALSE_IT(sk_row_meta_ = &sk_store_.get_row_meta())) {
   } else if (has_addon) {
     if (OB_FAIL(init_temp_row_store(*addon_exprs_, INT64_MAX, batch_size, false /*need_callback*/,
                                     false /*enable dump*/,
-                                    Store_Row::get_extra_size(false /*is_sk*/), addon_store_))) {
+                                    Store_Row::get_extra_size(false /*is_sk*/), compress_type_, addon_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else {
       addon_row_meta_ = &addon_store_.get_row_meta();
@@ -270,6 +270,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     topn_cnt_ = ctx.topn_cnt_;
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = ctx.is_fetch_with_ties_;
+    compress_type_ = ctx.compress_type_;
     int64_t batch_size = eval_ctx_->max_batch_size_;
     if (OB_FAIL(merge_sk_addon_exprs(sk_exprs_, addon_exprs_))) {
       SQL_ENG_LOG(WARN, "failed to merge sort key and addon exprs", K(ret));

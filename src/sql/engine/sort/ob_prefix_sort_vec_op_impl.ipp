@@ -82,11 +82,11 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext 
       SQL_ENG_LOG(WARN, "sort impl init failed", K(ret));
     } else if (OB_FAIL(init_temp_row_store(
                  *sk_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
-                 Store_Row::get_extra_size(true /*is_sort_key*/), im_sk_store_))) {
+                 Store_Row::get_extra_size(true /*is_sort_key*/), NONE_COMPRESSOR, im_sk_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else if (OB_FAIL(init_temp_row_store(
                  *addon_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
-                 Store_Row::get_extra_size(false /*is_sort_key*/), im_addon_store_))) {
+                 Store_Row::get_extra_size(false /*is_sort_key*/), NONE_COMPRESSOR, im_addon_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else {
       selector_ =

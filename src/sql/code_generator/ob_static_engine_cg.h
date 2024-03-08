@@ -448,6 +448,8 @@ private:
     const ObSortCollations &collations,
     ObSortFuncs &sort_funcs,
     const ObIArray<ObExpr*> &sort_exprs);
+
+  int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
   int check_not_support_cmp_type(
     const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);
