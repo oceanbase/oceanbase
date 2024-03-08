@@ -8,6 +8,7 @@ OBD_LOCAL_VERSION_PATH="$DEPLOY_PATH"/.obd/version
 shopt -s expand_aliases
 source $DEPLOY_PATH/activate_obd.sh
 tag="latest"
+export TELEMETRY_REPORTER="dev"
 
 current_path=$(pwd)
 if [[ "$current_path" != "$BASE_DIR/tools/deploy" ]]

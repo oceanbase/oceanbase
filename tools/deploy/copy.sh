@@ -68,6 +68,7 @@ then
   do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-symbolizer $TOOL_DIR/
   do_install $SOURCE_DIR/rpm/.dep_create/lib/libstdc++.so.6 $LIB_DIR true
   do_install $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/ true
+  do_install $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell true
 
 
   do_install ./usr/lib/oracle/12.2/client64/lib/libclntsh.so.12.1 $LIB_DIR true
