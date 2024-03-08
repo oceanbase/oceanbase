@@ -567,7 +567,7 @@ int ObStmtExecParamReplacer::do_visit(ObRawExpr *&expr)
     } else if (OB_FAIL(SMART_CALL(query_ref_expr->get_ref_stmt()->iterate_stmt_expr(*this)))) {
       LOG_WARN("failed to iterator stmt expr", K(ret));
     }
-  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
       if (OB_FAIL(SMART_CALL(do_visit(expr->get_param_expr(i))))) {
         LOG_WARN("failed to do replace exec param", K(ret));
