@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
+#include "lib/utility/ob_fast_convert.h"
 #include "ob_log_miner_br_filter.h"
 #include "ob_log_miner_br.h"
 #include "ob_log_miner_br_producer.h"
@@ -247,6 +248,83 @@ void OperationBRFilterPlugin::destroy()
   op_cond_.reset();
 }
 
+//////////////////////////////////// TransBRFilterPlugin ///////////////////////////////////
+TransBRFilterPlugin::TransBRFilterPlugin():
+    trans_id_cond_() { }
+
+int TransBRFilterPlugin::init(const char *trans_id_cond)
+{
+  int ret = OB_SUCCESS;
+  if (!OB_ISNULL(trans_id_cond)) {
+    if (!is_number(trans_id_cond)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("TransBRFilterPlugin init fail", K(trans_id_cond));
+    } else {
+      trans_id_cond_ = trans_id_cond;
+    }
+  }
+  return ret;
+}
+
+bool TransBRFilterPlugin::need_process_(const RecordType type)
+{
+  bool bret = false;
+  switch (type) {
+    case EINSERT:
+    case EUPDATE:
+    case EDELETE:
+    case EBEGIN:
+    case ECOMMIT:
+      bret = true;
+      break;
+    default:
+      bret = false;
+      break;
+  }
+  return bret;
+}
+
+int TransBRFilterPlugin::filter(ObLogMinerBR &br, bool &need_filter)
+{
+  int ret = OB_SUCCESS;
+  ICDCRecord *cdc_br = br.get_br();
+  need_filter = false;
+  int64_t trans_id = br.get_trans_id().get_id();
+
+  if (OB_ISNULL(cdc_br)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("trans filter get a null cdc br", K(cdc_br));
+  } else if (!need_process_(static_cast<RecordType>(cdc_br->recordType()))) {
+    need_filter = false;
+    LOG_TRACE("doesn't filter some record needn't to be processed");
+  } else if (OB_ISNULL(trans_id_cond_)) {
+    // do nothing
+  } else {
+    int64_t trans_id_cond_int;  
+    ObString trans_id_str = ObString(trans_id_cond_);
+    bool is_atoi_valid = false;
+    trans_id_cond_int = common::ObFastAtoi<int64_t>::atoi(trans_id_str.ptr(), trans_id_str.ptr() + trans_id_str.length(), is_atoi_valid);
+    if (!is_atoi_valid) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("convert trans_id_cond value error", K(trans_id_cond_));
+    } else if (trans_id_cond_int != trans_id) {
+      need_filter = true;
+    } else {
+      if (ECOMMIT == br.get_record_type()) {
+        LOG_INFO("trans_is filter reach end_progress", K(br.get_record_type()), K(br.get_commit_scn()), K(trans_id_cond_int), K(trans_id));
+        br.mark_end();
+      }
+    }
+  }
+  
+  return ret;
+}
+
+void TransBRFilterPlugin::destroy()
+{
+  trans_id_cond_ = nullptr;
+}
+
 //////////////////////////////////// BRFilter ///////////////////////////////////
 
 const int64_t ObLogMinerBRFilter::BR_FILTER_THREAD_NUM = 1L;
@@ -267,6 +345,7 @@ ObLogMinerBRFilter::~ObLogMinerBRFilter()
 }
 
 int ObLogMinerBRFilter::init(const char *table_column_cond,
+    const char *trans_id_cond,
     const char *op_cond,
     ILogMinerDataManager *data_manager,
     ILogMinerResourceCollector *resource_collector,
@@ -276,6 +355,7 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
   int ret = OB_SUCCESS;
   ColumnBRFilterPlugin *column_plugin = nullptr;
   OperationBRFilterPlugin *op_plugin = nullptr;
+  TransBRFilterPlugin *trans_plugin = nullptr;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("oblogminer br_filter is already inited, no need to init again", K(is_inited_),
@@ -290,24 +370,34 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
       static_cast<OperationBRFilterPlugin*>(plugin_allocator.alloc(sizeof(OperationBRFilterPlugin))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for operation filter plugin failed", K(op_plugin));
+  } else if (OB_ISNULL(trans_plugin =
+      static_cast<TransBRFilterPlugin*>(plugin_allocator.alloc(sizeof(TransBRFilterPlugin))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate memory for trans filter plugin failed", K(trans_plugin));
   } else {
     column_plugin = new (column_plugin) ColumnBRFilterPlugin(&plugin_allocator);
     op_plugin = new (op_plugin) OperationBRFilterPlugin();
+    trans_plugin = new (trans_plugin) TransBRFilterPlugin();
     if (OB_FAIL(column_plugin->init(table_column_cond))) {
       LOG_ERROR("table plugin init failed", K(table_column_cond));
     } else if (OB_FAIL(op_plugin->init(op_cond))) {
       LOG_ERROR("op plugin init failed", K(op_cond));
+    } else if (OB_FAIL(trans_plugin->init(trans_id_cond))) {
+      LOG_ERROR("trans plugin init failed", K(trans_id_cond));
     } else if (OB_FAIL(filter_pipeline_.push_back(op_plugin))) {
       LOG_ERROR("filter pipeline push back op_plugin failed", K(op_plugin), K(filter_pipeline_));
     } else if (OB_FAIL(filter_pipeline_.push_back(column_plugin))) {
       LOG_ERROR("filter pipeline push back column_plugin failed", K(column_plugin), K(filter_pipeline_));
+    } else if (OB_FAIL(filter_pipeline_.push_back(trans_plugin))) {
+      LOG_ERROR("filter pipeline push back trans_plugin failed", K(trans_plugin), K(filter_pipeline_));
     } else {
       data_manager_ = data_manager;
       resource_collector_ = resource_collector;
       br_converter_ = br_converter;
       err_handle_ = err_handle;
       is_inited_ = true;
-      LOG_INFO("ObLogMinerBRFilter finished to init", K(table_column_cond), K(op_cond));
+      trans_id_cond_ = trans_id_cond;
+      LOG_INFO("ObLogMinerBRFilter finished to init", K(table_column_cond), K(op_cond), K(trans_id_cond));
       LOGMINER_STDOUT_V("ObLogMinerBRFilter finished to init\n");
     }
   }
@@ -437,6 +527,11 @@ int ObLogMinerBRFilter::handle(void *data, const int64_t thread_index, volatile 
       } else {
         if (OB_FAIL(br_converter_->push(logminer_br))) {
           LOG_ERROR("failed to push logminer br into br converter", K(br_converter_), KPC(logminer_br));
+        } else {
+          if (logminer_br->is_end()) {
+            LOG_INFO("ObLogMinerBRFilter has reach end", KPC(logminer_br));
+            data_manager_->set_end_commit_scn(logminer_br->get_commit_scn().convert_to_ts());
+          }
         }
       }
     }

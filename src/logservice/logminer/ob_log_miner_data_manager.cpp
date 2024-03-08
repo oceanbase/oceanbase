@@ -37,6 +37,8 @@ ObLogMinerDataManager::ObLogMinerDataManager():
     end_progress_(OB_INVALID_TIMESTAMP),
     output_progress_(OB_INVALID_TIMESTAMP),
     record_count_(0),
+    end_commit_scn_(0),
+    is_end_(false),
     err_handle_(nullptr) { }
 
 ObLogMinerDataManager::~ObLogMinerDataManager()
@@ -70,6 +72,8 @@ int ObLogMinerDataManager::init(const LogMinerMode mode,
     end_progress_ = end_progress;
     err_handle_ = err_handle;
     is_inited_ = true;
+    end_commit_scn_ = 0;
+    is_end_ = false;
     LOG_INFO("ObLogMinerDataManager finished to init", K(mode), K(format), K(start_progress),
         K(end_progress));
     LOGMINER_STDOUT_V("ObLogMinerDataManager finished to init\n");
@@ -213,7 +217,11 @@ int ObLogMinerDataManager::update_output_progress(const int64_t timestamp)
   }
 
   if (OB_SUCC(ret)) {
-    if (reach_end_progress(timestamp)) {
+    if (end_commit_scn_ != 0 && output_progress_ > end_commit_scn_) {
+      end_progress_ = output_progress_;
+      is_end_ = true;
+    }
+    if (reach_end_progress(timestamp) || is_end_) {
       if (OB_FAIL(LOGMINER_LOGGER.log_progress(record_count_, output_progress_, start_progress_, end_progress_))) {
         LOG_WARN("log progress failed", K(record_count_), K(output_progress_), K(start_progress_), K(end_progress_));
       }
