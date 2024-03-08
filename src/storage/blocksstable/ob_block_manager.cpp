@@ -194,6 +194,9 @@ int ObBlockManager::start(const int64_t reserved_size)
   opts.opt_cnt_ = 1;
   opts.opts_ = &(opt);
   opt.set("reserved size", reserved_size);
+  LOG_DBA_INFO_V2(OB_SERVER_BLOCK_MANAGER_START_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "block manager start begin.");
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -242,6 +245,17 @@ int ObBlockManager::start(const int64_t reserved_size)
       LOG_INFO("start block manager", K(need_format));
     }
   }
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_SERVER_BLOCK_MANAGER_START_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "block manager start fail. ",
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_SERVER_BLOCK_MANAGER_START_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "block manager start success.");
+  }
+
   return ret;
 }
 

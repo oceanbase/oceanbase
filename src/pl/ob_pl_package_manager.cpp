@@ -172,8 +172,13 @@ int ObPLPackageManager::read_and_exec_package_sql(
                                                 static_cast<int64_t>(compa_mode)))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
           } else if (affected_rows != 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
+            char *last_slash = strrchr(package_full_path, '/');
+            const char *pacakge_filename = (last_slash != NULL) ? last_slash + 1 : package_full_path;
+            // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
+            if (strcmp(pacakge_filename, "external_table_alert_log.sql") != 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
+            }
           } else {
             OZ (ObSPIService::force_refresh_schema(OB_SYS_TENANT_ID));
           }
@@ -276,7 +281,8 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"}
+  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
+  {"external_table_alert_log", "external_table_alert_log.sql", "none"}
 };
 
 int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)

@@ -44,6 +44,7 @@
 #include "lib/oblog/ob_syslog_rate_limiter.h"
 #include "lib/signal/ob_signal_handlers.h"
 #include "common/ob_common_utility.h"
+#include "lib/oblog/ob_log_dba_event.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -67,9 +68,11 @@ class ObLogCompressor;
 extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
 extern ObPLogFDType get_fd_type(const char *mod_name);
+extern ObPLogFDType get_fd_type(const char *mod_name, int32_t level, const char *dba_event);
 
 #define OB_LOGGER ::oceanbase::common::ObLogger::get_logger()
 #define OB_LOG_NEED_TO_PRINT(level) (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))
+#define OB_LOG_NEED_TO_PRINT_DBA(level, force) (OB_UNLIKELY(OB_LOGGER.need_to_print_dba(OB_LOG_LEVEL_##level, force)))
 
 //@class ObLogIdLevelMap
 //@brief stroe the level of each par-module and sub-module. The key is module ID.
@@ -407,10 +410,13 @@ public:
   int64_t get_rs_write_size() const { return log_file_[FD_RS_FILE].write_size_; }
   int64_t get_elec_write_size() const { return log_file_[FD_ELEC_FILE].write_size_; }
   int64_t get_trace_write_size() const { return log_file_[FD_TRACE_FILE].write_size_; }
+  int64_t get_alert_write_size() const { return log_file_[FD_ALERT_FILE].write_size_; }
   int64_t get_total_write_count() const { return log_file_[FD_SVR_FILE].write_count_; }
   int64_t get_rs_total_write_count() const { return log_file_[FD_RS_FILE].write_count_; }
   int64_t get_elec_total_write_count() const { return log_file_[FD_ELEC_FILE].write_count_; }
   int64_t get_trace_total_write_count() const { return log_file_[FD_TRACE_FILE].write_count_; }
+  int64_t get_alert_total_write_count() const { return log_file_[FD_ALERT_FILE].write_count_; }
+
   ObPLogFileStruct &get_elec_log() { return *(log_file_ + FD_ELEC_FILE); }
 
   void insert_warning_buffer(const UserMsgLevel user_msg_level,
@@ -507,7 +513,63 @@ public:
                                                    std::forward<const Args&&>(args)...);
                              return ret;
                            };
-    log_it(mod_name, level, file, line, function, location_hash_val, errcode, log_data_func);
+    log_it(mod_name, nullptr, level, file, line, function, location_hash_val, errcode, log_data_func);
+  }
+
+  // for dba log
+  __attribute__((noinline, cold)) int fill_value(char *buf, const int64_t buf_len, int64_t &pos)
+  {
+    return OB_SUCCESS;
+  }
+
+  __attribute__((noinline, cold)) int fill_value(char *buf, const int64_t buf_len, int64_t &pos,
+                                                 const ObILogValue &value)
+  {
+    return value.print(buf, buf_len, pos);
+  }
+
+  template <typename ... Args>
+  __attribute__((noinline, cold)) int fill_value(char *buf, const int64_t buf_len, int64_t &pos,
+                                                 const ObILogValue &value,
+                                                 Args const & ... args)
+  {
+    int ret = OB_SUCCESS;
+    ret = fill_value(buf, buf_len, pos, value);
+    if (OB_SUCC(ret)) {
+      ret = fill_value(buf, buf_len, pos, std::forward<const Args&&>(args)...);
+    }
+    return ret;
+  }
+
+  template <typename ... Args>
+  __attribute__((noinline, cold)) int fill_log_buffer_value(char *data, const int64_t buf_len,
+                                                            int64_t &pos, bool with_quotes,
+                                                            const ObILogValue &value,
+                                                            Args const & ... args)
+  {
+    int ret = OB_SUCCESS;
+    if (with_quotes && OB_FAIL(logdata_printf(data, buf_len, pos, "\""))) {
+    } else if (OB_FAIL(fill_value(data, buf_len, pos, value))) {
+    } else if (OB_FAIL(fill_value(data, buf_len, pos, std::forward<const Args&&>(args)...))) {
+    } else if (with_quotes) {
+      ret = logdata_printf(data, buf_len, pos, "\"");
+    }
+    return ret;
+  }
+
+  template <typename ... Args>
+  __attribute__((noinline, cold)) void log_message_value(const char *mod_name, const char *dba_event,
+      const int32_t level, const char *file, const int32_t line, const char *function,
+      const uint64_t location_hash_val, const int errcode, bool with_quotes,
+      Args const && ... args)
+  {
+    auto &&log_data_func = [&] (char *buf, const int64_t buf_len, int64_t &pos) {
+                             int ret = OB_SUCCESS;
+                             ret = fill_log_buffer_value(buf, buf_len, pos, with_quotes,
+                                                       std::forward<const Args&&>(args)...);
+                             return ret;
+                           };
+    log_it(mod_name, dba_event, level, file, line, function, location_hash_val, errcode, log_data_func);
   }
 
 
@@ -517,6 +579,7 @@ public:
 
   //@brief Check whether the level to print.
   bool __attribute__((weak, noinline, cold)) need_to_print(const int32_t level) { return (level <= get_log_level()); }
+  bool __attribute__((weak, noinline, cold)) need_to_print_dba(const int32_t level, bool force = false);
   //@brief Check whether the level of the par-module to print.
   bool __attribute__((weak, noinline, cold)) need_to_print(const uint64_t par_mod_id, const int32_t level);
   //@brief Check whether the level of the sub-module to print.
@@ -536,7 +599,8 @@ public:
                      const char *rs_filename = NULL,
                      const char *elec_filename = NULL,
                      const char *trace_filename = NULL,
-                     const char *audit_filename = NULL);
+                     const char *audit_filename = NULL,
+                     const char *alert_filename = NULL);
 
   //whether log warn/error log to log.wf
   void set_log_warn(bool log_warn) { enable_wf_flag_ = log_warn; }
@@ -595,6 +659,7 @@ public:
   int level_str2int(const char *level_name, int8_t &level_int);
 
   int parse_check(const char *str, const int32_t str_length);
+  int parse_check_alert(const char *str, const int32_t str_length);
   //@brief Parse the string like "ALL.*:INFO, SQL.ENG:DEBUG, COMMON.*:ERROR",
   //and set the global level map.
   int parse_set(const char *str, const int32_t str_length, int64_t version = 0);
@@ -653,6 +718,7 @@ private:
 
   int log_head(const int64_t ts,
                const char *mod_name,
+               const char *dba_event,
                const int32_t level,
                const char *file,
                const int32_t line,
@@ -725,6 +791,7 @@ private:
   template<typename Function>
   void do_log_message(const bool is_async,
                       const char *mod_name,
+                      const char *dba_event,
                       int32_t level,
                       const char *file,
                       int32_t line,
@@ -736,6 +803,7 @@ private:
 
   template<typename Function>
   void log_it(const char *mod_name,
+              const char *dba_event,
               const int32_t level,
               const char *file,
               const int32_t line,
@@ -782,6 +850,7 @@ private:
   ObLogNameIdMap name_id_map_;
   ObLogIdLevelMap id_level_map_;//level of log-file
   int8_t wf_level_;//level of warning log-file
+  int8_t alert_log_level_;//level of alert log-file
   int64_t level_version_;//version of log level
 
   // Whether to disable the Thread Log Level function, the default is false, that is, the Thread Log Level is not disabled
@@ -914,6 +983,7 @@ inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
 
 template<typename Function>
 void ObLogger::log_it(const char *mod_name,
+            const char *dba_event,
             const int32_t level,
             const char *file,
             const int32_t line,
@@ -937,7 +1007,7 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(get_cur_ts(), mod_name, level, file, line, function, errcode, buf, buf_len, pos);
+            ret = log_head(get_cur_ts(), mod_name, dba_event, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }
@@ -955,7 +1025,7 @@ void ObLogger::log_it(const char *mod_name,
           }
         }
       } else {
-        do_log_message(is_async_log_used(), mod_name, level, file, line, function, true,
+        do_log_message(is_async_log_used(), mod_name, dba_event, level, file, line, function, true,
                        location_hash_val, errcode, log_data_func);
       }
     }
@@ -996,7 +1066,7 @@ inline void ObLogger::log_message_va(const char *mod_name,
       DEFER(va_end(args_cpy));
       return logdata_vprintf(buf, buf_len, pos, fmt, args_cpy);
     };
-    log_it(mod_name, level, file, line, function, location_hash_val, errcode, log_data_func);
+    log_it(mod_name, nullptr, level, file, line, function, location_hash_val, errcode, log_data_func);
   }
 }
 
@@ -1133,6 +1203,7 @@ inline void ObLogger::check_probe(
 template<typename Function>
 inline void ObLogger::do_log_message(const bool is_async,
                                      const char *mod_name,
+                                     const char *dba_event,
                                      int32_t level,
                                      const char *file,
                                      int32_t line,
@@ -1153,7 +1224,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   bool disable = false;
   check_probe(file, line, location_hash_val, force_bt, disable);
   if(OB_UNLIKELY(disable)) return;
-  auto fd_type = get_fd_type(mod_name);
+  ObPLogFDType fd_type = get_fd_type(mod_name, level, dba_event);
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
   BASIC_TIME_GUARD(tg, "ObLog");
@@ -1177,7 +1248,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     int64_t buf_len = log_item->get_buf_size();
     int64_t pos = log_item->get_data_len();
     if (with_head) {
-      if (OB_FAIL(log_head(tg.get_start_ts(), mod_name, level, file, line, function, errcode,
+      if (OB_FAIL(log_head(tg.get_start_ts(), mod_name, dba_event, level, file, line, function, errcode,
                            buf, buf_len, pos))) {
         LOG_STDERR("log_header error ret = %d\n", ret);
       }
@@ -1273,7 +1344,7 @@ _Pragma("GCC diagnostic pop")
     const int64_t buf_len = sizeof buf;
     int64_t pos = 0;
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(log_head(tg.get_start_ts(), mod_name, OB_LOG_LEVEL_ERROR, file, line, function,
+    if (OB_TMP_FAIL(log_head(tg.get_start_ts(), mod_name, dba_event, OB_LOG_LEVEL_ERROR, file, line, function,
                              errcode, buf, buf_len, pos))) {
     } else if (OB_TMP_FAIL(logdata_printf(buf, buf_len, pos,
                                           "LOGGER COST TOO MUCH TIME, cost: %ld, ", cost_time))) {
@@ -1302,6 +1373,27 @@ void OB_PRINT(const char *mod_name, const int32_t level, const char *file, const
                              info_string, std::forward<const Args&&>(args)...);
     OB_LOGGER.get_guard() = false;
     UNUSED(ret);
+  }
+}
+
+template <typename ... Args>
+void OB_PRINT_DBA(const char *mod_name, const char *mod_name_bracket,
+                  const char *dba_event, bool print_rd_log, const int32_t level,
+                  const char *file, const int32_t line,
+                  const char *function, const uint64_t location_hash_val,
+                  const int errcode,
+                  const char *, /* placeholder */
+                  Args const && ... args)
+{
+  if (OB_LIKELY(!OB_LOGGER.get_guard())) {
+    OB_LOGGER.get_guard() = true;
+    OB_LOGGER.log_message_value(mod_name, dba_event, level, file, line, function, location_hash_val, errcode, true,
+                                std::forward<const Args&&>(args)...);
+    if (print_rd_log) {
+      OB_LOGGER.log_message_value(mod_name_bracket, nullptr, level, file, line, function, location_hash_val, errcode, false,
+                                std::forward<const Args&&>(args)...);
+    }
+    OB_LOGGER.get_guard() = false;
   }
 }
 

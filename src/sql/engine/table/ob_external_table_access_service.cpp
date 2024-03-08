@@ -442,6 +442,15 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (init_exprs(scan_param));
     OZ (data_access_driver_.init(scan_param_->external_file_location_, scan_param->external_file_access_info_));
     OZ (expand_buf());
+
+    if (OB_SUCC(ret)) {
+      if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+        if (OB_ISNULL(state_.ip_port_buf_ = static_cast<char *>(allocator_.alloc(max_ipv6_port_length)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -505,6 +514,16 @@ int ObCSVTableRowIterator::open_next_file()
                                         (location.empty() || location[location.length() - 1] == '/') ? "" : split_char,
                                         file_url.length(), file_url.ptr()));
       OZ (data_access_driver_.get_file_size(url_.string(), state_.file_size_));
+      if (OB_SUCC(ret) && data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+        ObSqlString full_name;
+        if (state_.ip_port_len_ == 0) {
+          OZ (GCONF.self_addr_.addr_to_buffer(state_.ip_port_buf_, max_ipv6_port_length, state_.ip_port_len_));
+        }
+        OZ (full_name.append(state_.ip_port_buf_, state_.ip_port_len_));
+        OZ (full_name.append("%"));
+        OZ (full_name.append(this->state_.cur_file_name_));
+        OZ (ob_write_string(allocator_, full_name.string(), state_.file_with_url_));
+      }
     }
     LOG_DEBUG("try next file", K(ret), K(url_), K(file_url), K(state_));
   } while (OB_SUCC(ret) && 0 >= state_.file_size_); //skip empty file
@@ -599,19 +618,28 @@ int ObCSVTableRowIterator::get_next_row()
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   bool is_oracle_mode = lib::is_oracle_mode();
   int64_t returned_row_cnt = 0; // rows count for scan output, exclude blank lines or skip header
-  auto handle_one_line = [&file_column_exprs, &eval_ctx, &is_oracle_mode, &returned_row_cnt]
+  auto handle_one_line = [this, &file_column_exprs, &eval_ctx, &is_oracle_mode, &returned_row_cnt]
       (ObIArray<ObCSVGeneralParser::FieldValue> &arr) -> int {
     int ret = OB_SUCCESS;
     for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); ++i) {
       ObDatum &datum = file_column_exprs.at(i)->locate_datum_for_write(eval_ctx);
-      int64_t loc_idx = file_column_exprs.at(i)->extra_ - 1;
-      if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        if (arr.at(loc_idx).is_null_|| (0 == arr.at(loc_idx).len_ && is_oracle_mode)) {
-          datum.set_null();
+      if (file_column_exprs.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
+        if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+          datum.set_string(this->state_.file_with_url_.ptr(), this->state_.file_with_url_.length());
         } else {
-          datum.set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+          datum.set_string(this->state_.cur_file_name_.ptr(), this->state_.cur_file_name_.length());
+        }
+      } else {
+        int64_t loc_idx = file_column_exprs.at(i)->extra_ - 1;
+        if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= arr.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else {
+          if (arr.at(loc_idx).is_null_|| (0 == arr.at(loc_idx).len_ && is_oracle_mode)) {
+            datum.set_null();
+          } else {
+            datum.set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+          }
         }
       }
     }
@@ -694,19 +722,28 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
       bit_vector_cache_->reset(eval_ctx.max_batch_size_);
     }
   }
-  auto handle_one_line = [&file_column_exprs, &eval_ctx, &is_oracle_mode, &returned_row_cnt]
+  auto handle_one_line = [this, &file_column_exprs, &eval_ctx, &is_oracle_mode, &returned_row_cnt]
       (ObIArray<ObCSVGeneralParser::FieldValue> &arr) -> int {
     int ret = OB_SUCCESS;
     for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); ++i) {
       ObDatum *datums = file_column_exprs.at(i)->locate_batch_datums(eval_ctx);
-      int64_t loc_idx = file_column_exprs.at(i)->extra_ - 1;
-      if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode)) {
-          datums[returned_row_cnt].set_null();
+      if (file_column_exprs.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
+        if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
+          datums[returned_row_cnt].set_string(this->state_.file_with_url_.ptr(), this->state_.file_with_url_.length());
         } else {
-          datums[returned_row_cnt].set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+          datums[returned_row_cnt].set_string(this->state_.cur_file_name_.ptr(), this->state_.cur_file_name_.length());
+        }
+      } else {
+        int64_t loc_idx = file_column_exprs.at(i)->extra_ - 1;
+        if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= arr.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret), K(loc_idx), K(arr));
+        } else {
+          if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode)) {
+            datums[returned_row_cnt].set_null();
+          } else {
+            datums[returned_row_cnt].set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+          }
         }
       }
     }

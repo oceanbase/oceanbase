@@ -97,6 +97,21 @@ ObPLogFDType get_fd_type(const char *mod_name)
   return type;
 }
 
+ObPLogFDType get_fd_type(const char *mod_name, int32_t level, const char *dba_event)
+{
+  ObPLogFDType type = FD_SVR_FILE;
+  if (level >= OB_LOG_LEVEL_DBA_ERROR && level <= OB_LOG_LEVEL_DBA_INFO) {
+    if (OB_NOT_NULL(dba_event)) {
+      type = FD_ALERT_FILE;
+    } else {
+      // consistent with old DBA log behavior.
+      type = FD_SVR_FILE;
+    }
+  } else {
+    type = get_fd_type(mod_name);
+  }
+  return type;
+}
 
 int logdata_printf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, ...)
 {
@@ -464,7 +479,7 @@ void ObLogger::print_trace_buffer(const char* mod_name,
                              return OB_SUCCESS;
     };
     // invoke log_it isn't workable，that will recycle infinitely
-    do_log_message(is_async_log_used(), mod_name, level, file, line, function,
+    do_log_message(is_async_log_used(), mod_name, nullptr, level, file, line, function,
                    false, location_hash_val, 0, log_data_func);
     tb->reset();//reset, than reuse the TraceBuffer
   }
@@ -472,11 +487,11 @@ void ObLogger::print_trace_buffer(const char* mod_name,
 
 
 
-const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
+const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 
 ObLogger::ObLogger()
   : ObBaseLogWriter(), log_file_(), max_file_size_(DEFAULT_MAX_FILE_SIZE), max_file_index_(0),
-    name_id_map_(), id_level_map_(), wf_level_(OB_LOG_LEVEL_DBA_WARN), level_version_(0),
+    name_id_map_(), id_level_map_(), wf_level_(OB_LOG_LEVEL_DBA_WARN), alert_log_level_(OB_LOG_LEVEL_DBA_INFO), level_version_(0),
     disable_thread_log_level_(false), force_check_(false), redirect_flag_(false), open_wf_flag_(false),
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
@@ -573,7 +588,8 @@ void ObLogger::set_file_name(const char *filename,
                              const char *rs_filename,
                              const char *elec_filename,
                              const char *trace_filename,
-                             const char *audit_filename)
+                             const char *audit_filename,
+                             const char *alert_filename)
 {
   int ret = OB_SUCCESS;
   redirect_flag_ = !no_redirect_flag;
@@ -593,6 +609,8 @@ void ObLogger::set_file_name(const char *filename,
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", trace_filename, ret);
   } else if (NULL != audit_filename && OB_FAIL(log_file_[FD_AUDIT_FILE].open(audit_filename, false, false))) {
     LOG_STDERR("fail to open log_file = %p, ret=%d\n", audit_filename, ret);
+  } else if (NULL != alert_filename && OB_FAIL(log_file_[FD_ALERT_FILE].open(alert_filename, false, false))) {
+    LOG_STDERR("fail to open log_file = %p, ret=%d\n", alert_filename, ret);
   }
 }
 
@@ -664,6 +682,7 @@ void ts_to_tv(int64_t ts, timeval &tv)
 
 int ObLogger::log_head(const int64_t ts,
                        const char *mod_name,
+                       const char *dba_event,
                        const int32_t level,
                        const char *file,
                        const int32_t line,
@@ -685,31 +704,43 @@ int ObLogger::log_head(const int64_t ts,
     const int32_t errcode_buf_size = 32;
     char errcode_buf[errcode_buf_size];
     errcode_buf[0] = '\0';
-    if (level == OB_LOG_LEVEL_DBA_ERROR
-        || level == OB_LOG_LEVEL_DBA_WARN
-        || level == OB_LOG_LEVEL_WARN
-        || level == OB_LOG_LEVEL_ERROR) {
-      snprintf(errcode_buf, errcode_buf_size, "[errcode=%d]", errcode);
-    }
-    if (get_fd_type(mod_name) == FD_TRACE_FILE) {
-      //forbid modify the format of logdata_printf
+    ObPLogFDType log_type = get_fd_type(mod_name, level, dba_event);
+    if (log_type == FD_ALERT_FILE) {
+      dba_event = dba_event == nullptr ? "none" : dba_event;
       ret = logdata_printf(buf, buf_len, pos,
-                           "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "[%ld][%s][T%lu][%s] ",
+                           "%04d-%02d-%02d %02d:%02d:%02d.%06ld"
+                           "|%s|%s|%s|%d|%lu|%ld|%s|%s|%s|%s:%d|",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                           tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
+                           tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, dba_event, errcode,
+                           GET_TENANT_ID(), GETTID(), GETTNAME(), ObCurTraceId::get_trace_id_str(),
+                           function, base_file_name, line);
     } else {
-      constexpr int cluster_id_buf_len = 8;
-      char cluster_id_buf[cluster_id_buf_len] = {'\0'};
-      (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
-      ret = logdata_printf(buf, buf_len, pos,
-                           "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
-                           "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][%s] [lt=%ld]%s ",
-                           tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                           tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
-                           base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
-                           is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
-                           last_logging_cost_time_us_, errcode_buf);
+      if (level == OB_LOG_LEVEL_DBA_ERROR
+          || level == OB_LOG_LEVEL_DBA_WARN
+          || level == OB_LOG_LEVEL_WARN
+          || level == OB_LOG_LEVEL_ERROR) {
+        snprintf(errcode_buf, errcode_buf_size, "[errcode=%d]", errcode);
+      }
+      if (log_type == FD_TRACE_FILE) {
+        //forbid modify the format of logdata_printf
+        ret = logdata_printf(buf, buf_len, pos,
+                             "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
+                             "[%ld][%s][T%lu][%s] ",
+                             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
+                             tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
+      } else {
+        constexpr int cluster_id_buf_len = 8;
+        char cluster_id_buf[cluster_id_buf_len] = {'\0'};
+        (void)snprintf(cluster_id_buf, cluster_id_buf_len, "[C%lu]", GET_CLUSTER_ID());
+        ret = logdata_printf(buf, buf_len, pos,
+                             "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
+                             "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][%s] [lt=%ld]%s ",
+                             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
+                             tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
+                             base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
+                             is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
+                             last_logging_cost_time_us_, errcode_buf);
+      }
     }
   }
   return ret;
@@ -818,7 +849,7 @@ void ObLogger::rotate_log(const char *filename,
           }
         }
 
-        if (open_wf_flag_ && enable_wf_flag_) {
+        if (open_wf_flag_ && enable_wf_flag_ && ObPLogFDType::FD_ALERT_FILE != fd_type) {
           if (max_file_index_ > 0) {
             if (OB_LIKELY(0 == pthread_mutex_lock(&file_index_mutex_))) {
               if (wf_file_list.size() >= max_file_index_) {
@@ -858,6 +889,7 @@ void ObLogger::check_file()
   check_file(log_file_[FD_AUDIT_FILE], false, false);
   check_file(log_file_[FD_ELEC_FILE], false, open_wf_flag_);
   check_file(log_file_[FD_TRACE_FILE], false, false);
+  check_file(log_file_[FD_ALERT_FILE], false, false);
 }
 
 void ObLogger::check_file(ObPLogFileStruct &log_struct, const bool redirect_flag, const bool open_wf_flag)
@@ -1083,6 +1115,32 @@ int ObLogger::parse_check(const char *str,
   return ret;
 }
 
+int ObLogger::parse_check_alert(const char *str, const int32_t str_length)
+{
+  int ret = OB_SUCCESS;
+  HEAP_VAR(char[OB_MAX_CONFIG_VALUE_LEN], buffer) {
+    const int32_t MAX_LEVEL_NAME_LENGTH = 10;
+    if (NULL == str) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      str_copy_trim(buffer, OB_MAX_CONFIG_VALUE_LEN, str, str_length);
+      int8_t level_int = 0;
+      if (OB_FAIL(level_str2int(buffer, level_int))) {
+        OB_LOG(WARN, "failed to get level_int", KCSTRING(buffer), K(str_length), K(ret));
+      } else if (level_int >= OB_LOG_LEVEL_DBA_ERROR && level_int <= OB_LOG_LEVEL_INFO) {
+        // becase string of DBA_INFO and string of INFO are both 'INFO'
+        if (OB_LOG_LEVEL_INFO == level_int) {
+          level_int = OB_LOG_LEVEL_DBA_INFO;
+        }
+        alert_log_level_ = level_int;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogger::parse_set(const char *str, const int32_t str_length, int64_t version)
 {
   int ret = OB_SUCCESS;
@@ -1184,7 +1242,7 @@ int ObLogger::level_str2int(const char *level_name, int8_t &level_int)
   } else {
     bool find_level = false;
     int8_t level_num = sizeof(errstr_) / sizeof(char *);
-    for (int8_t level_index = 0;!find_level && level_index < level_num; level_index++) {
+    for (int8_t level_index = level_num - 1;!find_level && level_index >= 0; level_index--) {
       if (0 == STRCASECMP(level_name, errstr_[level_index])) {
         level_int = level_index;
         find_level = true;
@@ -1255,6 +1313,9 @@ int ObLogger::record_old_log_file()
       if (OB_TMP_FAIL(get_log_files_in_dir(log_file_[type].filename_, &files, &wf_files))) {
         OB_LOG(WARN, "Get log files in log dir error", K(ret));
       }
+    }
+    if (OB_TMP_FAIL(get_log_files_in_dir(log_file_[FD_ALERT_FILE].filename_, &files, &wf_files))) {
+      OB_LOG(WARN, "Get log files in log dir error", K(ret));
     }
     if (OB_FAIL(add_files_to_list(&files, &wf_files, file_list_, wf_file_list_))) {
         OB_LOG(WARN, "Add files to list error", K(ret));
@@ -1424,6 +1485,9 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
                    const bool is_arb_replica)
 {
   int ret = OB_SUCCESS;
+  LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer syslog service init begin.");
 
   static const char *thread_name = "OB_PLOG";
   void *buf = nullptr;
@@ -1474,6 +1538,10 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
   }
 
   if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_SERVER_SYSLOG_SERVICE_INIT_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "observer syslog service init fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
     if (error_allocator_) {
       error_allocator_->~ObFIFOAllocator();
       error_allocator_ = nullptr;
@@ -1490,6 +1558,10 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
       ob_free(buf);
     }
     destroy();
+  } else {
+    LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "observer syslog service init success.");
   }
   return ret;
 }
@@ -1566,7 +1638,7 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
           vec[fd_type][iovcnt[fd_type]].iov_base = log_item[i]->get_buf();
           vec[fd_type][iovcnt[fd_type]].iov_len = static_cast<size_t>(log_item[i]->get_data_len());
           iovcnt[fd_type] += 1;
-          if ((enable_wf_flag_ && open_wf_flag_ && log_item[i]->get_log_level() <= wf_level_)) {
+          if (enable_wf_flag_ && open_wf_flag_ && log_item[i]->get_log_level() <= wf_level_ && fd_type != FD_ALERT_FILE) {
             wf_vec[fd_type][wf_iovcnt[fd_type]].iov_base = log_item[i]->get_buf();
             wf_vec[fd_type][wf_iovcnt[fd_type]].iov_len = static_cast<size_t>(log_item[i]->get_data_len());
             wf_iovcnt[fd_type] += 1;
@@ -1917,6 +1989,35 @@ void ObLogger::issue_dba_error(const int errcode, const char *file, const int li
 bool ObLogger::is_svr_file_opened()
 {
   return log_file_[FD_SVR_FILE].is_opened();
+}
+
+bool ObLogger::need_to_print_dba(const int32_t level, bool force)
+{
+  static thread_local ObCurTraceId::TraceId dba_log_trace_id[OB_LOG_LEVEL_DBA_WARN + 1];
+  static thread_local int64_t dba_log_count[OB_LOG_LEVEL_DBA_WARN + 1];
+  static const int64_t LOG_COUNT_WARN_THRESHOLD = 20;
+
+  bool need_to_print = false;
+  if (level > alert_log_level_){
+    // false
+  } else if (level == OB_LOG_LEVEL_DBA_INFO) {
+    need_to_print = true;
+  } else if (force) {
+    need_to_print = true;
+  } else if (level == OB_LOG_LEVEL_DBA_ERROR || level == OB_LOG_LEVEL_DBA_WARN) {
+    if (ObCurTraceId::get_trace_id()->is_default()) {
+      need_to_print = true;
+    } else if (dba_log_trace_id[level] != *ObCurTraceId::get_trace_id()) {
+      dba_log_trace_id[level] = *ObCurTraceId::get_trace_id();
+      dba_log_count[level] = 1;
+      need_to_print = true;
+    } else if ((++dba_log_count[level]) % LOG_COUNT_WARN_THRESHOLD == 0) {
+      int ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "print too many alert logs with same trace id!", K(ret), "log_count", dba_log_count[level]);
+    }
+  }
+
+  return need_to_print;
 }
 
 }

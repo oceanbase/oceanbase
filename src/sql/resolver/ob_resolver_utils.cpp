@@ -4640,30 +4640,35 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
 int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx)
 {
   int ret = OB_SUCCESS;
-  constexpr int32_t PREFIX_LEN = str_length(N_EXTERNAL_FILE_COLUMN_PREFIX);
-  if (column_name.length() <= PREFIX_LEN) {
-    ret = OB_ERR_UNEXPECTED;
+  if (column_name.case_compare(N_EXTERNAL_FILE_URL) == 0) {
+    file_column_idx = UINT64_MAX;
   } else {
-    int err = 0;
-    file_column_idx = ObCharset::strntoull(column_name.ptr() + PREFIX_LEN, column_name.length() - PREFIX_LEN, 10, &err);
-    if (err != 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid file column name", K(column_name));
+    constexpr int32_t PREFIX_LEN = str_length(N_EXTERNAL_FILE_COLUMN_PREFIX);
+    if (column_name.length() <= PREFIX_LEN) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      int err = 0;
+      file_column_idx = ObCharset::strntoull(column_name.ptr() + PREFIX_LEN, column_name.length() - PREFIX_LEN, 10, &err);
+      if (err != 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid file column name", K(column_name));
+      }
     }
   }
   return ret;
 }
 
-ObRawExpr *ObResolverUtils::find_file_column_expr(
-    ObIArray<ObRawExpr *> &pseudo_exprs,
-    int64_t table_id,
-    int64_t column_idx
-    )
+ObRawExpr *ObResolverUtils::find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
+                                        int64_t table_id,
+                                        int64_t column_idx,
+                                        const ObString &expr_name)
 {
   ObRawExpr *expr = nullptr;
   for (int i = 0; i < pseudo_exprs.count(); ++i) {
     ObPseudoColumnRawExpr *pseudo_expr = static_cast<ObPseudoColumnRawExpr *>(pseudo_exprs.at(i));
-    if (pseudo_expr->get_table_id() == table_id && pseudo_expr->get_extra() == column_idx) {
+    if (pseudo_expr->get_table_id() == table_id
+        && pseudo_expr->get_extra() == column_idx
+        && pseudo_expr->get_expr_name().prefix_match_ci(expr_name)) {
       expr = pseudo_expr;
       break;
     }
@@ -4688,7 +4693,7 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
   } else if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
     LOG_WARN("fail to calc file column idx", K(ret));
   } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
-                           real_exprs, OB_INVALID_ID, file_column_idx))) {
+                           real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
     ObString table_name;
     if (OB_FAIL(ObResolverUtils::build_file_column_expr(expr_factory, session_info, OB_INVALID_ID,
                                                         table_name, q_name.col_name_,
@@ -4709,7 +4714,8 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
 
 bool ObResolverUtils::is_external_file_column_name(const ObString &name)
 {
-  return name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX);
+  return name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)
+         || 0 == name.case_compare(N_EXTERNAL_FILE_URL);
 }
 
 int ObResolverUtils::build_file_column_expr(ObRawExprFactory &expr_factory,
@@ -4721,28 +4727,42 @@ int ObResolverUtils::build_file_column_expr(ObRawExprFactory &expr_factory,
                                             ObRawExpr *&expr,
                                             ObCharsetType cs_type)
 {
-  int ret = OB_SUCCESS;
+int ret = OB_SUCCESS;
   ObPseudoColumnRawExpr *file_column_expr = nullptr;
+  ObItemType type = T_INVALID;
+  uint64_t extra = UINT64_MAX;
 
-  if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_EXTERNAL_FILE_COL, file_column_expr))) {
+  if (column_name.case_compare(N_EXTERNAL_FILE_URL) == 0) {
+    type = T_PSEUDO_EXTERNAL_FILE_URL;
+    extra = UINT64_MAX;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)) {
+    type = T_PSEUDO_EXTERNAL_FILE_COL;
+    extra = column_idx;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not valid column type", K(column_name), K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_factory.create_raw_expr(type, file_column_expr))) {
     LOG_WARN("create nextval failed", K(ret));
   } else if (OB_ISNULL(file_column_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else{
+  } else {
     file_column_expr->set_expr_name(column_name);
     file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_extra(extra);
     file_column_expr->set_data_type(ObVarcharType);
     file_column_expr->set_collation_type(ObCharset::get_default_collation(cs_type));
     file_column_expr->set_length(OB_MAX_VARCHAR_LENGTH);
     if (lib::is_oracle_mode()) {
       file_column_expr->set_length_semantics(LS_BYTE);
     }
-    file_column_expr->set_table_id(table_id);
-    file_column_expr->set_explicited_reference();
-    file_column_expr->set_extra(column_idx);
 
-    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
       expr = file_column_expr;
@@ -4752,17 +4772,6 @@ int ObResolverUtils::build_file_column_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
-ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &exprs, const ObString &file_column_name)
-{
-  ObRawExpr *res_expr = nullptr;
-  for (int i = 0; i < exprs.count(); ++i) {
-    if (0 == exprs.at(i)->get_expr_name().case_compare(file_column_name)) {
-      res_expr = exprs.at(i);
-      break;
-    }
-  }
-  return res_expr;
-}
 
 // 解析生成列表达式时，首先在table_schema中的column_schema中寻找依赖的列，如果找不到，再在 resolved_cols中找
 int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
@@ -8123,13 +8132,17 @@ int ObResolverUtils::escape_char_for_oracle_mode(ObIAllocator &allocator,
   return ret;
 }
 
+// Submit a product behavior change request before modifying the whitelist.
+static const char * const sys_tenant_white_list[] = {
+  "log/alert"
+};
+
 int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv, const common::ObString &full_path)
 {
   int ret = OB_SUCCESS;
 
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
-    LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("secure file priv string length exceeds default buf length", K(ret),
@@ -8142,7 +8155,6 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
     stat(buf, &path_stat);
     if (0 == S_ISDIR(path_stat.st_mode)) {
       ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
     } else {
       MEMSET(buf, 0, sizeof(buf));
       char *real_secure_file = nullptr;
@@ -8153,17 +8165,49 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
         const int64_t pos = secure_file_priv_tmp.length();
         if (full_path.length() < secure_file_priv_tmp.length()) {
           ret = OB_ERR_NO_PRIVILEGE;
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (!full_path.prefix_match(secure_file_priv_tmp)) {
           ret = OB_ERR_NO_PRIVILEGE;
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
                    && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
-          LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
       }
     }
+  }
+  if (OB_ERR_NO_PRIVILEGE == ret && OB_SYS_TENANT_ID == MTL_ID()) {
+    char buf[DEFAULT_BUF_LENGTH] = { 0 };
+    const int list_size = ARRAYSIZEOF(sys_tenant_white_list);
+    for (int i = 0; OB_ERR_NO_PRIVILEGE == ret && i < list_size; i++) {
+      const char * const secure_file_path = sys_tenant_white_list[i];
+      struct stat path_stat;
+      stat(secure_file_path, &path_stat);
+      if (0 == S_ISDIR(path_stat.st_mode)) {
+        // continue
+      } else {
+        MEMSET(buf, 0, sizeof(buf));
+        char *real_secure_file = nullptr;
+        if (NULL == (real_secure_file = ::realpath(secure_file_path, buf))) {
+          // continue
+        } else {
+          ObString secure_file_path_tmp(real_secure_file);
+          const int64_t pos = secure_file_path_tmp.length();
+          if (full_path.length() < secure_file_path_tmp.length()) {
+            // continue
+          } else if (!full_path.prefix_match(secure_file_path_tmp)) {
+            // continue
+          } else if (full_path.length() > secure_file_path_tmp.length()
+                    && secure_file_path_tmp != "/" && full_path[pos] != '/') {
+            // continue
+          } else {
+            ret = OB_SUCCESS;
+            LOG_INFO("check sys tenant whitelist success.", K(ret), K(secure_file_path), K(full_path));
+          }
+        }
+      }
+    }
+  }
+  if (OB_ERR_NO_PRIVILEGE == ret) {
+    LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   }
 
   return ret;

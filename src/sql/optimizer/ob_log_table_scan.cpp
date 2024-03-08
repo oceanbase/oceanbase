@@ -258,6 +258,16 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   } else if (OB_FAIL(dep_checker.check(exprs))) {
     LOG_WARN("failed to check op_exprs", K(ret));
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_output.count(); i++) {
+      if (OB_ISNULL(child_output.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (child_output.at(i)->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+        if (OB_FAIL(deps.del_member(i))) {
+          LOG_WARN("del member failed", K(ret));
+        }
+      }
+    }
     LOG_TRACE("succeed to check output exprs", K(exprs), K(type_), K(deps));
   }
   return ret;
@@ -269,7 +279,8 @@ int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+            || T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
     auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
     if (pseudo_col_expr->get_table_id() != table_id_) {
       //table id may be changed because of rewrite
@@ -431,6 +442,15 @@ int ObLogTableScan::generate_access_exprs()
       } else if ((T_ORA_ROWSCN == expr->get_expr_type())
                  && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
         if (OB_FAIL(access_exprs_.push_back(expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        }
+      } else if ((T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type())
+                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+        if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+         LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(access_exprs_.push_back(expr))) { //add access expr temp
           LOG_WARN("fail to push back expr", K(ret));
         }
       }

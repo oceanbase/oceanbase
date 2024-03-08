@@ -2208,6 +2208,26 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::extract_metadata_fileurl_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr)
+{
+  int ret = OB_SUCCESS;
+  if (file_name_expr != NULL) {
+    //do nothing
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_pseudo_column_expr() && expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+    file_name_expr = expr;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(extract_metadata_fileurl_expr(expr->get_param_expr(i), file_name_expr)))) {
+        LOG_WARN("extract metadata filename expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
                                                 const ObSQLSessionInfo &session_info,
                                                 const ParseNode &node,

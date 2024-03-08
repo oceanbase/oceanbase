@@ -174,9 +174,15 @@ struct ObCurTraceId
 
     inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
+    inline bool is_default() { return uval_[0] == 0 && uval_[1] == 0 && uval_[2] == 0 && uval_[3] == 0; }
+
     inline bool operator == (const TraceId &other) const
     {
       return equals(other);
+    }
+    inline bool operator != (const TraceId &other) const
+    {
+      return !equals(other);
     }
   private:
     union

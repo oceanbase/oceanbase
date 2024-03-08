@@ -291,6 +291,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogLevelChecker);
 };
 
+class ObConfigAlertLogLevelChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAlertLogLevelChecker() {}
+  virtual ~ObConfigAlertLogLevelChecker() {};
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAlertLogLevelChecker);
+};
+
 class ObConfigAuditTrailChecker
   : public ObConfigChecker
 {

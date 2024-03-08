@@ -11843,7 +11843,8 @@ int ObLogPlan::adjust_expr_properties_for_external_table(ObRawExpr *col_expr, Ob
   if (OB_ISNULL(col_expr) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", K(ret));
-  } else if (expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_COL) {
+  } else if (expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_COL
+            || expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
     // The file column PSEUDO expr does not have relation_ids.
     // Using relation_ids in column expr to act as a column from the table.
     // Relation_ids are required when cg join conditions.

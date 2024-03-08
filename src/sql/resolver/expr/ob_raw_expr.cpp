@@ -5783,6 +5783,7 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
         LOG_WARN("failed to print expr name", K(ret));
       }
       break;
+    case T_PSEUDO_EXTERNAL_FILE_URL:
     case T_PSEUDO_EXTERNAL_FILE_COL:
       if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
           LOG_WARN("failed to print table name", K(ret));

@@ -1013,6 +1013,8 @@ public:
                                ObRawExpr *param_expr2,
                                ObRawExpr *&is_not_expr);
 
+  static int extract_metadata_fileurl_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr);
+
   static int build_is_not_null_expr(ObRawExprFactory &expr_factory,
                                     ObRawExpr *param_expr,
                                     bool is_not_null,

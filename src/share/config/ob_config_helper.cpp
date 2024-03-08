@@ -341,6 +341,12 @@ bool ObConfigLogLevelChecker::check(const ObConfigItem &t) const
       || OB_SUCCESS == OB_LOGGER.parse_check(tmp_str.ptr(), tmp_str.length()));
 }
 
+bool ObConfigAlertLogLevelChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return OB_SUCCESS == OB_LOGGER.parse_check_alert(tmp_str.ptr(), tmp_str.length());
+}
+
 bool ObConfigAuditTrailChecker::check(const ObConfigItem &t) const
 {
   common::ObString tmp_string(t.str());

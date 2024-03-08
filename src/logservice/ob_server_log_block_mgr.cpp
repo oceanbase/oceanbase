@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX CLOG
 #include "ob_server_log_block_mgr.h"
 #include <fcntl.h>                              // IO operation
 #include <type_traits>                          // decltype
@@ -33,6 +34,9 @@
 #include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "logservice/palf/log_io_utils.h"       // renameat_with_retry
+
+#define BYTE_TO_MB(byte) (byte+1024*1024-1)/1024/1024
+
 namespace oceanbase
 {
 using namespace palf;
@@ -196,19 +200,30 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
                                                            : SHRINKING_STATUS))) {
   } else if (aligned_new_size_byte < min_log_disk_size_for_all_tenants_) {
     ret = OB_NOT_SUPPORTED;
-    LOG_DBA_ERROR(OB_NOT_SUPPORTED,
-                  "possible reason",
-                  "new log_disk_size is not enough to hold all tenants, please check the configuration about log disk",
-                  "new log disk size(MB)", (new_size_byte+1024*1024-1)/1024/1024,
-                  "min log disk size(MB)", (min_log_disk_size_for_all_tenants_+1024*1024-1)/1024/1024);
-  } else if (OB_FAIL(
-                 do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
+    LOG_DBA_ERROR_V2(OB_CLOG_NEW_DISK_SIZE_NOT_ENOUGH, ret,
+                     "new log_disk_size(", BYTE_TO_MB(new_size_byte), "MB) is not enough to hold all tenants. ",
+                     "[suggestion] set log_disk_size greater than ", BYTE_TO_MB(min_log_disk_size_for_all_tenants_), "MB.");
+  } else if (OB_FAIL(do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
     if (OB_ALLOCATE_DISK_SPACE_FAILED == ret) {
       ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      LOG_DBA_ERROR(OB_ALLOCATE_DISK_SPACE_FAILED,
-                    "possible reason",
-                    "may be diskspace is not enough, please check the configuration about log disk",
-                    "new log disk size(MB)", (new_size_byte+1024*1024-1)/1024/1024);
+      // available disk space = free space in disk + current allocated space
+      int64_t free_disk_space = 0;
+      if (OB_UNLIKELY(OB_SUCCESS != get_free_disk_space(free_disk_space))) {
+        LOG_DBA_ERROR_V2(OB_CLOG_ALLOCATE_DISK_SPACE_FAIL, ret,
+                         "maybe available disk space(can't get automatically) is not enough to satisfy new log_disk_size(",
+                         BYTE_TO_MB(new_size_byte), "MB). "
+                         "[suggestion] set log_disk_size less than available disk space(= old log_disk_size + free disk size) "
+                         "or link the clog path({data_dir}/clog) to another disk which has more than ",
+                         BYTE_TO_MB(new_size_byte), "MB free space.");
+      } else {
+        int64_t available_size_byte =  free_disk_space + curr_total_size;
+        LOG_DBA_ERROR_V2(OB_CLOG_ALLOCATE_DISK_SPACE_FAIL, ret,
+                         "maybe available disk size(", BYTE_TO_MB(available_size_byte), "MB) "
+                         "is not enough to satisfy new log_disk_size(", BYTE_TO_MB(new_size_byte), "MB). "
+                         "[suggestion] set log_disk_size less than ", BYTE_TO_MB(available_size_byte), "MB "
+                         "or link the clog path({data_dir}/clog) to another disk which has more than ",
+                         BYTE_TO_MB(new_size_byte), "MB free space.");
+      }
     } else {
       CLOG_LOG(ERROR, "do_resize_ failed", K(ret), KPC(this), K(old_log_pool_meta),
                K(new_log_pool_meta));
@@ -1310,6 +1325,20 @@ int ObServerLogBlockMgr::remove_tmp_file_or_directory_for_tenant_(const char *lo
   }
   if (NULL != dir) {
     closedir(dir);
+  }
+  return ret;
+}
+
+int ObServerLogBlockMgr::get_free_disk_space(int64_t &free_disk_space)
+{
+  int ret = OB_SUCCESS;
+  free_disk_space = 0;
+  struct statvfs file_system;
+  if (statvfs(log_pool_path_, &file_system) == -1) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("fail to get disk stat", K(ret), K(strerror(errno)), K(log_pool_path_));
+  } else {
+    free_disk_space = file_system.f_bsize * file_system.f_bavail;
   }
   return ret;
 }

@@ -36,6 +36,7 @@ enum ObPLogFDType {
   FD_ELEC_FILE,
   FD_TRACE_FILE,
   FD_AUDIT_FILE,
+  FD_ALERT_FILE,
   MAX_FD_FILE,
 };
 
@@ -79,6 +80,7 @@ public:
   bool is_trace_file() const { return FD_TRACE_FILE == fd_type_; }
   bool is_supported_file() const { return MAX_FD_FILE != fd_type_; }
   bool is_audit_file() const { return FD_AUDIT_FILE == fd_type_; }
+  bool is_alert_file() const { return FD_ALERT_FILE == fd_type_; }
 
 private:
   ObPLogFDType fd_type_;

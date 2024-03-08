@@ -183,6 +183,10 @@ DEF_STR(obconfig_url, OB_CLUSTER_PARAMETER, "", "URL for OBConfig service",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_LOG_LEVEL(syslog_level, OB_CLUSTER_PARAMETER, "WDIAG", "specifies the current level of logging. There are DEBUG, TRACE, WDIAG, EDIAG, INFO, WARN, ERROR, seven different log levels.",
               ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(alert_log_level, OB_CLUSTER_PARAMETER, "INFO",
+                     common::ObConfigAlertLogLevelChecker,
+                     "specifies the current level of alert log. There are INFO, WARN, ERROR, three different log levels.",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(syslog_io_bandwidth_limit, OB_CLUSTER_PARAMETER, "30MB",
         "Syslog IO bandwidth limitation, exceeding syslog would be truncated. Use 0 to disable ERROR log.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
