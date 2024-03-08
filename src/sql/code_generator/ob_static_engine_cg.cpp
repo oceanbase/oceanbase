@@ -3217,6 +3217,18 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   spec.set_shared_filter_type(op.get_filter_type());
   spec.is_shuffle_ = op.is_use_filter_shuffle();
   bool enable_rich_format = spec.use_rich_format_;
+
+  uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  if (min_ver >= CLUSTER_VERSION_4_3_0_1 || min_ver >= MOCK_CLUSTER_VERSION_4_2_3_0
+      || (min_ver > MOCK_CLUSTER_VERSION_4_2_1_4 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
+    spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
+    spec.send_bloom_filter_size_ = GCONF._send_bloom_filter_size;
+  } else {
+    // for compatibility, if the cluseter is upgrading, set them as default value 0
+    spec.bloom_filter_ratio_ = 0;
+    spec.send_bloom_filter_size_ = 0;
+  }
+
   if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
