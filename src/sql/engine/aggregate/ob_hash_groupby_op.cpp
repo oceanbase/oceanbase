@@ -147,7 +147,6 @@ int ObGroupRowHashTable::add_hashval_to_llc_map(LlcEstimate &llc_est)
         for (int64_t j = 0; j < item->cnt_; ++j) {
           ObAggregateProcessor::llc_add_value(item->hash_, llc_est.llc_map_);
            ++llc_est.est_cnt_;
-           ++llc_est.check_cnt_;
         }
         item = item->next();
       }
@@ -3139,11 +3138,11 @@ int ObHashGroupByOp::check_llc_ndv()
   ObTenantSqlMemoryManager * tenant_sql_mem_manager = NULL;
   tenant_sql_mem_manager = MTL(ObTenantSqlMemoryManager*);
   ObExprEstimateNdv::llc_estimate_ndv(ndv, llc_est_.llc_map_);
-
   if (0 == llc_est_.est_cnt_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect zero cnt", K(llc_est_.est_cnt_), K(ret));
   } else if (FALSE_IT(ndv_ratio_is_small_enough = (ndv * 1.0 / llc_est_.est_cnt_) < LlcEstimate::LLC_NDV_RATIO_)) {
+  } else if (FALSE_IT(llc_est_.last_est_cnt_ = llc_est_.est_cnt_)) {
   } else if (OB_ISNULL(tenant_sql_mem_manager)) {
      uint64_t tenant_id  = MTL_ID();
      if (OB_MAX_RESERVED_TENANT_ID <  tenant_id) {
@@ -3173,34 +3172,33 @@ int ObHashGroupByOp::check_llc_ndv()
   return ret;
 }
 
-int ObHashGroupByOp::bypass_add_llc_map(uint64_t hash_val, bool is_permuted) {
+int ObHashGroupByOp::bypass_add_llc_map(uint64_t hash_val, bool ready_to_check_ndv) {
   int ret = OB_SUCCESS;
   llc_add_value(hash_val);
-  if (llc_est_.check_cnt_ > LlcEstimate::ESTIMATE_MOD_NUM_ && is_permuted) {
-    llc_est_.check_cnt_ = 0;
+  if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
     if (OB_FAIL(check_llc_ndv())) {
       LOG_WARN("failed to check llc ndv", K(ret));
-    } else if (OB_ISNULL(last_child_row_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null ptr", K(ret));
-    } else {
-      last_child_row_->reset();
-
+    } else if (0 < bypass_ctrl_.scaled_llc_est_ndv_) { // means state of bypass_ctrl_ go to INSERT from BYPASS
+      if (OB_ISNULL(last_child_row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret), K(llc_est_.est_cnt_), K(bypass_ctrl_.scaled_llc_est_ndv_));
+      } else {
+        last_child_row_->reset();
+      }
     }
   }
   return ret;
 }
-int ObHashGroupByOp::bypass_add_llc_map_batch(bool is_permuted) {
+int ObHashGroupByOp::bypass_add_llc_map_batch(bool ready_to_check_ndv) {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && llc_est_.enabled_ && i < brs_.size_; ++i) {
     if (brs_.skip_->exist(i)) { continue; }
     llc_add_value(hash_vals_[i]);
   }
-  if (llc_est_.check_cnt_ > LlcEstimate::ESTIMATE_MOD_NUM_ && is_permuted) {
-    llc_est_.check_cnt_ = 0;
+  if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
     if (OB_FAIL(check_llc_ndv())) {
       LOG_WARN("failed to check llc ndv", K(ret));
-    } else {
+    } else if (0 < bypass_ctrl_.scaled_llc_est_ndv_) { // means state of bypass_ctrl_ go to INSERT from BYPASS
       by_pass_brs_holder_.reset();
     }
   }
@@ -3228,7 +3226,7 @@ int LlcEstimate::reset()
   }
   avg_group_mem_ = 0;
   est_cnt_ = 0;
-  check_cnt_ = 0;
+  last_est_cnt_ = 0;
   enabled_ = false;
   return ret;
 }
