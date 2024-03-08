@@ -1522,9 +1522,6 @@ int ObDMLResolver::replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx
   int ret = OB_SUCCESS;
 
   ObRawExpr* col_ref_expr = NULL;
-  ObSEArray<ColumnItem, 4> columns_list;
-  TableItem *table_item = NULL;
-  bool tab_has_alias = false;
 
   if (col_ref.tbl_name_.empty()) {
     // do nothing ...
@@ -1535,14 +1532,15 @@ int ObDMLResolver::replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx
   } else if (OB_ISNULL(col_ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col ref expr is null", K(ret), KPC(col_ref_expr));
-  } else if (OB_FAIL(get_target_column_list(columns_list, col_ref.tbl_name_, false, tab_has_alias, table_item, false))) {
-    LOG_WARN("failed to get target column list", K(ret), K(col_ref));
-  } else if (OB_ISNULL(table_item) || !tab_has_alias) {
+  } else if (col_ref_expr->is_column_ref_expr()
+             && !(static_cast<ObColumnRefRawExpr *>(col_ref_expr))->is_from_alias_table()
+             && OB_NOT_NULL(params_.query_ctx_)
+             && params_.query_ctx_->available_tb_id_ > (static_cast<ObColumnRefRawExpr *>(col_ref_expr))->get_table_id()) {
     // Oracle Compatible :
     // To reference an attribute or method of a table element,
     // you must give the table an alias and use the alias to qualify the reference to the attribute or method.
     ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("column access with table name has not alias", K(ret), K(col_ref));
+    LOG_WARN("column access with table name has not alias", K(ret), K(col_ref), KPC(col_ref_expr));
   } else if (OB_FAIL(ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(params_.expr_factory_, params_.session_info_, col_ref_expr))) {
     LOG_WARN("try add implict cast above sql udt col ref failed", K(ret), K(col_ref), K(col_ref_expr));
   } else if (col_ref_expr->get_result_type().is_ext()
