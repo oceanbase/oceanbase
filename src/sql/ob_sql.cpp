@@ -173,6 +173,14 @@ void ObSql::stat()
        LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", \
                 KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
      }                                                                  \
+     ObPhysicalPlan* phy_plan = result.get_physical_plan();             \
+     if (OB_SUCCESS == ret && NULL != phy_plan) {                       \
+       if (phy_plan->has_link_table()) {                                \
+         ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                       \
+         LOG_WARN("stmt with dblink can not be executed on txn temporary node", \
+                  KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
+       }                                                                \
+     }                                                                  \
    }                                                                    \
  }
 
