@@ -104,10 +104,11 @@ int ObCDCUdtValueMap::set_main_column_value_(
 {
   int ret = OB_SUCCESS;
   if (main_column_schema_info.is_xmltype()) {
-    if (set_xmltype_main_column_value_(value, udt_val)) {
+    if (OB_FAIL(set_xmltype_main_column_value_(value, udt_val))) {
       LOG_WARN("xmltype main column value not correct", KR(ret), K(value));
     }
   } else {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR(
         "not supported column type, only support xmltype currently",
         KR(ret),
