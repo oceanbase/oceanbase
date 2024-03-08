@@ -256,7 +256,8 @@ inline static void bitmap_get_row_ids(
     ++pos;
   }
   if (row_count >= limit) {
-    from = row_ids[row_count - 1] + id_offset + 1;
+    from = row_ids[limit - 1] + id_offset + 1;
+    row_count = limit;
   } else {
     from = to;
   }
@@ -480,9 +481,9 @@ int ObBitmap::get_row_ids(
     const int64_t id_offset) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(from < 0 || to > valid_bytes_ || to < from)) {
+  if (OB_UNLIKELY(from < 0 || to > valid_bytes_ || to < from || limit <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "Invalid from or to when get row ids", K(ret), K(from), K(to), K_(valid_bytes));
+    LIB_LOG(WARN, "Invalid from or to when get row ids", K(ret), K(from), K(to), K_(valid_bytes), K(limit));
 #if OB_USE_MULTITARGET_CODE
   } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
     common::specific::avx2::bitmap_get_row_ids(row_ids, row_count, from, to, limit, id_offset, data_);
