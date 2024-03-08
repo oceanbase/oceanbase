@@ -6180,7 +6180,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
   } else if (!(column.is_extend()) && !(lib::is_oracle_mode() && column.is_geometry())) {
     // do nothing
   } else if (column.is_identity_column() || column.is_generated_column()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE;
     LOG_WARN("udt columns cannot be generated column or identity column",
              K(ret), K(column), K(default_value));
   } else if (default_value.is_null()) {

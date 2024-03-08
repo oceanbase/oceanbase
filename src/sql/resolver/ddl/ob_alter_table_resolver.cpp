@@ -5341,9 +5341,12 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && ObGeometryType == alter_column_schema.get_data_type()
+                   && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+                   && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
                    && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change geometry type");
+          ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+          LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
           LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
                   K(alter_column_schema.get_geo_type()));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
@@ -5621,9 +5624,12 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_WARN("can't set primary key nullable", K(ret));
           } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && ObGeometryType == alter_column_schema.get_data_type()
+                     && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+                     && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
                      && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry type");
+            ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+            LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
                     K(alter_column_schema.get_geo_type()));
           } else if (ObGeometryType == origin_col_schema->get_data_type()
