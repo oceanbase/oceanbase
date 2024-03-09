@@ -8146,8 +8146,6 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         } else if (OB_REPARTITION_NO_REPARTITION != op.get_repartition_type()
                 && !op.is_slave_mapping()) {
           type = PHY_PX_REPART_TRANSMIT;
-        } else if (ObPQDistributeMethod::LOCAL != op.get_dist_method()) {
-          type = PHY_PX_DIST_TRANSMIT;
         } else {
           // NOTE: 优化器需要和执行器保持一致，既没有分区、又没有HASH、或其它重分区方式时，就使用All To One
           type = PHY_PX_REDUCE_TRANSMIT;
