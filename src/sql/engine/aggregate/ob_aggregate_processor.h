@@ -163,6 +163,7 @@ public:
     group_idxs_.set_allocator(alloc);
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int assign(const ObAggrInfo &rhs);
 
   common::ObIAllocator *alloc_;
   ObExpr *expr_;
