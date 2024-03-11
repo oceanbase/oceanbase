@@ -3084,7 +3084,7 @@ int ObDDLService::set_raw_table_options(
           } else if (OB_FAIL(orig_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
             LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
           } else {
-            //TODO rename datbase_name need to update all index table @hualong
+            //TODO rename database_name need to update all index table @hualong
             ObString database_name;
             if (!is_oracle_mode) {
               // mysql mode
@@ -3121,28 +3121,41 @@ int ObDDLService::set_raw_table_options(
             if (OB_FAIL(schema_guard.get_database_id(tenant_id, database_name, database_id))) {
               LOG_WARN("fail to get database id", K(tenant_id), K(database_name), K(ret));
             } else if (database_name != origin_database_name || table_name != origin_table_name) {
-              const ObTableSchema *tmp_schema = NULL;
-              const ObSynonymInfo *synonym_info = NULL;
-              bool is_index = false;
-              if (OB_FAIL(schema_guard.get_synonym_info(tenant_id,
-                                                          database_id,
-                                                          table_name,
-                                                          synonym_info))) {
-                LOG_WARN("fail to check synonym exist", K(database_name), K(table_name), K(ret));
-              } else if (NULL != synonym_info) {
-                ret = OB_ERR_EXIST_OBJECT;
-                LOG_WARN("Name is already used by an existing object", K(database_name), K(table_name), K(ret));
-              } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                        database_name,
-                                                        table_name,
-                                                        is_index,
-                                                        tmp_schema))) {
-                LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_name), K(table_name));
-             } else if (NULL == tmp_schema) {
-                LOG_INFO("table not exist, can rename to new table name", K(new_table_name));
+              if (OB_UNLIKELY(OB_RECYCLEBIN_SCHEMA_ID == database_id
+                  || OB_PUBLIC_SCHEMA_ID == database_id)) {
+                ret = OB_OP_NOT_ALLOW;
+                LOG_WARN("rename table to hidden database is not allowd",
+                         KR(ret), K(database_id), K(database_name), K(table_name));
+              } else if (!is_oracle_mode) {
+                const ObTableSchema *tmp_schema = NULL;
+                const ObSynonymInfo *synonym_info = NULL;
+                bool is_index = false;
+                if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, database_id, table_name, synonym_info))) {
+                  LOG_WARN("fail to check synonym exist", KR(ret), K(tenant_id), K(database_name), K(table_name));
+                } else if (OB_NOT_NULL(synonym_info)) {
+                  ret = OB_ERR_EXIST_OBJECT;
+                  LOG_WARN("Name is already used by an existing object", KR(ret), K(database_name), K(table_name));
+                } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, is_index, tmp_schema))) {
+                  LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_name), K(table_name));
+                } else if (OB_ISNULL(tmp_schema)) {
+                  LOG_INFO("table not exist, can rename to new table name", K(new_table_name));
+                } else {
+                  ret = OB_ERR_TABLE_EXIST;
+                  LOG_USER_ERROR(OB_ERR_TABLE_EXIST, table_name.length(), table_name.ptr());
+                }
               } else {
-                ret = OB_ERR_TABLE_EXIST;
-                LOG_USER_ERROR(OB_ERR_TABLE_EXIST, table_name.length(), table_name.ptr());
+                ObArray<ObSchemaType> conflict_schema_types;
+                if (OB_FAIL(schema_guard.check_oracle_object_exist(
+                    tenant_id, database_id, table_name, TABLE_SCHEMA,
+                    INVALID_ROUTINE_TYPE, false /*if_not_eixst*/, conflict_schema_types))) {
+                  LOG_WARN("fail to check oracle object exist", KR(ret), K(tenant_id),
+                           K(database_id), K(database_name), K(table_name));
+                 } else if (conflict_schema_types.count() > 0) {
+                   ret = OB_ERR_EXIST_OBJECT;
+                   LOG_WARN("Name is already used by an existing object in oralce mode",
+                            KR(ret), K(tenant_id), K(database_id), K(database_name),
+                            K(table_name), K(conflict_schema_types));
+                }
               }
             }
             if (OB_SUCC(ret)) {
