@@ -910,6 +910,14 @@ int get_dml_stmt_need_privs(
         } else { } //do nothing
         const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(basic_stmt);
         int64_t table_size = dml_stmt->get_table_size();
+        if (stmt::T_SELECT != stmt_type) {
+          ObSEArray<const ObDmlTableInfo*, 4> table_infos;
+          if (OB_FAIL(static_cast<const ObDelUpdStmt*>(basic_stmt)->get_dml_table_infos(table_infos))) {
+            LOG_WARN("failed to get dml table infos", K(ret));
+          } else if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_infos, op_literal))) {
+            LOG_WARN("cann't do this operation on this database", K(ret), K(stmt_type));
+          }
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
           const TableItem *table_item = dml_stmt->get_table_item(i);
           if (OB_ISNULL(table_item)) {
@@ -3043,6 +3051,33 @@ int ObPrivilegeCheck::can_do_operation_on_db(
 		}
   } else {
 		//do nothing
+  }
+  return ret;
+}
+
+int ObPrivilegeCheck::can_do_operation_on_db(const ObSessionPrivInfo &session_priv,
+                                             const ObIArray<const ObDmlTableInfo*> &table_infos,
+                                             const ObString &op_literal)
+{
+  int ret = OB_SUCCESS;
+  if (is_sys_tenant(session_priv.tenant_id_)) {
+    /* system tenant, no checking */
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); i++) {
+      const ObDmlTableInfo *table_info = table_infos.at(i);
+      if (OB_ISNULL(table_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table info is null");
+      } else if (table_info->is_link_table_) {
+        // skip link table
+      } else if (is_inner_table(table_info->ref_table_id_)) {
+        ret = OB_ERR_NO_TABLE_PRIVILEGE;
+        LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, op_literal.length(), op_literal.ptr(),
+                      session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                      session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                      table_info->table_name_.length(), table_info->table_name_.ptr());
+      }
+    }
   }
   return ret;
 }
