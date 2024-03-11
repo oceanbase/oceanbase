@@ -206,7 +206,11 @@ private:
   static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
-  static constexpr int64_t N = 10;
+  static constexpr int32_t N = 10;
+  static constexpr int32_t NORMAL_ACHUNK_INDEX = 0;
+  static constexpr int32_t MIN_LARGE_ACHUNK_INDEX = NORMAL_ACHUNK_INDEX + 1;
+  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = N - 1;
+  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_LARGE_ACHUNK_INDEX + 1;
 public:
   static AChunkMgr &instance();
 
@@ -221,14 +225,12 @@ public:
   void free_co_chunk(AChunk *chunk);
   static OB_INLINE uint64_t aligned(const uint64_t size);
   static OB_INLINE uint64_t hold(const uint64_t size);
-  void set_max_chunk_cache_size(const int64_t max_cache_size)
+  void set_max_chunk_cache_size(const int64_t max_cache_size, const bool use_large_chunk_cache = false)
   {
-    slots_[0]->set_max_chunk_cache_size(max_cache_size);
-  }
-  void set_max_large_chunk_cache_size(const int64_t max_cache_size)
-  {
-    for (int i = 1; i < ARRAYSIZEOF(slots_); ++i) {
-      slots_[i]->set_max_chunk_cache_size(max_cache_size);
+    max_chunk_cache_size_ = max_cache_size;
+    int64_t large_chunk_cache_size = use_large_chunk_cache ? INT64_MAX : 0;
+    for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
+      slots_[i]->set_max_chunk_cache_size(large_chunk_cache_size);
     }
   }
   inline static AChunk *ptr2chunk(const void *ptr);
@@ -259,11 +261,12 @@ private:
   void low_free(const void *ptr, const uint64_t size);
   Slot &get_slot(const uint64_t size)
   {
-    return (size >= INTACT_ACHUNK_SIZE && size <= INTACT_ACHUNK_SIZE * N) ?
-        slots_[(size - 1) / INTACT_ACHUNK_SIZE] :
-        huge_slot_;
+    int64_t index = (size - 1) / INTACT_ACHUNK_SIZE;
+    if (index > HUGE_ACHUNK_INDEX) {
+      index = HUGE_ACHUNK_INDEX;
+    }
+    return slots_[index];
   }
-
 protected:
   int64_t limit_;
   int64_t urgent_;
@@ -271,8 +274,8 @@ protected:
   int64_t total_hold_; // Including virtual memory, just for statifics.
   int64_t used_;
   int64_t shadow_hold_;
-  Slot slots_[N];
-  Slot huge_slot_;
+  int64_t max_chunk_cache_size_;
+  Slot slots_[N + 1];
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)
