@@ -16,6 +16,7 @@
 #include "ob_codecs.h"
 #include "ob_bp_util.h"
 #include "ob_generated_unalign_simd_bp_func.h"
+#include "common/ob_target_specific.h"
 
 namespace oceanbase
 {
@@ -110,7 +111,7 @@ public:
   static OB_INLINE void inner_do_encode(
       const UIntT *__restrict in,
       uint32_t n,
-      char *__restrict out,
+      char *out,
       const uint32_t b,
       const uint32_t bx,
       const uint64_t out_buf_len,
@@ -124,20 +125,7 @@ public:
     char *orig_out = out;
 
     if (bx == 0) { // no exception
-      if (4 == sizeof(UIntT)) {
-        // uint32_t simd packing
-        uSIMD_fastpackwithoutmask_128_32((uint32_t *)in, reinterpret_cast<__m128i *>(out), b);
-        out += BlockSize * b / 8;
-      } else if (2 == sizeof(UIntT)) {
-        // uint16_t simd packing
-        uSIMD_fastpackwithoutmask_128_16((const uint16_t *)in, reinterpret_cast<__m128i *>(out), b);
-        out += BlockSize * b / 8;
-      } else {
-        // uint64_t, uint8_t use scalar packing
-        uint64_t out_pos = 0;
-        scalar_bit_packing<UIntT>(in, BlockSize, b, out, out_buf_len, out_pos);
-        out += out_pos;
-      }
+      inner_bit_packing<UIntT>(in, out, b, out_buf_len);
     } else {
       uint64_t i = 0;
       uint64_t xn = 0;// the count of exceptions
@@ -174,18 +162,7 @@ public:
       }
 
       // packing data
-      if (4 == sizeof(UIntT)) {
-        uSIMD_fastpackwithoutmask_128_32((uint32_t *)_in, reinterpret_cast<__m128i *>(out), b);
-        out += BlockSize * b / 8;
-      } else if (2 == sizeof(UIntT)) {
-        uSIMD_fastpackwithoutmask_128_16((const uint16_t *)_in, reinterpret_cast<__m128i *>(out), b);
-        out += BlockSize * b / 8;
-      } else {
-        // uint8 & uint16 does not support simd packing
-        uint64_t out_pos = 0;
-        scalar_bit_packing<UIntT>(_in, BlockSize, b, out, out_buf_len, out_pos);
-        out += out_pos;
-      }
+      inner_bit_packing<UIntT>(_in, out, b, out_buf_len);
     }
     len = (uint32_t)(out - orig_out);
   }
@@ -307,24 +284,7 @@ public:
 
     b = *in++; // bit width
     if (0 == (b & 0x80)) {  // no exception value, direct unpack
-      if (4 == sizeof(UIntT)) {
-        uSIMD_fastunpack_128_32(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint32_t *>(out), b);
-        in += BlockSize * b / 8; // convert to byte;
-      } else if (2 == sizeof(UIntT)) {
-        uSIMD_fastunpack_128_16(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint16_t *>(out), b);
-        in += BlockSize * b / 8;
-      } else {
-        // uint8 & uint64 does not support simd packing
-        uint64_t in_pos = in - _in;
-        uint64_t in_len = length;
-        uint64_t tmp_out_pos = 0;
-        uint64_t tmp_out_buf_len = BlockSize;
-        UIntT *tmp_out = (UIntT *)out;
-        scalar_bit_unpacking<UIntT>(_in, in_len, in_pos, BlockSize, b,
-            tmp_out, tmp_out_buf_len, tmp_out_pos);
-        in = _in + in_pos;
-      }
-      out += BlockSize * sizeof(UIntT);
+      inner_bit_unpacking<UIntT>(in, _in, length, out, b);
     } else {
       b &= (0x80 - 1); // get normal bit width
       bx = *in++; // get exception bit width
@@ -346,27 +306,9 @@ public:
         in = _in + in_pos;
       }
 
-      if (4 == sizeof(UIntT)) {
-        // unpacking data
-        uSIMD_fastunpack_128_32(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint32_t *>(out), b);
-        in += BlockSize * b / 8;
-      } else if (2 == sizeof(UIntT)) {
-        uSIMD_fastunpack_128_16(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint16_t *>(out), b);
-        in += BlockSize * b / 8;
-      } else {
-        // uint8 & uint64 does not support simd packing
-        uint64_t in_pos = in - _in;
-        uint64_t in_len = length;
-        uint64_t tmp_out_pos = 0;
-        uint64_t tmp_out_buf_len = BlockSize;
-        UIntT *tmp_out = (UIntT *)out;
-        scalar_bit_unpacking<UIntT>(_in, in_len, in_pos, BlockSize, b,
-            tmp_out, tmp_out_buf_len, tmp_out_pos);
-        in = _in + in_pos;
-      }
-
-      UIntT *out_arr = reinterpret_cast<UIntT *>(out);
-      out += BlockSize * sizeof(UIntT);
+      // unpacking data
+      inner_bit_unpacking<UIntT>(in, _in, length, out, b);
+      UIntT *out_arr = reinterpret_cast<UIntT *>(_out + out_pos);
 
       // patch exception, TODO, oushen, optimize later
       int64_t ex_idx = 0;
@@ -440,6 +382,57 @@ public:
   }
 
   virtual const char * name() const override { return "ObSIMDFixedPFor128"; }
+private:
+  template<typename UIntT>
+  static OB_INLINE void inner_bit_packing(
+      const UIntT *__restrict in,
+      char *&out,
+      const uint32_t bit,
+      const uint64_t out_buf_len)
+  {
+    if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+      // uint32_t simd packing
+      uSIMD_fastpackwithoutmask_128_32((uint32_t *)in, reinterpret_cast<__m128i *>(out), bit);
+      out += BlockSize * bit / 8;
+    } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+      // uint16_t simd packing
+      uSIMD_fastpackwithoutmask_128_16((const uint16_t *)in, reinterpret_cast<__m128i *>(out), bit);
+      out += BlockSize * bit / 8;
+    } else {
+      // uint64_t, uint8_t use scalar packing
+      uint64_t out_pos = 0;
+      scalar_bit_packing<UIntT>(in, BlockSize, bit, out, out_buf_len, out_pos);
+      out += out_pos;
+    }
+  }
+
+  template<typename UIntT>
+  static OB_INLINE void inner_bit_unpacking(
+      const char *&in,
+      const char *_in,
+      const uint64_t length,
+      char *&out,
+      const uint32_t bit)
+  {
+    if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+      uSIMD_fastunpack_128_32(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint32_t *>(out), bit);
+      in += BlockSize * bit / 8; // convert to byte;
+    } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+      uSIMD_fastunpack_128_16(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint16_t *>(out), bit);
+      in += BlockSize * bit / 8;
+    } else {
+      // uint8 & uint64 does not support simd packing
+      uint64_t in_pos = in - _in;
+      uint64_t in_len = length;
+      uint64_t tmp_out_pos = 0;
+      uint64_t tmp_out_buf_len = BlockSize;
+      UIntT *tmp_out = (UIntT *)out;
+      scalar_bit_unpacking<UIntT>(_in, in_len, in_pos, BlockSize, bit,
+          tmp_out, tmp_out_buf_len, tmp_out_pos);
+      in = _in + in_pos;
+    }
+    out += BlockSize * sizeof(UIntT);
+  }
 };
 
 } // namespace common
