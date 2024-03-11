@@ -50,7 +50,11 @@ typedef common::hash::ObHashMap<uint64_t, ObMDSMemStat> ObTxMDSMemStatHash;
 class ObTxMDSCache
 {
 public:
-  ObTxMDSCache(TransModulePageAllocator &allocator) : mds_list_(allocator) { reset(); }
+  ObTxMDSCache(TransModulePageAllocator &allocator)
+      : mds_list_(allocator), final_notify_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator)
+  {
+    reset();
+  }
   int init(const int64_t tenant_id, const share::ObLSID ls_id, const ObTransID tx_id);
   void reset();
   void destroy();
@@ -77,7 +81,12 @@ public:
       const ObTxLogType state_log_type,
       logservice::ObReplayBarrierType &cache_final_barrier_type);
   int earse_from_cache(const ObTxBufferNode &node) { return mds_list_.erase(node); }
-  int copy_to(ObTxBufferNodeArray &tmp_array) const;
+
+  int reserve_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr);
+  int generate_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr,
+                                   bool need_merge_cache,
+                                   bool allow_log_overflow);
+  ObTxBufferNodeArray &get_final_notify_array() { return final_notify_array_; }
 
   int64_t get_unsubmitted_size() const { return unsubmitted_size_; }
   int64_t count() const { return mds_list_.size(); }
@@ -94,12 +103,16 @@ public:
   TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()), K(max_register_no_));
 
 private:
+  int copy_to_(ObTxBufferNodeArray &tmp_array) const;
+
+private:
   // TransModulePageAllocator allocator_;
   uint64_t max_register_no_;
   bool need_retry_submit_mds_;
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;
   ObTxBufferNodeList::iterator submitted_iterator_;
+  ObTxBufferNodeArray final_notify_array_;
 
 #ifdef ENABLE_DEBUG_LOG
   int64_t tenant_id_;
