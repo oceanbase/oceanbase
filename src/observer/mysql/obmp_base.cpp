@@ -590,7 +590,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields, schema_guard);
+      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields, schema_guard, session.get_effective_tenant_id());
       sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
       rp.set_is_packed(is_packed);

@@ -765,7 +765,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           field.type_.set_collation_level(expr->get_collation_level());
         }
         // Setup Scale
-        if (ObVarcharType == field.type_.get_type() || is_ext_field) {
+        if (ObVarcharType == field.type_.get_type()) {
           field.type_.set_varchar(type_name);
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
@@ -811,6 +811,31 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
             }
           }
+        } else if ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_ext()
+          && OB_INVALID_ID != expr->get_result_type().get_udt_id()
+          && (PL_VARRAY_TYPE == expr->get_result_type().get_extend_type()
+                || PL_NESTED_TABLE_TYPE == expr->get_result_type().get_extend_type()
+                || PL_ASSOCIATIVE_ARRAY_TYPE == expr->get_result_type().get_extend_type()
+                || PL_RECORD_TYPE == expr->get_result_type().get_extend_type())) {
+          // pl udt type, need set field_name to deserialize
+          const ObUDTTypeInfo *udt_info = NULL;
+          const ObSimpleDatabaseSchema *db_schema = NULL;
+          uint64_t udt_id = expr->get_result_type().get_udt_id();
+          const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+          if (OB_FAIL(context->schema_guard_->get_udt_info(tenant_id, udt_id, udt_info))) {
+            LOG_WARN("fail to get udt info. ", K(tenant_id), K(udt_id), K(ret));
+          } else if (NULL == udt_info) {
+            LOG_WARN("udt is invalid. ", K(tenant_id), K(udt_id), K(udt_info), K(ret));
+          } else if (OB_FAIL(context->schema_guard_->get_database_schema(tenant_id, udt_info->get_database_id(), db_schema))) {
+            LOG_WARN("get database info fail. ", K(tenant_id), K(udt_info->get_database_id()), K(ret));
+          } else if (NULL == db_schema) {
+            LOG_WARN("database is invalid. ", K(tenant_id), K(udt_id), K(udt_info->get_database_id()), K(ret));
+          } else if (OB_FAIL(ob_write_string(alloc, udt_info->get_type_name(), field.type_name_))) {
+            LOG_WARN("fail to alloc string", K(udt_info->get_type_name()), K(ret));
+          } else if (OB_FAIL(ob_write_string(alloc, db_schema->get_database_name_str(), field.type_owner_))) {
+            LOG_WARN("fail to alloc string", K(db_schema->get_database_name_str()), K(ret));
+          }
+
         } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
