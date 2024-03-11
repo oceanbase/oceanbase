@@ -700,7 +700,7 @@ int ObAggregateProcessor::HashBasedDistinctExtraResult::build_distinct_data_for_
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(hp_infras_->insert_row_for_batch(exprs,
                                                         hash_values_for_batch_,
-                                                        batch_size,
+                                                        read_rows,
                                                         nullptr,
                                                         output_vec))) {
       LOG_WARN("failed to insert batch rows, dump", K(ret));
