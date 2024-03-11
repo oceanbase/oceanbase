@@ -76,12 +76,12 @@ int ObTableLoadClientExecCtx::check_status()
     LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));
   } else if (OB_UNLIKELY(ObTimeUtil::current_time() - last_heartbeat_time_ > heartbeat_timeout_us_)) {
     ret = OB_TIMEOUT;
-    LOG_WARN("heart beat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
+    LOG_WARN("heartbeat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null");
-  } else if (session_info_->is_terminate(ret)){
-    LOG_WARN("execution was terminated", K(ret));
+    LOG_WARN("session info is null", KR(ret));
+  } else if (OB_UNLIKELY(session_info_->is_terminate(ret))) {
+    LOG_WARN("execution was terminated", KR(ret));
   }
   return ret;
 }

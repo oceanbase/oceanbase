@@ -370,7 +370,7 @@ int ObArchiveService::check_if_need_switch_log_archive_(
     ARCHIVE_LOG(INFO, "round lag, need_stop first", K(local_key),
         K(local_state), K(attr), K_(archive_round_mgr));
   } else if (local_state.is_doing()
-      && (tenant_state.is_suspend() || tenant_state.is_suspend())
+      && (tenant_state.is_suspending() || tenant_state.is_suspend())
       && ! local_round_lag) {
     op = ArchiveRoundOp::SUSPEND;
     ARCHIVE_LOG(INFO, "need_suspend", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));

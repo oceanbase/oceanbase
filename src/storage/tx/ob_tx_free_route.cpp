@@ -467,6 +467,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         // mark as REPLICA_ for all temporary node
       } else if (FALSE_IT(tx->flags_.SHADOW_ = tx->is_xa_trans() && tx->addr_ != self_)) {
         // mark as SHADOW_ for XA's temporary node, exclude XA orig node
+      } else if (FALSE_IT(ctx.set_start_sessid(tx->sess_id_))) {
       }
       int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
@@ -903,7 +904,9 @@ int ObTransService::calc_txn_free_route(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx)
 
   // decide free-route flag for newly started txn
   if (is_tx_start || is_tx_switch) {
-    if (proxy_support) {
+    if (OB_UNLIKELY(tx->access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY)) {
+      // read only transaction on standby tenant, disable free route
+    } else if (proxy_support) {
       if (!is_xa_tightly_couple) {
         omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
         if (OB_LIKELY(tenant_config.is_valid())) {
@@ -1097,6 +1100,9 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
   if (tx.with_temporary_table()) {
     TRANS_LOG(TRACE, "with tx level temp-table");
     fallback = true;
+  } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {
+    TRANS_LOG(TRACE, "need fallback for tightly coupled xa trans");
+    fallback = true;
   } else {
     total_size = OB_E(EventTable::EN_TX_FREE_ROUTE_STATE_SIZE, tx.tx_id_) tx.estimate_state_size();
     if (total_size > MAX_STATE_SIZE) {
@@ -1255,7 +1261,7 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
     m.sender_ = self_;
     m.receiver_ = ctx.txn_addr_;
     m.req_sess_id_ = session_id;
-    m.tx_sess_id_ = tx.sess_id_;
+    m.tx_sess_id_ = ctx.get_start_session_id();
     ret = rpc_->post_msg(ctx.txn_addr_, m);
     bool print_log = OB_FAIL(ret);
 #ifndef NDEBUG

@@ -3734,6 +3734,14 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
       escape_node.text_len_ = 0;
       escape_node.raw_text_ = NULL;
 
+      // when sql_mode = 'NO_BACKSLASH_ESCAPES', Remove the default value '\'.
+      // otherwise, it is not possible to determine whether ESCAPE is explicitly specified.
+      bool is_no_backslash_escapes = false;
+      IS_NO_BACKSLASH_ESCAPES(ctx_.session_info_->get_sql_mode(), is_no_backslash_escapes);
+      if (lib::is_mysql_mode() && is_no_backslash_escapes) {
+        escape_node.str_len_ = 0;
+        escape_node.str_value_ = "";
+      }
       /*
       bugfix:
       in NO_BACKSLASH_ESCAPES mode, 'like BINARY xxx' stmt should also set the escapes as null, instead of '\' 
@@ -3745,7 +3753,7 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
           && node->children_[1]->children_[1]->num_child_ == 2 // T_EXPR_LIST node
           && node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_VARCHAR
           && node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_COLL_IDX] == BINARY_COLLATION) {
-        IS_NO_BACKSLASH_ESCAPES(ctx_.session_info_->get_sql_mode(), no_escapes);
+        no_escapes = is_no_backslash_escapes;
       }
       if (OB_FAIL(process_datatype_or_questionmark(escape_node, escape_expr))) {
         LOG_WARN("fail to resolver default excape node", K(ret));

@@ -28,13 +28,13 @@ ObSortVecSpec::ObSortVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorTyp
   sk_exprs_(alloc), addon_exprs_(alloc), sk_collations_(alloc), addon_collations_(alloc),
   minimum_row_count_(0), topk_precision_(0), prefix_pos_(0), is_local_merge_sort_(false),
   is_fetch_with_ties_(false), prescan_enabled_(false), enable_encode_sortkey_opt_(false),
-  has_addon_(false), part_cnt_(0)
+  has_addon_(false), part_cnt_(0), compress_type_(NONE_COMPRESSOR)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortVecSpec, ObOpSpec), topn_expr_, topk_limit_expr_, topk_offset_expr_,
                     sk_exprs_, addon_exprs_, sk_collations_, addon_collations_, minimum_row_count_,
                     topk_precision_, prefix_pos_, is_local_merge_sort_, is_fetch_with_ties_,
-                    prescan_enabled_, enable_encode_sortkey_opt_, has_addon_, part_cnt_);
+                    prescan_enabled_, enable_encode_sortkey_opt_, has_addon_, part_cnt_, compress_type_);
 
 ObSortVecOp::ObSortVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input) :
   ObOperator(ctx_, spec, input), sort_op_provider_(op_monitor_info_), sort_row_count_(0),
@@ -190,7 +190,8 @@ int ObSortVecOp::process_sort_batch()
 
 int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
                                      const int64_t batch_size, const ObMemAttr &mem_attr,
-                                     const bool is_sort_key, ObTempRowStore &row_store)
+                                     const bool is_sort_key, ObCompressorType compress_type,
+                                     ObTempRowStore &row_store)
 {
   int ret = OB_SUCCESS;
   const bool enable_trunc = true;
@@ -199,7 +200,7 @@ int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
     // do nothing
   } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 2 * 1024 * 1024, true,
                              sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
-                             reorder_fixed_expr, enable_trunc))) {
+                             reorder_fixed_expr, enable_trunc, compress_type))) {
     LOG_WARN("init row store failed", K(ret));
   } else if (OB_FAIL(row_store.alloc_dir_id())) {
     LOG_WARN("failed to alloc dir id", K(ret));
@@ -215,11 +216,11 @@ int ObSortVecOp::init_prescan_row_store()
   ObMemAttr mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), "SORT_VEC_CTX",
                      ObCtxIds::WORK_AREA);
   if (OB_FAIL(init_temp_row_store(MY_SPEC.sk_exprs_, MY_SPEC.max_batch_size_, mem_attr, true,
-                                  sk_row_store_))) {
+                                  MY_SPEC.compress_type_, sk_row_store_))) {
     LOG_WARN("failed to init temp row store", K(ret));
   } else if (MY_SPEC.has_addon_
              && OB_FAIL(init_temp_row_store(MY_SPEC.addon_exprs_, MY_SPEC.max_batch_size_, mem_attr,
-                                            false, addon_row_store_))) {
+                                            false, MY_SPEC.compress_type_, addon_row_store_))) {
     LOG_WARN("failed to init temp row store", K(ret));
   }
   return ret;
@@ -386,6 +387,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   context.topn_cnt_ = topn_cnt;
   context.is_fetch_with_ties_ = MY_SPEC.is_fetch_with_ties_;
   context.has_addon_ = MY_SPEC.has_addon_;
+  context.compress_type_ = MY_SPEC.compress_type_;
   if (MY_SPEC.prefix_pos_ > 0) {
     context.prefix_pos_ = MY_SPEC.prefix_pos_;
     context.op_ = this;

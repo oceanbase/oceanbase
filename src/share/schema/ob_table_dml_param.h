@@ -83,6 +83,8 @@ public:
   bool is_depend_column(uint64_t column_id) const;
   const storage::ObTableReadInfo &get_read_info() const
   { return read_info_; }
+  inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
+  { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
   int has_udf_column(bool &has_udf) const;
 
   DECLARE_TO_STRING;
@@ -107,7 +109,10 @@ private:
   Columns columns_;
   ColumnMap col_map_;
   common::ObString pk_name_; // use for printing error msg in oracle mode
+  // version of the mixture read info
+  int16_t read_param_version_;
   storage::ObTableReadInfo read_info_;
+  storage::ObFixedMetaObjArray<storage::ObTableReadInfo *> cg_read_infos_;
   int64_t lob_inrow_threshold_;
 };
 

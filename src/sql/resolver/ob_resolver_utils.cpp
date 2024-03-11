@@ -2157,6 +2157,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_LOCK_TABLE;
       }
       break;
+      case T_SP_CALL_STMT: {
+        type = stmt::T_CALL_PROCEDURE;
+      }
+      break;
       default: {
         type = stmt::T_NONE;
       }
@@ -8598,7 +8602,9 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
-                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))
+        || (lib::is_oracle_mode() // for "comment on table" command in oracle mode
+            && arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COMMENT))) {
       // supported operations
     } else if (!arg.is_alter_columns_
         && ((ObAlterTableArg::ADD_CONSTRAINT == arg.alter_constraint_type_)

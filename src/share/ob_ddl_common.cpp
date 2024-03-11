@@ -773,8 +773,7 @@ int ObDDLUtil::generate_build_replica_sql(
     const bool use_heap_table_ddl_plan,
     const bool use_schema_version_hint_for_src_table,
     const ObColumnNameMap *col_name_map,
-    ObSqlString &sql_string,
-    const SortCompactLevel compact_level)
+    ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -1023,8 +1022,8 @@ int ObDDLUtil::generate_build_replica_sql(
         }
         if (OB_FAIL(ret)) {
         } else if (oracle_mode) {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('compact_sort_level', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
-              real_parallelism, execution_id, task_id, static_cast<int64_t>(compact_level),
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
+              real_parallelism, execution_id, task_id,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
@@ -1035,8 +1034,8 @@ int ObDDLUtil::generate_build_replica_sql(
             LOG_WARN("fail to assign sql string", K(ret));
           }
         } else {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('compact_sort_level', %ld), opt_param('enable_newsort', 'false') use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
-              real_parallelism, execution_id, task_id, static_cast<int64_t>(compact_level),
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
+              real_parallelism, execution_id, task_id,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
@@ -1774,6 +1773,38 @@ bool ObDDLUtil::reach_time_interval(const int64_t i, volatile int64_t &last_time
   }
   return bret;
 }
+int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                            const int64_t parallel,
+                                            ObCompressorType &compr_type)
+{
+  int ret = OB_SUCCESS;
+  const int64_t COMPRESS_PARALLELISM_THRESHOLD = 8;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  compr_type = NONE_COMPRESSOR;
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail get tenant_config", K(ret), K(MTL_ID()));
+  } else {
+    if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("NONE")) {
+      compr_type = NONE_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("ZSTD")) {
+      compr_type = ZSTD_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("LZ4")) {
+      compr_type = LZ4_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("AUTO")) {
+      if (parallel >= COMPRESS_PARALLELISM_THRESHOLD) {
+        compr_type = schema_compr_type;
+      } else {
+        compr_type = NONE_COMPRESSOR;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the temp store format config is unexpected", K(ret), K(tenant_config->_ob_ddl_temp_file_compress_func.get_value_string()));
+    }
+  }
+  LOG_INFO("get compressor type", K(ret), K(compr_type));
+  return ret;
+}
 
 /******************           ObCheckTabletDataComplementOp         *************/
 
@@ -2494,7 +2525,7 @@ int ObCODDLUtil::get_column_checksums(
         LOG_WARN("unexpected column_group", K(ret), K(i));
       } else if (OB_FAIL(co_sstable->fetch_cg_sstable(i, cg_sstable_wrapper))) {
         LOG_WARN("fail to get cg sstable", K(ret), K(i));
-      } else if (OB_FAIL(cg_sstable_wrapper.get_sstable(cg_sstable))) {
+      } else if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_UNLIKELY(cg_sstable == nullptr || !cg_sstable->is_valid())) {
         ret = OB_ERR_UNEXPECTED;

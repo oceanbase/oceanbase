@@ -1556,22 +1556,28 @@ DEF_INT(_transfer_start_retry_count, OB_TENANT_PARAMETER, "3", "[0,64]",
 
 
 DEF_TIME(_transfer_service_wakeup_interval, OB_TENANT_PARAMETER, "5m", "[1s,5m]",
-        "transfer service wakeup interval in errsim mode"
+        "transfer service wakeup interval in errsim mode. "
         "Range: [1s, 5m]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_transfer_process_lock_tx_timeout, OB_TENANT_PARAMETER, "100s", "[30s,)",
-        "transaction timeout for locking and unlocking transfer task"
+        "transaction timeout for locking and unlocking transfer task. "
         "Range: [30s, +∞)",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_transfer_task_tablet_count_threshold, OB_TENANT_PARAMETER, "100", "(0,100]",
-        "Threshold for the count of tablets that can be processed by a transfer task"
+        "Threshold for the count of tablets that can be processed by a transfer task. "
         "Range: (0, 100]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_active_txn_transfer, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_active_txn_transfer, OB_TENANT_PARAMETER, "True",
         "Specifies whether support transfer active tx",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
+        "Retry interval after transfer task failure. "
+        "Range: [0s, +∞). Default: 1m",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // end of transfer
 
 DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
@@ -1752,9 +1758,14 @@ DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
         "enable the skip index in storage engine",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_store_compression, OB_TENANT_PARAMETER, "False",
-              "enable compression in ObTempBlockStore",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
+        common::ObConfigTempStoreFormatChecker,
+        "specific compression in ObTempBlockStore."\
+        "AUTO: use dop to determine compression;"\
+        "ZSTD: use ZSTD compression algorithm;"\
+        "LZ4: use LZ4 compression algorithm;"\
+        "NONE: do not use compression.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          "enable limiting memory in prefetch for single query",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1871,3 +1882,12 @@ DEF_TIME(_faststack_min_interval, OB_CLUSTER_PARAMETER, "30m", "[1s,)",
         "Minimum interval for OBServer to automatically collect the obstack. "
         "Default: 30min. Range: [1s,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "idc",
+        common::ObConfigMigrationChooseSourceChecker,
+        "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
+        "'region' means firstly choose follower replica of the same region as source",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
+        "Control whether to use chose_migration_source_policy. "
+        "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

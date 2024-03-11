@@ -207,15 +207,15 @@ public:
   ObTxPrevLogType() { reset(); }
   ObTxPrevLogType(const TypeEnum prev_log_type) : prev_log_type_(prev_log_type) {}
 
-  bool is_valid() { return prev_log_type_ > 0; }
+  bool is_valid() const { return prev_log_type_ > 0; }
   void set_self() { prev_log_type_ = TypeEnum::SELF; }
-  bool is_self() { return TypeEnum::SELF == prev_log_type_; }
+  bool is_self() const { return TypeEnum::SELF == prev_log_type_; }
   void set_tranfer_in() { prev_log_type_ = TypeEnum::TRANSFER_IN; }
-  bool is_transfer_in() { return TypeEnum::TRANSFER_IN == prev_log_type_; }
+  bool is_transfer_in() const { return TypeEnum::TRANSFER_IN == prev_log_type_; }
 
   void set_prepare() { prev_log_type_ = TypeEnum::PREPARE; }
   void set_commit_info() { prev_log_type_ = TypeEnum::COMMIT_INFO; }
-  bool is_normal_log()
+  bool is_normal_log() const
   {
     return TypeEnum::COMMIT_INFO == prev_log_type_ || TypeEnum::PREPARE == prev_log_type_;
   }

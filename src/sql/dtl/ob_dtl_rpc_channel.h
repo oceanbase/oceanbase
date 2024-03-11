@@ -48,9 +48,11 @@ class ObDtlRpcChannel
   class SendMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_SEND>
   {
   public:
-    explicit SendMsgCB(SendMsgResponse &response, const common::ObCurTraceId::TraceId trace_id, const int64_t timeout_ts)
+    explicit SendMsgCB(SendMsgResponse &response, const common::ObCurTraceId::TraceId trace_id,
+                       const int64_t timeout_ts, const uint64_t channel_id)
         : response_(response),
-          timeout_ts_(timeout_ts)
+          timeout_ts_(timeout_ts),
+          channel_id_(channel_id)
     {
       trace_id_.set(trace_id);
     }
@@ -63,6 +65,7 @@ class ObDtlRpcChannel
     SendMsgResponse &response_;
     common::ObCurTraceId::TraceId trace_id_;
     int64_t timeout_ts_;
+    uint64_t channel_id_;
   };
 
   class SendBCMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_BC_SEND>
@@ -99,9 +102,14 @@ public:
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
   virtual int send_message(ObDtlLinkedBuffer *&buf);
 
+  virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
+      ObEvalCtx *eval_ctx = nullptr, bool is_eof = false) override;
+
   bool recv_sqc_fin_res() { return recv_sqc_fin_res_; }
+  void set_cb_ret(int cb_ret) { cb_ret_ = cb_ret; }
 private:
   bool recv_sqc_fin_res_;
+  int cb_ret_;
 };
 
 }  // dtl

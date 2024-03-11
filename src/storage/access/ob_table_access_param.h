@@ -165,6 +165,7 @@ public:
   ObCGReadInfoHandle cg_read_info_handle_;
   //TODO(huronghui.hrh):temp solution
   const ObColumnParam *cg_col_param_;
+  const common::ObIArray<ObTableReadInfo *> *cg_read_infos_;
   const common::ObIArray<int32_t> *out_cols_project_;
   const common::ObIArray<int32_t> *agg_cols_project_;
   const common::ObIArray<int32_t> *group_by_cols_project_;

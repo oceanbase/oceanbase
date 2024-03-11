@@ -58,6 +58,7 @@ OB_INLINE uint64_t countl_zero64(uint64_t mask)
   return __builtin_clzll(mask);
 }
 
+//TODO: use template to avoid branch prediction in simd
 class ObBitmap
 {
 public:

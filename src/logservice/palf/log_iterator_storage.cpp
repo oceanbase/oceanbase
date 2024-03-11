@@ -163,9 +163,10 @@ int MemoryStorage::append(const char *buf, const int64_t buf_len)
   return ret;
 }
 
-int MemoryStorage::pread(const LSN &lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size)
+int MemoryStorage::pread(const LSN &lsn, const int64_t in_read_size, ReadBuf &read_buf, int64_t &out_read_size, LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
+  UNUSED(io_ctx);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (false == lsn.is_valid() || 0 >= in_read_size) {
@@ -202,7 +203,8 @@ int MemoryIteratorStorage::read_data_from_storage_(
 {
   int ret = OB_SUCCESS;
   const LSN start_lsn = start_lsn_ + pos;
-  if (OB_FAIL(log_storage_->pread(start_lsn, in_read_size, read_buf_, out_read_size))) {
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
+  if (OB_FAIL(log_storage_->pread(start_lsn, in_read_size, read_buf_, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "MemoryIteratorStorage pread failed", K(ret), KPC(this), K(start_lsn));
   } else {
     PALF_LOG(TRACE, "MemoryIteratorStorage read_data_from_storage_ success", K(ret), KPC(this), K(start_lsn));
@@ -237,12 +239,13 @@ int DiskIteratorStorage::read_data_from_storage_(
     const LSN curr_round_read_lsn = start_lsn_ + pos + remain_valid_data_size;
     const int64_t real_in_read_size = in_read_size - remain_valid_data_size;
     read_buf_.buf_ += remain_valid_data_size;
+    LogIOContext io_ctx(LogIOUser::DEFAULT);
     if (0ul == real_in_read_size) {
       ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "real read size is zero, unexpected error!!!", K(ret), K(real_in_read_size));
     } else if (OB_FAIL(log_storage_->pread(curr_round_read_lsn,
             real_in_read_size,
-            read_buf_, out_read_size))) {
+            read_buf_, out_read_size, io_ctx))) {
       PALF_LOG(WARN, "ILogStorage pread failed", K(ret), K(pos), K(in_read_size), KPC(this));
     }
     read_buf_.buf_ -= remain_valid_data_size;

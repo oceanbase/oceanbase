@@ -2761,6 +2761,26 @@ int ObSQLUtils::get_partition_range(ObObj *start_row_key,
 	return ret;
 }
 
+bool ObSQLUtils::part_expr_has_virtual_column(const ObExpr *part_expr)
+{
+  bool has_virtual_column = false;
+  if (part_expr == NULL) {
+    // do nothing.
+  } else if (part_expr->type_ == T_REF_COLUMN || part_expr->type_ == T_FUN_SYS_PART_HASH) {
+    // do nothing. column or oracle mode hash.
+  } else if (part_expr->type_ == T_OP_ROW) {
+    for (int64_t i = 0; i < part_expr->arg_cnt_ && !has_virtual_column; i++) {
+      if (part_expr->args_[i]->type_ != T_REF_COLUMN) {
+        has_virtual_column = true;
+      }
+    }
+  } else {
+    has_virtual_column = true;
+  }
+
+  return has_virtual_column;
+}
+
 int ObSQLUtils::get_partition_range(ObObj *start_row_key,
                                     ObObj *end_row_key,
                                     ObObj *function_obj,
@@ -2769,56 +2789,183 @@ int ObSQLUtils::get_partition_range(ObObj *start_row_key,
                                     int64_t range_key_count,
                                     uint64_t table_id,
                                     ObEvalCtx &eval_ctx,
-                                    common::ObNewRange &part_range)
+                                    common::ObNewRange &part_range,
+                                    ObArenaAllocator &allocator)
 {
-	int ret = OB_SUCCESS;
-  if (part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS ||
-      part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_LIST_COLUMNS ||
-      OB_ISNULL(part_expr)) {
-    part_range.table_id_ = table_id;
-    part_range.start_key_.assign(start_row_key, range_key_count);
-    part_range.end_key_.assign(end_row_key, range_key_count);
-    part_range.border_flag_.set_inclusive_start();
-    part_range.border_flag_.set_inclusive_end();
-    if (part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_HASH) {
-      // hash partition and part_expr.is_empty(), should not reach here
-      LOG_TRACE("get empty part_expr");
-      ObNewRow start_row;
-      start_row.cells_ = start_row_key;
-      start_row.count_ = range_key_count;
-      ObNewRow end_row;
-      end_row.cells_ = end_row_key;
-      end_row.count_ = range_key_count;
-      if (OB_FAIL(ObSQLUtils::revise_hash_part_object(start_row_key[0], start_row, true, part_type))) {
-        LOG_WARN("failed to revise hash part object", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::revise_hash_part_object(end_row_key[0], end_row, true, part_type))) {
-        LOG_WARN("failed to revise hash part object", K(ret));
-      } else { /*do nothing*/ }
-    }
-  } else {
-    LOG_TRACE("get non empty part_expr");
-    ObNewRow dummy_row;
-    ObDatum *datum = NULL;
-    if (OB_FAIL(part_expr->eval(eval_ctx, datum))) {
-      LOG_WARN("failed to calc expr", K(ret));
-    } else if (OB_FAIL(datum->to_obj(*function_obj,
-                                     part_expr->obj_meta_,
-                                     part_expr->obj_datum_map_))) {
-      LOG_WARN("convert datum to obj failed", K(ret));
-    } else if (FALSE_IT(dummy_row.cells_ = function_obj)) {
-    } else if (FALSE_IT(dummy_row.count_ = 1)) {
-    } else if (part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_HASH &&
-        OB_FAIL(ObSQLUtils::revise_hash_part_object(*function_obj, dummy_row, false, part_type))) {
-      LOG_WARN("failed to revise hash partition object", K(ret));
+  int ret = OB_SUCCESS;
+  bool has_virtual_column = part_expr_has_virtual_column(part_expr);
+  // If there is a virtual generated column in part_expr, this logic cannot be used
+  if (!has_virtual_column) {
+    // opt logic. no need evalute.
+    if ((part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS ||
+        part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_LIST_COLUMNS)) {
+      if (OB_FAIL(get_range_for_vector(
+                                    start_row_key,
+                                    end_row_key,
+                                    range_key_count,
+                                    table_id,
+                                    part_range))) {
+        LOG_WARN("get partition range in opt failed", K(ret));
+      }
+      LOG_DEBUG("opt logic", K(part_range), KPC(part_expr));
     } else {
-      part_range.table_id_ = table_id;
-      part_range.start_key_.assign(function_obj, 1);
-      part_range.end_key_.assign(function_obj, 1);
-      part_range.border_flag_.set_inclusive_start();
-      part_range.border_flag_.set_inclusive_end();
+      // part expr only have one column.
+      if (OB_FAIL(get_range_for_scalar(
+                                    start_row_key,
+                                    end_row_key,
+                                    function_obj,
+                                    part_type,
+                                    part_expr,
+                                    range_key_count,
+                                    table_id,
+                                    eval_ctx,
+                                    part_range,
+                                    allocator))) {
+        LOG_WARN("get partition range in part expr for scalar failed", K(ret));
+      }
+    }
+  // conclude virtual generated column & part expr not NULL
+  } else {
+    if (OB_FAIL(get_range_for_scalar(
+                                    start_row_key,
+                                    end_row_key,
+                                    function_obj,
+                                    part_type,
+                                    part_expr,
+                                    range_key_count,
+                                    table_id,
+                                    eval_ctx,
+                                    part_range,
+                                    allocator))) {
+      LOG_WARN("get partition range in part expr for scalar failed", K(ret));
     }
   }
-	return ret;
+
+  return ret;
+}
+
+int ObSQLUtils::get_range_for_scalar(ObObj *start_row_key,
+                                    ObObj *end_row_key,
+                                    ObObj *function_obj,
+                                    const share::schema::ObPartitionFuncType part_type,
+                                    const ObExpr *part_expr,
+                                    int64_t range_key_count,
+                                    uint64_t table_id,
+                                    ObEvalCtx &eval_ctx,
+                                    common::ObNewRange &part_range,
+                                    ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObObj *tmp_start_row_key = NULL;
+  ObObj *tmp_end_row_key = NULL;
+  int64_t count = 0;
+  // only range column & list column
+  // hash column mode type is T_FUN_SYS_PART_HASH
+  if (part_expr->type_ == T_OP_ROW) {
+    count = range_key_count;
+    if (OB_ISNULL(tmp_start_row_key = static_cast<ObObj*>(allocator.alloc(
+      sizeof(ObObj) * range_key_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for start_obj failed", K(ret));
+    } else if (OB_ISNULL(tmp_end_row_key = static_cast<ObObj*>(allocator.alloc(
+      sizeof(ObObj) * range_key_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for start_obj failed", K(ret));
+    } else {
+      for (int64_t i = 0; i < part_expr->arg_cnt_ && OB_SUCC(ret); i++) {
+        if (part_expr->args_[i]->type_ == T_REF_COLUMN) {
+          tmp_start_row_key[i] = start_row_key[i];
+          tmp_end_row_key[i] = end_row_key[i];
+        } else {
+          ObExpr *part_expr_arg = NULL;
+          part_expr_arg = part_expr->args_[i];
+        // virtual generated column scene
+          if (OB_FAIL(get_partition_range_common(
+                                    function_obj,
+                                    part_type,
+                                    part_expr_arg,
+                                    eval_ctx))) {
+            LOG_WARN("get partition range common failed", K(ret));
+          } else {
+            tmp_start_row_key[i] = *function_obj;
+            tmp_end_row_key[i] = *function_obj;
+          }
+        }
+      }
+    }
+  // one column or hash columns oracle mode.
+  } else {
+    count = 1;
+    if (OB_ISNULL(tmp_start_row_key = static_cast<ObObj*>(allocator.alloc(
+      sizeof(ObObj) * 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for start_obj failed", K(ret));
+    } else if (OB_ISNULL(tmp_end_row_key = static_cast<ObObj*>(allocator.alloc(
+      sizeof(ObObj) * 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for start_obj failed", K(ret));
+    } else if (OB_FAIL(get_partition_range_common(
+                                    function_obj,
+                                    part_type,
+                                    part_expr,
+                                    eval_ctx))) {
+      LOG_WARN("get partition range common failed", K(ret));
+    } else {
+      tmp_start_row_key[0] = *function_obj;
+      tmp_end_row_key[0] = *function_obj;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    part_range.table_id_ = table_id;
+    part_range.start_key_.assign(tmp_start_row_key, count);
+    part_range.end_key_.assign(tmp_end_row_key, count);
+    part_range.border_flag_.set_inclusive_start();
+    part_range.border_flag_.set_inclusive_end();
+  }
+  LOG_DEBUG("get partition range", K(ret), K(part_range), KPC(part_expr), K(count));
+  return ret;
+}
+
+int ObSQLUtils::get_range_for_vector(ObObj *start_row_key,
+                                    ObObj *end_row_key,
+                                    int64_t range_key_count,
+                                    uint64_t table_id,
+                                    common::ObNewRange &part_range)
+{
+  int ret = OB_SUCCESS;
+  part_range.table_id_ = table_id;
+  part_range.start_key_.assign(start_row_key, range_key_count);
+  part_range.end_key_.assign(end_row_key, range_key_count);
+  part_range.border_flag_.set_inclusive_start();
+  part_range.border_flag_.set_inclusive_end();
+  return ret;
+}
+
+
+
+int ObSQLUtils::get_partition_range_common(
+                                    ObObj *function_obj,
+                                    const share::schema::ObPartitionFuncType part_type,
+                                    const ObExpr *part_expr,
+                                    ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow dummy_row;
+  ObDatum *datum = NULL;
+  if (OB_FAIL(part_expr->eval(eval_ctx, datum))) {
+    LOG_WARN("failed to calc expr", K(ret));
+  } else if (OB_FAIL(datum->to_obj(*function_obj,
+                                  part_expr->obj_meta_,
+                                  part_expr->obj_datum_map_))) {
+    LOG_WARN("convert datum to obj failed", K(ret));
+  } else if (FALSE_IT(dummy_row.cells_ = function_obj)) {
+  } else if (FALSE_IT(dummy_row.count_ = 1)) {
+  } else if (part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_HASH &&
+      OB_FAIL(ObSQLUtils::revise_hash_part_object(*function_obj, dummy_row, false, part_type))) {
+    LOG_WARN("failed to revise hash partition object", K(ret));
+  }
+  LOG_DEBUG("get_partition_range_common", K(ret), KPC(part_expr));
+  return ret;
 }
 
 int ObSQLUtils::revise_hash_part_object(common::ObObj &obj,
@@ -4670,7 +4817,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         && !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
       if (ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)) {
         bret = true;
-      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_) {
+      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                 || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_) {
         /* anonymous block in a store procedure will be send to sql engine as sql, which will make new obexeccontext.
            consider follow scene:
             dml1(exec_ctx1)->udf/trigger->procedure->anonymous block(exec_ctx2)->dml2
@@ -4679,7 +4827,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         do {
           parent_ctx = parent_ctx->get_parent_ctx();
         } while (OB_NOT_NULL(parent_ctx) && OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
-                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_));
+                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                  || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_));
 
         if (OB_NOT_NULL(parent_ctx) &&
             OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&

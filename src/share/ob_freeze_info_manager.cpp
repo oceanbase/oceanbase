@@ -199,7 +199,12 @@ int ObFreezeInfoManager::update_freeze_info(
     const share::SCN &latest_snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(freeze_info_.frozen_statuses_.prepare_allocate(freeze_infos.count()))) {
+  const int64_t freeze_info_cnt = freeze_infos.count();
+
+  if (OB_UNLIKELY(freeze_infos.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(freeze_infos), K(latest_snapshot_gc_scn));
+  } else if (OB_FAIL(freeze_info_.frozen_statuses_.prepare_allocate(freeze_info_cnt))) {
     LOG_WARN("failed to prepare allocate mem for new freeze info", KR(ret), K(freeze_infos), K(freeze_info_));
   } else if (OB_FAIL(freeze_info_.frozen_statuses_.assign(freeze_infos))) {
     LOG_WARN("fail to assign", KR(ret), K(freeze_infos));
@@ -211,7 +216,7 @@ int ObFreezeInfoManager::update_freeze_info(
 
   if (OB_SUCC(ret)) {
     freeze_info_.latest_snapshot_gc_scn_ = latest_snapshot_gc_scn;
-    LOG_INFO("inner load succ", K(freeze_info_));
+    LOG_INFO("inner load succ", "latest_freeze_info", freeze_info_.frozen_statuses_.at(freeze_info_cnt - 1), K(freeze_info_));
   }
   return ret;
 }
@@ -354,7 +359,7 @@ int ObFreezeInfoManager::get_freeze_info_behind_major_snapshot(
     LOG_WARN("get invalid arguments", K(ret), K(snapshot_version));
   } else {
     bool found = false;
-    for (int64_t i = freeze_info_.frozen_statuses_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < freeze_info_.frozen_statuses_.count(); ++i) {
       if (snapshot_version < freeze_info_.frozen_statuses_.at(i).frozen_scn_.get_val_for_tx()) {
         frozen_status = freeze_info_.frozen_statuses_.at(i);
         found = true;

@@ -48,8 +48,16 @@ int ObMicroIndexRowItem::init(ObIAllocator &allocator,
     LOG_WARN("invalid arguemen", K(ret), KP(idx_row_header), KP(endkey), KP(idx_minor_info), KP(agg_row_buf));
   } else {
     allocator_ = &allocator;
-    endkey_ = endkey; // already deep_copied outside
     agg_buf_size_ = agg_buf_size;
+
+    void *key_buf = nullptr;
+    if (OB_ISNULL(key_buf = allocator_->alloc(sizeof(ObDatumRowkey)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObDatumRowkey)));
+    } else if (FALSE_IT(endkey_ = new (key_buf) ObDatumRowkey())) {
+    } else if (OB_FAIL(endkey->deep_copy(*endkey_, allocator))) {
+      LOG_WARN("fail to deep copy rowkey", K(ret), KPC(endkey_), KPC(endkey));
+    }
 
     void *header_buf = nullptr;
     if (OB_ISNULL(header_buf = allocator_->alloc(sizeof(ObIndexBlockRowHeader)))) {
@@ -86,9 +94,13 @@ int ObMicroIndexRowItem::init(ObIAllocator &allocator,
 void ObMicroIndexRowItem::reset()
 {
   int ret = OB_SUCCESS;
-  endkey_ = nullptr;
   agg_buf_size_ = 0;
   if (OB_NOT_NULL(allocator_)) {
+    if (OB_NOT_NULL(endkey_)){
+      endkey_->~ObDatumRowkey();
+      allocator_->free(endkey_);
+      endkey_ = nullptr;
+    }
     if (OB_NOT_NULL(idx_row_header_)){
       idx_row_header_->~ObIndexBlockRowHeader();
       allocator_->free(idx_row_header_);
@@ -104,6 +116,17 @@ void ObMicroIndexRowItem::reset()
       agg_row_buf_ = nullptr;
     }
   }
+  allocator_ = nullptr;
+}
+
+void ObMicroIndexRowItem::reuse()
+{
+  int ret = OB_SUCCESS;
+  endkey_ = nullptr;
+  agg_buf_size_ = 0;
+  idx_row_header_ = nullptr;
+  idx_minor_info_ = nullptr;
+  agg_row_buf_ = nullptr;
   allocator_ = nullptr;
 }
 
@@ -361,8 +384,7 @@ int ObIndexBlockMacroIterator::get_next_idx_row(ObIAllocator &item_allocator, Ob
       LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
     } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
       STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
-    } else if (FALSE_IT(macro_index_item.reset())) {
-    } else if (FALSE_IT(item_allocator.reuse())) {
+    } else if (FALSE_IT(macro_index_item.reuse())) {
     } else if (OB_FAIL(macro_index_item.init(item_allocator, idx_row_header, &curr_key_, minor_meta_info, agg_row_buf, agg_buf_size))) {
       STORAGE_LOG(WARN, "Failed to init macro index item", K(ret), K(macro_index_item));
     } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {

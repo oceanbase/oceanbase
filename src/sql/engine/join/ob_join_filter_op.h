@@ -71,7 +71,7 @@ public:
       px_message_compression_(false) {}
   double bloom_filter_ratio_;
   int64_t each_group_size_;
-  int64_t bf_piece_size_;
+  int64_t bf_piece_size_; // how many int64_t a piece bloom filter contains
   int64_t runtime_filter_wait_time_ms_;
   int64_t runtime_filter_max_in_num_;
   int64_t runtime_bloom_filter_max_size_;
@@ -177,8 +177,8 @@ class ObJoinFilterSpec : public ObOpSpec
 public:
   ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
-  INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
-                       K_(mode), K_(filter_id), K_(filter_len), K_(rf_infos));
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(mode), K_(filter_id), K_(filter_len), K_(rf_infos),
+                       K_(bloom_filter_ratio), K_(send_bloom_filter_size));
 
   inline void set_mode(JoinFilterMode mode) { mode_ = mode; }
   inline JoinFilterMode get_mode() const { return mode_; }
@@ -212,6 +212,8 @@ public:
   common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_build_cmp_infos_;
   common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_probe_cmp_infos_;
   ObPxQueryRangeInfo px_query_range_info_;
+  int64_t bloom_filter_ratio_;
+  int64_t send_bloom_filter_size_; // how many KB a piece bloom filter has
 };
 
 class ObJoinFilterOp : public ObOperator

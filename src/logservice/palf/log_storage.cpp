@@ -271,11 +271,15 @@ int LogStorage::append_meta(const char *buf, const int64_t buf_len)
   return ret;
 }
 
-int LogStorage::pread(const LSN &read_lsn, const int64_t in_read_size, ReadBuf &read_buf,
-                      int64_t &out_read_size)
+int LogStorage::pread(const LSN &read_lsn,
+                      const int64_t in_read_size,
+                      ReadBuf &read_buf,
+                      int64_t &out_read_size,
+                      LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_read_with_block_header = false;
+  UNUSED(io_ctx);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogStorage not inited!!!", K(ret));

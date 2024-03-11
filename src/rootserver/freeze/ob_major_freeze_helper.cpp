@@ -364,16 +364,18 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
       bool major_freeze_done = false;
 
       for (int64_t i = 0; OB_SUCC(ret) && (!major_freeze_done) && (i < MAX_RETRY_COUNT); ++i) {
+        const int64_t timeout_us = MAX(GCONF.rpc_timeout * 5, MAX_PROCESS_TIME_US); // timeout >= 10s
         if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
                     tenant_id, share::SYS_LS, leader))) {
           LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
         } else if (OB_FAIL(proxy.to(leader)
                                 .trace_time(true)
-                                .max_process_handler_time(MAX_PROCESS_TIME_US)
+                                .timeout(timeout_us)
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .major_freeze(req, resp))) {
-          LOG_WARN("tenant_major_freeze rpc failed", KR(ret), K(tenant_id), K(leader), K(freeze_info));
+          LOG_WARN("tenant_major_freeze rpc failed", KR(ret), K(tenant_id), K(leader),
+                   K(freeze_info), K(timeout_us));
         } else if (FALSE_IT(ret = resp.err_code_)) {
         } else if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
@@ -509,7 +511,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
           LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
         } else if (OB_FAIL(proxy.to(leader)
                                 .trace_time(true)
-                                .max_process_handler_time(MAX_PROCESS_TIME_US)
+                                .timeout(THIS_WORKER.get_timeout_remain())
                                 .by(tenant_id)
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .tenant_admin_merge(req, resp))) {

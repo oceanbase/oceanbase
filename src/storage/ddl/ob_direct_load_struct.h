@@ -217,11 +217,11 @@ struct ObDirectInsertRuntimeOnlyParam final
 {
 public:
   ObDirectInsertRuntimeOnlyParam()
-    : exec_ctx_(nullptr), task_id_(0), table_id_(OB_INVALID_ID), schema_version_(0), task_cnt_(0), need_online_opt_stat_gather_(false), trans_id_(), seq_no_(0)
+    : exec_ctx_(nullptr), task_id_(0), table_id_(OB_INVALID_ID), schema_version_(0), task_cnt_(0), need_online_opt_stat_gather_(false), trans_id_(), seq_no_(0), parallel_(1)
   {}
   ~ObDirectInsertRuntimeOnlyParam() = default;
   bool is_valid() const { return OB_INVALID_ID != task_id_ && OB_INVALID_ID != table_id_ && schema_version_ > 0 && task_cnt_ >= 0; }
-  TO_STRING_KV(KP_(exec_ctx), K_(task_id), K_(table_id), K_(schema_version), K_(task_cnt), K_(need_online_opt_stat_gather), K_(trans_id), K_(seq_no));
+  TO_STRING_KV(KP_(exec_ctx), K_(task_id), K_(table_id), K_(schema_version), K_(task_cnt), K_(need_online_opt_stat_gather), K_(trans_id), K_(seq_no), K_(parallel));
 public:
   sql::ObExecContext *exec_ctx_;
   int64_t task_id_;
@@ -237,6 +237,7 @@ public:
   // sequence number for the incremental direct load,
   // fixed 0 for the full direct load.
   int64_t seq_no_; //
+  int64_t parallel_; // used to decide wehter need to use compress temp data in rescan task.
 };
 
 // full parameters used by runtime execution
@@ -405,14 +406,15 @@ public:
   }
   virtual ~ObChunkSliceStore() { reset(); }
   int init(const int64_t rowkey_column_count, ObTabletHandle &tablet_handle, ObArenaAllocator &allocator,
-           const ObIArray<ObColumnSchemaItem> &col_schema, const int64_t dir_id);
+           const ObIArray<ObColumnSchemaItem> &col_schema, const int64_t dir_id, const int64_t parallelism);
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int close() override;
   void reset();
   virtual int64_t get_row_count() const { return row_cnt_; }
   TO_STRING_KV(K(is_inited_), K(target_store_idx_), K(row_cnt_), KP(arena_allocator_), K(datum_stores_), K(endkey_), K(rowkey_column_count_), K(cg_schemas_));
 private:
-  int prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator, const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id);
+  int prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator,
+                           const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id, const int64_t parallelism);
   int64_t calc_chunk_limit(const ObStorageColumnGroupSchema &cg_schema);
 public:
   bool is_inited_;
@@ -458,6 +460,7 @@ public:
   int64_t &inserted_cg_row_cnt_;
 };
 
+class ObCOSliceWriter;
 class ObDirectLoadSliceWriter final
 {
 public:
@@ -476,6 +479,7 @@ public:
       const ObDirectLoadType &direct_load_type,
       const ObArray<ObColumnSchemaItem> &column_items,
       const int64_t dir_id,
+      const int64_t parallelism,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = NULL);
   int fill_lob_sstable_slice(
@@ -494,9 +498,14 @@ public:
       const ObStorageSchema *storage_schema,
       const share::SCN &start_scn,
       ObInsertMonitor *monitor_node = NULL);
+  int fill_aggregated_column_group(
+      const int64_t cg_idx,
+      ObCOSliceWriter *cur_writer,
+      ObIArray<sql::ObCompactStore *> &datum_stores);
   void set_row_offset(const int64_t row_offset) { row_offset_ = row_offset; }
   int64_t get_row_count() const { return nullptr == slice_store_ ? 0 : slice_store_->get_row_count(); }
   int64_t get_row_offset() const { return row_offset_; }
+  blocksstable::ObMacroDataSeq &get_start_seq() { return start_seq_; }
   bool is_empty() const { return 0 == get_row_count(); }
   bool need_column_store() const { return need_column_store_; }
   ObTabletSliceStore *get_slice_store() const { return slice_store_; }
@@ -529,6 +538,7 @@ private:
       const int64_t schema_rowkey_column_num,
       const bool is_slice_store,
       const int64_t dir_id,
+      const int64_t parallelism,
       ObTabletHandle &tablet_handle,
       const share::SCN &start_scn);
   int report_unique_key_dumplicated(
@@ -552,6 +562,7 @@ private:
       const int64_t lob_inrow_threshold,
       const uint64_t src_tenant_id,
       ObLobMetaRowIterator *&row_iter);
+  int mock_chunk_store(const int64_t row_cnt);
 private:
   bool is_inited_;
   bool need_column_store_;
@@ -585,6 +596,7 @@ public:
       const sql::ObChunkDatumStore::StoredRow *stored_row,
       blocksstable::ObDatumRow &cg_row);
   int close();
+  bool is_inited() { return is_inited_; }
   TO_STRING_KV(K(is_inited_), K(cg_idx_), KPC(cg_schema_), K(macro_block_writer_), K(data_desc_), K(cg_row_));
 private:
   bool is_inited_;

@@ -3780,10 +3780,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLONE_TENANT__USER_ERROR_MSG "%.*s"
 #define OB_ERR_TENANT_SNAPSHOT__USER_ERROR_MSG "%.*s"
 #define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__USER_ERROR_MSG "%s"
-#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__USER_ERROR_MSG "checksum type is not supported"
+#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__USER_ERROR_MSG "checksum type %s is not supported for the input destination"
 #define OB_INVALID_STORAGE_DEST__USER_ERROR_MSG "storage destination is not valid"
 #define OB_STORAGE_DEST_NOT_CONNECT__USER_ERROR_MSG "can not connect to storage destination"
 #define OB_OBJECT_STORAGE_PERMISSION_DENIED__USER_ERROR_MSG "no I/O operation permission of the object storage"
+#define OB_S3_REGION_MISMATCH__USER_ERROR_MSG "the specified s3_region does not match the endpoint"
+#define OB_INVALID_OBJECT_STORAGE_ENDPOINT__USER_ERROR_MSG "object storage endpoint is invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -5200,7 +5202,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TRUNCATE_ILLEGAL_FK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5594, Cannot truncate a table referenced in a foreign key constraint %.*s"
 #define OB_ERR_DUP_KEY__ORA_USER_ERROR_MSG "ORA-00001: unique constraint (%.*s) violated"
 #define OB_ER_INVALID_USE_OF_NULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5596, Invalid use of NULL value"
-#define OB_ERR_SPLIT_LIST_LESS_VALUE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5597, last resulting partition cannot contain bounds"
+#define OB_ERR_SPLIT_LIST_LESS_VALUE__ORA_USER_ERROR_MSG "ORA-14805: last resulting partition cannot contain bounds"
 #define OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5598, cannot add partition when DEFAULT partition exists"
 #define OB_ERR_SPLIT_INTO_ONE_PARTITION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5599, cannot split partition into one partition, use rename instead"
 #define OB_ERR_NO_TENANT_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5600, can not create user %s in sys tenant, name %.*s"
@@ -6010,10 +6012,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLONE_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9110, %.*s"
 #define OB_ERR_TENANT_SNAPSHOT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9111, %.*s"
 #define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9112, %s"
-#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9113, checksum type is not supported"
+#define OB_CHECKSUM_TYPE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9113, checksum type %s is not supported for the input destination"
 #define OB_INVALID_STORAGE_DEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9114, storage destination is not valid"
 #define OB_STORAGE_DEST_NOT_CONNECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9115, can not connect to storage destination"
 #define OB_OBJECT_STORAGE_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9116, no I/O operation permission of the object storage"
+#define OB_S3_REGION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9117, the specified s3_region does not match the endpoint"
+#define OB_INVALID_OBJECT_STORAGE_ENDPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9118, object storage endpoint is invalid"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6322,7 +6326,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2226];
+extern int g_all_ob_errnos[2228];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

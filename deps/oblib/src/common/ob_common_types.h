@@ -55,7 +55,8 @@ struct ObQueryFlag
 #define OBSF_BIT_ENABLE_RICH_FORMAT   1
 #define OBSF_BIT_IS_MDS_QUERY         1
 #define OBSF_BIT_IS_SELECT_FOLLOWER   1
-#define OBSF_BIT_RESERVED             26
+#define OBSF_BIT_ENABLE_LOB_PREFETCH  1
+#define OBSF_BIT_RESERVED             25
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -84,6 +85,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_NEW_QUERY_RANGE = (0x1UL << OBSF_BIT_IS_NEW_QUERY_RANGE) - 1;
   static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
   static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
+  static const uint64_t OBSF_MASK_ENABLE_LOB_PREFETCH = (0x1UL << OBSF_BIT_ENABLE_LOB_PREFETCH) - 1;
 
   enum ScanOrder
   {
@@ -149,6 +151,7 @@ struct ObQueryFlag
       uint64_t is_select_follower_ : OBSF_BIT_IS_SELECT_FOLLOWER;
       uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
       uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
+      uint64_t enable_lob_prefetch_ : OBSF_BIT_ENABLE_LOB_PREFETCH;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -239,6 +242,8 @@ struct ObQueryFlag
   inline bool is_mds_query() const { return is_mds_query_; }
   inline void set_is_select_follower() { is_select_follower_ = true; }
   inline bool is_select_follower() const { return is_select_follower_; }
+  inline void set_enable_lob_prefetch() { enable_lob_prefetch_ = true; }
+  inline bool enable_lob_prefetch() const { return enable_lob_prefetch_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -275,6 +280,7 @@ struct ObQueryFlag
                "is_for_foreign_key_check", for_foreign_key_check_,
                "is_mds_query", is_mds_query_,
                "is_select_follower", is_select_follower_,
+               "enable_lob_prefetch", enable_lob_prefetch_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

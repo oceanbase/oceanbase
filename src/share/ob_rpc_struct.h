@@ -3998,6 +3998,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchTabletSeqRes);
 };
 
+using ObClearTabletAutoincSeqCacheArg = ObBatchRemoveTabletArg;
+
 struct ObGetMinSSTableSchemaVersionRes
 {
   OB_UNIS_VERSION(1);
@@ -4118,7 +4120,8 @@ public:
       dst_(),
       data_source_(),
       paxos_replica_number_(0),
-      skip_change_member_list_() {}
+      skip_change_member_list_(),
+      force_use_data_source_(false) {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -4139,7 +4142,8 @@ public:
                K_(dst),
                K_(data_source),
                K_(paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4159,6 +4163,7 @@ public:
   common::ObReplicaMember data_source_;
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
 };
 
 struct ObLSAddReplicaArg
@@ -4174,7 +4179,8 @@ public:
       data_source_(),
       orig_paxos_replica_number_(0),
       new_paxos_replica_number_(0),
-      skip_change_member_list_(false) {}
+      skip_change_member_list_(false),
+      force_use_data_source_(false) {}
 public:
   int assign(const ObLSAddReplicaArg &that);
 
@@ -4195,7 +4201,8 @@ public:
                K_(data_source),
                K_(orig_paxos_replica_number),
                K_(new_paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4215,6 +4222,7 @@ public:
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
 };
 
 struct ObLSChangeReplicaArg
@@ -8810,14 +8818,18 @@ struct ObCheckServerForAddingServerResult
 {
   OB_UNIS_VERSION(1);
 public:
+  enum ObServerMode {
+    INVALID_MODE = 0
+  };
   ObCheckServerForAddingServerResult()
       : is_server_empty_(false),
       zone_(),
       sql_port_(0),
-      build_version_()
+      build_version_(),
+      startup_mode_(ObServerMode::INVALID_MODE)
   {
   }
-  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version));
+  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version), K_(startup_mode));
   int init(
       const bool is_server_empty,
       const ObZone &zone,
@@ -8845,6 +8857,7 @@ private:
   ObZone zone_;
   int64_t sql_port_;
   share::ObServerInfoInTable::ObBuildVersion build_version_;
+  ObServerMode startup_mode_; // not used, only as placeholder
 };
 
 struct ObArchiveLogArg
@@ -9103,9 +9116,14 @@ struct ObCheckDeploymentModeArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false) {}
-  TO_STRING_KV(K_(single_zone_deployment_on));
+  enum ObServerMode {
+    INVALID_MODE = 0
+  };
+  ObCheckDeploymentModeArg() : single_zone_deployment_on_(false), startup_mode_(ObServerMode::INVALID_MODE) {}
+  TO_STRING_KV(K_(single_zone_deployment_on), K_(startup_mode));
+  int assign(const ObCheckDeploymentModeArg &other);
   bool single_zone_deployment_on_;
+  ObServerMode startup_mode_;	// not used, only as placeholder
 };
 
 struct ObPreProcessServerArg

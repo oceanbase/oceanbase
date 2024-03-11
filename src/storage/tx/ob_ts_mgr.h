@@ -100,6 +100,7 @@ public:
                               bool &need_wait) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn) = 0;
   virtual bool is_external_consistent(const uint64_t tenant_id) = 0;
+  virtual int remove_dropped_tenant(const uint64_t tenant_id) = 0;
 public:
   VIRTUAL_TO_STRING_KV("", "");
 };
@@ -405,6 +406,7 @@ public:
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);
   bool is_external_consistent(const uint64_t tenant_id);
   int refresh_gts_location(const uint64_t tenant_id);
+  int remove_dropped_tenant(const uint64_t tenant_id);
 public:
   TO_STRING_KV("ts_source", "GTS");
 public:
@@ -420,7 +422,6 @@ private:
   void revert_ts_source_info_(ObTsSourceInfoGuard &guard);
   int add_tenant_(const uint64_t tenant_id);
   int delete_tenant_(const uint64_t tenant_id);
-  int remove_dropped_tenant_(const uint64_t tenant_id);
   static ObTsMgr* &get_instance_inner();
 private:
   bool is_inited_;

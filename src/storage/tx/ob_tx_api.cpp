@@ -628,9 +628,17 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
       int64_t uncertain_bound = 0;
       if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
-      } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
-        TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
-      } else {
+      } else if (tx.access_mode_ != ObTxAccessMode::STANDBY_RD_ONLY &&
+                 !tx.tx_id_.is_valid()
+                 && OB_FAIL(tx_desc_mgr_.add(tx))) {
+        if (OB_STANDBY_READ_ONLY == ret) {
+          tx.access_mode_ = ObTxAccessMode::STANDBY_RD_ONLY;
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
+        }
+      }
+      if (OB_SUCC(ret)) {
         tx.snapshot_version_ = version;
         tx.snapshot_uncertain_bound_ = uncertain_bound;
         tx.snapshot_scn_ = tx.get_tx_seq(ObSequence::get_max_seq_no() + 1);
@@ -714,6 +722,8 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
       snapshot.parts_.reset();
       if(acquire_from_follower) {
         snapshot.snapshot_ls_role_ = common::ObRole::FOLLOWER;
+      } else {
+        snapshot.snapshot_ls_role_ = common::ObRole::LEADER;
       }
       // If tx id is valid , record tx_id and scn
       if (tx.tx_id_.is_valid()) {
@@ -990,6 +1000,7 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
                                                       const bool release)
 {
   int ret = OB_SUCCESS;
+  // tx is idle, update tx parameters
   if (tx.state_ == ObTxDesc::State::IDLE) {
     tx.cluster_id_      = tx_param.cluster_id_;
     tx.access_mode_     = tx_param.access_mode_;
@@ -1287,11 +1298,8 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   bool blockable = expire_ts > 0;
-  const int64_t seq_abs = ObSequence::inc_and_get_max_seq_no();
-  const ObTxSEQ from_scn = specified_from_scn.is_valid() ? specified_from_scn
-    : savepoint.clone_with_seq(seq_abs, tx_seq_base);
   do {
-    ret = part_ctx->rollback_to_savepoint(op_sn, from_scn, savepoint, downstream_parts);
+    ret = part_ctx->rollback_to_savepoint(op_sn, specified_from_scn, savepoint, tx_seq_base, downstream_parts);
     if (OB_NEED_RETRY == ret && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;

@@ -844,7 +844,9 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
       if (OB_ISNULL(log_lock = min_epoch_list->try_lock_log())) {
         // lock conflict, acquired by others
       } else {
-        TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
+        if (REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
+        }
         list_idx = min_epoch_idx;
         lock_guard.set(log_lock);
         ret = OB_SUCCESS;

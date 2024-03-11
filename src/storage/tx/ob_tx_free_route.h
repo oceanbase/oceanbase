@@ -85,6 +85,7 @@ struct ObTxnFreeRouteCtx {
   ObTxnFreeRouteCtx() { reset(); }
   ~ObTxnFreeRouteCtx() { reset(); }
   void reset() {
+    start_session_id_ = 0;
     local_version_ = 1;
     global_version_ = 0;
     global_version_water_mark_ = 0;
@@ -101,6 +102,7 @@ struct ObTxnFreeRouteCtx {
     audit_record_.reset();
   }
   void set_sessid(const uint32_t sessid) { session_id_ = sessid; }
+  void set_start_sessid(const uint32_t sessid) { start_session_id_ = sessid; }
   void init_before_update_state(bool proxy_support);
   void init_before_handle_request(ObTxDesc *txdesc);
   bool is_temp(const ObTxDesc &tx) const;
@@ -123,6 +125,7 @@ struct ObTxnFreeRouteCtx {
   const ObTransID &get_tx_id() const { return tx_id_; }
   const ObTxnFreeRouteFlag &get_flag() const { return flag_; }
   uint32_t get_session_id() const { return session_id_; }
+  uint32_t get_start_session_id() const { return start_session_id_; }
   uint64_t get_audit_record() const { return audit_record_.v_; }
   int state_update_verify_by_version(const TxnFreeRouteState state,
                                      const int64_t version,
@@ -146,6 +149,9 @@ private:
   }
   // the session this ctx belongs to
   uint32_t session_id_;
+  // for normal trx: transaction original session
+  // for xa trx: xa-start session
+  uint32_t start_session_id_;
   // the local_version updated when session handle a request
   // from proxy which caused txn state synced
   // it is used as request id for checkAlive request

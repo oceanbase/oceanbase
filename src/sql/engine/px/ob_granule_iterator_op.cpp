@@ -881,6 +881,7 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
       if (OB_FAIL(try_build_tablet2part_id_map())) {
         LOG_WARN("fail to build tablet2part id map", K(ret));
       } else if (OB_FAIL(tablet2part_id_map_.get_refactored(tablet_id, part_id))) {
+        ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
         LOG_WARN("fail to get refactored part id", K(ret), K(tablet_id), K(part_id));
       } else {
         tablet_id = part_id;

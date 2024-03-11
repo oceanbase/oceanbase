@@ -78,6 +78,107 @@ TEST_F(TestDirectLoad, init_ddl_table_store)
 
 }
 
+TEST_F(TestDirectLoad, test_cg_aggregate)
+{
+  ObTabletFullDirectLoadMgr tablet_dl_mgr;
+  ObTabletDirectLoadInsertParam build_param;
+  build_param.common_param_.ls_id_ = ls_id_;
+  build_param.common_param_.tablet_id_ = tablet_id_;
+  build_param.common_param_.direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_DDL;
+  build_param.common_param_.read_snapshot_ = SNAPSHOT_VERSION;
+  build_param.runtime_only_param_.task_cnt_ = 1;
+  build_param.runtime_only_param_.task_id_ = 1;
+  build_param.runtime_only_param_.table_id_ = TEST_TABLE_ID;
+  build_param.runtime_only_param_.schema_version_ = 1;
+  SCN ddl_start_scn;
+  ASSERT_EQ(OB_SUCCESS, ddl_start_scn.convert_from_ts(ObTimeUtility::current_time()));
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.update(nullptr, build_param));
+  tablet_dl_mgr.start_scn_ = ddl_start_scn;
+  tablet_dl_mgr.data_format_version_ = DATA_VERSION_4_0_0_0;
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.init_ddl_table_store(ddl_start_scn, SNAPSHOT_VERSION, ddl_start_scn));
+
+  common::ObArenaAllocator allocator;
+
+  ObArray<ObDirectLoadSliceWriter *> sorted_slices;
+  for (int64_t i = 0; i < 3; ++i) {
+    ObDirectLoadSliceWriter *slice_writer = nullptr;
+    slice_writer = OB_NEWx(ObDirectLoadSliceWriter, (&allocator));
+    ASSERT_NE(nullptr, slice_writer);
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.push_back(slice_writer));
+  }
+
+  // case 1:one thread can handle the number of slices divided according to EACH_MACRO_MIN_ROW_CNT
+  for (int64_t i = 0; i < sorted_slices.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.at(i)->mock_chunk_store(ObTabletDirectLoadMgr::EACH_MACRO_MIN_ROW_CNT / 2 - 1));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.calc_cg_range(sorted_slices, 2));
+  ASSERT_EQ(1, tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count());
+  for (int64_t i = 0; i < tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count(); ++i) {
+    const int64_t start_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).start_idx_;
+    const int64_t last_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).last_idx_;
+    STORAGE_LOG(INFO, "case1", K(start_idx), K(last_idx));
+    ASSERT_EQ(start_idx, 0);
+    ASSERT_EQ(last_idx, sorted_slices.count());
+  }
+
+  // case 2:all threads can handle the number of slices divided according to EACH_MACRO_MIN_ROW_CNT
+  for (int64_t i = 0; i < sorted_slices.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.at(i)->mock_chunk_store(ObTabletDirectLoadMgr::EACH_MACRO_MIN_ROW_CNT / 2 + 1));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.calc_cg_range(sorted_slices, 2));
+  ASSERT_EQ(2, tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count());
+  for (int64_t i = 0; i < tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count(); ++i) {
+    const int64_t start_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).start_idx_;
+    const int64_t last_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).last_idx_;
+    STORAGE_LOG(INFO, "case2", K(start_idx), K(last_idx));
+  }
+
+  // case 3:all threads cannot handle the number of slices divided according to EACH_MACRO_MIN_ROW_CNT
+  for (int64_t i = 0; i < sorted_slices.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.at(i)->mock_chunk_store(ObTabletDirectLoadMgr::EACH_MACRO_MIN_ROW_CNT + 1));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.calc_cg_range(sorted_slices, 2));
+  ASSERT_EQ(2, tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count());
+  for (int64_t i = 0; i < tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count(); ++i) {
+    const int64_t start_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).start_idx_;
+    const int64_t last_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).last_idx_;
+    STORAGE_LOG(INFO, "case3", K(start_idx), K(last_idx));
+  }
+
+  for (int64_t i = 0; i < 2; ++i) {
+    ObDirectLoadSliceWriter *slice_writer = nullptr;
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.pop_back(slice_writer));
+  }
+
+  // case 4
+  for (int64_t i = 0; i < sorted_slices.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.at(i)->mock_chunk_store(ObTabletDirectLoadMgr::EACH_MACRO_MIN_ROW_CNT + 1));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.calc_cg_range(sorted_slices, 2));
+  ASSERT_EQ(1, tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count());
+  for (int64_t i = 0; i < tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count(); ++i) {
+    const int64_t start_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).start_idx_;
+    const int64_t last_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).last_idx_;
+    STORAGE_LOG(INFO, "case4", K(start_idx), K(last_idx));
+    ASSERT_EQ(start_idx, 0);
+    ASSERT_EQ(last_idx, sorted_slices.count());
+  }
+
+  // case 5
+  for (int64_t i = 0; i < sorted_slices.count(); ++i) {
+    ASSERT_EQ(OB_SUCCESS, sorted_slices.at(i)->mock_chunk_store(ObTabletDirectLoadMgr::EACH_MACRO_MIN_ROW_CNT - 1));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.calc_cg_range(sorted_slices, 2));
+  ASSERT_EQ(1, tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count());
+  for (int64_t i = 0; i < tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.count(); ++i) {
+    const int64_t start_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).start_idx_;
+    const int64_t last_idx = tablet_dl_mgr.get_sqc_build_ctx().sorted_slices_idx_.at(i).last_idx_;
+    STORAGE_LOG(INFO, "case5", K(start_idx), K(last_idx));
+    ASSERT_EQ(start_idx, 0);
+    ASSERT_EQ(last_idx, sorted_slices.count());
+  }
+
+}
 
 } // namespace oceanbase
 

@@ -265,6 +265,7 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       update_optimizer_gather_stat_info(NULL, &gather_stat);
       ObOptStatGatherStatList::instance().remove(gather_stat);
       task_info.completed_table_count_ ++;
+      ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
     }
     task_info.task_end_time_ = ObTimeUtility::current_time();
     task_info.ret_code_ = ret;
@@ -986,6 +987,7 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
             tmp_alloc.reset();
           }
         }
+        ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
       }
     }
   }
@@ -1460,6 +1462,7 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           } else {
             tmp_alloc.reset();
           }
+          ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
         }
       }
     }
@@ -1831,6 +1834,7 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           } else {
             tmp_alloc.reset();
           }
+          ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
         }
       }
     }
@@ -2124,6 +2128,7 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
           } else {
             tmp_alloc.reset();
           }
+          ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
         }
       }
     }
@@ -2329,6 +2334,7 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
             tmp_alloc.reset();
           }
         }
+        ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
       }
     }
   }
@@ -2531,6 +2537,7 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
       } else {
         tmp_alloc.reset();
       }
+      ret = ret == OB_TABLE_NOT_EXIST ? OB_SUCCESS : ret;//skip table not exist in schema stats op.
     }
   }
   return ret;

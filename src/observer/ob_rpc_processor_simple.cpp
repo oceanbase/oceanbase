@@ -560,6 +560,20 @@ int ObRpcBuildDDLSingleReplicaRequestP::process()
   return ret;
 }
 
+int ObRpcCheckandCancelDDLComplementDagP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
+  } else {
+    bool is_dag_exist = true;
+    ret = gctx_.ob_service_->check_and_cancel_ddl_complement_data_dag(arg_, is_dag_exist);
+    result_ = is_dag_exist;
+  }
+  return ret;
+}
+
 int ObRpcFetchSysLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -2213,6 +2227,19 @@ int ObRpcBatchSetTabletAutoincSeqP::process()
   ObTabletAutoincSeqRpcHandler &autoinc_seq_handler = ObTabletAutoincSeqRpcHandler::get_instance();
   if (OB_FAIL(autoinc_seq_handler.batch_set_tablet_autoinc_seq(arg_, result_))) {
     COMMON_LOG(WARN, "failed to batch set tablet autoinc seq", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObRpcClearTabletAutoincSeqCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletAutoincrementService::get_instance().clear_tablet_autoinc_seq_cache(MTL_ID(), arg_.tablet_ids_, abs_timeout_us);
   }
   return ret;
 }

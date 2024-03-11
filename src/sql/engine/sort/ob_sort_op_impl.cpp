@@ -577,7 +577,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
     max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX), outputted_rows_cnt_(0),
     is_fetch_with_ties_(false), topn_heap_(NULL), ties_array_pos_(0),
     last_ties_row_(NULL), pt_buckets_(NULL), use_partition_topn_sort_(false), heap_nodes_(), cur_heap_idx_(0),
-    rows_(NULL), sort_compact_level_(share::SORT_DEFAULT_LEVEL), sort_exprs_(nullptr),
+    rows_(NULL), sort_exprs_(nullptr),
     compress_type_(NONE_COMPRESSOR)
 {
 }
@@ -639,7 +639,6 @@ int ObSortOpImpl::init(
   const int64_t topn_cnt /* = INT64_MAX */,
   const bool is_fetch_with_ties /* = false */,
   const int64_t default_block_size /* = 64KB */,
-  const SortCompactLevel compact_level /* = false */,
   const ObCompressorType compress_type /* = NONE_COMPRESS */,
   const ExprFixedArray *exprs /* =nullptr */)
 {
@@ -669,7 +668,6 @@ int ObSortOpImpl::init(
     exec_ctx_ = exec_ctx;
     part_cnt_ = part_cnt;
     topn_cnt_ = topn_cnt;
-    sort_compact_level_ = compact_level;
     compress_type_ = compress_type;
     sort_exprs_ = exprs;
     use_heap_sort_ = is_topn_sort() && part_cnt_ == 0;
@@ -807,7 +805,6 @@ void ObSortOpImpl::reset()
   is_fetch_with_ties_ = false;
   rows_ = NULL;
   ties_array_pos_ = 0;
-  sort_compact_level_ = share::SORT_DEFAULT_LEVEL;
   compress_type_ = NONE_COMPRESSOR;
   sort_exprs_ = nullptr;
   // for partition topn sort
@@ -875,7 +872,7 @@ int ObSortOpImpl::build_chunk(const int64_t level, Input &input, int64_t extra_s
   } else if (OB_FAIL(chunk->datum_store_.init(1/*+ mem limit, small limit for dump immediately */,
                         tenant_id_, ObCtxIds::WORK_AREA, ObModIds::OB_SQL_SORT_ROW,
                         true/*+ enable dump */, extra_size/* for InMemoryTopnSort */, true,
-                        sort_compact_level_, compress_type_, sort_exprs_))) {
+                        compress_type_, sort_exprs_))) {
     LOG_WARN("init row store failed", K(ret));
   } else {
     chunk->datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -2238,7 +2235,7 @@ int ObSortOpImpl::get_next_batch_stored_rows(int64_t max_cnt, int64_t &read_rows
         LOG_WARN("fail to get next row", K(ret));
       } else {
         stored_rows_[read_rows++] = const_cast<ObChunkDatumStore::StoredRow *>(sr);
-        if (sort_compact_level_ != share::SORT_DEFAULT_LEVEL && sort_compact_level_ != share::SORT_COMPRESSION_LEVEL) {
+        if (use_compact_store()) {
           // can't hold multi rows for get_batch, if we use compact/encoding
           break;
         }
@@ -2769,10 +2766,16 @@ void ObPrefixSortImpl::reset()
   selector_size_ = 0;
   sort_prefix_rows_ = 0;
   immediate_prefix_store_.reset();
-  immediate_prefix_rows_ = 0;
   immediate_prefix_pos_ = 0;
   brs_ = NULL;
-
+  if (nullptr != mem_context_ && nullptr != selector_) {
+    mem_context_->get_malloc_allocator().free(selector_);
+    selector_ = nullptr;
+  }
+  if (nullptr != mem_context_ && nullptr != immediate_prefix_rows_) {
+    mem_context_->get_malloc_allocator().free(immediate_prefix_rows_);
+    immediate_prefix_rows_ = nullptr;
+  }
   ObSortOpImpl::reset();
 }
 
@@ -2833,10 +2836,10 @@ int ObPrefixSortImpl::init(const int64_t tenant_id,
         LOG_WARN("fetch rows failed");
       }
     } else {
-      selector_ = (typeof(selector_))eval_ctx->exec_ctx_.get_allocator().alloc(
+      selector_ = (typeof(selector_))mem_context_->get_malloc_allocator().alloc(
           batch_size * sizeof(*selector_));
       immediate_prefix_rows_ = (typeof(immediate_prefix_rows_))
-          eval_ctx->exec_ctx_.get_allocator().alloc(batch_size * sizeof(*immediate_prefix_rows_));
+          mem_context_->get_malloc_allocator().alloc(batch_size * sizeof(*immediate_prefix_rows_));
       if (NULL == selector_ || NULL == immediate_prefix_rows_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed",

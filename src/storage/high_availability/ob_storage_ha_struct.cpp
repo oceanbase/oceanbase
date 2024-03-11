@@ -612,7 +612,8 @@ bool ObMigrationStatusHelper::check_migration_status_is_fail_(const ObMigrationS
 
 bool ObMigrationStatusHelper::need_online(const ObMigrationStatus &cur_status)
 {
-  return (OB_MIGRATION_STATUS_NONE == cur_status);
+  return (OB_MIGRATION_STATUS_NONE == cur_status
+         || OB_MIGRATION_STATUS_GC == cur_status);
 }
 
 bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)
@@ -835,16 +836,6 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
   return ret;
 }
 
-bool ObMigrationStatusHelper::can_gc_ls_without_check_dependency(
-    const ObMigrationStatus &cur_status)
-{
-  bool allow_gc = false;
-  if (check_migration_status_is_fail_(cur_status)) {
-    allow_gc = true;
-  }
-  return allow_gc;
-}
-
 /******************ObMigrationOpArg*********************/
 ObMigrationOpArg::ObMigrationOpArg()
   : ls_id_(),
@@ -866,7 +857,7 @@ bool ObMigrationOpArg::is_valid() const
       && src_.is_valid()
       && dst_.is_valid()
       && data_src_.is_valid()
-      && paxos_replica_number_ > 0;
+      && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_);
 }
 
 void ObMigrationOpArg::reset()

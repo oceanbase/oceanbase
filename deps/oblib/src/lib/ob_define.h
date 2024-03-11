@@ -287,6 +287,7 @@ const int64_t OB_MAX_OBJECT_NAME_LENGTH = 128; //should include index_name
 const int64_t OB_MAX_ORIGINAL_NANE_LENGTH = 256; //max length of tenant_name, table_name, db_name
 
 const int64_t OB_MAX_CHAR_LEN = 3;
+const int64_t OB_MAX_POINTER_ADDR_LEN = 32;
 const int64_t OB_MAX_TRIGGER_NAME_LENGTH = 128;  // Compatible with Oracle
 const int64_t OB_MAX_WHEN_CONDITION_LENGTH = 4000;  // Compatible with Oracle
 const int64_t OB_MAX_UPDATE_COLUMNS_LENGTH = 4000;  // Compatible with Oracle
@@ -1890,6 +1891,7 @@ const int64_t MAX_MEMSTORE_CNT_IN_STORAGE = MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE +
 const int64_t MAX_TX_DATA_TABLE_STATE_LENGTH = 20;
 const int64_t MAX_TX_DATA_STATE_LENGTH = 16;
 const int64_t MAX_UNDO_LIST_CHAR_LENGTH = 4096;
+const int64_t MAX_TX_OP_CHAR_LENGTH = 4096;
 const int64_t MAX_TABLE_CNT_IN_STORAGE = MAX_SSTABLE_CNT_IN_STORAGE + MAX_MEMSTORE_CNT;
 const int64_t OB_MAX_PARTITION_NUM_MYSQL = 8192;
 const int64_t OB_MAX_PARTITION_NUM_ORACLE = 65536;

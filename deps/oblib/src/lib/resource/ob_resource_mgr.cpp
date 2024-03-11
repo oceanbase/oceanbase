@@ -75,7 +75,7 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
         update_cache_hold(hold_size);
       }
     }
-    ObMallocTimeMonitor::click("ALLOC_CHUNK_END");
+    BASIC_TIME_GUARD_CLICK("ALLOC_CHUNK_END");
     if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_
         && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
       // try wash memory from cache
@@ -151,7 +151,7 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
           }
         }
       }
-      ObMallocTimeMonitor::click("WASH_KVCACHE_END");
+      BASIC_TIME_GUARD_CLICK("WASH_KVCACHE_END");
     }
   }
   return chunk;

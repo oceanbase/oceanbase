@@ -575,6 +575,9 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
     case S3_BAD_REQUEST: {
       if (exception == "InvalidRequest" && err_msg.find("x-amz-checksum") != std::string::npos) {
         ob_errcode = OB_CHECKSUM_ERROR;
+      } else if (err_msg.find("region") != std::string::npos
+                 && err_msg.find("is wrong; expecting") != std::string::npos) {
+        ob_errcode = OB_S3_REGION_MISMATCH;
       } else {
         ob_errcode = OB_S3_ERROR;
       }
@@ -616,6 +619,10 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       ob_errcode = OB_BACKUP_PERMISSION_DENIED;
       break;
     }
+    case Aws::S3::S3Errors::NO_SUCH_BUCKET: {
+      ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
+      break;
+    }
     default: {
       convert_http_error(s3_err, ob_errcode);
       break;
@@ -652,7 +659,7 @@ static int set_request_checkusum_algorithm(RequestType &request,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type))) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K(checksum_type));
   } else {
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
@@ -670,7 +677,7 @@ static int set_completed_part_checksum(Aws::S3::Model::CompletedPart &completed_
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type))) {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K(checksum_type));
   } else {
     if (checksum_type == ObStorageChecksumType::OB_CRC32_ALGO) {
@@ -941,21 +948,21 @@ int ObStorageS3Base::open(const ObString &uri, ObObjectStorageInfo *storage_info
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "s3 base alreagy inited", K(ret));
-  } else if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(uri.empty() || !storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "failed to init s3 base, invalid arguments", K(ret), K(uri), KP(storage_info));
+    OB_LOG(WARN, "failed to init s3 base, invalid arguments", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(build_bucket_and_object_name(allocator_, uri, bucket_, object_))) {
     OB_LOG(WARN, "failed to parse uri", K(ret), K(uri));
   } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
     OB_LOG(WARN, "failed to get storage info str", K(ret), KPC(storage_info));
-  } else if (s3_account_.parse_from(info_str, strlen(info_str))) {
+  } else if (OB_FAIL(s3_account_.parse_from(info_str, strlen(info_str)))) {
     OB_LOG(WARN, "failed to build s3 account", K(ret));
   } else if (OB_FAIL(ObS3Env::get_instance().get_or_create_s3_client(s3_account_, s3_client_))) {
     OB_LOG(WARN, "faied to get s3 client", K(ret));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
     if (OB_UNLIKELY(!is_s3_supported_checksum(checksum_type_))) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for s3", K(ret), K_(checksum_type));
     } else {
       is_inited_ = true;
@@ -1091,6 +1098,7 @@ int ObStorageS3Writer::write_(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
   Aws::S3::Model::PutObjectRequest request;
+  ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "s3 writer not opened", K(ret));

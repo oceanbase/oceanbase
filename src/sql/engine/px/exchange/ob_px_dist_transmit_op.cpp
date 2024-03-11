@@ -654,6 +654,9 @@ int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
                   get_piece_sample_msg().row_stores_.push_back(sample_store))) {
               LOG_WARN("fail to push back sample store", K(ret));
             }
+            if (OB_FAIL(ret) && nullptr != sample_store) {
+              sample_store->~ObChunkDatumStore();
+            }
           }
         }
       }

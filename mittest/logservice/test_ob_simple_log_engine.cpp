@@ -396,16 +396,19 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   // 测试目录清空后，读数据是否正常报错
   ReadBufGuard buf_guard("dummy", 100);
   int64_t out_read_size;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND,
             log_storage->pread(LSN((truncate_prefix_block_id + 1) * PALF_BLOCK_SIZE),
                                100,
                                buf_guard.read_buf_,
-                               out_read_size));
+                               out_read_size,
+                               io_ctx));
   EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND,
             log_storage->pread(LSN((truncate_prefix_block_id - 1) * PALF_BLOCK_SIZE),
                                100,
                                buf_guard.read_buf_,
-                               out_read_size));
+                               out_read_size,
+                               io_ctx));
   // 测试目录清空后，重启是否正常
   EXPECT_EQ(OB_SUCCESS, reload(log_engine_->log_storage_.log_tail_, log_engine_->log_meta_storage_.log_tail_, log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
 

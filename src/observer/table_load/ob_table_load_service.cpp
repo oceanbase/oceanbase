@@ -97,6 +97,7 @@ void ObTableLoadService::ObHeartBeatTask::runTimerTask()
     LOG_DEBUG("table load heart beat", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all table ctx", KR(ret), K(tenant_id_));
     }
@@ -142,6 +143,7 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     LOG_DEBUG("table load start gc", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all  table ctx", KR(ret), K(tenant_id_));
     }
@@ -263,6 +265,7 @@ void ObTableLoadService::ObReleaseTask::runTimerTask()
   } else {
     LOG_DEBUG("table load start release", K(tenant_id_));
     ObArray<ObTableLoadTableCtx *> releasable_table_ctx_array;
+    releasable_table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.manager_.get_releasable_table_ctx_list(releasable_table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret), K(tenant_id_));
     }
@@ -304,6 +307,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
   } else {
     LOG_DEBUG("table load auto abort client task", K(tenant_id_));
     ObArray<ObTableLoadClientTask *> client_task_array;
+    client_task_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.get_client_service().get_all_client_task(client_task_array))) {
       LOG_WARN("fail to get all client task", KR(ret));
     } else {
@@ -311,9 +315,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
         ObTableLoadClientTask *client_task = client_task_array.at(i);
         if (OB_UNLIKELY(ObTableLoadClientStatus::ERROR == client_task->get_status() ||
                         client_task->get_exec_ctx()->check_status() != OB_SUCCESS)) {
-          if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-            LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-          }
+          client_task->abort();
         }
         ObTableLoadClientService::revert_task(client_task);
       }
@@ -631,14 +633,13 @@ void ObTableLoadService::abort_all_client_task()
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadClientTask *> client_task_array;
+  client_task_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(client_service_.get_all_client_task(client_task_array))) {
     LOG_WARN("fail to get all client task", KR(ret));
   } else {
     for (int i = 0; i < client_task_array.count(); ++i) {
       ObTableLoadClientTask *client_task = client_task_array.at(i);
-      if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
-        LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
-      }
+      client_task->abort();
       ObTableLoadClientService::revert_task(client_task);
     }
   }
@@ -648,6 +649,7 @@ void ObTableLoadService::fail_all_ctx(int error_code)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTableCtx *> table_ctx_array;
+  table_ctx_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(manager_.get_all_table_ctx(table_ctx_array))) {
     LOG_WARN("fail to get all table ctx list", KR(ret));
   } else {
@@ -679,6 +681,7 @@ void ObTableLoadService::release_all_ctx()
     abort_all_client_task();
     fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_inactive_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get inactive table ctx list", KR(ret), K(tenant_id));
     } else {
@@ -715,6 +718,7 @@ void ObTableLoadService::release_all_ctx()
       LOG_INFO("[DIRECT LOAD DIRTY LIST]", "count", manager_.get_dirty_list_count());
     }
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_releasable_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret));
     }

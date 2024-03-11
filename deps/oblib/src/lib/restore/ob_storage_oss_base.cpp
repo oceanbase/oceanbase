@@ -227,8 +227,12 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_BAD_REQUEST: {
-        if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_OSS_ERROR;
+        } else if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
           ob_errcode = OB_CHECKSUM_ERROR;
+        } else if (0 == STRCMP("InvalidBucketName", aos_ret->error_code)) {
+          ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_OSS_ERROR;
         }
@@ -375,9 +379,9 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "oss client init twice", K(ret));
-  } else if (OB_ISNULL(storage_info)) {
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "oss account is null, fail to init oss base!", K(ret));
+    OB_LOG(WARN, "oss account is invalid, fail to init oss base!", K(ret), KPC(storage_info));
   } else if (OB_FAIL(storage_info->get_storage_info_str(info_str, sizeof(info_str)))) {
     OB_LOG(WARN, "fail to get storage info str", K(ret), KPC(storage_info));
   } else if (OB_FAIL(oss_account_.parse_oss_arg(info_str))) {
@@ -390,15 +394,11 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
   } else {
     checksum_type_ = storage_info->get_checksum_type();
     if (OB_UNLIKELY(!is_oss_supported_checksum(checksum_type_))) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for oss", K(ret), K_(checksum_type));
     } else {
       is_inited_ = true;
-      if (checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO) {
-        oss_option_->ctl->options->enable_crc = false;
-      } else {
-        oss_option_->ctl->options->enable_crc = true;
-      }
+      oss_option_->ctl->options->enable_crc = false;
     }
   }
   return ret;
@@ -722,6 +722,9 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
       print_oss_info(resp_headers, aos_ret, ret);
+    } else if (OB_ISNULL(upload_id_.data) || OB_UNLIKELY(upload_id_.len <= 0)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "upload id is invalid", K(ret), KP(upload_id_.data), K(upload_id_.len));
     } else {
       is_opened_ = true;
       base_buf_pos_ = 0;
@@ -2122,12 +2125,12 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
                   int64_t cur_pos = -1;
                   char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
                   if (OB_ISNULL(append_pos_str)) {
-                    OB_LOG(WARN, "after append fail, current append pos is not found");
+                    OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
                   } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
                     OB_LOG(WARN, "after append fail, fail to get append pos",
-                        K(tmp_ret), K(append_pos_str), K_(object));
+                        K(ret), K(tmp_ret), K(append_pos_str), K_(object));
                   } else {
-                    OB_LOG(WARN, "after append fail, we got the object meta", K(cur_pos));
+                    OB_LOG(WARN, "after append fail, we got the object meta", K(ret), K(cur_pos));
                   }
                 }
               }

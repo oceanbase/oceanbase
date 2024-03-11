@@ -62,6 +62,7 @@ public:
   int64_t store_column_count_;
   int64_t snapshot_version_;
   int64_t lob_column_cnt_;
+  int64_t fill_cg_thread_cnt_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
@@ -93,7 +94,7 @@ private:
 private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMergeParam param_;
-  common::ObSEArray<ObDirectLoadTabletMergeCtx *, 64> tablet_merge_ctx_array_;
+  common::ObArray<ObDirectLoadTabletMergeCtx *> tablet_merge_ctx_array_;
   bool is_inited_;
 };
 
@@ -163,12 +164,12 @@ private:
   common::ObTabletID tablet_id_;
   common::ObTabletID target_tablet_id_;
   ObDirectLoadOriginTable origin_table_;
-  common::ObSEArray<ObDirectLoadSSTable *, 64> sstable_array_;
-  common::ObSEArray<ObDirectLoadMultipleSSTable *, 64> multiple_sstable_array_;
-  common::ObSEArray<ObDirectLoadMultipleHeapTable *, 64> multiple_heap_table_array_;
-  common::ObSEArray<blocksstable::ObDatumRange, 64> range_array_;
-  common::ObSEArray<ObDirectLoadPartitionMergeTask *, 64> task_array_;
-  common::ObSEArray<ObDirectLoadPartitionRescanTask *, 64> rescan_task_array_;
+  common::ObArray<ObDirectLoadSSTable *> sstable_array_;
+  common::ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array_;
+  common::ObArray<ObDirectLoadMultipleHeapTable *> multiple_heap_table_array_;
+  common::ObArray<blocksstable::ObDatumRange> range_array_;
+  common::ObArray<ObDirectLoadPartitionMergeTask *> task_array_;
+  common::ObArray<ObDirectLoadPartitionRescanTask *> rescan_task_array_;
   int64_t task_finish_count_ CACHE_ALIGNED;
   int64_t rescan_task_finish_count_ CACHE_ALIGNED;
   bool is_inited_;

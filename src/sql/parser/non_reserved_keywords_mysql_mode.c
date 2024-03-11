@@ -1115,7 +1115,6 @@ static const NonReservedKeyword Mysql_sql_keywords_in_pl[] =
   {"truncate", TRUNCATE},
   {"uninstall", UNINSTALL},
   {"update", UPDATE},
-  {"user", USER},
   {"user_resources", USER_RESOURCES},
   {"view", VIEW},
   {"warnings", WARNINGS},

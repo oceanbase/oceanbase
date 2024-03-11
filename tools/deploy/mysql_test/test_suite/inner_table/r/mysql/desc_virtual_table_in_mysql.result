@@ -1072,6 +1072,7 @@ outline_target	longtext	NO		NULL
 outline_sql	longtext	NO		NULL	
 sql_id	varchar(32)	NO			
 outline_content	longtext	NO		NULL	
+format_sql_text	longtext	YES		NULL	
 format_sql_id	varbinary(32)	NO			
 format_outline	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_outline;
@@ -1637,6 +1638,7 @@ nested_offset	bigint(20)	NO		NULL
 nested_size	bigint(20)	NO		NULL	
 cg_idx	bigint(20)	NO		NULL	
 data_checksum	bigint(20)	NO		NULL	
+table_flag	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_mgr;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2549,6 +2551,9 @@ task_exec_svr_port	bigint(20)	YES		NULL
 generate_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
 schedule_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
 comment	varchar(2048)	YES		NULL	
+data_source_svr_ip	varchar(46)	YES		NULL	
+data_source_svr_port	bigint(20)	YES		NULL	
+is_manual	tinyint(4)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task;
 IF(count(*) >= 0, 1, 0)
 1

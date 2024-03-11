@@ -323,12 +323,11 @@ int ObTableReadInfo::init(
     const common::ObIArray<ObColumnParam *> *cols_param,
     const common::ObIArray<int32_t> *cg_idxs,
     const common::ObIArray<ObColExtend> *cols_extend,
-    const bool has_all_column_group)
+    const bool has_all_column_group,
+    const bool is_cg_sstable)
 {
   int ret = OB_SUCCESS;
   const int64_t out_cols_cnt = cols_desc.count();
-  //TODO find a better way to deal with normal cg sstable
-  const bool is_cg_sstable = ObCGReadInfo::is_cg_sstable(schema_rowkey_cnt, schema_column_count);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -1127,6 +1126,44 @@ int ObTenantCGReadInfoMgr::construct_normal_cg_read_infos()
     }
   }
 
+  return ret;
+}
+
+int ObTenantCGReadInfoMgr::construct_cg_read_info(
+    common::ObIAllocator &allocator,
+    const bool is_oracle_mode,
+    const ObColDesc &col_desc,
+    ObColumnParam *col_param,
+    ObTableReadInfo &cg_read_info)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObColExtend tmp_col_extend;
+  tmp_col_extend.skip_index_attr_.set_min_max();
+  ObSEArray<ObColDesc, 1> tmp_access_cols_desc;
+  ObSEArray<ObColumnParam *, 1> tmp_access_cols_param;
+  ObSEArray<int32_t, 1> tmp_access_cols_index;
+  ObSEArray<ObColExtend, 1> tmp_access_cols_extend;
+  if (OB_FAIL(tmp_access_cols_desc.push_back(col_desc))) {
+    LOG_WARN("Fail to push back col desc", K(ret));
+  } else if (nullptr != col_param && OB_FAIL(tmp_access_cols_param.push_back(col_param))) {
+    LOG_WARN("Fail to push back col param", K(ret));
+  } else if (OB_FAIL(tmp_access_cols_index.push_back(0))) {
+    LOG_WARN("Fail to push back col index", K(ret));
+  } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
+    LOG_WARN("Fail to push_back tmp_col_extend", K(ret));
+  } else if (OB_FAIL(cg_read_info.init(allocator,
+                                       ObCGReadInfo::CG_COL_CNT,
+                                       ObCGReadInfo::CG_ROWKEY_COL_CNT,
+                                       is_oracle_mode,
+                                       tmp_access_cols_desc,
+                                       &tmp_access_cols_index,
+                                       tmp_access_cols_param.empty() ? nullptr : &tmp_access_cols_param,
+                                       nullptr,
+                                       &tmp_access_cols_extend,
+                                       false,
+                                       true))) {
+    LOG_WARN("Fail to init cg read info", K(ret));
+  }
   return ret;
 }
 

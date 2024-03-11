@@ -314,6 +314,10 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(data_checksum);
           break;
         }
+        case TABLE_FLAG:
+          // TODO(yanfeng): only for place holder purpose, need change when auto_split branch merge
+          cur_row_.cells_[i].set_int(0);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

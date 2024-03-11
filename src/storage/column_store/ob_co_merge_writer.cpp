@@ -496,13 +496,22 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
   } else if (OB_FAIL(row_.init(cg_schema.column_cnt_))) {
     STORAGE_LOG(WARN, "fail to init row", K(ret), K(cg_schema));
   } else if (add_column) {//skpi init read info and progressive_merge_helper_
-  } else if (cg_schema.is_single_column_group() &&
-      OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(write_helper_.get_col_desc_array().at(0),
-                                                   nullptr,
-                                                   merge_param.static_param_.get_tablet_id(), cg_read_info_handle_))) {
-    STORAGE_LOG(WARN, "Fail to get cg read info ", K(ret));
-  } else if (FALSE_IT(read_info = cg_schema.is_single_column_group() ? cg_read_info_handle_.get_read_info() : full_read_info)) {
-  } else if (!merge_param.is_full_merge() && table != nullptr) {
+  } else if (cg_schema.is_single_column_group()) {
+    single_read_info_.reset();
+    if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                              full_read_info->is_oracle_mode(),
+                                                              write_helper_.get_col_desc_array().at(0),
+                                                              nullptr,
+                                                              single_read_info_))) {
+      LOG_WARN("Fail to init cg read info", K(ret));
+    } else {
+      read_info = &single_read_info_;
+    }
+  } else {
+    read_info = full_read_info;
+  }
+
+  if (OB_SUCC(ret) && !merge_param.is_full_merge() && table != nullptr) {
     const ObSSTable *sstable = static_cast<ObSSTable *>(table);
     progressive_merge_helper_ = OB_NEWx(ObProgressiveMergeHelper, (&allocator_), sstable->get_key().column_group_idx_);
     if (OB_ISNULL(progressive_merge_helper_)) {

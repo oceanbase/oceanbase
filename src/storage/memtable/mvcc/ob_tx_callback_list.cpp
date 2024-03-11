@@ -391,14 +391,20 @@ int ObTxCallbackList::remove_callbacks_for_rollback_to(const transaction::ObTxSE
   struct Functor final : public ObRemoveCallbacksWCondFunctor {
     Functor(const share::SCN right_bound, const bool need_remove_data = true)
       : ObRemoveCallbacksWCondFunctor(right_bound, need_remove_data) {}
-    bool cond_for_remove(ObITransCallback *callback) {
+    bool cond_for_remove(ObITransCallback *callback, int &ret) {
       transaction::ObTxSEQ dseq = callback->get_seq_no();
-      // sanity check
-      OB_ASSERT(to_seq_.support_branch() == dseq.support_branch());
-      return (to_seq_.get_branch() == 0                     // match all branches
-              || to_seq_.get_branch() == dseq.get_branch()) // match target branch
-        && dseq.get_seq() > to_seq_.get_seq()               // exclusive
-        && dseq.get_seq() < from_seq_.get_seq();            // inclusive
+      bool match = false;
+      if (to_seq_.get_branch() == 0                          // match all branches
+          || to_seq_.get_branch() == dseq.get_branch()) {    // match target branch
+        if (dseq.get_seq() >= from_seq_.get_seq()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "found callback with seq_no larger than rollback from point",
+                    K(ret), K(dseq), K_(from_seq), K_(to_seq), KPC(callback));
+        } else {
+          match = dseq.get_seq() > to_seq_.get_seq();          // exclusive
+        }
+      }
+      return match;
     }
     transaction::ObTxSEQ to_seq_;
     transaction::ObTxSEQ from_seq_;

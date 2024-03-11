@@ -20,33 +20,37 @@ CREATE OR REPLACE PACKAGE BODY dbms_scheduler
     DECLARE interval_ts BIGINT;
     DECLARE my_error_code INT DEFAULT 0;
 
-    SET pos = instr(repeat_interval, ';');
-    SET freq = substr(repeat_interval, old_pos, pos - old_pos);
-    SET intv = substr(repeat_interval, pos);
-    SET pos = instr(freq, '=');
-    SET freq = substr(freq, pos+1);
-    SET pos = instr(intv, '=');
-    SET intv = substr(intv, pos+1);
-    SET intv_cnt = intv;
-    IF freq = 'SECONDLY' THEN
-      SET freq_ts = 1 * 1000000;
-    ELSEIF freq = 'MINUTELY' THEN
-      SET freq_ts = 60 * 1000000;
-    ELSEIF freq = 'HOURLY' THEN
-      SET freq_ts = 60 * 60 * 1000000;
-    ELSEIF freq = 'DAYLY' THEN
-      SET freq_ts = 24 * 60 * 60 * 1000000;
-    ELSEIF freq = 'WEEKLY' THEN
-      SET freq_ts = 7 * 24 * 60 * 60 * 1000000;
-    ELSEIF freq = 'MONTHLY' THEN
-      SET freq_ts = 30 * 7 * 24 * 60 * 60 * 1000000;
-    ELSEIF freq = 'YEARLY' THEN
-      SET freq_ts = 12 * 30 * 7 * 24 * 60 * 60 * 1000000;
+    IF repeat_interval = 'null' THEN
+      SET interval_ts = 0;
     ELSE
-      -- RAISE_APPLICATION_ERROR(-20000, 'interval expression not valid: ' || repeat_interval);
-      SET my_error_code = -1;
+      SET pos = instr(repeat_interval, ';');
+      SET freq = substr(repeat_interval, old_pos, pos - old_pos);
+      SET intv = substr(repeat_interval, pos);
+      SET pos = instr(freq, '=');
+      SET freq = substr(freq, pos+1);
+      SET pos = instr(intv, '=');
+      SET intv = substr(intv, pos+1);
+      SET intv_cnt = intv;
+      IF freq = 'SECONDLY' THEN
+        SET freq_ts = 1 * 1000000;
+      ELSEIF freq = 'MINUTELY' THEN
+        SET freq_ts = 60 * 1000000;
+      ELSEIF freq = 'HOURLY' THEN
+        SET freq_ts = 60 * 60 * 1000000;
+      ELSEIF freq = 'DAYLY' THEN
+        SET freq_ts = 24 * 60 * 60 * 1000000;
+      ELSEIF freq = 'WEEKLY' THEN
+        SET freq_ts = 7 * 24 * 60 * 60 * 1000000;
+      ELSEIF freq = 'MONTHLY' THEN
+        SET freq_ts = 30 * 7 * 24 * 60 * 60 * 1000000;
+      ELSEIF freq = 'YEARLY' THEN
+        SET freq_ts = 12 * 30 * 7 * 24 * 60 * 60 * 1000000;
+      ELSE
+        -- RAISE_APPLICATION_ERROR(-20000, 'interval expression not valid: ' || repeat_interval);
+        SET my_error_code = -1;
+      END IF;
+      SET interval_ts = freq_ts * intv_cnt;
     END IF;
-    SET interval_ts = freq_ts * intv_cnt;
     RETURN interval_ts;
   END;
 
@@ -69,11 +73,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_scheduler
     DECLARE LUSER   VARCHAR(128);
     DECLARE PUSER   VARCHAR(128);
     DECLARE CUSER   VARCHAR(128);
-    DECLARE MYCOUNT INT DEFAULT 0;
     DECLARE program_name VARCHAR(255) DEFAULT NULL;
     DECLARE job_style VARCHAR(255) DEFAULT 'REGULER';
     DECLARE interval_ts BIGINT;
-    DECLARE my_error_code INT DEFAULT 0;
 
     IF job_class != 'DATE_EXPRESSION_JOB_CLASS' THEN
       SET interval_ts = CALC_DELAY_TS(repeat_interval);
@@ -82,28 +84,12 @@ CREATE OR REPLACE PACKAGE BODY dbms_scheduler
     SET PUSER = DBMS_ISCHEDULER.PUSER();
     SET LUSER = DBMS_ISCHEDULER.LUSER();
     SET CUSER = LUSER;
+    SET JOB = 1;
 
-    retry_label: LOOP
-      IF MYCOUNT > 1000 THEN
-        -- RAISE_APPLICATION_ERROR(-20000, 'ORA-23422: Oceanbase Server could not generate an unused job number');
-        SET my_error_code = -1;
-        LEAVE retry_label;
-      END IF;
-
-      SET JOB = DBMS_ISCHEDULER.NEXTVALS();
-
-      BEGIN
-        CALL DBMS_ISCHEDULER.create_job(JOB, LUSER, PUSER, CUSER, job_name, program_name, job_type, job_action,
-                                  number_of_argument, start_date, repeat_interval, end_date, job_class,
-                                  enabled, auto_drop, comments, job_style, credential_name, destination_name,
-                                  interval_ts, max_run_duration);
-        -- EXCEPTION
-        --   WHEN DUP_VAL_ON_INDEX THEN
-        --     SET MYCOUNT = MYCOUNT + 1;
-        --     ITERATE RETRY;
-      END;
-      LEAVE retry_label;
-    END LOOP retry_label;
+    CALL DBMS_ISCHEDULER.create_job(JOB, LUSER, PUSER, CUSER, job_name, program_name, job_type, job_action,
+                              number_of_argument, start_date, repeat_interval, end_date, job_class,
+                              enabled, auto_drop, comments, job_style, credential_name, destination_name,
+                              interval_ts, max_run_duration);
   END;
 
   PROCEDURE enable ( job_name  VARCHAR(65535));

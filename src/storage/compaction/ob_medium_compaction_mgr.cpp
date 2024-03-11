@@ -249,6 +249,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
     } else if (OB_FAIL(replay_executor.execute(scn, ls_id_, tablet_id_))) {
       if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
         ret = OB_SUCCESS;
+        LOG_INFO("skip reply medium info", KR(ret), K(replay_medium_info));
       } else {
         LOG_WARN("failed to replay medium info", K(ret), K(replay_medium_info));
       }
@@ -272,7 +273,7 @@ int ObTabletMediumCompactionInfoRecorder::sync_clog_succ_for_leader(const int64_
   } else if (OB_FAIL(submit_trans_on_mds_table(true/*is_commit*/))) {
     LOG_WARN("failed to dec ref on memtable", K(ret), K_(tablet_id), KPC(medium_info_));
   } else {
-    FLOG_INFO("success to save medium info for leader", K(ret), K_(ls_id), K_(tablet_id), KPC(medium_info_),
+    LOG_TRACE("success to save medium info for leader", K(ret), K_(ls_id), K_(tablet_id), KPC(medium_info_),
         K(max_saved_version_), K_(clog_scn));
   }
   return ret;

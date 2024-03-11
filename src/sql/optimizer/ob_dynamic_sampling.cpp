@@ -1361,7 +1361,8 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
              filter->get_expr_type() == T_FUN_ENUM_TO_STR ||
              filter->get_expr_type() == T_OP_GET_PACKAGE_VAR ||
              (filter->get_expr_type() >= T_FUN_SYS_IS_JSON &&
-              filter->get_expr_type() <= T_FUN_SYS_TREAT)) {
+              filter->get_expr_type() <= T_FUN_SYS_TREAT) ||
+             filter->get_expr_type() == T_FUN_GET_TEMP_TABLE_SESSID) {
     no_use = true;
   } else if (filter->get_expr_type() == T_FUN_SYS_LNNVL) {
     const ObRawExpr *real_expr = NULL;

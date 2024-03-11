@@ -615,7 +615,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     group_by_projector_(allocator),
     output_sel_mask_(allocator),
     pad_col_projector_(allocator),
+    read_param_version_(0),
     main_read_info_(),
+    cg_read_infos_(),
     has_virtual_column_(false),
     use_lob_locator_(false),
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
@@ -639,6 +641,8 @@ void ObTableParam::reset()
   group_by_projector_.reset();
   output_sel_mask_.reset();
   pad_col_projector_.reset();
+  cg_read_infos_.reset();
+  read_param_version_ = 0;
   has_virtual_column_ = false;
   use_lob_locator_ = false;
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
@@ -667,7 +671,18 @@ OB_DEF_SERIALIZE(ObTableParam)
               enable_lob_locator_v2_,
               is_spatial_index_,
               group_by_projector_,
-              is_fts_index_);
+              is_fts_index_,
+              read_param_version_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cg_read_infos_.count()))) {
+      LOG_WARN("Fail to encode column count", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i) && OB_FAIL(cg_read_infos_.at(i)->serialize(buf, buf_len, pos))) {
+        LOG_WARN("Fail to serialize column", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -701,7 +716,42 @@ OB_DEF_DESERIALIZE(ObTableParam)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, is_fts_index_);
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_fts_index_,
+                read_param_version_);
+  }
+  if (OB_SUCC(ret) && pos < data_len) {
+    int64_t cg_read_info_cnt = 0;
+    const common::ObIArray<int32_t> *access_cgs = main_read_info_.get_cg_idxs();
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &cg_read_info_cnt))) {
+      LOG_WARN("Fail to decode cg read info count", K(ret));
+    } else if (cg_read_info_cnt > 0) {
+      void *tmp_ptr  = nullptr;
+      if (OB_UNLIKELY(nullptr == access_cgs || access_cgs->count() != cg_read_info_cnt
+                      || ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE != read_param_version_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected cg read info count", K(ret), KPC(access_cgs), K(cg_read_info_cnt), K_(read_param_version));
+      } else {
+        ObArray<ObTableReadInfo *> tmp_read_infos;
+        for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_info_cnt; ++i) {
+          ObTableReadInfo *cur_read_info = nullptr;
+          if (0 > access_cgs->at(i)) {
+          } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(ObTableReadInfo)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc failed", K(ret));
+          } else if (FALSE_IT(cur_read_info = new (tmp_ptr) ObTableReadInfo())) {
+          } else if (OB_FAIL(cur_read_info->deserialize(allocator_, buf, data_len, pos))) {
+            LOG_WARN("Fail to deserialize read info", K(ret));
+          }
+          if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+            LOG_WARN("Fail to add read info", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+          LOG_WARN("Fail to add read infos", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -725,7 +775,16 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               enable_lob_locator_v2_,
               is_spatial_index_,
               group_by_projector_,
-              is_fts_index_);
+              is_fts_index_,
+              read_param_version_);
+  if (OB_SUCC(ret)) {
+    len += serialization::encoded_length_vi64(cg_read_infos_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i)) {
+        len += cg_read_infos_.at(i)->get_serialize_size();
+      }
+    }
+  }
   return len;
 }
 
@@ -1047,6 +1106,40 @@ int ObTableParam::construct_columns_and_projector(
     }
   }
   LOG_DEBUG("Generated main read info", K_(main_read_info));
+  read_param_version_ = ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
+  if (OB_SUCC(ret) && is_cs && tmp_cg_idxs.count() <= ObCGReadInfo::LOCAL_MAX_CG_READ_INFO_CNT) {
+    // construct cg read infos
+    int64_t cg_cnt = tmp_cg_idxs.count();
+    void *tmp_ptr  = nullptr;
+    ObArray<ObTableReadInfo *> tmp_read_infos;
+    if (OB_UNLIKELY(tmp_access_cols_desc.count() != cg_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected not equal col count", K(ret), K(cg_cnt), K(tmp_access_cols_desc.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cg_cnt; i++) {
+        ObTableReadInfo *cur_read_info = nullptr;
+        if (0 > tmp_cg_idxs.at(i)) {
+        } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(ObTableReadInfo)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (FALSE_IT(cur_read_info = new (tmp_ptr) ObTableReadInfo())) {
+        } else if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                                         main_read_info_.is_oracle_mode(),
+                                                                         tmp_access_cols_desc.at(i),
+                                                                         tmp_access_cols_param.at(i),
+                                                                         *cur_read_info))) {
+          LOG_WARN("Fail to init cg read info", K(ret));
+        }
+
+        if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+          LOG_WARN("Fail to push back read info", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+        LOG_WARN("Fail to add read infos", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1382,6 +1475,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(group_by_projector),
        K_(output_sel_mask),
        K_(pad_col_projector),
+       K_(read_param_version),
        K_(main_read_info),
        K_(use_lob_locator),
        K_(rowid_version),

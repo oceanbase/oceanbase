@@ -270,7 +270,7 @@ int ObMultiVersionValueIterator::get_trans_status(const transaction::ObTransID &
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
   SCN trans_version = SCN::max_scn();
-  storage::ObTxTableGuards tx_table_guards = ctx_->get_tx_table_guards();
+  storage::ObTxTableGuards &tx_table_guards = ctx_->get_tx_table_guards();
   if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(trans_id,
                                                     merge_scn_,
                                                     state,

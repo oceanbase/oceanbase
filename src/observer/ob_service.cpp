@@ -2471,10 +2471,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else {
-    if (DDL_DROP_COLUMN == arg.ddl_type_
-        || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
-        || DDL_COLUMN_REDEFINITION == arg.ddl_type_
-        || DDL_TABLE_RESTORE == arg.ddl_type_) {
+    if (is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_))) {
       int saved_ret = OB_SUCCESS;
       ObTenantDagScheduler *dag_scheduler = nullptr;
       ObComplementDataDag *dag = nullptr;
@@ -2515,6 +2512,47 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       LOG_WARN("not supported ddl type", K(ret), K(arg));
     }
 
+  }
+  return ret;
+}
+
+int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist)
+{
+  int ret = OB_SUCCESS;
+  is_dag_exist = true;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_UNLIKELY(!is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ddl type", K(ret), K(arg));
+  } else {
+    ObTenantDagScheduler *dag_scheduler = nullptr;
+    ObComplementDataDag *dag = nullptr;
+    if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag scheduler is null", K(ret));
+    } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+      LOG_WARN("fail to alloc dag", K(ret));
+    } else if (OB_ISNULL(dag)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+    } else if (OB_FAIL(dag->init(arg))) {
+      LOG_WARN("fail to init complement data dag", K(ret), K(arg));
+    } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
+      LOG_WARN("check dag exist failed", K(ret));
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+      // sync to cancel ready dag only, not including running dag.
+      LOG_WARN("cancel dag failed", K(ret));
+    }
+    if (OB_NOT_NULL(dag)) {
+      (void) dag->handle_init_failed_ret_code(ret);
+      dag_scheduler->free_dag(*dag);
+      dag = nullptr;
+    }
+  }
+  if (REACH_COUNT_INTERVAL(1000L)) {
+    LOG_INFO("receive cancel ddl complement dag request", K(ret), K(is_dag_exist), K(arg));
   }
   return ret;
 }

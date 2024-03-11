@@ -47,6 +47,7 @@ struct ObTabletStatKey;
 
 namespace compaction
 {
+struct ObTabletSchedulePair;
 
 class ObFastFreezeChecker
 {
@@ -261,7 +262,7 @@ private:
     const bool enable_adaptive_compaction,
     bool &is_leader,
     bool &tablet_merge_finish,
-    bool &tablet_need_freeze_flag,
+    ObTabletSchedulePair &schedule_pair,
     ObCompactionTimeGuard &time_guard);
   int after_schedule_tenant_medium(
     const int64_t merge_version,
@@ -294,6 +295,9 @@ private:
     const bool &tablet_could_schedule_medium,
     const bool &could_major_merge,
     const share::ObLSID &ls_id);
+  int schedule_batch_freeze_dag(
+      const share::ObLSID &ls_id,
+      const common::ObIArray<compaction::ObTabletSchedulePair> &tablet_ids);
 public:
   static const int64_t INIT_COMPACTION_SCN = 1;
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;

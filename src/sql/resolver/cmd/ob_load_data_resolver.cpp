@@ -729,6 +729,8 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             LOG_WARN("fail to copy string", K(ret));
           } else if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
             LOG_WARN("fail to add files", K(ret));
+          } else {
+            load_args.file_name_ = file_name;
           }
         }
       }

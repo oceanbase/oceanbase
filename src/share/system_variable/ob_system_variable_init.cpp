@@ -3694,13 +3694,55 @@ static struct VarsInit{
     ObSysVars[261].alias_ = "OB_SV_SECURITY_VERSION" ;
     }();
 
+    [&] (){
+      ObSysVars[262].default_value_ = "1" ;
+      ObSysVars[262].info_ = "Specifies the correlation model when the optimizer estimates cardinality" ;
+      ObSysVars[262].name_ = "cardinality_estimation_model" ;
+      ObSysVars[262].data_type_ = ObIntType ;
+      ObSysVars[262].enum_names_ = "[u'INDEPENDENT', u'PARTIAL', u'FULL']" ;
+      ObSysVars[262].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[262].id_ = SYS_VAR_CARDINALITY_ESTIMATION_MODEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CARDINALITY_ESTIMATION_MODEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CARDINALITY_ESTIMATION_MODEL] = 262 ;
+      ObSysVars[262].base_value_ = "1" ;
+    ObSysVars[262].alias_ = "OB_SV_CARDINALITY_ESTIMATION_MODEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[263].default_value_ = "1" ;
+      ObSysVars[263].info_ = "Whether to enable the materialized view rewriting" ;
+      ObSysVars[263].name_ = "query_rewrite_enabled" ;
+      ObSysVars[263].data_type_ = ObIntType ;
+      ObSysVars[263].enum_names_ = "[u'FALSE', u'TRUE', u'FORCE']" ;
+      ObSysVars[263].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[263].id_ = SYS_VAR_QUERY_REWRITE_ENABLED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_ENABLED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_QUERY_REWRITE_ENABLED] = 263 ;
+      ObSysVars[263].base_value_ = "1" ;
+    ObSysVars[263].alias_ = "OB_SV_QUERY_REWRITE_ENABLED" ;
+    }();
+
+    [&] (){
+      ObSysVars[264].default_value_ = "0" ;
+      ObSysVars[264].info_ = "Control the data integrity of materialized view rewriting" ;
+      ObSysVars[264].name_ = "query_rewrite_integrity" ;
+      ObSysVars[264].data_type_ = ObIntType ;
+      ObSysVars[264].enum_names_ = "[u'ENFORCED', u'STALE_TOLERATED']" ;
+      ObSysVars[264].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[264].id_ = SYS_VAR_QUERY_REWRITE_INTEGRITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_INTEGRITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_QUERY_REWRITE_INTEGRITY] = 264 ;
+      ObSysVars[264].base_value_ = "0" ;
+    ObSysVars[264].alias_ = "OB_SV_QUERY_REWRITE_INTEGRITY" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 262;
+static int64_t var_amount = 265;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

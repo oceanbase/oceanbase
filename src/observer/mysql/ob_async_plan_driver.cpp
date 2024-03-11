@@ -144,7 +144,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
             K(ret), K(async_resp_used), K(retry_ctrl_.need_retry()));
 
   //if the error code is ob_timeout, we add more error info msg for dml query.
-  if (OB_TIMEOUT == ret) {
+  if (OB_TIMEOUT == ret && session_.is_user_session()) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());
   }
 

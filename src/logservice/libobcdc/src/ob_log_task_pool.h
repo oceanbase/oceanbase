@@ -229,14 +229,14 @@ public:
     if (OB_ISNULL(task)) {
       // pass
     } else {
+      // Reset memory on recycle
+      task->reset();
+
       // Recycling of pre-allocated pages
       void *page = NULL;
       task->revert_prealloc_page(page);
       revert_prealloc_page_(page);
       page = NULL;
-
-      // Reset memory on recycle
-      task->reset();
 
       if (prealloc_task_cnt_ > 0
           && NULL != prealloc_pool_tasks_

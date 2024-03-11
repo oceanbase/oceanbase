@@ -5611,8 +5611,18 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
         if (prepare_result.for_update_) {
           func.set_modifies_sql_data();
         } else if (stmt::T_SELECT == prepare_result.type_) {
+          bool has_real_table = false;
+          for (int64_t i = 0; OB_SUCC(ret) && !has_real_table && i < prepare_result.ref_objects_.count(); ++i) {
+            if (ObDependencyTableType::DEPENDENCY_TABLE == prepare_result.ref_objects_.at(i).object_type_) {
+              has_real_table = true;
+            }
+          }
           if (!func.is_modifies_sql_data()) {
-            func.set_reads_sql_data();
+            if (has_real_table || lib::is_oracle_mode()) {
+              func.set_reads_sql_data();
+            } else if (!func.is_reads_sql_data()) {
+              func.set_contains_sql();
+            }
           }
         } else if (ObStmt::is_dml_write_stmt(prepare_result.type_) ||
                    ObStmt::is_savepoint_stmt(prepare_result.type_) ||
@@ -11197,6 +11207,7 @@ int ObPLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, expr));
   }
   CK (OB_NOT_NULL(expr));
+  OZ (ObRawExprUtils::set_call_in_pl(expr));
   OZ (formalize_expr(*expr));
   return ret;
 }
@@ -11930,6 +11941,10 @@ int ObPLResolver::resolve_udf_info(
                                             &is_public));
       if (OB_FAIL(ret) || !exist) {
         ret = OB_SUCCESS; // some case may not be synonym.
+      } else if (!is_public) {
+        if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
+          db_name = resolve_ctx_.session_info_.get_database_name();
+        }
       } else {
         db_name = OB_SYS_DATABASE_NAME;
       }

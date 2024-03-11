@@ -80,11 +80,12 @@ public:
             const char *agg_row_buf,
             const int64_t agg_buf_size);
   void reset();
+  void reuse();
   TO_STRING_KV(KPC(idx_row_header_), KPC(endkey_), KPC(idx_minor_info_), K(agg_row_buf_), K(agg_buf_size_), KP(allocator_));
 
 public:
   ObIAllocator *allocator_;
-  const blocksstable::ObDatumRowkey *endkey_;
+  blocksstable::ObDatumRowkey *endkey_;
   ObIndexBlockRowHeader *idx_row_header_;
   ObIndexBlockRowMinorMetaInfo *idx_minor_info_;
   char *agg_row_buf_; //max 1024

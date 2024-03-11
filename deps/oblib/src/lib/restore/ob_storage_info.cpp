@@ -21,6 +21,17 @@ namespace oceanbase
 
 namespace common
 {
+const char *OB_STORAGE_CHECKSUM_TYPE_STR[] = {CHECKSUM_TYPE_NO_CHECKSUM, CHECKSUM_TYPE_MD5, CHECKSUM_TYPE_CRC32};
+
+const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
+{
+  const char *str = "UNKNOWN";
+  STATIC_ASSERT(static_cast<int64_t>(OB_STORAGE_CHECKSUM_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_CHECKSUM_TYPE_STR), "ObStorageChecksumType count mismatch");
+  if (type >= OB_NO_CHECKSUM_ALGO && type < OB_STORAGE_CHECKSUM_MAX_TYPE) {
+    str = OB_STORAGE_CHECKSUM_TYPE_STR[type];
+  }
+  return str;
+}
 
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
@@ -95,6 +106,11 @@ ObStorageChecksumType ObObjectStorageInfo::get_checksum_type() const
   return checksum_type_;
 }
 
+const char *ObObjectStorageInfo::get_checksum_type_str() const
+{
+  return get_storage_checksum_type_str(checksum_type_);
+}
+
 // oss:host=xxxx&access_id=xxx&access_key=xxx
 // cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx
 // s3:host=xxxx&access_id=xxx&access_key=xxx&s3_region=xxx
@@ -124,9 +140,6 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else if (OB_STORAGE_COS == device_type && !has_needed_extension) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid cos info, appid do not allow to be empty", K(ret), K_(extension));
-  } else if (OB_STORAGE_S3 == device_type && !has_needed_extension) {
-    ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid s3 info, region do not allow to be empty", K(ret), K_(extension));
   } else if (OB_STORAGE_FILE == device_type
       && (0 != strlen(endpoint_) || 0 != strlen(access_id_) || 0 != strlen(access_key_))) {
     ret = OB_INVALID_BACKUP_DEST;
@@ -174,7 +187,6 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       if (NULL == token) {
         break;
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
-        has_needed_extension = (OB_STORAGE_S3 == device_type_);
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set region", K(ret), K(token));
         }
@@ -311,6 +323,7 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
   device_type_ = storage_info.device_type_;
+  checksum_type_ = storage_info.checksum_type_;
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
@@ -333,8 +346,9 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (OB_STORAGE_FILE != device_type_) {
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s",
-                                       endpoint_, access_id_, key))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s",
+                                       endpoint_, access_id_, key,
+                                       CHECKSUM_TYPE, get_checksum_type_str()))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }

@@ -226,12 +226,12 @@ int ObTabletMiniMergeCtx::try_schedule_meta_merge(
 
   // try schedule medium merge
   if (!medium_is_cooling_down) {
-    bool non_used_freeze_flag = false; // no meaning, just for placeholder for refering
     bool non_used_schedule_dag_flag = false;
+    ObTabletSchedulePair non_used_schedule_pair;
     if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
             *get_ls(),
             *tablet_handle.get_obj(),
-            non_used_freeze_flag,
+            non_used_schedule_pair,
             non_used_schedule_dag_flag))) {
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         LOG_WARN_RET(tmp_ret, "failed to schedule tablet medium merge", K(tmp_ret), "param", get_dag_param());

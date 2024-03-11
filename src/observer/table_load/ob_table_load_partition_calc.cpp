@@ -40,6 +40,7 @@ ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
     exec_ctx_(allocator_),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, sql::ObSQLSessionInfo *session_info)
@@ -51,7 +52,6 @@ int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, sql::ObSQLSess
   } else {
     uint64_t tenant_id = param.tenant_id_;
     uint64_t table_id = param.table_id_;
-    allocator_.set_tenant_id(tenant_id);
     sql_ctx_.schema_guard_ = &schema_guard_;
     exec_ctx_.set_sql_ctx(&sql_ctx_);
     const ObTableSchema *table_schema = nullptr;
@@ -94,7 +94,8 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
                                                 ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObColDesc, 64> column_descs;
+  ObArray<ObColDesc> column_descs;
+  column_descs.set_tenant_id(MTL_ID());
   if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
     LOG_WARN("fail to get column ids", KR(ret));
   } else if (OB_UNLIKELY(column_descs.empty())) {
@@ -193,6 +194,8 @@ int ObTableLoadPartitionCalc::get_partition_by_row(
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> tablet_ids;
   ObArray<ObObjectID> part_ids;
+  tablet_ids.set_tenant_id(MTL_ID());
+  part_ids.set_tenant_id(MTL_ID());
   if (OB_FAIL(table_location_.calculate_partition_ids_by_rows2(
                *session_info_, schema_guard_, param_->table_id_, part_rows, tablet_ids, part_ids))) {
     LOG_WARN("fail to calc partition id", KR(ret));

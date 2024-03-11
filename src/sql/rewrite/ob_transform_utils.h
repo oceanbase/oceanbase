@@ -1093,6 +1093,7 @@ public:
                                               const ObIArray<int64_t> &output_map,
                                               ObIArray<ObRawExpr*> &candi_source_exprs,
                                               ObIArray<ObRawExpr*> &candi_target_exprs);
+  static int check_at_least_one_row(TableItem *table_item, bool &at_least_one_row);
   static int adjust_agg_and_win_expr(ObSelectStmt *source_stmt,
                                      ObRawExpr *&source_expr);
 

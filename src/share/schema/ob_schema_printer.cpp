@@ -3812,7 +3812,7 @@ int ObSchemaPrinter::print_udt_body_definition(const uint64_t tenant_id,
     // OZ (databuff_printf(buf, buf_len, pos, "%.*s",
     //                     udt_body_info->get_source().length(), udt_body_info->get_source().ptr()));
     OZ (databuff_printf(buf, buf_len, pos,
-                      "CREATE OR REPLACE%s TYPE BODY \"%.*s\".\"%.*s\" IS \n",
+                      "CREATE OR REPLACE%s TYPE BODY \"%.*s\".\"%.*s\" \n",
                       udt_info->is_noneditionable() ? " NONEDITIONABLE" : "",
                       db_schema->get_database_name_str().length(),
                       db_schema->get_database_name_str().ptr(),

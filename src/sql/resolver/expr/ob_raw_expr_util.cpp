@@ -2184,6 +2184,16 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
       OZ (expr->formalize(&session_info, true));
     }
   }
+  if (OB_SUCC(ret)
+      && expr->get_result_type().is_decimal_int()
+      && lib::is_mysql_mode()
+      && expr->get_result_type().get_precision() > OB_MAX_DECIMAL_PRECISION) {
+    // maximum stored precision is 65, need truncating
+    LOG_INFO("truncate precision to `OB_MAX_DECIMAL_PRECISION` for deicmal_int", K(*expr));
+    ObAccuracy res_acc = expr->get_accuracy();
+    res_acc.set_precision(OB_MAX_DECIMAL_PRECISION);
+    expr->set_accuracy(res_acc);
+  }
   if (OB_SUCC(ret) &&
       (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {

@@ -99,6 +99,8 @@ ObDirectLoadMultipleSSTableBuilder::ObDirectLoadMultipleSSTableBuilder()
     is_closed_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  last_rowkey_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMultipleSSTableBuilder::~ObDirectLoadMultipleSSTableBuilder()
@@ -116,8 +118,6 @@ int ObDirectLoadMultipleSSTableBuilder::init(const ObDirectLoadMultipleSSTableBu
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
-    allocator_.set_tenant_id(MTL_ID());
-    last_rowkey_allocator_.set_tenant_id(MTL_ID());
     int64_t dir_id = -1;
     if (OB_FAIL(param_.file_mgr_->alloc_dir(dir_id))) {
       LOG_WARN("fail to alloc dir", KR(ret));

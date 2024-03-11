@@ -13,6 +13,7 @@
 #pragma once
 
 #include "lib/allocator/ob_allocator.h"
+#include "lib/net/ob_addr.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,11 @@ public:
   uint64_t get_user_id() const { return user_id_; }
   void set_database_id(uint64_t database_id) { database_id_ = database_id; }
   uint64_t get_database_id() const { return database_id_; }
+  void set_user_client_addr(const ObAddr &user_client_addr)
+  {
+    user_client_addr_ = user_client_addr;
+  }
+  const ObAddr get_user_client_addr() const { return user_client_addr_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDirectLoadExecContext);
 private:
@@ -41,6 +47,7 @@ private:
   uint64_t tenant_id_;
   uint64_t user_id_;
   uint64_t database_id_;
+  ObAddr user_client_addr_;
 };
 
 } // namespace observer

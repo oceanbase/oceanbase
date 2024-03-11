@@ -39,7 +39,9 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
+    read_param_version_(0),
     read_info_(),
+    cg_read_infos_(),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
 {
 }
@@ -66,6 +68,8 @@ void ObTableSchemaParam::reset()
   col_map_.clear();
   pk_name_.reset();
   read_info_.reset();
+  cg_read_infos_.reset();
+  read_param_version_ = 0;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
 }
 
@@ -204,6 +208,39 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     }
   }
   LOG_DEBUG("Generated read info", K_(read_info));
+  read_param_version_ = storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
+  if (OB_SUCC(ret) && use_cs && tmp_cg_idxs.count() <= storage::ObCGReadInfo::LOCAL_MAX_CG_READ_INFO_CNT) {
+    // construct cg read infos
+    void *tmp_ptr  = nullptr;
+    int64_t cg_cnt = tmp_cg_idxs.count();
+    ObArray<storage::ObTableReadInfo *> tmp_read_infos;
+    if (OB_UNLIKELY(tmp_col_descs.count() != cg_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected not equal col count", K(ret), K(cg_cnt), K(tmp_col_descs.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cg_cnt; i++) {
+        storage::ObTableReadInfo *cur_read_info = nullptr;
+        if (0 > tmp_cg_idxs.at(i)) {
+        } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(storage::ObTableReadInfo)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (FALSE_IT(cur_read_info = new (tmp_ptr) storage::ObTableReadInfo())) {
+        } else if (OB_FAIL(storage::ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                                                  read_info_.is_oracle_mode(),
+                                                                                  tmp_col_descs.at(i),
+                                                                                  tmp_cols.at(i),
+                                                                                  *cur_read_info))) {
+          LOG_WARN("Fail to init cg read info", K(ret));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+          LOG_WARN("Fail to push back read info", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+        LOG_WARN("Fail to add read infos", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -398,6 +435,17 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(spatial_cellid_col_id_);
   OB_UNIS_ENCODE(spatial_mbr_col_id_);
   OB_UNIS_ENCODE(lob_inrow_threshold_);
+  OB_UNIS_ENCODE(read_param_version_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cg_read_infos_.count()))) {
+      LOG_WARN("Fail to encode column count", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i) && OB_FAIL(cg_read_infos_.at(i)->serialize(buf, buf_len, pos))) {
+        LOG_WARN("Fail to serialize column", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -444,6 +492,41 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(spatial_cellid_col_id_);
   OB_UNIS_DECODE(spatial_mbr_col_id_);
   OB_UNIS_DECODE(lob_inrow_threshold_);
+  OB_UNIS_DECODE(read_param_version_);
+  if (OB_SUCC(ret) && pos < data_len) {
+    int64_t cg_read_info_cnt = 0;
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &cg_read_info_cnt))) {
+      LOG_WARN("Fail to decode cg read info count", K(ret));
+    } else if (cg_read_info_cnt > 0) {
+      void *tmp_ptr  = nullptr;
+      const common::ObIArray<int32_t> *access_cgs = read_info_.get_cg_idxs();
+      if (OB_UNLIKELY(nullptr == access_cgs || access_cgs->count() != cg_read_info_cnt ||
+                      storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE != read_param_version_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected cg read count", K(ret), KPC(access_cgs), K(cg_read_info_cnt), K_(read_param_version));
+      } else {
+        ObArray<storage::ObTableReadInfo *> tmp_read_infos;
+        for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_info_cnt; ++i) {
+          storage::ObTableReadInfo *cur_read_info = nullptr;
+          if (0 > access_cgs->at(i)) {
+          } else if (OB_ISNULL(tmp_ptr = allocator_.alloc(sizeof(storage::ObTableReadInfo)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc failed", K(ret));
+          } else if (FALSE_IT(cur_read_info = new (tmp_ptr) storage::ObTableReadInfo())) {
+          } else if (OB_FAIL(cur_read_info->deserialize(allocator_, buf, data_len, pos))) {
+            LOG_WARN("Fail to deserialize read info", K(ret));
+          }
+
+          if (OB_SUCC(ret) && OB_FAIL(tmp_read_infos.push_back(cur_read_info))) {
+            LOG_WARN("Fail to add read info", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(cg_read_infos_.init_and_assign(tmp_read_infos, allocator_))) {
+          LOG_WARN("Fail to add read infos", K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -476,6 +559,15 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(spatial_cellid_col_id_);
   OB_UNIS_ADD_LEN(spatial_mbr_col_id_);
   OB_UNIS_ADD_LEN(lob_inrow_threshold_);
+  OB_UNIS_ADD_LEN(read_param_version_);
+  if (OB_SUCC(ret)) {
+    len += serialization::encoded_length_vi64(cg_read_infos_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
+      if (nullptr != cg_read_infos_.at(i)) {
+        len += cg_read_infos_.at(i)->get_serialize_size();
+      }
+    }
+  }
   return len;
 }
 

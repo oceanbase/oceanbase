@@ -1048,3 +1048,44 @@ bool ObLogExchange::support_rich_format_vectorize() const {
   LOG_TRACE("[VEC2.0 PX] support_rich_format_vectorize", K(res), K(dist_method_), K(tmp_ret));
   return res;
 }
+
+int ObLogExchange::open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_px_coord())) {
+    // do nothing.
+  } else if (OB_ISNULL(px_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("px info is null", K(ret), K(get_op_id()));
+  } else if (OB_FAIL(px_res_analyzer.recursive_walk_through_px_tree(*px_info_))) {
+    LOG_WARN("walk through px tree failed", K(ret));
+  } else if (OB_FAIL(px_res_analyzer.append_px(OPEN_PX_RESOURCE_ANALYZE_ARG, *px_info_))) {
+    LOG_WARN("append px failed", K(ret));
+  } else {
+    LOG_TRACE("[PxResAnaly] px coord open_px_resource_analyze", K(get_op_id()),
+            KPC(px_info_), K(append_map), K(cur_parallel_thread_count), K(cur_parallel_group_count),
+            K(max_parallel_thread_count), K(max_parallel_group_count));
+  }
+  return ret;
+}
+
+int ObLogExchange::close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_px_coord())) {
+    // do nothing.
+  } else if (OB_ISNULL(px_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("px info is null", K(ret));
+  } else if (OB_FAIL(px_res_analyzer.remove_px(CLOSE_PX_RESOURCE_ANALYZE_ARG, *px_info_))) {
+    LOG_WARN("remove px failed", K(ret));
+  } else {
+    if (append_map) {
+      // each operator should be open and close exactly once with append_map = true, so reset px_info_.
+      px_info_ = NULL;
+    }
+    LOG_TRACE("[PxResAnaly] px coord close_px_resource_analyze", K(get_op_id()), KPC(px_info_),
+              K(append_map), K(cur_parallel_thread_count), K(cur_parallel_group_count));
+  }
+  return ret;
+}

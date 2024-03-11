@@ -687,7 +687,8 @@ public:
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
       optimizer_features_enable_version_(0),
-      udf_flag_(0)
+      udf_flag_(0),
+      has_dblink_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -733,6 +734,7 @@ public:
     root_stmt_ = NULL;
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
+    has_dblink_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -758,6 +760,8 @@ public:
   void set_is_prepare_stmt(bool is_prepare) { is_prepare_stmt_ = is_prepare; }
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
+  bool has_dblink() const { return has_dblink_; }
+  void set_has_dblink(bool v) { has_dblink_ = v; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
@@ -825,6 +829,7 @@ public:
       int8_t reserved_:5;
     };
   };
+  bool has_dblink_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

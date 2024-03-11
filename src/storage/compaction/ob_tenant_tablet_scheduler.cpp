@@ -1484,20 +1484,21 @@ bool ObTenantTabletScheduler::get_enable_adaptive_compaction()
   int ret = OB_SUCCESS;
   bool enable_adaptive_compaction = enable_adaptive_compaction_;
   ObTenantSysStat cur_sys_stat;
-  if (!enable_adaptive_compaction_) {
+  if (!enable_adaptive_compaction) {
     // do nothing
+#ifdef ENABLE_DEBUG_LOG
+  } else if (GCONF.enable_crazy_medium_compaction) {
+    enable_adaptive_compaction = true;
+    LOG_DEBUG("set crazy medium, set enable_adaptive_compaction = true");
+#endif
   } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_sys_stat(cur_sys_stat))) {
     LOG_WARN("failed to get tenant sys stat", K(ret), K(cur_sys_stat));
   } else if (cur_sys_stat.is_full_cpu_usage()) {
     enable_adaptive_compaction = false;
-    FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret), K(cur_sys_stat));
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret), K(cur_sys_stat));
+    }
   }
-#ifdef ENABLE_DEBUG_LOG
-  if (GCONF.enable_crazy_medium_compaction) {
-    enable_adaptive_compaction = true;
-    LOG_DEBUG("set crazy medium, set enable_adaptive_compaction = true");
-  }
-#endif
   return enable_adaptive_compaction;
 }
 
@@ -1527,7 +1528,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool is_leader = false;
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
-    ObSEArray<ObTabletID, MERGE_BACTH_FREEZE_CNT> need_freeze_tablets;
+    ObSEArray<ObTabletSchedulePair, MERGE_BACTH_FREEZE_CNT> need_freeze_tablets;
     need_freeze_tablets.set_attr(ObMemAttr(MTL_ID(), "MediumBatch"));
     if (could_major_merge_start()) {
       could_major_merge = true;
@@ -1549,15 +1550,16 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     }
 
     bool enable_adaptive_compaction = get_enable_adaptive_compaction();
-    bool tablet_need_freeze_flag = false;
+    ObTabletSchedulePair schedule_pair;
 
     while (OB_SUCC(ret)) { // loop all tablet in ls
       tablet_time_guard.reuse();
       bool tablet_merge_finish = false;
-      tablet_need_freeze_flag = false;
       // ATTENTION!!! load weak ts before get tablet
       const share::SCN &weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
       tablet_could_schedule_medium = false;
+      schedule_pair.reset();
+
       if (OB_FAIL(medium_ls_tablet_iter_.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -1586,7 +1588,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       } else if (OB_TMP_FAIL(schedule_tablet_medium(
                      ls, tablet_handle, major_frozen_scn, weak_read_ts,
                      could_major_merge, tablet_could_schedule_medium, merge_version, enable_adaptive_compaction,
-                     is_leader, tablet_merge_finish, tablet_need_freeze_flag, tablet_time_guard))) {
+                     is_leader, tablet_merge_finish, schedule_pair, tablet_time_guard))) {
         LOG_WARN("failed to schedule tablet medium", KR(tmp_ret), K(ls_id), K(tablet_id));
       }
       if (tablet_could_schedule_medium
@@ -1595,19 +1597,19 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
         LOG_WARN("failed to clear prohibit schedule medium flag", K(tmp_ret), K(ret), K(ls_id), K(tablet_id));
       }
       medium_ls_tablet_iter_.update_merge_finish(tablet_merge_finish);
-      if (tablet_need_freeze_flag) {
-        if (OB_TMP_FAIL(need_freeze_tablets.push_back(tablet_id))) {
+      if (schedule_pair.need_force_freeze()) {
+        if (OB_TMP_FAIL(need_freeze_tablets.push_back(schedule_pair))) {
           LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(ls_id), K(tablet_id));
         }
       }
       ls_time_guard.add_time_guard(tablet_time_guard);
     } // end of while
 
-    // TODO(@chengkong): submit a async task
-    FOREACH(need_freeze_tablet_id, need_freeze_tablets) {
-      if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(*need_freeze_tablet_id, true/*force_freeze*/, true/*is_sync*/))) {
-          LOG_WARN("failed to force freeze tablet", KR(tmp_ret), K(ls_id), K(*need_freeze_tablet_id));
-      }
+    if (OB_FAIL(ret) || need_freeze_tablets.empty()) {
+    } else if (OB_TMP_FAIL(schedule_batch_freeze_dag(ls_id,
+                                                     need_freeze_tablets))) {
+      LOG_WARN("failed to schedule batch force freeze tablets dag", K(tmp_ret), K(ls_id),
+               "tablet_count", need_freeze_tablets.count());
     }
 
     ls_time_guard.click(ObCompactionScheduleTimeGuard::FAST_FREEZE);
@@ -1654,7 +1656,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
   const bool enable_adaptive_compaction,
   bool &is_leader,
   bool &tablet_merge_finish,
-  bool &tablet_need_freeze_flag,
+  ObTabletSchedulePair &schedule_pair,
   ObCompactionTimeGuard &time_guard)
 {
   int ret = OB_SUCCESS;
@@ -1665,6 +1667,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
   bool need_diagnose = false;
   bool tablet_could_schedule_merge = false;
   bool create_dag_flag = false;
+  schedule_pair.reset();
 
   if (tablet_could_schedule_medium
       && OB_TMP_FAIL(ObTabletMergeChecker::check_could_merge_for_medium(tablet, tablet_could_schedule_merge))) {
@@ -1721,7 +1724,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
   if (OB_FAIL(ret)) {
   } else if (could_major_merge) {
     if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
-                ls, tablet, tablet_need_freeze_flag, create_dag_flag,
+                ls, tablet, schedule_pair, create_dag_flag,
                 major_frozen_scn, true /*scheduler_called*/))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
@@ -2047,6 +2050,32 @@ void ObTenantTabletScheduler::report_blocking_medium(
     }
   }
 }
+
+int ObTenantTabletScheduler::schedule_batch_freeze_dag(
+    const share::ObLSID &ls_id,
+    const common::ObIArray<ObTabletSchedulePair> &tablet_pairs)
+{
+  int ret = OB_SUCCESS;
+  ObBatchFreezeTabletsParam param;
+
+  if (OB_UNLIKELY(!ls_id.is_valid() || tablet_pairs.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), K(ls_id), K(tablet_pairs));
+  } else if (FALSE_IT(param.ls_id_ = ls_id)) {
+  } else if (OB_FAIL(param.tablet_pairs_.assign(tablet_pairs))) {
+    LOG_WARN("failed to assign tablet ids", K(ret));
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->create_and_add_dag<ObBatchFreezeTabletsDag>(&param, true/*is_emergency*/))) {
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      LOG_WARN("failed to create merge dag", K(ret), K(param));
+    } else if (OB_EAGAIN == ret) {
+      LOG_WARN("curr ls exists batch freeze dag, wait the dag to finish", K(ret), K(ls_id));
+    }
+  } else {
+    LOG_INFO("Succ to create tablet batch freeze dag", K(ret), K(param));
+  }
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

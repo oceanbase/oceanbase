@@ -4,8 +4,10 @@ url="https://openwebapi.oceanbase.com/api/web/oceanbase/report"
 type=@CPACK_PACKAGE_NAME@
 version=@CPACK_PACKAGE_VERSION@
 release=@CPACK_RPM_PACKAGE_RELEASE@
-ip=($hostname -i)
+ip=$(hostname -i)
 hostHash=$(echo -n "$ip" | sha1sum | awk '{print $1}')
+osName=$(cat /etc/os-release | grep "^ID=" | cut -f2 -d=)
+osRelease=$(cat /etc/os-release | grep "^VERSION_ID=" | cut -f2 -d=)
 cnf_file='/etc/oceanbase.cnf'
 
 step='none'
@@ -16,7 +18,9 @@ jsonData=$(jq -n --arg reporter "$reporter" \
                  --arg step "$step" \
                  --arg version "$version" \
                  --arg release "$revision" \
-                 --arg hostHash "$hostHash" '{
+                 --arg hostHash "$hostHash" \
+                 --arg osName "$osName" \
+                 --arg osRelease "$osRelease" '{
   component: "ocs",
   content: {
     reporter: $reporter,
@@ -25,6 +29,8 @@ jsonData=$(jq -n --arg reporter "$reporter" \
     version: $version,
     release: $release,
     hostHash: $hostHash,
+    osName: $osName,
+    osRelease: $osRelease,
     observerConfig: {}
   }
 }')

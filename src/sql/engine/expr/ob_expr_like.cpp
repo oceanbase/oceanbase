@@ -463,7 +463,9 @@ int ObExprLike::calc_escape_wc(const ObCollationType escape_coll,
   int ret = OB_SUCCESS;
   size_t length = ObCharset::strlen_char(escape_coll, escape.ptr(),
                                          escape.length());
-  if (1 != length) {
+  if (0 == length) {
+    escape_wc = 0;
+  } else if (1 != length) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to ESCAPE", K(escape), K(length), K(ret));
   } else if (OB_FAIL(ObCharset::mb_wc(escape_coll, escape, escape_wc))) {
@@ -671,13 +673,15 @@ int ObExprLike::like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum 
     ObString text_val = text.get_string();
     ObString pattern_val = pattern.get_string();
     ObString escape_val;
-    if (escape.is_null()) {
-      escape_val.assign_ptr("\\", 1);
-    } else {
-      escape_val = escape.get_string();
-      if (escape_val.empty()) {
+    if (escape.is_null() || escape.get_string().empty()) {
+      bool is_no_backslash_escapes = false;
+      IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
+                              is_no_backslash_escapes);
+      if (!is_no_backslash_escapes) {
         escape_val.assign_ptr("\\", 1);
       }
+    } else {
+      escape_val = escape.get_string();
     }
     if (do_optimization
         && like_id != OB_INVALID_ID
@@ -1026,7 +1030,12 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     // check pattern is not null already, so result is null if and only if text is null.
     bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
     if (escape_datum->is_null() || escape_datum->get_string().empty()) {
-      escape_val.assign_ptr("\\", 1);
+      bool is_no_backslash_escapes = false;
+      IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
+                              is_no_backslash_escapes);
+      if (!is_no_backslash_escapes) {
+        escape_val.assign_ptr("\\", 1);
+      }
     } else {
       escape_val = escape_datum->get_string();
     }
@@ -1140,7 +1149,12 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     // check pattern is not null already, so result is null if and only if text is null.
     bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
     if (escape_vector->is_null(0) || escape_vector->get_string(0).empty()) {
-      escape_val.assign_ptr("\\", 1);
+      bool is_no_backslash_escapes = false;
+      IS_NO_BACKSLASH_ESCAPES(ctx.exec_ctx_.get_my_session()->get_sql_mode(),
+                              is_no_backslash_escapes);
+      if (!is_no_backslash_escapes) {
+        escape_val.assign_ptr("\\", 1);
+      }
     } else {
       escape_val = escape_vector->get_string(0);
     }

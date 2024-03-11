@@ -220,16 +220,25 @@ public:
 
   void get_cg_read_info(const ObColDesc &col_desc, const ObITableReadInfo *&cg_read_info)
   {
-    ASSERT_EQ(OB_SUCCESS,
-              MTL(ObTenantCGReadInfoMgr *)->get_cg_read_info(col_desc, nullptr, ObTabletID(tablet_id_), cg_read_info_handle_));
-    cg_read_info = cg_read_info_handle_.get_read_info();
+    int ret = OB_SUCCESS;
+    cg_read_info_.reset();
+    if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                              lib::is_oracle_mode(),
+                                                              col_desc,
+                                                              nullptr,
+                                                              cg_read_info_))) {
+      LOG_WARN("Fail to init cg read info", K(ret));
+    } else {
+      cg_read_info = &cg_read_info_;
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
   }
 
 public:
   ObCOMergeDagParam param_;
   ObCOMergeDagNet dag_net_;
   ObStoreCtx store_ctx_;
-  ObCGReadInfoHandle cg_read_info_handle_;
+  ObTableReadInfo cg_read_info_;
 };
 
 void TestCOMerge::SetUpTestCase()

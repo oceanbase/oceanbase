@@ -72,7 +72,7 @@ type_value_dict["bool"] = 5 # FIXME: tinyint?
 type_value_dict["enum"] = 5
 
 required_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
-ignored_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
+ignored_attrs = ["publish_version", "info_cn", "background_cn", "ref_url", "placeholder"]
 
 file_head_annotation = """/**
  * Copyright (c) 2021 OceanBase
@@ -92,8 +92,13 @@ def parse_json(json_file_name):
   json_file = open(json_file_name,'r')
   all_the_vars = json_file.read( )
   json_Dict = json.loads(all_the_vars)
-  list_sorted_by_name= sorted(json_Dict.iteritems(), key=lambda d:d[0])
-  list_sorted_by_id= sorted(json_Dict.iteritems(), key=lambda d:d[1]['id'])
+  # add new attribute placeholder
+  # If placeholder is false, it means it is not a placeholder variable.
+  # If it is true, it means it is a placeholder variable.
+  filtered_json = filter(lambda d: 'placeholder' not in d[1] or d[1]['placeholder'] is False, json_Dict.iteritems())
+  filtered_dict = dict(filtered_json)
+  list_sorted_by_name= sorted(filtered_dict.iteritems(), key=lambda d:d[0])
+  list_sorted_by_id= sorted(filtered_dict.iteritems(), key=lambda d:d[1]['id'])
   json_file.close()
   return (json_Dict, list_sorted_by_name, list_sorted_by_id)
 

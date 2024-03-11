@@ -131,11 +131,6 @@ private:
       const ObLSRebuildInfo &curr_rebuild_info,
       const int32_t result);
   int generate_rebuild_task_();
-  int get_ls_info_(
-      const int64_t cluster_id,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      share::ObLSInfo &ls_info);
 
 private:
   bool is_inited_;

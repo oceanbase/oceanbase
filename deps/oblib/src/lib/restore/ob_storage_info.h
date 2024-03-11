@@ -50,11 +50,13 @@ enum ObStorageChecksumType
   OB_NO_CHECKSUM_ALGO = 0,
   OB_MD5_ALGO = 1,
   OB_CRC32_ALGO = 2,
+  OB_STORAGE_CHECKSUM_MAX_TYPE
 };
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
+const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 
 class ObObjectStorageInfo
 {
@@ -69,6 +71,7 @@ public:
   ObStorageType get_type() const;
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
+  const char *get_checksum_type_str() const;
   int get_storage_info_str(char *storage_info, const int64_t info_len) const;
 
   bool is_valid() const;
@@ -76,7 +79,8 @@ public:
   int64_t hash() const;
   bool operator ==(const ObObjectStorageInfo &storage_info) const;
   bool operator !=(const ObObjectStorageInfo &storage_info) const;
-  TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str());
+  TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension),
+               "type", get_type_str(), K_(checksum_type));
 
 protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
@@ -86,6 +90,10 @@ protected:
   int set_storage_info_field_(const char *info, char *field, const int64_t length);
 
 public:
+  // TODO: Rename device_type_ to storage_protocol_type_ for better clarity
+  // Prefix in the storage_info string, such as 's3://', indicates the protocol used to access the target
+  // Currently, both OBS and GCS are accessed via the s3 protocol,
+  // hence s3_region is updated to be an optional parameter
   common::ObStorageType device_type_;
   // Optional parameter. If not provided, the default value OB_MD5_ALGO will be used.
   // For OSS/COS, OB_NO_CHECKSUM_ALGO indicates that no checksum algorithm will be used.

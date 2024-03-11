@@ -38,7 +38,7 @@ int ObCGScanner::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init ObCGScanner", K(ret), K(wrapper), K(iter_param));
   } else if (FALSE_IT(table_wrapper_ = wrapper)) {
-  } else if (OB_FAIL(table_wrapper_.get_sstable(sstable_))) {
+  } else if (OB_FAIL(table_wrapper_.get_loaded_column_store_sstable(sstable_))) {
     LOG_WARN("fail to get sstable", K(ret), K(wrapper));
   } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable())) {
     ret = OB_ERR_UNEXPECTED;
@@ -78,7 +78,7 @@ int ObCGScanner::switch_context(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));
   } else if (FALSE_IT(table_wrapper_ = wrapper)) {
-  } else if (OB_FAIL(table_wrapper_.get_sstable(sstable_))) {
+  } else if (OB_FAIL(table_wrapper_.get_loaded_column_store_sstable(sstable_))) {
     LOG_WARN("fail to get sstable", K(ret), K(wrapper));
   } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable())) {
     ret = OB_ERR_UNEXPECTED;

@@ -55,10 +55,10 @@ protected:
 
   LST_DO_CODE(USING_SORT_IMPL, init, is_inited, add_batch, get_next_batch,
               get_next_batch_stored_rows, init_temp_row_store, adjust_topn_read_rows, attach_rows,
-              allocator_, eval_ctx_, cmp_sk_exprs_, sk_exprs_, all_exprs_, addon_exprs_,
-              addon_vec_ptrs_, sk_vec_ptrs_, comp_, part_cnt_, topn_cnt_, outputted_rows_cnt_,
-              cmp_sort_collations_, exec_ctx_, enable_encode_sortkey_, sk_rows_, addon_rows_,
-              sk_store_, addon_store_, sk_row_meta_, addon_row_meta_);
+              allocator_, mem_context_, eval_ctx_, cmp_sk_exprs_, sk_exprs_, all_exprs_,
+              addon_exprs_, addon_vec_ptrs_, sk_vec_ptrs_, comp_, part_cnt_, topn_cnt_,
+              outputted_rows_cnt_, cmp_sort_collations_, exec_ctx_, enable_encode_sortkey_,
+              sk_rows_, addon_rows_, sk_store_, addon_store_, sk_row_meta_, addon_row_meta_);
 
   // fetch rows in same prefix && do sort, set %next_prefix_row_ to nullptr
   // when all child rows are fetched.

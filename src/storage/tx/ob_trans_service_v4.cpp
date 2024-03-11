@@ -1125,6 +1125,9 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   if (tx.access_mode_ == ObTxAccessMode::RD_ONLY) {
     ret = OB_ERR_READ_ONLY_TRANSACTION;
     TRANS_LOG(WARN, "tx is readonly", K(ret), K(ls_id), K(tx), KPC(this));
+  } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
+    ret = OB_STANDBY_READ_ONLY;
+    TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
   } else if (!snapshot.valid_) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot));
@@ -1382,9 +1385,10 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
   }
 
   if (OB_SUCC(ret) && (acc_ctx.is_read())) {
+    // just for warning and report the errors
     if (acc_ctx.tx_table_guards_.check_ls_offline()) {
-      ret = OB_LS_OFFLINE;
-      STORAGE_LOG(WARN, "ls offline during the read operation", K(ret), K(acc_ctx.snapshot_));
+      int tmp_ret = OB_LS_OFFLINE;
+      STORAGE_LOG(WARN, "ls offline during the read operation", K(tmp_ret), K(acc_ctx.snapshot_));
     }
   }
 
@@ -2524,7 +2528,6 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
   int retry_times = 0;
   if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     ret = OB_STANDBY_READ_ONLY;
-    TRANS_LOG(WARN, "standby tenant support read only", K(ret));
   } else {
     const int MAX_RETRY_TIMES = 50;
     int64_t tx_id = 0;

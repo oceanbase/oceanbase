@@ -305,11 +305,20 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
                                                     dblink_schema->get_conn_string(),
                                                     dblink_schema->get_cluster_name()))) {
         LOG_WARN("create dblink pool failed", K(ret), K(param_ctx));
-      } else if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx,
-                                                      dblink_conn))) {
-        LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
-      } else if (OB_FAIL(session_info->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
-        LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+      } else if (OB_FAIL(session_info->get_dblink_context().get_dblink_conn(dblink_id, dblink_conn))) {
+        LOG_WARN("failed to get dblink connection from session", K(ret));
+      } else if (NULL == dblink_conn) {
+        if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx, dblink_conn))) {
+          LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
+        } else if (OB_FAIL(session_info->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
+          LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+        } else if (OB_FAIL(session_info->get_dblink_context().set_dblink_conn(dblink_conn))) {
+          LOG_WARN("failed to set dblink connection to session", K(ret));
+        } else {
+          LOG_TRACE("link sequence get connection from dblink pool", K(lbt()));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(dblink_proxy->dblink_read(dblink_conn, res, sql.ptr()))) {
         if (OB_ERR_SEQ_NOT_EXIST != ret) {
           exists = true;
@@ -345,12 +354,7 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
           LOG_WARN("failed to close oci result", K(tmp_ret));
         }
   #endif
-        if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(param_ctx.link_type_, dblink_conn))) {
-          LOG_WARN("failed to relese connection", K(tmp_ret));
-        }
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
+        //release dblink connection by session
       }
     }
   }

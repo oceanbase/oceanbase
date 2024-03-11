@@ -4304,6 +4304,9 @@ def_table_schema(
     ('generate_time', 'timestamp:6', 'false', 0),
     ('schedule_time', 'timestamp:6', 'false', 0),
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('data_source_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('data_source_svr_port', 'int', 'true'),
+    ('is_manual', 'bool', 'true', '0'),
   ],
 )
 
@@ -6918,6 +6921,7 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 514 : __all_user_proxy_role_info
 # 515 : __all_user_proxy_role_info_history
 # 516 : __all_service
+# 517 : __all_storage_io_usage
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -8531,6 +8535,7 @@ def_table_schema(
       ('outline_sql', 'longtext', 'false'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('outline_content', 'longtext', 'false'),
+      ('format_sql_text', 'longtext', 'true'),
       ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('format_outline', 'int', 'false', '0')
     ],
@@ -9927,7 +9932,9 @@ def_table_schema(
   ('end_scn', 'uint'),
   ('is_active', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
   ('retire_clock', 'int'),
-  ('mt_protection_clock', 'int')
+  ('mt_protection_clock', 'int'),
+  ('address', 'varchar:OB_MAX_POINTER_ADDR_LEN'),
+  ('ref_count', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -9964,6 +9971,7 @@ def_table_schema(
       ('nested_size', 'int'),
       ('cg_idx', 'int'),
       ('data_checksum', 'int'),
+      ('table_flag', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13143,6 +13151,7 @@ def_table_schema(
   ('end_scn', 'uint'),
   ('commit_version', 'uint'),
   ('undo_status', 'varchar:MAX_UNDO_LIST_CHAR_LENGTH'),
+  ('tx_op', 'varchar:MAX_TX_OP_CHAR_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13741,7 +13750,14 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12477: __all_virtual_user_proxy_role_info_history
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
-#
+# 12480: __all_virtual_service
+# 12481: __all_virtual_tenant_resource_limit
+# 12482: __all_virtual_tenant_resource_limit_detail
+# 12483: __all_virtual_group_io_stat
+# 12484: __all_virtual_res_mgr_consumer_group
+# 12485: __all_virtual_storage_io_usage
+# 12486: __all_zone_storage
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14208,7 +14224,13 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15446: __all_user_proxy_info
 # 15447: __all_user_proxy_role_info
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
-
+# 15449: __all_virtual_service
+# 15450: __all_virtual_tenant_resource_limit
+# 15451: __all_virtual_tenant_resource_limit_detail
+# 15452: __all_virtual_group_io_stat
+# 15453: __all_storage_io_usage
+# 15454: __all_virtual_storage_io_usage
+# 15455: __all_zone_storage
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -32872,6 +32894,18 @@ def_table_schema(
 # 21547: CDB_OB_RSRC_DIRECTIVES
 # 21548: DBA_OB_SERVICES
 # 21549: CDB_OB_SERVICES
+# 21550: GV$OB_TENANT_RESOURCE_LIMIT
+# 21551: V$OB_TENANT_RESOURCE_LIMIT
+# 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 21554: INNODB_LOCK_WAITS
+# 21555: INNODB_LOCKS
+# 21556: INNODB_TRX
+# 21557: ndb_transid_mysql_connection_map
+# 21558: V$OB_GROUP_IO_STAT
+# 21559: GV$OB_GROUP_IO_STAT
+# 21560: DBA_OB_STORAGE_IO_USAGE
+# 21561: CDB_OB_STROAGE_IO_USAGE
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -52703,6 +52737,7 @@ def_table_schema(
 
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
+# 25303: DBA_OB_STORAGE_IO_USAGE
 
 #
 # 余留位置（此行之前占位）
@@ -59913,6 +59948,12 @@ def_table_schema(
 # 28221: GV$OB_TRACEPOINT_INFO
 # 28222: V$OB_TRACEPOINT_INFO
 # 28223: DBA_OB_RSRC_DIRECTIVES
+# 28224: GV$OB_TENANT_RESOURCE_LIMIT
+# 28225: V$OB_TENANT_RESOURCE_LIMIT
+# 28226: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 28227: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+# 28228: V$OB_GROUP_IO_STAT
+# 28229: GV$OB_GROUP_IO_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

@@ -943,7 +943,18 @@ int ObSelectResolver::check_order_by()
         for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
           ObRawExpr *expr = select_items.at(i).expr_;
           if (OB_FAIL(select_item_exprs.push_back(expr))) {
-            LOG_WARN("fail to push back expr", K(ret));
+              LOG_WARN("fail to push back expr", K(ret));
+            // Support non-standard semantics in oracle
+            //
+          } else if (T_FUN_SYS_TO_CHAR == expr->get_expr_type() && expr->get_param_count() == 1) {
+            if (OB_ISNULL(expr->get_param_expr(0))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("to_char has no child expr", K(ret));
+            } else if (expr->get_param_expr(0)->get_result_type().is_number()) {
+              if (OB_FAIL(select_item_exprs.push_back(expr->get_param_expr(0)))) {
+                LOG_WARN("fail to push back expr", K(ret));
+              }
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -6874,6 +6885,9 @@ int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
       LOG_WARN("invalid number of arguments", K(ret), KPC(aggr_expr));
     } else if (aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()) {
       //do nothing
+    } else if (aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->has_flag(CNT_AGG)) {
+      ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
+      LOG_WARN("argument is should be a const expr", K(ret), KPC(aggr_expr));
     } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {

@@ -513,6 +513,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   ObTryTransHelper try_trans_helper1;
   ObTryTransHelper try_trans_helper2;
+  int64_t flag_view_sel_count = 0;
+  ObSelectStmt *orig_flag_stmt = NULL;
   StmtUniqueKeyProvider unique_key_provider1;
   try_trans_helper1.unique_key_provider_ = &unique_key_provider1;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_) ||
@@ -551,7 +553,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(add_select_item_to_ref_query(ref_query, not_null_side_table->table_id_,
                                                   unique_key_provider1,
-                                                  left_unique_pos, right_flag_pos))) {
+                                                  left_unique_pos, right_flag_pos,
+                                                  flag_view_sel_count, orig_flag_stmt))) {
     LOG_WARN("failed to set stmt unique", K(ret));
   } else if (OB_FAIL(try_trans_helper2.fill_helper(stmt->get_query_ctx()))) {
     // after create_single_joined_table_stmt, may generate new stmt
@@ -596,12 +599,13 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (!trans_happened && OB_FAIL(recover_flag_temp_table(ref_query,
+                                                                  not_null_side_table->table_id_,
+                                                                  flag_view_sel_count,
+                                                                  orig_flag_stmt))) {
+      LOG_WARN("failed to recover flag temp table", K(ret));
     } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
       LOG_WARN("failed to recover params", K(ret));
-    } else if (!trans_happened && OB_FAIL(remove_temp_table_select_item(ref_query,
-                                                                  not_null_side_table->table_id_,
-                                                                  right_flag_pos))) {
-      LOG_WARN("failed to remove temp table select item", K(ret));
     } else {
       ctx_->src_hash_val_.pop_back();
     }
@@ -719,7 +723,9 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                          const uint64_t flag_table_id,
                                                          StmtUniqueKeyProvider &unique_key_provider,
                                                          ObSqlBitSet<> &left_unique_pos,
-                                                         ObSqlBitSet<> &right_flag_pos)
+                                                         ObSqlBitSet<> &right_flag_pos,
+                                                         int64_t &flag_view_sel_count,
+                                                         ObSelectStmt *&orig_flag_stmt)
 {
   int ret = OB_SUCCESS;
   JoinedTable *joined_table = NULL;
@@ -753,9 +759,11 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     ObSelectStmt *view_stmt = NULL;
     ObConstRawExpr *const_expr = NULL;
     ObSEArray<ObRawExpr*, 4> select_list;
+    orig_flag_stmt = flag_table->ref_query_;
     if (OB_ISNULL(view_stmt = flag_table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view_stmt is null", K(ret), K(view_stmt));
+    } else if (OB_FALSE_IT(flag_view_sel_count = view_stmt->get_select_item_size())) {
     } else if (view_stmt->is_set_stmt() &&
                OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, view_stmt, flag_table->ref_query_))) {
       LOG_WARN("failed to create stmt with generated table", K(ret));
@@ -824,9 +832,10 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformOrExpansion::remove_temp_table_select_item(ObSelectStmt *stmt,
-                                                          const uint64_t flag_table_id,
-                                                          ObSqlBitSet<> &right_flag_pos)
+int ObTransformOrExpansion::recover_flag_temp_table(ObSelectStmt *stmt,
+                                                    const uint64_t flag_table_id,
+                                                    const int64_t orig_sel_count,
+                                                    ObSelectStmt *orig_flag_stmt)
 {
   int ret = OB_SUCCESS;
   TableItem *flag_table = NULL;
@@ -838,15 +847,25 @@ int ObTransformOrExpansion::remove_temp_table_select_item(ObSelectStmt *stmt,
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
   } else if (!flag_table->is_temp_table()) {
     // do nothing
-  } else if (OB_UNLIKELY(right_flag_pos.num_members() != 1)) {
-    ret= OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected right flag pos count", K(ret), K(right_flag_pos));
-  } else if (OB_ISNULL(view_stmt = flag_table->ref_query_)) {
+  } else if (OB_ISNULL(view_stmt = flag_table->ref_query_) || OB_ISNULL(orig_flag_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("view_stmt is null", K(ret), K(view_stmt));
-  } else if (ObTransformUtils::remove_select_items(ctx_, flag_table_id, *view_stmt,
-                                                   *stmt, right_flag_pos)) {
-    LOG_WARN("failed to remove select items", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(view_stmt), K(orig_flag_stmt));
+  } else if (view_stmt != orig_flag_stmt) {
+    if (OB_UNLIKELY(!orig_flag_stmt->is_set_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected origin flag stmt", K(ret), KPC(orig_flag_stmt));
+    } else if (OB_UNLIKELY(orig_flag_stmt->get_select_item_size() != orig_sel_count)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item count mismatch", K(ret), K(orig_sel_count), KPC(orig_flag_stmt));
+    } else {
+      flag_table->ref_query_ = orig_flag_stmt;
+    }
+  } else if (OB_UNLIKELY(orig_sel_count <= 0
+                         || orig_sel_count > view_stmt->get_select_item_size())) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected original select item count", K(ret), K(orig_sel_count), KPC(view_stmt));
+  } else {
+    ObOptimizerUtil::revert_items(view_stmt->get_select_items(), orig_sel_count);
   }
   return ret;
 }

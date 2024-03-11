@@ -15,6 +15,7 @@
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
+#include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase
 {
@@ -22,9 +23,28 @@ using namespace obrpc;
 using namespace share;
 using namespace share::schema;
 using namespace transaction::tablelock;
+using namespace storage;
 
 namespace rootserver
 {
+ObMLogBuilder::MLogColumnUtils::MLogColumnUtils()
+  : mlog_table_column_array_(),
+    allocator_("MlogColUtil")
+{
+
+}
+
+ObMLogBuilder::MLogColumnUtils::~MLogColumnUtils()
+{
+  for (int64_t i = 0; i < mlog_table_column_array_.count(); ++i) {
+    ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);
+    if (OB_NOT_NULL(column)) {
+      column->~ObColumnSchemaV2();
+      allocator_.free(column);
+    }
+  }
+}
+
 int ObMLogBuilder::MLogColumnUtils::check_column_type(
     const ObColumnSchemaV2 &column_schema)
 {
@@ -84,21 +104,25 @@ int ObMLogBuilder::MLogColumnUtils::add_pk_column(
     ObTableSchema &mlog_schema)
 {
   int ret = OB_SUCCESS;
-  ObColumnSchemaV2 rowkey_column;
-  rowkey_column.set_autoincrement(false);
-  rowkey_column.set_is_hidden(false);
-  rowkey_column.set_nullable(false);
-  rowkey_column.set_rowkey_position(1);
-  rowkey_column.set_order_in_rowkey(ObOrderType::ASC);
-  rowkey_column.set_column_id(OB_MLOG_SEQ_NO_COLUMN_ID);
-  rowkey_column.set_data_type(ObIntType);
-  rowkey_column.set_charset_type(CHARSET_BINARY);
-  rowkey_column.set_collation_type(CS_TYPE_BINARY);
-  mlog_schema.set_rowkey_column_num(1);
-  if (OB_FAIL(rowkey_column.set_column_name(OB_MLOG_SEQ_NO_COLUMN_NAME))) {
-    LOG_WARN("failed to set column name", KR(ret));
-  } else if (OB_FAIL(mlog_schema.add_column(rowkey_column))) {
-    LOG_WARN("failed to add rowkey column to mlog schema", KR(ret));
+  ObColumnSchemaV2 *rowkey_column = nullptr;
+  if (OB_FAIL(alloc_column(rowkey_column))) {
+    LOG_WARN("failed to alloc column", KR(ret));
+  } else {
+    rowkey_column->set_autoincrement(false);
+    rowkey_column->set_is_hidden(false);
+    rowkey_column->set_nullable(false);
+    rowkey_column->set_rowkey_position(1);
+    rowkey_column->set_order_in_rowkey(ObOrderType::ASC);
+    rowkey_column->set_column_id(OB_MLOG_SEQ_NO_COLUMN_ID);
+    rowkey_column->set_data_type(ObIntType);
+    rowkey_column->set_charset_type(CHARSET_BINARY);
+    rowkey_column->set_collation_type(CS_TYPE_BINARY);
+    mlog_schema.set_rowkey_column_num(1);
+    if (OB_FAIL(rowkey_column->set_column_name(OB_MLOG_SEQ_NO_COLUMN_NAME))) {
+      LOG_WARN("failed to set column name", KR(ret));
+    } else if (OB_FAIL(mlog_schema.add_column(*rowkey_column))) {
+      LOG_WARN("failed to add rowkey column to mlog schema", KR(ret));
+    }
   }
   return ret;
 }
@@ -106,19 +130,23 @@ int ObMLogBuilder::MLogColumnUtils::add_pk_column(
 int ObMLogBuilder::MLogColumnUtils::add_dmltype_column()
 {
   int ret = OB_SUCCESS;
-  ObColumnSchemaV2 column;
-  column.set_autoincrement(false);
-  column.set_is_hidden(false);
-  column.set_rowkey_position(0);
-  column.set_index_position(0);
-  column.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
-  column.set_data_type(ColumnType::ObVarcharType);
-  column.set_data_length(1);
-  column.set_column_id(OB_MLOG_DML_TYPE_COLUMN_ID);
-  if (OB_FAIL(column.set_column_name(OB_MLOG_DML_TYPE_COLUMN_NAME))) {
-    LOG_WARN("failed to set column name", KR(ret));
-  } else if (OB_FAIL(mlog_table_column_array_.push_back(column))) {
-    LOG_WARN("failed to push back column to mlog table column array", KR(ret), K(column));
+  ObColumnSchemaV2 *column = nullptr;
+  if (OB_FAIL(alloc_column(column))) {
+    LOG_WARN("failed to alloc column", KR(ret));
+  } else {
+    column->set_autoincrement(false);
+    column->set_is_hidden(false);
+    column->set_rowkey_position(0);
+    column->set_index_position(0);
+    column->set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    column->set_data_type(ColumnType::ObVarcharType);
+    column->set_data_length(1);
+    column->set_column_id(OB_MLOG_DML_TYPE_COLUMN_ID);
+    if (OB_FAIL(column->set_column_name(OB_MLOG_DML_TYPE_COLUMN_NAME))) {
+      LOG_WARN("failed to set column name", KR(ret));
+    } else if (OB_FAIL(mlog_table_column_array_.push_back(column))) {
+      LOG_WARN("failed to push back column to mlog table column array", KR(ret), KP(column));
+    }
   }
   return ret;
 }
@@ -126,19 +154,23 @@ int ObMLogBuilder::MLogColumnUtils::add_dmltype_column()
 int ObMLogBuilder::MLogColumnUtils::add_old_new_column()
 {
   int ret = OB_SUCCESS;
-  ObColumnSchemaV2 column;
-  column.set_autoincrement(false);
-  column.set_is_hidden(false);
-  column.set_rowkey_position(0);
-  column.set_index_position(0);
-  column.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
-  column.set_data_type(ColumnType::ObVarcharType);
-  column.set_data_length(1);
-  column.set_column_id(OB_MLOG_OLD_NEW_COLUMN_ID);
-  if (OB_FAIL(column.set_column_name(OB_MLOG_OLD_NEW_COLUMN_NAME))) {
-    LOG_WARN("failed to set column name", KR(ret));
-  } else if (OB_FAIL(mlog_table_column_array_.push_back(column))) {
-    LOG_WARN("failed to push back column to mlog table column array", KR(ret), K(column));
+  ObColumnSchemaV2 *column = nullptr;
+  if (OB_FAIL(alloc_column(column))) {
+    LOG_WARN("failed to alloc column", KR(ret));
+  } else {
+    column->set_autoincrement(false);
+    column->set_is_hidden(false);
+    column->set_rowkey_position(0);
+    column->set_index_position(0);
+    column->set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    column->set_data_type(ColumnType::ObVarcharType);
+    column->set_data_length(1);
+    column->set_column_id(OB_MLOG_OLD_NEW_COLUMN_ID);
+    if (OB_FAIL(column->set_column_name(OB_MLOG_OLD_NEW_COLUMN_NAME))) {
+      LOG_WARN("failed to set column name", KR(ret));
+    } else if (OB_FAIL(mlog_table_column_array_.push_back(column))) {
+      LOG_WARN("failed to push back column to mlog table column array", KR(ret), KP(column));
+    }
   }
   return ret;
 }
@@ -153,34 +185,36 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
     LOG_WARN("failed to get rowkey column ids", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
-      ObColumnSchemaV2 ref_column;
-      const ObColumnSchemaV2 *rowkey_column = base_table_schema.get_column_schema(
-                                                  column_ids.at(i).col_id_);
-      if (OB_ISNULL(rowkey_column)) {
+      const ObColumnSchemaV2 *rowkey_column = nullptr;
+      ObColumnSchemaV2 *ref_column = nullptr;
+      if (OB_FAIL(alloc_column(ref_column))) {
+        LOG_WARN("failed to alloc column", KR(ret));
+      } else if (OB_ISNULL(rowkey_column =
+          base_table_schema.get_column_schema(column_ids.at(i).col_id_))) {
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("column not exist", KR(ret));
       } else if (OB_FAIL(row_desc.add_column_desc(rowkey_column->get_table_id(),
                                           rowkey_column->get_column_id()))) {
         LOG_WARN("failed to add column desc to row desc", KR(ret),
             K(rowkey_column->get_table_id()), K(rowkey_column->get_column_id()));
-      } else if (OB_FAIL(ref_column.assign(*rowkey_column))) {
+      } else if (OB_FAIL(ref_column->assign(*rowkey_column))) {
         LOG_WARN("failed to assign rowkey_column to ref_column",
             KR(ret), KPC(rowkey_column));
       } else {
-        ref_column.set_autoincrement(false);
-        ref_column.set_is_hidden(false);
-        ref_column.set_rowkey_position(0);
-        ref_column.set_index_position(0);
-        ref_column.set_prev_column_id(UINT64_MAX);
-        ref_column.set_next_column_id(UINT64_MAX);
-        ref_column.set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
+        ref_column->set_autoincrement(false);
+        ref_column->set_is_hidden(false);
+        ref_column->set_rowkey_position(0);
+        ref_column->set_index_position(0);
+        ref_column->set_prev_column_id(UINT64_MAX);
+        ref_column->set_next_column_id(UINT64_MAX);
+        ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                 rowkey_column->get_column_id()));
         if (base_table_schema.is_heap_table()
-            && OB_FAIL(ref_column.set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
+            && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
           LOG_WARN("failed to set column name", KR(ret));
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
           LOG_WARN("failed to push back column to mlog table column array",
-              KR(ret), K(ref_column));
+              KR(ret), KP(ref_column));
         }
       }
     }
@@ -195,10 +229,12 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && (i < create_mlog_arg.store_columns_.count()); ++i) {
-    ObColumnSchemaV2 ref_column;
     const ObString &column_name = create_mlog_arg.store_columns_.at(i);
     const ObColumnSchemaV2 *data_column = nullptr;
-    if (OB_ISNULL(data_column = base_table_schema.get_column_schema(column_name))) {
+    ObColumnSchemaV2 *ref_column = nullptr;
+    if (OB_FAIL(alloc_column(ref_column))) {
+      LOG_WARN("failed to alloc column", KR(ret));
+    } else if (OB_ISNULL(data_column = base_table_schema.get_column_schema(column_name))) {
       ret = OB_ERR_COLUMN_NOT_FOUND;
       LOG_WARN("failed to get column schema", KR(ret), K(column_name));
     } else if (OB_FAIL(check_column_type(*data_column))) {
@@ -212,21 +248,21 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
                                         data_column->get_column_id()))) {
       LOG_WARN("failed to add column desc to row desc", KR(ret),
           K(data_column->get_table_id()), K(data_column->get_column_id()));
-    } else if (OB_FAIL(ref_column.assign(*data_column))) {
+    } else if (OB_FAIL(ref_column->assign(*data_column))) {
       LOG_WARN("failed to assign rowkey_column to ref_column",
           KR(ret), KPC(data_column));
     } else {
-      ref_column.set_autoincrement(false);
-      ref_column.set_is_hidden(false);
-      ref_column.set_rowkey_position(0);
-      ref_column.set_index_position(0);
-      ref_column.set_prev_column_id(UINT64_MAX);
-      ref_column.set_next_column_id(UINT64_MAX);
-      ref_column.set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
+      ref_column->set_autoincrement(false);
+      ref_column->set_is_hidden(false);
+      ref_column->set_rowkey_position(0);
+      ref_column->set_index_position(0);
+      ref_column->set_prev_column_id(UINT64_MAX);
+      ref_column->set_next_column_id(UINT64_MAX);
+      ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                   data_column->get_column_id()));
       if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
         LOG_WARN("failed to push back column to mlog table column array",
-            KR(ret), K(ref_column));
+            KR(ret), KP(ref_column));
       }
     }
   }
@@ -240,9 +276,11 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && (i < part_key_info.get_size()); ++i) {
-    ObColumnSchemaV2 ref_column;
-    const ObRowkeyColumn *rowkey_column = part_key_info.get_column(i);
-    if (OB_ISNULL(rowkey_column)) {
+    const ObRowkeyColumn *rowkey_column = nullptr;
+    ObColumnSchemaV2 *ref_column = nullptr;
+    if (OB_FAIL(alloc_column(ref_column))) {
+      LOG_WARN("failed to alloc column", KR(ret));
+    } else if (OB_ISNULL(rowkey_column = part_key_info.get_column(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey column is null", KR(ret));
     } else {
@@ -260,21 +298,21 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
           part_key_column->get_table_id(), part_key_column->get_column_id()))) {
         LOG_WARN("failed to add column desc to row desc", KR(ret),
             K(part_key_column->get_table_id()), K(part_key_column->get_column_id()));
-      } else if (OB_FAIL(ref_column.assign(*part_key_column))) {
+      } else if (OB_FAIL(ref_column->assign(*part_key_column))) {
         LOG_WARN("failed to assign rowkey_column to ref_column",
             KR(ret), KPC(part_key_column));
       } else {
-        ref_column.set_autoincrement(false);
-        ref_column.set_is_hidden(false);
-        ref_column.set_rowkey_position(0);
-        ref_column.set_index_position(0);
-        ref_column.set_prev_column_id(UINT64_MAX);
-        ref_column.set_next_column_id(UINT64_MAX);
-        ref_column.set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
+        ref_column->set_autoincrement(false);
+        ref_column->set_is_hidden(false);
+        ref_column->set_rowkey_position(0);
+        ref_column->set_index_position(0);
+        ref_column->set_prev_column_id(UINT64_MAX);
+        ref_column->set_next_column_id(UINT64_MAX);
+        ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                     part_key_column->get_column_id()));
         if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
           LOG_WARN("failed to push back column to mlog table column array",
-              KR(ret), K(ref_column));
+              KR(ret), KP(ref_column));
         }
       }
     }
@@ -299,6 +337,15 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
   return ret;
 }
 
+int ObMLogBuilder::MLogColumnUtils::alloc_column(ObColumnSchemaV2 *&column)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSchemaUtils::alloc_schema<ObColumnSchemaV2>(allocator_, column))) {
+    LOG_WARN("failed to alloc column schema", KR(ret));
+  }
+  return ret;
+}
+
 int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
     ObTableSchema &mlog_schema)
 {
@@ -306,19 +353,19 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
   int64_t rowkey_pos = 1; // the first rowkey is seq_no
   // sort mlog_table_column_array first
   struct ColumnSchemaCmp {
-    inline bool operator()(const ObColumnSchemaV2 &a, const ObColumnSchemaV2 &b) {
-      return (a.get_column_id() < b.get_column_id());
+    inline bool operator()(const ObColumnSchemaV2 *a, const ObColumnSchemaV2 *b) {
+      return (a->get_column_id() < b->get_column_id());
     }
   };
   std::sort(mlog_table_column_array_.begin(), mlog_table_column_array_.end(), ColumnSchemaCmp());
 
   for (int64_t i = 0; OB_SUCC(ret) && (i < mlog_table_column_array_.count()); ++i) {
-    ObColumnSchemaV2 &column = mlog_table_column_array_.at(i);
-    if ( column.is_part_key_column() || column.is_subpart_key_column()) {
-      column.set_rowkey_position(++rowkey_pos);
+    ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);
+    if (column->is_part_key_column() || column->is_subpart_key_column()) {
+      column->set_rowkey_position(++rowkey_pos);
     }
-    if (OB_FAIL(mlog_schema.add_column(column))) {
-      LOG_WARN("failed to add column to mlog schema", KR(ret), K(column));
+    if (OB_FAIL(mlog_schema.add_column(*column))) {
+      LOG_WARN("failed to add column to mlog schema", KR(ret), KPC(column));
     }
   }
   return ret;

@@ -20,10 +20,12 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "lib/restore/ob_object_device.h"
 
-using namespace oceanbase;
-using namespace share;
-
+namespace oceanbase
+{
+namespace share
+{
 ObBackupConnectivityCheckManager::ObBackupConnectivityCheckManager()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
@@ -417,7 +419,10 @@ int ObBackupCheckFile::create_connectivity_check_file(
     } else if (OB_FAIL(store.init(backup_dest))) {
       LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
     } else if (OB_FAIL(store.write_check_file(path.get_ptr(), check_desc))) {
-      LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
+      if (OB_CHECKSUM_TYPE_NOT_SUPPORTED == ret) {
+        LOG_USER_ERROR(OB_CHECKSUM_TYPE_NOT_SUPPORTED, backup_dest.get_storage_info()->get_checksum_type_str());
+      }
+      LOG_WARN("failed to write check file", K(ret), K(path), K(check_desc));
     } else {
       is_new_create = true;
       FLOG_INFO("[BACKUP_DEST_CHECK] succeed to create new check file", K(path), K(is_match));
@@ -478,17 +483,21 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
 
 int ObBackupCheckFile::get_permission_check_file_path_(
     const ObBackupDest &backup_dest,
-    bool is_appender,
+    const ObStorageAccessType access_type,
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   int64_t check_time_s = ObTimeUtility::current_time() / 1000/ 1000;
   char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
-  const char *prefix = is_appender ? "append" : "put";
+  const char *prefix = nullptr;
   int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
+  } else if (ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE <= access_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid access type", K(ret), K(access_type));
+  } else if (OB_FALSE_IT(prefix = get_storage_access_type_str(access_type))) {
   } else if (OB_FAIL(get_check_file_path(backup_dest, path))) {
     LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
   } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
@@ -524,7 +533,7 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
-  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, true/*is_appender*/, path))) {
+  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, path))) {
       LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest)); 
   } else if (OB_FAIL(util.set_access_type(&iod_opts, true/*is_appender*/, DEFAULT_OPT_ARG_NUM))) {
     LOG_WARN("fail to set access type");
@@ -539,7 +548,7 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   } else if (OB_FAIL(device_handle->write(fd, data, strlen(data),  write_size))) {
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
   } else if (OB_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
-    LOG_WARN("failed to del file", K(ret));
+    LOG_WARN("failed to del file", K(ret), K(path));
   }
 
   if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
@@ -550,13 +559,57 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   return ret;
 }
 
+int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+  int64_t write_size = 0;
+  int64_t offset = 0;
+  ObIODevice *device_handle = NULL;
+  ObIOFd fd;
+  const static int64_t BUF_LENGTH = 64;
+  char data[BUF_LENGTH];
+  ObBackupPath path;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup check file not init", K(ret));
+  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, access_type, path))) {
+    LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(util.open_with_access_type(device_handle, fd, backup_dest.get_storage_info(), path.get_obstr(), access_type))) {
+    LOG_WARN("fail to open device or fd", K(ret), K(backup_dest), K(path));
+  } else if (OB_FAIL(databuff_printf(data, sizeof(data), "tenant(%lu) multipart writer at %ld", tenant_id_, ObTimeUtility::current_time()))) {
+    LOG_WARN("fail to set data", K(ret), K(path.get_ptr()));
+  } else if (OB_FAIL(device_handle->pwrite(fd, offset, strlen(data), data, write_size))) {
+    LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
+  } else if (OB_FAIL(device_handle->complete(fd))) {
+    STORAGE_LOG(WARN, "fail to complete multipart upload", K(ret), K(device_handle), K(fd));
+  } else if (OB_FAIL(util.del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
+    LOG_WARN("failed to del file", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_TMP_FAIL(device_handle->abort(fd))) {
+      ret = COVER_SUCC(tmp_ret);
+      STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+    }
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(device_handle, fd))) {
+    ret = COVER_SUCC(tmp_ret);
+    STORAGE_LOG(WARN, "fail to close device and fd", K(ret), K(tmp_ret), K(device_handle), K(fd));
+  }
+  return ret;
+}
+
 bool ObBackupCheckFile::is_permission_error_(const int32_t result) 
 { 
   int ret = OB_SUCCESS;
   bool is_permission = false;
   if (OB_IO_ERROR == result
       || OB_OSS_ERROR == result
-      || OB_COS_ERROR == result) {
+      || OB_COS_ERROR == result
+      || OB_S3_ERROR == result) {
     is_permission = true; 
   }
   return is_permission;
@@ -582,7 +635,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
   } else if (!backup_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup dest is valid", K(ret), K_(tenant_id)); 
-  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, false/*is_appender*/, path))) {
+  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER, path))) {
       LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id));
   } else if (OB_FAIL(generate_format_desc_(backup_dest, check_desc))) {
     LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
@@ -590,17 +643,17 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
   } else if (OB_FAIL(store.write_check_file(path.get_ptr(), check_desc))) {
     if (is_permission_error_(ret)) {
+      ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "write single file");
-      ret = OB_BACKUP_PERMISSION_DENIED;
     }
     LOG_WARN("failed to write single file", K(ret), K_(tenant_id), K(backup_dest));
   } else if (FALSE_IT(write_ok = true)
       || OB_FAIL(util.adaptively_get_file_length(path.get_obstr(), backup_dest.get_storage_info(), file_len))) {
     if (is_permission_error_(ret)) { 
+      ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "get file length");
-      ret = OB_BACKUP_PERMISSION_DENIED;
     }
     LOG_WARN("failed to get file length", K(ret));
   } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_len)))) {
@@ -608,17 +661,17 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     LOG_WARN("failed to alloc buf", K(ret), K(file_len));
   } else if (OB_FAIL(util.adaptively_read_single_file(path.get_obstr(), backup_dest.get_storage_info(), buf, file_len, read_size))) {
     if (is_permission_error_(ret)) {
+      ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "read single file");
-      ret = OB_BACKUP_PERMISSION_DENIED;
     }
     LOG_WARN("failed to read single file", K(ret));
   }
   if (write_ok && (OB_SUCCESS != (tmp_ret = util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info())))) {
     if (is_permission_error_(tmp_ret)) {
+      tmp_ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", tmp_ret, "comment", "delete file");
-      tmp_ret = OB_BACKUP_PERMISSION_DENIED;
     }
     ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     LOG_WARN("failed to del file", K(tmp_ret), K(ret), K(path), K(backup_dest));
@@ -626,11 +679,18 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_appender_permission_(backup_dest))){
     if (is_permission_error_(ret)) {
+      ret = OB_BACKUP_PERMISSION_DENIED;
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check",
           "tenant_id", tenant_id_, "error_code", ret, "comment", "appender write");
-      ret = OB_BACKUP_PERMISSION_DENIED;
     }
     LOG_WARN("failed to appender permission", K(ret));
+  } else if (OB_FAIL(check_multipart_upload_permission_(backup_dest))) {
+    if (is_permission_error_(ret)) {
+      ret = OB_BACKUP_PERMISSION_DENIED;
+      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check",
+          "tenant_id", tenant_id_, "error_code", ret, "comment", "multipart upload write");
+    }
+    LOG_WARN("failed to check multipart permission", K(ret), K(backup_dest));
   }
 
   return ret;
@@ -1068,3 +1128,5 @@ int ObBackupStorageInfoOperator::get_backup_dest(
   }
   return ret;
 }
+}//share
+}//oceanbase

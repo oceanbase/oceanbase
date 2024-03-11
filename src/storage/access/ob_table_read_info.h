@@ -26,9 +26,6 @@ class ObColDesc;
 class ObColExtend;
 }
 }
-namespace blocksstable{
-struct ObDataStoreDesc;
-}
 using namespace share::schema;
 namespace storage {
 class ObStorageSchema;
@@ -287,7 +284,8 @@ public:
       const common::ObIArray<ObColumnParam *> *cols_param = nullptr,
       const common::ObIArray<int32_t> *cg_idxs = nullptr,
       const common::ObIArray<ObColExtend> *cols_extend = nullptr,
-      const bool has_all_column_group = true);
+      const bool has_all_column_group = true,
+      const bool is_cg_sstable = false);
   virtual OB_INLINE bool is_valid() const override
   {
     return ObReadInfoStruct::is_valid()
@@ -390,6 +388,8 @@ class ObCGReadInfo : public ObITableReadInfo
 public:
   const static int64_t CG_COL_CNT = 1;
   const static int64_t CG_ROWKEY_COL_CNT = 0;
+  const static int64_t LOCAL_MAX_CG_READ_INFO_CNT = 16;
+  const static int16_t MIX_READ_INFO_LOCAL_CACHE = 1;
 public:
   ObCGReadInfo();
   virtual ~ObCGReadInfo();
@@ -569,6 +569,12 @@ public:
   int release_cg_read_info(ObCGReadInfo *&cg_read_info);
   static int mtl_init(ObTenantCGReadInfoMgr *&read_info_mgr);
   static int construct_index_read_info(common::ObIAllocator &allocator, ObRowkeyReadInfo &index_read_info);
+  static int construct_cg_read_info(
+      common::ObIAllocator &allocator,
+      const bool is_oracle_mode,
+      const ObColDesc &col_desc,
+      ObColumnParam *cols_param,
+      ObTableReadInfo &cg_read_info);
   int gc_cg_info_array();
 private:
   int construct_normal_cg_read_infos();

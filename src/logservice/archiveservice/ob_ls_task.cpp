@@ -184,7 +184,7 @@ int ObLSArchiveTask::get_sorted_fetch_log(ObArchiveLogFetchTask *&task)
     ARCHIVE_LOG(WARN, "get top fetch log failed", K(ret));
   } else if (NULL == tmp_task) {
     // no task exist, just skip
-    ARCHIVE_LOG(INFO, "no task exist, just skip", K(tenant_id_), K(id_), K(tmp_task));
+    ARCHIVE_LOG(TRACE, "no task exist, just skip", K(tenant_id_), K(id_), K(tmp_task));
   }
   // 1. 同一个归档文件, 相同piece或者下一个piece
   else if (tmp_task->get_end_offset() > cur_offset && tmp_task->get_start_offset() <= cur_offset) {

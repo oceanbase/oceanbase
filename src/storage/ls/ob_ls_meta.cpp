@@ -62,7 +62,8 @@ ObLSMeta::ObLSMeta()
     all_id_meta_(),
     saved_info_(),
     transfer_scn_(SCN::min_scn()),
-    rebuild_info_()
+    rebuild_info_(),
+    transfer_meta_info_()
 {
 }
 
@@ -83,7 +84,8 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     tablet_change_checkpoint_scn_(ls_meta.tablet_change_checkpoint_scn_),
     saved_info_(ls_meta.saved_info_),
     transfer_scn_(ls_meta.transfer_scn_),
-    rebuild_info_(ls_meta.rebuild_info_)
+    rebuild_info_(ls_meta.rebuild_info_),
+    transfer_meta_info_(ls_meta.transfer_meta_info_)
 {
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
@@ -139,6 +141,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     saved_info_ = other.saved_info_;
     transfer_scn_ = other.transfer_scn_;
     rebuild_info_ = other.rebuild_info_;
+    transfer_meta_info_ = other.transfer_meta_info_;
   }
   return *this;
 }
@@ -161,6 +164,7 @@ void ObLSMeta::reset()
   saved_info_.reset();
   transfer_scn_ = SCN::min_scn();
   rebuild_info_.reset();
+  transfer_meta_info_.reset();
 }
 
 LSN &ObLSMeta::get_clog_base_lsn()
@@ -517,6 +521,7 @@ int ObLSMeta::update_ls_meta(
       if (update_restore_status) {
         restore_status_ = ls_restore_status;
       }
+      transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
     }
     LOG_INFO("update ls meta", K(ret), K(tmp), K(src_ls_meta), K(*this));
   }
@@ -813,7 +818,7 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get restore status", K(ret), K(*this));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_) {
+  } else if (!ObMigrationStatusHelper::need_online(migration_status_)) {
     create_type = ObLSCreateType::MIGRATE;
   } else if (restore_status_.is_in_clone()) {
     create_type = ObLSCreateType::CLONE;
@@ -940,7 +945,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     all_id_meta_,
                     saved_info_,
                     transfer_scn_,
-                    rebuild_info_);
+                    rebuild_info_,
+                    transfer_meta_info_);
 
 }
 }

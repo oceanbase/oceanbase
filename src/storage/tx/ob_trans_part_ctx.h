@@ -864,7 +864,11 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObIArray<ObTxLSEpochPair> &downstream_parts);
+  int rollback_to_savepoint(const int64_t op_sn,
+                            ObTxSEQ from_seq,
+                            const ObTxSEQ to_seq,
+                            const int64_t seq_base,
+                            ObIArray<ObTxLSEpochPair> &downstream_parts);
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
   int handle_tx_keepalive_response(const int64_t status);

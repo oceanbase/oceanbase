@@ -249,6 +249,8 @@ struct ObTableOperationType
     SCAN = 8,
     TTL = 9, // internal type for ttl executor cache key
     CHECK_AND_INSERT_UP = 10,
+    PUT = 11,
+    TRIGGER = 12, // internal type for group commit trigger
     INVALID = 15
   };
 };

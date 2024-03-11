@@ -1187,11 +1187,11 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setDependent(true);
       }
       col_meta->setName(column_schema.get_column_name());
-      col_meta->setType(static_cast<int>(mysql_type));
       col_meta->setSigned(signed_flag);
       col_meta->setIsPK(column_schema.is_original_rowkey_column());
       col_meta->setNotNull(! column_schema.is_nullable());
 
+      set_column_type_(*col_meta, mysql_type);
       set_column_encoding_(col_type, column_schema.get_charset_type(), col_meta);
 
       if (column_schema.is_xmltype()) {
@@ -1233,6 +1233,20 @@ int ObLogMetaManager::set_column_meta_(
   }
 
   return ret;
+}
+
+// convert column type for drcmsg and oblogmsg
+void ObLogMetaManager::set_column_type_(IColMeta &col_meta, const obmysql::EMySQLFieldType &col_type)
+{
+  if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_FLOAT == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_FLOAT);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_DOUBLE == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_DOUBLE);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_XML == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
+  } else {
+    col_meta.setType(static_cast<int>(col_type));
+  }
 }
 
 template<class TABLE_SCHEMA>

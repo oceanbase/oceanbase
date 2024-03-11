@@ -382,7 +382,6 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(src.get_ext());
       CK (OB_NOT_NULL(opaque));
       OX (opaque->~ObPLOpaque());
-      OX (src.set_null());
     }
       break;
 #endif
@@ -2682,13 +2681,17 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             K(src), K(table_data), K(table_data_len), K(table_data_pos));
         }
         if (OB_FAIL(ret)) {
-          for (int64_t j = 0; j <= n; ++j) {
-            ObObj* value = reinterpret_cast<ObObj*>(table_data + j);
-            int tmp = ObUserDefinedType::destruct_obj(*value);
-            if (OB_SUCCESS != tmp) {
-              LOG_WARN("fail torelease memory", K(ret), K(tmp));
+          if (OB_NOT_NULL(table_data)) {
+            for (int64_t j = 0; j <= n; ++j) {
+              ObObj* value = reinterpret_cast<ObObj*>(table_data + j * sizeof(ObObj));
+              if (OB_NOT_NULL(value)) {
+                int tmp = ObUserDefinedType::destruct_obj(*value);
+                if (OB_SUCCESS != tmp) {
+                  LOG_WARN("fail torelease memory", K(ret), K(tmp));
+                }
+                value->set_type(ObMaxType);
+              }
             }
-            value->set_type(ObMaxType);
           }
           collection_allocator->reset();
         }

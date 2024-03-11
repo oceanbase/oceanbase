@@ -871,6 +871,11 @@ typedef enum ObItemType
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
 
+  T_FUN_SYS_GTID_SUBSET = 2012,
+  T_FUN_SYS_GTID_SUBTRACT = 2013,
+  T_FUN_SYS_WAIT_FOR_EXECUTED_GTID_SET = 2014,
+  T_FUN_SYS_WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS = 2015,
+
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2421,6 +2426,8 @@ typedef enum ObItemType
   T_ALTER_USER_PROXY,
 
   T_PARALLEL_DAS_DML,
+  T_DISABLE_PARALLEL_DAS_DML,
+  T_ENABLE_LOB_PREFETCH,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

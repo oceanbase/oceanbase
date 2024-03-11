@@ -2058,6 +2058,8 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         LOG_WARN("failed to sort funcs", K(ret));
       } else if (OB_FAIL(append_array_no_dup(spec.all_exprs_, spec.get_child()->output_))) {
         LOG_WARN("failed to append array no dup", K(ret));
+      } else if (opt_ctx_->is_online_ddl() && OB_FAIL(fill_compress_type(op, spec.compress_type_))) {
+        LOG_WARN("fail to gt compress_type", K(ret));
       } else {
         spec.prefix_pos_ = op.get_prefix_pos();
         spec.is_local_merge_sort_ = op.is_local_merge_sort();
@@ -2067,46 +2069,7 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         spec.enable_encode_sortkey_opt_ = op.enable_encode_sortkey_opt();
         spec.part_cnt_ = op.get_part_cnt();
         LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
-        int64_t compact_level = 0;
-        OZ(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::COMPACT_SORT_LEVEL, compact_level));
-        if (OB_SUCC(ret)) {
-          int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
-          spec.sort_compact_level_ = static_cast<SortCompactLevel>(compact_level);
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-          if (OB_UNLIKELY(!tenant_config.is_valid())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail get tenant_config", K(ret), K(tenant_id));
-          } else if (tenant_config->enable_store_compression || compact_level == SORT_COMPRESSION_LEVEL ||
-                     compact_level == SORT_COMPRESSION_ENCODE_LEVEL ||
-                     compact_level == SORT_COMPRESSION_COMPACT_LEVEL) {
-            if (opt_ctx_->is_online_ddl()) {
-              // for normal sort we use default compress type. for online ddl, we use the compress type in source table
-              ObLogicalOperator *child_op = op.get_child(0);
-              while(OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
-                child_op = child_op->get_child(0);
-                if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
-                  share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
-                  const share::schema::ObTableSchema *table_schema = nullptr;
-                  uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
-                  if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("fail to get schema guard", K(ret));
-                  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
-                    LOG_WARN("fail to get table schema", K(ret));
-                  } else if (OB_ISNULL(table_schema)) {
-                    ret = OB_TABLE_NOT_EXIST;
-                    LOG_WARN("can't find table schema", K(ret), K(table_id));
-                  } else {
-                    spec.compress_type_ = table_schema->get_compressor_type();
-                  }
-                }
-              }
-              LOG_TRACE("compact type is", K(spec.compress_type_));
-            }
-          }
-        }
-        LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_),
-                  K(compact_level));
+
       }
       if (OB_SUCC(ret)) {
         if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()
@@ -2118,6 +2081,42 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
             K(spec.part_cnt_), K(spec.sort_collations_.count()), K(spec.sort_cmp_funs_.count()));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::fill_compress_type(ObLogSort &op, ObCompressorType &compr_type)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+  // for normal sort we use default compress type. for online ddl, we use the compress type in source table
+  ObLogicalOperator *child_op = op.get_child(0);
+  ObCompressorType tmp_compr_type = NONE_COMPRESSOR;
+  while(OB_SUCC(ret) && OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
+    child_op = child_op->get_child(0);
+    if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
+      share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
+      const share::schema::ObTableSchema *table_schema = nullptr;
+      uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
+      if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("can't find table schema", K(ret), K(table_id));
+      } else {
+        tmp_compr_type = table_schema->get_compressor_type();
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(tmp_compr_type,
+                                              op.get_parallel(),
+                                              compr_type))) {
+      LOG_WARN("fail to get compress type", K(ret));
     }
   }
   return ret;
@@ -2286,6 +2285,8 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
                                                     spec.get_child()->output_, spec.sk_exprs_,
                                                     spec.addon_exprs_))) {
         LOG_WARN("failed to append array no dup", K(ret));
+      } else if (opt_ctx_->is_online_ddl() && OB_FAIL(fill_compress_type(op, spec.compress_type_))) {
+        LOG_WARN("fail to gt compress_type", K(ret));
       } else {
         spec.prefix_pos_ = op.get_prefix_pos();
         spec.is_local_merge_sort_ = op.is_local_merge_sort();
@@ -3216,6 +3217,18 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   spec.set_shared_filter_type(op.get_filter_type());
   spec.is_shuffle_ = op.is_use_filter_shuffle();
   bool enable_rich_format = spec.use_rich_format_;
+
+  uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  if (min_ver >= CLUSTER_VERSION_4_3_0_1 || min_ver >= MOCK_CLUSTER_VERSION_4_2_3_0
+      || (min_ver > MOCK_CLUSTER_VERSION_4_2_1_4 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
+    spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
+    spec.send_bloom_filter_size_ = GCONF._send_bloom_filter_size;
+  } else {
+    // for compatibility, if the cluseter is upgrading, set them as default value 0
+    spec.bloom_filter_ratio_ = 0;
+    spec.send_bloom_filter_size_ = 0;
+  }
+
   if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
@@ -4791,6 +4804,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret) && spec.report_col_checksum_) {
+    const bool is_oracle_mode = lib::is_oracle_mode();
     spec.ddl_output_cids_.assign(op.get_ddl_output_column_ids());
     for (int64_t i = 0; OB_SUCC(ret) && i < spec.ddl_output_cids_.count(); i++) {
       const ObColumnSchemaV2 *column_schema = NULL;
@@ -4801,7 +4815,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret));
       } else if (column_schema->get_meta_type().is_fixed_len_char_type() &&
-        column_schema->is_virtual_generated_column()) {
+        (column_schema->is_virtual_generated_column() || is_oracle_mode)) {
         // add flag in ddl_output_cids_ in this special scene.
         uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
         spec.ddl_output_cids_.at(i) = spec.ddl_output_cids_.at(i) | VIRTUAL_GEN_FIX_LEN_TAG;

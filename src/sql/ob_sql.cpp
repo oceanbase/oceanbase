@@ -173,6 +173,14 @@ void ObSql::stat()
        LOG_WARN("only DML stmt or SET command is supported to be executed on txn temporary node", \
                 KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
      }                                                                  \
+     ObPhysicalPlan* phy_plan = result.get_physical_plan();             \
+     if (OB_SUCCESS == ret && NULL != phy_plan) {                       \
+       if (phy_plan->has_link_table()) {                                \
+         ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                       \
+         LOG_WARN("stmt with dblink can not be executed on txn temporary node", \
+                  KR(ret), K(stmt_type), K(session.get_txn_free_route_ctx()), K(session)); \
+       }                                                                \
+     }                                                                  \
    }                                                                    \
  }
 
@@ -1185,6 +1193,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   }
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_TIMEOUT == ret &&
+      session.is_user_session() &&
       parse_result.result_tree_ != NULL &&
       parse_result.result_tree_->children_ != NULL &&
       parse_result.result_tree_->num_child_ >= 1 &&
@@ -4093,7 +4102,6 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = pc_ctx.allocator_;
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
-
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
   bool is_stack_overflow = false;
   bool is_show_variables = false;
@@ -4648,12 +4656,15 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
                          bool &need_add_plan)
 {
   int ret = OB_SUCCESS;
+  result.get_exec_context().get_stmt_factory()->get_query_ctx();
   if (false == need_add_plan) {
     //do nothing
   } else if (!is_enable_pc || !pc_ctx.should_add_plan_) {
     need_add_plan = false;
-  } else if (OB_NOT_NULL(result.get_physical_plan()) &&
-             result.get_physical_plan()->has_link_table()) {
+  } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()) || OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), KP(result.get_exec_context().get_stmt_factory()));
+  } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_dblink()) {
     need_add_plan = false;
   }
   return ret;
@@ -4929,6 +4940,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
 #endif
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_TIMEOUT == ret &&
+      result.get_session().is_user_session() &&
       parse_result.result_tree_ != NULL &&
       parse_result.result_tree_->children_ != NULL &&
       parse_result.result_tree_->num_child_ >= 1 &&

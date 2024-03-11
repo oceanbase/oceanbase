@@ -260,6 +260,8 @@ void ObTransService::stop()
     TRANS_LOG(WARN, "ObTransTimer stop error", K(ret));
   } else if (OB_FAIL(dup_table_scan_timer_.stop())) {
     TRANS_LOG(WARN, "dup_table_scan_timer_ stop error", K(ret));
+  } else if (OB_FAIL(ts_mgr_->remove_dropped_tenant(tenant_id_))) {
+    TRANS_LOG(WARN, "gts_mgr stop error", K(ret));
   } else {
     rpc_->stop();
     dup_table_rpc_->stop();
@@ -944,6 +946,8 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = revert_store_ctx(store_ctx))) {
       TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(tx_desc), K(ls_id), K(type));
+    } else {
+      store_ctx.reset();
     }
   }
   TRANS_LOG(DEBUG, "register multi source data on participant", KR(ret), K(tx_desc), K(ls_id),

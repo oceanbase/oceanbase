@@ -20,6 +20,7 @@
 #include "sql/engine/basic/chunk_store/ob_block_iwriter.h"
 #include "sql/engine/basic/chunk_store/ob_chunk_block.h"
 #include "src/share/ob_ddl_common.h"
+
 namespace oceanbase
 {
 namespace storage {
@@ -33,7 +34,6 @@ class ObCompactStore final : public ObTempBlockStore
   OB_UNIS_VERSION_V(1);
 public:
   explicit ObCompactStore(common::ObIAllocator *alloc = NULL) : ObTempBlockStore(alloc),
-                        compact_level_(share::SORT_DEFAULT_LEVEL),
                         writer_(nullptr), reader_(nullptr), batch_ctx_(nullptr),
                         row_meta_(*allocator_), row_cnt_(0), block_reader_(), start_iter_(false),
                         cur_blk_id_(0)
@@ -49,7 +49,6 @@ public:
            const bool enable_dump = true,
            const uint32_t row_extra_size = 0,
            const bool enable_trunc = true,
-           const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
            const ObCompressorType compress_type = NONE_COMPRESSOR,
            const ExprFixedArray *exprs = nullptr);
 
@@ -61,7 +60,6 @@ public:
            const bool enable_dump = true,
            const uint32_t row_extra_size = 0,
            const bool enable_trunc = true,
-           const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
            const ObCompressorType compress_type = NONE_COMPRESSOR);
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                 const ObBitVector &skip, const int64_t batch_size,
@@ -91,7 +89,6 @@ public:
   int has_next(bool &has_next);
   ChunkRowMeta *get_row_meta() { return &row_meta_; }
   void set_meta(ChunkRowMeta *row_meta) { writer_->set_meta(row_meta); reader_->set_meta(row_meta); }
-  share::SortCompactLevel get_compact_level() { return compact_level_; }
   void set_blk_holder(ObTempBlockStore::BlockHolder *blk_holder) { block_reader_.set_blk_holder(blk_holder); }
 protected:
   int prepare_blk_for_write(Block *) final override;
@@ -112,7 +109,6 @@ private:
   int inner_get_next_row(const ObChunkDatumStore::StoredRow *&sr);
 
 private:
-  share::SortCompactLevel compact_level_;
   ObBlockIWriter *writer_;
   ObBlockIReader *reader_;
   BatchCtx *batch_ctx_;

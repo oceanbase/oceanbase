@@ -264,8 +264,8 @@ bool ObLockRequest::is_valid() const
 bool ObLockRequest::is_lock_thread_enabled() const
 {
   const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  return ((min_cluster_version > CLUSTER_VERSION_4_2_1_3 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
-          || (min_cluster_version > CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+  return ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+          || (min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
           || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0));
 }
 

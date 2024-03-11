@@ -125,18 +125,28 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
     uint64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
     ObSchemaGetterGuard schema_guard;
     int64_t local_schema_version = -1;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    int64_t query_tenant_begin_schema_version =
+      exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version();
+    if (query_tenant_begin_schema_version == OB_INVALID_VERSION) {
+      code = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid tenant_schema_version", K(ret), K(query_tenant_begin_schema_version));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_schema_version))) {
       LOG_WARN("get schema version failed", K(ret));
-    } else if (local_schema_version !=
-                exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()) {
-      if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, tenant_id)) {
-        code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-      } else {
-        code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-      }
     }
+
+    if ((OB_SUCC(ret) && local_schema_version != query_tenant_begin_schema_version)
+        || ret == OB_TENANT_NOT_EXIST || ret == OB_SCHEMA_ERROR || ret == OB_SCHEMA_EAGAIN) {
+      code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    }
+
+    // overwrite to make sure sql will retry
+    if (OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == code
+        && GSCHEMASERVICE.is_schema_error_need_retry(NULL, tenant_id)) {
+      code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
+    }
+
     LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(tenant_id), K(local_schema_version),
               K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
   } else {

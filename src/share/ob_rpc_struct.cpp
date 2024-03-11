@@ -3723,7 +3723,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     dst_,
                     data_source_,
                     paxos_replica_number_,
-                    skip_change_member_list_);
+                    skip_change_member_list_,
+                    force_use_data_source_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3737,6 +3738,7 @@ int ObLSMigrateReplicaArg::assign(
   data_source_ = that.data_source_;
   paxos_replica_number_ = that.paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
+  force_use_data_source_ = that.force_use_data_source_;
   return ret;
 }
 
@@ -3770,7 +3772,8 @@ OB_SERIALIZE_MEMBER(ObLSAddReplicaArg,
                     data_source_,
                     orig_paxos_replica_number_,
                     new_paxos_replica_number_,
-                    skip_change_member_list_);
+                    skip_change_member_list_,
+                    force_use_data_source_);
 
 int ObLSAddReplicaArg::assign(
     const ObLSAddReplicaArg &that)
@@ -3784,6 +3787,7 @@ int ObLSAddReplicaArg::assign(
   orig_paxos_replica_number_ = that.orig_paxos_replica_number_;
   new_paxos_replica_number_ = that.new_paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
+  force_use_data_source_ = that.force_use_data_source_;
   return ret;
 }
 
@@ -7144,7 +7148,8 @@ OB_SERIALIZE_MEMBER(
     is_server_empty_,
     zone_,
     sql_port_,
-    build_version_);
+    build_version_,
+    startup_mode_);
 int ObCheckServerForAddingServerResult::init(
     const bool is_server_empty,
     const ObZone &zone,
@@ -7175,10 +7180,18 @@ int ObCheckServerForAddingServerResult::assign(const ObCheckServerForAddingServe
   } else {
     is_server_empty_ = other.is_server_empty_;
     sql_port_ = other.sql_port_;
+    startup_mode_ = other.startup_mode_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_);
+OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_, startup_mode_);
+int ObCheckDeploymentModeArg::assign(const ObCheckDeploymentModeArg &other)
+{
+  int ret = OB_SUCCESS;
+  single_zone_deployment_on_ = other.single_zone_deployment_on_;
+  startup_mode_ = other.startup_mode_;
+  return ret;
+}
 #ifdef OB_BUILD_TDE_SECURITY
 OB_SERIALIZE_MEMBER(ObWaitMasterKeyInSyncArg,
                     tenant_max_key_version_,

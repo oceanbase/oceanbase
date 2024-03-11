@@ -313,7 +313,7 @@ int ObDDLTableMergeTask::process()
       is_major_exist = true;
       LOG_INFO("major sstable has been created before", K(merge_param_));
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      is_major_exist = true;
+      ret = OB_TASK_EXPIRED;
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(merge_param_.tablet_id_,
                                                               true /* is_full_direct_load */,
@@ -732,7 +732,7 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
         // skip
       } else if (OB_FAIL(cur_co_sstable->fetch_cg_sstable(cg_idx, cg_sstable_wrapper))) {
         LOG_WARN("get all tables failed", K(ret));
-      } else if (OB_FAIL(cg_sstable_wrapper.get_sstable(cg_sstable))) {
+      } else if (OB_FAIL(cg_sstable_wrapper.get_loaded_column_store_sstable(cg_sstable))) {
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_ISNULL(cg_sstable)) {
         // skip

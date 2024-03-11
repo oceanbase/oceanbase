@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace common
 {
-
+const char *get_storage_access_type_str(const ObStorageAccessType &type);
 /*
 there are three write mode
 ------use write interface----

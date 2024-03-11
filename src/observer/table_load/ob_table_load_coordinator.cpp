@@ -119,6 +119,7 @@ int ObTableLoadCoordinator::abort_active_trans(ObTableLoadTableCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTransId> trans_id_array;
+  trans_id_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(ctx->coordinator_ctx_->get_active_trans_ids(trans_id_array))) {
     LOG_WARN("fail to get active trans ids", KR(ret));
   }
@@ -157,6 +158,8 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
     int64_t tries = 0;
     ObDirectLoadControlAbortArg arg;
     ObDirectLoadControlAbortRes res;
+    addr_array1.set_tenant_id(MTL_ID());
+    addr_array2.set_tenant_id(MTL_ID());
     arg.table_id_ = ctx->param_.table_id_;
     arg.task_id_ = ctx->ddl_param_.task_id_;
     for (int64_t i = 0; i < all_addr_array.count(); ++i) {
@@ -850,18 +853,8 @@ int ObTableLoadCoordinator::heart_beat()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_DEBUG("coordinator heart beat");
-    // 心跳是为了让数据节点感知控制节点存活, 让控制节点感知数据节点是否重启过（返回-4018），忽略其它失败
-    if (OB_FAIL(heart_beat_peer())) {
-      if (ret == OB_ENTRY_NOT_EXIST) {
-        LOG_WARN("store has been restarted", K(ret));
-        if (OB_FAIL(coordinator_ctx_->set_status_abort())) {
-          LOG_WARN("fail to set coordinator status abort", KR(ret));
-        } else {
-          coordinator_ctx_->set_enable_heart_beat(false);
-        }
-      }
-    }
+    // 心跳是为了让数据节点感知控制节点存活, 控制节点不依赖心跳感知数据节点状态, 忽略失败
+    heart_beat_peer();
   }
   return ret;
 }

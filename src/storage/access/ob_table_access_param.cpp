@@ -33,6 +33,7 @@ ObTableIterParam::ObTableIterParam()
       rowkey_read_info_(nullptr),
       tablet_handle_(nullptr),
       cg_read_info_handle_(),
+      cg_read_infos_(nullptr),
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
       group_by_cols_project_(NULL),
@@ -69,6 +70,7 @@ void ObTableIterParam::reset()
   rowkey_read_info_ = nullptr;
   tablet_handle_ = nullptr;
   cg_read_info_handle_.reset();
+  cg_read_infos_ = nullptr;
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;
   group_by_cols_project_ = NULL;
@@ -144,6 +146,7 @@ int ObTableIterParam::get_cg_column_param(const share::schema::ObColumnParam *&c
   }
   return ret;
 }
+
 DEF_TO_STRING(ObTableIterParam)
 {
   int64_t pos = 0;
@@ -157,6 +160,7 @@ DEF_TO_STRING(ObTableIterParam)
        KPC_(pushdown_filter),
        KP_(op),
        KP_(sstable_index_filter),
+       KP_(cg_read_infos),
        KPC_(output_exprs),
        KPC_(aggregate_exprs),
        KPC_(output_sel_mask),
@@ -219,6 +223,7 @@ int ObTableAccessParam::init(
     iter_param_.table_id_ = table_param.get_table_id();
     iter_param_.tablet_id_ = scan_param.tablet_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
+    iter_param_.cg_read_infos_ = table_param.get_cg_read_infos();
     iter_param_.rowkey_read_info_ = &tablet_handle.get_obj()->get_rowkey_read_info();
     iter_param_.set_tablet_handle(&tablet_handle);
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
@@ -357,6 +362,7 @@ int ObTableAccessParam::init_dml_access_param(
     iter_param_.tablet_id_ = table.get_tablet_id();
     iter_param_.read_info_ = &schema_param.get_read_info();
     iter_param_.rowkey_read_info_ = &rowkey_read_info;
+    iter_param_.cg_read_infos_ = schema_param.get_cg_read_infos();
     iter_param_.set_tablet_handle(table.tablet_iter_.get_tablet_handle_ptr());
     iter_param_.is_same_schema_column_ =
         iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();

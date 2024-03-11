@@ -509,7 +509,7 @@ void ObTsMgr::run1()
     ids.reset();
     for (int64_t i = 0; i < check_ids.count(); i++) {
       const uint64_t tenant_id = check_ids.at(i);
-      if (OB_FAIL(remove_dropped_tenant_(tenant_id))) {
+      if (OB_FAIL(remove_dropped_tenant(tenant_id))) {
         TRANS_LOG(WARN, "remove dropped tenant failed", K(ret), K(tenant_id));
         // ignore ret
         ret = OB_SUCCESS;
@@ -743,7 +743,7 @@ int ObTsMgr::delete_tenant_(const uint64_t tenant_id)
   return ret;
 }
 
-int ObTsMgr::remove_dropped_tenant_(const uint64_t tenant_id)
+int ObTsMgr::remove_dropped_tenant(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObTsTenantInfo tenant_info(tenant_id);

@@ -1423,6 +1423,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
     LOG_WARN("failed to check group aggr param", K(ret));
   } else {
     bool need_add_cast = false;
+    bool override_calc_meta = true;
     switch (expr.get_expr_type()) {
       //count_sum是在分布式的count(*)中上层为了避免select a, count(a) from t1这种语句a出现NULL这种非期望值
       //而生成的内部表达式
@@ -1497,11 +1498,13 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           LOG_WARN("param expr is null", K(expr));
         } else {
           result_type.set_type(ObUInt64Type);
-          result_type.set_calc_type(result_type.get_type());
+          result_type.set_calc_type(ob_is_unsigned_type(child_expr->get_data_type()) ?
+            ObUInt64Type : ObIntType);
+          override_calc_meta = false;
           result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[0/*is_oracle*/][ObUInt64Type]);
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = child_expr->get_type_class();
-          need_add_cast = (ObUIntTC != from_tc && ObIntTC != from_tc);
+          need_add_cast = (ObUIntTC != from_tc && ObIntTC != from_tc && ObBitTC != from_tc);
         }
         break;
       }
@@ -1927,8 +1930,11 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
     }
     LOG_DEBUG("aggregate function deduced result type", K(result_type), K(need_add_cast), K(expr));
     if (OB_SUCC(ret) && need_add_cast) {
-      result_type.set_calc_type(result_type.get_type());
-      result_type.set_calc_accuracy(result_type.get_accuracy());
+      if (override_calc_meta) {
+        result_type.set_calc_type(result_type.get_type());
+        result_type.set_calc_accuracy(result_type.get_accuracy());
+        result_type.set_calc_meta(result_type.get_obj_meta());
+      }
       if (T_FUN_AVG == expr.get_expr_type() && -2 != scale_increment_recover) {
         result_type.set_calc_scale(scale_increment_recover);
       }
@@ -2533,16 +2539,10 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         result_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
       }
       expr.set_result_type(result_type);
+    } else if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
+      LOG_WARN("deduce type failed", K(ret));
     } else {
-      // agg函数func_params也为空，此时需要置成agg的result_type
-      if (expr.get_agg_expr()->get_result_type().is_invalid()) {
-        if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
-          LOG_WARN("deduce type failed", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        expr.set_result_type(expr.get_agg_expr()->get_result_type());
-      }
+      expr.set_result_type(expr.get_agg_expr()->get_result_type());
     }
   //here pl_agg_udf_expr_ in win_expr must be null, defensive check!!!
   } else if (OB_UNLIKELY(expr.get_pl_agg_udf_expr() != NULL)) {
@@ -3506,7 +3506,6 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
 {
   int ret = OB_SUCCESS;
   ObExprResType res_type = parent.get_result_type();
-  res_type.set_calc_meta(res_type.get_obj_meta());
   ObIArray<ObRawExpr*> &real_param_exprs = parent.get_real_param_exprs_for_update();
   for (int64_t i = 0; OB_SUCC(ret) && i < real_param_exprs.count(); ++i) {
     ObRawExpr *&child_ptr = real_param_exprs.at(i);

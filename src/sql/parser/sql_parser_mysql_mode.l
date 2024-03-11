@@ -55,6 +55,7 @@ insert_hint_begin       (insert{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/
 replace_hint_begin      (replace{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 load_data_hint_begin    (load{space}+data{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 create_hint_begin    (create{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
+alter_hint_begin    (alter{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 hint_hint_begin      (hint{space}*(\/\*([^+*]|\*+[^*\/])*\*+\/{space}*)*(\/\*\+({space}*hint{space}+)?))
 common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
@@ -954,6 +955,12 @@ Timestamp{whitespace}?\"[^\"]*\" {
   ParseResult *p = (ParseResult *)yyextra;
   p->is_ignore_token_ = p->is_ignore_hint_;
   return CREATE_HINT_BEGIN;
+}
+{alter_hint_begin} {
+  BEGIN(hint);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->is_ignore_token_ = p->is_ignore_hint_;
+  return ALTER_HINT_BEGIN;
 }
 <hint>{c_cmt_end} {
   BEGIN(INITIAL);

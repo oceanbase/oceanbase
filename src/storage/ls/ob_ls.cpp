@@ -448,25 +448,6 @@ bool ObLS::is_create_committed() const
   return (persistent_state.is_normal_state() || persistent_state.is_ha_state());
 }
 
-bool ObLS::is_need_gc() const
-{
-  int ret = OB_SUCCESS;
-  bool bool_ret = false;
-  ObMigrationStatus migration_status;
-  ObLSPersistentState create_status = ls_meta_.get_persistent_state();
-  if (create_status.is_need_gc()) {
-    bool_ret = true;
-  } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
-    LOG_WARN("get migration status failed", K(ret), K(ls_meta_.ls_id_));
-  } else if (ObMigrationStatusHelper::can_gc_ls_without_check_dependency(migration_status)) {
-    bool_ret = true;
-  }
-  if (bool_ret) {
-    FLOG_INFO("ls need gc", K(bool_ret), K(create_status), K(migration_status));
-  }
-  return bool_ret;
-}
-
 bool ObLS::is_clone_first_step() const
 {
   int ret = OB_SUCCESS;
@@ -1703,13 +1684,8 @@ int ObLS::finish_slog_replay()
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
   } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
     LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
-  } else if (is_need_gc()) {
-    LOG_INFO("this ls should be gc later", KPC(this));
-    // ls will be gc later and tablets in the ls are not complete,
-    // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
   } else {
     // after slog replayed, the ls must be offlined state.
-    ls_tablet_svr_.enable_to_read();
     update_state_seq_();
   }
   return ret;
