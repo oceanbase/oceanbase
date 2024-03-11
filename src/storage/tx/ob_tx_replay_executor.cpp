@@ -301,7 +301,7 @@ int ObTxReplayExecutor::before_replay_redo_()
   if (!has_redo_) {
     if (OB_ISNULL(ctx_) || OB_ISNULL(mt_ctx_ = ctx_->get_memtable_ctx())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (mt_ctx_->replay_begin(log_ts_ns_)) {
+    } else if (OB_FAIL(mt_ctx_->replay_begin(log_ts_ns_))) {
       TRANS_LOG(ERROR, "[Replay Tx] replay_begin fail or mt_ctx_ is NULL", K(ret), K(mt_ctx_));
     } else {
       has_redo_ = true;

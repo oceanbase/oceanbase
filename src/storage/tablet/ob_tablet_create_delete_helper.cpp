@@ -522,8 +522,8 @@ int ObTabletCreateDeleteHelper::check_for_standby(
   if (OB_UNLIKELY(snapshot.is_max())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args, snapshot is MAX", K(ret), K(snapshot));
-  } else if (trans_service->mds_infer_standby_trx_state(nullptr/*ls_ptr*/,
-      ls_id, tx_id, snapshot, tx_data_state, commit_version)) {
+  } else if (OB_FAIL(trans_service->mds_infer_standby_trx_state(nullptr/*ls_ptr*/,
+      ls_id, tx_id, snapshot, tx_data_state, commit_version))) {
     LOG_WARN("failed to do mds infer standby trx state", K(ret), K(ls_id), K(tx_id), K(snapshot));
   }
 
