@@ -230,7 +230,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr *&expr)
       }
       if (OB_SUCC(ret)) {
         ObOpRawExpr *new_and = NULL;
-        stmt_compare_context.init(&query_ctx->calculable_items_);
+        stmt_compare_context.init(&query_ctx->calculable_items_, ctx_.param_list_);
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_AND, new_and))) {
           LOG_WARN("alloc ObOpRawExpr failed", K(ret));
         } else if (OB_ISNULL(new_and)) {

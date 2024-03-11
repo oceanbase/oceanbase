@@ -1007,6 +1007,10 @@ bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,
   if (left.get_result_type() == right.get_result_type()) {
     if (ignore_param_ && (left.get_value().is_unknown() || right.get_value().is_unknown())) {
       result = true;
+    } else if (param_list_ != NULL &&
+               ((left.get_value().is_unknown() && left.get_value().get_unknown() >= param_list_->count()) ||
+                (right.get_value().is_unknown() && right.get_value().get_unknown() >= param_list_->count()))) {
+      result = false;//maybe in prepare stmt prepare phase.
     } else {
       const ObObj &this_value = left.get_value().is_unknown() ?
           left.get_result_type().get_param() : left.get_value();

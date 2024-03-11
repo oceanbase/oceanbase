@@ -868,9 +868,7 @@ int ObSelectResolver::check_group_by()
   }
 
   if (OB_SUCC(ret)) {
-    // skip add const constraint during prepare stage in PL
-    const ParamStore *param_store = (NULL != params_.secondary_namespace_) ? NULL : params_.param_list_;
-    if (OB_FAIL(ObGroupByChecker::check_group_by(param_store,
+    if (OB_FAIL(ObGroupByChecker::check_group_by(params_.param_list_,
                                                  select_stmt,
                                                  having_has_self_column_,
                                                  has_group_by_clause(),
@@ -884,7 +882,7 @@ int ObSelectResolver::check_group_by()
   // 1. select item/having/order item中的表达式树(子树)需要每个都在group by列中找到
   // 2. 递归查找是否在groupby列中，将在groupby的列的指针替换。
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt, NULL))) {
+    if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt, NULL, params_.param_list_))) {
       LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
     }
   }
@@ -943,9 +941,7 @@ int ObSelectResolver::check_order_by()
           }
         }
         if (OB_SUCC(ret)) {
-          // skip add const constraint during prepare stage in PL
-          const ParamStore *param_store = (NULL != params_.secondary_namespace_) ? NULL : params_.param_list_;
-          if (OB_FAIL(ObGroupByChecker::check_by_expr(param_store,
+          if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
                                                       select_stmt,
                                                       select_item_exprs,
                                                       order_item_exprs,
@@ -5892,9 +5888,7 @@ int ObSelectResolver::check_win_func_arg_valid(ObSelectStmt *select_stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected stmt", K(ret));
     } else {
-      // skip add const constraint during prepare stage in PL
-      const ParamStore *param_store = (NULL != params_.secondary_namespace_) ? NULL : params_.param_list_;
-      if (OB_FAIL(ObGroupByChecker::check_analytic_function(param_store,
+      if (OB_FAIL(ObGroupByChecker::check_analytic_function(params_.param_list_,
                                                             select_stmt,
                                                             arg_exp_arr,
                                                             partition_exp_arr))) {

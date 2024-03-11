@@ -169,7 +169,7 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
   // since the init() func only initialize the class members,
   // it is better to use constructor
   // for common expression extraction
-  void init(const ObIArray<ObHiddenColumnItem> *calculable_items);
+  void init(const ObIArray<ObHiddenColumnItem> *calculable_items, const ParamStore *param_list = NULL);
 
   // for win_magic rewrite
   void init(const ObDMLStmt *inner,

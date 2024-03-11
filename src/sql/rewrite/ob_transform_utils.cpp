@@ -10183,7 +10183,8 @@ int ObTransformUtils::add_const_param_constraints(ObRawExpr *expr,
 
 //pc_constraints are for non-paramlized groupby exprs while eq_constraints are for paramlized groupby exprs
 int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                           ObTransformerCtx *trans_ctx)
+                                                           ObTransformerCtx *trans_ctx,
+                                                           const ParamStore *param_list/*default null*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(select_stmt)) {
@@ -10196,7 +10197,9 @@ int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_
                                              select_items.at(i).expr_,
                                              true,
                                              trans_ctx,
-                                             false))) {
+                                             false,
+                                             param_list))) {
+
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -10206,7 +10209,8 @@ int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_
                                              having_exprs.at(i),
                                              true,
                                              trans_ctx,
-                                             false))) {
+                                             false,
+                                             param_list))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -10216,7 +10220,8 @@ int ObTransformUtils::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_
                                              order_items.at(i).expr_,
                                              false,
                                              trans_ctx,
-                                             false))) {
+                                             false,
+                                             param_list))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -10228,7 +10233,8 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                                  ObRawExpr *&expr,
                                                  bool need_query_compare,
                                                  ObTransformerCtx *trans_ctx,
-                                                 bool in_add_expr)
+                                                 bool in_add_expr,
+                                                 const ParamStore *param_list)
 {
   int ret = OB_SUCCESS;
   ObStmtCompareContext check_context;
@@ -10241,7 +10247,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got an unexpected null", K(ret));
   } else {
-    check_context.init(&select_stmt->get_query_ctx()->calculable_items_);
+    check_context.init(&select_stmt->get_query_ctx()->calculable_items_, param_list);
     int64_t param_cnt = expr->get_param_count();
     // only first param should be replaced (if needed) for T_OP_IS and T_OP_IS_NOT expr
     //    select null as aa group by aa having null is null;
@@ -10255,7 +10261,8 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                                         expr->get_param_expr(i),
                                                         need_query_compare,
                                                         trans_ctx,
-                                                        T_OP_ADD == expr->get_expr_type())))) {
+                                                        T_OP_ADD == expr->get_expr_type(),
+                                                        param_list)))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }

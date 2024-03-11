@@ -91,9 +91,10 @@ int StmtCompareHelper::alloc_compare_helper(ObIAllocator &allocator, StmtCompare
   return ret;
 }
 
-void ObStmtCompareContext::init(const ObIArray<ObHiddenColumnItem> *calculable_items)
+void ObStmtCompareContext::init(const ObIArray<ObHiddenColumnItem> *calculable_items, const ParamStore *param_list)
 {
   calculable_items_ = calculable_items;
+  param_list_ = param_list;
 }
 
 void ObStmtCompareContext::init(const ObDMLStmt *inner,
@@ -193,6 +194,10 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
         bret = false;
       } else if (ignore_param_) {
         bret = ObExprEqualCheckContext::compare_const(left, right);
+      } else if (param_list_ != NULL &&
+                 (left.get_value().get_unknown() >= param_list_->count() ||
+                  right.get_value().get_unknown() >= param_list_->count())) {
+        bret = false;//maybe in prepare stmt prepare phase.
       } else if (left.get_result_type().get_param().is_equal(
                    right.get_result_type().get_param(), CS_TYPE_BINARY)) {
         ObPCParamEqualInfo info;

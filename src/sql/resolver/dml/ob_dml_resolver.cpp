@@ -7590,6 +7590,7 @@ int ObDMLResolver::find_generated_column_expr(ObRawExpr *&expr, bool &is_found)
     ObExprEqualCheckContext check_ctx;
     check_ctx.override_const_compare_ = true;
     check_ctx.ignore_implicit_cast_ = true;
+    check_ctx.param_list_ = params_.param_list_;
     for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < gen_col_exprs_.count(); ++i) {
       if (OB_ISNULL(gen_col_exprs_.at(i).dependent_expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -7655,6 +7656,7 @@ int ObDMLResolver::find_const_params_for_gen_column(const ObRawExpr &expr)
     check_context.err_code_ = OB_SUCCESS;
     check_context.override_const_compare_ = false;
     check_context.ignore_implicit_cast_ = true;
+    check_context.param_list_ = params_.param_list_;
 
     if (OB_SUCC(ret) &&
         gen_col_exprs_.at(i).dependent_expr_->same_as(expr, &check_context)) {

@@ -1477,7 +1477,8 @@ public:
                                          ObTransformerCtx *ctx);
 
   static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                  ObTransformerCtx *trans_ctx);
+                                                  ObTransformerCtx *trans_ctx,
+                                                  const ParamStore *param_list = NULL);
 
   static int replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
                                                   ObRawExpr *expr_r,
@@ -1500,7 +1501,8 @@ public:
                                         ObRawExpr *&expr,
                                         bool need_query_compare,
                                         ObTransformerCtx *tran_ctx,
-                                        bool in_add_expr);
+                                        bool in_add_expr,
+                                        const ParamStore *param_list);
 
   static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                            ObIArray<ObRawExpr *> &not_null_exprs);
