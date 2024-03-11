@@ -88,7 +88,8 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
     OPT_TRACE("stmt has recusive cte or hierarchical query");
   } else if (select_stmt->get_from_item_size() != 1 || select_stmt->get_from_item(0).is_joined_
              || select_stmt->get_aggr_item_size() < 1 || !select_stmt->is_scala_group_by()
-             || select_stmt->is_contains_assignment()) {
+             || select_stmt->is_contains_assignment()
+             || (select_stmt->get_aggr_item_size() > 1 && select_stmt->get_semi_info_size() > 0)) {
     OPT_TRACE("not a simple aggr query");
   } else if (OB_FAIL(select_stmt->has_rownum(has_rownum))) {
     LOG_WARN("failed to check if select stmt has rownum", K(ret));
@@ -296,7 +297,7 @@ int ObTransformMinMax::deep_copy_subquery_for_aggr(const ObSelectStmt &copied_st
   } else if (child_stmt->get_table_size() != 1
               || OB_ISNULL(table = child_stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected table size or table item is null", K(ret));
+    LOG_WARN("get unexpected table size or table item is null", K(ret), KPC(child_stmt));
   } else if (OB_FALSE_IT(table->qb_name_ = qb_name)) {
   } else if (OB_FAIL(child_stmt->update_stmt_table_id(copied_stmt))) {
     LOG_WARN("failed to update stmt table id", K(ret));
