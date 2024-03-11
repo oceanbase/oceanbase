@@ -321,7 +321,9 @@ int64_t AlterColumnSchema::to_string(char* buf, const int64_t buf_len) const
 int AlterColumnSchema::assign(const ObColumnSchemaV2 &other)
 {
   int ret = OB_SUCCESS;
-  ObColumnSchemaV2::operator = (other);
+  if (OB_FAIL(ObColumnSchemaV2::assign(other))) {
+    LOG_WARN("fail to assign column", KR(ret), K(other));
+  }
   return ret;
 }
 
@@ -330,7 +332,6 @@ AlterColumnSchema &AlterColumnSchema::operator=(const AlterColumnSchema &src_sch
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
-    ObColumnSchemaV2::operator = (src_schema);
     alter_type_ = src_schema.alter_type_;
     is_primary_key_ = src_schema.is_primary_key_;
     is_autoincrement_ = src_schema.is_autoincrement_;
@@ -340,7 +341,9 @@ AlterColumnSchema &AlterColumnSchema::operator=(const AlterColumnSchema &src_sch
     is_set_default_ = src_schema.is_set_default_;
     check_timestamp_column_order_ = src_schema.check_timestamp_column_order_;
     is_no_zero_date_ = src_schema.is_no_zero_date_;
-    if (OB_FAIL(deep_copy_str(src_schema.get_origin_column_name(), origin_column_name_))) {
+    if (OB_FAIL(ObColumnSchemaV2::assign(src_schema))) {
+      LOG_WARN("fail to assign column", KR(ret), K(src_schema));
+    } else if (OB_FAIL(deep_copy_str(src_schema.get_origin_column_name(), origin_column_name_))) {
       SHARE_LOG(WARN, "failed to deep copy origin_column_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_schema.get_next_column_name(), next_column_name_))) {
       SHARE_LOG(WARN, "failed to deep copy next_column_name", K(ret));

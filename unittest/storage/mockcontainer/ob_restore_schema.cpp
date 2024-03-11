@@ -212,8 +212,9 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
         ret = OB_ERR_ILLEGAL_NAME;
         STORAGE_LOG(WARN, "invalid column name",
                     K_(index_arg.index_columns_[i].column_name));
+      } else if (OB_FAIL(index_column.assign(*col))) {
+        STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(col));
       } else {
-        index_column = *col;
         index_column.set_rowkey_position(++index_rowkey_num);
         if (col->get_column_id() > max_column_id) {
           max_column_id = col->get_column_id();
@@ -235,8 +236,9 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
         if (NULL == (col = table_schema->get_column_schema(column_id))) {
           ret = OB_ERR_ILLEGAL_ID;
           STORAGE_LOG(WARN, "invalid column id", K(column_id));
+        } else if (OB_FAIL(index_column.assign(*col))) {
+          STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(col));
         } else {
-          index_column = *col;
           index_column.set_rowkey_position(++index_rowkey_num);
           // we do not have index of other type now
           OB_ASSERT(INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
@@ -279,10 +281,14 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
     //add primary key of unique index
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < rk_cols.count(); ++i) {
-        ObColumnSchemaV2 index_column = *rk_cols.at(i);
-        index_column.set_rowkey_position(0);
-        if (OB_SUCCESS != (ret = index_schema.add_column(index_column))) {
-          STORAGE_LOG(WARN, "add column schema error", K(ret));
+        ObColumnSchemaV2 index_column;
+        if (OB_FAIL(index_column.assign(*rk_cols.at(i)))) {
+          STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(rk_cols.at(i)));
+        } else {
+          index_column.set_rowkey_position(0);
+          if (OB_SUCCESS != (ret = index_schema.add_column(index_column))) {
+            STORAGE_LOG(WARN, "add column schema error", K(ret));
+          }
         }
       }
     }

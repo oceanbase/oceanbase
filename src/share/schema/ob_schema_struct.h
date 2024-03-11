@@ -1400,9 +1400,8 @@ public:
   ObSysVarSchema() : ObSchema() { reset(); }
   ~ObSysVarSchema() {}
   explicit ObSysVarSchema(common::ObIAllocator *allocator);
-  explicit ObSysVarSchema(const ObSysVarSchema &src_schema);
-  ObSysVarSchema &operator=(const ObSysVarSchema &src_schema);
-  int assign(const ObSysVarSchema &other);
+  DISABLE_COPY_ASSIGN(ObSysVarSchema);
+  int assign(const ObSysVarSchema &src_schema);
   virtual bool is_valid() const { return ObSchema::is_valid() && tenant_id_ != common::OB_INVALID_ID && !name_.empty(); }
   void reset();
   int64_t get_convert_size() const;
@@ -1472,9 +1471,8 @@ public:
   ObSysVariableSchema();
   explicit ObSysVariableSchema(common::ObIAllocator *allocator);
   virtual ~ObSysVariableSchema();
-  ObSysVariableSchema(const ObSysVariableSchema &src_schema);
-  ObSysVariableSchema &operator=(const ObSysVariableSchema &src_schema);
-  int assign(const ObSysVariableSchema &other);
+  DISABLE_COPY_ASSIGN(ObSysVariableSchema);
+  int assign(const ObSysVariableSchema &src_schema);
   //set methods
   inline void set_tenant_id(const uint64_t tenant_id)  { tenant_id_ = tenant_id; }
   inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }

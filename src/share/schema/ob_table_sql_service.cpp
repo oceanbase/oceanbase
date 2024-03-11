@@ -1120,14 +1120,18 @@ int ObTableSqlService::add_columns_for_core(ObISQLClient &sql_client, const ObTa
   }
   for (ObTableSchema::const_column_iterator iter = table.column_begin();
       OB_SUCC(ret) && iter != table.column_end(); ++iter) {
-    ObColumnSchemaV2 column = (**iter);
-    column.set_schema_version(table.get_schema_version());
-    column.set_tenant_id(table.get_tenant_id());
-    column.set_table_id(table.get_table_id());
     dml.reset();
     cells.reuse();
     int64_t affected_rows = 0;
-    if (OB_FAIL(gen_column_dml(tenant_id, column, dml))) {
+    ObColumnSchemaV2 column;
+    if (OB_FAIL(column.assign(**iter))) {
+      LOG_WARN("fail to assign column", KR(ret), KPC(*iter));
+    } else {
+      column.set_schema_version(table.get_schema_version());
+      column.set_tenant_id(table.get_tenant_id());
+      column.set_table_id(table.get_table_id());
+    }
+    if (FAILEDx(gen_column_dml(tenant_id, column, dml))) {
       LOG_WARN("gen column dml failed", K(ret));
     } else if (OB_FAIL(dml.splice_core_cells(kv, cells))) {
       LOG_WARN("splice core cells failed", K(ret));
@@ -1228,12 +1232,16 @@ int ObTableSqlService::add_columns_for_not_core(ObISQLClient &sql_client,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is NULL", K(ret));
     } else {
-      ObColumnSchemaV2 column = (**iter);
-      column.set_schema_version(new_schema_version);
-      column.set_tenant_id(table.get_tenant_id());
-      column.set_table_id(table.get_table_id());
+      ObColumnSchemaV2 column;
+      if (OB_FAIL(column.assign(**iter))) {
+        LOG_WARN("fail to assign column", KR(ret), KPC(*iter));
+      } else {
+        column.set_schema_version(new_schema_version);
+        column.set_tenant_id(table.get_tenant_id());
+        column.set_table_id(table.get_table_id());
+      }
       ObDMLSqlSplicer dml;
-      if (OB_FAIL(gen_column_dml(exec_tenant_id, column, dml))) {
+      if (FAILEDx(gen_column_dml(exec_tenant_id, column, dml))) {
         LOG_WARN("gen_column_dml failed", K(column), K(ret));
       } else if (column_sql.empty()) {
         if (OB_FAIL(dml.splice_insert_sql_without_plancache(OB_ALL_COLUMN_TNAME, column_sql))) {
@@ -5570,12 +5578,16 @@ int ObTableSqlService::update_view_columns(ObISQLClient &sql_client,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is NULL", K(ret));
     } else {
-      ObColumnSchemaV2 column = (**iter);
-      column.set_schema_version(new_schema_version);
-      column.set_tenant_id(table.get_tenant_id());
-      column.set_table_id(table.get_table_id());
+      ObColumnSchemaV2 column;
+      if (OB_FAIL(column.assign(**iter))) {
+        LOG_WARN("fail to assign column", KR(ret), KPC(*iter));
+      } else {
+        column.set_schema_version(new_schema_version);
+        column.set_tenant_id(table.get_tenant_id());
+        column.set_table_id(table.get_table_id());
+      }
       ObDMLSqlSplicer dml;
-      if (OB_FAIL(gen_column_dml(exec_tenant_id, column, dml))) {
+      if (FAILEDx(gen_column_dml(exec_tenant_id, column, dml))) {
         LOG_WARN("gen_column_dml failed", K(column), K(ret));
       } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_COLUMN_TNAME, column_sql))) {
         LOG_WARN("splice_insert_sql failed", "table_name", OB_ALL_COLUMN_TNAME, K(ret));

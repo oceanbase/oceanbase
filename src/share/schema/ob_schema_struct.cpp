@@ -814,22 +814,15 @@ ObSysVariableSchema::ObSysVariableSchema(ObIAllocator *allocator)
   reset();
 }
 
-ObSysVariableSchema::ObSysVariableSchema(const ObSysVariableSchema &src_schema)
-  : ObSchema()
-{
-  reset();
-  *this = src_schema;
-}
-
 ObSysVariableSchema::~ObSysVariableSchema()
 {
 }
 
-ObSysVariableSchema& ObSysVariableSchema::operator =(const ObSysVariableSchema &src_schema)
+int ObSysVariableSchema::assign(const ObSysVariableSchema &src_schema)
 {
+  int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
-    int ret = OB_SUCCESS;
     error_ret_ = src_schema.error_ret_;
     tenant_id_ = src_schema.tenant_id_;
     schema_version_ = src_schema.schema_version_;
@@ -848,14 +841,6 @@ ObSysVariableSchema& ObSysVariableSchema::operator =(const ObSysVariableSchema &
       error_ret_ = ret;
     }
   }
-  return *this;
-}
-
-int ObSysVariableSchema::assign(const ObSysVariableSchema &other)
-{
-  int ret = OB_SUCCESS;
-  *this = other;
-  ret = get_err_ret();
   return ret;
 }
 
@@ -984,7 +969,9 @@ int ObSysVariableSchema::add_sysvar_schema(const ObSysVarSchema &sysvar_schema)
     LOG_WARN("alloc sysvar schema failed", K(sizeof(ObSysVarSchema)));
   } else {
     tmp_sysvar_schema = new(ptr) ObSysVarSchema(allocator_);
-    *tmp_sysvar_schema = sysvar_schema;
+    if (OB_FAIL(tmp_sysvar_schema->assign(sysvar_schema))) {
+      LOG_WARN("fail to assign sysvar", KR(ret), K(sysvar_schema));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(!tmp_sysvar_schema->is_valid())) {
@@ -2290,25 +2277,19 @@ int64_t ObSysVarSchema::get_convert_size() const
   return convert_size;
 }
 
-ObSysVarSchema::ObSysVarSchema(const ObSysVarSchema &src_schema)
-  : ObSchema()
-{
-  *this = src_schema;
-}
-
 ObSysVarSchema::ObSysVarSchema(ObIAllocator *allocator)
   : ObSchema(allocator)
 {
   reset();
 }
 
-ObSysVarSchema &ObSysVarSchema::operator=(const ObSysVarSchema &src_schema)
+int ObSysVarSchema::assign(const ObSysVarSchema &src_schema)
 {
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
     if (!src_schema.is_valid()) {
-      ret = src_schema.get_err_ret();
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("src schema is invalid", K(ret));
     } else if (OB_FAIL(set_name(src_schema.get_name()))) {
       LOG_WARN("set sysvar name failed", K(ret));
@@ -2328,16 +2309,8 @@ ObSysVarSchema &ObSysVarSchema::operator=(const ObSysVarSchema &src_schema)
       set_flags(src_schema.get_flags());
       set_tenant_id(src_schema.get_tenant_id());
     }
+    error_ret_ = ret;
   }
-  error_ret_ = ret;
-  return *this;
-}
-
-int ObSysVarSchema::assign(const ObSysVarSchema &other)
-{
-  int ret = OB_SUCCESS;
-  *this = other;
-  ret = get_err_ret();
   return ret;
 }
 

@@ -1025,11 +1025,16 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
           column.set_column_id(cur_column_id++);
           ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
           if (OB_NOT_NULL(org_column)) {
-            ObColumnSchemaV2 new_column(*org_column);
-            new_column.set_column_id(cur_column_id++);
-            new_column.set_prev_column_id(UINT64_MAX);
-            new_column.set_next_column_id(UINT64_MAX);
-            if (1 == table_schema.get_column_count()) {
+            ObColumnSchemaV2 new_column;
+            if (OB_FAIL(new_column.assign(*org_column))) {
+              LOG_WARN("fail to assign column schema", KR(ret), KPC(org_column));
+            } else {
+              new_column.set_column_id(cur_column_id++);
+              new_column.set_prev_column_id(UINT64_MAX);
+              new_column.set_next_column_id(UINT64_MAX);
+            }
+            if (OB_FAIL(ret)) {
+            } else if (1 == table_schema.get_column_count()) {
             } else if (OB_FAIL(table_schema.delete_column(org_column->get_column_name_str()))) {
               LOG_WARN("delete column failed", K(ret), K(new_column.get_column_name_str()));
             } else if (OB_FAIL(table_schema.add_column(new_column))) {
