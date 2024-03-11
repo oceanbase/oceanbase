@@ -122,13 +122,18 @@ void ObMemtableCtx::reset()
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsubmitted cnt not zero", K(*this), K(unsubmitted_cnt_));
       ob_abort();
     }
-    const int64_t fill = log_gen_.get_redo_filled_count();
-    const int64_t sync_succ = log_gen_.get_redo_sync_succ_count();
-    const int64_t sync_fail = log_gen_.get_redo_sync_fail_count();
-    if (OB_UNLIKELY(fill != sync_succ + sync_fail)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "redo filled_count != sync_succ + sync_fail", KPC(this),
+    if (OB_TRANS_KILLED != end_code_) {
+      // _NOTE_: skip when txn was forcedly killed
+      // if txn killed forcedly, callbacks of log unsynced will not been processed
+      // after log sync succeed
+      const int64_t fill = log_gen_.get_redo_filled_count();
+      const int64_t sync_succ = log_gen_.get_redo_sync_succ_count();
+      const int64_t sync_fail = log_gen_.get_redo_sync_fail_count();
+      if (OB_UNLIKELY(fill != sync_succ + sync_fail)) {
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "redo filled_count != sync_succ + sync_fail", KPC(this),
                     K(fill), K(sync_succ), K(sync_fail));
-      ob_abort();
+        ob_abort();
+      }
     }
     is_inited_ = false;
     callback_free_count_ = 0;
