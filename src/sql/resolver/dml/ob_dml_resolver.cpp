@@ -12704,7 +12704,7 @@ int ObDMLResolver::check_index_table_has_partition_keys(const ObTableSchema *ind
   if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema should not be null", K(ret));
-  } else if (index_schema->is_storage_local_index_table()) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && has_part_key && i < partition_keys.get_size(); ++i) {
       const ObColumnSchemaV2 *column_schema = nullptr;
       uint64_t col_id = OB_INVALID_ID;
