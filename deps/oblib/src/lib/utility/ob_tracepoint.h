@@ -785,6 +785,9 @@ class EventTable
       // session info diagnosis control
       // EN_SESS_INFO_DIAGNOSIS_CONTROL = 1187,
       EN_SESS_CLEAN_KILL_MAP_TIME = 1188,
+            // sql audit background thread stuck
+      EN_SQL_AUDIT_RELEASE_BACK_THREAD_STUCK = 1189,
+      EN_SQL_AUDIT_CONSTRUCT_BACK_THREAD_STUCK = 1190,
       EN_ENABLE_NEWSORT_FORCE = 1200,
 
       // Transaction // 2001 - 2100
