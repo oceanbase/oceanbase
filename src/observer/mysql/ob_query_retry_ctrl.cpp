@@ -17,6 +17,7 @@
 #include "sql/resolver/ob_stmt.h"
 #include "pl/ob_pl.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "observer/ob_server_struct.h"
 #include "observer/mysql/obmp_query.h"
@@ -987,6 +988,13 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   }
   if (OB_UNLIKELY(OB_SUCCESS == v.client_ret_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "no matter need retry or not, v.client_ret_ should not be OB_SUCCESS", K(v));
+  }
+  // bug fix:
+  if (RETRY_TYPE_LOCAL == v.retry_type_) {
+    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    if (NULL != node) {
+      node->reset_need_wait();
+    }
   }
 }
 
