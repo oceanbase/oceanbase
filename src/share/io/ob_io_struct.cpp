@@ -574,7 +574,7 @@ bool ObIOUsage::is_request_doing(const int64_t index) const
 
 int64_t ObIOUsage::get_io_usage_num() const
 {
-  return group_num_;
+  return ATOMIC_LOAD(&group_num_);
 }
 
 int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const

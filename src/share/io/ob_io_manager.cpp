@@ -1252,7 +1252,7 @@ void ObTenantIOManager::print_io_status()
     ObSysIOUsage::SysAvgItems sys_avg_iops, sys_avg_size, sys_avg_rt;
     io_usage_.get_io_usage(avg_iops, avg_size, avg_rt);
     io_backup_usage_.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt);
-    for (int64_t i = 1; i < io_usage_.get_io_usage_num(); ++i) {
+    for (int64_t i = 1; i < io_usage_.get_io_usage_num() && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
       if (io_config_.group_configs_.at(i-1).deleted_) {
         continue;
       }
