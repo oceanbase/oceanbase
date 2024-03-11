@@ -732,11 +732,10 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
     batch_info_guard.set_batch_size(brs_.size_);
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || brs_.size_ <= 0) {
     } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (brs_.size_ > 0
-        && (!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
+    } else if ((!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
         if (brs_.skip_->at(i)) {
           continue;
@@ -759,7 +758,7 @@ int ObPxTransmitOp::send_rows_in_batch(ObSliceIdxCalc &slice_calc)
           }
         }
       }
-    } else if (brs_.size_ > 0) {
+    } else {
       int64_t *indexes = NULL;
       if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, false>(spec_.output_, eval_ctx_,
                                                *brs_.skip_, brs_.size_,
@@ -849,11 +848,10 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
     }
     const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
     batch_info_guard.set_batch_size(brs_.size_);
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || brs_.size_ == 0) {
     } else if (OB_FAIL(set_rollup_hybrid_keys(slice_calc))) {
       LOG_WARN("failed to set rollup hybrid keys", K(ret));
-    } else if (brs_.size_ > 0
-        && (!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
+    } else if ((!slice_calc.support_vectorized_calc() || NULL != spec.tablet_id_expr_)) {
       for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
         ObExpr *expr = spec_.output_.at(i);
         if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
@@ -913,7 +911,7 @@ int ObPxTransmitOp::send_rows_in_vector(ObSliceIdxCalc &slice_calc)
           LOG_WARN("failed to send batch", K(ret));
         }
       }
-    } else if (brs_.size_ > 0) {
+    } else {
       int64_t *indexes = NULL;
       if (OB_FAIL((slice_calc.get_slice_idx_batch<CALC_TYPE, true>(spec_.output_, eval_ctx_,
                                                *brs_.skip_, brs_.size_,
