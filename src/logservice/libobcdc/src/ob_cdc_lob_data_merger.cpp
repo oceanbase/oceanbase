@@ -227,10 +227,10 @@ int ObCDCLobDataMerger::push_lob_column_(
       } else if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt),
             K(lob_data_get_ctx));
-      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st, seq_no_cnt, allocator,
-          lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
-        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt),
-            K(new_lob_col_fra_ctx_list));
+      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
+          allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt), K(del_seq_no_cnt),
+            K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_update()) {
       if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
@@ -247,8 +247,8 @@ int ObCDCLobDataMerger::push_lob_column_(
             K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
               allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
-        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
-            K(new_lob_col_fra_ctx_list));
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(seq_no_cnt), K(del_seq_no_cnt),
+            K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_delete()) {
       ret = OB_ERR_UNEXPECTED;
