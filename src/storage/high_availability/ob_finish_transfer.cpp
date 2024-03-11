@@ -838,6 +838,7 @@ int ObTxFinishTransfer::build_tx_finish_transfer_in_info_(const share::ObLSID &s
     transfer_in_info.src_ls_id_ = src_ls_id;
     transfer_in_info.dest_ls_id_ = dest_ls_id;
     transfer_in_info.start_scn_ = start_scn;
+    transfer_in_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
     if (OB_FAIL(transfer_in_info.tablet_list_.assign(tablet_list))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_list));
     }
@@ -858,6 +859,7 @@ int ObTxFinishTransfer::build_tx_finish_transfer_out_info_(const share::ObLSID &
     transfer_out_info.src_ls_id_ = src_ls_id;
     transfer_out_info.dest_ls_id_ = dest_ls_id;
     transfer_out_info.finish_scn_ = finish_scn;
+    transfer_out_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
     if (OB_FAIL(transfer_out_info.tablet_list_.assign(tablet_list))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_list));
     }

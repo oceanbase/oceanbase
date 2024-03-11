@@ -32,6 +32,7 @@ ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
     tablet_list_(),
     task_id_(),
     data_end_scn_(),
+    transfer_epoch_(0),
     data_version_(DEFAULT_MIN_DATA_VERSION)
 {
 }
@@ -44,13 +45,15 @@ void ObTXStartTransferOutInfo::reset()
   task_id_.reset();
   data_end_scn_.reset();
   transfer_epoch_ = 0;
+  data_version_ = 0;
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
     && dest_ls_id_.is_valid()
-    && !tablet_list_.empty();
+    && !tablet_list_.empty()
+    && data_version_ > 0;
 }
 
 int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_transfer_out_info)
@@ -99,7 +102,8 @@ bool ObTXStartTransferInInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && start_scn_.is_valid()
-      && !tablet_meta_list_.empty();
+      && !tablet_meta_list_.empty()
+      && data_version_ > 0;
 }
 
 int ObTXStartTransferInInfo::assign(const ObTXStartTransferInInfo &start_transfer_in_info)
@@ -150,7 +154,8 @@ bool ObTXFinishTransferInInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && start_scn_.is_valid()
-      && !tablet_list_.empty();
+      && !tablet_list_.empty()
+      && data_version_ > 0;
 }
 
 int ObTXFinishTransferInInfo::assign(const ObTXFinishTransferInInfo &finish_transfer_in_info)
@@ -196,7 +201,8 @@ bool ObTXFinishTransferOutInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && finish_scn_.is_valid()
-      && !tablet_list_.empty();
+      && !tablet_list_.empty()
+      && data_version_ > 0;
 }
 
 int ObTXFinishTransferOutInfo::assign(const ObTXFinishTransferOutInfo &finish_transfer_out_info)
