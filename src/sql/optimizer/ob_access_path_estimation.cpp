@@ -35,13 +35,41 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
                                               ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  ObBaseTableEstMethod valid_methods = 0;
-  method = EST_INVALID;
+  ObSEArray<AccessPath *, 4> normal_paths;
+  ObSEArray<AccessPath *, 4> geo_paths;
+  ObBaseTableEstMethod geo_method;
 
   if (OB_UNLIKELY(paths.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
+  } else if (is_inner_path) {
+    if (OB_FAIL(inner_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
+      LOG_WARN("failed to do estimate rowcount for paths", K(ret));
+    }
+  } else if (OB_FAIL(classify_paths(paths, normal_paths, geo_paths))) {
+    LOG_WARN("failed to classify paths", K(ret));
+  } else if (!normal_paths.empty() &&
+             OB_FAIL(inner_estimate_rowcount(ctx, normal_paths, is_inner_path, filter_exprs, method))) {
+    LOG_WARN("failed to do estimate rowcount for normal paths", K(ret));
+  } else if (!geo_paths.empty() &&
+             OB_FAIL(inner_estimate_rowcount(ctx, geo_paths, is_inner_path, filter_exprs, geo_method))) {
+    LOG_WARN("failed to do estimate rowcount for geo paths", K(ret));
+  } else if (normal_paths.empty() && !geo_paths.empty()) {
+    method = geo_method;
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                                    common::ObIArray<AccessPath *> &paths,
+                                                    const bool is_inner_path,
+                                                    const ObIArray<ObRawExpr*> &filter_exprs,
+                                                    ObBaseTableEstMethod &method)
+    {
+  int ret = OB_SUCCESS;
+  ObBaseTableEstMethod valid_methods = 0;
+  method = EST_INVALID;
+  if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
     LOG_WARN("failed to get valid est methods", K(ret));
   } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
@@ -400,7 +428,7 @@ int ObAccessPathEstimation::check_path_can_use_storage_estimation(const AccessPa
       int64_t partition_count = part_info->get_phy_tbl_location_info().get_partition_cnt();
       if (partition_count > 1 ||
           scan_range_count <= 0 ||
-          scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
+          (!path->est_cost_info_.index_meta_info_.is_geo_index_ && scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM)) {
         can_use = false;
       } else {
         can_use = true;
@@ -2059,6 +2087,26 @@ bool ObAccessPathEstimation::is_retry_ret(int ret)
          ret == OB_NO_READABLE_REPLICA ||
          ret == OB_LS_NOT_EXIST ||
          ret == OB_TABLET_NOT_EXIST;
+}
+
+int ObAccessPathEstimation::classify_paths(ObIArray<AccessPath *> &paths,
+                                           ObIArray<AccessPath *> &normal_paths,
+                                           ObIArray<AccessPath *> &geo_paths)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+    if (OB_ISNULL(paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null path", K(ret));
+    } else if (paths.at(i)->est_cost_info_.index_meta_info_.is_geo_index_) {
+      if (OB_FAIL(geo_paths.push_back(paths.at(i)))) {
+        LOG_WARN("failed to push back geo path", K(ret));
+      }
+    } else if (OB_FAIL(normal_paths.push_back(paths.at(i)))) {
+      LOG_WARN("failed to push back normal path", K(ret));
+    }
+  }
+  return ret;
 }
 
 } // end of sql

@@ -389,7 +389,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE FULL SCAN|tt1(idx05)|1       |299         |
+|0 |TABLE FULL SCAN|tt1(idx05)|1       |159         |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -583,3 +583,94 @@ SELECT ST_ASTEXT(B) FROM FF01 WHERE B NOT IN (SELECT /*+no_unnest*/B FROM FF01 W
 ST_ASTEXT(B)
 POINT(-1 -2)
 drop table FF01;
+drop table if exists geek_poi_7;
+CREATE TABLE `geek_poi_7` (
+`p_id` bigint(20) NOT NULL COMMENT 'poi id',
+`p_name` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '场景名称',
+`p_branch_name` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '分店名称',
+`p_phone1` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT '联系电话1',
+`p_phone2` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT '联系电话2',
+`p_logo_url` longtext NOT NULL COMMENT '场景LOGO URL',
+`p_scene_url` longtext NOT NULL COMMENT '场景主页URL',
+`p_quickapp_url` longtext NOT NULL COMMENT '快应用场景主页URL',
+`p_service_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '服务列表，json数组',
+`c_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '分类ID',
+`p_radius` double NOT NULL DEFAULT '0' COMMENT '半径大小，单位 m',
+`p_province` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '省',
+`p_city` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '市',
+`p_district` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '区县',
+`p_address` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '详细地址',
+`p_longitude` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '经度',
+`p_latitude` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '纬度',
+`p_altitude` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '海拔高度',
+`p_baidu_id` varchar(45) NOT NULL DEFAULT '\'\'' COMMENT '百度城市ID',
+`p_parent_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '父级poi id',
+`p_parent_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '父级poi 列表',
+`pn_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '合作方ID，默认为 0 - 梦享网络',
+`pb_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '品牌id',
+`p_order` bigint(20) NOT NULL DEFAULT '0' COMMENT '排序次序',
+`p_coordinate` bigint(20) NOT NULL DEFAULT '0' COMMENT '坐标系 0 - WGS84 # 1 - GCJ02 # 2 - BD09',
+`p_category_list` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT 'poi 分类ID列表',
+`geohash_code` varchar(20) NOT NULL DEFAULT '\'\'' COMMENT 'geog_poi 转换为 geohash 的值',
+`p_create_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '创建时间',
+`p_update_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '更新时间',
+`p_delete_time` bigint(20) NOT NULL DEFAULT '0' COMMENT '删除时间',
+`p_encryption_id` bigint(20) NOT NULL DEFAULT '0' COMMENT 'POI 加密ID',
+`p_class` bigint(20) NOT NULL DEFAULT '0' COMMENT '场景等级',
+`p_config` varchar(255) NOT NULL DEFAULT '\'\'' COMMENT '配置项，JSON对象',
+`p_tags_id` json NOT NULL COMMENT '标签列表',
+`geog_poi` geometry NOT NULL /*!80003 SRID 4326 */ COMMENT '经纬度转换后的WGS84坐标对应的geography数据',
+PRIMARY KEY (`p_id`),
+SPATIAL KEY `idx_geohash_code_geog_poi_7` (`geog_poi`) BLOCK_SIZE 16384 LOCAL,
+KEY `idx_poi_del_time_7` (`p_delete_time`) BLOCK_SIZE 16384 LOCAL
+);
+explain EXTENDED_NOADDR SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|p   |64      |2813        |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [(T_OP_LIKE, p.geohash_code, 'ws0emp%', '\\')], [BOOL(ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 
+      23.11138916015625)')))])
+      access([p.p_id], [p.geog_poi], [p.geohash_code], [p.p_delete_time]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([p.p_id]), range(MIN ; MAX)always true
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "p"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  p:
+      table_rows:10002
+      physical_range_rows:10002
+      logical_range_rows:10002
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx_geohash_code_geog_poi_7, idx_poi_del_time_7, geek_poi_7]
+      pruned_index_name:[idx_geohash_code_geog_poi_7]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
