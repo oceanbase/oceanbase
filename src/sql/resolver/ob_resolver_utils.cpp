@@ -7239,9 +7239,18 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   if (NULL == package_guard) {
-    CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
-    OZ (session_info.get_cur_exec_ctx()->get_package_guard(package_guard));
-    CK (OB_NOT_NULL(package_guard));
+    if (NULL != session_info.get_cur_exec_ctx()) {
+      OZ (session_info.get_cur_exec_ctx()->get_package_guard(package_guard));
+      CK (OB_NOT_NULL(package_guard));
+    } else {
+      ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_WARN("exec context is NULL", K(ret));
+      if (q_name.access_idents_.count() >= 0) {
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR,
+                       q_name.access_idents_.at(0).access_name_.length(),
+                       q_name.access_idents_.at(0).access_name_.ptr());
+      }
+    }
   }
   if (OB_SUCC(ret)) {
     pl::ObPLResolver pl_resolver(allocator,
