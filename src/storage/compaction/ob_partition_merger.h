@@ -54,9 +54,7 @@ public:
       const ObMergeParameter &merge_param,
       ObTabletMergeInfo &input_merge_info,
       blocksstable::ObDataStoreDesc &data_store_desc,
-      ObSSTableMergeInfo &output_merge_info,
-      const uint16_t table_idx = 0,
-      const storage::ObStorageColumnGroupSchema *cg_schema = nullptr);
+      ObSSTableMergeInfo &output_merge_info);
 };
 
 class ObProgressiveMergeHelper final

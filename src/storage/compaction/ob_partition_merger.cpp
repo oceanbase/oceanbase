@@ -40,9 +40,7 @@ int ObDataDescHelper::build(
     const ObMergeParameter &merge_param,
     ObTabletMergeInfo &input_merge_info,
     blocksstable::ObDataStoreDesc &data_store_desc,
-    ObSSTableMergeInfo &output_merge_info,
-    const uint16_t table_idx,
-    const storage::ObStorageColumnGroupSchema *cg_schema)
+    ObSSTableMergeInfo &output_merge_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(data_store_desc.shallow_copy(input_merge_info.get_sstable_build_desc().get_desc()))) {
