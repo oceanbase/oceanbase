@@ -213,6 +213,7 @@ private:
   void free_copy_ls_view_reader_(ObICopyLSViewInfoReader *&reader);
   int generate_tablet_id_array_(
       const ObIArray<common::ObTabletID> &tablet_id_array);
+  int reset_multi_version_start_(ObMigrationTabletParam &param);
 private:
   bool is_inited_;
   ObLSRestoreCtx *ctx_;
