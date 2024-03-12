@@ -23797,6 +23797,7 @@ def_table_schema(
           FROM
             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND TABLE_TYPE IN (0,2,3,6,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,
@@ -56136,6 +56137,7 @@ def_table_schema(
               'TABLE' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+          WHERE TABLE_TYPE IN (0,2,3,8,9,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,
@@ -56265,6 +56267,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+          WHERE TABLE_TYPE IN (0,2,3,8,9,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,
