@@ -2457,6 +2457,12 @@ int ObTransformPredicateMoveAround::check_having_expr(ObSelectStmt &stmt,
   ObSEArray<ObRawExpr *, 4> generalized_columns;
   ObSEArray<ObRawExpr *, 4> param_preds;
   all_contain = true;
+  bool contain_op_row = false;
+  if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(&or_qual, contain_op_row))) {
+    LOG_WARN("fail to check contain op row", K(ret));
+  } else if (contain_op_row) {
+    all_contain = false;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && all_contain && i < or_qual.get_param_count(); ++i) {
     ObRawExpr *cur_expr = or_qual.get_param_expr(i);
     generalized_columns.reuse();
@@ -2521,22 +2527,6 @@ int ObTransformPredicateMoveAround::inner_split_or_having_expr(ObSelectStmt &stm
       LOG_WARN("failed to to build and expr", K(ret));
     } else if (OB_FAIL(or_exprs.push_back(new_and_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    //split expr may result T_OP_ROW shared
-    ObSEArray<ObRawExpr*, 4> new_or_exprs;
-    ObRawExprCopier copier(*expr_factory);
-    ReplaceExprByType replacer(T_OP_ROW);
-    if (OB_FAIL(copier.copy_on_replace(or_exprs,
-                                       new_or_exprs,
-                                       &replacer))) {
-      LOG_WARN("failed to copy on replace start with exprs", K(ret));
-    } else if (OB_UNLIKELY(or_exprs.count() != new_or_exprs.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(or_exprs.count()), K(new_or_exprs.count()));
-    } else if (OB_FAIL(or_exprs.assign(new_or_exprs))) {
-      LOG_WARN("failed to assign assign results", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

@@ -439,7 +439,13 @@ public:
   }
   inline bool is_plain_select() const
   {
-    return stmt::T_SELECT == stmt_type_ && !has_for_update() && !(contain_pl_udf_or_trigger_ && udf_has_dml_stmt_);
+    bool is_plain = true;
+    if (lib::is_mysql_mode()) {
+      is_plain = stmt::T_SELECT == stmt_type_ && !has_for_update() && !(contain_pl_udf_or_trigger_ && udf_has_dml_stmt_);
+    } else { // in oralce mode, select + udf, udf cannot has dml stmt.
+      is_plain = stmt::T_SELECT == stmt_type_ && !has_for_update();
+    }
+    return is_plain;
   }
 
   inline bool contain_paramed_column_field() const { return contain_paramed_column_field_; }

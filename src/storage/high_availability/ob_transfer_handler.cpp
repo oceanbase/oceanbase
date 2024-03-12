@@ -1300,6 +1300,7 @@ int ObTransferHandler::do_tx_start_transfer_out_(
     start_transfer_out_info.data_end_scn_ = data_end_scn;
     // TODO lana optimise transfer_epoch value
     start_transfer_out_info.transfer_epoch_ = task_info.task_id_.id();
+    start_transfer_out_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
     if (OB_FAIL(start_transfer_out_info.tablet_list_.assign(task_info.tablet_list_))) {
       LOG_WARN("failed to assign transfer tablet list", K(ret), K(task_info));
     } else {
@@ -1744,6 +1745,7 @@ int ObTransferHandler::do_tx_start_transfer_in_(
       start_transfer_in_info.src_ls_id_ = task_info.src_ls_id_;
       start_transfer_in_info.dest_ls_id_ = task_info.dest_ls_id_;
       start_transfer_in_info.start_scn_ = start_scn;
+      start_transfer_in_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
 
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;

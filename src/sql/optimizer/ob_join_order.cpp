@@ -14263,7 +14263,8 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "join condition contains rownum and subquery");
       }
-    } else if (T_OP_NE == qual->get_expr_type() &&
+    } else if ((T_OP_NE == qual->get_expr_type() ||
+                T_OP_NOT_IN == qual->get_expr_type()) &&
                !force_inner_nl) {
       //do nothing
     } else if (OB_FAIL(pushdown_quals.push_back(qual))) {

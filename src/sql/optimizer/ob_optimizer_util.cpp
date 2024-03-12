@@ -4590,6 +4590,12 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
 {
   int ret = OB_SUCCESS;
   all_contain = true;
+  bool contain_op_row = false;
+  if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(&or_qual, contain_op_row))) {
+    LOG_WARN("fail to check contain op row", K(ret));
+  } else if (contain_op_row) {
+    all_contain = false;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && all_contain && i < or_qual.get_param_count(); ++i) {
     ObRawExpr *cur_expr = or_qual.get_param_expr(i);
     if (OB_ISNULL(cur_expr)) {
@@ -4678,26 +4684,10 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    //split expr may result T_OP_ROW shared
-    ObSEArray<ObRawExpr*, 4> new_or_exprs;
-    ObRawExprCopier copier(expr_factory);
-    ReplaceExprByType replacer(T_OP_ROW);
-    if (OB_FAIL(copier.copy_on_replace(new_expr_params,
-                                       new_or_exprs,
-                                       &replacer))) {
-      LOG_WARN("failed to copy on replace start with exprs", K(ret));
-    } else if (OB_UNLIKELY(new_expr_params.count() != new_or_exprs.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(new_expr_params.count()), K(new_or_exprs.count()));
-    } else if (OB_FAIL(new_expr_params.assign(new_or_exprs))) {
-      LOG_WARN("failed to assign assign results", K(ret));
-    } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
-      LOG_WARN("failed to assign param exprs", K(ret));
-    }
-  }
   if (OB_FAIL(ret)) {
     /* do nothing */
+  } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
+    LOG_WARN("failed to assign param exprs", K(ret));
   } else if (OB_FAIL(new_expr->formalize(session_info))) {
     LOG_WARN("failed to formalize or expr", K(ret));
   } else if (OB_FAIL(new_expr->pull_relation_id())) {
