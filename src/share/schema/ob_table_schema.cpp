@@ -6169,8 +6169,8 @@ int ObSimpleTableSchemaV2::get_index_name(const ObString &table_name, ObString &
     pos = strlen(OB_INDEX_PREFIX);
 
     while (NULL != table_name.ptr() &&
-        isdigit(*(table_name.ptr() + pos)) &&
-        pos < table_name.length()) {
+        pos < table_name.length() &&
+        isdigit(*(table_name.ptr() + pos))) {
       ++pos;
     }
     if (pos == table_name.length()) {
