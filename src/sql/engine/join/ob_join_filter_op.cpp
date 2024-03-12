@@ -68,7 +68,12 @@ OB_SERIALIZE_MEMBER((ObJoinFilterSpec, ObOpSpec),
                     rf_infos_,
                     need_null_cmp_flags_,
                     is_shuffle_,
-                    each_group_size_);
+                    each_group_size_,
+                    rf_build_cmp_infos_,
+                    rf_probe_cmp_infos_,
+                    px_query_range_info_,
+                    bloom_filter_ratio_,
+                    send_bloom_filter_size_);
 
 OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
     share_info_,
@@ -115,8 +120,19 @@ bool ObJoinFilterOpInput::check_release()
 int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
-  config_.bloom_filter_ratio_ = ((double)GCONF._bloom_filter_ratio / 100.0);
-  config_.bf_piece_size_ = GCONF._send_bloom_filter_size;
+  if (0 == spec.bloom_filter_ratio_ && 0 == spec.send_bloom_filter_size_) {
+    // bloom_filter_ratio_ and send_bloom_filter_size_ are default value, which indicates the
+    // cluster is upgrading. for compatibility, use the value from GCONF
+    config_.bloom_filter_ratio_ = ((double)GCONF._bloom_filter_ratio / 100.0);
+    config_.bf_piece_size_ = GCONF._send_bloom_filter_size;
+  } else {
+    // bf_piece_size_ means how many int64_t a piece bloom filter contains
+    // we expect to split bloom filter into k pieces with 1MB = 2^20B
+    // so a piece bloom filter should contain
+    // 1024(send_bloom_filter_size_) * 128 = 131,072 int64_t, i.e. 1MB
+    config_.bloom_filter_ratio_ = ((double)spec.bloom_filter_ratio_ / 100.0);
+    config_.bf_piece_size_ = spec.send_bloom_filter_size_ * 128;
+  }
   config_.each_group_size_ = spec.each_group_size_;
   config_.runtime_filter_wait_time_ms_ = ctx.get_my_session()->
       get_runtime_filter_wait_time_ms();
@@ -332,7 +348,12 @@ ObJoinFilterSpec::ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOpera
     rf_infos_(alloc),
     need_null_cmp_flags_(alloc),
     is_shuffle_(false),
-    each_group_size_(OB_INVALID_ID)
+    each_group_size_(OB_INVALID_ID),
+    rf_build_cmp_infos_(alloc),
+    rf_probe_cmp_infos_(alloc),
+    px_query_range_info_(alloc),
+    bloom_filter_ratio_(0),
+    send_bloom_filter_size_(0)
 {
 }
 
