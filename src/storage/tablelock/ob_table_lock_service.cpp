@@ -198,8 +198,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObLSService should not be null", K(ret));
-  } else if (ls_service->get_ls_iter(ls_iter_guard,
-                                     ObLSGetMod::TABLELOCK_MOD)) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard, ObLSGetMod::TABLELOCK_MOD))) {
     LOG_WARN("fail to get ls iterator", K(ret));
   } else {
     do {

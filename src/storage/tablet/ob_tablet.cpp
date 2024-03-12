@@ -1625,7 +1625,7 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
       ObTabletObjLoadHelper::free(arena_allocator, schema);
     }
     if (OB_SUCC(ret) && tablet_meta_.has_next_tablet_) {
-      if (next_tablet_guard_.get_obj()->deserialize_post_work(allocator)) {
+      if (OB_FAIL(next_tablet_guard_.get_obj()->deserialize_post_work(allocator))) {
         LOG_WARN("fail to deserialize post work for next tablet", K(ret));
       }
     }

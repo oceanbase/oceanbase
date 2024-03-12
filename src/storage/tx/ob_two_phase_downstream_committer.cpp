@@ -356,7 +356,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_() {
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive prepare request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive prepare request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -440,7 +440,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive commit request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive commit request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -539,7 +539,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive 2pc abort request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive 2pc abort request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -680,7 +680,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_clear_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive clear request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive clear request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
