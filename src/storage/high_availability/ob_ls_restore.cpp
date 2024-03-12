@@ -1064,6 +1064,8 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
                      && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_info.param_.tablet_id_))) {
             LOG_WARN("failed to push sys tablet id into array", K(ret), "array count", ctx_->sys_tablet_id_array_.count());
           } else if (!tablet_info.param_.is_empty_shell() && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
+          } else if (OB_FAIL(reset_multi_version_start_(tablet_info.param_))) {
+            LOG_WARN("failed to reset multi version start", K(ret), K(tablet_info));
           } else if (OB_FAIL(create_tablet_(tablet_info.param_, ls))) {
             LOG_WARN("failed to create tablet", K(ret));
           } else {
@@ -1178,6 +1180,21 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
         sys_tablets_restore_dag = nullptr;
       }
     }
+  }
+  return ret;
+}
+
+int ObStartLSRestoreTask::reset_multi_version_start_(ObMigrationTabletParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param is not valid", K(ret), K(param));
+  } else {
+    // We reset the multi version start of the tablet migration parameter that is backup in backup consistent SCN stage.
+    // This stage does not have any SSTables and only serves as a placeholder.
+    // So the multi version start can be reset to 0 and then pushed up in the restore minor stage and restore major stage.
+    param.multi_version_start_ = 0;
   }
   return ret;
 }
