@@ -167,7 +167,13 @@ private:
   int add_select_item_to_ref_query(ObSelectStmt *stmt,
                                    const uint64_t flag_table_id,
                                    ObSqlBitSet<> &left_unique_pos,
-                                   ObSqlBitSet<> &right_flag_pos);
+                                   ObSqlBitSet<> &right_flag_pos,
+                                   int64_t &flag_view_sel_count,
+                                   ObSelectStmt *&orig_flag_stmt);
+  int recover_flag_temp_table(ObSelectStmt *stmt,
+                              const uint64_t flag_table_id,
+                              const int64_t orig_sel_count,
+                              ObSelectStmt *orig_flag_stmt);
 
   int create_row_number_window_function(ObIArray<ObRawExpr *> &partition_exprs,
                                         ObIArray<ObRawExpr *> &order_exprs,
