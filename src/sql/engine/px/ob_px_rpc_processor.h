@@ -168,7 +168,7 @@ public:
   }
   virtual void set_args(const Request &arg) { UNUSED(arg); }
   int deal_with_rpc_timeout_err_safely();
-  void interrupt_qc(int err, bool is_timeout);
+  void interrupt_qc(int err);
 private:
   common::ObAddr addr_;
   ObQueryRetryInfo *retry_info_;
