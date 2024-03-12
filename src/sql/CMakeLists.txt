@@ -732,6 +732,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/p2p_datahub/ob_p2p_dh_msg.cpp
   engine/px/p2p_datahub/ob_p2p_dh_rpc_process.cpp
   engine/px/p2p_datahub/ob_runtime_filter_msg.cpp
+  engine/px/p2p_datahub/ob_runtime_filter_query_range.cpp
 )
 
 ob_set_subtarget(ob_sql engine_set

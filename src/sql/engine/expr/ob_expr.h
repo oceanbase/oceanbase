@@ -277,6 +277,10 @@ typedef void (*ObBatchDatumHashFunc)(uint64_t *hash_values,
                                      const bool is_batch_seed);
 
 typedef int (*ObExprCmpFuncType)(const common::ObDatum &datum1, const common::ObDatum &datum2, int& cmp_ret);
+typedef int (*NullSafeRowCmpFunc) (const ObObjMeta &l_meta, const ObObjMeta &r_meta,
+                                   const void *l_data, const int32_t l_len, const bool l_null,
+                                   const void *r_data, const int32_t r_len, const bool r_null,
+                                   int &cmp_ret);
 struct ObExprBasicFuncs
 {
   // Default hash method:

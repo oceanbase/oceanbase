@@ -25,6 +25,7 @@
 #include "sql/dtl/ob_op_metric.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
 #include "share/detect/ob_detectable_id.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 
 
 namespace oceanbase
@@ -69,7 +70,7 @@ public:
       px_message_compression_(false) {}
   double bloom_filter_ratio_;
   int64_t each_group_size_;
-  int64_t bf_piece_size_;
+  int64_t bf_piece_size_; // how many int64_t a piece bloom filter contains
   int64_t runtime_filter_wait_time_ms_;
   int64_t runtime_filter_max_in_num_;
   int64_t runtime_bloom_filter_max_size_;
@@ -175,8 +176,8 @@ class ObJoinFilterSpec : public ObOpSpec
 public:
   ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
-  INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
-                       K_(mode), K_(filter_id), K_(filter_len), K_(rf_infos));
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(mode), K_(filter_id), K_(filter_len), K_(rf_infos),
+                       K_(bloom_filter_ratio), K_(send_bloom_filter_size));
 
   inline void set_mode(JoinFilterMode mode) { mode_ = mode; }
   inline JoinFilterMode get_mode() const { return mode_; }
@@ -207,6 +208,11 @@ public:
   common::ObFixedArray<bool, common::ObIAllocator> need_null_cmp_flags_;
   bool is_shuffle_;
   int64_t each_group_size_;
+  common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_build_cmp_infos_;
+  common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_probe_cmp_infos_;
+  ObPxQueryRangeInfo px_query_range_info_;
+  int64_t bloom_filter_ratio_;
+  int64_t send_bloom_filter_size_; // how many KB a piece bloom filter has
 };
 
 class ObJoinFilterOp : public ObOperator
