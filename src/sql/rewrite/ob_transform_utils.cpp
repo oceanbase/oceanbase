@@ -5829,6 +5829,7 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
   bool is_contain = false;
   bool source_unique = false;
   bool target_unique = false;
+  bool is_at_least_one_row = false;
   ObSEArray<ObRawExpr*, 16> source_exprs;
   ObSEArray<ObRawExpr*, 16> target_exprs;
   ObSEArray<ObRawExpr *, 8> target_tab_cols;
@@ -5858,6 +5859,10 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
   } else if (OB_FAIL(stmt->get_column_exprs(target_table->table_id_, target_tab_cols))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (is_on_null_side && !target_tab_cols.empty() && target_exprs.empty()) {
+    is_loseless = false;
+  } else if (OB_FAIL(check_at_least_one_row(target_table, is_at_least_one_row))) {
+    LOG_WARN("failed to check at least one row", K(ret));
+  } else if (is_on_null_side && target_exprs.empty() && !is_at_least_one_row) {
     is_loseless = false;
   } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*stmt, source_table, source_exprs,
                                                 session_info, schema_checker, source_unique))) {
@@ -6113,6 +6118,38 @@ int ObTransformUtils::extract_lossless_mapping_columns(ObDMLStmt *stmt,
     if (OB_SUCC(ret)) {
       LOG_TRACE("succeed to extract lossless mapping column", K(candi_source_exprs),
           K(candi_target_exprs));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_at_least_one_row(TableItem *table_item, bool &at_least_one_row)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  at_least_one_row = false;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_item), K(ret));
+  } else if (!table_item->is_generated_table() && !table_item->is_temp_table()) {
+    // TODO: support outer join
+  } else if (OB_ISNULL(view_stmt = table_item->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(view_stmt), K(ret));
+  } else if (view_stmt->has_limit() || view_stmt->has_having()) {
+    // do nothing
+  } else if (view_stmt->is_scala_group_by()) {
+    at_least_one_row = true;
+  } else if (view_stmt->get_condition_size() > 0 || view_stmt->get_semi_info_size() > 0 ||
+             view_stmt->get_table_size() > 1) {
+    // do nothing
+  } else {
+    at_least_one_row = true;
+    for (int64_t i = 0; OB_SUCC(ret) && at_least_one_row && i < view_stmt->get_table_size(); ++i) {
+      TableItem *table = view_stmt->get_table_item(i);
+      if (OB_FAIL(SMART_CALL(check_at_least_one_row(table, at_least_one_row)))) {
+        LOG_WARN("failed to check at least one row", K(ret));
+      }
     }
   }
   return ret;
