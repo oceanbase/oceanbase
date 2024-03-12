@@ -176,6 +176,7 @@ public:
   void reset();
   bool is_valid_;
   int64_t priority_;
+  int64_t mem_limit_pct_;
   char cache_name_[MAX_CACHE_NAME_LENGTH];
 };
 
@@ -187,6 +188,10 @@ public:
   double get_hit_ratio() const;
   inline void set_hold_size(const int64_t hold_size) { ATOMIC_STORE(&hold_size_, hold_size); }
   inline int64_t get_hold_size() const { return ATOMIC_LOAD(&hold_size_); }
+  inline int64_t get_memory_limit_pct()
+  {
+    return ATOMIC_LOAD(&config_->mem_limit_pct_);
+  }
   void reset();
   TO_STRING_KV(KP_(config), K_(kv_cnt), K_(store_size), K_(map_size), K_(lru_mb_cnt),
       K_(lfu_mb_cnt), K_(base_mb_score), K_(hold_size));
