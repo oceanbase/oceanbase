@@ -459,7 +459,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
         LOG_INFO("tenant scn gap info", K(IS_MAX_GAP_REACHED), K(REAL_GAP), K(MAX_GAP), K(new_sync_scn),
             K(new_replayable_scn), K(new_readable_scn), K(old_tenant_info));
       }
-      if (old_tenant_info.is_standby()
+      if (!old_tenant_info.is_primary()
           && new_replayable_scn.is_valid()
           && new_readable_scn_plus_gap.is_valid()
           && new_replayable_scn > new_readable_scn_plus_gap) {
