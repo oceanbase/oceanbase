@@ -891,24 +891,47 @@ int ObCreateRoutineResolver::resolve_aggregate_body(
   if (OB_ISNULL(udt_info) && ret != OB_ERR_NO_DB_SELECTED) { // try synonym
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
     uint64_t database_id = session_info_->get_database_id();
-    ObSEArray<uint64_t, 4> syn_id_array;
+    ObSynonymChecker synonym_checker;
+    uint64_t object_database_id = OB_INVALID_ID;
+    ObString object_name;
+    bool exist = false;
     if (!db_name.empty() // try database name synonym
         && (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))
             || OB_INVALID_ID == database_id)) {
       database_id = session_info_->get_database_id();
-      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
-        tenant_id, database_id, db_name, database_id, db_name, syn_id_array, true));
-      OZ (schema_checker_->get_udt_info(tenant_id, db_name, type_name, udt_info));
-    } else { // try type name synonym
-      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
-        tenant_id, database_id, type_name, database_id, type_name, syn_id_array, true));
-      if (OB_SUCC(ret) && database_id != session_info_->get_database_id()) {
-        const share::schema::ObDatabaseSchema *database_schema = NULL;
-        OZ (schema_checker_->get_database_schema(tenant_id, database_id, database_schema));
-        CK (OB_NOT_NULL(database_schema));
-        OX (real_db_name = database_schema->get_database_name_str());
+      OZ (ObResolverUtils::resolve_synonym_object_recursively(*schema_checker_,
+                                                              synonym_checker,
+                                                              tenant_id,
+                                                              database_id,
+                                                              db_name,
+                                                              object_database_id,
+                                                              object_name,
+                                                              exist,
+                                                              true));
+      if (OB_SUCC(ret) && exist) {
+        OZ (schema_checker_->get_udt_info(tenant_id, object_name, type_name, udt_info));
       }
-      OZ (schema_checker_->get_udt_info(tenant_id, real_db_name, type_name, udt_info));
+    } else { // try type name synonym
+      OZ (ObResolverUtils::resolve_synonym_object_recursively(*schema_checker_,
+                                                              synonym_checker,
+                                                              tenant_id,
+                                                              database_id,
+                                                              type_name,
+                                                              object_database_id,
+                                                              object_name,
+                                                              exist,
+                                                              true));
+      if (OB_FAIL(ret) || !exist) {
+        // do nothing ...
+      } else {
+        if (object_database_id != session_info_->get_database_id()) {
+          const share::schema::ObDatabaseSchema *database_schema = NULL;
+          OZ (schema_checker_->get_database_schema(tenant_id, object_database_id, database_schema));
+          CK (OB_NOT_NULL(database_schema));
+          OX (real_db_name = database_schema->get_database_name_str());
+        }
+        OZ (schema_checker_->get_udt_info(tenant_id, real_db_name, object_name, udt_info));
+      }
     }
   }
 
