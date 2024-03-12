@@ -484,9 +484,18 @@ public:
                     const bool need_check_valid /* true */);
   void init_use_rich_format()
   {
-    use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
-                              && sys_vars_cache_.get_enable_rich_vector_format();
-    force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+    config_use_rich_format_ = GCONF._global_enable_rich_vector_format;
+    if (!config_use_rich_format_) {
+      use_rich_vector_format_ = false;
+      force_rich_vector_format_ = ForceRichFormatStatus::FORCE_OFF;
+    } else {
+      use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+                                && sys_vars_cache_.get_enable_rich_vector_format();
+      force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+    }
+  }
+  bool is_force_off_rich_format() {
+    return force_rich_vector_format_ == ForceRichFormatStatus::FORCE_OFF;
   }
   bool use_rich_format() const {
     if (force_rich_vector_format_ != ForceRichFormatStatus::Disable) {
@@ -495,6 +504,8 @@ public:
       return use_rich_vector_format_;
     }
   }
+
+  bool config_use_rich_format() { return config_use_rich_format_; }
 
   bool initial_use_rich_format() const {
     return use_rich_vector_format_;
@@ -2342,6 +2353,8 @@ private:
   // force_rich_vector_format_ == FORCE_OFF => use_rich_format() returns false
   // otherwise use_rich_format() returns use_rich_vector_format_
   ForceRichFormatStatus force_rich_vector_format_;
+  // just used to plan cache key
+  bool config_use_rich_format_;
 };
 
 

@@ -157,7 +157,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       is_client_sessid_support_(false),
       use_rich_vector_format_(false),
       last_refresh_schema_version_(OB_INVALID_VERSION),
-      force_rich_vector_format_(ForceRichFormatStatus::Disable)
+      force_rich_vector_format_(ForceRichFormatStatus::Disable),
+      config_use_rich_format_(true)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -461,6 +462,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   client_identifier_.reset();
   last_refresh_schema_version_ = OB_INVALID_VERSION;
   proxy_user_id_ = OB_INVALID_ID;
+  config_use_rich_format_ = true;
 }
 
 int ObBasicSessionInfo::reset_timezone()

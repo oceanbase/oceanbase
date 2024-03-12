@@ -1891,3 +1891,6 @@ DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
         "Control whether to use chose_migration_source_policy. "
         "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_global_enable_rich_vector_format, OB_CLUSTER_PARAMETER, "True",
+         "Control whether use rich vector format in vectorization engine",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
