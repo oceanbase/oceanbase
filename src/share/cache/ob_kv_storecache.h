@@ -158,7 +158,6 @@ public:
 
   // wash memblock from cache synchronously
   virtual int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
-                            const bool wash_single_mb,
                             lib::ObICacheWasher::ObCacheMemBlock *&wash_blocks);
   int set_checker_cache_name(const char *cache_name);
   int get_cache_name(const int64_t cache_id, char *cache_name);
