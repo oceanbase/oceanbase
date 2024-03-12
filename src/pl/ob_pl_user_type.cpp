@@ -1629,12 +1629,24 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
           ObObj tmp;
           OZ (ObUserDefinedType::deep_copy_obj(obj_allocator, result, tmp));
           OX (result = tmp);
+          OX (*member = result);
+        } else if (result.is_null() && !get_member(i)->is_obj_type()) {
+          int64_t init_size = OB_INVALID_SIZE;
+          int64_t member_ptr = 0;
+          OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
+          OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+          if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
+            ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
+            CK (OB_NOT_NULL(composite));
+            OX (composite->set_null());
+          }
         } else {
           ObObj tmp;
           OZ (common::deep_copy_obj(obj_allocator, result, tmp));
           OX (result = tmp);
+          OX (*member = result);
         }
-        OX (*member = result);
       } else {
         if (get_member(i)->is_obj_type()) {
           OX (new (member) ObObj(ObNullType));
