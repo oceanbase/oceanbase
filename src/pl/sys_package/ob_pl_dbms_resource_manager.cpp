@@ -191,6 +191,8 @@ int ObPlDBMSResourceManager::create_plan_directive(
     MIN_IOPS = 5,
     MAX_IOPS = 6,
     WEIGHT_IOPS = 7,
+    MAX_NET_BADNWIDTH = 8,    // placeholder
+    NET_BANDWIDTH_WEIGHT = 9, // placeholder
     MAX_PARAM
   };
 
@@ -287,6 +289,8 @@ int ObPlDBMSResourceManager::update_plan_directive(
     MIN_IOPS = 5,
     MAX_IOPS = 6,
     WEIGHT_IOPS = 7,
+    MAX_NET_BADNWIDTH = 8,    // placeholder
+    NET_BANDWIDTH_WEIGHT = 9, // placeholder
     MAX_PARAM
   };
   int ret = OB_SUCCESS;

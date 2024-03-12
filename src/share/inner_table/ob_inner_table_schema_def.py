@@ -2795,7 +2795,9 @@ def_table_schema(
     ('utilization_limit', 'int', 'false', 100),
     ('min_iops', 'int', 'false', 0),
     ('max_iops', 'int', 'false', 100),
-    ('weight_iops', 'int', 'false', 0)
+    ('weight_iops', 'int', 'false', 0),
+    ('max_net_bandwidth', 'int', 'false', 100),
+    ('net_bandwidth_weight', 'int', 'false', 0)
   ],
 )
 

@@ -396,6 +396,44 @@ int ObInnerTableSchema::all_res_mgr_directive_schema(ObTableSchema &table_schema
       weight_iops_default,
       weight_iops_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj max_net_bandwidth_default;
+    max_net_bandwidth_default.set_int(100);
+    ADD_COLUMN_SCHEMA_T("max_net_bandwidth", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      max_net_bandwidth_default,
+      max_net_bandwidth_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj net_bandwidth_weight_default;
+    net_bandwidth_weight_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("net_bandwidth_weight", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      net_bandwidth_weight_default,
+      net_bandwidth_weight_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

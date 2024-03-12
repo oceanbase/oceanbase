@@ -48,6 +48,15 @@ ObString oceanbase::share::get_io_function_name(ObFunctionType function_type)
     case ObFunctionType::PRIO_OTHER_BACKGROUND:
       ret_name = ObString("OTHER_BACKGROUND");
       break;
+    case ObFunctionType::PRIO_CLOG_LOW:
+      ret_name = ObString("CLOG_LOW");
+      break;
+    case ObFunctionType::PRIO_CLOG_MID:
+      ret_name = ObString("CLOG_MID");
+      break;
+    case ObFunctionType::PRIO_CLOG_HIGH:
+      ret_name = ObString("CLOG_HIGH");
+      break;
     default:
       ret_name = ObString("OTHER_GROUPS");
       break;
