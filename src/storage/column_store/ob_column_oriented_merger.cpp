@@ -388,7 +388,9 @@ int ObCOMerger::write_residual_data()
 
   for (int64_t i = 0; OB_SUCC(ret) && i < merge_writers_.count(); i++) {
     ObCOMergeWriter *merge_writer = nullptr;
-    if (OB_ISNULL(merge_writer = merge_writers_.at(i))) {
+    if (OB_FAIL(share::dag_yield())) {
+      STORAGE_LOG(WARN, "fail to yield co merge dag", KR(ret));
+    } else if (OB_ISNULL(merge_writer = merge_writers_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "UNEXPECTED null writer", K(ret));
     } else if (OB_FAIL(merge_writer->append_residual_data())) {
