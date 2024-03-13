@@ -193,10 +193,10 @@ private:
   int get_outrow_prefix_data(uint32_t prefix_char_len);
   int reserve_data();
   int reserve_byte_data();
-  OB_INLINE bool is_valid_for_config()
+  OB_INLINE bool is_valid_for_config(ObTextStringIterState valid_state = TEXTSTRING_ITER_INIT)
   {
     return (is_init_ && is_outrow_ && has_lob_header_
-            && state_ == TEXTSTRING_ITER_INIT && OB_NOT_NULL(ctx_));
+            && state_ == valid_state && OB_NOT_NULL(ctx_));
   }
 private:
   ObObjType type_;

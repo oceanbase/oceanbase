@@ -70,5 +70,23 @@ select collation(TRIM( BOTH _binary'a' FROM _gbk'abc' )) ;
 
 select TRIM(LEADING 'a' FROM TRIM(SUBSTR(REPEAT(NULL, 4 + 1), 1, LEAST(146, 20))));
 
+create table t1 (c1 longtext);
+insert into t1 values(concat(repeat(' ', 256*1024), 'ad'));
+insert into t1 values(concat('ad', repeat(' ', 256*1024)));
+insert into t1 values(concat(repeat(' ', 256*1024), 'ad', repeat(' ', 256*1024)));
+select length(c1) from t1;
+select length(trim(c1)), trim(c1) from t1;
+drop table t1;
+
+create table t1 (c1 longtext);
+insert into t1 values(concat(repeat('abcd', 600*1024), 'xx'));
+insert into t1 values(concat('xx', repeat('abcd', 600*1024)));
+insert into t1 values(concat(repeat('abcd', 600*1024), 'xx', repeat('abcd', 600*1024)));
+select length(c1) from t1;
+select length(trim(leading 'abcd' from c1)) from t1;
+select length(trim(trailing 'abcd' from c1)) from t1;
+select length(trim(both 'abcd' from c1)) from t1;
+drop table t1;
+
 connection syscon;
 --sleep 2
