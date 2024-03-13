@@ -607,6 +607,9 @@ private:
   bool enable_rich_format_;
   // for dependant exprs of generated columns
   common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
+  // for last_refresh_scn expr to get last_refresh_scn for rt mview used in query
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> last_refresh_scns_;
 };
 
 }

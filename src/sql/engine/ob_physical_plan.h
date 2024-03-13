@@ -681,6 +681,8 @@ private:
 
 public:
   bool udf_has_dml_stmt_;
+private:
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

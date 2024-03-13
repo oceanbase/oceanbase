@@ -137,7 +137,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     subschema_ctx_(allocator_),
     disable_auto_memory_mgr_(false),
     all_local_session_vars_(&allocator_),
-    udf_has_dml_stmt_(false)
+    udf_has_dml_stmt_(false),
+    mview_ids_(&allocator_)
 {
 }
 
@@ -236,6 +237,7 @@ void ObPhysicalPlan::reset()
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
   udf_has_dml_stmt_ = false;
+  mview_ids_.reset();
 }
 
 void ObPhysicalPlan::destroy()
@@ -797,7 +799,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     use_rich_format_,
                     disable_auto_memory_mgr_,
                     udf_has_dml_stmt_,
-                    stat_.format_sql_id_);
+                    stat_.format_sql_id_,
+                    mview_ids_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

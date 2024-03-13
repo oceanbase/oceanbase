@@ -114,7 +114,9 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       spm_ts_timeout_us_(0),
       subschema_ctx_(allocator_),
       enable_rich_format_(false),
-      all_local_session_vars_(allocator)
+      all_local_session_vars_(allocator),
+      mview_ids_(allocator),
+      last_refresh_scns_(allocator)
 {
 }
 
@@ -759,6 +761,8 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars_.count(); ++i) {
     OB_UNIS_ENCODE(*all_local_session_vars_.at(i));
   }
+  OB_UNIS_ENCODE(mview_ids_);
+  OB_UNIS_ENCODE(last_refresh_scns_);
   return ret;
 }
 
@@ -854,6 +858,8 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
     OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i));
   }
+  OB_UNIS_ADD_LEN(mview_ids_);
+  OB_UNIS_ADD_LEN(last_refresh_scns_);
   return len;
 }
 
@@ -977,6 +983,8 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       LOG_WARN("failed to deserialize param store", K(ret));
     }
   }
+  OB_UNIS_DECODE(mview_ids_);
+  OB_UNIS_DECODE(last_refresh_scns_);
   return ret;
 }
 
