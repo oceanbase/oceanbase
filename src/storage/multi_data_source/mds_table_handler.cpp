@@ -127,15 +127,15 @@ int ObMdsTableHandler::try_gc_mds_table()
     CLICK();
     if (!mds_table_handle_.is_valid()) {
       MDS_LOG_GC(WARN, "mds table handle invalid after add wlock");
-    } else if (MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt)) ||
-        MDS_FAIL(mds_table_handle_.get_rec_scn(rec_scn)) ||
-        MDS_FAIL(mds_table_handle_.is_flushing(is_flushing)) ||
-        MDS_FAIL(mds_table_handle_.get_ref_cnt(handle_ref_cnt))) {// double check
+    } else if (MDS_FAIL(mds_table_handle_.get_ref_cnt(handle_ref_cnt)) ||
+               MDS_FAIL(mds_table_handle_.get_node_cnt(valid_node_cnt)) ||
+               MDS_FAIL(mds_table_handle_.get_rec_scn(rec_scn)) ||
+               MDS_FAIL(mds_table_handle_.is_flushing(is_flushing))) {// double check
       MDS_LOG_GC(WARN, "fail to gc mds_table");
-    } else if (0 != valid_node_cnt || // double check condition1
+    } else if (handle_ref_cnt != 1 || // make sure this is the last reference of mds_table
+               0 != valid_node_cnt || // double check condition1
                !rec_scn.is_max() || // double check condition2
-               is_flushing || // double check condition3
-               handle_ref_cnt != 1) {// make sure this is the last reference of mds_table
+               is_flushing) { // double check condition3
       MDS_LOG_GC(INFO, "double check GC condition failed");
       ret = OB_EAGAIN;
     } else {
