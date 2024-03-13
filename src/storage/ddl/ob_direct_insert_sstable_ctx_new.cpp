@@ -1539,6 +1539,18 @@ int ObTabletDirectLoadMgr::wait_notify(const ObDirectLoadSliceWriter *slice_writ
             ret = OB_SUCCESS;
           }
         }
+        if (OB_SUCC(ret)) {
+          ObTabletDirectLoadMgrHandle handle;
+          if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr(tablet_id_, is_full_direct_load(direct_load_type_), handle))) {
+            if (OB_ENTRY_NOT_EXIST == ret && is_full_direct_load(direct_load_type_)) {
+              ret = OB_TASK_EXPIRED; //retry by RS
+              LOG_WARN("task expired", K(ret), "start_scn of current execution", start_scn, "start_scn latest", get_start_scn());
+              break;
+            } else {
+              LOG_WARN("get table mgr failed", K(ret), K(tablet_id_), K(direct_load_type_));
+            }
+          }
+        }
       }
     }
   }
@@ -1818,6 +1830,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       if (OB_SUCC(ret) && is_data_direct_load(direct_load_type_) && slice_writer->need_column_store()) {
         //ignore, free after rescan
       } else {
+        // for ddl, delete slice_writer regardless of success or failure
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_))) {
           LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
