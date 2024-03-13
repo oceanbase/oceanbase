@@ -872,7 +872,12 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
   } else if (cs == CS_TYPE_UTF8MB4_BIN
            || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN
            || cs == CS_TYPE_GB18030_2022_BIN
-           || cs == CS_TYPE_UTF8MB4_GENERAL_CI) {
+           || cs == CS_TYPE_UTF8MB4_GENERAL_CI
+           || cs == CS_TYPE_GBK_CHINESE_CI
+           || cs == CS_TYPE_UTF16_GENERAL_CI
+           || cs == CS_TYPE_UTF16_BIN
+           || cs == CS_TYPE_GB18030_CHINESE_CI
+           || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     if (with_empty_str) {
       *to = 0x00;
       to++;
@@ -886,37 +891,6 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
       *(to+1) = 0x20;
     }
     to_len += 2;
-  } else if ( cs == CS_TYPE_GBK_CHINESE_CI
-              || cs == CS_TYPE_UTF16_GENERAL_CI) {
-    if (with_empty_str) {
-      MEMSET(to, 0x00, 2);
-      to += 2;
-      to_len += 2;
-    }
-    if (is_mem) {
-      MEMSET(to, 0x00, 4);
-    } else {
-      MEMSET(to, 0x00, 4);
-      *(to+1) = 0x20;
-      *(to+3) = 0x20;
-    }
-    to_len += 4;
-  } else if (cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI
-             || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
-    if (with_empty_str) {
-      MEMSET(to, 0x00, 4);
-      to += 4;
-      to_len += 4;
-    }
-    if (is_mem) {
-      MEMSET(to, 0x00, 8);
-    } else {
-      MEMSET(to, 0x00, 8);
-      *(to+3) = 0x20;
-      *(to+7) = 0x20;
-    }
-    to_len += 8;
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support collation", K(cs));
