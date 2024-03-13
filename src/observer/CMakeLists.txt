@@ -38,6 +38,7 @@ ob_set_subtarget(ob_server common
   ob_uniq_task_queue.cpp
   ob_startup_accel_task_handler.cpp
   ob_srv_rpc_handler.cpp
+  ob_check_params.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed

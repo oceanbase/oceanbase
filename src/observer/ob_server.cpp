@@ -122,6 +122,7 @@
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_libxml2_sax_handler.h"
 #endif
+#include "ob_check_params.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -265,7 +266,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
-
+  //check os params
+  if (OB_SUCC(ret) && OB_FAIL(check_os_params(GCONF.strict_check_os_params))) {
+    LOG_ERROR("check OS params failed", K(GCONF.strict_check_os_params));
+  }
   // set large page param
   ObLargePageHelper::set_param(config_.use_large_pages);
 

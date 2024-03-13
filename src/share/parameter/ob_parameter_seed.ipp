@@ -1894,3 +1894,9 @@ DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_global_enable_rich_vector_format, OB_CLUSTER_PARAMETER, "True",
          "Control whether use rich vector format in vectorization engine",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+//check os params
+DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
+         "A switch that determines whether to enable strict OS parameter check mode, defaulting to true and can be set to false to bypass strict checks."
+         "Value: True: allowed; False: allowed but not suggested",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
