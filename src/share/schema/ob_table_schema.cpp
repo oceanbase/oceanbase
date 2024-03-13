@@ -4880,7 +4880,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
           is_same = true;
         }
       } else {
-        if (src_column.get_data_precision() == dst_column.get_data_precision() &&
+        if ((ob_is_int_tc(src_column.get_data_type()) ||
+            src_column.get_data_precision() == dst_column.get_data_precision()) &&
             src_column.get_data_scale() == dst_column.get_data_scale()) {
           is_same = true;
         }
