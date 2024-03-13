@@ -467,6 +467,8 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_ds_stat.cpp
   stat/ob_opt_ds_stat_cache.cpp
   stat/ob_dbms_stats_gather.cpp
+  stat/ob_opt_system_stat.cpp
+  stat/ob_opt_system_stat_cache.cpp
 )
 
 ob_set_subtarget(ob_share external_table

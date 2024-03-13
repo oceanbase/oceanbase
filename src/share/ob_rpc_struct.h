@@ -1273,7 +1273,8 @@ public:
       table_id_(common::OB_INVALID_ID),
       partition_ids_(),
       column_ids_(),
-      no_invalidate_(false)
+      no_invalidate_(false),
+      update_system_stats_only_(false)
   {}
   virtual ~ObUpdateStatCacheArg() {}
   void rest()
@@ -1283,6 +1284,7 @@ public:
     partition_ids_.reset();
     column_ids_.reset();
     no_invalidate_ = false;
+    update_system_stats_only_ = false;
   }
   bool is_valid() const;
   int assign(const ObUpdateStatCacheArg &other) {
@@ -1290,6 +1292,7 @@ public:
     tenant_id_ = other.tenant_id_;
     table_id_ = other.table_id_;
     no_invalidate_ = other.no_invalidate_;
+    update_system_stats_only_ = other.update_system_stats_only_;
     if (OB_FAIL(ObDDLArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
     } else if (OB_FAIL(partition_ids_.assign(other.partition_ids_))) {
@@ -1305,7 +1308,7 @@ public:
   common::ObSArray<int64_t> partition_ids_;
   common::ObSArray<uint64_t> column_ids_;
   bool no_invalidate_;
-
+  bool update_system_stats_only_;
   DECLARE_VIRTUAL_TO_STRING;
 };
 

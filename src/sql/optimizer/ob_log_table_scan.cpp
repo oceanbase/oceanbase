@@ -134,8 +134,9 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     param.need_row_count_ = std::min(param.need_row_count_, card);
     param.need_row_count_ += offset_count_double;
     if (OB_FAIL(AccessPath::re_estimate_cost(param, *est_cost_info_, sample_info_,
-                                             opt_ctx->get_cost_model_type(),
-                                             phy_query_range_row_count_, query_range_row_count_,
+                                             *opt_ctx,
+                                             phy_query_range_row_count_,
+                                             query_range_row_count_,
                                              card, index_back_cost, op_cost))) {
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {

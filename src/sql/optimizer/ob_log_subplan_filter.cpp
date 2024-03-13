@@ -257,7 +257,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
     cost_info.rows_ = ObJoinOrder::calc_single_parallel_rows(cost_info.rows_, param.need_parallel_);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     ObSubplanFilterCostInfo info(cost_infos, get_onetime_idxs(), get_initplan_idxs());
-    if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost, opt_ctx.get_cost_model_type()))) {
+    if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost, opt_ctx))) {
       LOG_WARN("failed to calculate  the cost of subplan filter", K(ret));
     } else {
       cost = op_cost + cost_info.cost_;

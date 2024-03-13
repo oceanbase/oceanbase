@@ -321,6 +321,7 @@
 # 491: __all_routine_privilege  # BASE_TABLE_NAME
 # 492: __wr_sqlstat
 # 493: __all_ncomp_dll
+# 494: __all_aux_stat
 # 495: __all_index_usage_info
 # 498: __all_transfer_partition_task
 # 499: __all_transfer_partition_task_history
@@ -1022,6 +1023,8 @@
 # 12445: __all_virtual_sqlstat
 # 12446: __all_virtual_wr_sqlstat
 # 12446: __wr_sqlstat  # BASE_TABLE_NAME
+# 12447: __all_virtual_aux_stat
+# 12447: __all_aux_stat  # BASE_TABLE_NAME
 # 12450: __all_virtual_sys_variable_default_value
 # 12451: __all_virtual_transfer_partition_task
 # 12451: __all_transfer_partition_task  # BASE_TABLE_NAME
@@ -1607,6 +1610,8 @@
 # 15425: __all_virtual_wr_sqlstat  # BASE_TABLE_NAME1
 # 15426: TENANT_VIRTUAL_STATNAME
 # 15426: __tenant_virtual_statname  # BASE_TABLE_NAME
+# 15427: ALL_VIRTUAL_AUX_STAT_REAL_AGENT
+# 15427: __all_aux_stat  # BASE_TABLE_NAME
 # 15428: ALL_VIRTUAL_SYS_VARIABLE_REAL_AGENT
 # 15428: __all_sys_variable  # BASE_TABLE_NAME
 # 15429: ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE
@@ -2005,6 +2010,8 @@
 # 21494: V$OB_SYS_TIME_MODEL
 # 21495: DBA_WR_SYS_TIME_MODEL
 # 21496: CDB_WR_SYS_TIME_MODEL
+# 21497: DBA_OB_AUX_STATISTICS
+# 21498: CDB_OB_AUX_STATISTICS
 # 21499: DBA_INDEX_USAGE
 # 21500: DBA_OB_SYS_VARIABLES
 # 21501: DBA_OB_TRANSFER_PARTITION_TASKS
@@ -2459,6 +2466,7 @@
 # 28207: GV$OB_SYS_TIME_MODEL
 # 28208: V$OB_SYS_TIME_MODEL
 # 28209: V$STATNAME
+# 28210: DBA_OB_AUX_STATISTICS
 # 28211: DBA_OB_SYS_VARIABLES
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY

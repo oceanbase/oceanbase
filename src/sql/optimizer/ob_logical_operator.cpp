@@ -1102,7 +1102,7 @@ int ObLogicalOperator::do_re_est_cost(EstimateCostInfo &param, double &card, dou
       double child_card = child->get_card();
       double child_cost = child->get_cost();
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-      op_cost = ObOptEstCost::cost_get_rows(child_card / parallel, opt_ctx.get_cost_model_type());
+      op_cost = ObOptEstCost::cost_get_rows(child_card / parallel, opt_ctx);
       if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
         LOG_WARN("failed to re est cost", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
@@ -2514,7 +2514,7 @@ int ObLogicalOperator::reorder_filters_exprs(common::ObIArray<ObExprSelPair> &pr
       rank = -NAN;
     } else if (OB_FAIL(ObOptEstCost::calc_pred_cost_per_row(filter_exprs.at(i),
                                                             card,
-                                                            opt_ctx->get_cost_model_type(),
+                                                            *opt_ctx,
                                                             cost_per_tuple))) {
       LOG_WARN("calc pred cost failed", K(ret));
     } else {

@@ -6615,6 +6615,26 @@ all_ncomp_dll = dict(
 def_table_schema(**all_ncomp_dll)
 
 def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name = '__all_aux_stat',
+  table_id = '494',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'bigint'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+      ('last_analyzed', 'timestamp'),
+      ('cpu_speed', 'bigint', 'true', '2500'),
+      ('disk_seq_read_speed', 'bigint', 'true', '2000'),
+      ('disk_rnd_read_speed', 'bigint', 'true', '150'),
+      ('network_speed', 'bigint', '1000')
+  ],
+)
+
+def_table_schema(
   owner = 'yangjiali.yjl',
   table_name     = '__all_index_usage_info',
   table_id       = '495',
@@ -13572,6 +13592,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sqlstat']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12447',
+  table_name = '__all_virtual_aux_stat',
+  keywords = all_def_keywords['__all_aux_stat']))
+
 def_table_schema(
   owner = 'linzhigang.lzg',
   table_name     = '__all_virtual_sys_variable_default_value',
@@ -14076,6 +14101,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15422'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15424', all_def_keywords['__all_virtual_sqlstat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15425', all_def_keywords['__all_virtual_wr_sqlstat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_keywords['__all_aux_stat']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15428', all_def_keywords['__all_sys_variable']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15429', all_def_keywords['__all_virtual_sys_variable_default_value']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15430', all_def_keywords['__all_transfer_partition_task'])))
@@ -32192,6 +32218,47 @@ def_table_schema(
   WHERE
     oceanbase.CDB_WR_SYSSTAT.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
 """.replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    table_id       = '21497',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	SELECT
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    FROM OCEANBASE.__ALL_AUX_STAT;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'CDB_OB_AUX_STATISTICS',
+    table_id       = '21498',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+	SELECT
+      TENANT_ID,
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    from oceanbase.__all_virtual_aux_stat;
+""".replace("\n", " ")
 )
 
 def_table_schema(
@@ -59069,6 +59136,29 @@ def_table_schema(
          CAST(CLASS AS NUMBER) AS CLASS
   from SYS.TENANT_VIRTUAL_STATNAME
   """.replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28210',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	SELECT
+      LAST_ANALYZED,
+      CPU_SPEED AS \"CPU_SPEED(MHZ)\",
+      DISK_SEQ_READ_SPEED AS \"DISK_SEQ_READ_SPEED(MB/S)\",
+      DISK_RND_READ_SPEED AS \"DISK_RND_READ_SPEED(MB/S)\",
+      NETWORK_SPEED AS \"NETWORK_SPEED(MB/S)\"
+    FROM SYS.ALL_VIRTUAL_AUX_STAT_REAL_AGENT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+""".replace("\n", " ")
 )
 
 def_table_schema(

@@ -117,7 +117,7 @@ int ObLogLimit::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
       if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
         LOG_WARN("failed to re-est cost", K(ret));
       } else {
-        op_cost = ObOptEstCost::cost_get_rows(child_card, opt_ctx.get_cost_model_type());
+        op_cost = ObOptEstCost::cost_get_rows(child_card, opt_ctx);
         cost = op_cost + child_cost;
         child_card = 0 <= limit_percent
                      ? std::max(child_card * limit_percent / 100 - offset_count, 0.0)

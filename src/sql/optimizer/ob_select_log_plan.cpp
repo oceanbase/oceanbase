@@ -2526,7 +2526,7 @@ int ObSelectLogPlan::allocate_set_distinct_as_top(ObLogicalOperator *&top)
                                                        top->get_card(),
                                                        top->get_width(),
                                                        distinct_exprs,
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
       distinct->set_cost(top->get_cost() + distinct_cost);
       distinct->set_op_cost(distinct_cost);
       top = distinct_op;
@@ -3453,7 +3453,7 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
                                                        right_need_sort,
                                                        right_prefix_pos,
                                                        right_path_cost,
-                                                       get_optimizer_context().get_cost_model_type()))) {
+                                                       get_optimizer_context()))) {
         LOG_WARN("failed to compute cost for merge join style op", K(ret));
       } else if (NULL == best_plan || right_path_cost < best_cost) {
         if (OB_FAIL(best_order_items.assign(right_order_items))) {
@@ -7091,7 +7091,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     // set card and cost
     table_scan->set_card(1.0);
     table_scan->set_op_cost(ObOptEstCost::cost_late_materialization_table_get(stmt->get_column_size(),
-                                                                              get_optimizer_context().get_cost_model_type()));
+                                                                              get_optimizer_context()));
     table_scan->set_cost(table_scan->get_op_cost());
     table_scan->set_table_row_count(index_scan->get_table_row_count());
     table_scan->set_output_row_count(1.0);
@@ -7196,7 +7196,7 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
                                                        right_child->get_cost(),
                                                        join->get_op_cost(),
                                                        join->get_cost(),
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
     if (OB_FAIL(join->set_op_ordering(left_child->get_op_ordering()))) {
       LOG_WARN("failed to set op ordering", K(ret));
     } else {
@@ -7310,7 +7310,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                              phy_query_range_row_count,
                                              op_cost,
                                              index_back_cost,
-                                             get_optimizer_context().get_cost_model_type()))) {
+                                             get_optimizer_context()))) {
           LOG_WARN("failed to get index access info", K(ret));
         } else {
           table_scan->set_cost(op_cost);
@@ -7356,7 +7356,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                                   top->get_cost(),
                                                   stmt->get_column_size(),
                                                   late_mater_cost,
-                                                  get_optimizer_context().get_cost_model_type());
+                                                  get_optimizer_context());
 
           OPT_TRACE("late materialization plan cost:", late_mater_cost);
         }

@@ -22,20 +22,16 @@ namespace sql
 class ObOptEstVectorCostModel : public ObOptEstCostModel {
 
 public:
-    ObOptEstVectorCostModel(
-			const double (&comparison_params)[common::ObMaxTC + 1],
-			const double (&hash_params)[common::ObMaxTC + 1],
-			const ObCostParams &cost_params)
-		:ObOptEstCostModel(comparison_params,
-                          hash_params,
-                          cost_params)
+    ObOptEstVectorCostModel(const ObOptCostModelParameter &cost_params,
+                            const OptSystemStat &stat)
+		:ObOptEstCostModel(cost_params, stat)
 	{}
   virtual ~ObOptEstVectorCostModel()=default;
 protected:
-  virtual int cost_table_scan_one_batch_inner(double row_count,
-                                              const ObCostTableScanInfo &est_cost_info,
-                                              bool is_scan_index,
-                                              double &res)override;
+  virtual int cost_range_scan(const ObCostTableScanInfo &est_cost_info,
+                              bool is_scan_index,
+                              double row_count,
+                              double &cost)override;
 };
 
 }

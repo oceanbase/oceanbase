@@ -13,6 +13,7 @@
 #ifndef _OB_LOG_VALUES_TABLE_ACCESS_H
 #define _OB_LOG_VALUES_TABLE_ACCESS_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_join_order.h"
 
 namespace oceanbase
 {

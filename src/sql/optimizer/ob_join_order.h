@@ -161,7 +161,8 @@ namespace sql
         force_no_mat_(false),
         prune_mj_(true),
         force_inner_nl_(false),
-        ignore_hint_(true) { }
+        ignore_hint_(true),
+        is_reverse_path_(false) { }
     virtual ~ValidPathInfo() {};
     void reset()
     {
@@ -174,6 +175,7 @@ namespace sql
       prune_mj_ = true;
       force_inner_nl_ = false;
       ignore_hint_ = true;
+      is_reverse_path_ = false;
     }
     TO_STRING_KV(K_(join_type),
                  K_(local_methods),
@@ -183,7 +185,8 @@ namespace sql
                  K_(force_no_mat),
                  K_(prune_mj),
                  K_(force_inner_nl),
-                 K_(ignore_hint));
+                 K_(ignore_hint),
+                 K_(is_reverse_path));
     ObJoinType join_type_;
     int64_t local_methods_;
     int64_t distributed_methods_;
@@ -193,6 +196,7 @@ namespace sql
     bool prune_mj_; // prune merge join path
     bool force_inner_nl_;
     bool ignore_hint_;
+    bool is_reverse_path_;
   };
 
   enum OptimizationMethod
@@ -654,7 +658,7 @@ struct EstimateCostInfo {
     static int re_estimate_cost(const EstimateCostInfo &param,
                                 ObCostTableScanInfo &est_cost_info,
                                 const SampleInfo &sample_info,
-                                const ObOptEstCost::MODEL_TYPE model_type,
+                                const ObOptimizerContext &opt_ctx,
                                 const double orign_phy_query_range_row_count,
                                 const double orign_query_range_row_count,
                                 double &card,
@@ -2290,6 +2294,7 @@ struct NullAwareAntiJoinInfo {
                             const ObJoinType join_type,
                             const ObIArray<ObRawExpr*> &join_conditions,
                             const bool ignore_hint,
+                            const bool reverse_join_tree,
                             ValidPathInfo &path_info);
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
                                       bool both_access,

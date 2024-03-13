@@ -5895,10 +5895,17 @@ DEF_TO_STRING(ObUpdateStatCacheArg)
        K_(tenant_id),
        K_(partition_ids),
        K_(column_ids),
-       K_(no_invalidate));
+       K_(no_invalidate),
+       K_(update_system_stats_only));
   return pos;
 }
-OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg, tenant_id_, table_id_, partition_ids_, column_ids_, no_invalidate_);
+OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg,
+                    tenant_id_,
+                    table_id_,
+                    partition_ids_,
+                    column_ids_,
+                    no_invalidate_,
+                    update_system_stats_only_);
 OB_SERIALIZE_MEMBER(ObSplitPartitionBatchArg, split_info_);
 OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg),
                     stmt_type_,

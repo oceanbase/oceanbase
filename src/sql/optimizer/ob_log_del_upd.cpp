@@ -816,7 +816,7 @@ int ObLogDelUpd::est_cost()
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card_ = child->get_card();
-    op_cost_ = ObOptEstCost::cost_get_rows(child->get_card(), opt_ctx.get_cost_model_type());
+    op_cost_ = ObOptEstCost::cost_get_rows(child->get_card(), opt_ctx);
     cost_ = op_cost_ + child->get_cost();
   }
   return ret;
