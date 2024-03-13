@@ -2100,8 +2100,14 @@ int ObStorageS3MultiPartWriter::complete_()
     complete_multipart_upload_request.WithMultipartUpload(completed_multipart_upload);
 
     Aws::S3::Model::CompleteMultipartUploadOutcome complete_multipart_upload_outcome;
-    if (FAILEDx(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
-                                                      complete_multipart_upload_outcome))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(part_num == 0)) {
+      // If 'complete' without uploading any data, S3 will return the error
+      // 'InvalidRequest，You must specify at least one part'
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(part_num), K_(upload_id));
+    } else if (OB_FAIL(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
+                                                             complete_multipart_upload_outcome))) {
       OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));
     } else if (!complete_multipart_upload_outcome.IsSuccess()) {
       handle_s3_outcome(complete_multipart_upload_outcome, ret);
