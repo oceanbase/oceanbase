@@ -74,6 +74,7 @@ CtxLock() : ctx_lock_(), access_lock_(), flush_redo_lock_(),
   int rdlock_flush_redo();
   void unlock_ctx();
   void unlock_access();
+  int try_wrlock_flush_redo();
   int try_rdlock_flush_redo();
   void unlock_flush_redo();
   void before_unlock(CtxLockArg &arg);

@@ -164,6 +164,12 @@ int CtxLock::wrlock_flush_redo()
   return ret;
 }
 
+int CtxLock::try_wrlock_flush_redo()
+{
+    int ret = flush_redo_lock_.try_wrlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
+    return ret;
+}
+
 int CtxLock::rdlock_flush_redo()
 {
   int ret = flush_redo_lock_.rdlock(common::ObLatchIds::TRANS_FLUSH_REDO_LOCK);
