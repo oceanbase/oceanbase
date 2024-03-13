@@ -20,7 +20,6 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_covers.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -65,7 +64,7 @@ int ObExprPrivSTCovers::calc_result_type2(ObExprResType &type,
 
 template<typename ResType>
 int ObExprPrivSTCovers::eval_st_covers_common(ObEvalCtx &ctx,
-                                              ObArenaAllocator &temp_allocator,
+                                              MultimodeAlloctor &temp_allocator,
                                               ObString wkb1,
                                               ObString wkb2,
                                               ResType &res)
@@ -81,6 +80,11 @@ int ObExprPrivSTCovers::eval_st_covers_common(ObEvalCtx &ctx,
   bool is_geo2_empty = false;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
+  temp_allocator.set_baseline_size(wkb1.length() + wkb2.length());
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+
   if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
@@ -94,20 +98,25 @@ int ObExprPrivSTCovers::eval_st_covers_common(ObEvalCtx &ctx,
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_PRIV_ST_COVERS))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb1));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_COVERS,
-                                            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
+            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING | ObGeoBuildFlag::GEO_NOT_COPY_WKB))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_COVERS,
-                                            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
+            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING | ObGeoBuildFlag::GEO_NOT_COPY_WKB))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
       || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
     LOG_WARN("check geo empty failed", K(ret));
   } else if (is_geo1_empty || is_geo2_empty) {
     res.set_null();
-  } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
+  } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs, *geo1, *geo2))) {
     LOG_WARN("zoom in geos failed", K(ret));
+  } else if (OB_FAIL(guard.init())) {
+    LOG_WARN("fail to init geo allocator guard", K(ret));
+  } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("fail to get mem ctx", K(ret));
   } else {
-    ObGeoEvalCtx gis_context(&temp_allocator, srs);
+    ObGeoEvalCtx gis_context(*mem_ctx, srs);
     bool result = false;
     if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
@@ -117,6 +126,9 @@ int ObExprPrivSTCovers::eval_st_covers_common(ObEvalCtx &ctx,
     } else {
       res.set_bool(result);
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }
@@ -133,17 +145,18 @@ int ObExprPrivSTCovers::eval_st_covers(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObObjType input_type1 = gis_arg1->datum_meta_.type_;
   ObObjType input_type2 = gis_arg2->datum_meta_.type_;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_COVERS);
+  if (OB_FAIL(temp_allocator.eval_arg(gis_arg1, ctx, gis_datum1)) || OB_FAIL(temp_allocator.eval_arg(gis_arg2, ctx, gis_datum2))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
   } else if (FALSE_IT(wkb1 = gis_datum1->get_string())) {
   } else if (FALSE_IT(wkb2 = gis_datum2->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum1,
             gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum2,
             gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb2));
   } else if (OB_FAIL(ObExprPrivSTCovers::eval_st_covers_common(ctx,

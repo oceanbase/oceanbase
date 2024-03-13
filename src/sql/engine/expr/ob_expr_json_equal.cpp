@@ -86,7 +86,8 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObIJsonBase *json_candidate = NULL;
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   int compare_res = -1;
   bool is_equal = false;
   uint8_t option_on_error = 0;
@@ -129,7 +130,7 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ret = OB_SUCCESS;
 
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObIntType) {
       int64_t option = json_datum->get_int();

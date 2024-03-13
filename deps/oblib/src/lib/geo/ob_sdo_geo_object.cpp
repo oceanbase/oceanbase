@@ -50,14 +50,14 @@ int ObSdoPoint::to_text(ObStringBuffer &buf)
   } else if ((len = snprintf(number_buf, 128, format_str_x.ptr(), x_)) < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret), K(x_));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
+  } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
     LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
   } else if ((len = snprintf(number_buf, 128, format_str_y.ptr(), y_)) < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret), K(y_));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
+  } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
     LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
@@ -65,7 +65,7 @@ int ObSdoPoint::to_text(ObStringBuffer &buf)
     if ((len = snprintf(number_buf, 128, format_str_z.ptr(), z_)) < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to val to string", K(ret), K(x_));
-    } else if (OB_FAIL(buf.append(number_buf, len))) {
+    } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
       LOG_WARN("fail to print gtype", K(ret));
     } else if (OB_FAIL(buf.append(")"))){
       LOG_WARN("fail to print (", K(ret));
@@ -93,7 +93,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
   } else if ((len = snprintf(number_buf, 128, "%lu", gtype_num)) < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret));
-  } else if (OB_FAIL(buf.append(number_buf, len))) {
+  } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
     LOG_WARN("fail to print gtype", K(ret));
   } else if (OB_FAIL(buf.append(", "))) {
     LOG_WARN("fail to print ,", K(ret));
@@ -101,7 +101,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
     LOG_WARN("fail to print srid", K(ret));
   } else if (srid_ != UINT32_MAX &&
              ((len = snprintf(number_buf, 128, "%u", srid_)) < 0 ||
-              OB_FAIL(buf.append(number_buf, len)))) {
+              OB_FAIL(buf.append(number_buf, len, 0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to val to string", K(ret), K(len));
   } else if (OB_FAIL(buf.append(", "))) {
@@ -124,7 +124,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       if ((len = snprintf(number_buf, 128, "%lu", elem_info_.at(i))) < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to val to string", K(ret));
-      } else if (OB_FAIL(buf.append(number_buf, len))) {
+      } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
         LOG_WARN("fail to print gtype", K(ret));
       } else if (i + 1 != elem_info_.count() && OB_FAIL(buf.append(", "))) {
         LOG_WARN("fail to print ,", K(ret));
@@ -151,7 +151,7 @@ int ObSdoGeoObject::to_text(ObStringBuffer &buf)
       if ((len = snprintf(number_buf, 128, format_str.ptr(), ordinates_.at(i))) < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to val to string", K(ret));
-      } else if (OB_FAIL(buf.append(number_buf, len))) {
+      } else if (OB_FAIL(buf.append(number_buf, len, 0))) {
         LOG_WARN("fail to print gtype", K(ret));
       } else if (i + 1 != ordinates_.count() && OB_FAIL(buf.append(", "))) {
         LOG_WARN("fail to print ,", K(ret));

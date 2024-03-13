@@ -546,8 +546,8 @@ public:
   const common::ObLogIdLevelMap *get_log_id_level_map() const;
   const common::ObString &get_client_version() const { return client_version_; }
   const common::ObString &get_driver_version() const { return driver_version_; }
-
-
+  void destory_json_pl_mngr();
+  intptr_t get_json_pl_mngr();
   int get_tx_timeout(int64_t &tx_timeout) const
   {
     tx_timeout = sys_vars_cache_.get_ob_trx_timeout();
@@ -2094,6 +2094,7 @@ protected:
   common::ObSmallBlockAllocator<> cursor_info_allocator_; // for alloc memory of PS CURSOR/SERVER REF CURSOR
   common::ObSmallBlockAllocator<> package_info_allocator_; // for alloc memory of session package state
   common::ObStringBuf name_pool_; // for variables names and statement names
+  intptr_t json_pl_mngr_; // for pl json manage
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
   bool need_reset_package_; // for dbms_session.reset_package

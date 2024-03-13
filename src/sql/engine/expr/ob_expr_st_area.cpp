@@ -66,10 +66,11 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   ObDatum *gis_datum = NULL;
   ObExpr *gis_arg = expr.args_[0];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_AREA);
   ObObjType input_type = gis_arg->datum_meta_.type_;
 
-  if (OB_FAIL(gis_arg->eval(ctx, gis_datum))) {
+  if (OB_FAIL(temp_allocator.eval_arg(gis_arg, ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
   } else if (gis_datum->is_null()) {
     res.set_null();
@@ -78,20 +79,28 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     omt::ObSrsCacheGuard srs_guard;
     const ObSrsItem *srs = NULL;
     ObString wkb = gis_datum->get_string();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum,
+    ObGeoBoostAllocGuard guard(tenant_id);
+    lib::MemoryContext *mem_ctx = nullptr;
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum,
         gis_arg->datum_meta_, gis_arg->obj_meta_.has_lob_header(), wkb))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(wkb.length()))) {
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, N_ST_AREA))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_ST_AREA, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_ST_AREA, GEO_ALLOW_3D_DEFAULT | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get geo by wkb failed", K(ret));
     } else if (geo->type() != ObGeoType::POLYGON && geo->type() != ObGeoType::MULTIPOLYGON) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
       LOG_WARN("unexpected geometry type for st_area", K(ret));
       LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, "POLYGON/MULTIPOLYGON",
         ObGeoTypeUtil::get_geo_name_by_type(geo->type()), N_ST_AREA);
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
     } else {
-      ObGeoEvalCtx gis_context(&temp_allocator, srs);
+      ObGeoEvalCtx gis_context(*mem_ctx, srs);
       int correct_result;
       double result = 0.0;
       if (OB_FAIL(gis_context.append_geo_arg(geo))) {
@@ -105,6 +114,9 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       } else {
         res.set_double(result);
       }
+    }
+    if (mem_ctx != nullptr) {
+      temp_allocator.add_ext_used((*mem_ctx)->arena_used());
     }
   }
   return ret;

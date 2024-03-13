@@ -96,23 +96,24 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   bool need_format = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_", K(expr.arg_cnt_));
-  } else if (OB_FAIL(expr.args_[3]->eval(ctx, xml_datum))) {
+  } else if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[3], ctx, xml_datum))) {
     LOG_WARN("get extra para failed", K(ret));
   } else if (FALSE_IT(need_format = (xml_datum->get_int() & 0x08) != 0)) {
   } else if (OB_FAIL(get_clause_opt(expr, ctx, 0, xml_type, OB_XML_DOC_TYPE_COUNT))) {
     LOG_WARN("get document/context error", K(ret), K(xml_type));
   } else if (OB_FAIL(get_clause_opt(expr, ctx, 2, is_wellformed, OB_WELLFORMED_COUNT))) {
     LOG_WARN("get wellformed error", K(ret), K(is_wellformed));
-  } else if (OB_FAIL(expr.args_[1]->eval(ctx, xml_datum))) {
+  } else if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, xml_datum))) {
     LOG_WARN("get extra para failed", K(ret));
   } else if (expr.args_[1]->datum_meta_.type_ == ObNullType || xml_datum->is_null()) {
     is_xml_text_null = true;
@@ -120,6 +121,7 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
     LOG_WARN("get xml plain text failed", K(ret), K(is_xml_text_null));
   }
 
+  tmp_allocator.set_baseline_size(xml_plain_text.length());
   bool is_unparsed_res = false;
   if(OB_FAIL(ret)) {
   } else if (is_xml_text_null) {

@@ -80,6 +80,12 @@ int ObCartesianPolygon::push_back(const ObLinearring &ring)
   return ret;
 }
 
+int ObCartesianPolygon::reserve(int64_t capacity)
+{
+  int ret = capacity > 0 ? inner_rings_.reserve(capacity - 1) : OB_SUCCESS;
+  return ret;
+}
+
 int ObGeographPolygon::push_back(const ObLinearring &ring)
 {
   INIT_SUCC(ret);
@@ -90,6 +96,12 @@ int ObGeographPolygon::push_back(const ObLinearring &ring)
       LOG_WARN("fail to push_back to ObGeographPolygon rings.", K(ret));
     }
   }
+  return ret;
+}
+
+int ObGeographPolygon::reserve(int64_t capacity)
+{
+  int ret = capacity > 0 ? inner_rings_.reserve(capacity - 1) : OB_SUCCESS;
   return ret;
 }
 
@@ -352,6 +364,58 @@ int ObGeographGeometrycollection::do_visit(ObIGeoVisitor &visitor)
 int ObCartesianGeometrycollection::do_visit(ObIGeoVisitor &visitor)
 {
   return ObGeoTreeVisitorImplement::collection_do_visit(this, visitor);
+}
+
+int ObCartesianGeometrycollection::set(uint32_t index, ObGeometry *geo)
+{
+  int ret = OB_SUCCESS;
+  if (index >= geoms_.size()) {
+    ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
+    LOG_WARN("index is out of range", K(ret), K(index), K(geoms_.size()));
+  } else {
+    geoms_[index] = geo;
+  }
+  return ret;
+}
+
+int ObGeographGeometrycollection::set(uint32_t index, ObGeometry *geo)
+{
+  int ret = OB_SUCCESS;
+  if (index >= geoms_.size()) {
+    ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
+    LOG_WARN("index is out of range", K(ret), K(index), K(geoms_.size()));
+  } else {
+    geoms_[index] = geo;
+  }
+  return ret;
+}
+
+int ObCartesianGeometrycollection::resize(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (size > geoms_.size()) {
+    if (OB_FAIL(geoms_.prepare_allocate(size))) {
+      OB_LOG(WARN, "failed to resize ObGeomVector", K(ret), K(size));
+    }
+  } else {
+    while (size != geoms_.size()) {
+      geoms_.pop_back();
+    }
+  }
+  return ret;
+}
+
+int ObGeographGeometrycollection::resize(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (size > geoms_.size()) {
+    if (OB_FAIL(geoms_.prepare_allocate(size))) {
+      OB_LOG(WARN, "failed to resize ObGeomVector", K(ret), K(size));
+    }
+  } else {
+    while (size != geoms_.size()) {
+      geoms_.pop_back();
+    }
+  }
+  return ret;
 }
 
 bool ObCartesianBox::Contains(ObCartesianBox &other)

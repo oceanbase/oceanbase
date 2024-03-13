@@ -60,7 +60,7 @@ int ObExprJsonUnquote::calc_result_type1(ObExprResType &type,
 }
 
 int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
-                            ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null)
+                            MultimodeAlloctor *allocator, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
   ObIJsonBase *j_base = NULL;
@@ -89,8 +89,11 @@ int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta met
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (ob_is_string_type(type) && (j_str.length() < 2 || j_str[0] != '"' || j_str[j_str.length() - 1] != '"')) {
-      if (OB_FAIL(j_buf.append(j_str))) {
+      if (OB_FAIL(j_buf.reserve(j_str.length()))) {
+        LOG_WARN("failed to reserve j_buf", K(ret), K(j_str.length()));
+      } else if (OB_FAIL(j_buf.append(j_str, 0))) {
         LOG_WARN("failed: copy original string", K(ret), K(j_str));
       }
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
@@ -116,12 +119,13 @@ int ObExprJsonUnquote::eval_json_unquote(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObExpr *arg = expr.args_[0];
   ObDatum* json_datum = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBuffer j_buf(&temp_allocator);
   bool is_null = false;
 
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
-  if (OB_FAIL(arg->eval(ctx, json_datum))) {
+  if (OB_FAIL(temp_allocator.eval_arg(arg, ctx, json_datum))) {
     ret = OB_ERR_INVALID_DATATYPE;
     LOG_WARN("error, eval json args datum failed", K(ret));
   } else if (OB_FAIL(calc(ctx, *json_datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &temp_allocator, j_buf, is_null))) {

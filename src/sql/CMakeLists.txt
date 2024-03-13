@@ -649,11 +649,14 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_multi_mode_func_helper.cpp
   engine/expr/ob_expr_xmlparse.cpp
   engine/expr/ob_expr_xml_element.cpp
+  engine/expr/ob_expr_xml_concat.cpp
+  engine/expr/ob_expr_xml_forest.cpp
   engine/expr/ob_expr_xml_attributes.cpp
   engine/expr/ob_expr_xml_serialize.cpp
   engine/expr/ob_expr_priv_xml_binary.cpp
   engine/expr/ob_expr_extract_value.cpp
   engine/expr/ob_expr_extract_xml.cpp
+  engine/expr/ob_expr_existsnode_xml.cpp
   engine/expr/ob_expr_xmlcast.cpp
   engine/expr/ob_expr_update_xml.cpp
   engine/expr/ob_expr_sql_udt_utils.cpp
@@ -684,6 +687,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_xml_sequence.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_priv_st_geohash.cpp
+  engine/expr/ob_expr_priv_st_makepoint.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

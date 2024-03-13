@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 namespace oceanbase
 {
@@ -33,8 +34,8 @@ public:
       ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
 private:
-  static int get_input_geometry(omt::ObSrsCacheGuard &srs_guard, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
-      bool &is_null_geo, const ObSrsItem *&srs, ObGeometry *&geo, bool &is_geo_empty);
+  static int get_input_geometry(omt::ObSrsCacheGuard &srs_guard, MultimodeAlloctor &temp_allocator, ObEvalCtx &ctx, ObExpr *gis_arg,
+      ObDatum *gis_datum, const ObSrsItem *&srs, ObGeometry *&geo, bool &is_geo_empty);
   DISALLOW_COPY_AND_ASSIGN(ObExprPrivSTTouches);
 };
 }  // namespace sql

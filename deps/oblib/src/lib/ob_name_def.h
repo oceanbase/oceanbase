@@ -1069,8 +1069,11 @@
 #define N_XML_ATTRIBUTES                    "xmlattributes"
 #define N_EXTRACTVALUE                      "extractvalue"
 #define N_EXTRACT_XML                       "extract_xml"
+#define N_EXISTSNODE_XML                    "existsnode_xml"
 #define N_XMLSERIALIZE                      "xmlserialize"
 #define N_XMLCAST                           "xmlcast"
+#define N_XML_CONCAT                        "xmlconcat"
+#define N_XML_FOREST                        "xmlforest"
 #define N_UPDATEXML                         "updatexml"
 #define N_INSERTCHILDXML                    "insertchildxml"
 #define N_XMLSEQUENCE                       "xmlsequence"
@@ -1100,4 +1103,6 @@
 #define N_ST_SYMDIFFERENCE                  "st_symdifference"
 #define N_PRIV_ST_ASMVTGEOM                 "_st_asmvtgeom"
 #define N_PRIV_ST_MAKEVALID                 "_st_makevalid"
+#define N_PRIV_ST_GEOHASH                   "_st_geohash"
+#define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

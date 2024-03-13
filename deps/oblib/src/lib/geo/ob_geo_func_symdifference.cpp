@@ -63,9 +63,9 @@ static int apply_bg_symdifference_pt_pt(
   if (OB_FAIL(get_specific_geos(g1, g2, context, geo1, geo2, res))) {
     LOG_WARN("fail to get specific geometry", K(ret));
   } else {
-    ObIAllocator *allocator = context.get_allocator();
-    GeometryRes *union_res = OB_NEWx(GeometryRes, allocator, g1->get_srid(), *allocator);
-    GeometryRes *intersection_res = OB_NEWx(GeometryRes, allocator, g1->get_srid(), *allocator);
+    ObArenaAllocator tmp_alloc;
+    GeometryRes *union_res = OB_NEWx(GeometryRes, &tmp_alloc, g1->get_srid(), tmp_alloc);
+    GeometryRes *intersection_res = OB_NEWx(GeometryRes, &tmp_alloc, g1->get_srid(), tmp_alloc);
     if (OB_ISNULL(union_res) || OB_ISNULL(intersection_res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create geometry", K(ret), K(union_res), K(intersection_res));
@@ -102,8 +102,7 @@ static int push_disjoint_point(PtBinType &geo1, GeoType &geo2, const ObGeoEvalCt
         allocator,
         geo1.template get<0>(),
         geo1.template get<1>(),
-        0,
-        allocator);
+        res.get_srid());
     if (OB_ISNULL(pt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for geometry", K(ret));
@@ -288,7 +287,7 @@ static int simplify_and_push_geometry(
     ObIAllocator &allocator, ObGeometry *push_geo, GcTreeType &geo_coll)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(push_geo, allocator)))) {
+  if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(push_geo, allocator)))) {
     LOG_WARN("fail to simplify result", K(ret));
   } else if (OB_FAIL(geo_coll.push_back(*push_geo))) {
     LOG_WARN("fail to push back geometry", K(ret));
@@ -321,8 +320,9 @@ static int apply_bg_symdifference_pt_coll(const ObGeometry *g1, const ObGeometry
       LOG_WARN("fail to do symdifference between pointlike and pointlike type", K(ret));
     } else {
       uint32_t srid = g1->get_srid();
+      ObArenaAllocator tmp_alloc;
       typename GcTreeType::sub_mpt_type *mls_res =
-          OB_NEWx(typename GcTreeType::sub_mpt_type, allocator, srid, *allocator);
+          OB_NEWx(typename GcTreeType::sub_mpt_type, &tmp_alloc, srid, tmp_alloc);
       typename GcTreeType::sub_mpt_type *mpy_res =
           OB_NEWx(typename GcTreeType::sub_mpt_type, allocator, srid, *allocator);
       GcTreeType *res = OB_NEWx(GcTreeType, allocator, srid, *allocator);
@@ -391,9 +391,10 @@ static int apply_bg_symdifference_line_coll(const ObGeometry *g1, const ObGeomet
       LOG_WARN("fail to convert geometry to tree", K(ret));
     } else if (FALSE_IT(g1_tree = tree_visitor.get_geometry())) {
     } else {
+      ObArenaAllocator tmp_alloc;
       uint32_t srid = g1->get_srid();
       typename GcTreeType::sub_ml_type *mls_res =
-          OB_NEWx(typename GcTreeType::sub_ml_type, allocator, srid, *allocator);
+          OB_NEWx(typename GcTreeType::sub_ml_type, &tmp_alloc, srid, tmp_alloc);
       GcTreeType *res = OB_NEWx(GcTreeType, allocator, srid, *allocator);
       typename GcTreeType::sub_ml_type *mls_diff_res =
           OB_NEWx(typename GcTreeType::sub_ml_type, allocator, srid, *allocator);
@@ -447,7 +448,7 @@ static int apply_bg_symdifference_line_coll(const ObGeometry *g1, const ObGeomet
   return ret;
 }
 
-template<typename PolyTreeType, typename GcTreeType>
+template<typename PolyTreeType, typename GcTreeType, typename GeomType>
 static int apply_bg_symdifference_poly_coll(const ObGeometry *g1, const ObGeometry *g2,
     const ObGeoEvalCtx &context, ObBGStrategyType strategy, ObGeometry *&result)
 {
@@ -460,64 +461,58 @@ static int apply_bg_symdifference_poly_coll(const ObGeometry *g1, const ObGeomet
     LOG_WARN("fail to apply symdifference collection common", K(ret));
   } else if (OB_ISNULL(result)) {
     ObIAllocator *allocator = context.get_allocator();
-    ObGeometry *g1_tree = nullptr;
-    ObGeoToTreeVisitor tree_visitor(allocator);
-    if (OB_FAIL(const_cast<ObGeometry *>(g1)->do_visit(tree_visitor))) {
-      LOG_WARN("fail to convert geometry to tree", K(ret));
-    } else if (FALSE_IT(g1_tree = tree_visitor.get_geometry())) {
+    const GeomType *g1_bin = reinterpret_cast<const GeomType *>(g1->val());
+    uint32_t srid = g1->get_srid();
+    typename GcTreeType::sub_ml_type *mls_res =
+        OB_NEWx(typename GcTreeType::sub_ml_type, allocator, srid, *allocator);
+    GcTreeType *res = OB_NEWx(GcTreeType, allocator, srid, *allocator);
+    typename GcTreeType::sub_mp_type *mpy_res =
+        OB_NEWx(typename GcTreeType::sub_mp_type, allocator, srid, *allocator);
+    typename GcTreeType::sub_mpt_type *mpt_res =
+        OB_NEWx(typename GcTreeType::sub_mpt_type, allocator, srid, *allocator);
+    if (OB_ISNULL(mpt_res) || OB_ISNULL(mls_res) || OB_ISNULL(res) || OB_ISNULL(mpy_res)) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("wrong geometry type or create geometry failed",
+          K(ret),
+          K(mpt_res),
+          K(mls_res),
+          K(res),
+          K(mpy_res));
+    } else if (strategy == ObBGStrategyType::DEFAULT_NONE) {
+      bg::sym_difference(*g1_bin, *mpy, *mpy_res);
+      bg::difference(*mls, *g1_bin, *mls_res);
+      bg::difference(*mpt, *g1_bin, *mpt_res);
+    } else if (OB_ISNULL(context.get_srs())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("invalid null srs", K(ret));
     } else {
-      uint32_t srid = g1->get_srid();
-      typename GcTreeType::sub_ml_type *mls_res =
-          OB_NEWx(typename GcTreeType::sub_ml_type, allocator, srid, *allocator);
-      GcTreeType *res = OB_NEWx(GcTreeType, allocator, srid, *allocator);
-      typename GcTreeType::sub_mp_type *mpy_res =
-          OB_NEWx(typename GcTreeType::sub_mp_type, allocator, srid, *allocator);
-      typename GcTreeType::sub_mpt_type *mpt_res =
-          OB_NEWx(typename GcTreeType::sub_mpt_type, allocator, srid, *allocator);
-      if (OB_ISNULL(mpt_res) || OB_ISNULL(mls_res) || OB_ISNULL(res) || OB_ISNULL(mpy_res)) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("wrong geometry type or create geometry failed",
-            K(ret),
-            K(mpt_res),
-            K(mls_res),
-            K(res),
-            K(mpy_res));
-      } else if (strategy == ObBGStrategyType::DEFAULT_NONE) {
-        bg::sym_difference(*reinterpret_cast<PolyTreeType *>(g1_tree), *mpy, *mpy_res);
-        bg::difference(*mls, *reinterpret_cast<PolyTreeType *>(g1_tree), *mls_res);
-        bg::difference(*mpt, *reinterpret_cast<PolyTreeType *>(g1_tree), *mpt_res);
-      } else if (OB_ISNULL(context.get_srs())) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("invalid null srs", K(ret));
-      } else {
-        const ObSrsItem *srs = context.get_srs();
-        boost::geometry::srs::spheroid<double> geog_sphere(
-            srs->semi_major_axis(), srs->semi_minor_axis());
-        ObLlLaAaStrategy line_strategy(geog_sphere);
-        ObPlPaStrategy point_strategy(geog_sphere);
-        bg::sym_difference(
-            *reinterpret_cast<PolyTreeType *>(g1_tree), *mpy, *mpy_res, line_strategy);
-        bg::difference(*mls, *reinterpret_cast<PolyTreeType *>(g1_tree), *mls_res, line_strategy);
-        bg::difference(*mpt, *reinterpret_cast<PolyTreeType *>(g1_tree), *mpt_res, point_strategy);
-      }
-      if (OB_SUCC(ret) && !mpy_res->is_empty()
-          && OB_FAIL(simplify_and_push_geometry(
-                 *allocator, reinterpret_cast<ObGeometry *>(mpy_res), *res))) {
-        LOG_WARN("fail to push back geometry", K(ret));
-      }
-      if (OB_SUCC(ret) && !mls_res->is_empty()
-          && OB_FAIL(simplify_and_push_geometry(
-                 *allocator, reinterpret_cast<ObGeometry *>(mls_res), *res))) {
-        LOG_WARN("fail to push back geometry", K(ret));
-      }
-      if (OB_SUCC(ret) && !mpt_res->is_empty()
-          && OB_FAIL(simplify_and_push_geometry(
-                 *allocator, reinterpret_cast<ObGeometry *>(mpt_res), *res))) {
-        LOG_WARN("fail to push back geometry", K(ret));
-      }
-      if (OB_SUCC(ret)) {
-        result = res;
-      }
+      const ObSrsItem *srs = context.get_srs();
+      boost::geometry::srs::spheroid<double> geog_sphere(
+          srs->semi_major_axis(), srs->semi_minor_axis());
+      ObLlLaAaStrategy line_strategy(geog_sphere);
+      ObPlPaStrategy point_strategy(geog_sphere);
+      bg::sym_difference(
+          *g1_bin, *mpy, *mpy_res, line_strategy);
+      bg::difference(*mls, *g1_bin, *mls_res, line_strategy);
+      bg::difference(*mpt, *g1_bin, *mpt_res, point_strategy);
+    }
+    if (OB_SUCC(ret) && !mpy_res->is_empty()
+        && OB_FAIL(simplify_and_push_geometry(
+                *allocator, reinterpret_cast<ObGeometry *>(mpy_res), *res))) {
+      LOG_WARN("fail to push back geometry", K(ret));
+    }
+    if (OB_SUCC(ret) && !mls_res->is_empty()
+        && OB_FAIL(simplify_and_push_geometry(
+                *allocator, reinterpret_cast<ObGeometry *>(mls_res), *res))) {
+      LOG_WARN("fail to push back geometry", K(ret));
+    }
+    if (OB_SUCC(ret) && !mpt_res->is_empty()
+        && OB_FAIL(simplify_and_push_geometry(
+                *allocator, reinterpret_cast<ObGeometry *>(mpt_res), *res))) {
+      LOG_WARN("fail to push back geometry", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      result = res;
     }
   }
   return ret;
@@ -613,19 +608,19 @@ private:
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mpy_bin, g2, context, mpy_res))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!mpy_res->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(mpy_res, *allocator)))) {
+      } else if (OB_FAIL(!mpy_res->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(mpy_res, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, mpy_res, mpy_res_bin, srs))) {
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mls_bin, mpy_res_bin, context, mls_res))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!mls_res->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(mls_res, *allocator)))) {
+      } else if (OB_FAIL(!mls_res->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(mls_res, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, mls_res, mls_res_bin, srs))) {
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mpt_bin, mls_res_bin, context, result))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!result->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
+      } else if (OB_FAIL(!result->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       }
     }
@@ -813,7 +808,7 @@ OB_GEO_FUNC_END;
 OB_GEO_CART_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeomPolygon, ObWkbGeomCollection, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObCartesianPolygon, ObCartesianGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObCartesianPolygon, ObCartesianGeometrycollection, ObWkbGeomPolygon>(
       g1, g2, context, ObBGStrategyType::DEFAULT_NONE, result);
 }
 OB_GEO_FUNC_END;
@@ -1000,7 +995,7 @@ OB_GEO_FUNC_END;
 OB_GEO_CART_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeomMultiPolygon, ObWkbGeomCollection, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObCartesianMultipolygon, ObCartesianGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObCartesianMultipolygon, ObCartesianGeometrycollection, ObWkbGeomMultiPolygon>(
       g1, g2, context, ObBGStrategyType::DEFAULT_NONE, result);
 }
 OB_GEO_FUNC_END;
@@ -1025,7 +1020,7 @@ OB_GEO_FUNC_END;
 OB_GEO_CART_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeomCollection, ObWkbGeomPolygon, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObCartesianPolygon, ObCartesianGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObCartesianPolygon, ObCartesianGeometrycollection, ObWkbGeomPolygon>(
       g2, g1, context, ObBGStrategyType::DEFAULT_NONE, result);
 }
 OB_GEO_FUNC_END;
@@ -1049,7 +1044,7 @@ OB_GEO_FUNC_END;
 OB_GEO_CART_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeomCollection, ObWkbGeomMultiPolygon, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObCartesianMultipolygon, ObCartesianGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObCartesianMultipolygon, ObCartesianGeometrycollection, ObWkbGeomMultiPolygon>(
       g2, g1, context, ObBGStrategyType::DEFAULT_NONE, result);
 }
 OB_GEO_FUNC_END;
@@ -1246,7 +1241,7 @@ OB_GEO_FUNC_END;
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeogPolygon, ObWkbGeogCollection, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObGeographPolygon, ObGeographGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObGeographPolygon, ObGeographGeometrycollection, ObWkbGeogPolygon>(
       g1, g2, context, ObBGStrategyType::LL_LA_AA_STRATEGY, result);
 }
 OB_GEO_FUNC_END;
@@ -1438,7 +1433,7 @@ OB_GEO_FUNC_END;
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeogMultiPolygon, ObWkbGeogCollection, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObGeographMultipolygon, ObGeographGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObGeographMultipolygon, ObGeographGeometrycollection, ObWkbGeogMultiPolygon>(
       g1, g2, context, ObBGStrategyType::LL_LA_AA_STRATEGY, result);
 }
 OB_GEO_FUNC_END;
@@ -1463,7 +1458,7 @@ OB_GEO_FUNC_END;
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeogCollection, ObWkbGeogPolygon, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObGeographPolygon, ObGeographGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObGeographPolygon, ObGeographGeometrycollection, ObWkbGeogPolygon>(
       g2, g1, context, ObBGStrategyType::LL_LA_AA_STRATEGY, result);
 }
 OB_GEO_FUNC_END;
@@ -1488,7 +1483,7 @@ OB_GEO_FUNC_END;
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(
     ObGeoFuncSymDifferenceImpl, ObWkbGeogCollection, ObWkbGeogMultiPolygon, ObGeometry *)
 {
-  return apply_bg_symdifference_poly_coll<ObGeographMultipolygon, ObGeographGeometrycollection>(
+  return apply_bg_symdifference_poly_coll<ObGeographMultipolygon, ObGeographGeometrycollection, ObWkbGeogMultiPolygon>(
       g2, g1, context, ObBGStrategyType::LL_LA_AA_STRATEGY, result);
 }
 OB_GEO_FUNC_END;

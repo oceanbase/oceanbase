@@ -752,7 +752,7 @@ int cast_to_string(common::ObIAllocator *allocator,
     LOG_WARN("allocator is null", K(ret));
   } else {
     ObJsonBuffer j_buf(allocator);
-    if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, cast_param.is_pretty_))) {
+    if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, 0, cast_param.is_pretty_))) {
       is_type_mismatch = 1;
       LOG_WARN("fail to_string as json", K(ret));
     } else {
@@ -1426,7 +1426,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
                               ObEvalCtx &ctx,
                               bool &is_null_result,
                               ObJsonParamCacheCtx *&param_ctx,
-                              common::ObIAllocator &temp_allocator,
+                              MultimodeAlloctor &temp_allocator,
                               bool &is_cover_by_error)
 {
   INIT_SUCC(ret);
@@ -1441,7 +1441,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
       && OB_NOT_NULL(path_cache)) {
   } else {
     type = expr->datum_meta_.type_;
-    if (OB_FAIL(expr->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(expr, ctx, json_datum))) {
       is_cover_by_error = false;
       LOG_WARN("eval json arg failed", K(ret));
     } else if (type == ObNullType || json_datum->is_null()) {
@@ -1483,7 +1483,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
 
 int ObJsonUtil::get_json_doc(ObExpr *expr,
                              ObEvalCtx &ctx,
-                             common::ObIAllocator &allocator,
+                             MultimodeAlloctor &allocator,
                              ObIJsonBase*& j_base,
                              bool &is_null, bool & is_cover_by_error,
                              bool relax)
@@ -1495,7 +1495,7 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
 
   bool is_oracle = lib::is_oracle_mode();
 
-  if (OB_UNLIKELY(OB_FAIL(expr->eval(ctx, json_datum)))) {
+  if (OB_FAIL(allocator.eval_arg(expr, ctx, json_datum))) {
     is_cover_by_error = false;
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType || json_datum->is_null()) {
@@ -1510,6 +1510,7 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr, ctx, allocator, j_str, is_null))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (is_null) {
+    } else if (OB_FALSE_IT(allocator.add_baseline_size(j_str.length()))) {
     } else {
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
       ObJsonInType expect_type = j_in_type;

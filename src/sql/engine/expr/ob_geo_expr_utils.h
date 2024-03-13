@@ -25,6 +25,8 @@
 #include "share/ob_i_sql_expression.h" // for ObExprCtx
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
+#include "lib/rc/context.h"
 
 namespace oceanbase
 {
@@ -122,7 +124,8 @@ public:
                                 const common::ObSrsItem *&srs,
                                 common::ObGeometry *&geo,
                                 const char *func_name,
-                                bool has_srid = true);
+                                bool has_srid = true,
+                                bool with_copy = true);
   static int check_coordinate_range(const common::ObSrsItem *srs,
                                     common::ObGeometry *geo,
                                     const char *func_name,
@@ -145,7 +148,7 @@ public:
                               int32 &bestsrid);
   static int normalize_wkb(const common::ObSrsItem *srs,
                            common::ObString &wkb,
-                           common::ObArenaAllocator &allocator,
+                           common::ObIAllocator &allocator,
                            common::ObGeometry *&geo);
   static int normalize_wkb(common::ObString &proj4text,
                            common::ObGeometry *geo); // for st_transform
@@ -175,20 +178,20 @@ public:
                            common::ObString &res_wkb,
                            uint32_t srs_id = 0);
   static void geo_func_error_handle(int ret, const char* func_name);
-  static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2);
+  static int zoom_in_geos_for_relation(const ObSrsItem *srs, common::ObGeometry &geo1, common::ObGeometry &geo2);
 
   static int pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
   static int reverse_coordinate(ObGeometry *geo, const char *func_name);
   static int length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs, double in_num, double &out_num);
-  static int get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
-    omt::ObSrsCacheGuard &srs_guard, const char *func_name,
-    const ObSrsItem *&srs, ObGeometry *&geo);
+  static int get_input_geometry(const char* func_name, MultimodeAlloctor &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    omt::ObSrsCacheGuard &srs_guard, const ObSrsItem *&srs, ObGeometry *&geo);
   static int make_valid_polygon_inner(
-    ObCartesianPolygon &poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+    ObCartesianPolygon &poly, lib::MemoryContext &mem_ctx, ObGeometry *&valid_poly);
   static int union_polygons(
-    ObIAllocator &allocator, const ObGeometry &poly, ObGeometry *&polygons_union);
-  static int make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+    lib::MemoryContext &mem_ctx, const ObGeometry &poly, ObGeometry *&polygons_union);
+  static int make_valid_polygon(ObGeometry *poly, lib::MemoryContext &mem_ctx, ObGeometry *&valid_poly);
   static int create_3D_empty_collection(ObIAllocator &allocator, uint32_t srid, bool is_3d, bool is_geog, ObGeometry *&geo);
+  static int string_to_double(const common::ObString &in_str, ObCollationType cs_type, double &res);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
 };

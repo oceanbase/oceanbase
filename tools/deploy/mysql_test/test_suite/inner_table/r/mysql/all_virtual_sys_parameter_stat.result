@@ -351,6 +351,7 @@ _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _min_malloc_sample_interval
+_multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode

@@ -23,6 +23,7 @@
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 #include "lib/charset/ob_charset.h" // for strntod
 #include "common/ob_smart_var.h" // for SMART_VAR
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -1689,7 +1690,7 @@ int ObIJsonBase::find_string_method(ObIAllocator* allocator, ObSeekParentInfo &p
     }
   } else if (!str_only) {
     ObJsonBuffer j_buf(allocator);
-    if (OB_FAIL(print(j_buf, true, false, 0))) {
+    if (OB_FAIL(print(j_buf, true, 0, false, 0))) {
       trans_fail = true;
     } else {
       ObJsonString* tmp_ans = static_cast<ObJsonString*> (allocator->alloc(sizeof(ObJsonString)));
@@ -1773,7 +1774,7 @@ int ObIJsonBase::find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &pa
       src = ObString(get_data_length(), get_data());
     } else if (type != ObJsonNodeType::J_NULL) {
       ObJsonBuffer j_buf(allocator);
-      if (OB_FAIL(print(j_buf, true, false, 0))) {
+      if (OB_FAIL(print(j_buf, true, 0, false, 0))) {
         trans_fail = true;
       } else {
         src = ObString(j_buf.length(), j_buf.ptr());
@@ -3165,7 +3166,7 @@ int ObIJsonBase::get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &
         right_str = ObString(var->get_data_length(), var->get_data());
       } else {
         ObJsonBuffer j_buf(allocator);
-        if (OB_FAIL(var->print(j_buf, true, false, 0))) {
+        if (OB_FAIL(var->print(j_buf, true, 0, false, 0))) {
           LOG_WARN("fail to get string of sql_var.", K(ret));
         } else {
           right_str = ObString(j_buf.length(), j_buf.ptr());
@@ -3531,7 +3532,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
         jb_ptr = &j_bin;
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
           LOG_WARN("fail to get array element", K(ret), K(depth), K(i));
-        } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) {
+        } else if (OB_FAIL(jb_ptr->print(j_buf, true, 0, is_pretty, depth))) {
           LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
         }
       }
@@ -3596,7 +3597,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           jb_ptr = &j_bin;
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("fail to get object value", K(ret), K(i), K(is_pretty), K(depth));
-          } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) { // value
+          } else if (OB_FAIL(jb_ptr->print(j_buf, true, 0, is_pretty, depth))) { // value
             LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
           }
         }
@@ -3784,7 +3785,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
     // base64::typeXX:<binary data>
     if (OB_FAIL(base64_buf.append("base64:type"))) {
       LOG_WARN("fail to append \" base64:type \"", K(ret), K(depth));
-    } else if (OB_FAIL(base64_buf.append(field_buf, field_len))) {
+    } else if (OB_FAIL(base64_buf.append(field_buf, field_len, 0))) {
       LOG_WARN("fail to append field type", K(ret), K(depth), K(f_type));
     } else if (OB_FAIL(base64_buf.append(":"))) {
       LOG_WARN("fail to append \":\"", K(ret), K(depth));
@@ -3808,7 +3809,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
                                                        base64_buf.length()))) {
             LOG_WARN("fail to add double quote", K(ret), K(depth), K(f_type), K(base64_buf));
           }
-        } else if (OB_FAIL(j_buf.append(base64_buf.ptr(), base64_buf.length()))) {
+        } else if (OB_FAIL(j_buf.append(base64_buf.ptr(), base64_buf.length(), 0))) {
           LOG_WARN("fail to append base64_buf", K(ret), K(depth), K(f_type), K(base64_buf));
         }
       }
@@ -3819,142 +3820,145 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
   return ret;
 }
 
-int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint64_t depth) const
+int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len, bool is_pretty, uint64_t depth) const
 {
   INIT_SUCC(ret);
   ObJsonNodeType j_type = json_type();
-
-  // consistent with mysql 5.7
-  // in mysql 8.0, varstring is handled as json string, obvarchartype is considered as varstring.
-  switch (j_type) {
-    case ObJsonNodeType::J_DATE:
-    case ObJsonNodeType::J_TIME:
-    case ObJsonNodeType::J_DATETIME:
-    case ObJsonNodeType::J_TIMESTAMP:
-    case ObJsonNodeType::J_ORACLEDATE:
-    case ObJsonNodeType::J_ODATE:
-    case ObJsonNodeType::J_OTIMESTAMP:
-    case ObJsonNodeType::J_OTIMESTAMPTZ: {
-      if (OB_FAIL(print_jtime(j_buf, is_quoted))) {
-        LOG_WARN("fail to change jtime to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_ARRAY: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_array(j_buf, depth, is_pretty))) {
-        LOG_WARN("fail to change jarray to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OBJECT: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_object(j_buf, depth, is_pretty))) {
-        LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_BOOLEAN: {
-      if (get_boolean() ? OB_FAIL(j_buf.append("true", sizeof("true") - 1)) :
-                          OB_FAIL(j_buf.append("false", sizeof("false") - 1))) {
-        LOG_WARN("fail to append boolean", K(ret), K(get_boolean()), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_DECIMAL:
-    case ObJsonNodeType::J_ODECIMAL: {
-      if (OB_FAIL(print_decimal(j_buf))) {
-        LOG_WARN("fail to print decimal to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_DOUBLE:
-    case ObJsonNodeType::J_ODOUBLE: {
-      if (OB_FAIL(print_double(j_buf))) {
-        LOG_WARN("fail to print double to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OFLOAT: {
-      if (OB_FAIL(print_float(j_buf))) {
-        LOG_WARN("fail to print float to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_NULL: {
-      if (!(this)->is_real_json_null(this) && OB_FAIL(j_buf.append("", 0))) {
-        LOG_WARN("fail to append NULL upper string to buffer", K(ret), K(j_type));
-      } else if ((this)->is_real_json_null(this) && OB_FAIL(j_buf.append("null", sizeof("null") - 1))) {
-        LOG_WARN("fail to append null string to buffer", K(ret), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OPAQUE: {
-      if (OB_FAIL(print_opaque(j_buf, depth, is_quoted))) {
-        LOG_WARN("fail to print opaque to string", K(ret), K(depth), K(j_type), K(is_quoted));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_STRING:
-    case ObJsonNodeType::J_OBINARY:
-    case ObJsonNodeType::J_OOID:
-    case ObJsonNodeType::J_ORAWHEX:
-    case ObJsonNodeType::J_ORAWID:
-    case ObJsonNodeType::J_ODAYSECOND:
-    case ObJsonNodeType::J_OYEARMONTH: {
-      uint64_t data_len = get_data_length();
-      const char *data = get_data();
-      if (is_quoted && data_len == 0) {
-        if (OB_FAIL(j_buf.append("\"\"", 2))) {
-          LOG_WARN("fail to append empty string", K(ret), K(j_type), K(is_quoted));
+  if (reserve_len > 0 && OB_FAIL(j_buf.reserve(reserve_len * 1.2))) {
+    LOG_WARN("failed to reserve j_str", K(ret), K(reserve_len));
+  } else {
+    // consistent with mysql 5.7
+    // in mysql 8.0, varstring is handled as json string, obvarchartype is considered as varstring.
+    switch (j_type) {
+      case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_TIME:
+      case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_TIMESTAMP:
+      case ObJsonNodeType::J_ORACLEDATE:
+      case ObJsonNodeType::J_ODATE:
+      case ObJsonNodeType::J_OTIMESTAMP:
+      case ObJsonNodeType::J_OTIMESTAMPTZ: {
+        if (OB_FAIL(print_jtime(j_buf, is_quoted))) {
+          LOG_WARN("fail to change jtime to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
         }
-      } else if (OB_ISNULL(data) && data_len != 0) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("data is null", K(ret), K(data_len));
-      } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len))) {
-        // if data is null, data_len is 0, it is an empty string
-        LOG_WARN("fail to append string", K(ret), K(j_type), K(is_quoted));
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_INT:
-    case ObJsonNodeType::J_OINT: {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_signed(get_int(), tmp_buf);
-      if (OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append json int to buffer", K(ret), K(get_int()), K(len), K(j_type));
+      case ObJsonNodeType::J_ARRAY: {
+        if (ObJsonParser::is_json_doc_over_depth(++depth)) {
+          ret = OB_ERR_JSON_OUT_OF_DEPTH;
+          LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
+        } else if (OB_FAIL(SMART_CALL(print_array(j_buf, depth, is_pretty)))) {
+          LOG_WARN("fail to change jarray to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
+        }
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_UINT:
-    case ObJsonNodeType::J_OLONG:  {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_unsigned(get_uint(), tmp_buf);
-      if (OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append json uint to buffer", K(ret), K(get_uint()), K(len), K(j_type));
+      case ObJsonNodeType::J_OBJECT: {
+        if (ObJsonParser::is_json_doc_over_depth(++depth)) {
+          ret = OB_ERR_JSON_OUT_OF_DEPTH;
+          LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
+        } else if (OB_FAIL(SMART_CALL(print_object(j_buf, depth, is_pretty)))) {
+          LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
+        }
+        break;
       }
-      break;
-    }
 
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("undefined json node type", K(ret), K(j_type));
-      break;
+      case ObJsonNodeType::J_BOOLEAN: {
+        if (get_boolean() ? OB_FAIL(j_buf.append("true", sizeof("true") - 1, 0)) :
+                            OB_FAIL(j_buf.append("false", sizeof("false") - 1, 0))) {
+          LOG_WARN("fail to append boolean", K(ret), K(get_boolean()), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_DECIMAL:
+      case ObJsonNodeType::J_ODECIMAL: {
+        if (OB_FAIL(print_decimal(j_buf))) {
+          LOG_WARN("fail to print decimal to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_DOUBLE:
+      case ObJsonNodeType::J_ODOUBLE: {
+        if (OB_FAIL(print_double(j_buf))) {
+          LOG_WARN("fail to print double to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_OFLOAT: {
+        if (OB_FAIL(print_float(j_buf))) {
+          LOG_WARN("fail to print float to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_NULL: {
+        if (!(this)->is_real_json_null(this) && OB_FAIL(j_buf.append("", 0, 0))) {
+          LOG_WARN("fail to append NULL upper string to buffer", K(ret), K(j_type));
+        } else if ((this)->is_real_json_null(this) && OB_FAIL(j_buf.append("null", sizeof("null") - 1, 0))) {
+          LOG_WARN("fail to append null string to buffer", K(ret), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_OPAQUE: {
+        if (OB_FAIL(print_opaque(j_buf, depth, is_quoted))) {
+          LOG_WARN("fail to print opaque to string", K(ret), K(depth), K(j_type), K(is_quoted));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_STRING:
+      case ObJsonNodeType::J_OBINARY:
+      case ObJsonNodeType::J_OOID:
+      case ObJsonNodeType::J_ORAWHEX:
+      case ObJsonNodeType::J_ORAWID:
+      case ObJsonNodeType::J_ODAYSECOND:
+      case ObJsonNodeType::J_OYEARMONTH: {
+        uint64_t data_len = get_data_length();
+        const char *data = get_data();
+        if (is_quoted && data_len == 0) {
+          if (OB_FAIL(j_buf.append("\"\"", 2, 0))) {
+            LOG_WARN("fail to append empty string", K(ret), K(j_type), K(is_quoted));
+          }
+        } else if (OB_ISNULL(data) && data_len != 0) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("data is null", K(ret), K(data_len));
+        } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len))) {
+          // if data is null, data_len is 0, it is an empty string
+          LOG_WARN("fail to append string", K(ret), K(j_type), K(is_quoted));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_INT:
+      case ObJsonNodeType::J_OINT: {
+        char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
+        int64_t len = ObFastFormatInt::format_signed(get_int(), tmp_buf);
+        if (OB_FAIL(j_buf.append(tmp_buf, len, 0))) {
+          LOG_WARN("fail to append json int to buffer", K(ret), K(get_int()), K(len), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_UINT:
+      case ObJsonNodeType::J_OLONG:  {
+        char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
+        int64_t len = ObFastFormatInt::format_unsigned(get_uint(), tmp_buf);
+        if (OB_FAIL(j_buf.append(tmp_buf, len, 0))) {
+          LOG_WARN("fail to append json uint to buffer", K(ret), K(get_uint()), K(len), K(j_type));
+        }
+        break;
+      }
+
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("undefined json node type", K(ret), K(j_type));
+        break;
+      }
     }
   }
 
@@ -4773,26 +4777,6 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
   return ret;
 }
 
-
-uint32_t ObIJsonBase::depth()
-{
-  INIT_SUCC(ret);
-  uint32_t depth = 0;
-
-  if (is_bin()) {
-    ObArenaAllocator allocator;
-    ObIJsonBase *j_tree = NULL;
-    if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, this, ObJsonInType::JSON_TREE, j_tree))) {
-      LOG_WARN("fail to transform to tree", K(ret));
-    } else {
-      depth = j_tree->depth();
-    }
-  } else {
-    depth = static_cast<ObJsonNode *>(this)->depth();
-  }
-
-  return depth;
-}
 
 int ObIJsonBase::get_location(ObJsonBuffer &path)
 {
@@ -6242,18 +6226,19 @@ int ObJsonBaseUtil::append_newline_and_indent(ObJsonBuffer &j_buf, uint64_t leve
 {
   // Append newline and two spaces per indentation level.
   INIT_SUCC(ret);
+  uint64_t reserve_size = level << 1;
 
   if (level > ObJsonParser::JSON_DOCUMENT_MAX_DEPTH) {
     ret = OB_ERR_JSON_OUT_OF_DEPTH;
     LOG_WARN("indent level is too deep", K(ret), K(level));
   } else if (OB_FAIL(j_buf.append("\n"))) {
     LOG_WARN("fail to append newline to buffer", K(ret), K(level));
-  } else if (OB_FAIL(j_buf.reserve(level * 2))) {
+  } else if (OB_FAIL(j_buf.reserve(reserve_size))) {
     LOG_WARN("fail to reserve memory for buffer", K(ret), K(level));
   } else {
-    char str[level * 2];
-    MEMSET(str, ' ', level * 2);
-    if (OB_FAIL(j_buf.append(str, level * 2))) {
+    char str[reserve_size];
+    MEMSET(str, ' ', reserve_size);
+    if (OB_FAIL(j_buf.append(str, reserve_size, 0))) {
       LOG_WARN("fail to append space to buffer", K(ret), K(level));
     }
   }
@@ -6307,7 +6292,7 @@ int ObJsonBaseUtil::escape_character(char c, ObJsonBuffer &j_buf)
       case '"':
       case '\\': {
         char str[1] = {c};
-        if (OB_FAIL(j_buf.append(str, 1))) {
+        if (OB_FAIL(j_buf.append(str, 1, 0))) {
           LOG_WARN("fail to append c to j_buf", K(ret), K(c));
         }
         break;
@@ -6319,11 +6304,11 @@ int ObJsonBaseUtil::escape_character(char c, ObJsonBuffer &j_buf)
         static char _dig_vec_lower[] = "0123456789abcdefghijklmnopqrstuvwxyz";
         char high[1] = {_dig_vec_lower[(c & 0xf0) >> 4]};
         char low[1] = {_dig_vec_lower[(c & 0x0f)]};
-        if (OB_FAIL(j_buf.append("u00", 3))) {
+        if (OB_FAIL(j_buf.append("u00", 3, 0))) {
           LOG_WARN("fail to append \"u00\" to j_buf", K(ret));
-        } else if (OB_FAIL(j_buf.append(high, 1))) {
+        } else if (OB_FAIL(j_buf.append(high, 1, 0))) {
           LOG_WARN("fail to append four high bits to j_buf", K(ret));
-        } else if (OB_FAIL(j_buf.append(low, 1))) {
+        } else if (OB_FAIL(j_buf.append(low, 1, 0))) {
           LOG_WARN("fail to append four low bits to j_buf", K(ret));
         }
         break;
@@ -6364,7 +6349,7 @@ int ObJsonBaseUtil::add_double_quote(ObJsonBuffer &j_buf, const char *cptr, uint
 
       // Most characters do not need to be escaped.
       // Append the characters that do not need to be escaped
-      if (OB_FAIL(j_buf.append(cptr, next_special - cptr))) {
+      if (OB_FAIL(j_buf.append(cptr, next_special - cptr, 0))) {
         LOG_WARN("fail to append common segments to j_buf", K(ret), K(length),
                                                            K(next_special - cptr));
         break;
@@ -6400,7 +6385,7 @@ int ObJsonBaseUtil::append_string(ObJsonBuffer &j_buf, bool is_quoted,
       LOG_WARN("fail to add double quote", K(ret), K(length));
     }
   } else {
-    if (OB_FAIL(j_buf.append(data, length))) {
+    if (OB_FAIL(j_buf.append(data, length, 0))) {
       LOG_WARN("fail to append data", K(ret), K(length));
     }
   }

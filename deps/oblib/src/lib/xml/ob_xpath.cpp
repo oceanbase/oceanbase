@@ -2157,6 +2157,41 @@ ObIMulModeBase* ObPathExprIter::get_cur_res_parent()
   return path_ctx_.ancestor_record_.size() > 0 ? path_ctx_.ancestor_record_.top() : nullptr;
 }
 
+int ObPathExprIter::get_node_exists(bool &is_exists)
+{
+  INIT_SUCC(ret);
+  is_exists = false;
+  if (!is_inited_ || OB_ISNULL(path_node_)) {
+    ret = OB_INIT_FAIL;
+    LOG_WARN("should be inited", K(ret));
+  } else {
+    ObSeekResult path_res;
+    while (OB_SUCC(ret) && !is_exists) {
+      if (OB_FAIL(path_node_->eval_node(path_ctx_, path_res))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to seek", K(ret));
+        }
+      } else if (path_res.is_scalar_) {
+        if (OB_ISNULL(path_res.result_.scalar_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("xpath result scalar is null", K(ret));
+        } else if (path_res.result_.scalar_->node_type_.get_arg_type() == ObArgType::PN_BOOLEAN
+                    && !path_res.result_.scalar_->arg_.boolean_) {
+          // do nothing, keep seeking
+        } else {
+          is_exists = true;
+        }
+      } else {
+        is_exists = true;
+      }
+    }  // end while
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObPathExprIter::get_next_node(ObIMulModeBase*& res)
 {
   INIT_SUCC(ret);
@@ -2404,8 +2439,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
               ObString input_str("");
               if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &input_str, content))) {
                 LOG_WARN("alloc node content info failed", K(ret));
-              } else {
-                node_vec.push_back(content);
+              } else if (OB_FAIL(node_vec.push_back(content))){
+                LOG_WARN("failed to push back content.", K(ret));
               }
             }
           }
@@ -2420,8 +2455,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
                                                               arg_node->node_type_.get_arg_type(),
                                                               content))) {
         LOG_WARN("alloc node content info failed", K(ret));
-      } else {
-        node_vec.push_back(content);
+      } else if (OB_FAIL(node_vec.push_back(content))) {
+        LOG_WARN("failed to push back content.", K(ret));
       }
     } else {
       for (int i = 0; OB_SUCC(ret) && i < seek_vector.size(); i++) {
@@ -2442,8 +2477,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
             LOG_WARN("get value failed", K(ret));
           } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text_str, content))) {
             LOG_WARN("alloc node content info failed", K(ret), K(text_str));
-          } else {
-            node_vec.push_back(content);
+          } else if (OB_FAIL(node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
 		    } else if (OB_FAIL(ObXmlUtil::get_array_from_mode_base(base, node_array))) { // get children
 			    LOG_WARN("get child array failed", K(ret));
@@ -2451,8 +2486,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
           ObString text("");
           if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text, content))) {
             LOG_WARN("alloc node content info", K(ret));
-          } else {
-            node_vec.push_back(content);
+          } else if OB_FAIL((node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
         } else {
           ObString text;
@@ -2465,8 +2500,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
             LOG_WARN("dfs get text failed", K(ret));
           } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text, content))) {
             LOG_WARN("alloc node content info failed", K(ret), K(text));
-          } else {
-            node_vec.push_back(content);
+          } else if (OB_FAIL(node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
         }
       }
@@ -2481,8 +2516,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
       LOG_WARN("scalar get null", K(ret));
     } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &arg_node->arg_, node_type, content))) {
       LOG_WARN("alloc node content info failed", K(ret), K(node_type));
-    } else {
-      node_vec.push_back(content);
+    } else if (OB_FAIL(node_vec.push_back(content))) {
+      LOG_WARN("failed to push back content.", K(ret));
     }
   }
   return ret;

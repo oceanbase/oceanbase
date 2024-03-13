@@ -177,11 +177,11 @@ public:
                           ObEvalCtx &ctx,
                           bool &is_null_result,
                           ObJsonParamCacheCtx *&param_ctx,
-                          common::ObIAllocator &temp_allocator,
+                          MultimodeAlloctor &temp_allocator,
                           bool &is_cover_by_error);
   static int get_json_doc(ObExpr *expr,
                           ObEvalCtx &ctx,
-                          common::ObIAllocator &allocator,
+                          MultimodeAlloctor &allocator,
                           ObIJsonBase*& j_base,
                           bool &is_null, bool & is_cover_by_error,
                           bool relax = false);

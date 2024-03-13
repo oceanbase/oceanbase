@@ -8026,9 +8026,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                && result_types[i].get_meta_type().is_ext()
                && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
       // sql udt or oracle gis can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
-      // but null may not cast to other pl extends (return error 4016 in store_datums)
       // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
-      // not support: select null into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(obj), K(i), K(current_type.at(i)), K(result_types[i]));
     } else {

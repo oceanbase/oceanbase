@@ -83,7 +83,7 @@ int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res)
   }
   if (OB_SUCC(ret)) {
     bool is_geog = (crs_ == ObGeoCRS::Geographic) ? true : false;
-    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator_, geo_type, is_geog, true, res))) {
+    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, geo_type, is_geog, true, res, srid_))) {
       LOG_WARN("fail to create 2d geo obj", K(ret), K(geo_type), K(is_geog));
     } else {
       res->set_data(wkb_2d);
@@ -127,10 +127,10 @@ int ObGeometry3D::read_nums_value(ObGeoWkbByteOrder bo, uint32_t &nums)
 int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/* = 0*/, int64_t maxdecimaldigits/* = -1*/)
 {
   int ret = OB_SUCCESS;
-  ObStringBuffer *buf = NULL;
+  ObGeoStringBuffer *buf = NULL;
   ObGeo3DToWktVisitor visitor(maxdecimaldigits);
   set_pos(0);
-  if (OB_ISNULL(buf = OB_NEWx(ObStringBuffer, &allocator, (&allocator)))) {
+  if (OB_ISNULL(buf = OB_NEWx(ObGeoStringBuffer, &allocator, (&allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", K(ret));
   } else if (srid != 0) {
@@ -441,7 +441,7 @@ int ObGeometry3D::create_elevation_extent(ObGeoElevationExtent &extent)
   return ret;
 }
 
-int ObGeometry3D::normalize(const ObSrsItem *srs, uint32_t &zoom_in_value)
+int ObGeometry3D::normalize(const ObSrsItem *srs)
 {
   int ret = OB_SUCCESS;
   ObGeo3DNormalizeVisitor visitor(srs);
@@ -451,8 +451,6 @@ int ObGeometry3D::normalize(const ObSrsItem *srs, uint32_t &zoom_in_value)
   } else if (!is_end()) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("has extra buffer in wkb", K(ret), K(cur_pos_), K(length()));
-  } else {
-    zoom_in_value = visitor.get_zoom_in_value();
   }
   return ret;
 }
@@ -713,9 +711,12 @@ int ObGeo3DTo2DVisitor::visit_header(ObGeoWkbByteOrder bo, ObGeoType geo_type, b
 int ObGeo3DTo2DVisitor::append_nums(uint32_t nums)
 {
   int ret = OB_SUCCESS;
+  uint64_t reserve_len = WKB_GEO_ELEMENT_NUM_SIZE + nums * WKB_GEO_DOUBLE_STORED_SIZE;
   if (OB_ISNULL(wkb_buf_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wkb_buf_ is NULL", K(ret));
+  } else if (OB_FAIL(wkb_buf_->reserve(reserve_len))) {
+    LOG_WARN("fail to resverse buffer", K(ret));
   } else if (OB_FAIL(wkb_buf_->append(nums))) {
     LOG_WARN("fail to append nums value", K(ret));
   }
@@ -838,7 +839,8 @@ int ObGeo3DToWktVisitor::visit_pointz_inner(double x, double y, double z)
     uint64_t len_y = 0;
     uint64_t len_z = 0;
     char *buff_ptr = NULL;
-    if (OB_FAIL(wkt_buf_->reserve(3 * double_buff_size + 2))) {
+    uint32_t reserve_len = 3 * double_buff_size + 2;
+    if (wkt_buf_->remain() < reserve_len && OB_FAIL(wkt_buf_->reserve(reserve_len))) {
       LOG_WARN("fail to reserve buffer", K(ret));
     } else if (FALSE_IT(buff_ptr = wkt_buf_->ptr() + wkt_buf_->length())) {
     } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, x, has_scale_, scale_, is_oracle_mode_, len_x))) {
@@ -1506,47 +1508,20 @@ int ObGeo3DNormalizeVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner
       ObGeoWkbByteOrder bo = geo->byteorder();
       double x = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos, bo);
       double y = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, bo);
-      double z = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos + 2 * WKB_GEO_DOUBLE_STORED_SIZE, bo);
       double nx = 1.0;
       double ny = 1.0;
-      double nz = 1.0;
       if (no_srs_) {
         nx = x * M_PI / 180.0;
         ny = y * M_PI / 180.0;
-        nz = z * M_PI / 180.0;
       } else {
         if (OB_FAIL(srs_->latitude_convert_to_radians(y, ny))) {
           LOG_WARN("normalize y failed", K(ret));
         } else if (OB_FAIL(srs_->longtitude_convert_to_radians(x, nx))) {
           LOG_WARN("normalize x failed", K(ret));
         } else {
-          uint32_t count = 0;
-          double nx_tmp = nx;
-          double ny_tmp = ny;
-          double nz_tmp = nz;
-          while (nx_tmp != 0.0 && std::fabs(nx_tmp) < ZOOM_IN_THRESHOLD) {
-            nx_tmp *= 10;
-            count++;
-          }
-          zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
-          count = 0;
-          while (ny_tmp != 0.0 && std::fabs(ny_tmp) < ZOOM_IN_THRESHOLD) {
-            ny_tmp *= 10;
-            count++;
-          }
-          zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
-          count = 0;
-          while (nz_tmp != 0.0 && std::fabs(nz_tmp) < ZOOM_IN_THRESHOLD) {
-            nz_tmp *= 10;
-            count++;
-          }
-          zoom_in_value_ = count > zoom_in_value_ ? count : zoom_in_value_;
+          ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos, nx, bo);
+          ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, ny, bo);
         }
-      }
-      if (OB_SUCC(ret)) {
-        ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos, nx, bo);
-        ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, ny, bo);
-        ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE * 2, nz, bo);
       }
     }
   }

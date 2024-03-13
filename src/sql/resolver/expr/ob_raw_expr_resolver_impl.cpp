@@ -1190,6 +1190,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_SYS_XML_FOREST: {
+        if (OB_FAIL(process_xml_forest_node(node, expr))) {
+          LOG_WARN("fail to process xml forest node", K(ret), K(node));
+        }
+        break;
+      }
       case T_FUN_SYS_XML_ATTRIBUTES: {
         if (OB_FAIL(process_xml_attributes_node(node, expr))) {
           LOG_WARN("fail to process xmlattributes node", K(ret), K(node));
@@ -2317,6 +2323,8 @@ void ObRawExprResolverImpl::get_special_func_ident_name(ObString &ident_name, co
   // get ident name of spacial exprs not using first child as function name
   if (func_type == T_FUN_SYS_XML_ELEMENT) {
     ident_name = ObString::make_string("xmlelement");
+  } else if (func_type == T_FUN_SYS_XML_FOREST) {
+    ident_name = ObString::make_string("xmlforest");
   } else if (func_type == T_FUN_SYS_XMLPARSE) {
     ident_name = ObString::make_string("xmlparse");
   } else if (func_type == T_FUN_ORA_XMLAGG) {
@@ -2397,6 +2405,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
             OZ (process_xmlparse_node(&func_node, func_expr));
           } else if (func_node.type_ == T_FUN_SYS_XML_ELEMENT) {
             OZ (process_xml_element_node(&func_node, func_expr));
+          } else if (func_node.type_ == T_FUN_SYS_XML_FOREST) {
+            OZ (process_xml_forest_node(&func_node, func_expr));
           } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
             OZ (process_agg_node(&func_node, func_expr));
           }else {
@@ -2528,6 +2538,7 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
     }
   } else if (T_FUN_SYS == left_node.type_
              || T_FUN_SYS_XML_ELEMENT == left_node.type_
+             || T_FUN_SYS_XML_FOREST == left_node.type_
              || T_FUN_SYS_XMLPARSE == left_node.type_
              || T_FUN_ORA_XMLAGG == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
@@ -6452,6 +6463,74 @@ int ObRawExprResolverImpl::process_json_mergepatch_node(const ParseNode *node, O
   }
   return ret;
  }
+
+int ObRawExprResolverImpl::process_xml_forest_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  INIT_SUCC(ret);
+  CK(OB_NOT_NULL(node));
+  CK(node->type_ == T_FUN_SYS_XML_FOREST);
+
+  ObSysFunRawExpr *func_expr = NULL;
+  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_XML_FOREST, func_expr));
+  CK(OB_NOT_NULL(func_expr));
+  OX(func_expr->set_func_name(ObString::make_string("xmlforest")));
+
+  for (int i = 0; i < node->num_child_ && OB_SUCC(ret); i++) {
+    ParseNode *param_node = node->children_[i];
+    ParseNode *value_node = NULL;
+    ParseNode *tag_node = NULL;
+    ObRawExpr *value_expr = NULL;
+    ObRawExpr *tag_expr = NULL;
+    ObRawExpr *lable_expr = NULL;
+    if (param_node->type_ != T_EXPR_LIST) {
+      LOG_WARN("empty/invalid param_node", K(param_node->type_));
+    } else {
+      if (param_node->num_child_ != 3) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param_node", K(param_node->num_child_));
+      } else {
+        value_node = param_node->children_[0];
+        tag_node = param_node->children_[1];
+      }
+      // fill tag
+      if (OB_FAIL(ret)) {
+      } else if (tag_node->type_ == T_VARCHAR && tag_node->str_value_ == NULL) {
+        if (value_node->type_ == T_OBJ_ACCESS_REF && OB_NOT_NULL(value_node->children_[0])) {
+          // fill tag with column name
+          if (value_node->children_[0]->str_value_ != NULL && value_node->children_[0]->str_len_ > 0) {
+            tag_node->str_value_ = value_node->children_[0]->str_value_;
+            tag_node->str_len_ = value_node->children_[0]->str_len_;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to fill the empty tag", K(value_node->children_[0]->str_value_));
+          }
+        } else {
+          // not the case that can fill the tag name with column name
+          ret = OB_ERR_XMLELEMENT_ALIASED;
+          LOG_USER_ERROR(OB_ERR_XMLELEMENT_ALIASED, i + 1);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_NOT_NULL(value_node->raw_text_) && STRCMP(value_node->raw_text_, "NULL") == 0) { // NULL input
+        LOG_WARN("NULL value, skip", K(value_node->num_child_));
+      } else {
+        OZ(recursive_resolve(value_node, value_expr));
+        CK(OB_NOT_NULL(value_expr));
+        OZ(func_expr->add_param_expr(value_expr));
+        OZ(recursive_resolve(tag_node, tag_expr));
+        CK(OB_NOT_NULL(tag_expr));
+        OZ(func_expr->add_param_expr(tag_expr));
+        CK(param_node->children_[2]->type_ == T_INT);
+        OZ(recursive_resolve(param_node->children_[2], lable_expr));
+        CK(OB_NOT_NULL(lable_expr));
+        OZ(func_expr->add_param_expr(lable_expr));
+      }
+    }
+  }
+
+  OX(expr = func_expr);
+  return ret;
+}
 
 int ObRawExprResolverImpl::process_is_json_node(const ParseNode *node, ObRawExpr *&expr)
 {

@@ -124,7 +124,8 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObDatum *xml_datum = NULL;
   ObString xpath_str;
   ObString namespace_str;
@@ -136,14 +137,14 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   ObString xml_res;
   ObCollationType cs_type = CS_TYPE_INVALID;
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 2 && expr.arg_cnt_ != 3)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid arg_cnt_", K(ret), K(expr.arg_cnt_));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     LOG_WARN("fail to get xml str", K(ret));
   } else if (ObNullType == expr.args_[1]->datum_meta_.type_) {
     ret = OB_ERR_INVALID_XPATH_EXPRESSION;
@@ -176,7 +177,8 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res);
   ObString xml_frag;
   ObString xpath_expr;
@@ -185,7 +187,7 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
   ObStringBuffer xml_res(&allocator);
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (expr.arg_cnt_ != 2) {
@@ -198,6 +200,7 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("get xml frag string failed", K(ret));
   } else if (xml_frag.empty()) {
     // do nothing
+  } else if (OB_FALSE_IT(allocator.set_baseline_size(xml_frag.length()))) {
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("get xpath expr failed.", K(ret));
   } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_DOCUMENT))) {

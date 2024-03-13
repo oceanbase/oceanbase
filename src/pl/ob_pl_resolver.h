@@ -268,6 +268,9 @@ public:
   int check_contain_goto_block(const ObPLStmt *cur_stmt,
                                const ObPLStmtBlock *goto_block,
                                bool &is_contain);
+  static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
@@ -1105,9 +1108,6 @@ private:
                                     ObRawExpr *real_expr);
 
   int replace_udf_param_expr(ObQualifiedName &q_name,
-                             ObIArray<ObQualifiedName> &columns,
-                             ObIArray<ObRawExpr*> &real_exprs);
-  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
   int get_names_by_access_ident(ObObjAccessIdent &access_ident,

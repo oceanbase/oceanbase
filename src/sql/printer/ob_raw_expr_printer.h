@@ -154,6 +154,7 @@ private:
   int print_window_clause(ObWinFunRawExpr *expr);
   int print_xml_parse_expr(ObSysFunRawExpr *expr);
   int print_xml_element_expr(ObSysFunRawExpr *expr);
+  int print_xml_forest_expr(ObSysFunRawExpr *expr);
   int print_xml_attributes_expr(ObSysFunRawExpr *expr);
   int print_xml_agg_expr(ObAggFunRawExpr *expr);
   int print_xml_serialize_expr(ObSysFunRawExpr *expr);

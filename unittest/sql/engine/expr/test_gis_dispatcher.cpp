@@ -69,7 +69,10 @@ TEST_F(TestGisDispatcher, not_impl)
   ObIWkbGeogPoint gp;
   int ret = OB_SUCCESS;
   int result;
-  ObGeoEvalCtx gis_context;
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context);
   ret = ObGisTestFunc<ObGeoFuncTestType::NotImplemented>::geo_func::eval(gis_context, result);
   ASSERT_EQ(ret, OB_ERR_GIS_INVALID_DATA);
 
@@ -99,7 +102,10 @@ TEST_F(TestGisDispatcher, dispatcher)
 
   ObArenaAllocator allocator(ObModIds::TEST);
   ObSrsItem srs(NULL);
-  ObGeoEvalCtx gis_context(&allocator, &srs);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context, &srs);
   ObGeometry *gis_args[3][8] = {{0}};
 
   gis_args[static_cast<int>(ObGeoCRS::Cartesian)][static_cast<int>(ObGeoType::POINT)] = &cp;
@@ -170,7 +176,10 @@ TEST_F(TestGisDispatcher, specialization_and_exception_test)
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
   ObSrsItem srs(NULL);
-  ObGeoEvalCtx gis_context(&allocator, &srs);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoEvalCtx gis_context(mem_context, &srs);
   ret = gis_context.append_geo_arg(&cp);
   ASSERT_EQ(ret, OB_SUCCESS);
 

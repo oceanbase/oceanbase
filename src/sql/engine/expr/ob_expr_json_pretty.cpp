@@ -55,7 +55,7 @@ int ObExprJsonPretty::calc_result_type1(ObExprResType &type,
 }
 
 int ObExprJsonPretty::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
-                           ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null)
+                           MultimodeAlloctor *allocator, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
   ObObjType type = meta.type_;
@@ -77,13 +77,14 @@ int ObExprJsonPretty::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
     LOG_WARN("fail to get real data.", K(ret), K(j_str));
+  } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
       j_in_type, j_base))) {
     if (ret == OB_ERR_INVALID_JSON_TEXT) {
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     }
     LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
-  } else if (OB_FAIL(j_base->print(j_buf, true, true, 0))) {
+  } else if (OB_FAIL(j_base->print(j_buf, true, j_str.length(), true, 0))) {
     LOG_WARN("fail to print json", K(ret), K(type), K(j_str), K(j_in_type));
   }
 
@@ -95,13 +96,15 @@ int ObExprJsonPretty::eval_json_pretty(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObExpr *arg = expr.args_[0];
   ObDatum *j_datum = NULL;
   ObJsonBuffer j_buf(&tmp_allocator);
   bool is_null = false;
 
-  if (OB_FAIL(arg->eval(ctx, j_datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(arg, ctx, j_datum))) {
     ret = OB_ERR_INVALID_DATATYPE;
     LOG_WARN("error, eval json args datum failed", K(ret));
   } else if (OB_FAIL(calc(ctx, *j_datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, j_buf, is_null))) {

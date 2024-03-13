@@ -105,7 +105,8 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
   uint32_t arg_num = expr.arg_cnt_;
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, get_func_name());
   omt::ObSrsCacheGuard srs_guard;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   const ObSrsItem *srs = NULL;
@@ -118,16 +119,17 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
   ObGeometry *geo = NULL;
   ObGeoAxisOrder axis_order = ObGeoAxisOrder::INVALID;
 
-  if (OB_FAIL(expr.args_[0]->eval(ctx, wkb_datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, wkb_datum))) {
     LOG_WARN("fail to eval wkb datum", K(ret));
   } else if (wkb_datum->is_null()) {
     is_null_result = true;
   } else if (FALSE_IT(wkb = wkb_datum->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *wkb_datum,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *wkb_datum,
              expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb));
+  } else if (FALSE_IT(tmp_allocator.set_baseline_size(wkb.length()))) {
   } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_allocator,
-      wkb, srs_guard, srs, geo, get_func_name()))) {
+      wkb, srs_guard, srs, geo, get_func_name(), true, false))) {
     LOG_WARN("fail to create geo bin", K(ret), K(wkb));
   } else if (OB_NOT_NULL(srs)) {
     is_geog = srs->is_geographical_srs();
@@ -138,12 +140,12 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
   if (OB_SUCC(ret) && !is_null_result && arg_num == 2) {
     ObDatum *option_datum = NULL;
     ObString option_str;
-    if (OB_FAIL(expr.args_[1]->eval(ctx, option_datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, option_datum))) {
       LOG_WARN("fail to eval option datum", K(ret));
     } else if (option_datum->is_null()){
       is_null_result = true;
     } else if (FALSE_IT(option_str = option_datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *option_datum,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *option_datum,
               expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), option_str))) {
       LOG_WARN("fail to get real string data", K(ret), K(option_str));
     } else if (is_blank_string(expr.args_[1]->datum_meta_.cs_type_, option_str)) {

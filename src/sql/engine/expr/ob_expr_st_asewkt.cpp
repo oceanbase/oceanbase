@@ -89,7 +89,8 @@ int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, 
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_ASEWKT);
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
   ObString res_wkt;
@@ -97,13 +98,13 @@ int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, 
   int64_t maxdecimaldigits = DEFAULT_DIGITS_IN_DOUBLE;
 
   // get geo
-  if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, gis_datum))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum->is_null()) {
     is_null_result = true;
   } else if (num_args > 1) { // get maxdecimaldigits
     ObDatum *precsion_data = NULL;
-    if (OB_FAIL(expr.args_[1]->eval(ctx, precsion_data))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, precsion_data))) {
       LOG_WARN("eval maxdecimaldigits args failed", K(ret));
     } else if (precsion_data->is_null()){
       is_null_result = true;
@@ -126,6 +127,10 @@ int ObExprPrivSTAsEwkt::eval_priv_st_asewkt(const ObExpr &expr, ObEvalCtx &ctx, 
       LOG_WARN("eval geo to ewkt failed", K(ret), K(wkb), K(maxdecimaldigits));
     } else if (OB_FAIL(ObGeoExprUtils::pack_geo_res(expr, ctx, res, res_wkt))) {
       LOG_WARN("fail to pack geo res", K(ret));
+    } else {
+      // assume that ObStringBuffer has 4 times memory enlargement
+      tmp_allocator.set_baseline_size(res_wkt.length() * 4 + wkb.length());
+      tmp_allocator.memory_usage_check_if_need();
     }
   }
 

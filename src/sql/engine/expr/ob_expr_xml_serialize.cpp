@@ -118,7 +118,6 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
   int64_t xml_doc_type = OB_XML_DOC_TYPE_IMPLICIT;
   int64_t opt_encoding_type = OB_XML_NONE_ENCODING;
   int64_t opt_version_type = OB_XML_NONE_VERSION;
@@ -132,7 +131,9 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
   ObDatum *xml_datum = NULL;
 
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
@@ -161,7 +162,7 @@ int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("fail to get indent size", K(ret));
   } else if (OB_FAIL(get_and_check_int_from_expr(expr.args_[9], ctx, OB_XML_DEFAULTS_IMPLICIT, OB_XML_SHOW_DEFAULTS, opt_defaults))) {
     LOG_WARN("fail to get defaults option", K(ret));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[1], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[1], ctx, xml_datum, allocator))) {
     // according to xmlserialize behavior in oracle: it will check the xmltype data type after the checks IMPLICIT done
     LOG_WARN("fail to get xmltype data", K(ret));
   } else if (xml_datum->is_null()) {

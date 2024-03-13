@@ -1979,6 +1979,9 @@ int ObPathParser::parse_arg(ObPathNode*& arg, ObPathArgType patharg_type, bool i
   ObXPathUtil::skip_whitespace(expression_, index_);
 
   if (OB_FAIL(ret)) {
+  } else if (index_ >= len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid xpath", K(ret), K(expression_));
   } else if (is_filter && (negtive || is_number_begin() || is_literal_begin())) { // is_scalar
     ObPathArgNode* arg_node = nullptr;
     // filter arg: string, number, subpath
@@ -2030,99 +2033,104 @@ int ObPathParser::get_filter_char_type(ObXpathFilterChar& filter_char)
   INIT_SUCC(ret);
   ObXPathUtil::skip_whitespace(expression_, index_);
   bool space_error = false;
-  switch (expression_[index_]) {
-    case '[':
-      filter_char = ObXpathFilterChar::CHAR_BEGIN_FILTER;
-      break;
-    case '(':
-      filter_char = ObXpathFilterChar::CHAR_LEFT_BRACE;
-      break;
-    case '|':
-      filter_char = ObXpathFilterChar::CHAR_UNION;
-      break;
-    case 'o':
-      if (path_prefix_match("or ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_OR;
-          index_ += strlen(ObPathItem::OR);
-        } else {
-          space_error = true;
+  if (index_ >= len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid xpath", K(ret), K(expression_));
+  } else {
+    switch (expression_[index_]) {
+      case '[':
+        filter_char = ObXpathFilterChar::CHAR_BEGIN_FILTER;
+        break;
+      case '(':
+        filter_char = ObXpathFilterChar::CHAR_LEFT_BRACE;
+        break;
+      case '|':
+        filter_char = ObXpathFilterChar::CHAR_UNION;
+        break;
+      case 'o':
+        if (path_prefix_match("or ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_OR;
+            index_ += strlen(ObPathItem::OR);
+          } else {
+            space_error = true;
+          }
         }
-      }
-      break;
-    case 'a':
-      if (path_prefix_match("and ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_AND;
-          index_ += strlen(ObPathItem::AND);
-        } else {
-          space_error = true;
+        break;
+      case 'a':
+        if (path_prefix_match("and ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_AND;
+            index_ += strlen(ObPathItem::AND);
+          } else {
+            space_error = true;
+          }
         }
-      }
-      break;
-    case '=':
-      filter_char = ObXpathFilterChar::CHAR_EQUAL;
-      break;
-    case '!':
-      if (path_prefix_match(ObPathItem::COM_NE)) {
-        filter_char = ObXpathFilterChar::CHAR_UNEQUAL;
-        ++index_;
-      }
-      break;
-    case '<' :
-      if (path_prefix_match(ObPathItem::COM_LE)) {
-        filter_char = ObXpathFilterChar::CHAR_LESS_EQUAL;
-        ++index_;
-      } else {
-        filter_char = ObXpathFilterChar::CHAR_LESS;
-      }
-      break;
-    case '>' :
-      if (path_prefix_match(ObPathItem::COM_GE)) {
-        filter_char = ObXpathFilterChar::CHAR_GREAT_EQUAL;
-        ++index_;
-      } else {
-        filter_char = ObXpathFilterChar::CHAR_GREAT;
-      }
-      break;
-    case '+':
-      filter_char = ObXpathFilterChar::CHAR_ADD;
-      break;
-    case '-':
-      filter_char = ObXpathFilterChar::CHAR_SUB;
-      break;
-    case '*':
-      filter_char = ObXpathFilterChar::CHAR_MULTI;
-      break;
-    case 'd':
-      if (path_prefix_match("div ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_DIV;
-          index_ += strlen(ObPathItem::DIV);
-        } else {
-          space_error = true;
+        break;
+      case '=':
+        filter_char = ObXpathFilterChar::CHAR_EQUAL;
+        break;
+      case '!':
+        if (path_prefix_match(ObPathItem::COM_NE)) {
+          filter_char = ObXpathFilterChar::CHAR_UNEQUAL;
+          ++index_;
         }
-      }
-      break;
-    case 'm':
-      if (path_prefix_match("mod ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_MOD;
-          index_ += strlen(ObPathItem::MOD);
+        break;
+      case '<' :
+        if (path_prefix_match(ObPathItem::COM_LE)) {
+          filter_char = ObXpathFilterChar::CHAR_LESS_EQUAL;
+          ++index_;
         } else {
-          space_error = true;
+          filter_char = ObXpathFilterChar::CHAR_LESS;
         }
-      }
-      break;
-    case ')':
-      filter_char = ObXpathFilterChar::CHAR_RIGHT_BRACE;
-      break;
-    case ']':
-      filter_char = ObXpathFilterChar::CHAR_END_FILTER;
-      break;
-    default:
-      filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
-      break;
+        break;
+      case '>' :
+        if (path_prefix_match(ObPathItem::COM_GE)) {
+          filter_char = ObXpathFilterChar::CHAR_GREAT_EQUAL;
+          ++index_;
+        } else {
+          filter_char = ObXpathFilterChar::CHAR_GREAT;
+        }
+        break;
+      case '+':
+        filter_char = ObXpathFilterChar::CHAR_ADD;
+        break;
+      case '-':
+        filter_char = ObXpathFilterChar::CHAR_SUB;
+        break;
+      case '*':
+        filter_char = ObXpathFilterChar::CHAR_MULTI;
+        break;
+      case 'd':
+        if (path_prefix_match("div ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_DIV;
+            index_ += strlen(ObPathItem::DIV);
+          } else {
+            space_error = true;
+          }
+        }
+        break;
+      case 'm':
+        if (path_prefix_match("mod ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_MOD;
+            index_ += strlen(ObPathItem::MOD);
+          } else {
+            space_error = true;
+          }
+        }
+        break;
+      case ')':
+        filter_char = ObXpathFilterChar::CHAR_RIGHT_BRACE;
+        break;
+      case ']':
+        filter_char = ObXpathFilterChar::CHAR_END_FILTER;
+        break;
+      default:
+        filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
+        break;
+    }
   }
   if (space_error) {
     ret = OB_ERR_UNEXPECTED;
@@ -2261,8 +2269,8 @@ int ObPathParser::parse_filter_node(ObPathNode*& filter, ObPathArgType patharg_t
       if (OB_FAIL(char_stack.push_back(ObXpathFilterChar::CHAR_BEGIN_FILTER))) {
         LOG_WARN("fail to push_back charactor", K(ret), K(index_), K(expression_));
       } else {
+        ObXPathUtil::skip_whitespace(expression_, index_);
         while (OB_SUCC(ret) && index_ < len_ && char_stack.size() > 0) {
-          ObXPathUtil::skip_whitespace(expression_, index_);
           ObXpathFilterChar filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
           bool minus = false;
           bool multi = false;
@@ -2294,6 +2302,7 @@ int ObPathParser::parse_filter_node(ObPathNode*& filter, ObPathArgType patharg_t
               LOG_WARN("fail to push arg", K(ret), K(index_), K(expression_));
             }
           }
+          ObXPathUtil::skip_whitespace(expression_, index_);
         } // end while
         // if not in predicate
         if (OB_SUCC(ret) && (index_ >= len_ && patharg_type != ObPathArgType::IN_FILTER)) {

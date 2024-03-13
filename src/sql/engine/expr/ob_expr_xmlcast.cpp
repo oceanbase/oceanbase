@@ -153,18 +153,19 @@ int ObExprXmlcast::eval_xmlcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res
   ObIMulModeBase *xml_doc = NULL;
   ObString xml_res_str;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
   ObCollationType cs_type = CS_TYPE_INVALID;
 
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_", K(ret), K(expr.arg_cnt_));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     // temporally use
     LOG_WARN("fail to get xml str", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, xml_datum, cs_type, ObNodeMemType::BINARY_TYPE, xml_doc))) {

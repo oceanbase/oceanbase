@@ -156,7 +156,7 @@ int ObXMLExprHelper::get_xml_base(ObMulModeMemCtx *ctx,
   ObString xml_text;
   ObDatumMeta xml_meta;
   xml_meta.type_ = ObLongTextType;
-  xml_meta.cs_type_ = CS_TYPE_UTF8MB4_BIN;
+  xml_meta.cs_type_ = CS_TYPE_BINARY;
   ObXmlDocument *xml_doc = NULL;
   if (OB_ISNULL(xml_datum)) {
     ret = OB_ERR_UNEXPECTED;
@@ -356,47 +356,56 @@ int ObXMLExprHelper::parse_namespace_str(ObString &ns_str, ObString &prefix, ObS
       str[idx+3] == 'n' &&
       str[idx+4] == 's') {
     idx += 5;
-    if (str[idx] == ':') {
-      // parse prefix name
-      int64_t start = idx + 1;
-      while (idx < str_len && str[idx] != '=') ++idx;
-      if (idx < str_len && str[idx] == '=') {
-        prefix_start = str + start;
-        prefix_len = idx - start;
-      }
-    }
-    if (idx < str_len && str[idx] == '=') {
-      // parse uri value
-      idx += 1;
-      if (idx < str_len && str[idx] == '"') {
-        // "xxx"
-        int start = ++idx;
-        while(idx < str_len && str[idx] != '"') ++idx;
-        if (idx < str_len && str[idx] == '"') {
-          uri_start = str + start;
-          uri_len = idx - start;
-          idx += 1;
-        } else {
-          ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-          LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
-        }
-      } else {
-        uri_start = str + idx;
-        uri_len = str_len - idx;
-      }
-    } else {
-      ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-      LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
-    }
   } else {
     ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-    LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
+    LOG_WARN("not invalid xmlns string", K(ret), K(ns_str));
+  }
+  // parse prefix name
+  if (OB_FAIL(ret)) {
+  } else if (idx < str_len && str[idx] == ':') {
+    idx += 1;
+    int64_t start = idx;
+    // find prefix name end
+    while (idx < str_len && str[idx] != '=') {
+      idx += 1;
+    }
+    prefix_start = str + start;
+    prefix_len = idx - start;
+  }
+  // parse uri value
+  if (OB_FAIL(ret)) {
+  } else if (idx < str_len && str[idx] == '=') {
+    idx += 1;
+    // skip the " in the front
+    while (idx < str_len && str[idx] == '"') {
+      idx += 1;
+    }
+    int64_t start = idx;
+    // find the value end
+    while (idx < str_len && str[idx] != '"') {
+      idx += 1;
+    }
+    uri_start = str + start;
+    uri_len = idx - start;
+    // skip the " in the end
+    while (idx < str_len && str[idx] == '"') {
+      idx += 1;
+    }
+  } else if (idx != str_len) {
+    ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+    LOG_WARN("no \"=\" after xmlns or prefix name", K(ret), K(ns_str));
   }
 
-  if (OB_SUCC(ret)) {
-    if (prefix_len > 0) {
+  if (OB_FAIL(ret)) {
+  } else if (prefix_len > 0) {
+    if (uri_len > 0) {
+      uri.assign_ptr(uri_start, uri_len);
       prefix.assign_ptr(prefix_start, prefix_len);
+    } else {
+      ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+      LOG_WARN("empty value after prefix name", K(ret), K(ns_str));
     }
+  } else if (uri_len > 0) {
     uri.assign_ptr(uri_start, uri_len);
   }
   return ret;
@@ -513,7 +522,8 @@ int ObXMLExprHelper::get_str_from_expr(const ObExpr *expr,
   ObDatum *datum = NULL;
   ObObjType val_type = expr->datum_meta_.type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
-  if (OB_FAIL(expr->eval(ctx, datum))) {
+  MultimodeAlloctor &alloc = static_cast<MultimodeAlloctor&>(allocator);
+  if (OB_FAIL(alloc.eval_arg(expr, ctx, datum))) {
     LOG_WARN("eval xml arg failed", K(ret));
   } else if (!ob_is_string_type(val_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -564,6 +574,42 @@ int ObXMLExprHelper::get_xmltype_from_expr(const ObExpr *expr,
   return ret;
 }
 
+int ObXMLExprHelper::get_xmltype_from_expr(const ObExpr *expr,
+                                           ObEvalCtx &ctx,
+                                           ObDatum *&xml_datum,
+                                           MultimodeAlloctor &allocator)
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(get_xmltype_from_expr(expr, ctx, xml_datum))) {
+    LOG_WARN("get xmltype failed.", K(ret));
+  } else {
+    ObLobLocatorV2 locator(xml_datum->get_string());
+    int64_t byte_len = static_cast<int64_t>(xml_datum->len_);
+    if (OB_FAIL(locator.get_lob_data_byte_len(byte_len))) {
+      LOG_WARN("get lob data byte length failed", K(ret));
+    } else {
+      allocator.add_baseline_size(byte_len);
+    }
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::mem_ctx_add_baseline(const ObExpr *expr,
+                                          ObEvalCtx &ctx,
+                                          ObMulModeMemCtx *&mem_ctx,
+                                          uint32_t multiple)
+{
+  INIT_SUCC(ret);
+  MultimodeAlloctor *mul_alloc = static_cast<MultimodeAlloctor*>(mem_ctx->allocator_);
+  if (OB_ISNULL(mul_alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get mul alloc null", K(ret));
+  } else if (OB_FAIL(mul_alloc->add_baseline_size(expr, ctx, multiple))) {
+    LOG_WARN("failed to add baseline size.", K(ret));
+  }
+  return ret;
+}
+
 int ObXMLExprHelper::get_xml_base_from_expr(const ObExpr *expr,
                                             ObMulModeMemCtx *mem_ctx,
                                             ObEvalCtx &ctx,
@@ -583,7 +629,16 @@ int ObXMLExprHelper::get_xml_base_from_expr(const ObExpr *expr,
       } else if (xml_text.empty()) {
         ret = OB_ERR_XQUERY_TYPE_MISMATCH;
         LOG_WARN("node is NULL", K(ret));
-      } else if (OB_FAIL(ObMulModeFactory::get_xml_base(mem_ctx, xml_text,
+      } else {
+        MultimodeAlloctor *mul_alloc = static_cast<MultimodeAlloctor*>(mem_ctx->allocator_);
+        if (OB_ISNULL(mul_alloc)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get mul alloc null", K(ret));
+        } else {
+          mul_alloc->add_baseline_size(xml_text.length());
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(ObMulModeFactory::get_xml_base(mem_ctx, xml_text,
                                                     ObNodeMemType::TREE_TYPE,
                                                     ObNodeMemType::BINARY_TYPE,
                                                     node, M_DOCUMENT, false, true))) {
@@ -1126,7 +1181,6 @@ int ObXMLExprHelper::process_sql_udt_results(ObObj& value, sql::ObResultSet &res
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator *allocator = NULL;
-  sql::ObSQLSessionInfo *session_info = &result.get_session();
   if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
     LOG_WARN("fail to get convert charset allocator", K(ret));
   } else if (OB_ISNULL(allocator)) {
@@ -1151,7 +1205,10 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
                                              ObSchemaGetterGuard *schema_guard) // need fields and schema guard
 {
   int ret = OB_SUCCESS;
-  if (!value.is_user_defined_sql_type() && !value.is_collection_sql_type() && !value.is_geometry()) {
+  if (OB_ISNULL(session_info) || OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get session info null", K(ret));
+  } else if (!value.is_user_defined_sql_type() && !value.is_collection_sql_type() && !value.is_geometry()) {
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "not supported udt type", K(ret),
            K(value.get_type()), K(value.get_udt_subschema_id()));
@@ -1162,12 +1219,13 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
     } else if (is_client_support_binary_xml) {
       // convert to udt client format
     } else {
+      ObArenaAllocator tmp_alloc("ObXmlRes", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info->get_effective_tenant_id());
       ObString data;
       ObLobLocatorV2 loc(value.get_string(), true);
       ObString converted_str;
       if (!loc.is_null()) {
         ObTextStringIter instr_iter(ObLongTextType, CS_TYPE_BINARY, value.get_string(), true);
-        if (OB_FAIL(instr_iter.init(0, session_info, allocator))) {
+        if (OB_FAIL(instr_iter.init(0, session_info, &tmp_alloc))) {
           LOG_WARN("init lob str inter failed", K(ret), K(value));
         } else if (OB_FAIL(instr_iter.get_full_data(data))) {
           LOG_WARN("get xml full data failed", K(value));
@@ -1181,11 +1239,8 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
           ObNsSortedVector* ns_vec_point = nullptr;
           ObNsSortedVector ns_vec;
 
-          if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(allocator, ctx))) {
+          if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_alloc, ctx))) {
             LOG_WARN("fail to create tree memory context", K(ret));
-          } else if (OB_ISNULL(allocator)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid input args", K(ret), KP(allocator));
           } else if (data.length() == 0) {
           } else if (OB_FAIL(ObXmlUtil::xml_bin_type(data, node_type))) {
             LOG_WARN("xml bin type failed", K(ret));
@@ -1194,7 +1249,7 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
                                                             ObNodeMemType::BINARY_TYPE,
                                                             node))) {
             LOG_WARN("fail to get xml base", K(ret), K(data.length()));
-          } else if (OB_FAIL(ObXmlUtil::init_print_ns(allocator, node, ns_vec, ns_vec_point))) {
+          } else if (OB_FAIL(ObXmlUtil::init_print_ns(&tmp_alloc, node, ns_vec, ns_vec_point))) {
             LOG_WARN("fail to init ns vector by extend area", K(ret));
           }
 
@@ -1490,6 +1545,540 @@ void ObXMLExprHelper::get_accuracy_from_expr(const ObExpr &expr, ObAccuracy &acc
   } else {
     accuracy.set_precision(expr.datum_meta_.precision_);
   }
+}
+
+int ObXMLExprHelper::construct_value_array(
+    ObIAllocator &allocator,
+    const ObString &value,
+    ObVector<ObObj, ElementObjCacheStatArena> &res_value)
+{
+  INIT_SUCC(ret);
+  if (value.empty()) {
+    // donothing
+  } else {
+    ObObj temp_value;
+    uint32_t vec_size = res_value.size();
+    if (res_value.size() == 0) {
+      temp_value.set_string(ObVarcharType, value);
+    } else {
+      if (res_value[vec_size - 1].get_type() == ObUserDefinedSQLType) {
+        temp_value.set_string(ObVarcharType, value);
+      } else {
+        char *new_value = NULL;
+        ObString temp_from = res_value[vec_size - 1].get_string();
+        if (OB_ISNULL(new_value = static_cast<char *>(allocator.alloc(temp_from.length() + value.length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("new value allocator failed", K(ret));
+        } else if (OB_FAIL(res_value.remove(res_value.last()))) {
+          LOG_WARN("res value remove failed", K(ret));
+        } else {
+          MEMCPY(new_value, temp_from.ptr(), temp_from.length());
+          MEMCPY(new_value + temp_from.length(), value.ptr(), value.length());
+          temp_value.set_string(ObVarcharType, new_value, temp_from.length() + value.length());
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(res_value.push_back(temp_value))) {
+      LOG_WARN("failed to push back value.", K(ret), K(temp_value));
+    }
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::construct_element_value(
+    ObIAllocator &allocator,
+    ObExpr *xml_arg,
+    ObDatum *datum,
+    bool need_escape,
+    ObVector<ObObj,ElementObjCacheStatArena> &value_vec)
+{
+  INIT_SUCC(ret);
+  ObString xml_value_data = datum->get_string();
+  if (xml_arg->datum_meta_.type_ == ObUserDefinedSQLType) { // xmltype
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                    &allocator,
+                    ObObjType::ObLongTextType,
+                    ObCollationType::CS_TYPE_BINARY,
+                    true, xml_value_data))) {
+      LOG_WARN("fail to get real data.", K(ret), K(xml_value_data));
+    } else {
+      ObObj temp_value;
+      temp_value.set_string(ObUserDefinedSQLType, xml_value_data);
+      if (OB_FAIL(value_vec.push_back(temp_value))) {
+        LOG_WARN("failed to push back temp value.", K(ret), K(temp_value));
+      }
+    }
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                        allocator, *datum,
+                        xml_arg->datum_meta_,
+                        xml_arg->obj_meta_.has_lob_header(),
+                        xml_value_data))) {
+    LOG_WARN("fail to get real data.", K(ret), K(xml_value_data));
+  } else if (xml_arg->datum_meta_.cs_type_ == CS_TYPE_BINARY) { // binary
+    const ObObjMeta obj_meta = xml_arg->obj_meta_;
+    ObObj obj;
+    ObObj tmp_result;
+    ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, CS_TYPE_INVALID);
+    obj.set_string(ObVarcharType, xml_value_data);
+    if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
+      LOG_WARN("fail to check xml binary syntax", K(ret));
+    } else if (OB_FAIL(construct_value_array(
+                          allocator,
+                          tmp_result.get_string(),
+                          value_vec))) {
+      LOG_WARN("construct value array failed", K(ret));
+    }
+  } else {  // varchar
+    if (need_escape) {
+      ObStringBuffer *escape_value = nullptr;
+      if (OB_ISNULL(escape_value = OB_NEWx(ObStringBuffer, &allocator, (&allocator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate buffer", K(ret));
+      } else if (OB_FAIL(ObXmlParserUtils::escape_xml_text(xml_value_data, *escape_value))) {
+        LOG_WARN("escape xml value failed", K(ret), K(need_escape));
+      } else if (OB_FAIL(construct_value_array(
+                            allocator,
+                            ObString(escape_value->length(), escape_value->ptr()),
+                            value_vec))) {
+        LOG_WARN("construct value array failed", K(ret));
+      }
+    } else if (OB_FAIL(construct_value_array(
+                          allocator,
+                          xml_value_data,
+                          value_vec))) {
+      LOG_WARN("construct value array failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::construct_attribute(
+    ObMulModeMemCtx* mem_ctx,
+    const ObIJsonBase *attr,
+    ObXmlElement *&element)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(attr)) {  // do nothing
+  } else if (attr->json_type() != ObJsonNodeType::J_ARRAY) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid json type", K(ret), K(attr->json_type()));
+  } else if (attr->element_count() % 2 != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("attribute element count invalid", K(ret), K(attr->element_count()));
+  } else {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < attr->element_count(); i += 2) {
+      ObIJsonBase *jb_name = NULL;
+      ObIJsonBase *jb_value = NULL;
+      ObString value_str = NULL;
+      ObString key_str = NULL;
+      ObXmlAttribute *attribute = NULL;
+      if (OB_FAIL(attr->get_array_element(i, jb_value))) {
+        LOG_WARN("get attribute value failed", K(ret), K(i));
+      } else if (OB_FAIL(attr->get_array_element(i + 1, jb_name))) {
+        LOG_WARN("get attribute name failed", K(ret), K(i));
+      } else if (OB_ISNULL(jb_name) || OB_ISNULL(jb_value)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("attribute name or value is null", K(ret), K(i), K(jb_name), K(jb_value));
+      } else if (jb_name->json_type() == ObJsonNodeType::J_NULL ||
+                    jb_value->json_type() == ObJsonNodeType::J_NULL) {
+        LOG_DEBUG("name or content is null", K(jb_name->json_type()), K(jb_value->json_type()));
+      } else if (OB_FAIL(ob_write_string(
+                            *mem_ctx->allocator_,
+                            ObString(jb_value->get_data_length(),
+                            jb_value->get_data()),
+                            value_str, false))) {
+        LOG_WARN("write string value to string failed", K(ret), K(i), K(jb_name), K(jb_value));
+      } else if (OB_FAIL(ob_write_string(
+                            *mem_ctx->allocator_,
+                            ObString(jb_name->get_data_length(),
+                            jb_name->get_data()),
+                            key_str,
+                            false))) {
+        LOG_WARN("write string key to string failed", K(ret), K(i), K(jb_name), K(jb_value));
+      } else if (OB_FAIL(element->add_attr_by_str(key_str, value_str, ObMulModeNodeType::M_ATTRIBUTE))) {
+        LOG_WARN("add element failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::construct_element_children(
+    ObMulModeMemCtx* mem_ctx,
+    ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+    ObXmlElement *&element,
+    ObXmlElement *valid_ele)
+{
+  int ret = OB_SUCCESS;
+  ObXmlText *tag_value = NULL;
+  if (OB_ISNULL(element)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("element node is NULL", K(ret));
+  }
+  // build xml text
+  for (int i = 0; OB_SUCC(ret) && i < value_vec.size(); i++) {
+    ObObj value = value_vec[i];
+    ObIMulModeBase *node = NULL;
+    ObXmlDocument *doc_node = NULL;
+    if (value.get_type() == ObUserDefinedSQLType) {
+      if (OB_FAIL(add_binary_to_element(mem_ctx, value.get_string(), *element))) {
+        LOG_WARN("add binary to element failed", K(ret), K(i));
+      }
+    } else {
+      if (OB_ISNULL(tag_value = OB_NEWx(ObXmlText, mem_ctx->allocator_, ObMulModeNodeType::M_TEXT, mem_ctx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("new xml text failed", K(ret));
+      } else if (OB_FALSE_IT(tag_value->set_text(value.get_string()))) {
+      } else if (OB_FAIL(element->add_element(tag_value))) {
+        LOG_WARN("element add element failed", K(ret));
+      } else {
+        element->set_unparse(1);
+      }
+    }
+  }
+
+  // if the constructed element is not unparsed, use valid_ele to replace the element
+  if (!element->get_unparse()) {
+    if (OB_ISNULL(valid_ele)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("valid element is NULL, but validity is true", K(ret));
+    }
+    ObXmlNode *xml_node = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < element->size(); i++) {
+      if (OB_ISNULL(xml_node = element->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("xml node is NULL", K(ret));
+      } else if (OB_FAIL(valid_ele->add_element(xml_node))) {
+        LOG_WARN("fail to add element", K(ret));
+      }
+    } // end for
+
+    if (OB_SUCC(ret)) {
+      element = valid_ele;
+    }
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::construct_element(
+    ObMulModeMemCtx* mem_ctx,
+    const ObString &name,
+    ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+    const ObIJsonBase *attr,
+    ObXmlElement *&element,
+    bool &validity)
+{
+  INIT_SUCC(ret);
+  ObXmlElement *valid_ele = NULL;
+  if (OB_ISNULL(element)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("element node is NULL", K(ret));
+  } else if (OB_FAIL(element->init())) {
+    LOG_WARN("element init failed", K(ret));
+  } else if (FALSE_IT(element->set_xml_key(name))) {
+  } else if (OB_FAIL(element->alter_member_sort_policy(false))) {
+    LOG_WARN("fail to sort child element", K(ret));
+  } else if (OB_FAIL(construct_attribute(mem_ctx, attr, element))) {
+    LOG_WARN("fail to construct attribute", K(ret));
+  } else if (OB_FAIL(check_element_validity(mem_ctx, element, valid_ele, validity))) {
+    LOG_WARN("check element validity failed", K(ret));
+  } else if (OB_FAIL(construct_element_children(mem_ctx, value_vec, element, valid_ele))) {
+    LOG_WARN("fail to construct element chidren", K(ret));
+  }
+  // set sort flag
+  if (OB_SUCC(ret) && OB_FAIL(element->alter_member_sort_policy(true))) {
+    LOG_WARN("fail to sort child element", K(ret));
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::construct_doc(
+    ObMulModeMemCtx* mem_ctx,
+    const ObString &name_tag,
+    ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+    const ObIJsonBase *attr_json,
+    bool has_attribute,
+    ObXmlDocument *&res_doc)
+{
+    int ret = OB_SUCCESS;
+    ObXmlElement *element = NULL;
+    bool tag_validity = false;
+    bool doc_validity = true;
+    ObXmlText *tag_name_start;
+    ObXmlText *tag_name_end;
+    ObString start_tag("<>");
+    ObString end_tag("</>");
+    if (!has_attribute && name_tag.empty()) {
+      if (OB_ISNULL(tag_name_start = OB_NEWx(
+                                        ObXmlText,
+                                        mem_ctx->allocator_,
+                                        ObMulModeNodeType::M_TEXT, mem_ctx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("new xml text failed", K(ret));
+      } else if (OB_FALSE_IT(tag_name_start->set_text(start_tag))) {
+      } else if (OB_ISNULL(tag_name_end = OB_NEWx(
+                                              ObXmlText,
+                                              mem_ctx->allocator_,
+                                              ObMulModeNodeType::M_TEXT,
+                                              mem_ctx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("new xml text failed", K(ret));
+      } else if (OB_FALSE_IT(tag_name_end->set_text(end_tag))) {
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("ret failed", K(ret));
+    } else if (OB_ISNULL(element = OB_NEWx(
+                                      ObXmlElement,
+                                      (mem_ctx->allocator_),
+                                      ObMulModeNodeType::M_ELEMENT,
+                                      mem_ctx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate mem failed", K(ret));
+    } else if (!has_attribute && name_tag.empty() && OB_FAIL(element->add_element(tag_name_start))) {
+      LOG_WARN("element add start element failed", K(ret));
+    } else if (OB_FAIL(construct_element(mem_ctx, name_tag, value_vec, attr_json, element, tag_validity))) {
+      LOG_WARN("construct_element failed", K(ret));
+    } else if (!has_attribute && name_tag.empty() && OB_FAIL(element->add_element(tag_name_end))) {
+      LOG_WARN("element add end element failed", K(ret));
+    } else if (OB_ISNULL(res_doc = OB_NEWx(
+                                      ObXmlDocument,
+                                      (mem_ctx->allocator_),
+                                      ObMulModeNodeType::M_UNPARSED,
+                                      mem_ctx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate mem failed", K(ret));
+    } else if (OB_FAIL(res_doc->add_element(element))) {
+      LOG_WARN("res doc add element failed", K(ret));
+    } else if (tag_validity
+                  && element->get_unparse()
+                  && OB_FAIL(check_doc_validity(mem_ctx, res_doc, doc_validity))) { // && element.get_unparse()
+      LOG_WARN("check doc validity failed", K(ret), K(tag_validity));
+    } else if ((!tag_validity || !doc_validity)) {
+      res_doc->set_xml_type(ObMulModeNodeType::M_UNPARSED);
+    } else if (tag_validity && doc_validity) {
+      static_cast<ObXmlElement*>(res_doc->at(0))->set_unparse(0);
+      res_doc->set_xml_type(ObMulModeNodeType::M_DOCUMENT);
+    }
+    return ret;
+  }
+
+int ObXMLExprHelper::concat_xml_type_nodes(
+    ObMulModeMemCtx* mem_ctx,
+    ObVector<ObString> &xml_bin_str_vec,
+    ObString &res_bin_str)
+{
+  INIT_SUCC(ret);
+  bool first_is_doc = false;
+  ObString version;
+  ObString encoding;
+  uint16_t standalone;
+  ObMulModeNodeType res_node_type = M_NULL;
+  ObBinAggSerializer bin_agg(mem_ctx->allocator_, ObBinAggType::AGG_XML, static_cast<uint8_t>(M_CONTENT));
+  int num = xml_bin_str_vec.size();
+
+  if (num == 0) {
+    // do noting
+  } else if (num == 1) {
+    res_bin_str = xml_bin_str_vec[0];
+  } else if (num > 1) {
+    for (int i = 0; OB_SUCC(ret) && i < num; i++) {
+      ObMulModeNodeType node_type = M_NULL;
+      ObIMulModeBase *xml_doc = NULL;
+      ObXmlBin *xml_bin = NULL;
+      if (OB_FAIL(ObXmlUtil::xml_bin_type(xml_bin_str_vec[i], node_type))) {
+        LOG_WARN("faild to xml_bin_type", K(ret), K(i), K(xml_bin_str_vec[i]));
+      } else if (OB_FAIL(common::ObMulModeFactory::get_xml_base(
+                            mem_ctx, xml_bin_str_vec[i],
+                            ObNodeMemType::BINARY_TYPE,
+                            ObNodeMemType::BINARY_TYPE,
+                            xml_doc))) {
+        if (node_type == M_DOCUMENT || node_type == M_CONTENT) {
+          LOG_WARN("fail to parse to xml binary", K(ret), K(i), K(xml_bin_str_vec[i]));
+        } else {
+          LOG_WARN("try to add by text");
+          ret = OB_SUCCESS;
+          ObString xml_text;
+          ObStringBuffer xml_buf(mem_ctx->allocator_);
+          ObXmlBin xml_text_bin(mem_ctx);
+          if (OB_FAIL(xml_text_bin.parse(xml_bin_str_vec[i].ptr(), xml_bin_str_vec[i].length()))) {
+            LOG_WARN("fail to parse bin text to bin");
+          } else  {
+            xml_bin = &xml_text_bin;
+            res_node_type = M_UNPARSED;
+          }
+        }
+      } else {
+        xml_bin = static_cast<ObXmlBin*>(xml_doc);
+        ObMulModeNodeType node_type = xml_doc->type();
+        if (res_node_type == M_NULL) {
+          // this is the first node
+          if (node_type == M_DOCUMENT || node_type == M_UNPARESED_DOC) {
+            res_node_type = M_DOCUMENT;
+            version = xml_doc->get_version();
+            encoding = xml_doc->get_encoding();
+            standalone = xml_doc->get_standalone();
+            first_is_doc = version.empty() ? false : true;
+          } else {
+            res_node_type = node_type;
+          }
+        } else {
+          if (res_node_type != M_UNPARSED && node_type != M_UNPARSED) {
+            res_node_type = M_CONTENT;
+          } else {
+            res_node_type = M_UNPARSED;
+          }
+        }
+      }
+      if (OB_FAIL(ret) || OB_ISNULL(xml_bin)) {
+        // skip
+      } else if (xml_bin->meta_.len_ == 0) {
+        // do noting
+      } else if (OB_FAIL(bin_agg.append_key_and_value(xml_bin))) {
+        LOG_WARN("failed to append binary", K(ret));
+      }
+    }
+    OX(bin_agg.set_header_type(res_node_type));
+    if (first_is_doc && res_node_type == M_DOCUMENT) {
+      OX(bin_agg.set_xml_decl(version, encoding, standalone));
+    }
+    OZ(bin_agg.serialize());
+    OX(res_bin_str = bin_agg.get_buffer()->string());
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid xml_bin_str_vec.size()", K(num));
+  }
+  return ret;
+}
+
+int ObXMLExprHelper::concat_xpath_result(
+        ObMulModeMemCtx* mem_ctx,
+        ObPathExprIter &xpath_iter,
+        ObString &bin_str,
+        bool &is_null_res)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType cs_type = CS_TYPE_INVALID;
+  ObMulModeNodeType node_type = M_MAX_TYPE;
+  ObIMulModeBase *node = NULL;
+  int64_t append_node_num = 0;
+  int element_count = 0;
+  int text_count = 0;
+  ObString version;
+  ObString encoding;
+  uint16_t standalone;
+  bool first_is_doc = false;
+  ObIMulModeBase* last_parent = nullptr;
+  common::hash::ObHashMap<ObString, ObString> ns_map;
+  ObBinAggSerializer bin_agg(mem_ctx->allocator_, ObBinAggType::AGG_XML, static_cast<uint8_t>(M_CONTENT));
+
+  if (OB_FAIL(xpath_iter.open())) {
+    LOG_WARN("fail to open xpath iterator", K(ret));
+    ObXMLExprHelper::replace_xpath_ret_code(ret);
+  } else if (OB_FAIL(ns_map.create(10, lib::ObMemAttr(MTL_ID(), "XMLModule")))) {
+    LOG_WARN("ns map create failed", K(ret));
+  }
+
+  while (OB_SUCC(ret)) {
+    ObIMulModeBase* tmp = nullptr;
+    ObXmlBin extend;
+    if (OB_FAIL(xpath_iter.get_next_node(node))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to get next xml node", K(ret));
+      }
+    } else if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("xpath result node is null", K(ret));
+    } else if (node->is_tree() && OB_FAIL(ObMulModeFactory::transform(mem_ctx, node, BINARY_TYPE, node))) {
+      LOG_WARN("fail to transform to tree", K(ret));
+    } else {
+      ObXmlBin *bin = nullptr;
+      if (OB_ISNULL(bin = static_cast<ObXmlBin*>(node))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get bin failed", K(ret));
+      } else if (bin->meta_.len_ == 0) {
+        // do nothing
+      } else if (bin->check_extend()) {
+        bool conflict = false;
+        // check key conflict
+        if (OB_FAIL(bin->get_extend(extend))) {
+          LOG_WARN("fail to get extend", K(ret));
+        } else if (OB_FAIL(ObXmlUtil::check_ns_conflict(
+                              xpath_iter.get_cur_res_parent(),
+                              last_parent,
+                              &extend,
+                              ns_map,
+                              conflict))) {
+          LOG_WARN("fail to check conflict", K(ret));
+        } else if (conflict) {
+          // if conflict, merge bin
+          if (OB_FAIL(bin->merge_extend(extend))) {
+            LOG_WARN("fail to merge extend", K(ret));
+          } else {
+            bin = &extend;
+          }
+        } else if (OB_FAIL(bin->remove_extend())) { // if not conflict, erase extend
+          LOG_WARN("fail to remove extend", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(bin_agg.append_key_and_value(bin))) {
+        LOG_WARN("failed to append binary", K(ret));
+      } else {
+        ObMulModeNodeType type = node->type();
+        if (append_node_num == 0 && type == ObMulModeNodeType::M_DOCUMENT) {
+          version = node->get_version();
+          encoding = node->get_encoding();
+          standalone = node->get_standalone();
+          first_is_doc = version.empty() ? false : true;
+        }
+
+        if (type == ObMulModeNodeType::M_ELEMENT || type == ObMulModeNodeType::M_DOCUMENT) {
+          element_count++;
+        } else if (type == ObMulModeNodeType::M_TEXT || type == ObMulModeNodeType::M_CDATA) {
+          text_count++;
+        } else if (type == ObMulModeNodeType::M_CONTENT) {
+          append_node_num += bin->count() - 1;
+        }
+        append_node_num++;
+      }
+    }
+  }
+
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS;
+    if (element_count > 1 || element_count == 0) {
+      node_type = ObMulModeNodeType::M_CONTENT;
+    } else if (element_count == 1 && text_count > 0) {
+      node_type = ObMulModeNodeType::M_CONTENT;
+    } else if (append_node_num == 0) {
+      // do nothing
+    } else {
+      node_type = ObMulModeNodeType::M_DOCUMENT;
+    }
+
+    bin_agg.set_header_type(node_type);
+    if (first_is_doc && append_node_num == 1) {
+      bin_agg.set_xml_decl(version, encoding, standalone);
+    }
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = xpath_iter.close())) {
+    LOG_WARN("fail to close xpath iter", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  } else if (append_node_num == 0) {
+    is_null_res = true;
+  } else if (OB_FAIL(bin_agg.serialize())) {
+    LOG_WARN("failed to serialize binary.", K(ret));
+  } else if (ns_map.size() > 0 && OB_FAIL(ObXmlUtil::ns_to_extend(mem_ctx, ns_map, bin_agg.get_buffer()))) {
+     LOG_WARN("failed to serialize extend.", K(ret));
+  } else {
+    bin_str = bin_agg.get_buffer()->string();
+  }
+  ns_map.clear();
+  return ret;
 }
 
 } // sql

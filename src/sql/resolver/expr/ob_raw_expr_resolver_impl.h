@@ -205,6 +205,7 @@ private:
   int process_sql_udt_construct_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sql_udt_attr_access_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_element_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xml_forest_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xmlparse_node(const ParseNode *node, ObRawExpr *&expr);
@@ -232,6 +233,7 @@ private:
                                          const ObRawExpr *left_expr,
                                          const bool is_root_condition,
                                          ObRawExpr *&right_expr);
+
 private:
   // data members
   ObExprResolveContext &ctx_;

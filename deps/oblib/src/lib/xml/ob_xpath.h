@@ -934,6 +934,7 @@ public:
   int init(ObMulModeMemCtx* ctx, ObString& path, ObString& default_ns, ObIMulModeBase* doc, ObPathVarObject* pass_var, bool add_namespace = true);
   int open(); // begin to parse and seek
   int get_next_node(ObIMulModeBase*& res);
+  int get_node_exists(bool &is_exists);
 
   int get_first_node(ObPathNode*& loc);
   int get_first_axis(ObPathNodeAxis& first_axis);

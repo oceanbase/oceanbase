@@ -95,7 +95,8 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, func_name);
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
@@ -112,20 +113,21 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
   bool is_3d_geo = false;
 
   // get wkt
-  if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
   } else if (datum->is_null()) {
     is_null_result = true;
   } else {
     wkt = datum->get_string();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *datum,
         expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkt))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkt));
+    } else if (FALSE_IT(tmp_allocator.set_baseline_size(wkt.length()))) {
     }
   }
   // get srid
   if (!is_null_result && OB_SUCC(ret) && num_args > 1) {
-    if (OB_FAIL(expr.args_[1]->eval(ctx, datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
       LOG_WARN("failed to eval second argument", K(ret));
     } else if (datum->is_null()) {
       is_null_result = true;
@@ -151,12 +153,12 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
   // get axis_order
   if (!is_null_result && OB_SUCC(ret) && num_args > 2 ) {
     ObString axis_str;
-    if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[2], ctx, datum))) {
       LOG_WARN("failed to eval third argument", K(ret));
     } else if (datum->is_null()){
       is_null_result = true;
     } else if (FALSE_IT(axis_str = datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *datum,
               expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), axis_str))) {
       LOG_WARN("fail to get real string data", K(ret), K(axis_str));
     } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(axis_str, func_name, axis_order))) {

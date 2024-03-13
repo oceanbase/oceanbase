@@ -71,8 +71,9 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObExpr *gis_arg2 = expr.args_[1];
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_WITHIN);
+  if (OB_FAIL(temp_allocator.eval_arg(gis_arg1, ctx, gis_datum1)) || OB_FAIL(temp_allocator.eval_arg(gis_arg2, ctx, gis_datum2))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
@@ -89,13 +90,16 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObString wkb2 = gis_datum2->get_string();
     omt::ObSrsCacheGuard srs_guard;
     const ObSrsItem *srs = NULL;
+    ObGeoBoostAllocGuard guard(tenant_id);
+    lib::MemoryContext *mem_ctx = nullptr;
 
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum1,
               gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum2,
               gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb2));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(wkb1.length() + wkb2.length()))) {
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_WITHIN);
@@ -111,19 +115,24 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_WITHIN, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
         || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
       LOG_WARN("check geo empty failed", K(ret));
     } else if (is_geo1_empty || is_geo2_empty) {
       res.set_null();
-    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
+    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs, *geo1, *geo2))) {
       LOG_WARN("zoom in geos failed", K(ret));
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
     } else {
-      ObGeoEvalCtx gis_context(&temp_allocator, srs);
+      ObGeoEvalCtx gis_context(*mem_ctx, srs);
       bool result = false;
       if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
         LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
@@ -133,6 +142,9 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       } else {
         res.set_bool(result);
       }
+    }
+    if (mem_ctx != nullptr) {
+      temp_allocator.add_ext_used((*mem_ctx)->arena_used());
     }
   }
   return ret;

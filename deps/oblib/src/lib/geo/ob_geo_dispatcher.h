@@ -50,6 +50,8 @@ protected:
                                      const common::ObGeometry *g2,
                                      const ObGeoEvalCtx &context,
                                      RetType &result);
+
+  static inline int eval_geo_func_inner(const common::ObGeoEvalCtx &gis_context, RetType &result);
 };
 
 template <typename RetType, typename Functype>
@@ -1054,6 +1056,25 @@ int ObIGeoDispatcher<RetType, Functype>::eval_tree_binary(const common::ObGeomet
 
 template <typename RetType, typename Functype>
 int ObIGeoDispatcher<RetType, Functype>::eval_geo_func(
+    const common::ObGeoEvalCtx &gis_context, RetType &result)
+{
+  int ret = OB_SUCCESS;
+  lib::MemoryContext mem_ctx = gis_context.get_mem_ctx();
+  WITH_CONTEXT(mem_ctx) {
+    if (CURRENT_CONTEXT->attr_.label_ != "GISModule" || CURRENT_CONTEXT->attr_.use_500()) {
+      // only warning, not return error
+      OB_LOG(WARN, "should not use other label expect GISModule",
+          K(ret), K(CURRENT_CONTEXT->attr_), K(CURRENT_CONTEXT->attr_.use_500()), K(lbt()));
+    }
+    ret = eval_geo_func_inner(gis_context, result);
+  } else {
+    OB_LOG(WARN, "fail to do with context", K(ret));
+  }
+  return ret;
+}
+
+template <typename RetType, typename Functype>
+int ObIGeoDispatcher<RetType, Functype>::eval_geo_func_inner(
     const common::ObGeoEvalCtx &gis_context, RetType &result)
 {
   INIT_SUCC(ret);

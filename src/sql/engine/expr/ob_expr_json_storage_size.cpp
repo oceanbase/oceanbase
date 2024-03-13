@@ -55,7 +55,7 @@ int ObExprJsonStorageSize::calc_result_type1(ObExprResType &type,
 }
 
 int ObExprJsonStorageSize::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
-                                bool has_lob_header, ObIAllocator *allocator, ObDatum &res)
+                                bool has_lob_header, MultimodeAlloctor *allocator, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObObjType type = meta.type_;
@@ -91,6 +91,7 @@ int ObExprJsonStorageSize::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
         j_in_type, j_base))) {
       if (ret == OB_ERR_INVALID_JSON_TEXT) {
@@ -119,8 +120,9 @@ int ObExprJsonStorageSize::eval_json_storage_size(const ObExpr &expr, ObEvalCtx 
     LOG_WARN("eval json arg failed", K(ret));
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
+    uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+    MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
     if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
       LOG_WARN("fail to calc json storage free result", K(ret), K(arg->datum_meta_));
     }

@@ -8496,7 +8496,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8568,7 +8568,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8637,7 +8637,7 @@ static int common_json_string(const ObObjType expect_type,
       ObString j_str;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);

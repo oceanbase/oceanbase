@@ -79,6 +79,8 @@ int ObExprSpatialCollection::calc_resultN(common::ObObj &result,
   if (ObGeoType::GEOMETRY >= geo_type || ObGeoType::GEOTYPEMAX <= geo_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid geo type", K(ret), K(geo_type));
+  } else if (OB_FAIL(res_wkb_buf.reserve(WKB_OFFSET + WKB_COMMON_WKB_HEADER_LEN))) {
+    LOG_WARN("fail to reserve memory", K(ret), K(WKB_OFFSET + WKB_COMMON_WKB_HEADER_LEN));
   } else if (OB_FAIL(res_wkb_buf.append(srid))) {
     LOG_WARN("fail to append srid to res wkb buf", K(ret), K(srid));
   } else if (OB_FAIL(res_wkb_buf.append(static_cast<char>(ENCODE_GEO_VERSION(GEO_VESION_1))))) {
@@ -114,7 +116,7 @@ int ObExprSpatialCollection::calc_resultN(common::ObObj &result,
         const ObString wkb_sub = wkb;
         const char *data = wkb_sub.ptr() + WKB_OFFSET;
         const uint64_t len = wkb_sub.length() - WKB_OFFSET;
-        if (res_wkb_buf.append(data, len)) {
+        if (OB_FAIL(res_wkb_buf.append(data, len))) {
           LOG_WARN("fail to append sub data to res wkb buf", K(ret), K(wkb_sub), K(len));
         }
       }
@@ -249,7 +251,8 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, get_func_name());
   ObWkbBuffer res_wkb_buf(tmp_allocator);
   uint32_t srid = 0;
   bool is_null_result = false;
@@ -258,6 +261,8 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
   if (ObGeoType::GEOMETRY >= geo_type || ObGeoType::GEOTYPEMAX <= geo_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid geo type", K(ret), K(geo_type));
+  } else if (OB_FAIL(res_wkb_buf.reserve(WKB_OFFSET + WKB_COMMON_WKB_HEADER_LEN))) {
+    LOG_WARN("fail to reserve memory", K(ret), K(WKB_OFFSET + WKB_COMMON_WKB_HEADER_LEN));
   } else if (OB_FAIL(res_wkb_buf.append(srid))) {
     LOG_WARN("fail to append srid to res wkb buf", K(ret), K(srid));
   } else if (OB_FAIL(res_wkb_buf.append(static_cast<char>(ENCODE_GEO_VERSION(GEO_VESION_1))))) {
@@ -274,7 +279,7 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
     ObDatum *datum = NULL;
     ObString wkb;
     for (uint32_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null_result; i++) {
-      if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
+      if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[i], ctx, datum))) {
         LOG_WARN("fail to eval datum", K(ret));
       } else if (datum->is_null() ) {
         is_null_result = true;
@@ -282,6 +287,7 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
       } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
                  expr.args_[i]->datum_meta_, expr.args_[i]->obj_meta_.has_lob_header(), wkb))) {
         LOG_WARN("fail to get real string data", K(ret), K(i), K(wkb));
+      } else if (FALSE_IT(tmp_allocator.add_baseline_size(wkb.length()))) {
       } else if (ObGeoType::LINESTRING == geo_type) { // linestring
         if (OB_FAIL(calc_linestring(wkb, res_wkb_buf))) {
           LOG_WARN("fail to calc linestring", K(ret), K(wkb));
@@ -307,7 +313,7 @@ int ObExprSpatialCollection::eval_spatial_collection(const ObExpr &expr,
           ret = OB_INVALID_ARGUMENT;
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, get_func_name());
           LOG_WARN("unexpected sub geo type", K(ret), K(sub_type));
-        } else if (res_wkb_buf.append(data, len)) {
+        } else if (OB_FAIL(res_wkb_buf.append(data, len))) {
           LOG_WARN("fail to append sub data to res wkb buf", K(ret), K(wkb_sub), K(len));
         }
       }

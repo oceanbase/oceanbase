@@ -135,7 +135,7 @@ int ObExprJsonExists::calc_result_typeN(ObExprResType& type,
 }
 
 int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
-                              ObJsonPath* &j_path, common::ObArenaAllocator &allocator,
+                              ObJsonPath* &j_path, common::ObIAllocator &allocator,
                               ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache)
 {
   INIT_SUCC(ret);
@@ -177,7 +177,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObArenaAllocator &allocator,
+int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &allocator,
                                     uint16_t index, ObIJsonBase*& j_base)
 {
   INIT_SUCC(ret);
@@ -241,7 +241,7 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
 }
 
 int ObExprJsonExists::get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap &pass_map,
-                                  uint32_t param_num, ObArenaAllocator& temp_allocator)
+                                  uint32_t param_num, ObIAllocator& temp_allocator)
 {
   INIT_SUCC(ret);
   ObExpr *json_arg = nullptr;
@@ -414,7 +414,9 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObIJsonBase *json_data = NULL;
   bool is_null_json = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonPathCache ctx_cache(&temp_allocator);
   ObJsonPathCache* path_cache = nullptr;
   ObJsonPath* j_path = nullptr;
@@ -430,7 +432,6 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   // No error is reported when the json data is empty, no error is reported anyway, and the result is false
   // When error on error, json parses an error and reports an error, otherwise no error is reported (false on error by default)
   // ORA-40441: JSON syntax error
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_data, is_null_json))) {
     if (ret == OB_ERR_JSON_SYNTAX_ERROR) {

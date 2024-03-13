@@ -120,12 +120,12 @@ int ObWkbBuffer::append(const char *str)
 
 int ObWkbBuffer::append(const char *str, const uint64_t len)
 {
-  return buf_.append(str, len);
+  return buf_.append(str, len, 0);
 }
 
 int ObWkbBuffer::append(const ObString &str)
 {
-  return buf_.append(str);
+  return buf_.append(str, 0);
 }
 
 int ObWkbBuffer::write(uint64_t pos, uint32_t val)

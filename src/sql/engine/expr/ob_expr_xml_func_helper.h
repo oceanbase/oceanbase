@@ -22,6 +22,7 @@
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
+#include "lib/xml/ob_binary_aggregate.h"
 
 using namespace oceanbase::common;
 
@@ -29,6 +30,7 @@ namespace oceanbase
 {
 namespace sql
 {
+typedef PageArena<ObObj, ModulePageAllocator> ElementObjCacheStatArena;
 
 enum ObGetXmlBaseType {
   OB_IS_REPARSE,
@@ -77,6 +79,14 @@ public:
   static int get_xmltype_from_expr(const ObExpr *expr,
                                    ObEvalCtx &ctx,
                                    ObDatum *&xml_datum);
+  static int get_xmltype_from_expr(const ObExpr *expr,
+                                   ObEvalCtx &ctx,
+                                   ObDatum *&xml_datum,
+                                   MultimodeAlloctor &allocator);
+  static int mem_ctx_add_baseline(const ObExpr *expr,
+                                  ObEvalCtx &ctx,
+                                  ObMulModeMemCtx *&mem_ctx,
+                                  uint32_t multiple = 1);
   static int get_str_from_expr(const ObExpr *expr,
                                ObEvalCtx &ctx,
                                ObString &res,
@@ -123,6 +133,51 @@ public:
   static int update_new_nodes_ns(ObIAllocator &allocator, ObXmlNode *parent, ObXmlNode *update_node);
   static int get_valid_default_ns_from_parent(ObXmlNode *cur_node, ObXmlAttribute* &default_ns);
   static int set_ns_recrusively(ObXmlNode *update_node, ObXmlAttribute *ns);
+
+  static int construct_doc(
+      ObMulModeMemCtx* mem_ctx,
+      const ObString &name_tag,
+      ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+      const ObIJsonBase *attr_json,
+      bool has_attribute,
+      ObXmlDocument *&res_doc);
+  static int construct_element(
+      ObMulModeMemCtx* mem_ctx,
+      const ObString &name,
+      ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+      const ObIJsonBase *attr,
+      ObXmlElement *&element,
+      bool &validity);
+  static int construct_attribute(
+      ObMulModeMemCtx* mem_ctx,
+      const ObIJsonBase *attr,
+      ObXmlElement *&element);
+  static int construct_element_children(
+      ObMulModeMemCtx* mem_ctx,
+      ObVector<ObObj, ElementObjCacheStatArena> &value_vec,
+      ObXmlElement *&element,
+      ObXmlElement *valid_ele);
+  static int construct_element_value(
+      ObIAllocator &allocator,
+      ObExpr *xml_arg,
+      ObDatum *datum,
+      bool need_escape,
+      ObVector<ObObj, ElementObjCacheStatArena> &value_vec);
+  static int construct_value_array(
+      ObIAllocator &allocator,
+      const ObString &value,
+      ObVector<ObObj, ElementObjCacheStatArena> &res_value);
+
+  static int concat_xml_type_nodes(
+      ObMulModeMemCtx* mem_ctx,
+      ObVector<ObString> &xml_bin_str_vec,
+      ObString &res_bin_str);
+
+  static int concat_xpath_result(
+      ObMulModeMemCtx* mem_ctx,
+      ObPathExprIter &xpath_iter,
+      ObString &bin_str,
+      bool &is_null_res);
 
 private:
   static int add_ns_to_container_node(ObPathVarObject &container,

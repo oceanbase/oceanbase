@@ -43,12 +43,15 @@ private:
   static int apply_bg_transform_point(const ObGeometry *g, const ObGeoEvalCtx &context, ObGeometry *&result)
   {
     int ret = OB_SUCCESS;
+    lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
+    lib::ObMallocHookAttrGuard tmp_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "BoostCache"));
     boost::geometry::srs::proj4 src_proj4(context.get_val_arg(0)->string_->ptr());
     boost::geometry::srs::proj4 dest_proj4(context.get_val_arg(1)->string_->ptr());
     boost::geometry::srs::transformation<> transformer(src_proj4, dest_proj4);
+    lib::ObMallocHookAttrGuard malloc_guard(last_mem_attr);
     const PtInType *src_geo = reinterpret_cast<const PtInType *>(g->val());
     PtResType *dest_geo = NULL;
-    if (OB_ISNULL(dest_geo = OB_NEWx(PtResType, (context.get_allocator())))) {
+    if (OB_ISNULL(dest_geo = OB_NEWx(PtResType, (context.get_allocator()), g->get_srid(), context.get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
@@ -74,13 +77,16 @@ private:
     if (OB_ISNULL(alloc)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("unexpected null alloactor for transform functor", K(ret));
-    } else if (OB_ISNULL(dest_geo = OB_NEWx(GeometryResType, alloc))) {
+    } else if (OB_ISNULL(dest_geo = OB_NEWx(GeometryResType, alloc, g->get_srid(), *alloc))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
+      lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
+      lib::ObMallocHookAttrGuard tmp_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "BoostCache"));
       boost::geometry::srs::proj4 src_proj4(context.get_val_arg(0)->string_->ptr());
       boost::geometry::srs::proj4 dest_proj4(context.get_val_arg(1)->string_->ptr());
       boost::geometry::srs::transformation<> transformer(src_proj4, dest_proj4);
+      lib::ObMallocHookAttrGuard malloc_guard(last_mem_attr);
       const GeometryInType *src_geo = reinterpret_cast<const GeometryInType *>(g->val());
       transformer.forward(*src_geo, *dest_geo);
       result = dest_geo;

@@ -58,7 +58,7 @@ int ObExprJsonQuote::calc_result_type1(ObExprResType &type,
 }
 
 
-int ObExprJsonQuote::calc(ObEvalCtx &ctx, ObIAllocator &temp_allocator, const ObDatum &data,
+int ObExprJsonQuote::calc(ObEvalCtx &ctx, MultimodeAlloctor &temp_allocator, const ObDatum &data,
                           ObDatumMeta meta, bool has_lob_header, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
@@ -88,6 +88,7 @@ int ObExprJsonQuote::calc(ObEvalCtx &ctx, ObIAllocator &temp_allocator, const Ob
       if (OB_FAIL(j_buf.append("\"\"", 2))) {
         LOG_WARN("failed: jbuf append", K(ret));        
       }
+    } else if (OB_FALSE_IT(temp_allocator.add_baseline_size(j_buf.length()))) {
     } else if (OB_FAIL(ObJsonPathUtil::double_quote(json_val, &j_buf))) {
       LOG_WARN("failed: add double quote", K(ret), K(json_val));
     }
@@ -100,14 +101,15 @@ int ObExprJsonQuote::eval_json_quote(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBuffer j_buf(&temp_allocator);
   ObExpr *arg = expr.args_[0];
   ObDatum* json_datum = NULL;
   bool is_null = false;
 
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
-  if (OB_FAIL(arg->eval(ctx, json_datum))) {
+  if (OB_FAIL(temp_allocator.eval_arg(arg, ctx, json_datum))) {
     LOG_WARN("failed: eval json args datum.", K(ret));
   } else if (OB_FAIL(calc(ctx, temp_allocator, *json_datum, arg->datum_meta_,
                           arg->obj_meta_.has_lob_header(), j_buf, is_null))) {

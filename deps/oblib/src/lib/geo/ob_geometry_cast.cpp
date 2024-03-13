@@ -1027,7 +1027,7 @@ int ObGeomcollectionTypeCast::cast(const ObGeometry &src,
           } else {
             double x = iter->template get<0>();
             double y = iter->template get<1>();
-            P *point = new (buf) P (x, y, src.get_srid(), allocator);
+            P *point = new (buf) P (x, y, src.get_srid());
             if (OB_FAIL(res.push_back(*point))) {
               LOG_WARN("fail to push back point", K(ret));
             }

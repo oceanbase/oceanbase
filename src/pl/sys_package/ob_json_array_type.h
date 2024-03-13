@@ -34,6 +34,7 @@ private:
   static int get_array_value(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
                               ObJsonNode *&json_val,
+                              ObPlJsonNode *&pl_json_node,
                               int& error_behavior,
                               int expect_param_nums = 2);
 };

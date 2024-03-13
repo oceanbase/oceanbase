@@ -2298,6 +2298,7 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
     ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 1> ref_sys_exprs;
     ObSEArray<ObQualifiedName, 1> real_columns;
     ObSequenceNamespaceChecker sequence_checker(schema_checker, &session_info);
+    ObArray<ObRawExpr*> real_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
       const ObQualifiedName &q_name = columns.at(i);
       if (q_name.is_sys_func()) {
@@ -2310,12 +2311,17 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
         OZ (q_name.access_idents_.at(0).check_param_num());
         OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, sys_func));
         OZ (ref_sys_exprs.push_back(std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, sys_func)));
+        OZ(real_exprs.push_back(sys_func));
       } else if (q_name.is_pl_udf()) {
         ObRawExpr *udf_info = NULL;
-        for (uint64_t i = 0; OB_SUCC(ret) && i < q_name.access_idents_.count(); ++i) {
-          const ObUDFInfo &udf_info = q_name.access_idents_.at(i).udf_info_;
-          if (OB_NOT_NULL(udf_info.ref_expr_)) {
-            OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, udf_info.ref_expr_), q_name);
+        for (uint64_t j = 0; OB_SUCC(ret) && j < q_name.access_idents_.count(); ++j) {
+          ObObjAccessIdent &access_ident = columns.at(i).access_idents_.at(j);
+          if (access_ident.is_pl_udf()) {
+            OZ (pl::ObPLResolver::replace_udf_param_expr(access_ident, columns, real_exprs));
+            const ObUDFInfo &udf_info = access_ident.udf_info_;
+            if (OB_NOT_NULL(udf_info.ref_expr_)) {
+              OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, udf_info.ref_expr_), q_name);
+            }
           }
         }
         OZ(real_columns.push_back(q_name), q_name, i);

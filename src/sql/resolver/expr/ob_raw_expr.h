@@ -170,7 +170,9 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_PRIV_ST_POINTONSURFACE) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOMETRYTYPE) \
     || ((op) == T_FUN_SYS_PRIV_ST_ASMVTGEOM) \
-    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID)) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOHASH) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKEPOINT)) \
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
 
