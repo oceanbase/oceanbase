@@ -3058,6 +3058,7 @@ const char *ObNumber::format() const
   if (OB_ISNULL(buffers)) {
     buffer = nullptr;
   } else if(OB_UNLIKELY(OB_SUCCESS != format(buffer, BUFFER_SIZE, length, -1))) {
+    buffer = nullptr;
     LOG_ERROR_RET(OB_ERROR, "fail to format buffer");
   } else {
     buffer[length] = '\0';
