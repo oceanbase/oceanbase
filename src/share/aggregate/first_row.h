@@ -156,14 +156,14 @@ public:
     if (OB_LIKELY(not_nulls.at(agg_col_id) && agg_cell_len != INT32_MAX)) {
       const char *payload = (const char *)(*reinterpret_cast<const int64_t *>(agg_cell));
       char *res_buf = nullptr;
-      if (need_extend_buf<AggCalcType<vec_tc>>::value) {
-        res_buf = agg_expr.get_str_res_mem(ctx, agg_cell_len);
-        if (OB_ISNULL(res_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          SQL_LOG(WARN, "allocate memory failed", K(ret));
-        } else {
-          CellWriter<AggCalcType<vec_tc>>::set(payload, agg_cell_len, res_vec, output_idx, res_buf);
-        }
+      if (is_discrete_vec(vec_tc)) {
+        // implicit aggr expr may be shared between operators and its
+        // data is shallow copied for variable-length types while do backup/restore operations.
+        // Hence child op's data is unexpected modified if deep copy happened here.
+        // see details in `bug/55372943`
+        //
+        // note that variable-length types include ObNumberType.
+        res_vec->set_payload_shallow(output_idx, payload, agg_cell_len);
       } else {
         CellWriter<AggCalcType<vec_tc>>::set(payload, agg_cell_len, res_vec, output_idx, res_buf);
       }
