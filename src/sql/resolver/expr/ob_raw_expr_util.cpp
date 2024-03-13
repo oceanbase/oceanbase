@@ -1881,7 +1881,18 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
                                                                     syn_checker,
                                                                     sequence_id,
                                                                     &dblink_id))) {
-      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
+      // Except for table creation, sequence_not_exist error can be ignored in the resolver phase
+      // for sequence in definition of default column. If an error needs to be reported such as when
+      // insert or update column with default value, check it again in the execution phase.
+      if (NULL != stmt && stmt::T_CREATE_TABLE != stmt->get_stmt_type() && is_generated_column
+          && ret == OB_ERR_BAD_FIELD_ERROR) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_UNLIKELY(T_FIELD_LIST_SCOPE != current_scope &&
                            T_UPDATE_SCOPE != current_scope &&
                            T_INSERT_SCOPE != current_scope)) {
