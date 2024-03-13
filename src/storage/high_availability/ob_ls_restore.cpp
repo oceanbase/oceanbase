@@ -984,7 +984,7 @@ int ObStartLSRestoreTask::create_tablet_(
   if (!tablet_meta.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create tablet get invalid argument", K(ret), K(tablet_meta), KP(ls));
-  } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL, true/*is_soft_limit*/))) {
+  } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL, ObTabletCreateThrottlingLevel::SOFT))) {
     LOG_WARN("failed to check create new tablet", K(ret), K(tablet_meta));
   } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta, false /*keep old*/))) {
     LOG_WARN("failed to create tablet", K(ret), K(tablet_meta));
