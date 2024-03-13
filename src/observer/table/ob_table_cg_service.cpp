@@ -2281,13 +2281,28 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
       for (int64_t j = 0; OB_SUCC(ret) && j < cst_columns.count(); ++j) {
         const ObTableColumnItem *item = nullptr;
         ObColumnRefRawExpr *ref_expr = cst_columns.at(j);
+        ObRawExpr *raw_expr = nullptr;
         ObExpr *expr = nullptr;
         if (OB_FAIL(ctx.get_column_item_by_expr(ref_expr, item))) {
           LOG_WARN("fail to column item by expr", K(ret), K(*ref_expr));
         } else if (OB_ISNULL(item)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column item is null", K(ret), K(ctx));
-        } else if (OB_FAIL(cg.generate_rt_expr(*item->raw_expr_, expr))) {
+        } else if (item->is_generated_column_) {
+          ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(item->raw_expr_);
+          raw_expr = col_ref_expr->get_dependant_expr();
+        } else {
+          // why use column ref expr:
+          // rowkey_cst_ctdef.rowkey_expr_ is used to build key in conflict checker map
+          // conflict_checker_ctdef.table_column_exprs_ store the conflict row which lookup from data table
+          // and table_column_exprs_ use column ref expr no need to calculate repeadtedly except generated cloumn expr
+          raw_expr = item->expr_;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw expr is NULL", K(ret));
+        } else if (OB_FAIL(cg.generate_rt_expr(*raw_expr, expr))) {
           LOG_WARN("fail to generate rt expr", K(ret));
         } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.push_back(expr))) {
           LOG_WARN("fail to push back rt expr", K(ret));
@@ -2608,22 +2623,6 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
       if (is_lob_storage(column_type.get_type())) {
         if (ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
           column_type.set_has_lob_header();
-        }
-      }
-      if (index_schema->is_index_table()) {
-        const ObTableColumnItem *item = nullptr;
-        if (!column->is_index_column() || is_shadow_column(column->get_column_id())) {
-          // skip
-        } else if (OB_FAIL(ctx.get_column_item_by_column_id(column->get_column_id(), item))) {
-          LOG_WARN("fail to get column item", K(ret), K(column->get_column_id()), K(index_tid));
-        } else if (OB_ISNULL(item) || OB_ISNULL(item->raw_expr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column item is NULL", K(ret), K(item), K(column->get_column_id()));
-        } else if (!item->raw_expr_->is_column_ref_expr() ||
-                  (item->raw_expr_->is_column_ref_expr() && item->is_generated_column_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("index with non-common column is not supported", K(ret), K(column->get_column_id()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "index with non-common column");
         }
       }
       if (OB_FAIL(ret)) {

@@ -86,6 +86,12 @@ public:
   int calc_tablet_loc(ObExpr *calc_part_id_expr,
                       ObDASTableLoc &table_loc,
                       ObDASTabletLoc *&tablet_loc);
+  // only use for replace and ttl executor
+  int calc_del_tablet_loc(ObExpr *calc_part_id_expr,
+                          bool is_primary_table,
+                          const ObExprPtrIArray &calc_dep_exprs,
+                          ObDASTableLoc &table_loc,
+                          ObDASTabletLoc *&tablet_loc);
   OB_INLINE int64_t get_affected_rows() const { return affected_rows_; }
   int get_affected_entity(ObITableEntity *&entity);
 protected:
@@ -102,6 +108,12 @@ protected:
   int insert_row_to_das(const ObTableInsCtDef &ins_ctdef,
                         ObTableInsRtDef &ins_rtdef);
   int delete_row_to_das(const ObTableDelCtDef &del_ctdef,
+                        ObTableDelRtDef &del_rtdef);
+  // for replace and ttl executor
+  int delete_row_to_das(bool is_primary_table,
+                        ObExpr *calc_part_id_expr,
+                        const ObExprPtrIArray &calc_dep_exprs,
+                        const ObTableDelCtDef &del_ctdef,
                         ObTableDelRtDef &del_rtdef);
   // for replace & insert_up & ttl executor
   int get_next_conflict_rowkey(sql::DASTaskIter &task_iter,
