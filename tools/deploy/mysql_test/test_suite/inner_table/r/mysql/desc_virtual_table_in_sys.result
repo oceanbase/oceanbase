@@ -4864,6 +4864,7 @@ ddl_stmt_str	longtext	YES		NULL
 ret_code	bigint(20)	NO		0	
 message	longtext	YES		NULL	
 consensus_schema_version	bigint(20)	NO		-1	
+schedule_info	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_task_status;
 IF(count(*) >= 0, 1, 0)
 1

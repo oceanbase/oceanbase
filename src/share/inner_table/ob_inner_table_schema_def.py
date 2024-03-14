@@ -2997,6 +2997,7 @@ def_table_schema(
     ('ret_code', 'int', 'false', '0'),
     ('message', 'longtext', 'true'),
     ('consensus_schema_version', 'int', 'false', '-1'),
+    ('schedule_info', 'longtext', 'true'),
   ],
 )
 
