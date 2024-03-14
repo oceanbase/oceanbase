@@ -11577,9 +11577,9 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     if (OB_SUCC(ret)) {
       bool force_use_nlj = false;
       force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
-      if (force_use_nlj) {
+      //if tracepoint is triggered and the local methiods contain NLJ, remove the merge-join paths to use nlj as possible
+      if (force_use_nlj && (path_info.local_methods_ & NESTED_LOOP_JOIN)) {
         path_info.local_methods_ &= ~MERGE_JOIN;
-        path_info.local_methods_ |= NESTED_LOOP_JOIN;
       }
     }
     //check batch update join type
