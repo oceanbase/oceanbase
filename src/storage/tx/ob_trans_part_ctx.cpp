@@ -1175,12 +1175,15 @@ int ObPartTransCtx::gts_callback_interrupted(const int errcode)
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(ERROR, "ObPartTransCtx not inited", K(ret));
-    } else if (OB_UNLIKELY(is_exiting_)) {
+    } else if (OB_UNLIKELY(!is_exiting_)) {
+      // at this time, ObTxCtxMgr should already be stopped,
+      // so ObPartTransCtx should already be killed
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "ObPartTransCtx is not exiting", K(ret));
+    } else {
       need_revert_ctx = true;
       sub_state_.clear_gts_waiting();
       TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), "context", *this);
-    } else {
-      ret = OB_EAGAIN;
     }
   }
   if (need_revert_ctx) {

@@ -261,6 +261,11 @@ public:
     MonotonicTs unused;
     return source_.get_gts(stc, NULL, gts, unused);
   }
+  virtual int remove_dropped_tenant(const uint64_t tenant_id)
+  {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
 private:
   MockObGtsSource &source_;
 };
