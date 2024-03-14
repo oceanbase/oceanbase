@@ -28,7 +28,7 @@ enum ObMergeType
   MEDIUM_MERGE = 5,
   DDL_KV_MERGE = 6, // only use for ddl dag
   BACKFILL_TX_MERGE = 7,
-  MDS_TABLE_MERGE = 8,
+  MDS_MINI_MERGE = 8,
   // add new merge type here
   // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX
@@ -88,7 +88,7 @@ inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
 }
 inline bool is_mds_table_merge(const ObMergeType &merge_type)
 {
-  return MDS_TABLE_MERGE == merge_type;
+  return MDS_MINI_MERGE == merge_type;
 }
 
 enum ObMergeLevel : uint8_t

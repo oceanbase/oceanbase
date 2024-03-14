@@ -33,7 +33,7 @@ namespace storage
 namespace mds
 {
 ObMdsTableMergeTask::ObMdsTableMergeTask()
-  : ObITask(ObITaskType::TASK_TYPE_MDS_TABLE_MERGE),
+  : ObITask(ObITaskType::TASK_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
     mds_merge_dag_(nullptr)
 {
@@ -48,7 +48,7 @@ int ObMdsTableMergeTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not be null", K(ret));
-  } else if (OB_UNLIKELY(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_TABLE_MERGE != dag_->get_type())) {
+  } else if (OB_UNLIKELY(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE != dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC_(dag));
   } else {
