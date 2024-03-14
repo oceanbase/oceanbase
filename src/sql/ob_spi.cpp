@@ -3985,7 +3985,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           OZ (spi_result.start_nested_stmt_if_need(ctx, sqlstr, static_cast<stmt::StmtType>(type), for_update));
           int64_t old_query_start_time = session_info->get_query_start_time();
           // query_start_time_ set to 0 in begin_nested_session, here we reset it.
-          session_info->set_query_start_time(ObTimeUtility::current_time());
+          int64_t new_query_start_time = ObTimeUtility::current_time();
+          session_info->set_query_start_time(new_query_start_time);
           if (OB_SUCC(ret)) {
             ObExecRecord exec_record;
             ObExecTimestamp exec_timestamp;
@@ -4054,7 +4055,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                       spi_result.get_result_set()->get_field_columns(),
                       spi_cursor->fields_));
                   //}
-                  OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
+                  OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, new_query_start_time));
                   if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
                     int cli_ret = OB_SUCCESS;
                     retry_ctrl.test_and_save_retry_state(GCTX,
@@ -4358,7 +4359,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         int64_t retry_cnt = 0;
         ObPLSPITraceIdGuard trace_id_guard(sql_stmt, ps_sql, *session);
         int64_t old_query_start_time = session->get_query_start_time();
-        session->set_query_start_time(ObTimeUtility::current_time());
+        int64_t new_query_start_time = ObTimeUtility::current_time();
+        session->set_query_start_time(new_query_start_time);
         do {
           ret = OB_SUCCESS;
           if (retry_cnt > 0) {
@@ -4389,7 +4391,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                 cursor.set_packed(plan->is_packed());
               }
             }
-            OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
+            OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, new_query_start_time));
             if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
@@ -8654,9 +8656,10 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
   return ret;
 }
 
-int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor)
+int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time)
 {
   int ret = OB_SUCCESS;
+  int64_t old_time_out_ts = THIS_WORKER.get_timeout_ts();
   if (OB_ISNULL(cursor) || OB_ISNULL(cursor->allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(cursor), K(ret));
@@ -8666,6 +8669,14 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor)
     if (OB_ISNULL(fields)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
+    }
+    if (OB_NOT_NULL(result_set.get_physical_plan()) && new_query_start_time > 0) {
+      // fill_dbms_cursor do not need check hint , so only new_query_start_time > 0 will check hint timeout
+      ObPhysicalPlan *plan = result_set.get_physical_plan();
+      if (plan->get_phy_plan_hint().query_timeout_ > 0) {
+        old_time_out_ts = THIS_WORKER.get_timeout_ts();
+        THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < fields->count(); ++i) {
       ObDataType type;
@@ -8707,6 +8718,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor)
       LOG_WARN("read result error", K(ret));
     }
   }
+  THIS_WORKER.set_timeout_ts(old_time_out_ts);
   return ret;
 }
 
