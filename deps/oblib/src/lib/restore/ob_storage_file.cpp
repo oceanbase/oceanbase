@@ -1179,6 +1179,7 @@ int ObStorageFileMultiPartWriter::complete()
 {
   int ret = OB_SUCCESS;
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
+  struct stat64 file_info;
 
   if (!is_opened_) {
     ret = OB_NOT_INIT;
@@ -1195,6 +1196,13 @@ int ObStorageFileMultiPartWriter::complete()
     if (has_error_) {
       STORAGE_LOG(WARN, "multipart writer has error, skip complete",
           KCSTRING(path_), KCSTRING(real_path_));
+    } else if (0 != ::stat64(path_, &file_info)) {
+      convert_io_error(errno, ret);
+      STORAGE_LOG(WARN, "fail to get file length",
+          K(ret), K_(path), K(errno), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
+    } else if (OB_UNLIKELY(file_info.st_size == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(file_info.st_size), K_(path));
     } else if (0 != ::rename(path_, real_path_)) {
       convert_io_error(errno, ret);
       STORAGE_LOG(WARN, "failed to complete", K(ret), KCSTRING(real_path_),
