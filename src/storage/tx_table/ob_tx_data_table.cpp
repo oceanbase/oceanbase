@@ -809,7 +809,7 @@ int ObTxDataTable::self_freeze_task()
 
   STORAGE_LOG(INFO, "start tx data table self freeze task", K(get_ls_id()));
 
-  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
+  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, true))) {
     share::ObLSID ls_id = get_ls_id();
     STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
   }

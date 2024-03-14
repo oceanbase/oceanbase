@@ -406,7 +406,7 @@ void ObMinorFreezeTest::batch_tablet_freeze()
 
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    ASSERT_EQ(OB_SUCCESS, ls_handles_.at(0).get_ls()->batch_tablet_freeze(tablet_ids_, (i % 2 == 0) ? true : false));
+    ASSERT_EQ(OB_SUCCESS, ls_handles_.at(0).get_ls()->batch_tablet_freeze(0, tablet_ids_, (i % 2 == 0) ? true : false));
     i = i + 1;
   }
 }

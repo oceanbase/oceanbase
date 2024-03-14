@@ -181,6 +181,7 @@ public:
   ObTabletMergeFinishTask();
   virtual ~ObTabletMergeFinishTask();
   int init();
+  int report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx);
   virtual int process() override;
 private:
   bool is_inited_;

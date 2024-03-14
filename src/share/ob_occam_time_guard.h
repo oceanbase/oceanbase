@@ -283,6 +283,15 @@ public:
     total_cost += common::ObTimeUtility::current_time() - last_click_ts_;
     return total_cost > warn_threshold_;
   }
+  int64_t get_total_time() const
+  {
+    int64_t total_cost = 0;
+    for (int64_t idx = 0; idx < idx_; ++idx) {
+      total_cost += click_poinsts_[idx];
+    }
+    total_cost += common::ObTimeUtility::fast_current_time() - last_click_ts_;
+    return total_cost;
+  }
   bool click(const uint16_t line)
   {
     if (OB_LIKELY(idx_ < CAPACITY)) {

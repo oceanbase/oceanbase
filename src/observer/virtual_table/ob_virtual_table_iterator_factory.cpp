@@ -216,6 +216,10 @@
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.h"
+#include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
+#include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.h"
+
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 
@@ -2601,6 +2605,46 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualCgroupConfig *all_virtual_cgroup_config = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCgroupConfig, all_virtual_cgroup_config))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cgroup_config);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DATA_ACTIVITY_METRICS_TID: {
+            ObAllVirtualActivityMetric *all_virtual_activity_metrics = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualActivityMetric, all_virtual_activity_metrics))) {
+              SERVER_LOG(ERROR, "ObAllVirtualActivityMetric construct failed", K(ret));
+            } else {
+              all_virtual_activity_metrics->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_activity_metrics);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseInfo *checkpoint_diagnose_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseInfo, checkpoint_diagnose_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseInfo*>(checkpoint_diagnose_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseMemtableInfo *checkpoint_diagnose_memtable_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseMemtableInfo, checkpoint_diagnose_memtable_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseMemtableInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_memtable_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseMemtableInfo*>(checkpoint_diagnose_memtable_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID: {
+            ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo *checkpoint_diagnose_checkpoint_unit_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo, checkpoint_diagnose_checkpoint_unit_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo construct fail", K(ret));
+            } else {
+              checkpoint_diagnose_checkpoint_unit_info->set_addr(addr_);
+              vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo*>(checkpoint_diagnose_checkpoint_unit_info);
             }
             break;
           }

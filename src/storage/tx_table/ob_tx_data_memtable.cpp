@@ -152,6 +152,7 @@ void ObTxDataMemtable::reset()
   DEBUG_last_start_scn_ = SCN::min_scn();
   stat_change_ts_.reset();
   is_inited_ = false;
+  reset_trace_id();
 }
 
 int ObTxDataMemtable::insert(ObTxData *tx_data)
@@ -911,7 +912,7 @@ bool ObTxDataMemtable::ready_for_flush()
   return bool_ret;
 }
 
-int ObTxDataMemtable::flush()
+int ObTxDataMemtable::flush(const int64_t trace_id)
 {
   int ret = OB_SUCCESS;
   compaction::ObTabletMergeDagParam param;
@@ -919,11 +920,14 @@ int ObTxDataMemtable::flush()
   param.tablet_id_ = key_.tablet_id_;
   param.merge_type_ = compaction::MINI_MERGE;
   param.merge_version_ = ObVersionRange::MIN_VERSION;
+  set_trace_id(trace_id);
   if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
     if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
       STORAGE_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
     }
   } else {
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(),
+        get_start_scn(), get_end_scn());
     stat_change_ts_.create_flush_dag_time_ = ObTimeUtil::fast_current_time();
     STORAGE_LOG(INFO,
                 "[TX DATA MERGE]schedule flush tx data memtable task done",

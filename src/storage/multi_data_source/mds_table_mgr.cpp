@@ -148,7 +148,7 @@ struct OrderOp {
   }
   Flusher &flusher_;
 };
-int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
+int ObMdsTableMgr::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
 {
   #define PRINT_WRAPPER KR(ret), K(ls_->get_ls_id()), K(recycle_scn), K(need_freeze), K(order_flusher_for_some),\
                         K(max_consequent_callbacked_scn), K(*this)
@@ -190,7 +190,7 @@ int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
       MDS_LOG_FREEZE(INFO, "freezing_scn decline to max_consequent_callbacked_scn");
     }
     if (order_flusher_for_some.min_key().rec_scn_ <= freezing_scn_) {
-      order_flush_(order_flusher_for_some, freezing_scn_, max_consequent_callbacked_scn);
+      order_flush_(order_flusher_for_some, freezing_scn_, max_consequent_callbacked_scn, trace_id);
     } else {
       MDS_LOG_FREEZE(INFO, "no need do flush cause min_rec_scn is larger than freezing scn");
     }
@@ -201,7 +201,8 @@ int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
 
 void ObMdsTableMgr::order_flush_(FlusherForSome &order_flusher_for_some,
                                  share::SCN freezing_scn,
-                                 share::SCN max_consequent_callbacked_scn)
+                                 share::SCN max_consequent_callbacked_scn,
+                                 int64_t trace_id)
 {
   #define PRINT_WRAPPER KR(ret), K(ls_->get_ls_id()), K(freezing_scn), K(order_flusher_for_some),\
                         K(third_sacn_mds_table_cnt), K(max_consequent_callbacked_scn), K(order_flusher_for_all.count()),\
@@ -210,7 +211,7 @@ void ObMdsTableMgr::order_flush_(FlusherForSome &order_flusher_for_some,
   int ret = OB_SUCCESS;
   int64_t third_sacn_mds_table_cnt = 0;
   FlusherForAll order_flusher_for_all;
-  FlushOp flush_op(freezing_scn, third_sacn_mds_table_cnt, max_consequent_callbacked_scn);
+  FlushOp flush_op(freezing_scn, third_sacn_mds_table_cnt, max_consequent_callbacked_scn, trace_id);
   if (!order_flusher_for_some.full() || order_flusher_for_some.max_key().rec_scn_ > freezing_scn_) {
     // than means all mds_tables needed be flushed is included in order_flusher_for_some
     order_flusher_for_some.flush_by_order(mds_table_map_, freezing_scn_, max_consequent_callbacked_scn);

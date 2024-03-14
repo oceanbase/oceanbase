@@ -4648,6 +4648,62 @@ error_msg	varchar(512)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_clone_job_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_checkpoint_diagnose_memtable_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+trace_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+checkpoint_thread_name	varchar(16)	NO		NULL	
+checkpoint_start_time	timestamp(6)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+ptr	varchar(128)	NO		NULL	
+start_scn	bigint(20) unsigned	NO		NULL	
+end_scn	bigint(20) unsigned	NO		NULL	
+rec_scn	bigint(20) unsigned	NO		NULL	
+create_flush_dag_time	timestamp(6)	NO		NULL	
+merge_finish_time	timestamp(6)	NO		NULL	
+release_time	timestamp(6)	NO		NULL	
+frozen_finish_time	timestamp(6)	NO		NULL	
+merge_start_time	timestamp(6)	NO		NULL	
+start_gc_time	timestamp(6)	NO		NULL	
+memtable_occupy_size	bigint(20)	NO		NULL	
+occupy_size	bigint(20)	NO		NULL	
+concurrent_cnt	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_checkpoint_diagnose_checkpoint_unit_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+trace_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+checkpoint_thread_name	varchar(16)	NO		NULL	
+checkpoint_start_time	timestamp(6)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+ptr	varchar(128)	NO		NULL	
+start_scn	bigint(20) unsigned	NO		NULL	
+end_scn	bigint(20) unsigned	NO		NULL	
+rec_scn	bigint(20) unsigned	NO		NULL	
+create_flush_dag_time	timestamp(6)	NO		NULL	
+merge_finish_time	timestamp(6)	NO		NULL	
+start_gc_time	timestamp(6)	NO		NULL	
+desc oceanbase.__all_virtual_checkpoint_diagnose_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+trace_id	bigint(20)	NO		NULL	
+freeze_clock	int(10) unsigned	NO		NULL	
+checkpoint_thread_name	varchar(16)	NO		NULL	
+checkpoint_start_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_checkpoint_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_checkpoint_diagnose_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_snapshot_job;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

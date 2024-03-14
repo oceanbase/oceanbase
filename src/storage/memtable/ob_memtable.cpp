@@ -281,6 +281,7 @@ void ObMemtable::destroy()
   contain_hotspot_row_ = false;
   snapshot_version_.set_max();
   encrypt_meta_ = nullptr;
+  reset_trace_id();
 }
 
 int ObMemtable::safe_to_destroy(bool &is_safe)
@@ -2157,7 +2158,7 @@ void ObMemtable::print_ready_for_flush()
             K(ret), K(bool_ret),
             K(frozen_memtable_flag), K(write_ref),
             K(current_right_boundary), K(end_scn),
-            K(logstream_freeze_clock), K(memtable_freeze_clock));
+            K(logstream_freeze_clock), K(memtable_freeze_clock), K_(trace_id));
 }
 
 // The freeze_snapshot_version is needed for mini merge, which represents that
@@ -2351,6 +2352,7 @@ void ObMemtable::set_freeze_state(const int64_t state)
   }
 }
 
+DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateScheduleDagTime, update_schedule_dag_time)
 int ObMemtable::flush(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
@@ -2373,6 +2375,7 @@ int ObMemtable::flush(share::ObLSID ls_id)
       }
     } else {
       mt_stat_.create_flush_dag_time_ = cur_time;
+      report_memtable_diagnose_info(UpdateScheduleDagTime());
       TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
     }
 
@@ -3346,6 +3349,17 @@ int ObMemtable::set_memtable_mgr_(storage::ObTabletMemtableMgr *mgr)
 storage::ObTabletMemtableMgr *ObMemtable::get_memtable_mgr_()
 {
   return static_cast<ObTabletMemtableMgr *>(memtable_mgr_handle_.get_memtable_mgr());
+}
+
+int ObMemtable::finish_freeze()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObFreezeCheckpoint::finish_freeze())) {
+    TRANS_LOG(WARN, "fail to finish_freeze", KR(ret));
+  } else {
+    report_memtable_diagnose_info(UpdateFreezeInfo(*this));
+  }
+  return ret;
 }
 
 } // namespace memtable

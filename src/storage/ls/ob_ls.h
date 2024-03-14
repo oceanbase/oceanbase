@@ -854,9 +854,11 @@ public:
 
   // ObFreezer interface:
   // freeze the data of ls:
+  // @param [in] trace_id, for checkpoint diagnose
   // @param [in] is_sync, only used for wait_freeze_finished()
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int logstream_freeze(const bool is_sync = false,
+  int logstream_freeze(const int64_t trace_id,
+                       const bool is_sync = false,
                        const int64_t abs_timeout_ts = INT64_MAX);
   // tablet freeze
   // @param [in] is_sync, only used for wait_freeze_finished()
@@ -872,9 +874,10 @@ public:
   // @param [in] tablet_ids
   // @param [in] is_sync
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
-  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
-                          const bool is_sync = false,
-                          const int64_t abs_timeout_ts = INT64_MAX);
+  int batch_tablet_freeze(const int64_t trace_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const bool is_sync = false,
+      const int64_t abs_timeout_ts = INT64_MAX);
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);

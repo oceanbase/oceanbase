@@ -107,7 +107,7 @@ public:
   bool is_in_prepare_list_of_data_checkpoint();
   // after checkpoint ready_for_flush
   // move to prepare_list in data_checkpoint
-  int finish_freeze();
+  virtual int finish_freeze();
   // for empty memtable
   virtual int set_frozen() { return OB_SUCCESS; }
 

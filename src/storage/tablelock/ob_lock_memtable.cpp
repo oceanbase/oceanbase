@@ -112,6 +112,7 @@ void ObLockMemtable::reset()
   need_check_tablet_status_ = false;
   freezer_ = nullptr;
   is_inited_ = false;
+  reset_trace_id();
 }
 
 // RX + S = RX + SRX  | S + RX = S + SRX
@@ -923,6 +924,7 @@ bool ObLockMemtable::is_active_memtable() const
 }
 
 int ObLockMemtable::flush(SCN recycle_scn,
+                          int64_t trace_id,
                           bool need_freeze)
 {
   int ret = OB_SUCCESS;
@@ -967,11 +969,14 @@ int ObLockMemtable::flush(SCN recycle_scn,
       param.tablet_id_ = LS_LOCK_TABLET;
       param.merge_type_ = compaction::MINI_MERGE;
       param.merge_version_ = ObVersion::MIN_VERSION;
+      set_trace_id(trace_id);
       if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
         if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
           LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
         }
       } else {
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(),
+            get_start_scn(), get_end_scn());
         LOG_INFO("schedule lock_memtable merge_dag successfully", K(ls_id_), K(freeze_scn_));
       }
     }

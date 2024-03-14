@@ -479,7 +479,8 @@ ObLSWRSHandler* ObFreezer::get_ls_wrs_handler()
 }
 
 /* logstream freeze */
-int ObFreezer::logstream_freeze(ObFuture<int> *result)
+int ObFreezer::logstream_freeze(int64_t trace_id,
+    ObFuture<int> *result)
 {
   int ret = OB_SUCCESS;
   SCN freeze_snapshot_version;
@@ -516,6 +517,11 @@ int ObFreezer::logstream_freeze(ObFuture<int> *result)
                                                  ObTabletID(ObTabletID::INVALID_TABLET_ID),
                                                  false/*need_rewrite_meta*/))) {
     TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
+  }
+
+  MTL(checkpoint::ObCheckpointDiagnoseMgr*)->update_freeze_clock(ls_id, trace_id, get_freeze_clock());
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(inner_logstream_freeze(result))) {
     TRANS_LOG(WARN, "[Freezer] logstream_freeze failure", K(ret), K(ls_id));
     stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
@@ -1056,7 +1062,7 @@ int ObFreezer::handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &
   return ret;
 }
 
-int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result)
+int ObFreezer::batch_tablet_freeze(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
@@ -1096,7 +1102,7 @@ int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFut
                                                    ObTabletID(ObTabletID::INVALID_TABLET_ID),
                                                    false/*need_rewrite_meta*/))) {
       TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
-    } else if (OB_FAIL(batch_tablet_freeze_(tablet_ids, result, need_freeze))) {
+    } else if (OB_FAIL(batch_tablet_freeze_(trace_id, tablet_ids, result, need_freeze))) {
       TRANS_LOG(WARN, "[Freezer] batch_tablet_freeze failed", K(ret), K(ls_id), K(tablet_ids));
     }
     if (OB_FAIL(ret) || !need_freeze) {
@@ -1109,8 +1115,9 @@ int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFut
   return ret;
 }
 
-int ObFreezer::batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze)
+int ObFreezer::batch_tablet_freeze_(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze)
 {
+  const int64_t start = ObTimeUtility::current_time();
   // succeed to set freeze flag
   int ret = OB_SUCCESS;
   ObTableHandleArray memtable_handles;
@@ -1131,7 +1138,7 @@ int ObFreezer::batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFu
     } else if (FALSE_IT(tablet = handle.get_obj())) {
     } else if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
       LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
-    } else if (OB_FAIL(protected_handle->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle))) {
+    } else if (OB_FAIL(protected_handle->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle, trace_id))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_SUCCESS;
         TRANS_LOG(INFO, "[Freezer] no need to freeze since there is no active memtable", K(ret),
@@ -1160,7 +1167,7 @@ int ObFreezer::batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFu
   } else if (OB_FAIL(submit_batch_tablet_freeze_task(memtable_handles, result))) {
     TRANS_LOG(WARN, "[Freezer] fail to submit batch_tablet_freeze task", K(ret));
   } else {
-    TRANS_LOG(INFO, "[Freezer] succeed to start batch_tablet_freeze task", K(ret), K(tablet_ids));
+    TRANS_LOG(INFO, "[Freezer] succeed to start batch_tablet_freeze task", K(ret), K(get_ls_id()), K(tablet_ids));
   }
 
   return ret;

@@ -21,6 +21,7 @@
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/multi_data_source/mds_table_mgr.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -84,7 +85,8 @@ public:
       const bool include_active_memtable = true);
   int get_memtables_nolock(ObTableHdlArray &handle);
   int get_first_frozen_memtable(ObTableHandleV2 &handle) const;
-  int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle);
+  int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle,
+                                               const int64_t trace_id = checkpoint::INVALID_TRACE_ID);
 
   ObStorageSchemaRecorder &get_storage_schema_recorder() { return schema_recorder_; }
   compaction::ObTabletMediumCompactionInfoRecorder &get_medium_info_recorder() { return medium_info_recorder_; }

@@ -38,7 +38,9 @@ when "$table_name" in (
 "__all_virtual_proxy_schema" ,
 "__all_virtual_proxy_partition_info" ,
 "__all_virtual_proxy_partition" ,
-"__all_virtual_proxy_sub_partition") then 3
+"__all_virtual_proxy_sub_partition",
+"__all_virtual_checkpoint_diagnose_memtable_info",
+"__all_virtual_checkpoint_diagnose_checkpoint_unit_info") then 3
 when "$table_name" in (
 "__all_virtual_sysstat",
 "__all_virtual_sesstat",
