@@ -32,6 +32,7 @@
 #include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/backup/ob_archive_persist_helper.h"
 namespace oceanbase
 {
 using namespace share;
@@ -1213,6 +1214,41 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
 bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
   const ObString tmp_str(t.str());
   return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
+}
+
+bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int ret = OB_SUCCESS;
+  int64_t value = ObConfigTimeParser::get(t.value_.ptr(), is_valid);
+  ObArchivePersistHelper archive_op;
+  ObBackupPathString archive_dest_str;
+  ObBackupDest archive_dest;
+  ObStorageType device_type;
+  const int64_t dest_no = 0;
+  const bool lock = false;
+  if (is_valid) {
+    if (OB_FAIL(archive_op.init(tenant_id))) {
+      OB_LOG(WARN, "fail to init archive persist helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_op.get_archive_dest(*GCTX.sql_proxy_, lock, dest_no, archive_dest_str))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        OB_LOG(WARN, "failed to get archive dest", K(ret), K(tenant_id));
+      } else { // no dest exist, set archive_lag_target is disallowed
+        is_valid =  false;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "log_archive_dest has not been set, set archive_lag_target is");
+      }
+    } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
+      OB_LOG(WARN, "fail to set archive dest", K(ret), K(archive_dest_str));
+    } else if (archive_dest.is_storage_type_s3()) {
+      is_valid = MIN_LAG_TARGET_FOR_S3 <= value;
+      if (!is_valid) {
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set archive_lag_target smaller than 60s when log_archive_dest is S3 is");
+      }
+    } else {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 } // end of namepace common

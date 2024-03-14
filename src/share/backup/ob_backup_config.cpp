@@ -633,6 +633,7 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   int ret = OB_SUCCESS;
   ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG;
   ObBackupDestMgr dest_mgr;
+  ObBackupDest backup_dest;
   bool is_running = false;
   if (is_empty_) {
   } else if (!type_.is_valid()) {
@@ -648,10 +649,19 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(backup_dest));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "change archive dest when archive is running is");
-  } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
-    LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id)); 
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
-    LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id)); 
+  } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
+    LOG_WARN("fail to set backup dest", K(ret));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
+    if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
+    } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
+      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+    }
   }
   return ret;
 }
