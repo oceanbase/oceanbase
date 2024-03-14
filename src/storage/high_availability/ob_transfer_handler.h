@@ -265,6 +265,7 @@ private:
       const bool find_by_src_ls,
       bool &task_exist) const;
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
+  int pre_check_active_trans_before_lock_member_list_(const share::ObLSID &src_ls_id);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s

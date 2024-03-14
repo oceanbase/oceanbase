@@ -459,7 +459,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
     }
     if (OB_FAIL(ret)) {
-    } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
+    } else if (!enable_kill_trx && OB_FAIL(pre_check_active_trans_before_lock_member_list_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
       LOG_WARN("failed to lock src and dest ls member list", K(ret), K(task_info));
@@ -2326,6 +2326,35 @@ int ObTransferHandler::broadcast_tablet_location_(const ObTransferTaskInfo &task
     } else if (OB_FAIL(location_service->submit_tablet_broadcast_task(broadcast_task))) {
       LOG_WARN("failed to submit tablet location broadcast task", KR(ret), K(broadcast_task));
     }
+  }
+  return ret;
+}
+
+// To reduce the frequency of locking the member list, we need to add a check for active transactions before locking.
+int ObTransferHandler::pre_check_active_trans_before_lock_member_list_(const share::ObLSID &src_ls_id)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t CHECK_ACTIVE_TRANS_INTERVAL = 1_ms;
+  static const int64_t TOTAL_CHECK_ACTIVE_TRANS_TIME = 10_ms;
+  bool has_active_trans = true;
+  int64_t active_trans_count = 0;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  while (OB_SUCC(ret) && has_active_trans) {
+    if (OB_FAIL(get_ls_active_trans_count_(src_ls_id, active_trans_count))) {
+      LOG_WARN("failed to get ls active trans count", K(ret), K(src_ls_id));
+    } else if (0 == active_trans_count) {
+      has_active_trans = false;
+      LOG_INFO("src ls has no active trans", K(active_trans_count), K(src_ls_id));
+    } else if (ObTimeUtility::current_time() - start_ts > TOTAL_CHECK_ACTIVE_TRANS_TIME) {
+      break;
+    } else {
+      LOG_WARN("src ls still has active trans", K(active_trans_count), K(src_ls_id));
+      ob_usleep(CHECK_ACTIVE_TRANS_INTERVAL);
+    }
+  }
+  if (OB_SUCC(ret) && has_active_trans) {
+    ret = OB_TRANSFER_DETECT_ACTIVE_TRANS;
+    LOG_WARN("src ls still has active trans", K(ret), K(active_trans_count), K(src_ls_id));
   }
   return ret;
 }
