@@ -349,7 +349,6 @@ _max_rpc_packet_size
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
 _mds_memory_limit_percentage
-_memory_large_chunk_cache_size
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
