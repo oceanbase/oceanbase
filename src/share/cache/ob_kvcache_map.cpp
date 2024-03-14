@@ -268,6 +268,7 @@ int ObKVCacheMap::get(
     ObKVCacheHazardGuard hazard_guard(global_hazard_station_);
     if (OB_FAIL(hazard_guard.get_ret())) {
       COMMON_LOG(WARN, "Fail to acquire hazard version", K(ret));
+      ret = OB_ENTRY_NOT_EXIST;
     } else {
       Node *&bucket_ptr = get_bucket_node(bucket_pos);
       iter = bucket_ptr;
