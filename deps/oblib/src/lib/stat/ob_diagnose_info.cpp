@@ -567,6 +567,10 @@ int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo *tenant_info, co
         EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
         break;
       }
+      case ObWaitClassIds::NETWORK:{
+        EVENT_ADD(ObStatEventIds::NETWORK_WAIT_TIME, event_desc->wait_time_);
+        break;
+      }
       default:
         break;
     }

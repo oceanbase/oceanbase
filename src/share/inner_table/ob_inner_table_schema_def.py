@@ -7644,7 +7644,10 @@ def_table_schema(
 
     ('partition_hit', 'bool'),
     ('tx_internal_route_version', 'uint'),
-    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH')
+    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
+    ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
+    ('plsql_exec_time', 'int'),
+    ('network_wait_time', 'uint', 'true')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14568,7 +14571,8 @@ def_table_schema(
                          case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                        flt_trace_id as FLT_TRACE_ID
+                        flt_trace_id as FLT_TRACE_ID,
+                        network_wait_time as NETWORK_WAIT_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -48882,7 +48886,8 @@ def_table_schema(
                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         network_wait_time as  NETWORK_WAIT_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
