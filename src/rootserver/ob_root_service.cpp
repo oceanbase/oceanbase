@@ -6729,8 +6729,9 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
                                               udt_name, exist))) {
           LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
       } else if (!exist && exist_valid_udt) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("valid udt can not be found any more", K(ret), K(udt_name));
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("valid udt at resolve stage can not be found any more at rootservice stage, "
+                 "could be dropped by another parallel ddl", K(ret), K(udt_name));
       } else if (exist) {
         if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
                                               db_schema->get_database_id(),
