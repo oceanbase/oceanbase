@@ -4,12 +4,12 @@
 # Afterward, you can reinstall and launch OceanBase with the new IP address.
 # For instance, to set the observer IP to 127.0.0.1, you would use the line:
 # ip=127.0.0.1
-mysqlPort=2881
-rpcPort=2882
-obshellPort=2886
-rootPwd=""
-redoDir=/var/lib/oceanbase/redo
-dataDir=/var/lib/oceanbase/data
+mysql_port=2881
+rpc_port=2882
+obshell_port=2886
+root_pwd=""
+redo_dir=/var/lib/oceanbase/redo
+data_dir=/var/lib/oceanbase/data
 datafile_size=2G
 datafile_next=2G
 datafile_maxsize=20G
