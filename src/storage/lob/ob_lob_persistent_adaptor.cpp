@@ -211,7 +211,7 @@ int ObPersistentLobApator::scan_lob_meta(
       // build key range
       void *buf = param.allocator_->alloc(sizeof(ObObj) * 4);
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc range obj failed.", K(ret));
       } else {
         ObObj *row_objs = reinterpret_cast<ObObj*>(buf);

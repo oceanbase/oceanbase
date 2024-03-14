@@ -28,7 +28,12 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 {
   int ret = OB_SUCCESS;
   lob_adatper_ = lob_adatper;
-  param_ = param;
+  byte_size_ = param.byte_size_;
+  offset_ = param.offset_;
+  len_ = param.len_;
+  coll_type_ = param.coll_type_;
+  scan_backward_ = param.scan_backward_;
+  allocator_ = param.allocator_;
   cur_pos_ = 0;
   cur_byte_pos_ = 0;
   if (OB_FAIL(lob_adatper->scan_lob_meta(param, scan_param_, meta_iter_))) {
@@ -38,7 +43,9 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 }
 
 ObLobMetaScanIter::ObLobMetaScanIter()
-  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0) {}
+  : lob_adatper_(nullptr), meta_iter_(nullptr),
+    byte_size_(0), offset_(0), len_(0), coll_type_(ObCollationType::CS_TYPE_INVALID), scan_backward_(false),
+    allocator_(nullptr), scan_param_(), cur_pos_(0), cur_byte_pos_(0) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -46,14 +53,14 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
   if (OB_ISNULL(meta_iter_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("meta_iter is null.", K(ret));
-  } else if (cur_byte_pos_ > param_.byte_size_) {
+  } else if (cur_byte_pos_ > byte_size_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("scan get lob meta byte len is bigger than byte size", K(ret), K(*this), K(param_));
-  } else if (cur_byte_pos_ == param_.byte_size_) {
+    LOG_WARN("scan get lob meta byte len is bigger than byte size", K(ret), K(*this), K(byte_size_));
+  } else if (cur_byte_pos_ == byte_size_) {
     ret = OB_ITER_END;
   } else {
     bool has_found = false;
-    bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+    bool is_char = coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
     while (OB_SUCC(ret) && !has_found) {
       common::ObNewRow* new_row = NULL;
       ret = meta_iter_->get_next_row(new_row);
@@ -63,7 +70,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
           row.char_len_ = 0;
           row.seq_id_ = ObString();
           // when get iter end, do deep copy for last scan result
-          int tmp_ret = cur_info_.deep_copy(*param_.allocator_, cur_info_);
+          int tmp_ret = cur_info_.deep_copy(*allocator_, cur_info_);
           if (tmp_ret != OB_SUCCESS) {
             LOG_WARN("fail to do deep copy for cur info", K(tmp_ret), K(cur_info_));
           }
@@ -80,7 +87,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
         if (is_range_over(row)) {
           // if row cur_pos > offset + len, need break;
           ret = OB_ITER_END;
-        } else if (/*param_.scan_backward_ ||*/ is_in_range(row)) {
+        } else if (/*scan_backward_ ||*/ is_in_range(row)) {
           has_found = true;
         } else {
           // TODO
@@ -98,7 +105,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 int ObLobMetaScanIter::get_next_row(ObLobMetaScanResult &result)
 {
   int ret = OB_SUCCESS;
-  bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+  bool is_char = coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
   ret = get_next_row(result.info_);
   if (ret == OB_ITER_END) {
   } else if (OB_FAIL(ret)) {
@@ -113,32 +120,31 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaScanResult &result)
       result.st_ = 0;
       result.len_ = cur_len;
       // if scan backward, do full scan, not support range
-      // if (!param_.scan_backward_) {
+      // if (!scan_backward_) {
         // 3种场景，meta_info与左右边界相交，或者被包含
-        if (cur_pos < param_.offset_) { // 越过左边界,
-          if (cur_pos + cur_len < param_.offset_) {
+        if (cur_pos < offset_) { // 越过左边界,
+          if (cur_pos + cur_len < offset_) {
             ret = OB_ERR_INTERVAL_INVALID;
-            LOG_WARN("Invalid query result at left edge.", K(ret), K(cur_pos), K(cur_len), K(param_.offset_), K(param_.len_));
+            LOG_WARN("Invalid query result at left edge.", K(ret), K(cur_pos), K(cur_len), K(offset_), K(len_));
           } else {
-            if (!param_.scan_backward_) {
-              result.st_ = param_.offset_ - cur_pos;
+            if (!scan_backward_) {
+              result.st_ = offset_ - cur_pos;
               result.len_ -= result.st_;
             } else {
-              result.len_ = cur_pos_ - param_.offset_;
+              result.len_ = cur_pos_ - offset_;
             }
           }
         }
         if (OB_SUCC(ret)) {
-          if (cur_pos + cur_len > param_.offset_ + param_.len_) { // 越过右边界
-            if (cur_pos > param_.offset_ + param_.len_) {
+          if (cur_pos + cur_len > offset_ + len_) { // 越过右边界
+            if (cur_pos > offset_ + len_) {
               ret = OB_ERR_INTERVAL_INVALID;
-              LOG_WARN("Invalid query result at right edge.", K(ret), K(cur_pos), K(cur_len), K(param_.offset_), K(param_.len_));
+              LOG_WARN("Invalid query result at right edge.", K(ret), K(cur_pos), K(cur_len), K(offset_), K(len_));
             } else {
-              if (!param_.scan_backward_) {
-                result.len_ = param_.offset_ + param_.len_ - cur_pos - result.st_;
+              if (!scan_backward_) {
+                result.len_ = offset_ + len_ - cur_pos - result.st_;
               } else {
-                // []
-                result.st_ = cur_pos_ - (param_.offset_ + param_.len_);
+                result.st_ = cur_pos_ - (offset_ + len_);
                 result.len_ -= result.st_;
               }
             }
@@ -222,10 +228,10 @@ int ObLobMetaUtil::transform(common::ObNewRow* row, ObLobMetaInfo &info)
 bool ObLobMetaScanIter::is_in_range(const ObLobMetaInfo& info)
 {
   bool bool_ret = false;
-  bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+  bool is_char = coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
   uint64_t cur_end = cur_pos_ + ((is_char) ? info.char_len_ : info.byte_len_);
-  uint64_t range_end = param_.offset_ + param_.len_;
-  if (std::max(cur_pos_, param_.offset_) < std::min(cur_end, range_end)) {
+  uint64_t range_end = offset_ + len_;
+  if (std::max(cur_pos_, offset_) < std::min(cur_end, range_end)) {
     bool_ret = true;
   }
   return bool_ret;
@@ -248,23 +254,23 @@ void ObLobMetaScanIter::reset()
 // called after 
 bool ObLobMetaScanIter::is_range_begin(const ObLobMetaInfo& info)
 {
-  bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+  bool is_char = coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
   uint32_t meta_len = (is_char) ? info.char_len_ : info.byte_len_;
-  uint64_t range_begin = param_.offset_;
+  uint64_t range_begin = offset_;
   return (range_begin < cur_pos_) && (cur_pos_ - meta_len <= range_begin);
 }
 
 bool ObLobMetaScanIter::is_range_end(const ObLobMetaInfo& info)
 {
-  bool is_char = param_.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+  bool is_char = coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
   uint32_t meta_len = (is_char) ? info.char_len_ : info.byte_len_;
-  uint64_t range_end = param_.offset_ + param_.len_;
+  uint64_t range_end = offset_ + len_;
   return (cur_pos_ >= range_end) && (cur_pos_ - meta_len < range_end);
 }
 
 bool ObLobMetaScanIter::is_range_over(const ObLobMetaInfo& info)
 {
-  return cur_pos_ >= param_.offset_ + param_.len_;
+  return cur_pos_ >= offset_ + len_;
 }
 
 ObLobMetaWriteIter::ObLobMetaWriteIter(

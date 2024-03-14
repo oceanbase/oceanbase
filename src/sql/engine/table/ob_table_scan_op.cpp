@@ -967,6 +967,11 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
         LOG_WARN("extended table location failed", K(ret), KPC(loc_meta));
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(das_rtdef.table_loc_) && OB_NOT_NULL(das_rtdef.table_loc_->loc_meta_)) {
+      if (das_rtdef.table_loc_->loc_meta_->select_leader_ == 0) {
+        das_rtdef.scan_flag_.set_is_select_follower();
+      }
+    }
   }
   return ret;
 }

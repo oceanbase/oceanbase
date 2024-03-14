@@ -64,7 +64,9 @@ struct ObLobAccessParam {
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),  enable_query_cache_(false)
+      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+      schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),  enable_query_cache_(false),
+      remote_query_ctx_(nullptr), scan_objs_(nullptr)
   {}
   ~ObLobAccessParam() {
     if (OB_NOT_NULL(dml_base_param_)) {
@@ -144,6 +146,9 @@ public:
   int64_t schema_chunk_size_;
   bool enable_query_cache_;
   ObObj ext_info_log_;
+  // remote query ctx
+  void *remote_query_ctx_;
+  void *scan_objs_;
 };
 
 struct ObLobMetaInfo {

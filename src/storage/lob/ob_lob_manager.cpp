@@ -19,6 +19,7 @@
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/das/ob_das_utils.h"
 
 namespace oceanbase
 {
@@ -416,16 +417,37 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 *lob_locator = param.lob_locator_;
+  uint64_t tenant_id = param.tenant_id_;
   const ObAddr &self_addr = MYADDR;
   if (lob_locator == nullptr) {
     is_remote = false;
   } else if (!lob_locator->is_persist_lob()) {
     is_remote = false;
+  } else if (param.from_rpc_ == true) {
+    is_remote = false;
   } else {
-    uint64_t tenant_id = param.tenant_id_;
-    if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
-      LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(param.ls_id_));
+    bool has_retry_info = false;
+    ObMemLobExternHeader *extern_header = nullptr;
+    if (OB_SUCC(lob_locator->get_extern_header(extern_header))) {
+      has_retry_info = extern_header->flags_.has_retry_info_;
+    }
+    if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_2_0) {
+      // compat old version
+      has_retry_info = false;
+    }
+    if (has_retry_info) {
+      ObMemLobRetryInfo *retry_info = nullptr;
+      if (OB_FAIL(lob_locator->get_retry_info(retry_info))) {
+        LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
+      } else {
+        dst_addr = retry_info->addr_;
+      }
     } else {
+      if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
+        LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(param.ls_id_));
+      }
+    }
+    if (OB_SUCC(ret)) {
       // lob from other tenant also should read by rpc
       is_remote = (dst_addr != self_addr) || (tenant_id != MTL_ID());
       if (param.from_rpc_ == true && is_remote) {
@@ -439,51 +461,97 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
 
 bool ObLobManager::is_remote_ret_can_retry(int ret)
 {
-  return (ret == OB_NOT_MASTER);
+  return (ret == OB_REPLICA_NOT_READABLE) ||
+         (ret == OB_RPC_CONNECT_ERROR) ||
+         (ret == OB_RPC_SEND_ERROR) ||
+         (ret == OB_RPC_POST_ERROR) ||
+         (ret == OB_NOT_MASTER) ||
+         (ret == OB_NO_READABLE_REPLICA) ||
+         (ret == OB_TABLET_NOT_EXIST) ||
+         (ret == OB_LS_NOT_EXIST);
 }
 
-int ObLobManager::lob_remote_query_with_retry(
-    ObLobAccessParam &param,
-    common::ObAddr& dst_addr,
-    ObLobQueryArg& arg,
-    int64_t timeout,
-    common::ObDataBuffer& rpc_buffer,
-    obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY>& handle)
+int ObLobManager::lob_query_with_retry(ObLobAccessParam &param, ObAddr &dst_addr,
+    bool &remote_bret, ObLobMetaScanIter& iter,
+    ObLobQueryArg::QueryType qtype, void *&ctx)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_service = (MTL(ObLSService *));
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy = ls_service->get_storage_rpc_proxy();
-  int64_t retry_max = REMOTE_LOB_QUERY_RETRY_MAX;
   int64_t retry_cnt = 0;
   bool is_continue = true;
+  ObLSService *ls_service = (MTL(ObLSService *));
+  obrpc::ObStorageRpcProxy *svr_rpc_proxy = ls_service->get_storage_rpc_proxy();
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
-    ret = svr_rpc_proxy->to(dst_addr).by(arg.tenant_id_)
-                    .dst_cluster_id(GCONF.cluster_id)
-                    .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                    .timeout(timeout)
-                    .lob_query(arg, rpc_buffer, handle);
+    if (remote_bret) {
+      // first try to init remote ctx
+      if (OB_FAIL(lob_remote_query_init_ctx(param, qtype, ctx))) {
+        LOG_WARN("fail to init remote query ctx", K(ret));
+      } else {
+        ObLobRemoteQueryCtx *remote_ctx = reinterpret_cast<ObLobRemoteQueryCtx*>(ctx);
+        int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
+        if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
+          timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+        }
+        ret = svr_rpc_proxy->to(dst_addr).by(remote_ctx->query_arg_.tenant_id_)
+                        .dst_cluster_id(GCONF.cluster_id)
+                        .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
+                        .timeout(timeout)
+                        .lob_query(remote_ctx->query_arg_, remote_ctx->rpc_buffer_, remote_ctx->handle_);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to do remote lob query", K(ret), K(remote_ctx->query_arg_), K(dst_addr), K(timeout));
+        }
+      }
+    } else {
+      if (OB_FAIL(lob_ctx_.lob_meta_mngr_->scan(param, iter))) {
+        LOG_WARN("failed to do local lob query and show retry cnt and mem usage", K(ret), K(param),
+                 K(dst_addr), K(retry_cnt), K(param.allocator_->total()), K(param.allocator_->used()));
+        // reset iter for maybe has done alloc for iter
+        iter.reset();
+      }
+    }
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to do remote query", K(ret), K(arg), K(dst_addr), K(timeout));
-      if (is_remote_ret_can_retry(ret)) {
+      // check timeout
+      if (param.from_rpc_) { // from rpc should not do retry, just return ret
+        is_continue = false;
+      } else if (is_remote_ret_can_retry(ret)) {
         retry_cnt++;
-        if (retry_cnt > retry_max) {
+        if (retry_cnt >= 100 && retry_cnt % 50L == 0) {
+          LOG_INFO("[LOB RETRY] The LOB query has been retried multiple times without success, "
+                    "and the execution may be blocked by a specific exception", KR(ret),
+                    "continuous_retry_cnt", retry_cnt, K(param), K(remote_bret), K(dst_addr));
+        }
+        if (ObTimeUtility::current_time() > param.timeout_) {
           is_continue = false;
-          LOG_INFO("retry cnt is reach retry_max_cnt, return error code", K(ret), K(retry_cnt), K(retry_max));
+          ret = OB_TIMEOUT;
+          int64_t cur_time = ObTimeUtility::current_time();
+          LOG_WARN("[LOB RETRY] query timeout", K(cur_time), K(param.timeout_), K(ret));
+        } else if (IS_INTERRUPTED()) { // for worker interrupted
+          is_continue = false;
+          LOG_INFO("[LOB RETRY] Retry is interrupted by worker interrupt signal", KR(ret));
+        } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
+          is_continue = false;
+          ret = OB_KILLED_BY_THROTTLING;
+          LOG_INFO("[LOB RETRY] Retry is interrupted by worker check wait", KR(ret));
         } else {
           switch (ret) {
-            case OB_NOT_MASTER: {
-              bool remote_bret = false;
-              // refresh leader
-              if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
-                LOG_WARN("fail to refresh leader addr", K(ret), K(param));
+            case	OB_REPLICA_NOT_READABLE:
+            case  OB_RPC_CONNECT_ERROR:
+            case  OB_RPC_SEND_ERROR:
+            case  OB_RPC_POST_ERROR:
+            case  OB_NOT_MASTER:
+            case  OB_NO_READABLE_REPLICA:
+            case  OB_TABLET_NOT_EXIST:
+            case  OB_LS_NOT_EXIST: {
+              remote_bret = false;
+              // refresh location
+              if (OB_FAIL(lob_refresh_location(param, dst_addr, remote_bret, ret, retry_cnt))) {
+                LOG_WARN("fail to do refresh location", K(ret));
                 is_continue = false;
-              } else {
-                LOG_INFO("refresh leader location", K(retry_cnt), K(retry_max), K(remote_bret), K(dst_addr), K(param));
               }
               break;
             }
             default: {
-              LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt), K(retry_max));
+              LOG_INFO("do nothing, just retry", K(ret), K(retry_cnt));
             }
           }
         }
@@ -497,62 +565,159 @@ int ObLobManager::lob_remote_query_with_retry(
   return ret;
 }
 
-int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, ObString& data)
+int ObLobManager::lob_check_tablet_not_exist(ObLobAccessParam &param, uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  bool tablet_exist = false;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", KR(ret), K(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(param.tenant_id_, schema_guard))) {
+    // tenant could be deleted
+    LOG_WARN("get tenant schema guard fail", KR(ret), K(param.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(param.tenant_id_, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    //table could be dropped
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist, fast fail das task", K(table_id));
+  } else if (OB_FAIL(table_schema->check_if_tablet_exists(param.tablet_id_, tablet_exist))) {
+    LOG_WARN("check if tablet exists failed", K(ret), K(param), K(table_id));
+  } else if (!tablet_exist) {
+    ret = OB_PARTITION_NOT_EXIST;
+    LOG_WARN("partition not exist, maybe dropped by DDL", K(ret), K(param), K(table_id));
+  }
+  return ret;
+}
+
+int ObLobManager::lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr, bool &remote_bret, int last_err, int retry_cnt)
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 *lob_locator = param.lob_locator_;
-  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle;
-  common::ObDataBuffer rpc_buffer;
-  ObLobQueryRemoteReader reader;
+  const ObAddr &self_addr = MYADDR;
+  ObMemLobExternHeader *extern_header = NULL;
+  bool has_retry_info = false;
+  if (OB_NOT_NULL(lob_locator) && OB_SUCC(lob_locator->get_extern_header(extern_header))) {
+    has_retry_info = extern_header->flags_.has_retry_info_;
+  }
+  if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_2_0) {
+    // compat old version
+    has_retry_info = false;
+  }
+  if (param.tenant_id_ != MTL_ID()) { // query over tenant id
+    has_retry_info = false;
+  }
+  if (!has_retry_info) {
+    // do check remote
+    if (OB_FAIL(is_remote(param, remote_bret, dst_addr))) {
+      LOG_WARN("fail to do check is remote", K(ret));
+    }
+  } else if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
+    LOG_WARN("wait das retry failed", K(ret));
+  } else {
+    // do location refresh
+    ObArenaAllocator tmp_allocator("LobRefLoc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+    ObDASLocationRouter router(tmp_allocator);
+    router.set_last_errno(last_err);
+    ObDASTableLocMeta loc_meta(tmp_allocator);
+    loc_meta.ref_table_id_ = extern_header->table_id_;
+    ObDASTabletLoc tablet_loc;
+    ObMemLobRetryInfo *retry_info = nullptr;
+    if (last_err == OB_TABLET_NOT_EXIST && OB_FAIL(lob_check_tablet_not_exist(param, extern_header->table_id_))) {
+      LOG_WARN("fail to check tablet not exist", K(ret), K(extern_header->table_id_));
+    } else if (OB_FAIL(lob_locator->get_retry_info(retry_info))) {
+      LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
+    } else if (OB_FALSE_IT(loc_meta.select_leader_ = retry_info->is_select_leader_)) {
+       // use main tablet id to get location, for lob meta tablet is same location as main tablet
+    } else if (OB_FAIL(router.get_tablet_loc(loc_meta, param.tablet_id_, tablet_loc))) {
+      LOG_WARN("fail to refresh location", K(ret));
+    } else {
+      dst_addr = tablet_loc.server_;
+      remote_bret = (dst_addr != self_addr);
+      if (tablet_loc.ls_id_ != param.ls_id_) {
+        LOG_INFO("[LOB RETRY] lob retry find tablet ls id is changed",
+                 K(param.tablet_id_), K(param.ls_id_), K(tablet_loc.ls_id_));
+        param.ls_id_ = tablet_loc.ls_id_;
+      }
+    }
+  }
+  LOG_DEBUG("[LOB RETRY] after do fresh location", K(ret), K(has_retry_info), K(dst_addr), K(remote_bret));
+  return ret;
+}
+
+int ObLobManager::lob_remote_query_init_ctx(
+    ObLobAccessParam &param,
+    ObLobQueryArg::QueryType qtype,
+    void *&ctx)
+{
+  int ret = OB_SUCCESS;
+  if (ctx != nullptr) {
+    // do nothing, has been init
+  } else {
+    void *buff = param.allocator_->alloc(sizeof(ObLobRemoteQueryCtx));
+    if (OB_ISNULL(buff)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc lob remote query ctx", K(ret));
+    } else {
+      ObLobRemoteQueryCtx *remote_ctx = new(buff)ObLobRemoteQueryCtx();
+      if (OB_FAIL(remote_ctx->remote_reader_.open(param, remote_ctx->rpc_buffer_))) {
+        LOG_WARN("fail to open lob remote reader", K(ret));
+      } else {
+        // build arg
+        remote_ctx->query_arg_.tenant_id_ = param.tenant_id_;
+        remote_ctx->query_arg_.offset_ = param.offset_;
+        remote_ctx->query_arg_.len_ = param.len_;
+        remote_ctx->query_arg_.cs_type_ = param.coll_type_;
+        remote_ctx->query_arg_.scan_backward_ = param.scan_backward_;
+        remote_ctx->query_arg_.qtype_ = qtype;
+        remote_ctx->query_arg_.lob_locator_.ptr_ = param.lob_locator_->ptr_;
+        remote_ctx->query_arg_.lob_locator_.size_ = param.lob_locator_->size_;
+        remote_ctx->query_arg_.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
+        //set ctx ptr
+        ctx = buff;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLobManager::query_remote(ObLobAccessParam& param, ObString& data)
+{
+  int ret = OB_SUCCESS;
+  ObLobLocatorV2 *lob_locator = param.lob_locator_;
   if (OB_ISNULL(lob_locator)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("lob locator is null.", K(ret), K(param));
-  } else if (OB_FAIL(reader.open(param, rpc_buffer))) {
-    LOG_WARN("fail to open lob remote reader", K(ret));
+  } else if (OB_ISNULL(param.remote_query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get remote query ctx nullptr", K(ret), K(param));
   } else {
-    SMART_VAR(ObLobQueryArg, arg) {
-      // build arg
-      arg.tenant_id_ = param.tenant_id_;
-      arg.offset_ = param.offset_;
-      arg.len_ = param.len_;
-      arg.cs_type_ = param.coll_type_;
-      arg.scan_backward_ = param.scan_backward_;
-      arg.qtype_ = ObLobQueryArg::QueryType::READ;
-      arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
-      arg.lob_locator_.size_ = param.lob_locator_->size_;
-      arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
-      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
-      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
-        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
-      }
-      if (OB_FAIL(lob_remote_query_with_retry(param, dst_addr, arg, timeout, rpc_buffer, handle))) {
-        LOG_WARN("failed to do remote query", K(ret), K(arg));
+    ObLobRemoteQueryCtx *remote_ctx = reinterpret_cast<ObLobRemoteQueryCtx*>(param.remote_query_ctx_);
+    ObLobQueryBlock block;
+    ObString block_data;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(remote_ctx->remote_reader_.get_next_block(param, remote_ctx->rpc_buffer_, remote_ctx->handle_, block, block_data))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("failed to get next lob query block", K(ret));
+        }
       } else {
-        ObLobQueryBlock block;
-        ObString block_data;
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(reader.get_next_block(param, rpc_buffer, handle, block, block_data))) {
-            if (ret != OB_ITER_END) {
-              LOG_WARN("failed to get next lob query block", K(ret));
-            }
-          } else {
-            if (param.scan_backward_) {
-              if (data.write_front(block_data.ptr(), block_data.length()) != block_data.length()) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("fail to write data buffer", K(ret), K(data.remain()), K(block_data.length()));
-              }
-            } else {
-              if (data.write(block_data.ptr(), block_data.length()) != block_data.length()) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("fail to write data buffer", K(ret), K(data.remain()), K(block_data.length()));
-              }
-            }
+        if (param.scan_backward_) {
+          if (data.write_front(block_data.ptr(), block_data.length()) != block_data.length()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to write data buffer", K(ret), K(data.remain()), K(block_data.length()));
+          }
+        } else {
+          if (data.write(block_data.ptr(), block_data.length()) != block_data.length()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to write data buffer", K(ret), K(data.remain()), K(block_data.length()));
           }
         }
-        if (ret == OB_ITER_END) {
-          ret = OB_SUCCESS;
-        }
       }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
     }
   }
   return ret;
@@ -609,48 +774,47 @@ int ObLobManager::query(
     } else {
       bool is_remote_lob = false;
       common::ObAddr dst_addr;
+      ObLobMetaScanIter meta_iter;
+      param.lob_data_ = reinterpret_cast<ObLobData*>(lob_common->buffer_);
       if (OB_FAIL(is_remote(param, is_remote_lob, dst_addr))) {
         LOG_WARN("check is remote failed.", K(ret), K(param));
+      } else if (OB_FAIL(lob_query_with_retry(param, dst_addr, is_remote_lob, meta_iter,
+                                              ObLobQueryArg::QueryType::READ, param.remote_query_ctx_))) {
+        LOG_WARN("fail to do lob query with retry", K(ret), K(is_remote_lob), K(dst_addr));
       } else if (is_remote_lob) {
-        if (OB_FAIL(query_remote(param, dst_addr, output_data))) {
+        if (OB_FAIL(query_remote(param, output_data))) {
           LOG_WARN("do remote query failed.", K(ret), K(param), K(dst_addr));
         }
       } else {
-        ObLobMetaScanIter meta_iter;
-        ObLobCtx lob_ctx = lob_ctx_;
         if (!lob_common->is_init_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid lob common header for out row.", K(ret), KPC(lob_common));
         } else {
-          param.lob_data_ = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-          if (OB_FAIL(lob_ctx.lob_meta_mngr_->scan(param, meta_iter))) {
-            LOG_WARN("do lob meta scan failed.", K(ret), K(param));
-          } else {
-            ObLobQueryResult result;
-            while (OB_SUCC(ret)) {
-              ret = meta_iter.get_next_row(result.meta_result_);
-              if (OB_FAIL(ret)) {
-                if (ret == OB_ITER_END) {
-                } else {
-                  LOG_WARN("failed to get next row.", K(ret));
-                }
-              } else if (ObTimeUtility::current_time() > param.timeout_) {
-                ret = OB_TIMEOUT;
-                int64_t cur_time = ObTimeUtility::current_time();
-                LOG_WARN("query timeout", K(cur_time), K(param.timeout_), K(ret));
-                /* TODO: weiyouchao.wyc should set param.asscess_ptable_ as false 2022.4.7 */
-              } else if (param.asscess_ptable_ /* not operate piece table currently */ &&
-                        OB_FAIL(lob_ctx.lob_piece_mngr_->get(param, result.meta_result_.info_.piece_id_, result.piece_info_))) {
-                LOG_WARN("get lob piece failed.", K(ret), K(result));
-              } else if (OB_FAIL(get_real_data(param, result, output_data))) {
-                LOG_WARN("failed to write data to output buf.", K(ret), K(result), K(output_data));
+          ObLobQueryResult result;
+          while (OB_SUCC(ret)) {
+            ret = meta_iter.get_next_row(result.meta_result_);
+            if (OB_FAIL(ret)) {
+              if (ret == OB_ITER_END) {
+              } else {
+                LOG_WARN("failed to get next row.", K(ret));
               }
-            }
-            if (ret == OB_ITER_END) {
-              ret = OB_SUCCESS;
+            } else if (ObTimeUtility::current_time() > param.timeout_) {
+              ret = OB_TIMEOUT;
+              int64_t cur_time = ObTimeUtility::current_time();
+              LOG_WARN("query timeout", K(cur_time), K(param.timeout_), K(ret));
+            } else if (OB_FAIL(get_real_data(param, result, output_data))) {
+              LOG_WARN("failed to write data to output buf.", K(ret), K(result), K(output_data));
             }
           }
+          if (ret == OB_ITER_END) {
+            ret = OB_SUCCESS;
+          }
         }
+      }
+      // finish query, release resource
+      if (OB_NOT_NULL(param.remote_query_ctx_)) {
+        ObLobRemoteQueryCtx *remote_ctx = reinterpret_cast<ObLobRemoteQueryCtx*>(param.remote_query_ctx_);
+        remote_ctx->~ObLobRemoteQueryCtx();
       }
     }
   }
@@ -755,14 +919,8 @@ int ObLobManager::query(
         LOG_WARN("alloc lob meta scan iterator fail", K(ret));
       } else if (OB_FAIL(is_remote(param, is_remote_lob, dst_addr))) {
         LOG_WARN("check is remote failed.", K(ret), K(param));
-      } else if (is_remote_lob) {
-        if (OB_FAIL(iter->open(param, dst_addr))) {
-          LOG_WARN("open remote iter query failed.", K(ret), K(param), K(dst_addr));
-        }
-      } else {
-        if (OB_FAIL(iter->open(param, lob_ctx))) {
-          LOG_WARN("open local meta scan iter failed", K(ret), K(param));
-        }
+      } else if (OB_FAIL(iter->open(param, lob_ctx, dst_addr, is_remote_lob))) {
+        LOG_WARN("open local meta scan iter failed", K(ret), K(param), K(dst_addr), K(is_remote_lob));
       }
       if (OB_SUCC(ret)) {
         result = iter;
@@ -2217,74 +2375,50 @@ int ObLobManager::getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 *lob_locator = param.lob_locator_;
-  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle;
-  common::ObDataBuffer rpc_buffer;
   ObLobQueryBlock header;
   char *buf = nullptr;
   int64_t buffer_len = header.get_serialize_size();
   if (OB_ISNULL(lob_locator)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("lob locator is null.", K(ret), K(param));
-  } else if (OB_ISNULL(buf = static_cast<char*>(param.allocator_->alloc(buffer_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed alloc buffer.", K(ret), K(buffer_len));
-  } else if (!rpc_buffer.set_data(buf, buffer_len)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to set rpc buffer", K(ret), K(buffer_len));
+  } else if (OB_ISNULL(param.remote_query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get remote query ctx nullptr", K(ret), K(param));
   } else {
-    SMART_VAR(ObLobQueryArg, arg) {
-      // build arg
-      arg.tenant_id_ = param.tenant_id_;
-      arg.offset_ = param.offset_;
-      arg.len_ = param.len_;
-      arg.cs_type_ = param.coll_type_;
-      arg.scan_backward_ = param.scan_backward_;
-      arg.qtype_ = ObLobQueryArg::QueryType::GET_LENGTH;
-      arg.lob_locator_.ptr_ = param.lob_locator_->ptr_;
-      arg.lob_locator_.size_ = param.lob_locator_->size_;
-      arg.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
-      int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
-      if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
-        timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
-      }
-      if (OB_FAIL(lob_remote_query_with_retry(param, dst_addr, arg, timeout, rpc_buffer, handle))) {
-        LOG_WARN("failed to do remote query", K(ret), K(arg));
+    ObLobRemoteQueryCtx *remote_ctx = reinterpret_cast<ObLobRemoteQueryCtx*>(param.remote_query_ctx_);
+    int64_t cur_position = remote_ctx->rpc_buffer_.get_position();
+    while (OB_SUCC(ret) && remote_ctx->handle_.has_more()) {
+      cur_position = remote_ctx->rpc_buffer_.get_position();
+      if (OB_FAIL(remote_ctx->handle_.get_more(remote_ctx->rpc_buffer_))) {
+        ret = OB_DATA_SOURCE_TIMEOUT;
+      } else if (remote_ctx->rpc_buffer_.get_position() < 0) {
+        ret = OB_ERR_SYS;
+      } else if (cur_position == remote_ctx->rpc_buffer_.get_position()) {
+        if (!remote_ctx->handle_.has_more()) {
+          ret = OB_ITER_END;
+          LOG_DEBUG("empty rpc buffer, no more data", K(remote_ctx->rpc_buffer_));
+        } else {
+          ret = OB_ERR_SYS;
+          LOG_ERROR("rpc buffer has no data", K(ret), K(remote_ctx->rpc_buffer_));
+        }
       } else {
-        int64_t cur_position = rpc_buffer.get_position();
-        while (OB_SUCC(ret) && handle.has_more()) {
-          cur_position = rpc_buffer.get_position();
-          if (OB_FAIL(handle.get_more(rpc_buffer))) {
-            ret = OB_DATA_SOURCE_TIMEOUT;
-          } else if (rpc_buffer.get_position() < 0) {
-            ret = OB_ERR_SYS;
-          } else if (cur_position == rpc_buffer.get_position()) {
-            if (!handle.has_more()) {
-              ret = OB_ITER_END;
-              LOG_DEBUG("empty rpc buffer, no more data", K(rpc_buffer));
-            } else {
-              ret = OB_ERR_SYS;
-              LOG_ERROR("rpc buffer has no data", K(ret), K(rpc_buffer));
-            }
-          } else {
-            LOG_DEBUG("get more data", K(rpc_buffer));
-          }
-        }
-        if (ret == OB_ITER_END) {
-          ret = OB_SUCCESS;
-        }
-        // do header decode
-        if (OB_SUCC(ret)) {
-          int64_t rpc_buffer_pos = 0;
-          if (OB_FAIL(serialization::decode(rpc_buffer.get_data(),
-            rpc_buffer.get_position(), rpc_buffer_pos, header))) {
-            LOG_WARN("failed to decode lob query block", K(ret), K(rpc_buffer));
-          } else if (!header.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid header", K(ret), K(header));
-          } else {
-            len = static_cast<uint64_t>(header.size_);
-          }
-        }
+        LOG_DEBUG("get more data", K(remote_ctx->rpc_buffer_));
+      }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+    // do header decode
+    if (OB_SUCC(ret)) {
+      int64_t rpc_buffer_pos = 0;
+      if (OB_FAIL(serialization::decode(remote_ctx->rpc_buffer_.get_data(),
+        remote_ctx->rpc_buffer_.get_position(), rpc_buffer_pos, header))) {
+        LOG_WARN("failed to decode lob query block", K(ret), K(remote_ctx->rpc_buffer_));
+      } else if (!header.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid header", K(ret), K(header));
+      } else {
+        len = static_cast<uint64_t>(header.size_);
       }
     }
   }
@@ -2360,45 +2494,43 @@ int ObLobManager::getlength(ObLobAccessParam& param, uint64_t &len)
     } else { // do meta scan
       bool is_remote_lob = false;
       common::ObAddr dst_addr;
+      ObLobMetaScanIter meta_iter;
+      param.lob_data_ = reinterpret_cast<ObLobData*>(lob_common->buffer_);
+      // mock do full scan
+      param.offset_ = 0;
+      param.len_ = UINT64_MAX;
       if (OB_FAIL(is_remote(param, is_remote_lob, dst_addr))) {
         LOG_WARN("check is remote failed.", K(ret), K(param));
+      } else if (OB_FAIL(lob_query_with_retry(param, dst_addr, is_remote_lob, meta_iter,
+                         ObLobQueryArg::QueryType::GET_LENGTH, param.remote_query_ctx_))) {
+        LOG_WARN("fail to do lob query with retry", K(ret), K(is_remote_lob), K(dst_addr));
       } else if (is_remote_lob) {
         if (OB_FAIL(getlength_remote(param, dst_addr, len))) {
           LOG_WARN("fail to get length remote", K(ret));
         }
       } else {
-        ObLobMetaScanIter meta_iter;
-        ObLobCtx lob_ctx = lob_ctx_;
         if (!lob_common->is_init_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid lob common header for out row.", K(ret), KPC(lob_common));
         } else {
-          param.lob_data_ = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-          // mock do full scan
-          param.offset_ = 0;
-          param.len_ = UINT64_MAX;
-          if (OB_FAIL(lob_ctx.lob_meta_mngr_->scan(param, meta_iter))) {
-            LOG_WARN("do lob meta scan failed.", K(ret), K(param));
-          } else {
-            ObLobQueryResult result;
-            while (OB_SUCC(ret)) {
-              ret = meta_iter.get_next_row(result.meta_result_);
-              if (OB_FAIL(ret)) {
-                if (ret == OB_ITER_END) {
-                } else {
-                  LOG_WARN("failed to get next row.", K(ret));
-                }
-              } else if (ObTimeUtility::current_time() > param.timeout_) {
-                ret = OB_TIMEOUT;
-                int64_t cur_time = ObTimeUtility::current_time();
-                LOG_WARN("query timeout", K(cur_time), K(param.timeout_), K(ret));
+          ObLobQueryResult result;
+          while (OB_SUCC(ret)) {
+            ret = meta_iter.get_next_row(result.meta_result_);
+            if (OB_FAIL(ret)) {
+              if (ret == OB_ITER_END) {
               } else {
-                len += result.meta_result_.info_.char_len_;
+                LOG_WARN("failed to get next row.", K(ret));
               }
+            } else if (ObTimeUtility::current_time() > param.timeout_) {
+              ret = OB_TIMEOUT;
+              int64_t cur_time = ObTimeUtility::current_time();
+              LOG_WARN("query timeout", K(cur_time), K(param.timeout_), K(ret));
+            } else {
+              len += result.meta_result_.info_.char_len_;
             }
-            if (ret == OB_ITER_END) {
-              ret = OB_SUCCESS;
-            }
+          }
+          if (ret == OB_ITER_END) {
+            ret = OB_SUCCESS;
           }
         }
       }
@@ -3740,16 +3872,32 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
 
 
 /*************ObLobQueryIter*****************/
-int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx)
+int ObLobQueryIter::open(ObString &data, uint32_t byte_offset, uint32_t byte_len, ObCollationType cs, bool is_reverse)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(lob_ctx.lob_meta_mngr_) ||
-      OB_ISNULL(lob_ctx.lob_piece_mngr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob ctx.", K(ret), K(lob_ctx));
-  } else if (OB_FAIL(lob_ctx.lob_meta_mngr_->scan(param, meta_iter_))) {
-    LOG_WARN("open meta iter failed.");
-  } else {
+  cur_pos_ = 0;
+  inner_data_.assign_ptr(data.ptr() + byte_offset, byte_len);
+  is_inited_ = true;
+  is_in_row_ = true;
+  is_reverse_ = is_reverse;
+  cs_type_ = cs;
+  return ret;
+}
+
+int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx, common::ObAddr &dst_addr, bool &is_remote)
+{
+  int ret = OB_SUCCESS;
+  ObLobManager *lob_manager = MTL(ObLobManager*);
+  if (OB_FAIL(lob_manager->lob_query_with_retry(param, dst_addr, is_remote, meta_iter_,
+              ObLobQueryArg::QueryType::READ, remote_query_ctx_))) {
+    LOG_WARN("fail to do lob query with retry", K(ret), K(is_remote), K(dst_addr));
+  } else if (is_remote) { // init remote scan
+    param_ = param;
+    is_reverse_ = param.scan_backward_;
+    cs_type_ = param.coll_type_;
+    is_inited_ = true;
+    is_remote_ = true;
+  } else { // init local scan
     last_data_buf_len_ = OB_MIN(ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE, param.byte_size_);
     last_data_ptr_ = reinterpret_cast<char*>(param.allocator_->alloc(last_data_buf_len_));
     if (OB_ISNULL(last_data_ptr_)) {
@@ -3763,56 +3911,6 @@ int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx)
       is_reverse_ = param.scan_backward_;
       cs_type_ = param.coll_type_;
       last_data_.assign_buffer(last_data_ptr_, last_data_buf_len_);
-    }
-  }
-  return ret;
-}
-
-int ObLobQueryIter::open(ObString &data, uint32_t byte_offset, uint32_t byte_len, ObCollationType cs, bool is_reverse)
-{
-  int ret = OB_SUCCESS;
-  cur_pos_ = 0;
-  inner_data_.assign_ptr(data.ptr() + byte_offset, byte_len);
-  is_inited_ = true;
-  is_in_row_ = true;
-  is_reverse_ = is_reverse;
-  cs_type_ = cs;
-  return ret;
-}
-
-int ObLobQueryIter::open(ObLobAccessParam &param, common::ObAddr dst_addr)
-{
-  int ret = OB_SUCCESS;
-  ObLobLocatorV2 *lob_locator = param.lob_locator_;
-  if (OB_ISNULL(lob_locator)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("lob locator is null.", K(ret), K(param));
-  } else if (OB_FAIL(remote_reader_.open(param, rpc_buffer_))) {
-    LOG_WARN("failed to open remote reader", K(ret));
-  } else {
-    ObLobManager *lob_manager = MTL(ObLobManager*);
-    // build arg
-    query_arg_.tenant_id_ = param.tenant_id_;
-    query_arg_.offset_ = param.offset_;
-    query_arg_.len_ = param.len_;
-    query_arg_.cs_type_ = param.coll_type_;
-    query_arg_.qtype_ = ObLobQueryArg::QueryType::READ;
-    query_arg_.scan_backward_ = param.scan_backward_;
-    query_arg_.lob_locator_.ptr_ = param.lob_locator_->ptr_;
-    query_arg_.lob_locator_.size_ = param.lob_locator_->size_;
-    query_arg_.lob_locator_.has_lob_header_ = param.lob_locator_->has_lob_header_;
-    int64_t timeout = param.timeout_ - ObTimeUtility::current_time();
-    if (timeout < ObStorageRpcProxy::STREAM_RPC_TIMEOUT) {
-      timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
-    }
-    if (OB_FAIL(lob_manager->lob_remote_query_with_retry(param, dst_addr, query_arg_, timeout, rpc_buffer_, handle_))) {
-      LOG_WARN("failed to do remote query", K(ret), K(query_arg_));
-    } else {
-      param_ = param;
-      is_reverse_ = param.scan_backward_;
-      cs_type_ = param.coll_type_;
-      is_inited_ = true;
-      is_remote_ = true;
     }
   }
   return ret;
@@ -3952,12 +4050,14 @@ int ObLobQueryIter::get_next_row(ObString& data)
     uint64_t st_len = data.length();
     ObLobQueryBlock block;
     ObString cur_buffer;
+    ObLobRemoteQueryCtx *remote_ctx = reinterpret_cast<ObLobRemoteQueryCtx*>(remote_query_ctx_);
     while (OB_SUCC(ret) && !has_fill_full) {
       // first try fill buffer remain data to output
       has_fill_full = fill_buffer_to_data(data);
       if (has_fill_full) {
         // data has been filled full, do nothing
-      } else if (OB_FAIL(remote_reader_.get_next_block(param_, rpc_buffer_, handle_, block, last_data_))) {
+      } else if (OB_FAIL(remote_ctx->remote_reader_.get_next_block(param_,
+                         remote_ctx->rpc_buffer_, remote_ctx->handle_, block, last_data_))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fail to get block from remote reader", K(ret));
         }
