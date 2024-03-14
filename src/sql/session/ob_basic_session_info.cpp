@@ -4711,6 +4711,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   ObString sql_id;
   OB_UNIS_DECODE(sql_id);
   if (OB_SUCC(ret)) {
+    set_cur_sql_id(sql_id.ptr());
+  }
+  if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
