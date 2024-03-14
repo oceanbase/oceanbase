@@ -1193,6 +1193,7 @@ public:
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
+  static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
 
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,
