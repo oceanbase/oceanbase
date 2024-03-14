@@ -1129,10 +1129,10 @@ int ObDirectLoadSliceWriter::fill_aggregated_column_group(
           LOG_WARN("append row failed", K(ret), KPC(stored_row));
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(datum_stores.push_back(cur_datum_store))) {
-          LOG_WARN("fail to push datum store", K(ret));
-        }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(datum_stores.push_back(cur_datum_store))) {
+        LOG_WARN("fail to push datum store", K(ret));
       }
     }
   }
