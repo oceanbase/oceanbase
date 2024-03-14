@@ -298,27 +298,34 @@ int ObLogMinerBatchRecordWriter::proceed_checkpoint_()
   bool popped = true;
   constexpr int64_t PRINT_INTERVAL = 10L * 1000 * 1000;
 
-  while (popped && OB_SUCC(batch_record_sw_.pop(func, curr_task, popped))) {
+  while (OB_SUCC(ret) && popped && OB_SUCC(batch_record_sw_.pop(func, curr_task, popped))) {
     // continuity check
     if (popped && nullptr != curr_task) {
       if (OB_INVALID_TIMESTAMP == ckpt.progress_ || ckpt.progress_ <= curr_task->last_trans_end_ts_) {
         ckpt.progress_ = curr_task->last_trans_end_ts_;
       } else {
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("the progress of meta_flush task rollbacked", K(ckpt), KPC(curr_task));
       }
 
       if (-1 == ckpt.cur_file_id_ || ckpt.cur_file_id_ <= curr_task->file_id_) {
         ckpt.cur_file_id_ = curr_task->file_id_;
       } else {
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("the file id of meta_flush task rollbacked", K(ckpt), KPC(curr_task));
       }
 
       if (curr_task->is_file_complete_) {
         if (-1 == ckpt.max_file_id_ || ckpt.max_file_id_ == curr_task->file_id_ - 1) {
           ckpt.max_file_id_ = curr_task->file_id_;
-        } else if (curr_task->is_file_complete_) {
+        } else {
+          ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("max file id of meta_flush task not expected", K(ckpt), KPC(curr_task));
         }
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(data_manager_->increase_record_count(curr_task->record_cnt_))) {
+        LOG_ERROR("failed to increase record count", K(curr_task->record_cnt_));
       }
 
       LOG_TRACE("task poped", KPC(curr_task));
@@ -346,8 +353,6 @@ int ObLogMinerBatchRecordWriter::proceed_checkpoint_()
 
       if (OB_FAIL(file_manager_->write_checkpoint(ckpt))) {
         LOG_ERROR("file_manager failed to write checkpoint", K(ckpt), K(curr_task));
-      } else if (OB_FAIL(data_manager_->increase_record_count(curr_task->record_cnt_))) {
-        LOG_ERROR("failed to increase record count", K(curr_task->record_cnt_));
       } else if (OB_FAIL(data_manager_->update_output_progress(ckpt.progress_))) {
         LOG_ERROR("failed to update output progress", K(ckpt));
       } else {

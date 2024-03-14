@@ -141,6 +141,8 @@ int ObLogMinerFileManager::append_records(const ObLogMinerBatchRecord &batch_rec
 
         if (OB_FAIL(write_meta_(file_id, meta))) {
           LOG_ERROR("write meta failed when appending batch_record", K(file_id), K(meta));
+        } else if (OB_FAIL(meta_map_.insert_or_update(FileIdWrapper(file_id), meta))) {
+          LOG_ERROR("failed to update meta_map", K(file_id), K(meta));
         }
       }
     }
