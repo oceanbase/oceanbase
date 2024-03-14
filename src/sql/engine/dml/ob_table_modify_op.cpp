@@ -1227,8 +1227,10 @@ int ObTableModifyOp::discharge_das_write_buffer()
     buffer_size_limit = simulate_buffer_size;
   }
   if (dml_rtctx_.get_row_buffer_size() >= buffer_size_limit) {
-    LOG_INFO("DASWriteBuffer full, now to write storage",
+    if (REACH_COUNT_INTERVAL(100)) {
+      LOG_INFO("DASWriteBuffer full, now to write storage",
              "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(dml_rtctx_.get_row_buffer_size()));
+    }
     ret = submit_all_dml_task();
   } else if (execute_single_row_) {
     if (REACH_COUNT_INTERVAL(100)) { // print log per 100 times.
