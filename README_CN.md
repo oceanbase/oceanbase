@@ -31,6 +31,9 @@
     <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
+    <a href="https://stackoverflow.com/questions/tagged/oceanbase">
+        <img alt="Ask on Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+    </a>
 </p>
 
 [English](README.md) | 中文版
@@ -135,5 +138,6 @@ OceanBase 数据库根据 Mulan 公共许可证版本 2 获得许可。有关详
 
 * [中文论坛](https://ask.oceanbase.com/)
 * [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
+* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
 * 钉钉群: 33254054 ([二维码](images/dingtalk.svg))
 * 微信群 (添加微信小助手: OBCE666)
