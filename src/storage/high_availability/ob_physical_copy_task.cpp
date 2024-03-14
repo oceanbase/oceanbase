@@ -1386,7 +1386,7 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(ls_, tablet_id_,
-      src_tablet_meta_, minor_tables_handle_))) {
+      src_tablet_meta_, minor_tables_handle_, restore_action_))) {
     LOG_WARN("failed to build table with ddl tables", K(ret));
   }
   return ret;
@@ -1432,7 +1432,7 @@ int ObTabletCopyFinishTask::check_finish_copy_tablet_data_valid_()
     LOG_WARN("tablet here should only has one", K(ret), KPC(tablet));
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::check_remote_logical_sstable_exist(tablet, is_logical_sstable_exist))) {
     LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
-  } else if (is_logical_sstable_exist && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+  } else if (is_logical_sstable_exist) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet still has remote logical sstable, unexpected !!!", K(ret), KPC(tablet));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
