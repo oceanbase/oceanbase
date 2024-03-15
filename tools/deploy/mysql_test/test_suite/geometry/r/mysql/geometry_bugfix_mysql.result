@@ -624,53 +624,7 @@ PRIMARY KEY (`p_id`),
 SPATIAL KEY `idx_geohash_code_geog_poi_7` (`geog_poi`) BLOCK_SIZE 16384 LOCAL,
 KEY `idx_poi_del_time_7` (`p_delete_time`) BLOCK_SIZE 16384 LOCAL
 );
-explain EXTENDED_NOADDR SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
-Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|p   |64      |2813        |
-===============================================
-Outputs & filters:
--------------------------------------
-  0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [(T_OP_LIKE, p.geohash_code, 'ws0emp%', '\\')], [BOOL(ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 
-      23.11138916015625)')))])
-      access([p.p_id], [p.geog_poi], [p.geohash_code], [p.p_delete_time]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([p.p_id]), range(MIN ; MAX)always true
-Used Hint:
--------------------------------------
-  /*+
-      
-  */
-Qb name trace:
--------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN 
-  stmt_id:1, SEL$1
-Outline Data: 
--------------------------------------
-  /*+
-      BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "p"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
-      END_OUTLINE_DATA
-  */
-Optimization Info:
--------------------------------------
-  p:
-      table_rows:10002
-      physical_range_rows:10002
-      logical_range_rows:10002
-      index_back_rows:0
-      output_rows:1
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[idx_geohash_code_geog_poi_7, idx_poi_del_time_7, geek_poi_7]
-      pruned_index_name:[idx_geohash_code_geog_poi_7]
-      stats version:0
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
-  Plan Type:
-      LOCAL
-  Note:
-      Degree of Parallelisim is 1 because of table property
+SELECT count(*) FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
+count(*)
+0
+drop table geek_poi_7;
