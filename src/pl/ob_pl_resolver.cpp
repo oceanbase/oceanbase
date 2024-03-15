@@ -62,6 +62,7 @@ int ObPLResolver::init(ObPLFunctionAST &func_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     func_ast.set_body(current_block_);
     arg_cnt_ = func_ast.get_arg_count();
     question_mark_cnt_ = 0;
@@ -359,11 +360,15 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_IF: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_IF, resolve_if, ObPLIfStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CASE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CASE, resolve_case, ObPLCaseStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_ITERATE: {
@@ -375,31 +380,43 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_WHILE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_WHILE, resolve_while, ObPLWhileStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FOR_LOOP, resolve_for_loop, ObPLForLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CURSOR_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CURSOR_FOR_LOOP, resolve_cursor_for_loop, ObPLCursorForLoopStmt);
-        if (!func.is_modifies_sql_data()) {
+        OX (--current_level_);
+        if (OB_SUCC(ret) && !func.is_modifies_sql_data()) {
           func.set_reads_sql_data();
         }
       }
         break;
       case T_SP_FORALL: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FORALL, resolve_forall, ObPLForAllStmt);
-        func.set_modifies_sql_data();
+        OX (--current_level_);
+        OX (func.set_modifies_sql_data());
       }
         break;
       case T_SP_REPEAT: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_REPEAT, resolve_repeat, ObPLRepeatStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_LOOP, resolve_loop, ObPLLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_RETURN: {
@@ -860,6 +877,7 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     package_ast.set_body(current_block_);
     external_ns_.set_dependency_table(&package_ast.get_dependency_table());
     current_block_->get_namespace().set_explicit_block();
@@ -16088,6 +16106,7 @@ int ObPLResolver::make_block(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to static cast", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&func.get_symbol_table());
     block->get_namespace().set_label_table(&func.get_label_table());
     block->get_namespace().set_type_table(&func.get_user_type_table());
@@ -16149,6 +16168,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to allocate block", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&package_ast.get_symbol_table());
     block->get_namespace().set_label_table(&package_ast.get_label_table());
     block->get_namespace().set_type_table(&package_ast.get_user_type_table());

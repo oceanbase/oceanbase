@@ -134,6 +134,7 @@ int ObPLCompiler::compile(
   FLTSpanGuard(pl_compile);
   bool use_jitted_expr = false;
   int64_t compile_start = ObTimeUtility::current_time();
+  uint64_t block_hash = OB_INVALID_ID;
   ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
 
   //Step 1：构造匿名块的ObPLFunctionAST
@@ -169,6 +170,11 @@ int ObPLCompiler::compile(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      block_hash = murmurhash(block->str_value_, block->str_len_, 0);
+      func.set_profiler_unit_info(block_hash, STANDALONE_ANONYMOUS);
+    }
+
     // Process Prepare SQL Ref
     if (OB_SUCC(ret)) {
       func.set_proc_type(STANDALONE_ANONYMOUS);
@@ -190,7 +196,7 @@ int ObPLCompiler::compile(
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
-        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
+        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
@@ -420,6 +426,9 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         }
       }
     }
+
+    OX (func.set_profiler_unit_info(id, func.get_proc_type()));
+
     int64_t resolve_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Resolve Time: ", K(id), K(resolve_end - parse_end));
 
@@ -443,7 +452,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                                         func_ast.get_id());
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
-        bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() &&
+        bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() && !cg.get_profile_mode() &&
             !cg.get_debug_mode() && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
         OZ (cg.init());
         // Step 4: try to obtain dll from disk
@@ -743,7 +752,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
                                         session_info_.get_database_id(),
                                         package.get_id());
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
-      bool need_read_dll = GCONF._enable_persistent_compiled_routine && package_ast.get_can_cached();
+      bool need_read_dll = GCONF._enable_persistent_compiled_routine && package_ast.get_can_cached() && session_info_.get_pl_profiler() == nullptr;
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
@@ -1383,7 +1392,19 @@ int ObPLCompiler::generate_package_routines(
              K(package.get_db_name()),
              K(package.get_name()),
              K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    uint64_t package_id = package.get_id();
+    if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+      package_id = ObTriggerInfo::get_package_trigger_id(package_id);
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < package.get_routine_table().count(); ++i) {
+      if (OB_NOT_NULL(package.get_routine_table().at(i))) {
+        package.get_routine_table().at(i)->set_profiler_unit_info(
+          package_id, package.get_routine_table().at(i)->get_proc_type());
+      }
+    }
+  }
   return ret;
 }
 

@@ -266,6 +266,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
   {"xmlsequence", "xml_sequence_type.sql", "xml_sequence_type_body.sql"},
+  {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
 #endif
 };
 
@@ -843,6 +844,9 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
   OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+
+  OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));
+
   if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
     // package ref cursor variable, refrence outside, do not destruct it.
   } else if (OB_FAIL(ret)) {
@@ -857,7 +861,32 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+int ObPLPackageManager::update_special_package_status(const ObPLResolveCtx &resolve_ctx,
+                                                      uint64_t package_id,
+                                                      const ObPLVar &var,
+                                                      const ObObj &old_val,
+                                                      const ObObj &new_val)
+{
+  int ret = OB_SUCCESS;
 
+  ObPLPackage *package_spec = nullptr;
+  ObPLPackage *package_body = nullptr;
+
+  OZ (get_cached_package(resolve_ctx, package_id, package_spec, package_body));
+
+  CK (OB_NOT_NULL(package_spec));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (get_tenant_id_by_object_id(package_id) == OB_SYS_TENANT_ID &&
+               0 == package_spec->get_name().compare("DBMS_PROFILER")) {
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (ObDBMSProfiler::notify_package_variable_change(resolve_ctx.session_info_, var, old_val, new_val));
+#endif // OB_BUILD_ORACLE_PL
+  }
+
+  return ret;
+}
 
 
 int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
@@ -1392,6 +1421,8 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_sessid() : 0;
+      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
+                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(tenant_id, tenant_schema_version))
@@ -1461,6 +1492,8 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       pc_ctx.key_.sessid_ =
         (get_tenant_id_by_object_id(package_id) != OB_SYS_TENANT_ID && resolve_ctx.session_info_.is_pl_debug_on())
           ? resolve_ctx.session_info_.get_sessid() : 0;
+      pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
+                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
       // get package from plan cache
       ObCacheObjGuard* cacheobj_guard = NULL;

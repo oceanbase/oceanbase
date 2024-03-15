@@ -792,6 +792,10 @@ public:
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
   static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
 
+  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
+  static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,

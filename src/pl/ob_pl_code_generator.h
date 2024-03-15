@@ -98,6 +98,8 @@ public:
     jit::ObLLVMFunction spi_check_composite_not_null_;
     jit::ObLLVMFunction spi_process_resignal_error_;
     jit::ObLLVMFunction spi_check_autonomous_trans_;
+    jit::ObLLVMFunction spi_pl_profiler_before_record_;
+    jit::ObLLVMFunction spi_pl_profiler_after_record_;
   };
 
   struct EHStack
@@ -189,7 +191,8 @@ public:
     di_adt_service_(di_helper),
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
-    oracle_mode_(oracle_mode)
+    oracle_mode_(oracle_mode),
+    profile_mode_(session_info_.get_pl_profiler() != nullptr)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -783,15 +786,24 @@ public:
   int generate_di_local_variable(const ObString &name, jit::ObLLVMDIType &di_type,
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
   bool get_debug_mode() { return debug_mode_; }
+  bool get_profile_mode() { return profile_mode_; }
+
+  int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
+  int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
+
 private:
   int init_di_adt_service();
   int generate_di_prototype();
+
+  int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
+
 private:
   jit::ObLLVMDIHelper &di_helper_;
   ObPLDIADTService di_adt_service_;
   ObLLVMDITypeMap di_user_type_map_;
   bool debug_mode_;
   bool oracle_mode_;
+  bool profile_mode_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor

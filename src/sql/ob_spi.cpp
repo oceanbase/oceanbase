@@ -42,6 +42,7 @@
 #include "sql/dblink/ob_tm_service.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_util.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "pl/ob_pl_allocator.h"
 namespace oceanbase
@@ -9442,6 +9443,111 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
 }
 
 #endif
+
+int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  ObSQLSessionInfo *session = nullptr;
+  ObPLExecState *curr_state = nullptr;
+  ObPLProfiler *profiler = nullptr;
+
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
+
+  CK (ctx->pl_ctx_);
+  CK (curr_state = ctx->pl_ctx_->get_current_state());
+
+  CK (OB_LIKELY(line > 0));
+  CK (OB_LIKELY(level >= 0));
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(profiler = session->get_pl_profiler())) {
+    ObPLProfilerTimeStack *time_stack = nullptr;
+
+    if (OB_ISNULL(time_stack = curr_state->get_profiler_time_stack())) {
+      CK (curr_state->get_allocator());
+
+      if (OB_SUCC(ret)) {
+        time_stack = OB_NEWx(ObPLProfilerTimeStack, curr_state->get_allocator(), *curr_state);
+
+        if (OB_ISNULL(time_stack)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("[DBMS_PROFILER] failed to allocate memory for pl profiler time stack",
+                   K(ret), KPC(profiler));
+        } else {
+          curr_state->set_profiler_time_stack(time_stack);
+        }
+      }
+    }
+
+    while (OB_SUCC(ret) && time_stack->get_last_level() >= level) {
+      if (OB_FAIL(time_stack->pop(*profiler))) {
+        LOG_WARN("[DBMS_PROFILER] failed to pop pl profiler time stack",
+                K(ret), KPC(profiler), K(line), K(level));
+      }
+    }
+
+    CK (OB_NOT_NULL(ctx->func_));
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(
+                   time_stack->push(ctx->func_->get_profiler_unit_info().first,
+                                    ctx->func_->get_profiler_unit_info().second,
+                                    line,
+                                    level))) {
+      LOG_WARN("[DBMS_PROFILER] failed to push into time stack",
+               K(ret), KPC(profiler), K(line), K(level));
+    }
+  }
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
+
+int ObSPIService::spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  ObSQLSessionInfo *session = nullptr;
+  ObPLExecState *curr_state = nullptr;
+  ObPLProfiler *profiler = nullptr;
+  ObPLProfilerTimeStack *time_stack = nullptr;
+
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
+
+  CK (ctx->pl_ctx_);
+  CK (curr_state = ctx->pl_ctx_->get_current_state());
+
+  CK (OB_LIKELY(line > 0));
+  CK (OB_LIKELY(level >= 0));
+
+  // TODO: GOTO/exception needs to check level
+  if (OB_SUCC(ret)
+        && OB_NOT_NULL(profiler = session->get_pl_profiler())
+        && OB_NOT_NULL(time_stack = curr_state->get_profiler_time_stack())) {
+    CK (OB_LIKELY(time_stack->get_last_level() != OB_INVALID_INDEX));
+
+    while (OB_SUCC(ret) && time_stack->get_last_level() >= level) {
+      if (OB_FAIL(time_stack->pop(*profiler))) {
+        LOG_WARN("[DBMS_PROFILER] failed to pop pl profiler time stack",
+                K(ret), KPC(profiler), K(line), K(level));
+      }
+    }
+  }
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
 
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
