@@ -2856,10 +2856,14 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
       LOG_WARN("failed to do remove duplicate exprs", K(ret));
     } else if (param_conds.count() == conditions.count()) {
       //do nothing
-    } else if (OB_FAIL(conditions.assign(param_conds))) {
-      LOG_WARN("assign array failed", K(ret));
     } else {
-      trans_happened = true;
+      OPT_TRACE("before remove duplicate exprs", conditions);
+      OPT_TRACE("after duplicate exprs happened", param_conds);
+      if (OB_FAIL(conditions.assign(param_conds))) {
+        LOG_WARN("assign array failed", K(ret));
+      } else {
+        trans_happened = true;
+      }
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
@@ -2929,8 +2933,15 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
     ObStmtCompareContext cmp_ctx;
     cmp_ctx.init(&query_ctx.calculable_items_);
     for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
+      if (OB_ISNULL(exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null pointer error");
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
-        if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
+        if (OB_ISNULL(exprs.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null pointer error");
+        } else if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
           if (OB_FAIL(exprs.remove(i))) {
             LOG_WARN("failed to remove", K(ret));
           } else if (!cmp_ctx.equal_param_info_.empty()) {
