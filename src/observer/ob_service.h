@@ -260,6 +260,7 @@ public:
       share::ObHBResponse &hb_response);
   int ob_admin_unlock_member_list(
       const obrpc::ObAdminUnlockMemberListOpArg &arg);
+  int check_server_empty(bool &server_empty);
 
 private:
   int get_role_from_palf_(
@@ -276,7 +277,6 @@ private:
       const bool need_checksum);
 
   int register_self();
-  int check_server_empty(bool &server_empty);
 
   int handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
