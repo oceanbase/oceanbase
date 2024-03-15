@@ -1112,7 +1112,7 @@ int ObTablet::init_with_update_medium_info(
       if (old_tablet.get_tablet_meta().has_next_tablet_) {
         set_next_tablet_guard(old_tablet.next_tablet_guard_);
       }
-      LOG_INFO("succeeded to init tablet with update medium info", K(ret), K(this), K(old_tablet));
+      LOG_INFO("succeeded to init tablet with update medium info", K(ret), KPC(this));
       is_inited_ = true;
     }
   }
