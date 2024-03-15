@@ -112,6 +112,8 @@ struct ObMvccWriteResult {
   // is_new_locked_ indicates whether you are locking the row for the first
   // time for your txn(mainly used for deadlock detector and detecting errors)
   bool is_new_locked_;
+  // is_mvcc_undo_ indicates whether the tx_node_ is inserted
+  bool is_mvcc_undo_;
   // lock_state_ is used for deadlock detector and lock wait mgr
   storage::ObStoreRowLockState lock_state_;
   // tx_node_ is the node used for insert, whether it is inserted is decided by
@@ -123,6 +125,7 @@ struct ObMvccWriteResult {
   TO_STRING_KV(K_(can_insert),
                K_(need_insert),
                K_(is_new_locked),
+               K_(is_mvcc_undo),
                K_(lock_state),
                K_(is_checked),
                KPC_(tx_node));
@@ -131,19 +134,21 @@ struct ObMvccWriteResult {
     : can_insert_(false),
     need_insert_(false),
     is_new_locked_(false),
+    is_mvcc_undo_(false),
     lock_state_(),
     tx_node_(NULL),
     is_checked_(false) {}
 
   // has_insert indicates whether the insert is succeed
   // It is decided by both can_insert_ and need_insert_
-  bool has_insert() const { return can_insert_ && need_insert_; }
+  bool has_insert() const { return can_insert_ && need_insert_ && !is_mvcc_undo_; }
 
   void reset()
   {
     can_insert_ = false;
     need_insert_ = false;
     is_new_locked_ = false;
+    is_mvcc_undo_ = false;
     lock_state_.reset();
     tx_node_ = NULL;
     is_checked_ = false;

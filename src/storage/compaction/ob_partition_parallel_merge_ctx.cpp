@@ -97,7 +97,7 @@ int ObParallelMergeCtx::init(compaction::ObTabletMergeCtx &merge_ctx)
       if (OB_FAIL(init_parallel_mini_minor_merge(merge_ctx))) {
         STORAGE_LOG(WARN, "Failed to init parallel setting for mini minor merge", K(ret));
       }
-    } else if (tablet_size > 0 && is_major_merge_type(merge_ctx.param_.merge_type_)) {
+    } else if (tablet_size > 0 && is_major_or_meta_merge_type(merge_ctx.param_.merge_type_)) {
       if (OB_FAIL(init_parallel_major_merge(merge_ctx))) {
         STORAGE_LOG(WARN, "Failed to init parallel major merge", K(ret));
       }
@@ -216,7 +216,7 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObTabletMergeCtx &
 {
   int ret = OB_SUCCESS;
   const ObITable *first_table = nullptr;
-  if (OB_UNLIKELY(!is_major_merge_type(merge_ctx.param_.merge_type_))) {
+  if (OB_UNLIKELY(!is_major_or_meta_merge_type(merge_ctx.param_.merge_type_))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init parallel major merge", K(ret), K(merge_ctx));
   } else if (OB_UNLIKELY(nullptr == (first_table = merge_ctx.tables_handle_.get_table(0))

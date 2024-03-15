@@ -237,6 +237,7 @@ public:  // ObTxDataTable
   int get_start_tx_scn(share::SCN &start_tx_scn);
 
   void reuse_memtable_handles_cache();
+  void update_calc_upper_info();
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd);
 

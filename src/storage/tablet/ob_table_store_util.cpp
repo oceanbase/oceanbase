@@ -387,6 +387,16 @@ ObITable *ObSSTableArray::get_boundary_table(const bool is_last) const
   return sstable;
 }
 
+int64_t ObSSTableArray::get_last_snapshot_version() const
+{
+  int64_t last_snapshot_version = 0;
+  ObITable *sstable = get_boundary_table(true /*is_last*/);
+  if (OB_NOT_NULL(sstable)) {
+    last_snapshot_version = sstable->get_snapshot_version();
+  }
+  return last_snapshot_version;
+}
+
 int ObSSTableArray::get_all_tables(ObIArray<ObITable *> &tables) const
 {
   int ret = OB_SUCCESS;

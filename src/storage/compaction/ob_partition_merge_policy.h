@@ -16,6 +16,7 @@
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "share/ob_table_range.h"
+#include "share/schema/ob_table_schema.h"
 namespace oceanbase
 {
 namespace storage
@@ -87,6 +88,7 @@ public:
       bool &can_merge,
       bool &need_force_freeze);
   static int generate_parallel_minor_interval(
+      const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       const ObGetMergeTablesResult &input_result,
       ObMinorExecuteRangeMgr &minor_range_mgr,
@@ -96,8 +98,8 @@ public:
       const ObTablet &tablet,
       int64_t &min_snapshot,
       int64_t &max_snapshot,
-      const bool check_table_cnt,
-      const bool is_multi_version_merge);
+      const bool check_table_cnt = false,
+      const bool is_multi_version_merge = false);
 
   static int diagnose_table_count_unsafe(
       const storage::ObMergeType merge_type,
@@ -138,6 +140,7 @@ private:
       storage::ObGetMergeTablesResult &result,
       bool &need_check_tablet);
   static int refine_minor_merge_result(
+      const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
       storage::ObGetMergeTablesResult &result);
 
@@ -230,8 +233,21 @@ public:
     INVALID_REASON
   };
 
+  enum AdaptiveCompactionPolicy : uint8 {
+    NORMAL = 0,   // only medium
+    ADVANCED = 1, // medium with meta
+    EXTREME = 2,  // only meta
+    INVALID_POLICY
+  };
+
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
+  static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
+  static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
+  static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);
+  static bool take_advanced_policy(const share::schema::ObTableModeFlag &mode);
+  static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -242,44 +258,45 @@ public:
   static int get_adaptive_merge_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
+  static int check_tombstone_reason(
+      const storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason);
 
 private:
-  static int find_meta_major_tables(const storage::ObTablet &tablet,
-                                    storage::ObGetMergeTablesResult &result);
-  static int find_base_table_and_inc_version(storage::ObITable *last_major_table,
-                                             storage::ObITable *last_minor_table,
-                                             storage::ObITable *&meta_base_table,
-                                             int64_t &merge_inc_version);
-  static int add_meta_merge_result(storage::ObITable *table,
+  static int find_adaptive_merge_tables(
+        const ObMergeType &merge_type,
+        const storage::ObTablet &tablet,
+        storage::ObGetMergeTablesResult &result);
+  static int add_meta_merge_result(
+      const ObMergeType &merge_type,
+      storage::ObITable *table,
       const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
       const bool update_snapshot_flag);
 private:
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_tombstone_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_ineffecient_read(
       const storage::ObTabletStatAnalyzer &analyzer,
-      const storage::ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
   static int check_inc_sstable_row_cnt_percentage(
       const ObTablet &tablet,
       AdaptiveMergeReason &merge_reason);
 
-private:
+public:
   static constexpr int64_t SCHEDULE_META_MERGE_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t INC_ROW_COUNT_THRESHOLD = 100L * 1000L; // 10w
-  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 30L * 1000L; // 3w
-  static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 5w
+  static constexpr int64_t TOMBSTONE_ROW_COUNT_THRESHOLD = 250L * 1000L; // 25w, the same as ObFastFreezeChecker::TOMBSTONE_DEFAULT_ROW_COUNT
+  static constexpr int64_t BASE_ROW_COUNT_THRESHOLD = 10L * 1000L; // 1w
   static constexpr int64_t LOAD_DATA_SCENE_THRESHOLD = 70;
   static constexpr int64_t TOMBSTONE_SCENE_THRESHOLD = 50;
   static constexpr float INC_ROW_COUNT_PERCENTAGE_THRESHOLD = 0.5;
   static constexpr int64_t TRANS_STATE_DETERM_ROW_CNT_THRESHOLD = 10000L; // 10k
+  static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
 };
 
 

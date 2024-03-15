@@ -43,7 +43,7 @@ namespace storage
 #define TX_DATA_MEM_LEAK_DEBUG_CODE
 #endif
 
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 30 * 1000 * 1000; // 30 seconds
+int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 5 * 1000 * 1000; // 5 seconds
 
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
@@ -1027,6 +1027,11 @@ int ObTxDataTable::check_min_start_in_ctx_(const SCN &sstable_end_scn,
   return ret;
 }
 
+void ObTxDataTable::update_calc_upper_info()
+{
+  (void)update_calc_upper_info_(SCN::max_scn());
+}
+
 void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
 {
   int64_t cur_ts = common::ObTimeUtility::fast_current_time();
@@ -1064,6 +1069,8 @@ void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
       } else {
         calc_upper_info_ = tmp_calc_upper_info;
       }
+
+      STORAGE_LOG(INFO, "GENGLI update calc upper info once", K(calc_upper_info_));
     }
   }
 }

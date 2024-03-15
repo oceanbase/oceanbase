@@ -868,9 +868,16 @@ int ObCreateTableHelper::generate_table_schema_()
 
   // to make try_format_partition_schema() passed
   const uint64_t mock_table_id = OB_MIN_USER_OBJECT_ID + 1;
+  uint64_t compat_version = 0;
   bool is_oracle_mode = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_3_0 && arg_.schema_.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K_(tenant_id), K(compat_version), K(arg_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",

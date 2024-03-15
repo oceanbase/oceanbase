@@ -479,6 +479,7 @@ ob_set_subtarget(ob_storage common
   ob_common_id_utils.cpp
   ob_tenant_tablet_stat_mgr.cpp
   ob_storage_async_rpc.cpp
+  ob_gc_upper_trans_helper.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed

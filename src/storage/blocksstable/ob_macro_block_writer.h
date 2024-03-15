@@ -189,6 +189,7 @@ private:
   int flush_reuse_macro_block(const ObDataMacroBlockMeta &macro_meta);
   int open_bf_cache_writer(const ObDataStoreDesc &desc, const int64_t bloomfilter_size);
   int flush_bf_to_cache(ObMacroBloomFilterCacheWriter &bf_cache_writer, const int32_t row_count);
+  int update_micro_commit_info(const ObDatumRow &row);
   void dump_micro_block(ObIMicroBlockWriter &micro_writer);
   void dump_macro_block(ObMacroBlock &macro_block);
 public:
