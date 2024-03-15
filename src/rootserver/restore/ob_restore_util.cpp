@@ -828,27 +828,33 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
   } else {
     ObPhysicalRestoreTableOperator restore_op;
+    ObRestorePersistHelper persist_helper;
     if (OB_FAIL(restore_op.init(&trans, tenant_id, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init restore op", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
+      LOG_WARN("failed to init persist helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(persist_helper.record_restore_info(trans))) {
+      LOG_WARN("failed to record restore info", KR(ret), K(tenant_id));
     } else if (OB_FAIL(restore_op.remove_job(job_id))) {
       LOG_WARN("failed to remove job", KR(ret), K(tenant_id), K(job_id));
     } else {
       ObHisRestoreJobPersistInfo history_info;
       ObRestoreProgressPersistInfo restore_progress;
-      ObRestorePersistHelper persist_helper;
       ObRestoreJobPersistKey key;
       common::ObArray<share::ObLSRestoreProgressPersistInfo> ls_restore_progress_infos;
       key.tenant_id_ = tenant_id;
       key.job_id_ = job_info.get_job_id();
-      if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
-        LOG_WARN("failed to init persist helper", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(persist_helper.get_restore_process(
+      if (OB_FAIL(persist_helper.get_restore_process(
                      trans, key, restore_progress))) {
         LOG_WARN("failed to get restore progress", KR(ret), K(key));
       } else if (OB_FAIL(history_info.init_with_job_process(
                      job_info, restore_progress))) {
         LOG_WARN("failed to init history", KR(ret), K(job_info), K(restore_progress));
       } else if (history_info.is_restore_success()) { // restore succeed, no need to record comment
+        // move ls restore progress to history.
+        if (OB_FAIL(persist_helper.move_ls_restore_progress_to_history(trans))) {
+          LOG_WARN("failed to move ls restore progress to history", K(ret));
+        }
       } else if (OB_FAIL(persist_helper.get_all_ls_restore_progress(trans, ls_restore_progress_infos))) {
         LOG_WARN("failed to get ls restore progress", K(ret));
       } else {

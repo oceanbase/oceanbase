@@ -156,6 +156,10 @@ public:
       const common::ObIArray<ObAddr> &member_addr_list,
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
+  static void transfer_tablet_restore_stat(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

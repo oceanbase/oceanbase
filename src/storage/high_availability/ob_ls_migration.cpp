@@ -904,7 +904,8 @@ ObStartMigrationTask::ObStartMigrationTask()
     ctx_(nullptr),
     bandwidth_throttle_(nullptr),
     svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr)
+    storage_rpc_(nullptr),
+    sql_proxy_(nullptr)
 {
 }
 
@@ -934,6 +935,7 @@ int ObStartMigrationTask::init()
     bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
     svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
     storage_rpc_ = migration_dag_net->get_storage_rpc();
+    sql_proxy_ = migration_dag_net->get_sql_proxy();
     ctx_->reuse();
     is_inited_ = true;
     LOG_INFO("succeed init start migration task", "ls id", ctx_->arg_.ls_id_,
@@ -1571,7 +1573,31 @@ int ObStartMigrationTask::fill_restore_arg_if_needed_()
   } else if (OB_FAIL(ls->get_ls_restore_handler()->fill_restore_arg())) {
     LOG_WARN("failed to fill restore arg", K(ret), KPC(ls), KPC(ctx_));
   } else {
-    LOG_INFO("succeed fill restore arg during migration", "ls_id", ctx_->arg_.ls_id_, K(restore_status));
+    // report restore stat
+    ObRestorePersistHelper helper;
+    ObLSRestoreProgressPersistInfo ls_restore_progress;
+    ls_restore_progress.key_.tenant_id_ = ctx_->tenant_id_;
+    ls_restore_progress.key_.job_id_ = ls->get_ls_restore_handler()->get_restore_ctx().job_id_;
+    ls_restore_progress.key_.ls_id_ = ls->get_ls_id();
+    ls_restore_progress.key_.addr_ = GCTX.self_addr();
+    ls_restore_progress.status_ = restore_status;
+
+    ObLSRestoreJobPersistKey dest_ls_key;
+    dest_ls_key.tenant_id_ = ctx_->tenant_id_;
+    dest_ls_key.job_id_ = ls->get_ls_restore_handler()->get_restore_ctx().job_id_;
+    dest_ls_key.ls_id_ = ls->get_ls_id();
+    dest_ls_key.addr_ = ctx_->minor_src_.src_addr_;
+
+    if (OB_FAIL(helper.init(ctx_->tenant_id_, share::OBCG_STORAGE))) {
+      LOG_WARN("fail to init restore table helper", K(ret), K(ret), KPC(ls), KPC(ctx_));
+    } else if (!restore_status.is_before_restore_to_consistent_scn()
+               && OB_FAIL(helper.get_ls_total_tablet_cnt(*sql_proxy_, dest_ls_key, ls_restore_progress.tablet_count_))) {
+      LOG_WARN("fail to get total tablet cnt", K(ret), K(dest_ls_key), K(restore_status));
+    } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*sql_proxy_, ls_restore_progress))) {
+      LOG_WARN("fail to insert initial restore progress", K(ret), K(ls_restore_progress));
+    } else {
+      LOG_INFO("succeed fill restore arg during migration", "ls_id", ctx_->arg_.ls_id_, K(restore_status));
+    }
   }
 
   return ret;

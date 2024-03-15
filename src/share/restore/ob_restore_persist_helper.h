@@ -154,6 +154,12 @@ struct ObLSRestoreJobPersistKey final : public ObIInnerTableKey
 
   ObRestoreJobPersistKey generate_restore_job_key() const;
 
+  void reset()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    job_id_ = -1;
+  }
+
   // Return if primary key valid.
   bool is_pkey_valid() const override;
 
@@ -417,6 +423,12 @@ public:
       const ObRestoreJobPersistKey &ls_key,
       ObRestoreProgressPersistInfo &persist_info) const;
 
+  int update_restore_process(
+      common::ObISQLClient &proxy,
+      const ObRestoreJobPersistKey &key,
+      const int64_t total_tablet_cnt,
+      const int64_t finish_tablet_cnt) const;
+
   //__all_restore_job_history
   int insert_restore_job_history(
        common::ObISQLClient &proxy, const ObHisRestoreJobPersistInfo &persist_info) const;
@@ -457,11 +469,38 @@ public:
 
   int update_ls_restore_status(
       common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-      const share::ObTaskId &trace_id, const share::ObLSRestoreStatus &status, 
-      const int result, const char *comment) const;
+      const share::ObTaskId &trace_id, const share::ObLSRestoreStatus &status,
+      const int64_t finished_tablet_cnt, const int result, const char *comment) const;
   
   int get_all_ls_restore_progress(common::ObISQLClient &proxy, 
       ObIArray<ObLSRestoreProgressPersistInfo> &ls_restore_progress_info);
+
+
+  int set_ls_total_tablet_cnt(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      const int64_t total_tablet_cnt) const;
+  int set_ls_finish_tablet_cnt(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      const int64_t finish_tablet_cnt) const;
+
+  int get_ls_total_tablet_cnt(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      int64_t &total_tablet_cnt) const;
+  int get_ls_finish_tablet_cnt(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+      int64_t &finish_tablet_cnt) const;
+  int inc_total_tablet_count_by_one(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key) const;
+  int dec_total_tablet_count_by_one(
+      common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key) const;
+  // The restore of one tablet is transfered from src ls to dest ls.
+  int transfer_tablet(
+    common::ObMySQLTransaction &trans, const ObLSRestoreJobPersistKey &src_ls_key,
+    const ObLSRestoreJobPersistKey &dest_ls_key) const;
+  // let finish tablet count be equal to total tablet count.
+  int force_correct_restore_stat(common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key) const;
+  int move_ls_restore_progress_to_history(common::ObMySQLTransaction &trans) const;
+  int record_restore_info(common::ObMySQLTransaction &trans) const;
 
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
 
