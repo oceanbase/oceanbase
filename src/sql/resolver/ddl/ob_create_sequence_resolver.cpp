@@ -104,8 +104,6 @@ int ObCreateSequenceResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  
-
   /* sequence options */
   if (OB_SUCC(ret) && NULL != parse_tree.children_[1]) {
     if (OB_UNLIKELY(T_SEQUENCE_OPTION_LIST != parse_tree.children_[1]->type_)) {
@@ -114,7 +112,8 @@ int ObCreateSequenceResolver::resolve(const ParseNode &parse_tree)
                 K(parse_tree.children_[1]->type_), K(ret));
     } else {
       ObSequenceResolver<ObCreateSequenceStmt> resolver;
-      if (OB_FAIL(resolver.resolve_sequence_options(mystmt, parse_tree.children_[1]))) {
+      if (OB_FAIL(resolver.resolve_sequence_options(session_info_->get_effective_tenant_id(),
+                                                    mystmt, parse_tree.children_[1]))) {
         LOG_WARN("resolve sequence options failed", K(ret));
       }
     }

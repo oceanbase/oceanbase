@@ -2342,11 +2342,24 @@ int ObSetTPResolver::resolve(const ParseNode &parse_tree)
             switch (action_node->type_)
             {
             case T_TP_NO: {        // event no
-              stmt->get_rpc_arg().event_no_ = value->value_;
-            } break;
-            case T_TP_NAME: {
-              stmt->get_rpc_arg().event_name_.assign_ptr(
+              if (stmt->get_rpc_arg().event_name_ != "") {
+                ret = OB_NOT_SUPPORTED;
+                SQL_RESV_LOG(WARN, "Setting tp_no and tp_name simultaneously is not supported.");
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Setting tp_no and tp_name simultaneously is");
+              } else {
+                stmt->get_rpc_arg().event_no_ = value->value_;
+              }
+              break;
+            }
+            case T_TP_NAME: {     // event name
+              if (stmt->get_rpc_arg().event_no_ != 0) {
+                ret = OB_NOT_SUPPORTED;
+                SQL_RESV_LOG(WARN, "Setting tp_no and tp_name simultaneously is not supported.");
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Setting tp_no and tp_name simultaneously is");
+              } else {
+                stmt->get_rpc_arg().event_name_.assign_ptr(
                   value->str_value_, static_cast<ObString::obstr_size_t>(value->str_len_));
+              }
               break;
             }
             case T_OCCUR: {        // occurrence
@@ -4380,7 +4393,7 @@ int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<
 int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;;
+  uint64_t tenant_data_version = 0;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
   if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));

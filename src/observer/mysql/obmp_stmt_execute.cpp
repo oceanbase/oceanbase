@@ -1381,6 +1381,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_NOT_NULL(plan_ctx)) {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
+        audit_record.total_memstore_read_row_count_ = plan_ctx->get_total_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
 

@@ -46,7 +46,10 @@ namespace obmysql {
   class ObSqlNioServer;
 }
 namespace sql {
-  namespace dtl { class ObTenantDfc; }
+  namespace dtl {
+    class ObTenantDfc;
+    class ObDTLIntermResultManager;
+  }
   class ObTenantSQLSessionMgr;
   class ObTenantSqlMemoryManager;
   class ObPlanMonitorNodeList;
@@ -287,6 +290,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       obmysql::ObMySQLRequestManager*,               \
       transaction::ObTenantWeakReadService*,         \
       sql::ObTenantSqlMemoryManager*,                \
+      sql::dtl::ObDTLIntermResultManager*,           \
       sql::ObPlanMonitorNodeList*,                   \
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \

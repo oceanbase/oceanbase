@@ -3075,7 +3075,8 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
           param.autoinc_first_part_num_ = table_schema->get_first_part_num();
           param.autoinc_table_part_num_ = table_schema->get_all_part_num();
           param.autoinc_col_id_ = column_id;
-          param.auto_increment_cache_size_ = auto_increment_cache_size;
+          param.auto_increment_cache_size_ = get_auto_increment_cache_size(
+            table_schema->get_auto_increment_cache_size(), auto_increment_cache_size);
           param.part_level_ = table_schema->get_part_level();
           ObObjType column_type = table_schema->get_column_schema(column_id)->get_data_type();
           param.autoinc_col_type_ = column_type;

@@ -60,6 +60,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"auto", AUTO},
   {"auto_increment", AUTO_INCREMENT},
   {"auto_increment_mode", AUTO_INCREMENT_MODE},
+  {"auto_increment_cache_size", AUTO_INCREMENT_CACHE_SIZE},
   {"autoextend_size", AUTOEXTEND_SIZE},
   {"availability", AVAILABILITY},
   {"avg", AVG},

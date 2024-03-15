@@ -2728,6 +2728,10 @@ int ObTableSqlService::gen_table_dml(
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_2_3_0
+             && OB_UNLIKELY(0 != table.get_auto_increment_cache_size())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("auto increment cache size not support before 4.2.3", K(ret), K(table));
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -2868,6 +2872,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         || (data_version >= DATA_VERSION_4_2_1_2
             && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
+        || (data_version >= DATA_VERSION_4_2_3_0
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2898,6 +2904,9 @@ int ObTableSqlService::gen_table_options_dml(
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_2_3_0 && (table.get_auto_increment_cache_size() != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table auto_increment_cache_size not support before 4.2.3", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -3000,6 +3009,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         || (data_version >= DATA_VERSION_4_2_1_2
             && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
+        || (data_version >= DATA_VERSION_4_2_3_0
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }

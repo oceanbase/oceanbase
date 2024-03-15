@@ -135,6 +135,7 @@
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
@@ -521,6 +522,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND2(ObDetectManager::mtl_new, ObDetectManager::mtl_init, nullptr, nullptr, nullptr, ObDetectManager::mtl_destroy);
     MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObDTLIntermResultManager::mtl_init, ObDTLIntermResultManager::mtl_start,
+    ObDTLIntermResultManager::mtl_stop, ObDTLIntermResultManager::mtl_wait, ObDTLIntermResultManager::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
@@ -1731,11 +1734,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_ERROR("disk reporter is null", K(ret));
     } else if (OB_FAIL(GCTX.disk_reporter_->delete_tenant_usage_stat(tenant_id))) {
       LOG_WARN("failed to delete_tenant_usage_stat", K(ret), K(tenant_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_tenant_interm_result_info(tenant_id))) {
-      LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
     }
   }
 

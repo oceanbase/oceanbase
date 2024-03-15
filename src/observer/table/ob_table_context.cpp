@@ -2002,7 +2002,8 @@ int ObTableCtx::add_auto_inc_param(const ObColumnSchemaV2 &column_schema)
     param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
     param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
     param.autoinc_col_id_ = column_schema.get_column_id();
-    param.auto_increment_cache_size_ = auto_increment_cache_size;
+    param.auto_increment_cache_size_ = get_auto_increment_cache_size(
+      table_schema_->get_auto_increment_cache_size(), auto_increment_cache_size);
     param.part_level_ = table_schema_->get_part_level();
     ObObjType column_type = column_schema.get_data_type();
     param.autoinc_col_type_ = column_type;

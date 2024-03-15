@@ -10,12 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "observer/omt/ob_tenant.h"
+#include "observer/omt/ob_multi_tenant.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "observer/ob_server_utils.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/hash/ob_hashmap.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 
 namespace oceanbase
 {
@@ -118,7 +120,7 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
           break;
         }
         case ObAllDtlIntermResultMonitor::INSPECT_COLUMN::EXPIRE_TIME: {
-          int64_t expire_time = key.time_us_;
+          int64_t expire_time = key.timeout_ts_;
           cells[cell_idx].set_timestamp(expire_time);
           break;
         }
@@ -228,11 +230,39 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
   } else if (OB_FAIL(ObServerUtils::get_server_ip(allocator_, ipstr))) {
     SERVER_LOG(ERROR, "get server ip failed", K(ret));
   } else {
-    ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
-                                  cur_row_, *addr_, ipstr, session_->get_effective_tenant_id());
-    if (OB_FAIL(ObDTLIntermResultManager::getInstance().generate_monitor_info_rows(monitor_getter))) {
-      SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
+    uint64_t cur_tenant_id = MTL_ID();
+    if(is_sys_tenant(cur_tenant_id)) {
+      omt::TenantIdList all_tenants;
+      GCTX.omt_->get_tenant_ids(all_tenants);
+      for (int i = 0; i < all_tenants.size(); ++i) {
+        uint64_t tmp_tenant_id = all_tenants[i];
+        if(!is_virtual_tenant_id(tmp_tenant_id)) {
+          ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
+                                  cur_row_, *addr_, ipstr, tmp_tenant_id);
+          MTL_SWITCH(tmp_tenant_id) {
+            if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
+              SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
+            }
+          } else {
+            // During the iteration process, tenants may be deleted,
+            // so we need to ignore the error code of MTL_SWITCH.
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    } else if(is_user_tenant(cur_tenant_id)) {
+      ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
+                                  cur_row_, *addr_, ipstr, cur_tenant_id);
+      MTL_SWITCH(cur_tenant_id) {
+        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
+          SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
+        }
+      }
     } else {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "Non-system non-user tenants try generate_monitor_info_rows", K(ret));
+    }
+    if(OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();
       start_to_read_ = true;
     }

@@ -1780,6 +1780,7 @@ def_table_schema(
   ('order_flag', 'bool', 'false'),
   ('cycle_flag', 'bool', 'false'),
   ('is_system_generated', 'bool', 'false', 'false'),
+  ('flag', 'int', 'false', 0),
   ],
 )
 
@@ -1808,6 +1809,7 @@ def_table_schema(
   ('order_flag', 'bool', 'true'),
   ('cycle_flag', 'bool', 'true'),
   ('is_system_generated', 'bool', 'true'),
+  ('flag', 'int', 'false', 0),
   ],
 )
 
@@ -8038,6 +8040,10 @@ def_table_schema(
     ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ('plsql_exec_time', 'int'),
     ('network_wait_time', 'uint', 'true'),
+    ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
+    ('seq_num', 'int'),
+    ('total_memstore_read_row_count', 'int'),
+    ('total_ssstore_read_row_count', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10715,6 +10721,10 @@ def_table_schema(
     ('SKIPPED_ROWS_COUNT', 'int'),
     ('DB_TIME', 'int'),
     ('USER_IO_WAIT_TIME', 'int'),
+    ('WORKAREA_MEM', 'int'),
+    ('WORKAREA_MAX_MEM', 'int'),
+    ('WORKAREA_TEMPSEG', 'int'),
+    ('WORKAREA_MAX_TEMPSEG', 'int'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -13662,6 +13672,31 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+  owner = 'fy373789',
+  tablegroup_id = 'OB_INVALID_ID',
+  table_name    = '__all_virtual_tracepoint_info',
+  table_id      = '12469',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns    = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tp_no', 'int'),
+    ('tp_name', 'varchar:OB_MAX_TRACEPOINT_NAME_LEN'),
+    ('tp_describe', 'varchar:OB_MAX_TRACEPOINT_DESCRIBE_LEN'),
+    ('tp_frequency', 'int'),
+    ('tp_error_code', 'int'),
+    ('tp_occur', 'int'),
+    ('tp_match', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14111,6 +14146,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15431', all_def_keywords['__all_transfer_partition_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15432', all_def_keywords['__all_virtual_wr_sqltext'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -15450,7 +15486,9 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
-                         network_wait_time as NETWORK_WAIT_TIME
+                         network_wait_time as NETWORK_WAIT_TIME,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -15857,7 +15895,9 @@ def_table_schema(
     FLT_TRACE_ID,
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
-    NETWORK_WAIT_TIME FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+    NETWORK_WAIT_TIME,
+    TOTAL_MEMSTORE_READ_ROW_COUNT,
+    TOTAL_SSSTORE_READ_ROW_COUNT FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
     normal_columns = [
@@ -16085,10 +16125,10 @@ def_table_schema(
           CAST( NULL AS UNSIGNED) AS PHYSICAL_READ_BYTES,
           CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_REQUESTS,
           CAST( NULL AS UNSIGNED) AS PHYSICAL_WRITE_BYTES,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MEM,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_MEM,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_TEMPSEG,
-          CAST( NULL AS UNSIGNED) AS WORKAREA_MAX_TEMPSEG,
+          CAST( WORKAREA_MEM AS UNSIGNED) AS WORKAREA_MEM,
+          CAST( WORKAREA_MAX_MEM AS UNSIGNED) AS WORKAREA_MAX_MEM,
+          CAST( WORKAREA_TEMPSEG AS UNSIGNED) AS WORKAREA_TEMPSEG,
+          CAST( WORKAREA_MAX_TEMPSEG AS UNSIGNED) AS WORKAREA_MAX_TEMPSEG,
           CAST( NULL AS UNSIGNED) AS OTHERSTAT_GROUP_ID,
           OTHERSTAT_1_ID,
           CAST(NULL AS UNSIGNED) AS OTHERSTAT_1_TYPE,
@@ -32823,6 +32863,53 @@ def_table_schema(
            cast(a.gmt_modified as datetime) as Timestamp
     FROM oceanbase.__all_column_privilege a, oceanbase.__all_user b
     WHERE a.tenant_id = 0 and a.tenant_id = b.tenant_id AND a.user_id = b.user_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'fy373789',
+    table_name     = 'GV$OB_TRACEPOINT_INFO',
+    table_id       = '21543',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+          SVR_IP,
+          SVR_PORT,
+          TP_NO,
+          TP_NAME,
+          TP_DESCRIBE,
+          TP_FREQUENCY,
+          TP_ERROR_CODE,
+          TP_OCCUR,
+          TP_MATCH
+        FROM oceanbase.__all_virtual_tracepoint_info
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'fy373789',
+    table_name     = 'V$OB_TRACEPOINT_INFO',
+    table_id       = '21544',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+          SVR_IP,
+          SVR_PORT,
+          TP_NO,
+          TP_NAME,
+          TP_DESCRIBE,
+          TP_FREQUENCY,
+          TP_ERROR_CODE,
+          TP_OCCUR,
+          TP_MATCH
+        FROM OCEANBASE.GV$OB_TRACEPOINT_INFO
+        WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -52031,7 +52118,9 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
-                         network_wait_time as  NETWORK_WAIT_TIME
+                         network_wait_time as  NETWORK_WAIT_TIME,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -52142,7 +52231,9 @@ TX_STATE_VERSION,
 FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
-NETWORK_WAIT_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+NETWORK_WAIT_TIME,
+TOTAL_MEMSTORE_READ_ROW_COUNT,
+TOTAL_SSSTORE_READ_ROW_COUNT FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -53740,10 +53831,10 @@ def_table_schema(
           CAST(NULL AS NUMBER) PHYSICAL_READ_BYTES,
           CAST(NULL AS NUMBER) PHYSICAL_WRITE_REQUESTS,
           CAST(NULL AS NUMBER) PHYSICAL_WRITE_BYTES,
-          CAST(NULL AS NUMBER) WORKAREA_MEM,
-          CAST(NULL AS NUMBER) WORKAREA_MAX_MEM,
-          CAST(NULL AS NUMBER) WORKAREA_TEMPSEG,
-          CAST(NULL AS NUMBER) WORKAREA_MAX_TEMPSEG,
+          CAST(WORKAREA_MEM AS NUMBER) WORKAREA_MEM,
+          CAST(WORKAREA_MAX_MEM AS NUMBER) WORKAREA_MAX_MEM,
+          CAST(WORKAREA_TEMPSEG AS NUMBER) WORKAREA_TEMPSEG,
+          CAST(WORKAREA_MAX_TEMPSEG AS NUMBER) WORKAREA_MAX_TEMPSEG,
           CAST(NULL AS NUMBER) OTHERSTAT_GROUP_ID,
           CAST(OTHERSTAT_1_ID AS NUMBER) OTHERSTAT_1_ID,
           CAST(NULL AS NUMBER) OTHERSTAT_1_TYPE,
@@ -59497,6 +59588,58 @@ def_table_schema(
       JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON IUT.OBJECT_ID = T.TABLE_ID
       JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON T.DATABASE_ID = DB.DATABASE_ID
     WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'fy373789',
+    table_name     = 'GV$OB_TRACEPOINT_INFO',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28221',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """SELECT
+          SVR_IP,
+          SVR_PORT,
+          TP_NO,
+          TP_NAME,
+          TP_DESCRIBE,
+          TP_FREQUENCY,
+          TP_ERROR_CODE,
+          TP_OCCUR,
+          TP_MATCH
+        FROM SYS.ALL_VIRTUAL_TRACEPOINT_INFO
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'fy373789',
+    table_name     = 'V$OB_TRACEPOINT_INFO',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28222',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      TP_NO,
+      TP_NAME,
+      TP_DESCRIBE,
+      TP_FREQUENCY,
+      TP_ERROR_CODE,
+      TP_OCCUR,
+      TP_MATCH
+    FROM SYS.GV$OB_TRACEPOINT_INFO
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 

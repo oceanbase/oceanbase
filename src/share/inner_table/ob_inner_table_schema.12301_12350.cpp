@@ -6139,6 +6139,7 @@ int ObInnerTableSchema::all_virtual_tablet_pointer_status_schema(ObTableSchema &
       false, //is_nullable
       false); //is_autoincrement
   }
+
   if (OB_SUCC(ret)) {
     ObObj occupy_size_default;
     occupy_size_default.set_int(0);
@@ -6150,13 +6151,14 @@ int ObInnerTableSchema::all_virtual_tablet_pointer_status_schema(ObTableSchema &
       ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
+      20, //column_precision
+      0, //column_scale
       false, //is_nullable
       false, //is_autoincrement
-      occupy_size_default, // orig_default_value
-      occupy_size_default); // cur_default_value
+      occupy_size_default,
+      occupy_size_default); //default_value
   }
+
   if (OB_SUCC(ret)) {
     ObObj required_size_default;
     required_size_default.set_int(0);
@@ -6168,12 +6170,12 @@ int ObInnerTableSchema::all_virtual_tablet_pointer_status_schema(ObTableSchema &
       ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
+      20, //column_precision
+      0, //column_scale
       false, //is_nullable
       false, //is_autoincrement
-      required_size_default, // orig_default_value
-      required_size_default); // cur_default_value
+      required_size_default,
+      required_size_default); //default_value
   }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);

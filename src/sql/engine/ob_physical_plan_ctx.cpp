@@ -116,12 +116,16 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_ps_rewrite_sql_(false),
       spm_ts_timeout_us_(0),
       subschema_ctx_(allocator_),
-      all_local_session_vars_(allocator)
+      all_local_session_vars_(allocator),
+      total_memstore_read_row_count_(0),
+      total_ssstore_read_row_count_(0)
 {
 }
 
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {
+  total_memstore_read_row_count_ = 0;
+  total_ssstore_read_row_count_ = 0;
   subschema_ctx_.destroy();
 }
 

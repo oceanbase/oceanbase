@@ -272,6 +272,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGAISCurrAutoIncP);
   RPC_PROCESSOR(ObGAISPushAutoIncP);
   RPC_PROCESSOR(ObGAISClearAutoIncCacheP);
+  RPC_PROCESSOR(ObGAISNextSequenceP);
 
 #ifdef OB_BUILD_SPM
   // sql plan baseline
@@ -319,4 +320,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // ddl
   RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
+
+  RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
 }

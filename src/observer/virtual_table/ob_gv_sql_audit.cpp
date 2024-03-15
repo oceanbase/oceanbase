@@ -1063,6 +1063,31 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
+        case STMT_TYPE: {
+          cells[cell_idx].set_null();
+          cells[cell_idx].set_default_collation_type();
+        } break;
+        case SEQ_NUM: {
+          cells[cell_idx].set_null();
+        } break;
+        case TOTAL_MEMSTORE_READ_ROW_COUNT: {
+          if (record.data_.total_memstore_read_row_count_ == 0) {
+            // local, remote plan
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
+          } else {
+            // px plan
+            cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
+          }
+        } break;
+        case TOTAL_SSSTORE_READ_ROW_COUNT: {
+          if (record.data_.total_ssstore_read_row_count_ == 0) {
+            // local, remote plan
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
+          } else {
+            // px plan
+            cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
+          }
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

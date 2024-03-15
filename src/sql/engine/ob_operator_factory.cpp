@@ -102,7 +102,7 @@
 #include "sql/engine/set/ob_hash_intersect_op.h"
 #include "sql/engine/set/ob_hash_except_op.h"
 #include "sql/engine/set/ob_merge_union_op.h"
-#include "sql/engine/recursive_cte/ob_recursive_union_all_op.h"
+#include "sql/engine/recursive_cte/ob_recursive_union_op.h"
 #include "sql/engine/recursive_cte/ob_fake_cte_table_op.h"
 #include "sql/engine/set/ob_merge_intersect_op.h"
 #include "sql/engine/set/ob_merge_except_op.h"

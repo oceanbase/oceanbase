@@ -1616,6 +1616,11 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       } else if (!strict_compat_ && OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_MODE = '%s' ",
                          table_schema.is_order_auto_increment_mode() ? "ORDER" : "NOORDER"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print auto increment mode", K(ret), K(table_schema));
+      } else if (!strict_compat_ && table_schema.get_auto_increment_cache_size() > 0 &&
+                   OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_CACHE_SIZE = %ld ",
+                      table_schema.get_auto_increment_cache_size()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print table auto increment cache size", K(ret),
+                         K(table_schema));
       }
     }
   }
@@ -2123,6 +2128,10 @@ int ObSchemaPrinter::print_table_definition_table_options(
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_MODE = '%s' ",
                          table_schema.is_order_auto_increment_mode() ? "ORDER" : "NOORDER"))) {
         OB_LOG(WARN, "fail to print auto increment mode", K(ret), K(table_schema));
+      } else if (table_schema.get_auto_increment_cache_size() > 0 &&
+                   OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_CACHE_SIZE = %ld ",
+                      table_schema.get_auto_increment_cache_size()))) {
+        OB_LOG(WARN, "fail to print table auto increment cache size", K(ret), K(table_schema));
       }
     }
   }

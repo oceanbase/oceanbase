@@ -970,6 +970,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         //do nothing
       } else {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
+        audit_record.total_memstore_read_row_count_ = plan_ctx->get_total_memstore_read_row_count();
+        audit_record.total_ssstore_read_row_count_ = plan_ctx->get_total_ssstore_read_row_count();
       }
     }
       //update v$sql statistics

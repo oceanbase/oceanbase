@@ -55,6 +55,7 @@ public:
       const uint64_t max_value,
       const uint64_t insert_value,
       const int64_t &autoinc_version,
+      const int64_t cache_size,
       uint64_t &global_sync_value) = 0;
 
   virtual int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &value) = 0;

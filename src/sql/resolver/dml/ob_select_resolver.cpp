@@ -330,8 +330,9 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode &parse_tree, b
       /*do nothing*/
     } else if (lib::is_oracle_mode() && OB_FAIL(check_cte_set_types(*left_select_stmt, *right_select_stmt))) {
       LOG_WARN("check cte set types", K(ret));
-    } else if (select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op()) {
-      // 必须是union all
+    } else if ((select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op())
+               && (lib::is_oracle_mode() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_3_0)) {
+      // oracle mode or mysql mode under 4.2.3 version do not support recursive union distinct
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive WITH clause using operation not union all");
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive WITH clause using union (distinct) operation");
@@ -6293,13 +6294,15 @@ int ObSelectResolver::check_recursive_cte_usage(const ObSelectStmt &select_stmt)
     }
   }
   if (cte_ctx_.invalid_recursive_union() && fake_cte_table_count >= 1) {
-    if (lib::is_mysql_mode()) {
+    if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_3_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive UNION DISTINCT in Recursive Common Table Expression");
-    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                     "recursive UNION DISTINCT in Recursive Common Table Expression");
+      LOG_WARN("recursive union distinct is not supported until 4.2.3", K(ret));
+    } else if (lib::is_oracle_mode()) {
       ret = OB_ERR_NEED_UNION_ALL_IN_RECURSIVE_CTE;
+      LOG_WARN("recursive WITH clause must use a UNION ALL operation", K(ret));
     }
-    LOG_WARN("recursive WITH clause must use a UNION ALL operation", K(ret));
   } else if (fake_cte_table_count > 1) {
     ret = OB_ERR_CTE_RECURSIVE_QUERY_NAME_REFERENCED_MORE_THAN_ONCE;
     LOG_WARN("Recursive query name referenced more than once in recursive branch of recursive WITH clause element", K(ret), K(fake_cte_table_count));

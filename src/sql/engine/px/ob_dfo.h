@@ -366,7 +366,8 @@ public:
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
-  TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
+  // Do not change the follow log about the second K_(need_report) and K_(exec_addr), becacue it will use in obdiag tool
+  TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(need_report), K_(exec_addr), K_(qc_addr),
                K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
@@ -920,7 +921,9 @@ public:
       tx_desc_(NULL),
       is_use_local_thread_(false),
       fb_info_(),
-      err_msg_()
+      err_msg_(),
+      memstore_read_row_count_(0),
+      ssstore_read_row_count_(0)
   {
 
   }
@@ -949,6 +952,8 @@ public:
     tx_desc_ = other.tx_desc_;
     is_use_local_thread_ = other.is_use_local_thread_;
     fb_info_.assign(other.fb_info_);
+    memstore_read_row_count_ = other.memstore_read_row_count_;
+    ssstore_read_row_count_ = other.ssstore_read_row_count_;
     return *this;
   }
 public:
@@ -973,7 +978,9 @@ public:
                K_(interm_result_ids),
                K_(tx_desc),
                K_(is_use_local_thread),
-               K_(fb_info));
+               K_(fb_info),
+               K_(memstore_read_row_count),
+               K_(ssstore_read_row_count));
   dtl::ObDtlChannelInfo &get_sqc_channel_info() { return sqc_ch_info_; }
   dtl::ObDtlChannelInfo &get_task_channel_info() { return task_ch_info_; }
   void set_task_channel(dtl::ObDtlChannel *ch) { task_channel_ = ch; }
@@ -1019,6 +1026,10 @@ public:
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   const ObPxUserErrorMsg &get_err_msg() const { return err_msg_; }
   ObPxUserErrorMsg &get_err_msg() { return err_msg_; }
+  void set_memstore_read_row_count(int64_t v) { memstore_read_row_count_ = v; }
+  void set_ssstore_read_row_count(int64_t v) { ssstore_read_row_count_ = v; }
+  int64_t get_memstore_read_row_count() const { return memstore_read_row_count_; }
+  int64_t get_ssstore_read_row_count() const { return ssstore_read_row_count_; }
 public:
   // 小于等于0表示设置了rc 值, task default ret值为1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
@@ -1049,6 +1060,8 @@ public:
   bool is_use_local_thread_;
   ObExecFeedbackInfo fb_info_; //for feedback info
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
+  int64_t memstore_read_row_count_; // the count of row from mem
+  int64_t ssstore_read_row_count_; // the count of row from disk
 };
 
 class ObPxRpcInitTaskArgs

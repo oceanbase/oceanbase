@@ -472,6 +472,15 @@ public:
                                        ObTableSchema &new_table_schema,
                                        ObDDLOperator &ddl_operator,
                                        ObMySQLTransaction &trans);
+
+  int alter_table_auto_increment(const ObTableSchema &orig_table_schema,
+                                 const AlterTableSchema &alter_table_schema,
+                                 const obrpc::ObAlterTableArg &alter_table_arg,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 ObTableSchema &new_table_schema,
+                                 ObDDLOperator &ddl_operator,
+                                 ObMySQLTransaction &trans);
+
   int get_tablets(
       const uint64_t tenant_id,
       const ObArray<common::ObTabletID> &tablet_ids,

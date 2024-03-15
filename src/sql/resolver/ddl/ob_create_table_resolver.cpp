@@ -2486,6 +2486,9 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
       }
     }
+    if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {
+      table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
+    }
   }
   return ret;
 }

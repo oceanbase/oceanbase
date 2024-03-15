@@ -827,6 +827,34 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         cells[cell_idx].set_int(int_value);
         break;
       }
+      case WORKAREA_MEM: {
+        if(need_rt_node_) {
+          int64_t int_value = node.workarea_mem_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case WORKAREA_MAX_MEM: {
+        int64_t int_value = node.workarea_max_mem_;
+        cells[cell_idx].set_int(int_value);
+        break;
+      }
+      case WORKAREA_TEMPSEG: {
+        if (need_rt_node_) {
+          int64_t int_value = node.workarea_tempseg_;
+          cells[cell_idx].set_int(int_value);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case WORKAREA_MAX_TEMPSEG: {
+        int64_t int_value = node.workarea_max_tempseg_;
+        cells[cell_idx].set_int(int_value);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(cell_idx),

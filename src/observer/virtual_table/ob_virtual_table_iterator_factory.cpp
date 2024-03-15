@@ -222,6 +222,7 @@
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
+#include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
 
 namespace oceanbase
 {
@@ -2457,6 +2458,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               kvcache_store_memblock->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(kvcache_store_memblock);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID: {
+            ObAllTracepointInfo *tp_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllTracepointInfo, tp_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllTracepointInfo", K(ret));
+            } else {
+              tp_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(tp_info);
             }
             break;
           }

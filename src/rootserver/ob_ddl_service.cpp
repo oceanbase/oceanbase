@@ -2778,6 +2778,21 @@ int ObDDLService::set_raw_table_options(
             alter_table_schema.get_table_auto_increment_mode());
           break;
         }
+        case ObAlterTableArg::INCREMENT_CACHE_SIZE : {
+          uint64_t data_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (data_version < DATA_VERSION_4_2_3_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("table auto_increment_cache_size less than 4.2.3 not support", K(ret),
+                     K(data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "table auto_increment_cache_size less than 4.2.3");
+          } else {
+            new_table_schema.set_auto_increment_cache_size(
+              alter_table_schema.get_auto_increment_cache_size());
+          }
+          break;
+        }
         case ObAlterTableArg::ENABLE_EXTENDED_ROWID: {
           new_table_schema.set_table_rowid_mode(alter_table_schema.get_table_rowid_mode());
           break;
@@ -9548,6 +9563,117 @@ int ObDDLService::alter_not_null_cst_in_column_flag(
   return ret;
 }
 
+int ObDDLService::alter_table_auto_increment(
+    const ObTableSchema &orig_table_schema,
+    const AlterTableSchema &alter_table_schema,
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObTableSchema &new_table_schema,
+    ObDDLOperator &ddl_operator,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObAutoincrementService &auto_inc_service = ObAutoincrementService::get_instance();
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t table_id = orig_table_schema.get_table_id();
+  const uint64_t column_id = orig_table_schema.get_autoinc_column_id();
+  const bool is_order_mode = orig_table_schema.is_order_auto_increment_mode();
+  const int64_t truncate_version = orig_table_schema.get_truncate_version();
+  uint64_t current_auto_increment = 0;
+  // Step 1: Determine whether the auto-increment value needs to be increased or decreased.
+  // If increased, only the table schema needs to be updated. It reduces the complexity of the
+  // alter_table operation.
+  const bool is_reduced_autoinc =
+      (alter_table_schema.get_auto_increment() < orig_table_schema.get_auto_increment());
+  if (!is_reduced_autoinc && OB_FAIL(auto_inc_service.get_sequence_value(tenant_id,
+                table_id, column_id, is_order_mode, truncate_version, current_auto_increment))) {
+    LOG_WARN("fail to get sequence value", K(ret));
+  } else if (is_reduced_autoinc ||
+      (alter_table_schema.get_auto_increment() < current_auto_increment)) {
+    // Step 2: Query the maximum value of the auto-increment column and use it as a base value.
+    const ObDatabaseSchema *db_schema = nullptr;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_database_schema(tenant_id, orig_table_schema.get_database_id(),
+                                                 db_schema))) {
+      LOG_WARN("failed to get database schema", K(ret), K(orig_table_schema.get_data_table_id()));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, database schema must not be nullptr", K(ret));
+    } else if (OB_ISNULL(column_schema = orig_table_schema.get_column_schema(column_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get alter column schema", K(ret), K(column_id));
+    } else if (OB_FAIL(lock_table(trans, orig_table_schema))) {
+      LOG_WARN("failed to lock table for alter auto_increment", K(ret));
+    } else {
+      uint64_t current_max_value = 0;
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObTimeoutCtx timeout_ctx;
+        ObSqlString sql;
+        sqlclient::ObMySQLResult *result = NULL;
+        common::ObCommonSqlProxy *user_sql_proxy = GCTX.ddl_sql_proxy_;
+        ObSessionParam session_param;
+        int64_t sql_mode = alter_table_arg.sql_mode_;
+        session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
+        session_param.ddl_info_.set_is_ddl(true);
+        // if data_table_id != dest_table_id, meaning this is happening in ddl double write
+        session_param.ddl_info_.set_source_table_hidden(orig_table_schema.is_user_hidden_table());
+        ObObj obj;
+        const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+        const bool is_unsigned_type = ob_is_unsigned_type(column_schema->get_data_type());
+        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+          LOG_WARN("set trx timeout failed", K(ret));
+        } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+          LOG_WARN("set timeout failed", K(ret));
+        } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(`%s`) AS %s) AS MAX_VALUE FROM `%s`.`%s`",
+                                    column_schema->get_column_name(),
+                                    is_unsigned_type ? "UNSIGNED" : "SIGNED",
+                                    db_schema->get_database_name(),
+                                    orig_table_schema.get_table_name()))) {
+          LOG_WARN("failed to assign fmt", K(ret), K(column_schema->get_column_name_str()),
+                                           K(db_schema->get_database_name_str()));
+        } else if (OB_FAIL(user_sql_proxy->read(res, tenant_id, sql.ptr(), &session_param))) {
+          LOG_WARN("fail to read", KR(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(ret));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            // empty table
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else if (OB_FAIL(result->get_obj("MAX_VALUE", obj))) {
+          LOG_WARN("fail to get result obj", K(ret));
+        } else if (is_unsigned_type) {
+          current_max_value = obj.get_uint64();
+        } else {
+          current_max_value = MAX(0, obj.get_int());
+        }
+      }
+
+      // Step 3: Clear the auto increment cache and reset the inner table of the auto-increment
+      // column. all new auto_inc request will be based on the auto_increment value in the table
+      // schema.
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(auto_inc_service.clear_autoinc_cache_all(tenant_id, table_id,
+                                                                  column_id, is_order_mode,
+                                                                  false /* ignore_rpc_errors */))) {
+        LOG_WARN("fail to clear autoinc cache all", K(ret));
+      } else if (OB_FAIL(ddl_operator.reinit_autoinc_row(new_table_schema, trans))) {
+        LOG_WARN("fail to reinit autoinc row", K(ret));
+      } else {
+        // Step 4: Update the table schema with the maximum values of auto_increment by setting and
+        // max_value plus 1.
+        const uint64_t next_value =
+          (current_max_value == UINT64_MAX) ? UINT64_MAX : (current_max_value + 1);
+        new_table_schema.set_auto_increment(MAX(next_value, new_table_schema.get_auto_increment()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::alter_table_constraints(const ObAlterTableArg::AlterConstraintType op_type,
                                           share::schema::ObSchemaGetterGuard &schema_guard,
                                           const ObTableSchema &orig_table_schema,
@@ -11234,6 +11360,21 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                      K(inc_table_schemas), K(del_table_schemas), KR(ret));
           } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, alter_table_arg.task_id_))) {
             LOG_WARN("update ddl task status failed", K(ret));
+          }
+        }
+
+        // alter table auto increment value
+        if (OB_SUCC(ret) &&
+              alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::AUTO_INCREMENT) &&
+              0 != new_table_schema.get_autoinc_column_id()) {
+          if (OB_FAIL(alter_table_auto_increment(*orig_table_schema,
+                                                 alter_table_schema,
+                                                 alter_table_arg,
+                                                 schema_guard,
+                                                 new_table_schema,
+                                                 ddl_operator,
+                                                 trans))) {
+            LOG_WARN("fail to alter table auto increment value", K(ret));
           }
         }
 
