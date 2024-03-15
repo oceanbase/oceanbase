@@ -5919,8 +5919,12 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           // if contain ObGeoKeyPart, need do or_range_graph for deduplication with different spatial filters
           if (!need_geo_rebuild && OB_FAIL(link_or_graphs(or_list, out_key_part))) {
             LOG_WARN("Or single head graphs failed", K(ret));
-          } else if (need_geo_rebuild && OB_FAIL(or_range_graph(or_list, exec_ctx, out_key_part, dtc_params))) {
-            LOG_WARN("Or single head graphs failed", K(ret));
+          } else if (need_geo_rebuild) {
+            if (or_list.get_size() == 1) {
+              out_key_part = or_list.get_first();
+            } else if (OB_FAIL(or_range_graph(or_list, exec_ctx, out_key_part, dtc_params))) {
+              LOG_WARN("Or single head graphs failed", K(ret));
+            }
           } else {
             // do nothing
           }
@@ -8815,7 +8819,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   INIT_SUCC(ret);
   common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"));
   ObS2Cellids cells;
-  ObS2Cellids cells_with_ancestors;
+  ObS2Cellids ancestors;
   ObSpatialMBR mbr_filter(op_type);
   ObGeoType geo_type = ObGeoType::GEOMETRY;
   const ObSrsItem *srs_item = NULL;
@@ -8859,7 +8863,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     }
   }
   if (s2object == NULL && OB_SUCC(ret)) {
-    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc s2 object", K(ret));
@@ -8873,10 +8877,8 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
       LOG_WARN("fail to get geo type by wkb", K(ret));
     } else if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
       LOG_WARN("Init s2object failed", K(ret));
-    } else if (OB_FAIL(s2object->get_cellids(cells, false))) {
+    } else if (OB_FAIL(s2object->get_cellids_and_unrepeated_ancestors(cells, ancestors))) {
       LOG_WARN("Get cellids from s2object failed", K(ret));
-    } else if (OB_FAIL(s2object->get_cellids(cells_with_ancestors, true))) {
-      LOG_WARN("Get cellids with ancestors from s2object failed", K(ret));
     } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
       LOG_WARN("Get mbr from s2object failed", K(ret));
     } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
@@ -8896,14 +8898,16 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         query_range_ctx_->cur_expr_is_precise_ = false;
       }
       ObKeyPart *last = out_key_part;
+      bool replace_out_keypart = false;
       // build keypart from cells_with_ancestors
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_with_ancestors.size(); i++) {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
         ObObj val;
-        val.set_uint64(cells_with_ancestors[i]);
+        val.set_uint64(ancestors[i]);
         if (i == 0) {
           if (OB_FAIL(get_geo_single_keypart(val, val, *out_key_part))) {
             LOG_WARN("get normal cmp keypart failed", K(ret));
           }
+          replace_out_keypart = true;
         } else {
           ObKeyPart *tmp = NULL;
           if (OB_ISNULL((tmp = create_new_key_part()))) {
@@ -8929,21 +8933,55 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
           uint64_t start_id = 0;
           uint64_t end_id = 0;
           ObS2Adapter::get_child_of_cellid(cellid, start_id, end_id);
-          ObKeyPart *tmp = NULL;
-          if (OB_ISNULL((tmp = create_new_key_part()))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("alloc memory failed", K(ret));
-          } else {
-            tmp->id_ = out_key_part->id_;
-            tmp->pos_ = out_key_part->pos_;
-            ObObj val_start, val_end;
-            val_start.set_uint64(start_id);
-            val_end.set_uint64(end_id);
-            if (OB_FAIL(get_geo_single_keypart(val_start, val_end, *tmp))) {
+          ObObj val_start, val_end;
+          val_start.set_uint64(start_id);
+          val_end.set_uint64(end_id);
+          if (!replace_out_keypart) { // if ancestor is empty, replace first keypart
+            if (OB_FAIL(get_geo_single_keypart(val_start, val_end, *out_key_part))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
+            }
+            replace_out_keypart = true;
+          } else {
+            ObKeyPart *tmp = NULL;
+            if (OB_ISNULL((tmp = create_new_key_part()))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("alloc memory failed", K(ret));
             } else {
-              last->or_next_ = tmp;
-              last = tmp;
+              tmp->id_ = out_key_part->id_;
+              tmp->pos_ = out_key_part->pos_;
+              if (OB_FAIL(get_geo_single_keypart(val_start, val_end, *tmp))) {
+                LOG_WARN("get normal cmp keypart failed", K(ret));
+              } else {
+                last->or_next_ = tmp;
+                last = tmp;
+              }
+            }
+          }
+        }
+      } else {
+        // build keypart to index child_of_cellid
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+          ObObj val;
+          val.set_uint64(cells[i]);
+          if (!replace_out_keypart) { // if ancestor is empty, replace first keypart
+            if (OB_FAIL(get_geo_single_keypart(val, val, *out_key_part))) {
+              LOG_WARN("get normal cmp keypart failed", K(ret));
+            }
+            replace_out_keypart = true;
+          } else {
+            ObKeyPart *tmp = NULL;
+            if (OB_ISNULL((tmp = create_new_key_part()))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("alloc memory failed", K(ret));
+            } else {
+              tmp->id_ = out_key_part->id_;
+              tmp->pos_ = out_key_part->pos_;
+              if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+                LOG_WARN("get normal cmp keypart failed", K(ret));
+              } else {
+                last->or_next_ = tmp;
+                last = tmp;
+              }
             }
           }
         }
@@ -9102,33 +9140,6 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, NULL, NULL);
       }
 
-      ObS2Cellids cells_cover_geo;
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_cover_geo.size(); i++) {
-        int hash_ret = cellid_set.exist_refactored(cells_cover_geo[i]);
-        if (OB_HASH_NOT_EXIST == hash_ret) {
-          ObKeyPart *tmp = NULL;
-          if (OB_FAIL(cellid_set.set_refactored(cells_cover_geo[i]))) {
-            LOG_WARN("failed to add cellid into set", K(ret));
-          } else if (OB_ISNULL((tmp = create_new_key_part()))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("alloc memory failed", K(ret));
-          } else {
-            ObObj val;
-            val.set_uint64(cells_cover_geo[i]);
-            tmp->id_ = out_key_part->id_;
-            tmp->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
-              LOG_WARN("get normal cmp keypart failed", K(ret));
-            } else {
-              last->or_next_ = tmp;
-              last = tmp;
-            }
-          }
-        } else if (OB_HASH_EXIST != hash_ret) {
-          ret = hash_ret;
-          LOG_WARN("fail to check if key exist", K(ret), K(cells_cover_geo[i]), K(i));
-        }
-      }
       // copy temp_result to out_key_part
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(out_key_part->create_normal_key())) {
@@ -9149,7 +9160,8 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         out_key_part->and_next_ = head->and_next_;
       }
       // clear hashset
-      if (cellid_set.created()) {
+      if (OB_FAIL(ret)) {
+      } else if (cellid_set.created()) {
         int tmp_ret = cellid_set.destroy();
         if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
           LOG_WARN("failed to destory param set", K(ret));

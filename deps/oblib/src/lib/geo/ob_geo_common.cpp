@@ -34,6 +34,19 @@ double ObGeoWkbByteOrderUtil::read<double>(const char* data, ObGeoWkbByteOrder b
   return res;
 }
 
+double ObGeoWkbByteOrderUtil::read_double(const char* data, ObGeoWkbByteOrder bo)
+{
+  double res = 0.0;
+  if (bo == ObGeoWkbByteOrder::LittleEndian) {
+    res = *reinterpret_cast<const double*>(data);
+  } else {
+    for(int i = 0; i < 8; i++) {
+      reinterpret_cast<char *>(&res)[i] = data[7 - i];
+    }
+  }
+  return res;
+}
+
 template<>
 uint32_t ObGeoWkbByteOrderUtil::read<uint32_t>(const char* data, ObGeoWkbByteOrder bo)
 {

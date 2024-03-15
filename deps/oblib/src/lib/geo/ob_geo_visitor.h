@@ -199,6 +199,7 @@ public:
   virtual int finish(ObIWkbGeogCollection *geo) = 0;
   virtual int finish(ObIWkbGeomCollection *geo) = 0;
 
+  virtual bool set_after_visitor() = 0;
 };
 
 class ObEmptyGeoVisitor : public ObIGeoVisitor
@@ -377,7 +378,8 @@ public:
   virtual int finish(ObIWkbGeomMultiPolygon *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
   virtual int finish(ObIWkbGeogCollection *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
   virtual int finish(ObIWkbGeomCollection *geo) override { return finish(static_cast<ObIWkbGeometry *>(geo)); }
-
+  // set true if the value of a point might be modified during linestring_do_visitor
+  virtual bool set_after_visitor() override { return true; }
 };
 
 class ObIWkbVisitorImplement {
@@ -411,15 +413,17 @@ int ObIWkbVisitorImplement::linestring_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
       T_POINT wkb_point;
       wkb_point.byteorder(ObGeoWkbByteOrder::LittleEndian);
       typename T_BIN::iterator iter = line->begin();
-      for ( ; iter != line->end() && OB_SUCC(ret) && !visitor.is_end(geo); iter++) {
-        wkb_point.template set<0>(iter->template get<0>());
-        wkb_point.template set<1>(iter->template get<1>());
-        T_IPOINT point;
+      typename T_BIN::iterator iter_end = line->end();
+      bool need_set = visitor.set_after_visitor();
+      T_IPOINT point;
+      for ( ; iter != iter_end && OB_SUCC(ret) && !visitor.is_end(geo); ++iter) {
+        wkb_point.template set<0>(iter->get_x());
+        wkb_point.template set<1>(iter->get_y());
         ObString data(sizeof(wkb_point), reinterpret_cast<char *>(&wkb_point));
         point.set_data(data);
         if (OB_FAIL(point.do_visit(visitor))) {
           OB_LOG(WARN,"failed to do wkb point visit", K(ret));
-        } else {
+        } else if (need_set) {
           iter->template set<0>(point.x());
           iter->template set<1>(point.y());
         }
@@ -446,8 +450,8 @@ int ObIWkbVisitorImplement::multipoint_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
     } else {
       const T_BIN *multi_point = reinterpret_cast<const T_BIN*>(geo->val());
       typename T_BIN::iterator iter = multi_point->begin();
-      for ( ; iter != multi_point->end() && OB_SUCC(ret) && !visitor.is_end(geo); iter++) {
-        T_IPOINT point;
+      T_IPOINT point;
+      for ( ; iter != multi_point->end() && OB_SUCC(ret) && !visitor.is_end(geo); ++iter) {
         ObString data(sizeof(T_POINT), reinterpret_cast<char *>(iter.operator->()));
         point.set_data(data);
         if (OB_FAIL(point.do_visit(visitor))) {
@@ -483,7 +487,7 @@ int ObIWkbVisitorImplement::polygon_do_visitor(T_IBIN *geo, ObIGeoVisitor &visit
       } else {
         const T_INNER_RING &rings = polygon->inner_rings();
         typename T_INNER_RING::iterator iter = rings.begin();
-        for ( ; iter != rings.end() && OB_SUCC(ret) && !visitor.is_end(geo); iter++) {
+        for ( ; iter != rings.end() && OB_SUCC(ret) && !visitor.is_end(geo); ++iter) {
           data.assign_ptr(reinterpret_cast<const char *>(iter.operator->()), sizeof(T_RING));
           ring.set_data(data);
           if (OB_FAIL(ring.do_visit(visitor))) {
@@ -508,8 +512,8 @@ int ObIWkbVisitorImplement::collection_do_visitor(T_IBIN *geo, ObIGeoVisitor &vi
     } else {
       const T_BIN *items = reinterpret_cast<const T_BIN*>(geo->val());
       typename T_BIN::iterator iter = items->begin();
-      for ( ; iter != items->end() && OB_SUCC(ret) && !visitor.is_end(geo); iter++) {
-        T_IITEM item;
+      T_IITEM item;
+      for ( ; iter != items->end() && OB_SUCC(ret) && !visitor.is_end(geo); ++iter) {
         ObString data(sizeof(T_ITEM), reinterpret_cast<char *>(iter.operator->()));
         item.set_data(data);
         if (OB_FAIL(item.do_visit(visitor))) {

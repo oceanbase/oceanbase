@@ -92,6 +92,7 @@ public:
   int finish(ObIWkbGeomCollection *geo) { UNUSED(geo); return OB_SUCCESS; }
 
   int64_t get_cellids(ObS2Cellids &cells, bool is_query, bool need_buffer, S1Angle distance);
+  int64_t get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors, bool need_buffer, S1Angle distance);
   int64_t get_inner_cover_cellids(ObS2Cellids &cells);
   int64_t get_mbr(S2LatLngRect &mbr, bool need_buffer, S1Angle distance);
   bool is_invalid() { return invalid_; }
