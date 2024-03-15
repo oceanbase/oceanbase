@@ -626,18 +626,30 @@ KEY `idx_poi_del_time_7` (`p_delete_time`) BLOCK_SIZE 16384 LOCAL
 );
 explain EXTENDED_NOADDR SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|p   |64      |2813        |
-===============================================
+=========================================================================
+|ID|OPERATOR       |NAME                          |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------
+|0 |TABLE FULL SCAN|p(idx_geohash_code_geog_poi_7)|1       |203         |
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [(T_OP_LIKE, p.geohash_code, 'ws0emp%', '\\')], [BOOL(ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 
       23.11138916015625)')))])
       access([p.p_id], [p.geog_poi], [p.geohash_code], [p.p_delete_time]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([p.p_id]), range(MIN ; MAX)always true
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([p.__cellid_50], [p.__mbr_50], [p.p_id]), range(3747839687816876905,MIN,MIN ; 3747839687816876905,MAX,MAX), (3747839687816876908,MIN,MIN 
+      ; 3747839687816876908,MAX,MAX), (3747839687816876912,MIN,MIN ; 3747839687816876912,MAX,MAX), (3747839687816876864,MIN,MIN ; 3747839687816876864,MAX,MAX),
+       (3747839687816876800,MIN,MIN ; 3747839687816876800,MAX,MAX), (3747839687816877056,MIN,MIN ; 3747839687816877056,MAX,MAX), (3747839687816876032,MIN,MIN 
+      ; 3747839687816876032,MAX,MAX), (3747839687816888320,MIN,MIN ; 3747839687816888320,MAX,MAX), (3747839687816839168,MIN,MIN ; 3747839687816839168,MAX,MAX),
+       (3747839687816642560,MIN,MIN ; 3747839687816642560,MAX,MAX), (3747839687816904704,MIN,MIN ; 3747839687816904704,MAX,MAX), (3747839687813758976,MIN,MIN 
+      ; 3747839687813758976,MAX,MAX), (3747839687809564672,MIN,MIN ; 3747839687809564672,MAX,MAX), (3747839687826341888,MIN,MIN ; 3747839687826341888,MAX,MAX),
+       (3747839687759233024,MIN,MIN ; 3747839687759233024,MAX,MAX), (3747839687490797568,MIN,MIN ; 3747839687490797568,MAX,MAX), (3747839688564539392,MIN,MIN 
+      ; 3747839688564539392,MAX,MAX), (3747839675679637504,MIN,MIN ; 3747839675679637504,MAX,MAX), (3747839658499768320,MIN,MIN ; 3747839658499768320,MAX,MAX),
+       (3747839589780291584,MIN,MIN ; 3747839589780291584,MAX,MAX), (3747840414414012416,MIN,MIN ; 3747840414414012416,MAX,MAX), (3747843712948895744,MIN,MIN 
+      ; 3747843712948895744,MAX,MAX), (3747856907088429056,MIN,MIN ; 3747856907088429056,MAX,MAX), (3747909683646562304,MIN,MIN ; 3747909683646562304,MAX,MAX),
+       (3747839314902384640,MIN,MIN ; 3747839314902384640,MAX,MAX), (3748120789879095296,MIN,MIN ; 3748120789879095296,MAX,MAX), (3751498489599623168,MIN,MIN 
+      ; 3751498489599623168,MAX,MAX), (3765009288481734656,MIN,MIN ; 3765009288481734656,MAX,MAX), (3819052484010180608,MIN,MIN ; 3819052484010180608,MAX,MAX),
+       (3746994889972252672,MIN,MIN ; 3746994889972252672,MAX,MAX), (3458764513820540928,MIN,MIN ; 3458764513820540928,MAX,MAX)
 Used Hint:
 -------------------------------------
   /*+
@@ -651,7 +663,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "p"@"SEL$1")
+      INDEX(@"SEL$1" "p"@"SEL$1" "idx_geohash_code_geog_poi_7")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -659,14 +671,14 @@ Optimization Info:
 -------------------------------------
   p:
       table_rows:10002
-      physical_range_rows:10002
-      logical_range_rows:10002
+      physical_range_rows:3
+      logical_range_rows:3
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx_geohash_code_geog_poi_7, idx_poi_del_time_7, geek_poi_7]
-      pruned_index_name:[idx_geohash_code_geog_poi_7]
+      unstable_index_name:[geek_poi_7]
       stats version:0
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
