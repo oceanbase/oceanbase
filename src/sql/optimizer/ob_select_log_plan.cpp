@@ -6386,29 +6386,45 @@ int ObSelectLogPlan::sort_window_functions(const ObFdItemSet &fd_item_set,
   ObSEArray<std::pair<int64_t, int64_t>, 8> expr_entries;
   bool is_const = false;
   ObSEArray<ObRawExpr*, 4> simplified_exprs;
+  ObSEArray<ObRawExpr*, 4> tmp_exprs;
   if (OB_UNLIKELY(win_func_exprs.empty())) {
      ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(win_func_exprs.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs.count(); ++i) {
-    int64_t non_const_exprs = 0;
-    simplified_exprs.reuse();
     if (OB_ISNULL(win_func_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(fd_item_set,
-                                                        equal_sets,
-                                                        const_exprs,
-                                                        win_func_exprs.at(i)->get_partition_exprs(),
-                                                        simplified_exprs))) {
-      LOG_WARN("failed to simplify exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(tmp_exprs,
+                                        win_func_exprs.at(i)->get_partition_exprs()))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
     }
-    for (int64_t j = 0; OB_SUCC(ret) && j < simplified_exprs.count(); ++j) {
-      if (OB_FAIL(ObOptimizerUtil::is_const_expr(simplified_exprs.at(j),
-                                                  equal_sets,
-                                                  const_exprs,
-                                                  get_onetime_query_refs(),
-                                                  is_const))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(fd_item_set,
+                                                     equal_sets,
+                                                     const_exprs,
+                                                     tmp_exprs,
+                                                     simplified_exprs))) {
+    LOG_WARN("failed to simplified exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs.count(); ++i) {
+    int64_t non_const_exprs = 0;
+    tmp_exprs.reuse();
+    if (OB_ISNULL(win_func_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(simplified_exprs,
+                                                        win_func_exprs.at(i)->get_partition_exprs(),
+                                                        tmp_exprs))) {
+      LOG_WARN("failed to intersect exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < tmp_exprs.count(); ++j) {
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(tmp_exprs.at(j),
+                                                 equal_sets,
+                                                 const_exprs,
+                                                 get_onetime_query_refs(),
+                                                 is_const))) {
         LOG_WARN("failed to check is const expr", K(ret));
       } else if (!is_const) {
         ++non_const_exprs;
