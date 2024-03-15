@@ -1368,7 +1368,8 @@ int ObTransformDBlink::inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &h
                                          helper.is_reverse_link_ ? 0
                                          : helper.dblink_id_))) {
     LOG_WARN("failed to reverse link table", K(ret));
-  } else if (ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), helper.conditions_)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
+                                                  helper.conditions_))) {
     LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                stmt,
@@ -1425,7 +1426,8 @@ int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
             || stmt->is_fetch_with_ties()
             || NULL != stmt->get_limit_percent_expr()) {
     dblink_stmt = stmt;
-  } else if (ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt), &child_stmt)) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt),
+                                                 &child_stmt))) {
     LOG_WARN("failed to pack the stmt", K(ret));
   } else {
     stmt->set_limit_offset(child_stmt->get_limit_expr(), child_stmt->get_offset_expr());

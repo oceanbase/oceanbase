@@ -82,7 +82,6 @@ private:
   int search_expr_cannot_pullup(ObRawExpr *expr,
                                 ObExprNodeMap &expr_map,
                                 common::ObIArray<ObRawExpr *> &expr_cannot_pullup);
-  int adjust_subquery(ObRawExpr *expr, ObSelectStmt &child, ObSelectStmt &parent);
   int is_stmt_may_reduce_row_count(const ObSelectStmt &stmt, bool &is_true);
 
   static bool is_view_acceptable_for_rewrite(TableItem &view);
