@@ -8810,6 +8810,13 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                           session->get_timezone_info()), call_stmt);
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
   }
+  if (OB_NOT_NULL(dblink_conn)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ObDblinkCtxInSession::revert_dblink_conn(dblink_conn))) {
+      ret = (ret == OB_SUCCESS) ? tmp_ret : ret;
+      LOG_WARN("failed to revert dblink conn", K(ret), K(tmp_ret), KP(dblink_conn));
+    }
+  }
 
   return ret;
 }

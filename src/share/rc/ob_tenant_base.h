@@ -24,6 +24,7 @@
 #include "share/ob_tenant_role.h"//ObTenantRole
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_environment.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
@@ -354,7 +355,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::ObIndexUsageInfoMgr*,                  \
       storage::ObTabletMemtableMgrPool*,            \
       rootserver::ObMViewMaintenanceService*,       \
-      storage::checkpoint::ObCheckpointDiagnoseMgr* \
+      storage::checkpoint::ObCheckpointDiagnoseMgr*, \
+      common::sqlclient::ObTenantDblinkKeeper*       \
   )
 
 

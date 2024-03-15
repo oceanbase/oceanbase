@@ -28,7 +28,8 @@ namespace sql
 ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
                                    ObSchemaGetterGuard *schema_guard,
                                    ObObjPrintParams print_params,
-                                   const ParamStore *param_store)
+                                   const ParamStore *param_store,
+                                   const ObSQLSessionInfo *session)
   : buf_(buf),
     buf_len_(buf_len),
     pos_(pos),
@@ -39,7 +40,8 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     schema_guard_(schema_guard),
     print_params_(print_params),
     expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store),
-    param_store_(param_store)
+    param_store_(param_store),
+    session_(session)
 {
 }
 
@@ -56,6 +58,95 @@ void ObDMLStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt 
   print_cte_ = false;
 }
 
+int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
+{
+  int ret = OB_SUCCESS;
+  if (!print_params_.for_dblink_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to print dblink hint", K(ret), K(print_params_.for_dblink_));
+  } else if (is_first_stmt_for_hint_) {
+    const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
+    const ObGlobalHint &global_hint = query_hint.get_global_hint();
+    ObGlobalHint &global_hint_dblink = query_hint_dblink.get_global_hint();
+    global_hint_dblink.merge_query_timeout_hint(global_hint.query_timeout_);
+    global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
+    global_hint_dblink.merge_log_level_hint(global_hint.log_level_);
+    global_hint_dblink.force_trace_log_ = global_hint.force_trace_log_;
+    global_hint_dblink.monitor_ = global_hint.monitor_;
+    int64_t session_query_timeout_us = 0;
+    if (OB_ISNULL(session_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), K(lbt()));
+    } else if (stmt_->is_select_stmt()) {
+      uint64_t dblink_id = OB_INVALID_ID;
+      dblink_id = stmt_->get_dblink_id();
+      if (0 == dblink_id) {
+        // set dblink_info, to unparse a link sql with dblink_info hint
+        oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
+        if (OB_FAIL(const_cast<oceanbase::sql::ObSQLSessionInfo *>(session_)->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
+          LOG_WARN("failed to get reverse link info from session", K(ret), K(session_->get_sessid()));
+        } else if (NULL == reverse_dblink_info) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          query_hint_dblink.get_global_hint().merge_tm_sessid_tx_id(reverse_dblink_info->get_tx_id(),
+                                                                    reverse_dblink_info->get_tm_sessid());
+          LOG_TRACE("set tx_id_ and tm_sessid to stmt", K(reverse_dblink_info->get_tx_id()),
+                                                        K(reverse_dblink_info->get_tm_sessid()));
+        }
+      } else {
+        // reset dblink hint, to unparse a link sql without dblink_info hint
+        query_hint_dblink.get_global_hint().reset_tm_sessid_tx_id_hint();
+      }
+      if ((session_->is_in_transaction() &&
+            transaction::ObTxIsolationLevel::RC == session_->get_tx_desc()->get_isolation_level()) ||
+            !session_->is_in_transaction()) {
+        query_hint_dblink.get_global_hint().set_flashback_read_tx_uncommitted(true);
+      }
+      // link scan have not xa_trans_stop_check_lock hint
+      query_hint_dblink.get_global_hint().set_xa_trans_stop_check_lock(false);
+    } else { // T_INSERT T_DELETE T_UPDATE T_MERGE
+      bool has_reverse_link = false;
+      // link dml have not tm_sessid and tx_id hint
+      query_hint_dblink.get_global_hint().reset_tm_sessid_tx_id_hint();
+      if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt_, has_reverse_link))) {
+        LOG_WARN("failed to exec has_reverse_link", K(ret));
+      } else {
+        /**
+          restore xa_trans_stop_check_lock info, to avoid affecting the next execution flow.
+          if xa_trans_stop_check_lock == true and this is RM(0==dblink_id), RM will stop check xa lock.
+          eg:
+          step 1.
+            TM get sql1 like "insert into t2@my_link1 select a.c1, b.c2 from t1 a, t2@my_link1  b where a.c1=b.c1;",
+            and my_link1 and my_link2 have the same conneciton info.
+          step 2.
+            TM will send sql2  to RM like below
+            insert into "LCQ1"."T2"("C1","C2") select "A"."C1" AS "C1","LCQ1"."B"."C2" AS "C2" from "LCQ1"."T1"@! "A","LCQ1"."T2" "B" where ("A"."C1" = "LCQ1"."B"."C1")
+            TM will attach DBLINK_XA_TRANS_STOP_CHECK_LOCK hint to sql2, telling RM to stop check xa lock.
+          step 3.
+            RM get sql2, stop checking xa lock, then send sql3 like below to TM
+            "select * from T2@my_link2"
+          step 4.
+            TM get sql3, and send sql4 like below to RM
+            "select * from T2"
+            RM received sql4 and the meantime of excuting of sql2 is still runing.
+            sql4 can excuted directory without wait ending of sql2, cause sql2 has stoped check xa lock.
+        */
+        // When TM detects a reverse link in the SQL sent to RM, add a xa_trans_stop_check_lock hint tag to the SQL.
+        query_hint_dblink.get_global_hint().set_xa_trans_stop_check_lock(has_reverse_link);
+      }
+    }
+    if (OB_SUCC(ret) && -1 == query_hint_dblink.get_global_hint().query_timeout_) {
+      if (OB_FAIL(session_->get_query_timeout(session_query_timeout_us))) {
+        LOG_WARN("failed to get session query timeout", K(ret));
+      } else {
+        query_hint_dblink.get_global_hint().merge_query_timeout_hint(session_query_timeout_us);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmtPrinter::print_hint()
 {
   int ret = OB_SUCCESS;
@@ -68,6 +159,12 @@ int ObDMLStmtPrinter::print_hint()
     DATA_PRINTF("%s", hint_begin);
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
+      ObQueryHint query_hint_dblink;
+      if (print_params_.for_dblink_ &&
+          is_first_stmt_for_hint_ &&
+          OB_FAIL(prepare_dblink_hint(query_hint_dblink))) {
+        LOG_WARN("failed to print dblink hint", K(ret));
+      }
       PlanText plan_text;
       plan_text.buf_ = buf_;
       plan_text.buf_len_ = buf_len_;
@@ -76,7 +173,11 @@ int ObDMLStmtPrinter::print_hint()
       plan_text.type_ = print_params_.for_dblink_
                         ? EXPLAIN_DBLINK_STMT
                         : EXPLAIN_UNINITIALIZED;  // just for print hint, ExplainType set as invalid type
-      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_first_stmt_for_hint_))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (print_params_.for_dblink_ && is_first_stmt_for_hint_ && OB_FAIL(query_hint_dblink.get_global_hint().print_global_hint(plan_text))) {
+        LOG_WARN("failed to print stmt hint", K(ret));
+      } else if (!print_params_.for_dblink_ && OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_first_stmt_for_hint_))) {
         LOG_WARN("failed to print stmt hint", K(ret));
       } else if (plan_text.pos_ == *pos_) {
         // no hint, roolback buffer!
@@ -1787,7 +1888,8 @@ int ObDMLStmtPrinter::print_subquery(const ObSelectStmt *subselect_stmt,
                               schema_guard_,
                               print_params_,
                               param_store_,
-                              subquery_print_params & FORCE_COL_ALIAS);
+                              subquery_print_params & FORCE_COL_ALIAS,
+                              session_);
   if (subquery_print_params & PRINT_CTE) {
     printer.enable_print_temp_table_as_cte();
   }

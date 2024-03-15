@@ -58,6 +58,26 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   return ret;
 }
 
+int ObDBLinkHit::print(char *buf, int64_t &buf_len, int64_t &pos, const char* outline_indent) const {
+  int ret = OB_SUCCESS;
+  if (0 < tx_id_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , %ld)", outline_indent, "DBLINK_INFO", "DBLINK_TX_ID", tx_id_))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %ld)"));
+    }
+  }
+  if (OB_SUCC(ret) &&  0 != tm_sessid_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , %u)", outline_indent, "DBLINK_INFO", "DBLINK_TM_SESSID", tm_sessid_))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %u)"));
+    }
+  }
+  if (OB_SUCC(ret) &&  hint_xa_trans_stop_check_lock_) {
+    if (OB_FAIL(BUF_PRINTF("%s%s(\'%s\' , \'%s\')", outline_indent, "DBLINK_INFO", "DBLINK_XA_TRANS_STOP_CHECK_LOCK", "TRUE"))) {
+      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%s , %s)"));
+    }
+  }
+  return 0;
+}
+
 int ObGlobalHint::merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints)
 {
   int ret = OB_SUCCESS;
@@ -131,19 +151,34 @@ void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
   }
 }
 
-void ObGlobalHint::merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid)
+void ObGlobalHint::merge_tm_sessid_tx_id(int64_t tx_id, uint32_t tm_sessid)
 {
-  if (-1 != tx_id && -1 != tm_sessid) {
-    tx_id_ = tx_id;
-    tm_sessid_ = tm_sessid;
-    LOG_DEBUG("merge dblink info hint", K(tx_id_), K(tm_sessid_));
+  if (0 < tx_id && 0 != tm_sessid) {
+    dblink_hints_.tx_id_ = tx_id;
+    dblink_hints_.tm_sessid_ = tm_sessid;
+    int ret = 0;
   }
 }
 
-void ObGlobalHint::reset_dblink_info_hint()
+void ObGlobalHint::merge_dblink_info_tx_id(int64_t tx_id)
 {
-  tx_id_ = -1;
-  tm_sessid_ = -1;
+  if (0 < tx_id) {
+    dblink_hints_.tx_id_ = tx_id;
+  }
+}
+
+void ObGlobalHint::merge_dblink_info_tm_sessid(uint32_t tm_sessid)
+{
+  if (0 != tm_sessid) {
+    dblink_hints_.tm_sessid_ = tm_sessid;
+  }
+}
+
+void ObGlobalHint::reset_tm_sessid_tx_id_hint()
+{
+  int ret = 0;
+  dblink_hints_.tx_id_ = 0;
+  dblink_hints_.tm_sessid_ = 0;
 }
 
 void ObGlobalHint::merge_max_concurrent_hint(int64_t max_concurrent)
@@ -281,7 +316,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != topk_precision_
          || 0 != sharding_minimum_row_count_
          || UNSET_QUERY_TIMEOUT != query_timeout_
-         || (-1 != tx_id_ && -1 != tm_sessid_)
+         || dblink_hints_.has_valid_hint()
          || common::INVALID_CONSISTENCY != read_consistency_
          || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
          || false != force_trace_log_
@@ -305,8 +340,6 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
-  tx_id_ = -1;
-  tm_sessid_ = -1;
   read_consistency_ = common::INVALID_CONSISTENCY;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
@@ -330,6 +363,7 @@ void ObGlobalHint::reset()
   flashback_read_tx_uncommitted_ = false;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
   alloc_op_hints_.reuse();
+  dblink_hints_.reset();
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -338,7 +372,6 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
-  merge_dblink_info_hint(other.tx_id_, other.tm_sessid_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
   merge_log_level_hint(other.log_level_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
@@ -357,6 +390,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
+  dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   if (OB_FAIL(merge_alloc_op_hints(other.alloc_op_hints_))) {
     LOG_WARN("failed to merge alloc op hints", K(ret));
@@ -438,10 +472,8 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   if (OB_SUCC(ret) && UNSET_QUERY_TIMEOUT != query_timeout_) { //QUERY_TIMEOUT
     PRINT_GLOBAL_HINT_NUM("QUERY_TIMEOUT", query_timeout_);
   }
-  if (OB_SUCC(ret) && -1 != tx_id_ && -1 != tm_sessid_) { //DBLINK_INFO
-    if (OB_FAIL(BUF_PRINTF("%s%s(%ld , %ld)", outline_indent, "DBLINK_INFO", tx_id_, tm_sessid_))) {
-      LOG_WARN("failed to print hint", K(ret), K("DBLINK_INFO(%lld , %lld)"));
-    }
+  if (OB_SUCC(ret) && OB_FAIL(dblink_hints_.print(buf, buf_len, pos, outline_indent))) { // DBLINK_INFO
+    LOG_WARN("failed to print dblink hints", K(ret), K(dblink_hints_));
   }
   if (OB_SUCC(ret) && plan_cache_policy_ != OB_USE_PLAN_CACHE_INVALID) { //USE_PLAN_CACHE
     const char *plan_cache_policy = "INVALID";

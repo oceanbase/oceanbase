@@ -116,7 +116,11 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       enable_rich_format_(false),
       all_local_session_vars_(allocator),
       mview_ids_(allocator),
-      last_refresh_scns_(allocator)
+      last_refresh_scns_(allocator),
+      tx_id_(0),
+      tm_sessid_(0),
+      hint_xa_trans_stop_check_lock_(false),
+      main_xa_trans_branch_(false)
 {
 }
 
