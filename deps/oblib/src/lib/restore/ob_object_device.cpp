@@ -1011,6 +1011,12 @@ int ObObjectDevice::check_space_full(const int64_t required_size) const
   return OB_NOT_SUPPORTED;
 }
 
+int ObObjectDevice::check_write_limited() const
+{
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "check_write_limited is not support in object device !", K(device_type_));
+  return OB_NOT_SUPPORTED;
+}
+
 int ObObjectDevice::fdatasync(const ObIOFd &fd)
 {
   UNUSED(fd);
