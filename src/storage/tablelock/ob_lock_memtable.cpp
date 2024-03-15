@@ -115,20 +115,6 @@ void ObLockMemtable::reset()
   reset_trace_id();
 }
 
-// RX + S = RX + SRX  | S + RX = S + SRX
-OB_INLINE static void lock_upgrade(const ObTableLockMode &lock_mode_in_same_trans,
-                                   ObTableLockOp &lock_op)
-{
-  if (((lock_mode_in_same_trans & ROW_EXCLUSIVE) &&
-       !(lock_mode_in_same_trans & SHARE) &&
-       lock_op.lock_mode_ == SHARE)
-    || ((lock_mode_in_same_trans & SHARE) &&
-       !(lock_mode_in_same_trans & ROW_EXCLUSIVE) &&
-       lock_op.lock_mode_ == ROW_EXCLUSIVE)) {
-    lock_op.lock_mode_ = SHARE_ROW_EXCLUSIVE;
-  }
-}
-
 int ObLockMemtable::lock_(
     const ObLockParam &param,
     ObStoreCtx &ctx,
@@ -139,7 +125,7 @@ int ObLockMemtable::lock_(
   int64_t USLEEP_TIME = 100 * 1000; // 100 ms
   ObMemtableCtx *mem_ctx = NULL;
   bool need_retry = false;
-  ObTableLockMode lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   bool lock_exist = false;
   ObLockStep succ_step = STEP_BEGIN;
   bool register_to_deadlock = false;
@@ -155,7 +141,7 @@ int ObLockMemtable::lock_(
     {
       succ_step = STEP_BEGIN;
       lock_exist = false;
-      lock_mode_in_same_trans = 0x0;
+      memset(lock_mode_cnt_in_same_trans, 0, sizeof(lock_mode_cnt_in_same_trans));
       conflict_tx_set.reset();
       ObMvccWriteGuard guard;
       if (OB_FAIL(guard.write_auth(ctx))) {
@@ -172,7 +158,7 @@ int ObLockMemtable::lock_(
                                                      lock_op.lock_mode_,
                                                      lock_op.op_type_,
                                                      lock_exist,
-                                                     lock_mode_in_same_trans))) {
+                                                     lock_mode_cnt_in_same_trans))) {
           LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
         } else if (lock_exist) {
           // if the lock is DBMS_LOCK, we should return error code
@@ -181,8 +167,7 @@ int ObLockMemtable::lock_(
             ret = OB_OBJ_LOCK_EXIST;
           }
           LOG_DEBUG("lock is exist", K(ret), K(lock_op));
-        } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
-        } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_in_same_trans, conflict_tx_set))) {
+        } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_cnt_in_same_trans, conflict_tx_set))) {
           if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
               ret != OB_OBJ_LOCK_EXIST) {
             LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
@@ -255,11 +240,11 @@ int ObLockMemtable::lock_(
     // wait all the conflict trans to do deadlock detect.
     ObFunction<int(bool &need_wait)> recheck_f([this,
                                                 &lock_op,
-                                                &lock_mode_in_same_trans](bool &need_wait) -> int {
+                                                &lock_mode_cnt_in_same_trans](bool &need_wait) -> int {
       int ret = OB_SUCCESS;
       ObTxIDSet conflict_tx_set;
       if (OB_FAIL(this->obj_lock_map_.check_allow_lock(lock_op,
-                                                       lock_mode_in_same_trans,
+                                                       lock_mode_cnt_in_same_trans,
                                                        conflict_tx_set)) &&
           OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("check allow lock failed", K(ret));
@@ -340,7 +325,7 @@ int ObLockMemtable::unlock_(
   ObMemtableCtx *mem_ctx = NULL;
   bool lock_op_exist = false;
   bool need_retry = false;
-  ObTableLockMode unused_lock_mode_in_same_trans = 0x0;
+  uint64_t unused_lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObLockStep succ_step = STEP_BEGIN;
 
   // 1. record unlock op myself(check conflict).
@@ -353,7 +338,7 @@ int ObLockMemtable::unlock_(
     {
       succ_step = STEP_BEGIN;
       lock_op_exist = false;
-      unused_lock_mode_in_same_trans = 0x0;
+      memset(unused_lock_mode_cnt_in_same_trans, 0, sizeof(unused_lock_mode_cnt_in_same_trans));
       ObMvccWriteGuard guard(true);
       if (ObClockGenerator::getClock() >= expired_time) {
         ret = OB_TIMEOUT;
@@ -369,7 +354,7 @@ int ObLockMemtable::unlock_(
                                                    unlock_op.lock_mode_,
                                                    unlock_op.op_type_,
                                                    lock_op_exist,
-                                                   unused_lock_mode_in_same_trans))) {
+                                                   unused_lock_mode_cnt_in_same_trans))) {
         LOG_WARN("failed to check lock exist ", K(ret), K(unlock_op));
       } else if (lock_op_exist) {
         // do nothing
@@ -515,7 +500,7 @@ int ObLockMemtable::check_lock_conflict(
 {
   int ret = OB_SUCCESS;
   bool lock_exist = false;
-  ObTableLockMode lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
 
   LOG_DEBUG("ObLockMemtable::check_lock_conflict ", K(lock_op));
   if (IS_NOT_INIT) {
@@ -530,7 +515,7 @@ int ObLockMemtable::check_lock_conflict(
                                                lock_op.lock_mode_,
                                                lock_op.op_type_,
                                                lock_exist,
-                                               lock_mode_in_same_trans))) {
+                                               lock_mode_cnt_in_same_trans))) {
     LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
   } else if (lock_exist) {
     // if the lock is DBMS_LOCK, we should return error code
@@ -540,7 +525,7 @@ int ObLockMemtable::check_lock_conflict(
     }
     LOG_DEBUG("lock is exist", K(ret), K(lock_op));
   } else if (OB_FAIL(obj_lock_map_.check_allow_lock(lock_op,
-                                                    lock_mode_in_same_trans,
+                                                    lock_mode_cnt_in_same_trans,
                                                     conflict_tx_set,
                                                     include_finish_tx,
                                                     only_check_dml_lock))) {
