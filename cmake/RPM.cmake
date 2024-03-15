@@ -54,12 +54,7 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 
 # systemd define on rpm
 if (OB_BUILD_OPENSOURCE)
-  if (CPACK_RPM_PACKAGE_RELEASE)
-    set(CPACK_RPM_SERVER_PACKAGE_REQUIRES "oceanbase-ce-libs = ${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}")
-  else()
-    set(CPACK_RPM_SERVER_PACKAGE_REQUIRES "oceanbase-ce-libs = ${CPACK_PACKAGE_VERSION}")
-  endif()
-  set(CPACK_RPM_SERVER_PACKAGE_REQUIRES "${CPACK_RPM_SERVER_PACKAGE_REQUIRES}, jq, systemd")
+  set(CPACK_RPM_SERVER_PACKAGE_REQUIRES "oceanbase-ce-libs = ${CPACK_PACKAGE_VERSION}, jq, systemd")
 
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh
