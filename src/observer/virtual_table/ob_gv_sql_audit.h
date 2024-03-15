@@ -169,6 +169,7 @@ private:
     FLT_TRACE_ID,
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
+    NETWORK_WAIT_TIME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

@@ -42,7 +42,9 @@ FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
                          L_ETIME       IN DATE,
                          SQL_ID        IN VARCHAR2  DEFAULT NULL,
                          TRACE_ID      IN VARCHAR2  DEFAULT NULL,
-                         WAIT_CLASS    IN VARCHAR2  DEFAULT NULL
+                         WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
+                         SVR_IP        VARCHAR(64)  DEFAULT NULL,
+                         SVR_PORT      NUMBER       DEFAULT NULL
                         )
 RETURN awrrpt_text_type_table
 IS
@@ -796,14 +798,16 @@ PROCEDURE ASH_REPORT(BTIME         IN DATE,
                      SQL_ID        IN VARCHAR2  DEFAULT NULL,
                      TRACE_ID      IN VARCHAR2  DEFAULT NULL,
                      WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
-                     REPORT_TYPE   IN VARCHAR2  DEFAULT 'text'
+                     REPORT_TYPE   IN VARCHAR2  DEFAULT 'text',
+                     SVR_IP        VARCHAR(64)  DEFAULT NULL,
+                     SVR_PORT      NUMBER       DEFAULT NULL
                    )
 IS
   -- REPORT_TYPE is reserved for 'text'/'html', currently only 'text' supported
   res AWRRPT_TEXT_TYPE_TABLE;
 BEGIN
   DBMS_OUTPUT.ENABLE(NULL);
-  res := DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME, SQL_ID, WAIT_CLASS);
+  res := DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME, SQL_ID, WAIT_CLASS, SVR_IP, SVR_PORT);
   for i in res.first .. res.last loop
     DBMS_OUTPUT.put_line(res(i));
   end loop;

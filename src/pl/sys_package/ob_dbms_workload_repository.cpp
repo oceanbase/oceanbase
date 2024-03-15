@@ -405,36 +405,24 @@ int ObDbmsWorkloadRepository::generate_ash_report_text(
   AshReportParams ash_report_params;
   uint64_t data_version = OB_INVALID_VERSION;
   ObStringBuffer buff(&ctx.exec_ctx_->get_allocator());
-  if (OB_UNLIKELY(5 != params.count())) {
-    ret = OB_INVALID_ARGUMENT_NUM;
-    LOG_WARN("parameters number is wrong", K(ret), K(params.count()));
-  } else if (params.at(0).is_null()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("first parameters is null", K(ret), K(params.at(0)));
-  } else if (params.at(1).is_null()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("second parameters is null", K(ret), K(params.at(1)));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), data_version))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(ctx.exec_ctx_->get_my_session()->get_effective_tenant_id(), data_version))) {
     LOG_WARN("get min data_version failed", KR(ret), K(ctx.exec_ctx_->get_my_session()->get_effective_tenant_id()));
   } else if (data_version < DATA_VERSION_4_2_1_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is too low for wr", K(ctx.exec_ctx_->get_my_session()->get_effective_tenant_id()), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2.1, workload repository not supported");
-  } else if (OB_FAIL(params.at(2).get_string(ash_report_params.sql_id))) {
-    LOG_WARN("failed to get sql id from params", K(ret), K(params.at(2)));
-  } else if (OB_FAIL(params.at(3).get_string(ash_report_params.trace_id))) {
-    LOG_WARN("failed to get trace id from params", K(ret), K(params.at(3)));
-  } else if (OB_FAIL(params.at(4).get_string(ash_report_params.wait_class))) {
-    LOG_WARN("failed to get wait class from params", K(ret), K(params.at(4)));
-  } else if (OB_FAIL(buff.append("\n# ASH Report\n\n"))) {  // print header
-    LOG_WARN("failed to append string into buff", K(ret));
+  } else if (process_ash_report_params(data_version, params, ash_report_params)) {
+    LOG_WARN("failed to process ash report params", K(ret), K(data_version), K(params));
   } else {
-    ash_report_params.ash_begin_time = params.at(0).get_datetime();
-    ash_report_params.ash_end_time = params.at(1).get_datetime();
 
     // calc ASH_BEGIN_TIME and ASH_END_TIME
     int64_t ash_begin_time = 0;
     int64_t ash_end_time = 0;
+
+    if (OB_FAIL(buff.append("\n# ASH Report\n\n"))) {  // print header
+      LOG_WARN("failed to append string into buff", K(ret));
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(get_ash_begin_and_end_time(ash_report_params, ash_begin_time, ash_end_time))) {
         LOG_WARN("failed to get ash begin time and end time", K(ret));
@@ -593,6 +581,8 @@ const char *ASH_VIEW_SQL =
     "a.in_px_execution,  a.in_sequence_load, a.in_committing,  a.in_storage_read, "
     "a.in_storage_write, a.in_remote_das_execution, a.module, a.action, a.client_id  FROM GV$ACTIVE_SESSION_HISTORY a "
     " WHERE 1=1 and a.sample_time between '%.*s' and '%.*s' "
+    "  AND ('%.*s' = ''  OR svr_ip like '%.*s') "
+    "  AND ('%.*s' = '-1'  OR svr_port like '%.*s') "
     ") unified_ash WHERE sample_time between '%.*s'  and '%.*s' "
     " AND ('%.*s' = ''  OR sql_id like '%.*s') "
     " AND ('%.*s' = '' OR trace_id like '%.*s') "
@@ -616,6 +606,8 @@ const char *ASH_VIEW_SQL_422 =
     "a.plsql_entry_object_id, a.plsql_entry_subprogram_id, a.plsql_entry_subprogram_name, "
     "a.plsql_object_id, a.plsql_subprogram_id, a.plsql_subprogram_name  FROM GV$ACTIVE_SESSION_HISTORY a "
     " WHERE 1=1 and a.sample_time between '%.*s' and '%.*s' "
+    "  AND ('%.*s' = ''  OR svr_ip like '%.*s') "
+    "  AND ('%.*s' = '-1'  OR svr_port like '%.*s') "
     ") unified_ash WHERE sample_time between '%.*s'  and '%.*s' "
     " AND ('%.*s' = ''  OR sql_id like '%.*s') "
     " AND ('%.*s' = '' OR trace_id like '%.*s') "
@@ -632,6 +624,7 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
   int64_t time_buf_pos = 0;
   char ash_begin_time_buf[time_buf_len];
   char ash_end_time_buf[time_buf_len];
+  char port_buf[time_buf_len];
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("get_min_data_version failed", K(ret), K(MTL_ID()));
@@ -642,14 +635,19 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
   } else if (OB_FAIL(usec_to_string(
                  ash_report_params.ash_end_time, ash_end_time_buf, time_buf_len, time_buf_pos))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
+  } else if (FALSE_IT(sprintf(port_buf, "%ld", ash_report_params.port))) {
   } else if (OB_FAIL(sql_string.append_fmt(
                  data_version >= DATA_VERSION_4_2_2_0 ? ASH_VIEW_SQL_422 : ASH_VIEW_SQL,
-                 static_cast<int>(time_buf_pos),
-                 ash_begin_time_buf, static_cast<int>(time_buf_pos), ash_end_time_buf,
-                 static_cast<int>(time_buf_pos), ash_begin_time_buf, static_cast<int>(time_buf_pos),
-                 ash_end_time_buf, ash_report_params.sql_id.length(),
-                 ash_report_params.sql_id.ptr(), ash_report_params.sql_id.length(),
-                 ash_report_params.sql_id.ptr(), ash_report_params.trace_id.length(),
+                 static_cast<int>(time_buf_pos), ash_begin_time_buf,
+                 static_cast<int>(time_buf_pos), ash_end_time_buf,
+                 ash_report_params.svr_ip.length(), ash_report_params.svr_ip.ptr(),
+                 ash_report_params.svr_ip.length(), ash_report_params.svr_ip.ptr(),
+                 strlen(port_buf), port_buf, strlen(port_buf), port_buf,
+                 static_cast<int>(time_buf_pos), ash_begin_time_buf,
+                 static_cast<int>(time_buf_pos), ash_end_time_buf,
+                 ash_report_params.sql_id.length(),ash_report_params.sql_id.ptr(),
+                 ash_report_params.sql_id.length(),
+                 ash_report_params.sql_id.ptr(),ash_report_params.trace_id.length(),
                  ash_report_params.trace_id.ptr(), ash_report_params.trace_id.length(),
                  ash_report_params.trace_id.ptr(), ash_report_params.wait_class.length(),
                  ash_report_params.wait_class.ptr(), ash_report_params.wait_class.length(),
@@ -2331,6 +2329,42 @@ int ObDbmsWorkloadRepository::print_ash_node_load(
   return ret;
 }
 
+int ObDbmsWorkloadRepository::process_ash_report_params(const uint64_t data_version, const sql::ParamStore &params, AshReportParams &ash_report_params)
+{
+  int ret = OB_SUCCESS;
+  if ((5 == params.count() && data_version < DATA_VERSION_4_2_3_0 )|| (7 == params.count() && data_version >= DATA_VERSION_4_2_3_0)) {
+    if (params.at(0).is_null()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("first parameters is null", K(ret), K(params.at(0)));
+    } else if (params.at(1).is_null()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("second parameters is null", K(ret), K(params.at(1)));
+    } else if (OB_FAIL(params.at(2).get_string(ash_report_params.sql_id))) {
+      LOG_WARN("failed to get sql id from params", K(ret), K(params.at(2)));
+    } else if (OB_FAIL(params.at(3).get_string(ash_report_params.trace_id))) {
+      LOG_WARN("failed to get trace id from params", K(ret), K(params.at(3)));
+    } else if (OB_FAIL(params.at(4).get_string(ash_report_params.wait_class))) {
+      LOG_WARN("failed to get wait class from params", K(ret), K(params.at(4)));
+    } else {
+      ash_report_params.ash_begin_time = params.at(0).get_datetime();
+      ash_report_params.ash_end_time = params.at(1).get_datetime();
 
+      if (7 == params.count() && data_version >= DATA_VERSION_4_2_3_0) {
+        if (!params.at(6).is_null()) {
+          ash_report_params.port = params.at(6).get_int();
+        } else {
+          ash_report_params.port = -1;
+        }
+        if (OB_FAIL(params.at(5).get_string(ash_report_params.svr_ip))) {
+          LOG_WARN("failed to get svr_ip from params", K(ret), K(params.at(5)));
+        }
+      }
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT_NUM;
+    LOG_WARN("parameters number is wrong", K(ret), K(params.count()), K(data_version), K(DATA_VERSION_4_2_2_0));
+  }
+  return ret;
+}
 }  // namespace pl
 }  // namespace oceanbase

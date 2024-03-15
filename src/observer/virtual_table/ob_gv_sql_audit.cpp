@@ -545,7 +545,8 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case INDEX_BLOCK_CACHE_HIT:
     case BLOCKSCAN_BLOCK_CNT:
     case BLOCKSCAN_ROW_CNT:
-    case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
+    case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
+    case NETWORK_WAIT_TIME: {
       is_contain = true;
       break;
     }
@@ -1058,6 +1059,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         } break;
         case PLSQL_EXEC_TIME: {
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
+        } break;
+        case NETWORK_WAIT_TIME: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

@@ -20,6 +20,8 @@ namespace oceanbase
 namespace share
 {
 
+enum class ObWrSnapshotStatus : int64_t;
+
 struct ObWrSysstat
 {
   ObWrSysstat() : svr_ip_("\0"), svr_port_(0), stat_id_(0), value_(0)
@@ -73,6 +75,7 @@ public:
     p2_ = -1;
     p3_ = -1;
     sql_plan_line_id_ = -1;
+    group_id_ = 0;
     time_model_ = 0;
     module_[0] = '\0';
     action_[0] = '\0';
@@ -87,7 +90,7 @@ public:
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time),
       K_(user_id), K_(session_type), K_(sql_id), K_(trace_id), K_(event_no), K_(event_id), K_(time_waited),
-      K_(p1), K_(p2), K_(p3), K_(sql_plan_line_id), K_(time_model), K_(module), K_(action),
+      K_(p1), K_(p2), K_(p3), K_(sql_plan_line_id), K_(group_id), K_(time_model), K_(module), K_(action),
       K_(client_id), K_(plan_id), K_(top_level_sql_id), K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id),
       K_(plsql_entry_subprogram_name), K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name));
   char svr_ip_[OB_IP_STR_BUFF];
@@ -106,13 +109,14 @@ public:
   int64_t p2_;
   int64_t p3_;
   int64_t sql_plan_line_id_;
+  int64_t group_id_;
   uint64_t time_model_;
-  char module_[64 + 1];
-  char action_[64 + 1];
-  char client_id_[64 + 1];
-  char backtrace_[512 + 1];
+  char module_[ASH_MODULE_STR_LEN + 1];
+  char action_[ASH_ACTION_STR_LEN + 1];
+  char client_id_[ASH_CLIENT_ID_STR_LEN + 1];
+  char backtrace_[ASH_BACKTRACE_STR_LEN + 1];
   int64_t plan_id_;
-  char program_[64+1];
+  char program_[ASH_PROGRAM_STR_LEN + 1];
   int64_t tm_delta_time_;
   int64_t tm_delta_cpu_time_;
   int64_t tm_delta_db_time_;

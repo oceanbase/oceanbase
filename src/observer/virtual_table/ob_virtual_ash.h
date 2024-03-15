@@ -91,6 +91,7 @@ protected:
     PLSQL_SUBPROGRAM_NAME,
     EVENT_ID,
     IN_FILTER_ROWS,
+    GROUP_ID,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

@@ -5918,6 +5918,7 @@ void ObBasicSessionInfo::setup_ash()
   ash_stat_.session_id_ = get_sessid();
   ash_stat_.trace_id_ = get_current_trace_id();
   ash_stat_.tid_ = GETTID();
+  ash_stat_.group_id_ = THIS_WORKER.get_group_id();
   ObActiveSessionGuard::setup_ash(ash_stat_);
 }
 

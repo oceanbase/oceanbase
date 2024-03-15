@@ -49,7 +49,7 @@ class ObAllVirtualDumpTenantInfo;
 }
 namespace omt
 {
-
+typedef common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> ReqQueue;
 class ObPxPool
     : public share::ObThreadPool
 {
@@ -70,7 +70,11 @@ public:
   {}
   virtual void stop();
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
-  void set_group_id(uint64_t group_id) { group_id_ = group_id; }
+  void set_group_id(uint64_t group_id)
+  {
+    ObActiveSessionGuard::get_stat().group_id_ = THIS_WORKER.get_group_id();
+    group_id_ = group_id;
+  }
   void set_cgroup_ctrl(share::ObCgroupCtrl *cgroup_ctrl) { cgroup_ctrl_ = cgroup_ctrl; }
   int64_t get_pool_size() const { return get_thread_count(); }
   int submit(const RunFuncT &func);
@@ -291,6 +295,8 @@ public:
   void check_worker_count();
   void check_worker_count(ObThWorker &w);
   int clear_worker();
+  common::ObPriorityQueue2<0, 1> &get_req_queue() { return req_queue_; }
+  ObMultiLevelQueue* get_multi_level_queue() { return &multi_level_queue_; }
   TO_STRING_KV("group_id", group_id_,
                "queue_size", req_queue_.size(),
                "recv_req_cnt", recv_req_cnt_,
@@ -505,6 +511,9 @@ public:
   {
     return 0;
   }
+  ReqQueue& get_req_queue() { return req_queue_; }
+  ObMultiLevelQueue* get_multi_level_queue() { return multi_level_queue_; }
+  GroupMap& get_group_map() { return group_map_;}
   // OB_INLINE bool has_normal_request() const { return req_queue_.size() != 0; }
   // OB_INLINE bool has_level_request() const { return OB_NOT_NULL(multi_level_queue_) && multi_level_queue_->get_total_size() != 0; }
 private:

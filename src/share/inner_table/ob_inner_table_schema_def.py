@@ -5859,6 +5859,7 @@ def_table_schema(
     ('plsql_subprogram_id', 'int', 'true'),
     ('plsql_subprogram_name', 'varchar:32', 'true'),
     ('event_id', 'int', 'true'),
+    ('group_id', 'int', 'true'),
   ],
 )
 
@@ -8036,6 +8037,7 @@ def_table_schema(
     ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
     ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ('plsql_exec_time', 'int'),
+    ('network_wait_time', 'uint', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11969,6 +11971,7 @@ def_table_schema(
     ('PLSQL_SUBPROGRAM_NAME', 'varchar:32', 'true'),
     ('EVENT_ID', 'int', 'true'),
     ('IN_FILTER_ROWS', 'bool', 'false', 'false'),
+    ('GROUP_ID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -15446,7 +15449,8 @@ def_table_schema(
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
-                         plsql_exec_time as PLSQL_EXEC_TIME
+                         plsql_exec_time as PLSQL_EXEC_TIME,
+                         network_wait_time as NETWORK_WAIT_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -15852,7 +15856,8 @@ def_table_schema(
     TX_STATE_VERSION,
     FLT_TRACE_ID,
     PL_TRACE_ID,
-    PLSQL_EXEC_TIME FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+    PLSQL_EXEC_TIME,
+    NETWORK_WAIT_TIME FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
     normal_columns = [
@@ -24705,6 +24710,7 @@ WAIT_CLASS,
 WAIT_CLASS_ID,
 TIME_WAITED,
 SQL_PLAN_LINE_ID,
+GROUP_ID,
 IN_PARSE,
 IN_PL_PARSE,
 IN_PLAN_CACHE,
@@ -24772,6 +24778,7 @@ WAIT_CLASS,
 WAIT_CLASS_ID,
 TIME_WAITED,
 SQL_PLAN_LINE_ID,
+GROUP_ID,
 IN_PARSE,
 IN_PL_PARSE,
 IN_PLAN_CACHE,
@@ -29423,6 +29430,7 @@ def_table_schema(
       ASH.P2 AS P2,
       ASH.P3 AS P3,
       ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.GROUP_ID AS GROUP_ID,
       ASH.TIME_MODEL AS TIME_MODEL,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PARSE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 2) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PL_PARSE,
@@ -29499,6 +29507,7 @@ def_table_schema(
       ASH.P2 AS P2,
       ASH.P3 AS P3,
       ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.GROUP_ID AS GROUP_ID,
       ASH.TIME_MODEL AS TIME_MODEL,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PARSE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 2) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PL_PARSE,
@@ -32596,6 +32605,7 @@ def_table_schema(
       CAST(WAIT_CLASS_ID AS SIGNED) AS WAIT_CLASS_ID,
       CAST(TIME_WAITED AS SIGNED) AS TIME_WAITED,
       CAST(SQL_PLAN_LINE_ID AS SIGNED) SQL_PLAN_LINE_ID,
+      CAST(GROUP_ID AS SIGNED) GROUP_ID,
       CAST(IF (IN_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PARSE,
       CAST(IF (IN_PL_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PL_PARSE,
       CAST(IF (IN_PLAN_CACHE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLAN_CACHE,
@@ -32666,6 +32676,7 @@ def_table_schema(
       WAIT_CLASS_ID,
       TIME_WAITED,
       SQL_PLAN_LINE_ID,
+      GROUP_ID,
       IN_PARSE,
       IN_PL_PARSE,
       IN_PLAN_CACHE,
@@ -50448,6 +50459,7 @@ def_table_schema(
       ASH.P2 AS P2,
       ASH.P3 AS P3,
       ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.GROUP_ID AS GROUP_ID,
       ASH.TIME_MODEL AS TIME_MODEL,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PARSE,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PL_PARSE,
@@ -52018,7 +52030,8 @@ def_table_schema(
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
-                         plsql_exec_time as PLSQL_EXEC_TIME
+                         plsql_exec_time as PLSQL_EXEC_TIME,
+                         network_wait_time as  NETWORK_WAIT_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -52128,7 +52141,8 @@ TX_INTERNAL_ROUTING,
 TX_STATE_VERSION,
 FLT_TRACE_ID,
 PL_TRACE_ID,
-PLSQL_EXEC_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLSQL_EXEC_TIME,
+NETWORK_WAIT_TIME FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -57273,6 +57287,7 @@ WAIT_CLASS,
 WAIT_CLASS_ID,
 TIME_WAITED,
 SQL_PLAN_LINE_ID,
+GROUP_ID,
 IN_PARSE,
 IN_PL_PARSE,
 IN_PLAN_CACHE,
@@ -57342,6 +57357,7 @@ def_table_schema(
       WAIT_CLASS_ID,
       TIME_WAITED,
       SQL_PLAN_LINE_ID,
+      GROUP_ID,
       IN_PARSE,
       IN_PL_PARSE,
       IN_PLAN_CACHE,
@@ -59343,6 +59359,7 @@ def_table_schema(
       CAST(WAIT_CLASS_ID AS NUMBER) AS WAIT_CLASS_ID,
       CAST(TIME_WAITED AS NUMBER) AS TIME_WAITED,
       CAST(SQL_PLAN_LINE_ID AS NUMBER) SQL_PLAN_LINE_ID,
+      CAST(GROUP_ID AS NUMBER) GROUP_ID,
       CAST(DECODE(IN_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PARSE,
       CAST(DECODE(IN_PL_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PL_PARSE,
       CAST(DECODE(IN_PLAN_CACHE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PLAN_CACHE,
@@ -59412,6 +59429,7 @@ WAIT_CLASS,
 WAIT_CLASS_ID,
 TIME_WAITED,
 SQL_PLAN_LINE_ID,
+GROUP_ID,
 IN_PARSE,
 IN_PL_PARSE,
 IN_PLAN_CACHE,
