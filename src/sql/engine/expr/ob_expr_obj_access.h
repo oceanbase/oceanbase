@@ -38,7 +38,7 @@ public:
   ExtraInfo &get_info() { return info_; }
 
   int calc_result(common::ObObj &result, const common::ObObj *objs_stack,
-                  int64_t param_num, const ParamStore &param_store, ObEvalCtx *ctx = nullptr) const;
+                  int64_t param_num, const ParamStore &param_store, ObEvalCtx &ctx) const;
 
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
@@ -96,7 +96,7 @@ public:
              const ParamStore &param_store,
              const common::ObObj *params,
              int64_t param_num,
-             ObEvalCtx *ctx) const;
+             ObEvalCtx &ctx) const;
 
     TO_STRING_KV(K_(get_attr_func),
                  K_(param_idxs),
