@@ -22,7 +22,6 @@
 #include "lib/hash/ob_hashset.h"
 #include "lib/time/ob_time_utility.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "ob_storage_ha_src_provider.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/tablet/ob_tablet.h"
@@ -30,6 +29,7 @@
 #include "ob_rebuild_service.h"
 #include "share/ob_cluster_version.h"
 #include "ob_storage_ha_utils.h"
+#include "ob_storage_ha_src_provider.h"
 
 namespace oceanbase
 {
@@ -1134,7 +1134,7 @@ int ObStartMigrationTask::report_ls_meta_table_()
 int ObStartMigrationTask::choose_src_()
 {
   int ret = OB_SUCCESS;
-  storage::ObStorageHASrcProvider src_provider;
+  ObStorageHAChooseSrcHelper choose_src_helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
@@ -1149,10 +1149,11 @@ int ObStartMigrationTask::choose_src_()
     SCN local_clog_checkpoint_scn = SCN::min_scn();
     if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
-    } else if (OB_FAIL(src_provider.init(tenant_id, ctx_->arg_.type_, storage_rpc_))) {
-      LOG_WARN("failed to init src provider", K(ret), K(tenant_id), "type", ctx_->arg_.type_);
-    } else if (OB_FAIL(src_provider.choose_ob_src(ls_id, local_clog_checkpoint_scn, src_info))) {
-      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn));
+    } else if (OB_FAIL(choose_src_helper.init(tenant_id, ls_id, local_clog_checkpoint_scn, ctx_->arg_, storage_rpc_))) {
+      LOG_WARN("failed to init src provider.", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn),
+          K(ctx_->arg_), KP(storage_rpc_));
+    } else if (OB_FAIL(choose_src_helper.get_available_src(ctx_->arg_, src_info))) {
+      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(ctx_->arg_));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(tenant_id), K(ls_id), K(src_info));
     } else if (OB_FAIL(ObStorageHAUtils::check_server_version(ls_info.version_))) {

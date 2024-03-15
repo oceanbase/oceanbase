@@ -3827,7 +3827,6 @@ public:
            && ls_id_.is_valid()
            && src_.is_valid()
            && dst_.is_valid()
-           && data_source_.is_valid()
            && paxos_replica_number_ > 0;
   }
 public:
@@ -3882,7 +3881,6 @@ public:
            && common::OB_INVALID_ID != tenant_id_
            && ls_id_.is_valid()
            && dst_.is_valid()
-           && data_source_.is_valid()
            && orig_paxos_replica_number_ > 0
            && new_paxos_replica_number_ > 0;
   }
@@ -3942,7 +3940,6 @@ public:
            && ls_id_.is_valid()
            && src_.is_valid()
            && dst_.is_valid()
-           && data_source_.is_valid()
            && orig_paxos_replica_number_ > 0
            && new_paxos_replica_number_ > 0;
   }

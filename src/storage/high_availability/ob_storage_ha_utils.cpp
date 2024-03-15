@@ -419,6 +419,34 @@ int ObStorageHAUtils::check_ls_is_leader(
   return ret;
 }
 
+int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus migration_status;
+  share::ObLSRestoreStatus restore_status;
+  if (!ls_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ls_info));
+  } else if (OB_FAIL(check_server_version(ls_info.version_))) {
+    if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+      LOG_WARN("this src is not compatible", K(ret), K(ls_info));
+    } else {
+      LOG_WARN("failed to check version", K(ret), K(ls_info));
+    }
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_info));
+  } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+    ret = OB_DATA_SOURCE_NOT_VALID;
+    LOG_WARN("this src is not suitable, migration status check failed", K(ret), K(ls_info));
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls_info));
+  } else if (restore_status.is_restore_failed()) {
+    ret = OB_DATA_SOURCE_NOT_EXIST;
+    LOG_WARN("some ls replica restore failed, can not migrate", K(ret), K(ls_info));
+  }
+  return ret;
+}
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;

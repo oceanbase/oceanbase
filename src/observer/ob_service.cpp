@@ -1704,7 +1704,7 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
-      migration_op_arg.src_ = arg.data_source_;
+      migration_op_arg.src_ = arg.dst_;
       migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
       if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
         LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));

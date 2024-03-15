@@ -1873,6 +1873,15 @@ ERRSIM_DEF_BOOL(errsim_migration_solo_send_medium_info, OB_CLUSTER_PARAMETER, "F
 ERRSIM_DEF_BOOL(ls_rebuild_without_check_limit, OB_TENANT_PARAMETER, "False",
          "ls rebuild without check limit",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "idc",
+        common::ObConfigMigrationChooseSourceChecker,
+        "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
+        "'region' means firstly choose follower replica of the same region as source",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
+        "Control whether to use chose_migration_source_policy. "
+        "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -216,7 +216,6 @@ public:
                transmit_data_size_(0),
                sibling_in_schedule_(false),
                invoked_source_(obrpc::ObAdminClearDRTaskArg::TaskType::AUTO),
-               skip_change_member_list_(false),
                generate_time_(common::ObTimeUtility::current_time()),
                priority_(ObDRTaskPriority::MAX_PRI),
                comment_("DRTask"),
@@ -244,7 +243,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment);
 
@@ -252,13 +250,6 @@ public:
       const int ret_code,
       const ObDRTaskRetComment &ret_comment,
       ObSqlString &execute_result) const;
-
-public:
-  static int generate_skip_change_member_list(
-      const ObDRTaskType task_type,
-      const common::ObReplicaType src_type,
-      const common::ObReplicaType dst_type,
-      bool &skip_change_member_list);
 public:
   virtual const common::ObAddr &get_dst_server() const = 0;
 
@@ -303,7 +294,6 @@ public:
                        K_(transmit_data_size),
                        K_(sibling_in_schedule),
                        K_(invoked_source),
-                       K_(skip_change_member_list),
                        K_(generate_time),
                        K_(priority),
                        K_(comment),
@@ -340,9 +330,6 @@ public:
   // operations of invoked_source_
   obrpc::ObAdminClearDRTaskArg::TaskType get_invoked_source() const { return invoked_source_; }
   void set_invoked_source(obrpc::ObAdminClearDRTaskArg::TaskType t) { invoked_source_ = t; }
-  // operations of skip_change_member_list
-  bool is_skip_change_member_list() const { return skip_change_member_list_; }
-  void set_skip_change_member_list(const bool l) { skip_change_member_list_ = l; } 
   // operations of generate_time_
   int64_t get_generate_time() const { return generate_time_; }
   void set_generate_time(const int64_t generate_time) { generate_time_ = generate_time; }
@@ -387,7 +374,6 @@ protected:
   int64_t transmit_data_size_;
   bool sibling_in_schedule_;
   obrpc::ObAdminClearDRTaskArg::TaskType invoked_source_;
-  bool skip_change_member_list_;
   int64_t generate_time_;
   ObDRTaskPriority priority_;
   ObSqlString comment_;
@@ -416,7 +402,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment,
       const ObDstReplica &dst_replica,
@@ -528,7 +513,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment,
       const ObDstReplica &dst_replica_,
@@ -639,7 +623,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment,
       const ObDstReplica &dst_replica_,
@@ -756,7 +739,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment,
       const common::ObAddr &leader,
@@ -872,7 +854,6 @@ public:
       const int64_t cluster_id,
       const int64_t transmit_data_size,
       const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
       const ObDRTaskPriority priority,
       const ObString &comment,
       const common::ObAddr &dst_server,

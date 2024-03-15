@@ -1216,6 +1216,13 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
   return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
 }
 
+bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("idc")
+      || 0 == v_str.case_compare("region");
+}
+
 bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
 {
   bool is_valid = false;
