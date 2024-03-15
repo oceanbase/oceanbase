@@ -221,7 +221,7 @@ private:
   int init_choose_source_by_checkpoint_provider_(
       const uint64_t tenant_id, const share::ObLSID &ls_id,
       const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc);
-  void errsim_test_();
+  void errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
 
 private:
   ObStorageHASrcProvider *provider_;

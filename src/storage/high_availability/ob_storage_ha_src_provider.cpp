@@ -1088,7 +1088,7 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
     src_info.src_addr_ = chosen_src_addr;
     src_info.cluster_id_ = GCONF.cluster_id;
     LOG_INFO("succeed to choose src", K(src_info));
-    errsim_test_();
+    errsim_test_(arg, src_info);
   }
   SERVER_EVENT_ADD("storage_ha", "choose_src",
                    "tenant_id", provider_->get_tenant_id(),
@@ -1188,10 +1188,11 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
   return ret;
 }
 
-void ObStorageHAChooseSrcHelper::errsim_test_()
+void ObStorageHAChooseSrcHelper::errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info)
 {
+  int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  if (ObMigrationOpType::ADD_LS_OP == type_ || ObMigrationOpType::MIGRATE_LS_OP == type_) {
+  if (ObMigrationOpType::ADD_LS_OP == arg.type_ || ObMigrationOpType::MIGRATE_LS_OP == arg.type_) {
     const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
     if (!errsim_server.empty()) {
       common::ObAddr tmp_errsim_addr;
