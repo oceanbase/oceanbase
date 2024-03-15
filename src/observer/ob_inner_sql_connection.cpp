@@ -914,6 +914,7 @@ template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
@@ -1827,6 +1828,7 @@ int ObInnerSQLConnection::execute(
     const uint64_t tenant_id, sqlclient::ObIExecutor &executor)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(inner_execute);
   SMART_VAR(ObInnerSQLResult, res, get_session()) {
     if (OB_FAIL(res.init())) {

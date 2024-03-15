@@ -1426,6 +1426,7 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   int64_t execute_start = ObTimeUtility::current_time();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
@@ -1706,6 +1707,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
 int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   lib::MemoryContext mem_context = NULL;
   lib::ContextParam param;
@@ -1852,6 +1854,7 @@ int ObPL::execute(ObExecContext &ctx,
                   ObBitSet<OB_DEFAULT_BITSET_SIZE> &out_args)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
@@ -1941,6 +1944,7 @@ int ObPL::execute(ObExecContext &ctx,
                   bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(pl_entry);
   bool debug_mode = false;
   ObPLFunction *routine = NULL;

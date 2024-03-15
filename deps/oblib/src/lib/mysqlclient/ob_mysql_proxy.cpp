@@ -461,6 +461,7 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
 int ObDbLinkProxy::acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObISQLConnectionPool *dblink_pool = NULL;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
@@ -579,6 +580,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
 int ObDbLinkProxy::release_dblink(/*uint64_t dblink_id,*/ DblinkDriverProto dblink_type, ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObISQLConnectionPool *dblink_pool = NULL;
   if (!is_inited()) {
     ret = OB_NOT_INIT;

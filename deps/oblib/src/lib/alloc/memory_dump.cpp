@@ -14,7 +14,7 @@
 
 #include "lib/alloc/memory_dump.h"
 #include <setjmp.h>
-#include "lib/alloc/ob_free_log_printer.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/rc/context.h"
 #include "lib/utility/utility.h"
@@ -205,6 +205,45 @@ int ObMemoryDump::push(void *task)
   return ret;
 }
 
+int ObMemoryDump::generate_mod_stat_task(ObMemoryCheckContext *memory_check_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObMemoryDumpTask *task = alloc_task();
+  if (OB_ISNULL(task)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc task failed");
+  } else {
+    task->type_ = STAT_LABEL;
+    task->memory_check_ctx_ = memory_check_ctx;
+    COMMON_LOG(INFO, "task info", K(*task));
+    if (OB_FAIL(push(task))) {
+      LOG_WARN("push task failed", K(ret));
+      free_task(task);
+    }
+  }
+  return ret;
+}
+
+int ObMemoryDump::check_sql_memory_leak()
+{
+  int ret = OB_SUCCESS;
+  ObMemoryCheckContext memory_check_ctx;
+  ObThreadCond &cond = memory_check_ctx.cond_;
+  if (OB_FAIL(cond.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+    LOG_WARN("thread cond init failed", K(ret));
+  } else if (OB_FAIL(generate_mod_stat_task(&memory_check_ctx))) {
+    LOG_WARN("generate mod stat task", K(ret));
+  } else {
+    ObThreadCondGuard guard(cond);
+    if (OB_FAIL(cond.wait())) {
+      LOG_WARN("thread condition wait failed", K(ret));
+    } else {
+      ret = memory_check_ctx.ret_;
+    }
+  }
+  return ret;
+}
+
 int ObMemoryDump::load_malloc_sample_map(ObMallocSampleMap &malloc_sample_map)
 {
   int ret = OB_SUCCESS;
@@ -231,19 +270,10 @@ void ObMemoryDump::run1()
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       int64_t current_ts = common::ObClockGenerator::getClock();
       if (current_ts - last_dump_ts > STAT_LABEL_INTERVAL) {
-        auto *task = alloc_task();
-        if (OB_ISNULL(task)) {
-          LOG_WARN("alloc task failed");
-        } else {
-          task->type_ = STAT_LABEL;
-          if (OB_FAIL(push(task))){
-            LOG_WARN("push task failed", K(ret));
-            free_task(task);
-          }
-        }
+        generate_mod_stat_task();
         last_dump_ts = current_ts;
       } else {
-        ob_usleep(current_ts - last_dump_ts);
+        ob_usleep(1000);
       }
     }
   }
@@ -485,6 +515,13 @@ void ObMemoryDump::handle(void *task)
                                   "tenant_id", "ctx_id", "chunk_cnt", "label_cnt",
                                   "segv_cnt");
     const int64_t start_ts = ObTimeUtility::current_time();
+    static bool has_memory_leak = false;
+    // sql memory leak can diagnose the memleak of object whose mem_version belongs to [min_check_version, max_check_version).
+    uint32_t min_check_version;
+    uint32_t max_check_version;
+    ObMemoryCheckContext *memory_check_ctx = m_task->memory_check_ctx_;
+    ObSqlMemoryLeakChecker::get_instance().update_check_range(NULL == memory_check_ctx || !memory_check_ctx->is_sql_memory_leak(),
+                                                              min_check_version, max_check_version);
     for (int tenant_idx = 0; tenant_idx < tenant_cnt; tenant_idx++) {
       uint64_t tenant_id = tenant_ids_[tenant_idx];
       for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
@@ -517,27 +554,27 @@ void ObMemoryDump::handle(void *task)
                     UNUSEDx(chunk, block);
                     return OB_SUCCESS;
                   },
-                  [tenant_id, ctx_id, &lmap, w_stat, &item_used]
+                  [tenant_id, ctx_id, &lmap, w_stat, &item_used, min_check_version, max_check_version]
                   (AChunk *chunk, ABlock *block, AObject *object) {
                     int ret = OB_SUCCESS;
                     if (object->in_use_) {
-                      bool expect = AOBJECT_TAIL_MAGIC_CODE ==
-                        reinterpret_cast<uint64_t&>(object->data_[object->alloc_bytes_]);
-                      if (!expect && object->is_valid() && object->in_use_
-                          && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-                        ObLabel label = object->label();
-                        char *ptr = object->data_;
-                        int32_t length = object->alloc_bytes_;
-                        LOG_INFO("tail magic maybe broken!!!", K(tenant_id), KP(ptr),
-                                  K(length), K(label));
+                     if (OB_FAIL(label_stat(chunk, block, object, lmap, w_stat->up2date_items_,
+                                           ARRAYSIZEOF(w_stat->up2date_items_), item_used))) {
+                        // do-nothing
+                      } else if (OB_FAIL(malloc_sample_stat(tenant_id, ctx_id, object,
+                                                            w_stat->malloc_sample_map_))) {
+                        // do-nothing
+                      } else if (!object->ignore_version_ &&
+                                 object->version_ >= min_check_version &&
+                                 object->version_ < max_check_version) {
+                        has_memory_leak = true;
+                        char bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+                        if (object->on_malloc_sample_) {
+                          parray(bt, sizeof(bt), (int64_t*)&object->data_[object->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE], AOBJECT_BACKTRACE_COUNT);
+                        }
+                        allow_next_syslog();
+                        LOG_WARN("SQL_MEMORY_LEAK", KP(object), K(tenant_id), K(ctx_id), K(object->version_), K(object->label_), K(bt));
                       }
-                    }
-                    ret = label_stat(chunk, block, object, lmap,
-                                      w_stat->up2date_items_, ARRAYSIZEOF(w_stat->up2date_items_),
-                                      item_used);
-                    if (OB_SUCC(ret)) {
-                      ret = malloc_sample_stat(tenant_id, ctx_id,
-                                               object, w_stat->malloc_sample_map_);
                     }
                     return ret;
                   });
@@ -593,7 +630,17 @@ void ObMemoryDump::handle(void *task)
       ObLatchWGuard guard(iter_lock_, common::ObLatchIds::MEM_DUMP_ITER_LOCK);
       std::swap(r_stat_, w_stat_);
     }
-    ObFreeLogPrinter::get_instance().disable_free_log();
+    if (NULL != memory_check_ctx) {
+      if (memory_check_ctx->is_sql_memory_leak() && has_memory_leak) {
+        memory_check_ctx->ret_ = OB_ERR_UNEXPECTED;
+        has_memory_leak = false;
+        LOG_WARN("there has sql memory leak");
+      }
+      if (OB_FAIL(memory_check_ctx->cond_.signal())) {
+        LOG_WARN("failed to signal condition", K(ret));
+      }
+      memory_check_ctx = NULL;
+    }
   } else {
     int fd = -1;
     if (-1 == (fd = ::open(LOG_FILE,

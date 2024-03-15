@@ -19,6 +19,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "lib/allocator/ob_page_manager.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/rc/context.h"
 #include "lib/thread/ob_thread_name.h"
 #include "ob_tenant.h"
@@ -305,6 +306,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   blocking_ts_ = &Thread::blocking_ts_;
 
   ObTLTaGuard ta_guard(tenant_->id());
+  ObMemVersionNodeGuard mem_version_node_guard;
   // Avoid adding and deleting entities from the root node for every request, the parameters are meaningless
   CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, OB_SERVER_TENANT_ID) {
     auto *pm = common::ObPageManager::thread_local_instance();

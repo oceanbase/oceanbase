@@ -203,6 +203,7 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
   int ret = OB_SUCCESS;
   void *result_info_buf = NULL;
   void *store_buf = NULL;
+  SET_IGNORE_MEM_VERSION(attr);
   const int64_t store_size = use_rich_format ? sizeof(ObTempColumnStore) : sizeof(ObChunkDatumStore);
   if (OB_ISNULL(result_info_buf = ob_malloc(sizeof(ObDTLIntermResultInfo), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -88,7 +88,13 @@ class ObDecoderCtxArray final
 {
 public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
-  ObDecoderCtxArray(): ctxs_(), ctx_blocks_() {};
+  ObDecoderCtxArray(): ctxs_(), ctx_blocks_()
+  {
+    ObMemAttr attr(ob_thread_tenant_id(), "TLDecoderCtxArr");
+    SET_IGNORE_MEM_VERSION(attr);
+    ctxs_.set_attr(attr);
+    ctx_blocks_.set_attr(attr);
+  };
   ~ObDecoderCtxArray()
   {
     reset();
