@@ -83,12 +83,6 @@ struct ObDASLockCtDef;
 struct ObDASLockRtDef;
 REGISTER_DAS_OP(DAS_OP_TABLE_LOCK, ObDASLockOp, ObDASLockResult, ObDASLockCtDef, ObDASLockRtDef);
 
-class ObDASGroupScanOp;
-class ObDASScanResult;
-struct ObDASScanCtDef;
-struct ObDASScanRtDef;
-REGISTER_DAS_OP(DAS_OP_TABLE_BATCH_SCAN, ObDASGroupScanOp, ObDASScanResult, ObDASScanCtDef, ObDASScanRtDef);
-
 class ObDASSplitRangesOp;
 class ObDASSplitRangesResult;
 class ObDASEmptyCtDef;

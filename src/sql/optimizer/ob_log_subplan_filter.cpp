@@ -544,6 +544,7 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {
     ObLogicalOperator *child = get_child(i);
     bool contains_invalid_startup = false;
+    bool contains_limit = false;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -551,6 +552,10 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       enable_das_group_rescan_ = false;
     } else if (!(child->get_type() == log_op_def::LOG_TABLE_SCAN
                  || child->get_type() == log_op_def::LOG_SUBPLAN_SCAN)) {
+      enable_das_group_rescan_ = false;
+    } else if (OB_FAIL(plan->contains_limit_or_pushdown_limit(child, contains_limit))) {
+      LOG_WARN("failed to check contains limit", K(ret));
+    } else if (contains_limit) {
       enable_das_group_rescan_ = false;
     } else if (OB_FAIL(check_if_match_das_group_rescan(child, enable_das_group_rescan_))) {
       LOG_WARN("failed to check match das batch rescan", K(ret));

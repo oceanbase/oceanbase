@@ -71,10 +71,19 @@ int ObSubQueryIterator::get_next_row()
   bool is_from_store = init_plan_ && inited_;
   if (is_from_store) {
     ret = store_it_.get_next_row(get_output(), op_.get_eval_ctx());
+  } else if (parent_->enable_left_das_batch()) {
+    uint64_t parent_spf_group = 0;
+    int64_t parent_group_rescan_cnt = 0;
+    const GroupParamArray *group_params = nullptr;
+    parent_->get_current_group(parent_spf_group);
+    parent_->get_current_batch_cnt(parent_group_rescan_cnt);
+    group_params = parent_->get_rescan_params_info();
+    GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
+    guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
+    ret = op_.get_next_row();
   } else {
     ret = op_.get_next_row();
   }
-
   return ret;
 }
 
@@ -113,13 +122,18 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
         //So we implement the GroupParamBackupGuard to make Paramstore like a stack,
         //protect every time change the Paramstore will be resume.
         bool new_group = is_new_batch_;
-        if (OB_SUCC(ret) && is_new_batch_) {
-          GroupParamBackupGuard guard(eval_ctx_,
-                                     das_batch_params_recovery_,
-                                     parent_->get_spec().rescan_params_,
-                                     parent_->get_spec().rescan_params_.count());
+        uint64_t parent_spf_group = 0;
+        int64_t parent_group_rescan_cnt = 0;
+        const GroupParamArray *group_params = nullptr;
+        if(OB_SUCC(ret)) {
+          parent_->get_current_group(parent_spf_group);
+          parent_->get_current_batch_cnt(parent_group_rescan_cnt);
+          group_params = parent_->get_rescan_params_info();
+        }
 
-          ret = parent_->bind_das_batch_params_to_store();
+        if (OB_SUCC(ret) && is_new_batch_) {
+          GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
+          guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
           if (OB_SUCC(ret) && OB_FAIL(op_.rescan())) {
             if(OB_ITER_END == ret) {
               ret = OB_ERR_UNEXPECTED;
@@ -128,11 +142,6 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
           }
           current_group_ = 0;
           is_new_batch_ = 0;
-        }
-
-        uint64_t parent_spf_group = 0;
-        if(OB_SUCC(ret)) {
-          parent_->get_current_group(parent_spf_group);
         }
         if (OB_SUCC(ret) && current_group_ < parent_spf_group) {
           if (new_group) {
@@ -149,6 +158,8 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
              * Therefore, it is necessary to ensure that get_next_row() is called at least once to
              * initialize the lookup Iterator on the right branch.
              **/
+            GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
+            guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
             if (OB_FAIL(op_.get_next_row())) {
               if (OB_ITER_END == ret) {
                 //ignore OB_ITER_END
@@ -159,16 +170,14 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
             }
           }
           if (OB_SUCC(ret)) {
-            int64_t old_jump_read_group_id;
-            old_jump_read_group_id = op_.get_exec_ctx().get_das_ctx().jump_read_group_id_;
-            op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = parent_spf_group;
+            GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
+            guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
             if (OB_FAIL(op_.rescan())) {
               if(OB_ITER_END == ret) {
                 ret = OB_ERR_UNEXPECTED;
               }
               LOG_WARN("Das jump read rescan fail.", K(ret));
             }
-            op_.get_exec_ctx().get_das_ctx().jump_read_group_id_ = old_jump_read_group_id;
             current_group_ = parent_spf_group;
           }
         }
@@ -365,38 +374,6 @@ int ObSubQueryIterator::alloc_das_batch_store()
   return ret;
 }
 
-
-void GroupParamBackupGuard::save_das_batch_store()
-{
-  //int64_t params_count = 0;
-  //params_count = parent_->get_spec().rescan_params_.count();
-  OB_ASSERT(!das_batch_params_recovery_.empty());
-  OB_ASSERT(das_batch_params_recovery_.count() == params_count_);
-  ObPhysicalPlanCtx *phy_ctx = eval_ctx_.exec_ctx_.get_physical_plan_ctx();
-  ParamStore &param_store = phy_ctx->get_param_store_for_update();
-  for (int64_t i = 0; i < params_count_; ++i) {
-    const ObDynamicParamSetter &rescan_param = rescan_params_.at(i);
-    //Always shallow copy for state save.
-    das_batch_params_recovery_.at(i) = param_store.at(rescan_param.param_idx_);
-  }
-}
-
-void GroupParamBackupGuard::resume_das_batch_store()
-{
-  OB_ASSERT(!das_batch_params_recovery_.empty());
-  OB_ASSERT(das_batch_params_recovery_.count() == params_count_);
-  ObPhysicalPlanCtx *phy_ctx = eval_ctx_.exec_ctx_.get_physical_plan_ctx();
-  ParamStore &param_store = phy_ctx->get_param_store_for_update();
-  for (int64_t i = 0; i < params_count_; ++i) {
-    const ObDynamicParamSetter &rescan_param = rescan_params_.at(i);
-    //Always shallow copy for state resume.
-    param_store.at(rescan_param.param_idx_) = das_batch_params_recovery_.at(i);
-    ObExpr *dst = rescan_param.dst_;
-    ObDatum &param_datum = dst->locate_datum_for_write(eval_ctx_);
-    param_datum.from_obj(das_batch_params_recovery_.at(i), dst->obj_datum_map_);
-  }
-}
-
 ObSubPlanFilterSpec::ObSubPlanFilterSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObOpSpec(alloc, type),
     rescan_params_(alloc),
@@ -467,7 +444,9 @@ ObSubPlanFilterOp::ObSubPlanFilterOp(
     cur_params_(),
     cur_param_idxs_(),
     cur_param_expr_idxs_(),
-    last_store_row_mem_(NULL)
+    last_store_row_mem_(NULL),
+    group_rescan_cnt_(0),
+    rescan_params_info_()
 {
 }
 
@@ -733,6 +712,7 @@ int ObSubPlanFilterOp::inner_close()
   destroy_update_set_mem();
   if (MY_SPEC.enable_das_group_rescan_) {
     das_batch_params_.reset();
+    rescan_params_info_.reset();
   }
   return OB_SUCCESS;
 }
@@ -857,6 +837,7 @@ int ObSubPlanFilterOp::handle_next_row()
           for(int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
             Iterator *&iter = subplan_iters_.at(i - 1);
             iter->set_new_batch(true);
+            group_rescan_cnt_++;
           }
         }
       }
@@ -1037,6 +1018,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
   bool stop_fetch = false;
   ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
   uint64_t left_rows_total_cnt = 0;
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), true);
   if (left_rows_iter_.is_valid() && left_rows_iter_.has_next()) {
     // fetch data from left store
   } else {
@@ -1096,6 +1078,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
         for(int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
           Iterator *&iter = subplan_iters_.at(i - 1);
           iter->set_new_batch(true);
+          group_rescan_cnt_++;
         }
       }
     }
@@ -1456,6 +1439,16 @@ int ObSubPlanFilterOp::alloc_das_batch_params(uint64_t group_size)
       }
     } else {
       LOG_WARN("allocate das params failed", KR(ret), K(MY_SPEC.rescan_params_.count()));
+    }
+  }
+  if (OB_SUCC(ret) && !das_batch_params_.empty()) {
+    ret = rescan_params_info_.allocate_array(ctx_.get_allocator(),
+                                           MY_SPEC.rescan_params_.count());
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < rescan_params_info_.count(); ++i) {
+        rescan_params_info_.at(i).param_idx_ = MY_SPEC.rescan_params_.at(i).param_idx_;
+        rescan_params_info_.at(i).gr_param_ = &das_batch_params_.at(i);
+      }
     }
   }
   return ret;

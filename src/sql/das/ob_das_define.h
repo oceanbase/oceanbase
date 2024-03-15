@@ -20,8 +20,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
 #define DAS_SCAN_OP(_task_op) \
-    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() && \
-        ::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
+    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() ? \
         nullptr : static_cast<::oceanbase::sql::ObDASScanOp*>(_task_op))
 #define DAS_GROUP_SCAN_OP(_task_op) \
     (::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \

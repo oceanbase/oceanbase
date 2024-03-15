@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_factory.h"
 #include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_group_scan_op.h"
 #include "sql/das/ob_das_insert_op.h"
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_update_op.h"

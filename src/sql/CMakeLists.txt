@@ -33,8 +33,6 @@ ob_set_subtarget(ob_sql common_mixed
 )
 
 ob_set_subtarget(ob_sql das
-  das/ob_group_scan_iter.cpp
-  das/ob_das_group_scan_op.cpp
   das/ob_das_context.cpp
   das/ob_das_define.cpp
   das/ob_das_delete_op.cpp
@@ -58,6 +56,11 @@ ob_set_subtarget(ob_sql das
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
+  das/iter/ob_das_iter.cpp
+  das/iter/ob_das_merge_iter.cpp
+  das/iter/ob_das_lookup_iter.cpp
+  das/iter/ob_das_group_fold_iter.cpp
+  das/iter/ob_das_iter_utils.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
