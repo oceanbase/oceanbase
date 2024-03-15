@@ -815,7 +815,7 @@ public:
                                       ObIAllocator &allocator,
                                       ParamStore &params,
                                       ParamStore &exec_params,
-                                      ObObj &result,
+                                      ObObj *result,
                                       ObObj &tmp_result);
 #endif
 private:

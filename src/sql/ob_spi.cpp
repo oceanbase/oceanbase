@@ -9362,7 +9362,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     OZ (dblink_proxy->dblink_execute_proc(OB_INVALID_TENANT_ID, dblink_conn, allocator,
                                           exec_params, call_stmt, *routine_info, udts,
                                           session->get_timezone_info(), &tmp_result), call_stmt);
-    OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params, *result, tmp_result));
+    OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params, result, tmp_result));
     if (OB_SUCC(ret) && NULL != result && !result->is_null() && result->is_ext()) {
       CK (OB_NOT_NULL(exec_ctx.get_pl_ctx()));
       OZ (exec_ctx.get_pl_ctx()->add(*result));
@@ -9377,7 +9377,7 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
                                            ObIAllocator &allocator,
                                            ParamStore &params,
                                            ParamStore &exec_params,
-                                           ObObj &result,
+                                           ObObj *result,
                                            ObObj &tmp_result)
 {
   int ret = OB_SUCCESS;
@@ -9416,14 +9416,14 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
     }
   }
   if (OB_SUCC(ret) && routine_info->is_function()) {
-    if (OB_ISNULL(routine_info->get_ret_type())) {
+    if (OB_ISNULL(routine_info->get_ret_type()) || OB_ISNULL(result)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("return type is NULL", K(ret), KPC(routine_info));
+      LOG_WARN("return type is NULL", K(ret), KPC(routine_info), K(result));
     } else if (ob_is_string_or_lob_type(routine_info->get_ret_type()->get_obj_type())
                && (0 == tmp_result.get_varchar().case_compare(""))) {
-      result.set_null();
+      result->set_null();
     } else if (ob_is_extend(routine_info->get_ret_type()->get_obj_type())) {
-      OZ (ObUserDefinedType::deep_copy_obj(allocator, tmp_result, result, true));
+      OZ (ObUserDefinedType::deep_copy_obj(allocator, tmp_result, *result, true));
       ObUserDefinedType::destruct_obj(tmp_result);
     } else if (tmp_result.get_type() != routine_info->get_ret_type()->get_obj_type()) {
       const ObDataType *datatype = routine_info->get_ret_type();
@@ -9434,9 +9434,9 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
       OX (convert_type.set_meta(datatype->get_meta_type()));
       OX (convert_type.set_accuracy(datatype->get_accuracy()));
       OZ (spi_convert(*session, allocator, tmp_result, convert_type, convert_obj));
-      OZ (deep_copy_obj(allocator, convert_obj, result));
+      OZ (deep_copy_obj(allocator, convert_obj, *result));
     } else {
-      OZ (deep_copy_obj(allocator, tmp_result, result));
+      OZ (deep_copy_obj(allocator, tmp_result, *result));
     }
   }
   return ret;
