@@ -7179,6 +7179,7 @@ def_table_schema(
   ('user_client_port', 'int', 'false', '0'),
   ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
   ('service_name', 'varchar:64', 'true'),
+  ('total_cpu_time', 'double', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -9438,7 +9439,8 @@ def_table_schema(
   ('ref_count', 'int'),
   ('backtrace', 'varchar:16384', 'true', ''),
   ('trans_state', 'varchar:OB_MAX_TRANS_STATE_LENGTH', 'true'),
-  ('user_client_port', 'int', 'false', '0')
+  ('user_client_port', 'int', 'false', '0'),
+  ('total_cpu_time', 'double', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -31168,8 +31170,8 @@ def_table_schema(
   WHERE a.tenant_id = b.tenant_id
   """.replace("\n", " ")
 )
-# 21459：GV$OB_SESSION
-# 21460：V$OB_SESSION
+# 21459:GV$OB_SESSION
+# 21460:V$OB_SESSION
 # 21461: GV$OB_PL_CACHE_OBJECT
 # 21462: V$OB_PL_CACHE_OBJECT
 

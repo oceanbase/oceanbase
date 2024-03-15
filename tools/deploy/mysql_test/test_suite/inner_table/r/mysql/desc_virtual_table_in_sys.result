@@ -130,6 +130,7 @@ out_bytes	bigint(20)	NO		NULL
 user_client_port	bigint(20)	NO		0	
 proxy_user	varchar(128)	YES		NULL	
 service_name	varchar(64)	YES		NULL	
+total_cpu_time	double	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_processlist;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1815,6 +1816,7 @@ ref_count	bigint(20)	NO		NULL
 backtrace	varchar(16384)	YES			
 trans_state	varchar(32)	YES		NULL	
 user_client_port	bigint(20)	NO		0	
+total_cpu_time	double	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_session_info;
 IF(count(*) >= 0, 1, 0)
 1

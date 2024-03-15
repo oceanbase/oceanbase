@@ -62,7 +62,8 @@ private:
     REF_COUNT,
     BACKTRACE,
     TRANS_STATE,
-    USER_CLIENT_PORT
+    USER_CLIENT_PORT,
+    TOTAL_CPU_TIME
   };
   class FillScanner
   {
