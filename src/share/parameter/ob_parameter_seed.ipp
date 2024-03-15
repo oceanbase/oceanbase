@@ -1891,3 +1891,7 @@ DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
 DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512M]",
+        "For outrow-stored LOBs, if the length is less than or equal to that threshold, "
+        "they can be admitted into the block cache to speed up the next query.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

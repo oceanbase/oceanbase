@@ -4665,6 +4665,7 @@ void ObDDLResolver::reset() {
   hash_subpart_num_ = -1;
   ttl_definition_.reset();
   kv_attributes_.reset();
+  is_set_lob_inrow_threshold_ = false;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
 }

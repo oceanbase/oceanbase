@@ -25,6 +25,7 @@
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "ob_operator.h"
 #include "observer/ob_server.h"
+#include "storage/lob/ob_lob_persistent_reader.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -131,7 +132,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     errcode_(OB_SUCCESS),
     dblink_snapshot_map_(),
     cur_row_num_(-1),
-    is_online_stats_gathering_(false)
+    is_online_stats_gathering_(false),
+    lob_access_ctx_(nullptr)
 {
 }
 
@@ -195,6 +197,11 @@ ObExecContext::~ObExecContext()
   }
   update_columns_ = nullptr;
   errcode_ = OB_SUCCESS;
+
+  if (OB_NOT_NULL(lob_access_ctx_)) {
+    lob_access_ctx_->~ObLobAccessCtx();
+    lob_access_ctx_ = nullptr;
+  }
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -1066,6 +1073,22 @@ int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
   } else {
     schema_guard = OB_ISNULL(schema_guard) ? get_sql_ctx()->schema_guard_ : schema_guard;
     ret = phy_plan_ctx_->get_subschema_id_by_udt_id(udt_type_id, subschema_id, schema_guard);
+  }
+  return ret;
+}
+
+
+int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &allocator = get_allocator();
+  if (OB_NOT_NULL(lob_access_ctx_)) {
+    lob_access_ctx = lob_access_ctx_;
+  } else if (OB_ISNULL(lob_access_ctx_ = OB_NEWx(ObLobAccessCtx, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc", K(ret), "size", sizeof(ObLobAccessCtx));
+  } else {
+    lob_access_ctx = lob_access_ctx_;
   }
   return ret;
 }

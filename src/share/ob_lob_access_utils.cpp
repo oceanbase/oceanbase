@@ -66,7 +66,8 @@ ObTextStringIter::~ObTextStringIter()
 int ObTextStringIter::init(uint32_t buffer_len,
                            const sql::ObBasicSessionInfo *session,
                            ObIAllocator *res_allocator,
-                           ObIAllocator *tmp_allocator)
+                           ObIAllocator *tmp_allocator,
+                           ObLobAccessCtx *lob_access_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_init_) {
@@ -101,6 +102,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
       } else {
         ctx_ = new (ctx_buffer) ObLobTextIterCtx(locator, session, res_allocator, buffer_len);
         ctx_ ->init();
+        ctx_->lob_access_ctx_ = lob_access_ctx;
       }
     }
   }
@@ -180,6 +182,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     param.scan_backward_ = false;
     param.offset_ = 0; // use 0 offset when reading full lob data
     param.len_ = 0;
+    param.access_ctx_ = lob_iter_ctx->lob_access_ctx_;
   }
 
   return ret;
