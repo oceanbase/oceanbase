@@ -51,15 +51,9 @@ public:
     reset();
   }
 
-  ObPackageInfo(const ObPackageInfo &package_info)
-  : ObSchema()
-  {
-    reset();
-    *this = package_info;
-  }
+  DISABLE_COPY_ASSIGN(ObPackageInfo);
 
   virtual ~ObPackageInfo() {}
-  ObPackageInfo &operator=(const ObPackageInfo &package_info);
   int assign(const ObPackageInfo &other);
   bool is_valid() const;
   void reset();
