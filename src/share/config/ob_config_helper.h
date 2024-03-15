@@ -169,6 +169,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCompressFuncChecker);
 };
 
+class ObConfigPerfCompressFuncChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigPerfCompressFuncChecker() {}
+  virtual ~ObConfigPerfCompressFuncChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPerfCompressFuncChecker);
+};
+
 class ObConfigResourceLimitSpecChecker
   : public ObConfigChecker
 {

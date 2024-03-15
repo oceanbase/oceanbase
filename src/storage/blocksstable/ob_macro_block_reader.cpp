@@ -51,9 +51,6 @@ ObMacroBlockReader::~ObMacroBlockReader()
     ob_free(encryption_);
     encryption_ = nullptr;
   }
-  if (nullptr != compressor_) {
-    compressor_->reset_mem();
-  }
 }
 
 #ifdef OB_BUILD_TDE_SECURITY

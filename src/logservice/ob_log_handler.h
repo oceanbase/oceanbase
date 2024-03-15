@@ -24,6 +24,11 @@
 #include "logrpc/ob_log_request_handler.h"
 #include "ob_log_handler_base.h"
 
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
+
+
 namespace oceanbase
 {
 namespace common
@@ -72,6 +77,7 @@ public:
                      const int64_t nbytes,
                      const share::SCN &ref_scn,
                      const bool need_nonblock,
+                     const bool allow_compress,
                      AppendCb *cb,
                      palf::LSN &lsn,
                      share::SCN &scn) = 0;
@@ -197,7 +203,8 @@ public:
            ObRoleChangeService *rc_service,
            palf::PalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
-           obrpc::ObLogServiceRpcProxy *rpc_proxy);
+           obrpc::ObLogServiceRpcProxy *rpc_proxy,
+           common::ObILogAllocator *alloc_mgr);
   bool is_valid() const;
   int stop();
   void destroy();
@@ -211,6 +218,7 @@ public:
   // @param[in] const int64_t, the base timestamp(ns), palf will ensure that the return tiemstamp will greater
   //            or equal than this field.
   // @param[in] const bool, decide this append option whether need block thread.
+  // @param[in] const bool, decide this append option whether compress buffer.
   // @param[int] AppendCb*, the callback of this append option, log handler will ensure that cb will be called after log has been committed
   // @param[out] LSN&, the append position.
   // @param[out] int64_t&, the append timestamp.
@@ -222,6 +230,7 @@ public:
              const int64_t nbytes,
              const share::SCN &ref_scn,
              const bool need_nonblock,
+             const bool allow_compress,
              AppendCb *cb,
              palf::LSN &lsn,
              share::SCN &scn) override final;
@@ -689,11 +698,13 @@ public:
   bool is_offline() const override final;
 private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
+  const int64_t MAX_APPEND_RETRY_INTERNAL = 500 * 1000L;
   typedef common::TCRWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
                                 LogConfigChangeCmdResp &resp);
+
 #ifdef OB_BUILD_ARBITRATION
   int create_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
   int delete_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
@@ -713,6 +724,9 @@ private:
   common::ObQSync ls_qs_;
   ObMiniStat::ObStatItem append_cost_stat_;
   bool is_offline_;
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  ObLogCompressorWrapper compressor_wrapper_;
+#endif
   mutable int64_t get_max_decided_scn_debug_time_;
 };
 

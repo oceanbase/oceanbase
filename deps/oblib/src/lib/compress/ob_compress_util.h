@@ -14,6 +14,7 @@
 #define OB_COMPRESSOR_UTIL_H_
 #include "lib/ob_define.h"
 #include "lib/utility/ob_template_utils.h"
+#include "lib/allocator/ob_allocator.h"
 
 namespace oceanbase
 {
@@ -64,26 +65,31 @@ const char *const compress_funcs[] =
 
 const char *const perf_compress_funcs[] =
 {
-  "none",
   "lz4_1.0",
   "zstd_1.0",
   "zstd_1.3.8",
-};
-
-const char *const batch_rpc_compress_funcs[] =
-{
-  "lz4_1.0",
-  "none",
-  "snappy_1.0",
-  "zlib_1.0",
-  "zstd_1.0",
-  "stream_lz4_1.0",
-  "stream_zstd_1.0",
-  "zstd_1.3.8",
-  "stream_zstd_1.3.8",
 };
 
 } /* namespace common */
 } /* namespace oceanbase */
+
+using oceanbase::common::ObIAllocator;
+static void *ob_zstd_malloc(void *opaque, size_t size)
+{
+  void *buf = NULL;
+  if (NULL != opaque) {
+    ObIAllocator *allocator = reinterpret_cast<ObIAllocator*> (opaque);
+    buf = allocator->alloc(size);
+  }
+  return buf;
+}
+
+static void ob_zstd_free(void *opaque, void *address)
+{
+  if (NULL != opaque) {
+    ObIAllocator *allocator = reinterpret_cast<ObIAllocator*> (opaque);
+    allocator->free(address);
+  }
+}
 
 #endif /* OB_COMPRESSOR_UTIL_H_ */

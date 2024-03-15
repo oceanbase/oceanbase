@@ -39,6 +39,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIAllocator;
+}
 namespace logfetcher
 {
 class ObLogFetcherConfig;
@@ -159,6 +163,11 @@ public:
 
   // Print the monitoring stat info periodically
   virtual void print_stat() = 0;
+  //allocate memory for log decompression
+  virtual void *alloc_decompression_buf(int64_t size) = 0;
+  virtual common::ObIAllocator *get_decompression_allocator() = 0;
+  //free memory for log decompression
+  virtual void free_decompression_buf(void *buf)  = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -259,6 +268,9 @@ public:
       int64_t &cur_progress);
 
   virtual void print_stat();
+  void *alloc_decompression_buf(int64_t size);
+  common::ObIAllocator *get_decompression_allocator() {return &decompression_alloc_;}
+  void free_decompression_buf(void *buf);
 
 private:
   int suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
@@ -278,7 +290,8 @@ private:
 
     ObIArray<share::ObLSID> &ls_ids_;
   };
-
+  const int64_t DECOMPRESSION_MEM_LIMIT_THRESHOLD = 512 * 1024 * 1024L;
+  const int64_t DECOMPRSSION_BUF_ALLOC_NWAY = 4;
 private:
   bool                                     is_inited_;
   LogFetcherUser                           log_fetcher_user_;
@@ -315,6 +328,8 @@ private:
   bool                                     paused_ CACHE_ALIGNED;
   int64_t                                  pause_time_ CACHE_ALIGNED;
   int64_t                                  resume_time_ CACHE_ALIGNED;
+  ObBlockAllocMgr decompression_blk_mgr_;
+  ObVSliceAlloc decompression_alloc_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFetcher);

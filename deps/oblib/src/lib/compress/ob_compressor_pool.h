@@ -15,6 +15,7 @@
 
 #include "lib/compress/ob_compressor.h"
 #include "lib/compress/ob_stream_compressor.h"
+#include "lib/allocator/ob_vslice_alloc.h"
 #include "none/ob_none_compressor.h"
 #include "lz4/ob_lz4_compressor.h"
 #include "snappy/ob_snappy_compressor.h"
@@ -61,6 +62,7 @@ private:
   ObCompressorPool();
   virtual ~ObCompressorPool() {}
 
+  ObVSliceAlloc allocator_;
   ObNoneCompressor none_compressor;
   ObLZ4Compressor lz4_compressor;
   ObLZ4Compressor191 lz4_compressor_1_9_1;

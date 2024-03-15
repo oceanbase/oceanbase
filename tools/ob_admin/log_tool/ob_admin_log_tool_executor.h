@@ -43,8 +43,13 @@ private:
   int alloc_mutator_string_buf_();
 private:
   const static int64_t MAX_TX_LOG_STRING_SIZE = 5*1024*1024;
+  const static int64_t MAX_DECOMPRESSED_BUF_SIZE = palf::MAX_LOG_BODY_SIZE;
+
+
   char *mutator_str_buf_;
   int64_t mutator_buf_size_;
+  char *decompress_buf_;
+  int64_t decompress_buf_size_;
   share::ObAdminLogDumpFilter filter_;
 };
 }

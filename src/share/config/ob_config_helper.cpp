@@ -215,6 +215,17 @@ bool ObConfigCompressFuncChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigPerfCompressFuncChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(common::perf_compress_funcs) && !is_valid; ++i) {
+    if (0 == ObString::make_string(perf_compress_funcs[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
 bool ObConfigResourceLimitSpecChecker::check(const ObConfigItem &t) const
 {
   ObResourceLimit rl;

@@ -40,8 +40,6 @@ public:
                          int64_t &dst_data_size) = 0;
   virtual int get_max_overflow_size(const int64_t src_data_size,
                                     int64_t &max_overflow_size) const = 0;
-  virtual void reset_mem() {}
-
   virtual const char *get_compressor_name() const = 0;
   virtual ObCompressorType get_compressor_type() const = 0;
 };

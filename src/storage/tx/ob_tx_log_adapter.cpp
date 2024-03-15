@@ -125,7 +125,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   int ret = OB_SUCCESS;
   palf::LSN lsn;
   SCN scn;
-
+  const bool allow_compression = true;
   if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid() ||
       base_scn.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {
     ret = OB_INVALID_ARGUMENT;
@@ -133,7 +133,8 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
-  } else if (OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock, cb, lsn, scn))) {
+  } else if (OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock,
+                                          allow_compression, cb, lsn, scn))) {
     TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock));
   } else {

@@ -151,7 +151,7 @@ ObAdminDumpBlock::ObAdminDumpBlock(const char *block_path,
 int ObAdminDumpBlock::dump()
 {
   int ret = OB_SUCCESS;
-  char *block_name  = basename((char*)block_path_);
+  char *block_name = basename((char*)block_path_);
   if (NULL == block_name) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid block_path", K(block_path_), KP(block_name));
@@ -196,9 +196,11 @@ int ObAdminDumpBlock::do_dump_(ObAdminDumpIterator &iter,
   int ret = OB_SUCCESS;
   LogGroupEntry entry;
   LSN lsn;
+  bool has_encount_error = false;
   while (OB_SUCC(iter.next())) {
     if (OB_FAIL(iter.get_entry(entry, lsn))) {
-      LOG_WARN("ObAdminDumpIterator get_entry failed", K(ret), K(entry), K(lsn), K(iter));
+      LOG_ERROR("ObAdminDumpIterator get_entry failed", K(ret), K(entry), K(lsn), K(iter));
+      has_encount_error = true;
     } else if (true == entry.get_header().is_padding_log()) {
       LOG_INFO("is_padding_log, no need parse", K(entry), K(iter));
     } else {
@@ -210,14 +212,16 @@ int ObAdminDumpBlock::do_dump_(ObAdminDumpIterator &iter,
         fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, GROUP_ENTRY:%s\n", block_name, to_cstring(lsn), total_size,
                 to_cstring(entry));
       }
-      if (OB_FAIL(parse_single_group_entry_(entry, block_name, lsn))) {
-        LOG_WARN("parser_single_group_entry_ success", K(ret), K(entry));
+      if (OB_FAIL(parse_single_group_entry_(entry, block_name, lsn, has_encount_error))) {
+        LOG_ERROR("parser_single_group_entry_ failed", K(ret), K(entry));
+        has_encount_error = true;
       }
     }
   }
   if (OB_INVALID_DATA == ret) {
     if (false == iter.check_is_the_last_entry()) {
       LOG_ERROR("data has been corrupted!!!", K(ret), K(iter));
+      has_encount_error = true;
     } else {
       ret = OB_SUCCESS;
     }
@@ -225,16 +229,21 @@ int ObAdminDumpBlock::do_dump_(ObAdminDumpIterator &iter,
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
+  if (has_encount_error) {
+    fprintf(stderr, "dumping block(%s) encounts error. Retrieve detailed error information from the ob_admin.log.\n", block_name);
+  }
   return ret;
 }
 
 int ObAdminDumpBlock::parse_single_group_entry_(const LogGroupEntry &group_entry,
                                                 const char *block_name,
-                                                LSN lsn)
+                                                LSN lsn,
+                                                bool &has_encount_error)
 {
   int ret = OB_SUCCESS;
   LSN curr_lsn = lsn;
   ObAdminParserGroupEntry parser_ge(group_entry.get_data_buf(), group_entry.get_data_len(), str_arg_);
+  has_encount_error = false;
   do {
     LogEntry entry;
     if (OB_FAIL(parser_ge.get_next_log_entry(entry))) {
@@ -245,17 +254,27 @@ int ObAdminDumpBlock::parse_single_group_entry_(const LogGroupEntry &group_entry
     } else {
       if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT
           && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT ) {
-        fprintf(stdout, "LSN:%s, LOG_ENTRY:%s", to_cstring(curr_lsn), to_cstring(entry));
+        logservice::ObLogBaseHeader header;
+        int64_t pos = 0;
+        if (OB_FAIL(header.deserialize(entry.get_data_buf(), entry.get_header().get_data_len(), pos))) {
+          LOG_WARN("deserialize BaseHeader failed", K(entry));
+        } else {
+          fprintf(stdout, "LSN:%s, LOG_ENTRY:%s BaseHeader:%s", to_cstring(curr_lsn), to_cstring(entry), to_cstring(header));
+        }
       }
       str_arg_.log_stat_->log_entry_header_size_ += entry.get_header_size();
       str_arg_.log_stat_->total_log_entry_count_++;
       curr_lsn = curr_lsn + entry.get_serialize_size();
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(entry, block_name, lsn))) {
-        LOG_WARN("parse_single_log_entry_ failed", K(tmp_ret), K(entry));
+        if (OB_ITER_END != tmp_ret) {
+          LOG_ERROR("parse_single_log_entry_ failed", K(tmp_ret), K(entry));
+          has_encount_error = true;
+        }
       }
     }
   } while (OB_SUCC(ret));
+
 
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;

@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_COMMON_COMPRESS_ZSTD_COMPRESSOR_
 #define OCEANBASE_COMMON_COMPRESS_ZSTD_COMPRESSOR_
 #include "lib/compress/ob_compressor.h"
-#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {
@@ -23,44 +22,28 @@ namespace common
 namespace zstd
 {
 
-class ObZstdCtxAllocator
-{
-public:
-  ObZstdCtxAllocator(int64_t tenant_id);
-  virtual ~ObZstdCtxAllocator();
-  static ObZstdCtxAllocator &get_thread_local_instance()
-  {
-    thread_local ObZstdCtxAllocator allocator(ob_thread_tenant_id());
-    return allocator;
-  }
-  void *alloc(size_t size);
-  void free(void *addr);
-  void reuse();
-  void reset();
-private:
-  ObArenaAllocator allocator_;
-};
-
 class ObZstdCompressor : public ObCompressor
 {
 public:
-  explicit ObZstdCompressor() {}
+  explicit ObZstdCompressor(ObIAllocator &allocator)
+    : allocator_(allocator) {}
   virtual ~ObZstdCompressor() {}
   int compress(const char *src_buffer,
                const int64_t src_data_size,
                char *dst_buffer,
                const int64_t dst_buffer_size,
-               int64_t &dst_data_size);
+               int64_t &dst_data_size) override;
   int decompress(const char *src_buffer,
                  const int64_t src_data_size,
                  char *dst_buffer,
                  const int64_t dst_buffer_size,
-                 int64_t &dst_data_size);
+                 int64_t &dst_data_size) override;
   const char *get_compressor_name() const;
   ObCompressorType get_compressor_type() const;
   int get_max_overflow_size(const int64_t src_data_size,
                                    int64_t &max_overflow_size) const;
-  void reset_mem();
+private:
+  ObIAllocator &allocator_;
 
 };
 } // namespace zstd

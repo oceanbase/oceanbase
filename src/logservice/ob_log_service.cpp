@@ -53,6 +53,7 @@ ObLogService::ObLogService() :
     self_(),
     palf_env_(NULL),
     net_keepalive_adapter_(NULL),
+    alloc_mgr_(NULL),
     apply_service_(),
     replay_service_(),
     role_change_service_(),
@@ -206,6 +207,7 @@ void ObLogService::destroy()
     MTL_DELETE(IObNetKeepAliveAdapter, "logservice", net_keepalive_adapter_);
     net_keepalive_adapter_ = NULL;
   }
+  alloc_mgr_ = NULL;
   FLOG_INFO("ObLogService is destroyed");
 }
 
@@ -288,6 +290,7 @@ int ObLogService::init(const PalfOptions &options,
     CLOG_LOG(WARN, "failed to init flashback_service_", K(ret));
   } else {
     net_keepalive_adapter_ = net_keepalive_adapter;
+    alloc_mgr_ = alloc_mgr;
     self_ = self;
     is_inited_ = true;
     FLOG_INFO("ObLogService init success", K(ret), K(base_dir), K(self), KP(transport), KP(batch_rpc),
@@ -419,7 +422,7 @@ int ObLogService::add_ls(const ObLSID &id,
   } else if (OB_FAIL(replay_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+          &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
@@ -668,7 +671,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     } else if (OB_FAIL(replay_service_.add_ls(id))) {
       CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
     } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-            &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+            &role_change_service_, palf_env_, loc_cache_cb, &rpc_proxy_, alloc_mgr_))) {
       CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
     } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
       CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
