@@ -176,7 +176,9 @@ int ObLogConfig::load_from_map(const ConfigMap &configs,
       } else {
         (*pp_item)->set_value(iter->second.c_str());
         (*pp_item)->set_version(version);
-        _LOG_INFO("load config succ, %s=%s", iter->first.c_str(), iter->second.c_str());
+        if (need_print_config(iter->first)) {
+          _LOG_INFO("load config succ, %s=%s", iter->first.c_str(), iter->second.c_str());
+        }
       }
     }
   }
