@@ -318,19 +318,15 @@ int ObWinbufWholeMsg::assign(const ObWinbufWholeMsg &other, common::ObIAllocator
     int64_t ser_pos = 0;
     int64_t des_pos = 0;
     if (is_datum_) {
-      ser_len = other.datum_store_.get_serialize_size();
-      if (OB_ISNULL(ser_ptr = allocator->alloc(ser_len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail alloc memory", K(ser_len), KP(ser_ptr), K(ret));
-      } else if (OB_FAIL(other.datum_store_.serialize(static_cast<char *>(ser_ptr),
-            ser_len, ser_pos))) {
-        LOG_WARN("fail serialzie init task arg", KP(ser_ptr), K(ser_len), K(ser_pos), K(ret));
-      } else if (OB_FAIL(datum_store_.deserialize(static_cast<const char *>(ser_ptr),
-            ser_pos, des_pos))) {
-        LOG_WARN("fail des task arg", KP(ser_ptr), K(ser_pos), K(des_pos), K(ret));
-      } else if (ser_pos != des_pos) {
-        ret = OB_DESERIALIZE_ERROR;
-        LOG_WARN("data_len and pos mismatch", K(ser_len), K(ser_pos), K(des_pos), K(ret));
+      datum_store_.reset();
+      int64_t mem_limit = other.datum_store_.get_mem_limit();
+      uint64_t tenant_id = other.datum_store_.get_tenant_id();
+      int64_t ctx_id = other.datum_store_.get_mem_ctx_id();
+      const char *label = other.datum_store_.get_label();
+      if (OB_FAIL(datum_store_.init(mem_limit, tenant_id, ctx_id, label, false))) {
+        LOG_WARN("init datum store failed", K(ret));
+      } else if (OB_FAIL(datum_store_.append_datum_store(other.datum_store_))) {
+        LOG_WARN("append store failed", K(ret));
       }
     } else {
       ser_len = other.row_store_.get_serialize_size();
