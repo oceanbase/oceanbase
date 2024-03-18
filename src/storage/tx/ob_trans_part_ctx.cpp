@@ -2001,8 +2001,12 @@ int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t 
 
 bool ObPartTransCtx::fast_check_need_submit_redo_for_freeze_() const
 {
-  bool has_pending_log = false;
-  const bool blocked = mt_ctx_.is_logging_blocked(has_pending_log);
+  bool has_pending_log = true;
+  bool blocked = false;
+  if (OB_SUCCESS == lock_.try_wrlock_flush_redo()) {
+    blocked = mt_ctx_.is_logging_blocked(has_pending_log);
+    lock_.unlock_flush_redo();
+  }
   return has_pending_log && !blocked;
 }
 

@@ -587,6 +587,13 @@ int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObP
       TRANS_LOG(INFO, "transaction statistics", K_(ls_id),
           "total_tx_ctx_count", get_tx_ctx_count_());
     }
+#ifdef ENABLE_DEBUG_LOG
+    // ENABLE_DEBUG_LOG macro only defined in inner test environment
+    if (REACH_TIME_INTERVAL(3 * 60 * 1000 * 1000 /*3 min*/)) {
+      TRANS_LOG(INFO, "transaction statistics", K_(ls_id),
+          "total_tx_ctx_count", get_tx_ctx_count_(), K(lbt()));
+    }
+#endif
   }
   return ret;
 }

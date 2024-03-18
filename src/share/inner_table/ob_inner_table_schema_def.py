@@ -2795,7 +2795,9 @@ def_table_schema(
     ('utilization_limit', 'int', 'false', 100),
     ('min_iops', 'int', 'false', 0),
     ('max_iops', 'int', 'false', 100),
-    ('weight_iops', 'int', 'false', 0)
+    ('weight_iops', 'int', 'false', 0),
+    ('max_net_bandwidth', 'int', 'false', 100),
+    ('net_bandwidth_weight', 'int', 'false', 0)
   ],
 )
 
@@ -2995,6 +2997,7 @@ def_table_schema(
     ('ret_code', 'int', 'false', '0'),
     ('message', 'longtext', 'true'),
     ('consensus_schema_version', 'int', 'false', '-1'),
+    ('schedule_info', 'longtext', 'true'),
   ],
 )
 
@@ -7176,6 +7179,7 @@ def_table_schema(
   ('user_client_port', 'int', 'false', '0'),
   ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
   ('service_name', 'varchar:64', 'true'),
+  ('total_cpu_time', 'double', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -9435,7 +9439,8 @@ def_table_schema(
   ('ref_count', 'int'),
   ('backtrace', 'varchar:16384', 'true', ''),
   ('trans_state', 'varchar:OB_MAX_TRANS_STATE_LENGTH', 'true'),
-  ('user_client_port', 'int', 'false', '0')
+  ('user_client_port', 'int', 'false', '0'),
+  ('total_cpu_time', 'double', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13627,7 +13632,30 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12428: __all_virtual_import_stmt_exec_history
 
-# 12429: __all_virtual_data_activity_metrics
+def_table_schema(
+  owner = 'handora.qc',
+  table_name = '__all_virtual_data_activity_metrics',
+  table_id = '12429',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('activity_timestamp', 'timestamp'),
+  ],
+
+  normal_columns = [
+  ('modification_size', 'int'),
+  ('freeze_times', 'int'),
+  ('mini_merge_cost', 'int'),
+  ('mini_merge_times', 'int'),
+  ('minor_merge_cost', 'int'),
+  ('minor_merge_times', 'int'),
+  ('major_merge_cost', 'int'),
+  ('major_merge_times', 'int'),
+  ]
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
     table_id = '12430',
@@ -13660,9 +13688,95 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__all_clone_job_history']))
 
-# 12437: __all_virtual_checkpoint_diagnose_memtable_info
-# 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
-# 12439: __all_virtual_checkpoint_diagnose_info
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_memtable_info',
+  table_id      = '12437',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('trace_id', 'int'),
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('ptr', 'varchar:128'),
+    ('start_scn', 'uint'),
+    ('end_scn', 'uint'),
+    ('rec_scn', 'uint'),
+    ('create_flush_dag_time', 'timestamp'),
+    ('merge_finish_time', 'timestamp'),
+    ('release_time', 'timestamp'),
+    ('frozen_finish_time', 'timestamp'),
+    ('merge_start_time', 'timestamp'),
+    ('start_gc_time', 'timestamp'),
+    ('memtable_occupy_size', 'int'),
+    ('occupy_size', 'int'),
+    ('concurrent_cnt', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_checkpoint_unit_info',
+  table_id      = '12438',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('trace_id', 'int'),
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('ptr', 'varchar:128'),
+    ('start_scn', 'uint'),
+    ('end_scn', 'uint'),
+    ('rec_scn', 'uint'),
+    ('create_flush_dag_time', 'timestamp'),
+    ('merge_finish_time', 'timestamp'),
+    ('start_gc_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'zk250686',
+  table_name    = '__all_virtual_checkpoint_diagnose_info',
+  table_id      = '12439',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('trace_id', 'int'),
+    ('freeze_clock', 'uint32'),
+    ('checkpoint_thread_name', 'varchar:OB_THREAD_NAME_BUF_LEN'),
+    ('checkpoint_start_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
 # 12442: __all_tenant_scheduler_running_job
@@ -23795,6 +23909,7 @@ def_table_schema(
           FROM
             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND TABLE_TYPE IN (0,2,3,6,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,
@@ -31055,8 +31170,8 @@ def_table_schema(
   WHERE a.tenant_id = b.tenant_id
   """.replace("\n", " ")
 )
-# 21459：GV$OB_SESSION
-# 21460：V$OB_SESSION
+# 21459:GV$OB_SESSION
+# 21460:V$OB_SESSION
 # 21461: GV$OB_PL_CACHE_OBJECT
 # 21462: V$OB_PL_CACHE_OBJECT
 
@@ -32906,6 +33021,25 @@ def_table_schema(
 # 21559: GV$OB_GROUP_IO_STAT
 # 21560: DBA_OB_STORAGE_IO_USAGE
 # 21561: CDB_OB_STROAGE_IO_USAGE
+# 21562: TABLESPACES
+# 21563: INNODB_BUFFER_PAGE
+# 21564: INNODB_BUFFER_PAGE_LRU
+# 21565: INNODB_BUFFER_POOL_STATS
+# 21566: INNODB_CMP
+# 21567: INNODB_CMP_PER_INDEX
+# 21568: INNODB_CMP_PER_INDEX_RESET
+# 21569: INNODB_CMP_RESET
+# 21570: INNODB_CMPMEM
+# 21571: INNODB_CMPMEM_RESET
+# 21572: INNODB_SYS_DATAFILES
+# 21573: INNODB_SYS_INDEXES
+# 21574: INNODB_SYS_TABLES
+# 21575: INNODB_SYS_TABLESPACES
+# 21576: INNODB_SYS_TABLESTATS
+# 21577: INNODB_SYS_VIRTUAL
+# 21578: INNODB_TEMP_TABLE_INFO
+# 21579: INNODB_METRICS
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -56134,6 +56268,7 @@ def_table_schema(
               'TABLE' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+          WHERE TABLE_TYPE IN (0,2,3,8,9,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,
@@ -56263,6 +56398,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+          WHERE TABLE_TYPE IN (0,2,3,8,9,14,15)
         UNION ALL
         SELECT TENANT_ID,
                DATABASE_ID,

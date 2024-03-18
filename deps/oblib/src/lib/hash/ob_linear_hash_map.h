@@ -642,6 +642,7 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::init(const int64_
   int ret = OB_SUCCESS;
   dir_alloc_.set_attr(ObMemAttr(tenant_id, "LinearHashMapDi"));
   cnter_alloc_.set_attr(ObMemAttr(tenant_id, "LinearHashMapCn"));
+  map_array_.set_attr(SET_USE_500("HashMapArray"));
   // Init node alloc.
   ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)),
                          SET_USE_500(ObMemAttr(tenant_id, "LinearHashMapNo")));

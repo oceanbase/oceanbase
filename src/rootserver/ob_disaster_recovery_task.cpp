@@ -864,12 +864,15 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   ObDstReplica dst_replica;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
+  ObSqlString task_id_sqlstring_format;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
     LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_sqlstring_format.assign(task_id))) {
+    LOG_WARN("fail to assign task id to ObSqlString format", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_to_set.set(task_id_sqlstring_format.ptr()))) {
+    LOG_WARN("fail to init a task_id", KR(ret), K(task_id_sqlstring_format));
   } else if (OB_FAIL(task_key.init(
                 tenant_id,
                 ls_id,
@@ -913,14 +916,14 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
                     obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     false,                          //(not used)skip_change_member_list
                     priority_to_set,                //(not used)
-                    comment,                        //comment
+                    comment_to_set.ptr(),           //comment
                     dst_replica,                    //(in used)dest_server
                     ObReplicaMember(src_server, 0), //(in used)src_server
                     ObReplicaMember(src_server, 0), //(not used)data_src_member
                     src_paxos_replica_number))) {                 //(not used)
     LOG_WARN("fail to build a ObMigrateLSReplicaTask", KR(ret));
   } else {
-    LOG_INFO("success to build a ObMigrateLSReplicaTask", KPC(this));
+    LOG_INFO("success to build a ObMigrateLSReplicaTask", KPC(this), K(task_id), K(task_id_sqlstring_format), K(task_id_to_set));
   }
   return ret;
 }
@@ -1322,12 +1325,15 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   ObDstReplica dst_replica;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
+  ObSqlString task_id_sqlstring_format;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
     LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_sqlstring_format.assign(task_id))) {
+    LOG_WARN("fail to assign task id to ObSqlString format", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_to_set.set(task_id_sqlstring_format.ptr()))) {
+    LOG_WARN("fail to init a task_id", KR(ret), K(task_id_sqlstring_format));
   } else if (OB_FAIL(task_key.init(
                 tenant_id,
                 ls_id,
@@ -1378,7 +1384,7 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
                     dest_paxos_replica_number))) {                //(in used)
     LOG_WARN("fail to build a ObAddLSReplicaTask", KR(ret));
   } else {
-    LOG_INFO("success to build a ObAddLSReplicaTask", KPC(this));
+    LOG_INFO("success to build a ObAddLSReplicaTask", KPC(this), K(task_id), K(task_id_to_set), K(task_id_sqlstring_format));
   }
   return ret;
 }
@@ -1783,12 +1789,15 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   ObDstReplica dst_replica;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
+  ObSqlString task_id_sqlstring_format;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
     LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_sqlstring_format.assign(task_id))) {
+    LOG_WARN("fail to assign task id to ObSqlString format", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_to_set.set(task_id_sqlstring_format.ptr()))) {
+    LOG_WARN("fail to init a task_id", KR(ret), K(task_id_sqlstring_format));
   } else if (OB_FAIL(task_key.init(
                 tenant_id,
                 ls_id,
@@ -1861,7 +1870,7 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
                K(priority_to_set), K(dst_replica), K(src_member), K(comment_to_set), K(src_paxos_replica_number),
                K(dest_paxos_replica_number));
     } else {
-      LOG_INFO("success to build a ObLSTypeTransformTask", KPC(this));
+      LOG_INFO("success to build a ObLSTypeTransformTask", KPC(this), K(task_id), K(task_id_to_set), K(task_id_sqlstring_format));
     }
   }
   return ret;
@@ -2169,12 +2178,15 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   rootserver::ObDRTaskPriority priority_to_set;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
+  ObSqlString task_id_sqlstring_format;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
     LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_sqlstring_format.assign(task_id))) {
+    LOG_WARN("fail to assign task id to ObSqlString format", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_to_set.set(task_id_sqlstring_format.ptr()))) {
+    LOG_WARN("fail to init a task_id", KR(ret), K(task_id_sqlstring_format));
   } else if (OB_FAIL(task_key.init(
                 tenant_id,
                 ls_id,
@@ -2228,7 +2240,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
                     replica_type_))) {            //(in used)
     LOG_WARN("fail to build a ObRemoveLSReplicaTask", KR(ret));
   } else {
-    LOG_INFO("success to build a ObRemoveLSReplicaTask", KPC(this));
+    LOG_INFO("success to build a ObRemoveLSReplicaTask", KPC(this), K(task_id), K(task_id_to_set), K(task_id_sqlstring_format));
   }
   return ret;
 }
@@ -2509,12 +2521,15 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
   common::ObMemberList member_list;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
+  ObSqlString task_id_sqlstring_format;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
     LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_sqlstring_format.assign(task_id))) {
+    LOG_WARN("fail to assign task id to ObSqlString format", KR(ret), K(task_id));
+  } else if (OB_FAIL(task_id_to_set.set(task_id_sqlstring_format.ptr()))) {
+    LOG_WARN("fail to init a task_id", KR(ret), K(task_id_sqlstring_format));
   } else if (OB_FAIL(task_key.init(
                 tenant_id,
                 ls_id,
@@ -2556,7 +2571,7 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
                     member_list))) {
     LOG_WARN("fail to build a ObLSModifyPaxosReplicaNumberTask", KR(ret));
   } else {
-    LOG_INFO("success to build a ObLSModifyPaxosReplicaNumberTask", KPC(this));
+    LOG_INFO("success to build a ObLSModifyPaxosReplicaNumberTask", KPC(this), K(task_id), K(task_id_to_set), K(task_id_sqlstring_format));
   }
   return ret;
 }

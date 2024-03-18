@@ -162,7 +162,7 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
                "err_msg", errmsg, K(ret), K(sql_str_));
       } else {
         LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port, K(conn_->get_sessid()),
-               "err_msg", errmsg, K(ret), K(STRLEN(sql_str_)), K(sql_str_));
+               "err_msg", errmsg, K(ret), K(STRLEN(sql_str_)), K(sql_str_), K(lbt()));
       }
       if (OB_SUCCESS == ret) {
         ret = OB_ERR_SQL_CLIENT;

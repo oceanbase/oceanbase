@@ -1036,6 +1036,7 @@
 # 12426: __all_import_table_task  # BASE_TABLE_NAME
 # 12427: __all_virtual_import_table_task_history
 # 12427: __all_import_table_task_history  # BASE_TABLE_NAME
+# 12429: __all_virtual_data_activity_metrics
 # 12430: __all_virtual_column_group_mapping
 # 12430: __all_column_group_mapping  # BASE_TABLE_NAME
 # 12431: __all_virtual_column_group_history
@@ -1048,6 +1049,9 @@
 # 12435: __all_clone_job  # BASE_TABLE_NAME
 # 12436: __all_virtual_clone_job_history
 # 12436: __all_clone_job_history  # BASE_TABLE_NAME
+# 12437: __all_virtual_checkpoint_diagnose_memtable_info
+# 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
+# 12439: __all_virtual_checkpoint_diagnose_info
 # 12447: __all_virtual_aux_stat
 # 12447: __all_aux_stat  # BASE_TABLE_NAME
 # 12453: __all_virtual_tenant_snapshot_job

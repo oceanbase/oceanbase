@@ -507,7 +507,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
           if (OB_ITER_END == ret || OB_READ_NOTHING == ret) {
             ret = OB_SUCCESS;
             // need_fetch 为 true 并且 得到了 OB_ITER_END 错误码，说明正常找到了最后一行，要设置last_row
-            if (need_fetch) {
+            if (need_fetch || !cursor.is_scrollable()) {
               last_row = true;
             }
           }

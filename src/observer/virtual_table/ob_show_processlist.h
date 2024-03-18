@@ -81,6 +81,7 @@ private:
     USER_CLIENT_PORT,
     PROXY_USER_NAME,
     SERVICE_NAME,
+    TOTAL_CPU_TIME,
   };
   class FillScanner
   {

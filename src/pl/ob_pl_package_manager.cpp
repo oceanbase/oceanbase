@@ -862,6 +862,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
                                           ObPLPackage *&package_spec)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   package_spec = NULL;
   const uint64_t tenant_id = package_spec_info.get_tenant_id();
   uint64_t db_id = package_spec_info.get_database_id();
@@ -929,6 +930,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
                                           ObPLPackage *&package_body)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   package_body = NULL;
   ObPLCompiler compiler(resolve_ctx.allocator_,
                         resolve_ctx.session_info_,

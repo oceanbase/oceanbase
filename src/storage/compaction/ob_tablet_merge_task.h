@@ -181,6 +181,7 @@ public:
   ObTabletMergeFinishTask();
   virtual ~ObTabletMergeFinishTask();
   int init();
+  int report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx);
   virtual int process() override;
 private:
   bool is_inited_;
@@ -242,7 +243,8 @@ public:
         || OB_TENANT_HAS_BEEN_DROPPED == dag_ret
         || OB_LS_NOT_EXIST == dag_ret
         || OB_TABLET_NOT_EXIST == dag_ret
-        || OB_CANCELED == dag_ret;
+        || OB_CANCELED == dag_ret
+        || OB_TABLET_TRANSFER_SEQ_NOT_MATCH == dag_ret;
   }
   int get_tablet_and_compat_mode();
   int prepare_merge_ctx(bool &finish_flag); // should be called when the first task of dag starts running

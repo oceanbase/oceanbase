@@ -461,19 +461,23 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
 int ObDbLinkProxy::acquire_dblink(const dblink_param_ctx &param_ctx, ObISQLConnection *&dblink_conn)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObISQLConnectionPool *dblink_pool = NULL;
+  ObISQLConnection * conn = NULL;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(param_ctx.link_type_, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret), K(param_ctx));
-  } else if (OB_FAIL(dblink_pool->acquire_dblink(param_ctx, dblink_conn))) {
+  } else if (OB_FAIL(dblink_pool->acquire_dblink(param_ctx, conn))) {
     LOG_WARN("acquire dblink failed", K(ret), K(param_ctx));
-  } else if (OB_FAIL(prepare_enviroment(param_ctx, dblink_conn))) {
+  } else if (OB_FAIL(prepare_enviroment(param_ctx, conn))) {
     LOG_WARN("failed to prepare dblink env", K(ret));
   } else {
-    dblink_conn->set_dblink_id(param_ctx.dblink_id_);
-    dblink_conn->set_dblink_driver_proto(param_ctx.link_type_);
+    conn->set_dblink_id(param_ctx.dblink_id_);
+    conn->set_dblink_driver_proto(param_ctx.link_type_);
+    conn->set_next_conn(NULL);
+    dblink_conn = conn;
   }
   return ret;
 }
@@ -509,7 +513,8 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
     sql_ptr_type sql_ptr[] = {param_ctx.set_sql_mode_cstr_,
                               param_ctx.set_client_charset_cstr_,
                               param_ctx.set_connection_charset_cstr_,
-                              param_ctx.set_results_charset_cstr_};
+                              param_ctx.set_results_charset_cstr_,
+                              param_ctx.set_transaction_isolation_cstr_};
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
     for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
@@ -528,6 +533,7 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       param_ctx.set_client_charset_cstr_,
       param_ctx.set_connection_charset_cstr_,
       param_ctx.set_results_charset_cstr_,
+      param_ctx.set_transaction_isolation_cstr_,
       "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
       "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
       "set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
@@ -542,8 +548,6 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
         LOG_WARN("create statement failed", K(ret), K(param_ctx));
       } else if (OB_FAIL(stmt.execute_update())) {
         LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
-      } else {
-        // do nothing
       }
     }
   }
@@ -579,10 +583,15 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
 int ObDbLinkProxy::release_dblink(/*uint64_t dblink_id,*/ DblinkDriverProto dblink_type, ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObISQLConnectionPool *dblink_pool = NULL;
-  if (!is_inited()) {
+  if (OB_ISNULL(dblink_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (FALSE_IT(dblink_conn->set_next_conn(NULL))) {
+  } else if (!is_inited()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("dblink proxy not inited");
+    LOG_WARN("dblink proxy not inited", K(ret));
   } else if (OB_FAIL(switch_dblink_conn_pool(dblink_type, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret));
   } else if (OB_FAIL(dblink_pool->release_dblink(dblink_conn))) {

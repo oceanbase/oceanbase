@@ -18,6 +18,7 @@
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "share/ob_force_print_log.h"
 #include "logservice/ob_log_base_type.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,9 @@ ObCheckpointExecutor::ObCheckpointExecutor()
       update_checkpoint_enabled_(false),
       reuse_recycle_scn_times_(0),
       prev_clog_checkpoint_lsn_(),
-      prev_recycle_scn_()
+      prev_recycle_scn_(),
+      update_clog_checkpoint_times_(0),
+      last_add_server_history_time_(0)
 {
   reset();
 }
@@ -53,6 +56,8 @@ void ObCheckpointExecutor::reset()
   reuse_recycle_scn_times_ = 0;
   prev_clog_checkpoint_lsn_.reset();
   prev_recycle_scn_.set_invalid();
+  update_clog_checkpoint_times_ = 0;
+  last_add_server_history_time_ = 0;
 }
 
 int ObCheckpointExecutor::register_handler(const ObLogBaseType &type,
@@ -137,6 +142,23 @@ inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type
   }
 }
 
+void ObCheckpointExecutor::add_server_event_history_for_update_clog_checkpoint(
+    const SCN &checkpoint_scn,
+    const char *service_type)
+{
+  int ret = OB_SUCCESS;
+  if (update_clog_checkpoint_times_ > 0) {
+    int64_t cur_time = ObClockGenerator::getClock();
+    if (cur_time - last_add_server_history_time_ > ADD_SERVER_HISTORY_INTERVAL) {
+      const uint64_t tenant_id = MTL_ID();
+      const int64_t ls_id = ls_->get_ls_id().id();
+      last_add_server_history_time_ = cur_time;
+      SERVER_EVENT_ADD("checkpoint", "update_clog_checkpoint", K(tenant_id), K(ls_id), K(checkpoint_scn), K(service_type), K_(update_clog_checkpoint_times));
+      update_clog_checkpoint_times_ = 0;
+    }
+  }
+}
+
 int ObCheckpointExecutor::update_clog_checkpoint()
 {
   int ret = OB_SUCCESS;
@@ -187,10 +209,12 @@ int ObCheckpointExecutor::update_clog_checkpoint()
         } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_scn))) {
           STORAGE_LOG(WARN, "set clog checkpoint failed", K(ret), K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id));
         } else {
+          update_clog_checkpoint_times_++;
           FLOG_INFO("[CHECKPOINT] update clog checkpoint successfully",
                     K(clog_checkpoint_lsn), K(checkpoint_scn), K(ls_id),
                     K(service_type));
         }
+        add_server_event_history_for_update_clog_checkpoint(checkpoint_scn, service_type);
       }
     } else {
       STORAGE_LOG(WARN, "freezer should not null", K(ls_->get_ls_id()));

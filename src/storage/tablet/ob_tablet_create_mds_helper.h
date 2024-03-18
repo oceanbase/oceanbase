@@ -55,6 +55,14 @@ class ObLSHandle;
 class ObTabletHandle;
 class ObLSTabletService;
 
+enum class ObTabletCreateThrottlingLevel : uint8_t
+{
+    STRICT = 0, // throttling by config like 1G2W, used in leader creation
+    SOFT = 1,   // adaptive, could break config to 1G3W, used in HA scene
+    FREE = 2,   // most free, 1G4W is the max creation speed without influcing stability
+    MAX
+};
+
 class ObTabletCreateMdsHelper
 {
 public:
@@ -78,7 +86,7 @@ public:
       const obrpc::ObBatchCreateTabletArg &arg,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
-  static int check_create_new_tablets(const int64_t inc_tablet_cnt, const bool is_soft_limit = false);
+  static int check_create_new_tablets(const int64_t inc_tablet_cnt, const ObTabletCreateThrottlingLevel level);
 private:
   static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg, const bool is_replay = false);
   static int check_create_arg(

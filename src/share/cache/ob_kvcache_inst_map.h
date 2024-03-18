@@ -109,7 +109,7 @@ struct ObKVCacheInst
 
   // hold size related
   inline bool need_hold_cache() { return ATOMIC_LOAD(&status_.hold_size_) > 0; }
-
+  inline int64_t get_memory_limit_pct() { return status_.get_memory_limit_pct(); }
   common::ObDLink *get_mb_list() { return mb_list_handle_.get_head(); }
 
   TO_STRING_KV(K_(cache_id), K_(tenant_id), K_(is_delete), K_(status), K_(ref_cnt));

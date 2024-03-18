@@ -221,6 +221,7 @@ int ObAccessService::table_scan(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   const share::ObLSID &ls_id = vparam.ls_id_;
   const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
   ObTableScanIterator *iter = nullptr;
@@ -659,6 +660,7 @@ int ObAccessService::delete_rows(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
@@ -779,6 +781,7 @@ int ObAccessService::insert_rows(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
@@ -842,6 +845,7 @@ int ObAccessService::insert_row(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
@@ -917,6 +921,7 @@ int ObAccessService::update_rows(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
@@ -979,6 +984,7 @@ int ObAccessService::lock_rows(
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_write);
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;

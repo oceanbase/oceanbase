@@ -453,7 +453,7 @@ public:
   inline const ObExprFrameInfo &get_expr_frame_info() const { return expr_frame_info_; }
 
   const ObOpSpec *get_root_op_spec() const { return root_op_spec_; }
-  inline bool is_link_dml_plan() {
+  inline bool is_link_dml_plan() const {
     bool is_link_dml = false;
     if (NULL != get_root_op_spec()) {
       is_link_dml = oceanbase::sql::ObPhyOperatorType::PHY_LINK_DML == get_root_op_spec()->type_;
@@ -619,8 +619,6 @@ public:
   //@todo: yuchen.wyc add a temporary member to mark whether
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
-  int64_t tx_id_; //for dblink recover xa tx
-  int64_t tm_sessid_; //for dblink get connection attached on tm session
   ExprFixedArray var_init_exprs_;
 private:
   bool is_returning_; //是否设置了returning
@@ -681,6 +679,8 @@ private:
 
 public:
   bool udf_has_dml_stmt_;
+private:
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

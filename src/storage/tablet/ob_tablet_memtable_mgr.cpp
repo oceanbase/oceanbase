@@ -553,7 +553,9 @@ int ObTabletMemtableMgr::unset_logging_blocked_for_active_memtable(memtable::ObI
   return ret;
 }
 
-int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle)
+int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
+    ObTableHandleV2 &handle,
+    const int64_t trace_id)
 {
   handle.reset();
   memtable::ObIMemtable *active_memtable = nullptr;
@@ -574,6 +576,9 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV
   } else if (FALSE_IT(memtable = static_cast<ObMemtable*>(active_memtable))) {
   } else if (memtable->allow_freeze()) {
     memtable->set_is_tablet_freeze();
+    if (checkpoint::INVALID_TRACE_ID != trace_id) {
+      memtable->set_trace_id(trace_id);
+    }
   } else {
     handle.reset();
     ret = OB_ENTRY_NOT_EXIST;
@@ -679,6 +684,7 @@ int ObTabletMemtableMgr::get_all_memtables(ObTableHdlArray &handle)
   return ret;
 }
 
+DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateReleaseTime, update_release_time)
 int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
                                                 const bool force)
 {
@@ -709,12 +715,14 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       memtable->set_frozen();
+      memtable->report_memtable_diagnose_info(UpdateReleaseTime());
       release_head_memtable();
       memtable::ObMemtable *active_memtable = get_active_memtable_();
       if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {
         active_memtable->set_allow_freeze(true);
         FLOG_INFO("allow active memtable to be freezed", K(ls_id), KPC(active_memtable));
       }
+
       FLOG_INFO("succeed to release head data memtable", K(ret), K(ls_id), K(tablet_id_));
     }
   }

@@ -853,15 +853,23 @@ bool ObTxCallbackList::is_logging_blocked() const
 {
   bool blocked = false;
   if (log_latch_.try_lock()) {
-    if (log_cursor_ != &head_ && log_cursor_->is_logging_blocked()) {
-      blocked = true;
+    // acquire APPEND lock to prevent append callback and
+    // reset log_cursor_ when log_cursor_ is point to head_
+    // due to no callback need to logging
+    // _NOTE_: the caller thread has hold TxCtx's FLUSH_REDO
+    // lock which prevent operations of remove callbacks
+    LockGuard guard(*this, LOCK_MODE::TRY_LOCK_APPEND);
+    if (guard.is_locked()) {
+      if (log_cursor_ != &head_ && log_cursor_->is_logging_blocked()) {
+        blocked = true;
+      }
     }
     log_latch_.unlock();
   }
   return blocked;
 }
 
-ObTxCallbackList::LockGuard::LockGuard(ObTxCallbackList &list,
+ObTxCallbackList::LockGuard::LockGuard(const ObTxCallbackList &list,
                                        const ObTxCallbackList::LOCK_MODE mode,
                                        ObTimeGuard *tg)
   : host_(list)
@@ -873,10 +881,13 @@ ObTxCallbackList::LockGuard::LockGuard(ObTxCallbackList &list,
     if (tg) {
       tg->click();
     }
-    lock_append_();
+    lock_append_(false);
     break;
   case LOCK_MODE::LOCK_APPEND:
-    lock_append_();
+    lock_append_(false);
+    break;
+  case LOCK_MODE::TRY_LOCK_APPEND:
+    lock_append_(true);
     break;
   case LOCK_MODE::LOCK_ITERATE:
     lock_iterate_(false);
@@ -902,17 +913,23 @@ void ObTxCallbackList::LockGuard::lock_iterate_(const bool try_lock)
     }
     if (state_.ITERATE_LOCKED_) {
       if (!host_.is_append_only_()) {
-        lock_append_();
+        lock_append_(false);
       }
     }
   }
 }
 
-void ObTxCallbackList::LockGuard::lock_append_()
+void ObTxCallbackList::LockGuard::lock_append_(const bool try_lock)
 {
   if (!state_.APPEND_LOCKED_) {
-    host_.append_latch_.lock();
-    state_.APPEND_LOCKED_ = true;
+    if (try_lock) {
+      if (host_.append_latch_.try_lock()) {
+        state_.APPEND_LOCKED_ = true;
+      }
+    } else {
+      host_.append_latch_.lock();
+      state_.APPEND_LOCKED_ = true;
+    }
   }
 }
 

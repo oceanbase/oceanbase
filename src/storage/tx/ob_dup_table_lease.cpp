@@ -71,7 +71,7 @@ void ObDupTableLSLeaseMgr::reset()
   lease_diag_info_log_buf_ = nullptr;
 }
 
-int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lease_req)
+int ObDupTableLSLeaseMgr::receive_lease_request(const ObDupTableLeaseRequest &lease_req)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lease_lock_);
@@ -89,7 +89,7 @@ int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lea
       DUP_TABLE_LOG(INFO, "first lease request from the new dup_table follower", K(ret), K(lease_req));
     }
   } else if (tmp_lease_info.cache_lease_req_.is_ready()) {
-    DUP_TABLE_LOG(INFO, "leader lease info is logging which can not recive new lease request",
+    DUP_TABLE_LOG(INFO, "leader lease info is logging which can not receive new lease request",
                   K(lease_req.get_src()));
   } else if (tmp_lease_info.cache_lease_req_.request_ts_ < lease_req.get_request_ts()) {
     // renew request ts before submit lease log

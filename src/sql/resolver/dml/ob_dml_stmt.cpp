@@ -1754,6 +1754,7 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
     LOG_WARN("get relation exprs failed", K(ret));
   } else {
     // rel id maintenance of dependent exprs
+    subquery_exprs_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
       ObColumnRefRawExpr *column_expr = NULL;
       if (OB_ISNULL(column_expr = column_items_.at(i).expr_)) {
@@ -1777,6 +1778,7 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
       } else if (OB_FAIL(expr->formalize(session_info))) {
+        // 'formalize' method calls 'extract_info' and 'decude_type' methods inside
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(expr->pull_relation_id())) {
         LOG_WARN("pull expr relation ids failed", K(ret), K(*expr));
@@ -1784,6 +1786,8 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         // zhanyue todo: adjust this.
         // Add IS_JOIN_COND flag need use expr relation_ids, here call extract_info() again.
         LOG_WARN("failed to extract info", K(*expr));
+      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, subquery_exprs_, true))) {
+        LOG_WARN("failed to extract query ref expr", K(ret));
       }
     }
   }
@@ -1802,6 +1806,17 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
   } else if (OB_FAIL(get_relation_exprs(stmt_exprs))) {
     LOG_WARN("get relation exprs failed", K(ret));
   } else {
+    // SQL DEFENSIVE CODE
+    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); ++i) {
+      ObQueryRefRawExpr *query_ref = subquery_exprs_.at(i);
+      if (OB_ISNULL(query_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref expr is null", K(ret));
+      } else if (OB_UNLIKELY(query_ref->is_explicited_reference())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref expr is referenced at two different levels", K(ret));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt_exprs.count(); i++) {
       if (OB_ISNULL(stmt_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1837,8 +1852,6 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
   }
   return ret;
 }
-
-
 
 int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
                                                    ObSQLSessionInfo *session_info)
@@ -1952,10 +1965,12 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
       LOG_WARN("failed to find pseudo column", K(ret), K(expr));
     } else if (expr.is_query_ref_expr() &&
                !ObRawExprUtils::find_expr(get_subquery_exprs(), &expr)) {
+      // SQL DEFENSIVE CODE
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref expr does not exist in the stmt", K(ret), K(expr));
     } else if (is_select_stmt() &&
                OB_FAIL(static_cast<ObSelectStmt *>(this)->check_aggr_and_winfunc(expr))) {
+      // SQL DEFENSIVE CODE
       LOG_WARN("failed to check aggr and winfunc validity", K(ret));
     }
   } else if (expr.is_exec_param_expr()) {
@@ -2146,14 +2161,6 @@ int ObDMLStmt::clear_sharable_expr_reference()
       expr->clear_explicited_referece();
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); i++) {
-    if (OB_ISNULL(subquery_exprs_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      subquery_exprs_.at(i)->clear_explicited_referece();
-    }
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_column_like_exprs_.count(); i++) {
     if (OB_ISNULL(pseudo_column_like_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -2168,6 +2175,7 @@ int ObDMLStmt::clear_sharable_expr_reference()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref expr is null", K(ret));
     } else {
+      query_ref->clear_explicited_referece();
       for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_exec_params().count(); ++j) {
         ObExecParamRawExpr *exec_param = query_ref->get_exec_params().at(j);
         if (OB_ISNULL(exec_param)) {

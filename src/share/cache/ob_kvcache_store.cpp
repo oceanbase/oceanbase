@@ -882,10 +882,16 @@ int ObKVCacheStore::alloc_mbhandle(
   ObKVStoreMemBlock *mem_block = NULL;
   char *buf = NULL;
   const uint64_t tenant_id = inst.tenant_id_;
+  const int64_t memory_limit_pct = inst.get_memory_limit_pct();
+  const int64_t cache_store_size = ATOMIC_AAF(&inst.status_.store_size_, block_size);
 
   if (!inst.mb_list_handle_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "mb_list_handle is invalid", K(ret));
+  } else if (memory_limit_pct < 100 && cache_store_size >
+        (inst.mb_list_handle_.get_resource_handle()->get_memory_mgr()->get_limit() * memory_limit_pct / 100)) {
+    ret = OB_SIZE_OVERFLOW;
+    COMMON_LOG(INFO, "Fail to allocate memory, ", K(ret), K(block_size), K(cache_store_size), K(memory_limit_pct));
   } else if (NULL == (buf = static_cast<char*>(alloc_mb(
       *inst.mb_list_handle_.get_resource_handle(), tenant_id, block_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -908,7 +914,6 @@ int ObKVCacheStore::alloc_mbhandle(
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "Fail to set mb_handle status from FREE to USING, ", K(ret));
     } else {
-      (void) ATOMIC_AAF(&inst.status_.store_size_, block_size);
       if (LRU == policy) {
         (void) ATOMIC_AAF(&inst.status_.lru_mb_cnt_, 1);
       } else {
@@ -929,6 +934,8 @@ int ObKVCacheStore::alloc_mbhandle(
     } else if (OB_FAIL(insert_mb_handle(head, mb_handle))) {
       COMMON_LOG(WARN, "insert_mb_handle failed", K(ret));
     }
+  } else {
+    ATOMIC_SAF(&inst.status_.store_size_, block_size);
   }
 
   return ret;

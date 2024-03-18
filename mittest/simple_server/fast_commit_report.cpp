@@ -638,7 +638,7 @@ public:
     ASSERT_EQ(OB_SUCCESS, ((ObTxDataMemtableMgr *)(memtable_mgr))->freeze());
     share::SCN start_log_ts =  tx_data_memtable->get_start_scn();
     share::SCN end_log_ts =  tx_data_memtable->get_end_scn();
-    ASSERT_EQ(OB_SUCCESS, tx_data_memtable->flush());
+    ASSERT_EQ(OB_SUCCESS, tx_data_memtable->flush(0));
 
     wait_freeze_tx_table_finish(start_log_ts, end_log_ts);
 

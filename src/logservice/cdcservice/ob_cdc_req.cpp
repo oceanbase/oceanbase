@@ -340,6 +340,7 @@ void ObCdcLSFetchLogReq::reset()
   progress_ = OB_INVALID_TIMESTAMP;
   flag_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
+  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
 }
 
 ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &other)
@@ -353,7 +354,7 @@ ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &othe
   progress_ = other.progress_;
   flag_ = other.flag_;
   tenant_id_ = other.tenant_id_;
-
+  compressor_type_ = other.compressor_type_;
   return *this;
 }
 
@@ -367,7 +368,8 @@ bool ObCdcLSFetchLogReq::operator==(const ObCdcLSFetchLogReq &that) const
     && client_id_ == that.client_id_
     && progress_ == that.progress_
     && flag_ == that.flag_
-    && tenant_id_ == that.tenant_id_;
+    && tenant_id_ == that.tenant_id_
+    && compressor_type_ == that.compressor_type_;
 }
 
 bool ObCdcLSFetchLogReq::operator!=(const ObCdcLSFetchLogReq &that) const
@@ -497,6 +499,7 @@ void ObCdcLSFetchMissLogReq::reset()
   client_id_.reset();
   flag_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
+  compressor_type_ = common::ObCompressorType::INVALID_COMPRESSOR;
 }
 
 int ObCdcLSFetchMissLogReq::append_miss_log(const MissLogParam &param)

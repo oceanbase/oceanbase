@@ -45,7 +45,6 @@ void ObLockWaitNode::set(void* addr,
   total_update_cnt_ = total_trans_node_cnt;
   run_ts_ = 0;
   snprintf(key_, sizeof(key_), "%s", key);
-  reset_need_wait();
 }
 
 void ObLockWaitNode::change_hash(const int64_t hash, const int64_t lock_seq)

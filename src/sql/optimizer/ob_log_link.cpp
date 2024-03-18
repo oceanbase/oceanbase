@@ -210,39 +210,22 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   print_param.for_dblink_ = 1;
   // only link scan need print flashback query for dblink table
   ObOptimizerContext *opt_ctx = NULL;
-  ObQueryCtx *query_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
-  int64_t session_query_timeout_us = 0;
-  int64_t hint_query_timeout_us = 0;
   if (OB_ISNULL(stmt) || OB_ISNULL(plan) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(session = opt_ctx->get_session_info()) ||
       OB_ISNULL(print_param.exec_ctx_ = opt_ctx->get_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KP(opt_ctx), KP(stmt), KP(session), KP(plan), K(ret));
-  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (FALSE_IT(hint_query_timeout_us = query_ctx->get_query_hint_for_update().get_global_hint().query_timeout_)) {
-  } else if (OB_FAIL(session->get_query_timeout(session_query_timeout_us))) {
-    LOG_WARN("failed to get session query timeout", K(ret));
-  } else if (-1 == hint_query_timeout_us &&
-             FALSE_IT(query_ctx->get_query_hint_for_update().get_global_hint().merge_query_timeout_hint(session_query_timeout_us))) {
-    // do nothing
-  } else if (FALSE_IT(query_ctx->get_query_hint_for_update().get_global_hint().set_flashback_read_tx_uncommitted(true))) {
   } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
     LOG_WARN("failed to mark exec params", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param))) {
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param, NULL, session))) {
     LOG_WARN("failed to reconstruct link sql", KP(stmt), KP(plan), K(get_dblink_id()), K(ret));
   } else {
     stmt_fmt_buf_ = sql.ptr();
     stmt_fmt_len_ = sql.length();
     LOG_DEBUG("loglink succ to reconstruct link sql", K(sql));
   }
-  if (-1 == hint_query_timeout_us) { // restore query_timeout_hint
-    query_ctx->get_query_hint_for_update().get_global_hint().reset_query_timeout_hint();
-  }
-  query_ctx->get_query_hint_for_update().get_global_hint().set_flashback_read_tx_uncommitted(false);
   return ret;
 }
 

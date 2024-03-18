@@ -14,6 +14,7 @@
 
 #include "observer/mysql/obmp_query.h"
 
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/worker.h"
@@ -690,7 +691,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObTenantCachedSchemaGuardInfo &cached_schema_info = session.get_cached_schema_guard_info();
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
-  common::ObSqlInfoGuard si_guard(sql);
+  SQL_INFO_GUARD(sql, session.get_cur_sql_id());
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
@@ -1269,6 +1270,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
+    ENABLE_SQL_MEMLEAK_GUARD;
     if (need_trans_cb) {
       ObAsyncPlanDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
       // NOTE: sql_end_cb必须在drv.response_result()之前初始化好

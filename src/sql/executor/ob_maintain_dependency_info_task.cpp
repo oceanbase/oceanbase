@@ -130,6 +130,7 @@ int ObMaintainObjDepInfoTask::check_and_build_dep_info_arg(
 share::ObAsyncTask *ObMaintainObjDepInfoTask::deep_copy(char *buf, const int64_t buf_size) const
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObAsyncTask *task = nullptr;
   const int64_t need_size = get_deep_copy_size();
   if (OB_ISNULL(buf)) {

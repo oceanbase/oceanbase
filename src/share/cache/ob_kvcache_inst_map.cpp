@@ -295,7 +295,7 @@ int ObKVCacheInstMap::get_cache_inst(
       } else if (OB_HASH_NOT_EXIST == ret) {
         lib::ObMemAttr attr(inst_key.tenant_id_, "CACHE_MAP_NODE");
         SET_USE_500(attr);
-        inst = OB_NEW(ObKVCacheInst, ObMemAttr(inst_key.tenant_id_, "CACHE_INST"));
+        inst = OB_NEW(ObKVCacheInst, SET_IGNORE_MEM_VERSION(ObMemAttr(inst_key.tenant_id_, "CACHE_INST")));
         if (OB_ISNULL(inst)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           COMMON_LOG(WARN, "Fail to alloc cache inst, ", K(ret));

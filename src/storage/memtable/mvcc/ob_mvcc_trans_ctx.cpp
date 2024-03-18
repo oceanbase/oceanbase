@@ -2254,14 +2254,16 @@ bool ObTransCallbackMgr::is_logging_blocked(bool &has_pending_log) const
   int ret = OB_SUCCESS;
   bool all_blocked = false;
   RDLockGuard guard(rwlock_);
-  CALLBACK_LISTS_FOREACH_CONST(idx, list) {
-    if (list->has_pending_log()) {
-      has_pending_log = true;
-      if (list->is_logging_blocked()) {
-        all_blocked = true;
-      } else {
-        all_blocked = false;
-        break;
+  if (!for_replay_) {
+    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+      if (list->has_pending_log()) {
+        has_pending_log = true;
+        if (list->is_logging_blocked()) {
+          all_blocked = true;
+        } else {
+          all_blocked = false;
+          break;
+        }
       }
     }
   }

@@ -58,9 +58,10 @@ class ObKVCache : public ObIKVCache<Key, Value>
 public:
   ObKVCache();
   virtual ~ObKVCache();
-  int init(const char *cache_name, const int64_t priority = 1);
+  int init(const char *cache_name, const int64_t priority = 1, const int64_t mem_limit_pct = 100);
   void destroy();
   int set_priority(const int64_t priority);
+  int set_mem_limit_pct(const int64_t mem_limit_pct);
   virtual int put(const Key &key, const Value &value, bool overwrite = true);
   virtual int put_and_fetch(
     const Key &key,
@@ -168,11 +169,12 @@ private:
   friend class ObKVCacheHandle;
   ObKVGlobalCache();
   virtual ~ObKVGlobalCache();
-  int register_cache(const char *cache_name, const int64_t priority, int64_t &cache_id);
+  int register_cache(const char *cache_name, const int64_t priority, const int64_t mem_limit_pct, int64_t &cache_id);
   void deregister_cache(const int64_t cache_id);
   int create_working_set(const ObKVCacheInstKey &inst_key, ObWorkingSet *&working_set);
   int delete_working_set(ObWorkingSet *working_set);
   int set_priority(const int64_t cache_id, const int64_t priority);
+  int set_mem_limit_pct(const int64_t cache_id, const int64_t mem_limit_pct);
   int put(
     const int64_t cache_id,
     const ObIKVCacheKey &key,
@@ -411,17 +413,17 @@ ObKVCache<Key, Value>::~ObKVCache()
 }
 
 template <class Key, class Value>
-int ObKVCache<Key, Value>::init(const char *cache_name, const int64_t priority)
+int ObKVCache<Key, Value>::init(const char *cache_name, const int64_t priority, const int64_t mem_limit_pct)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "The ObKVCache has been inited, ", K(ret));
   } else if (OB_UNLIKELY(NULL == cache_name)
-      || OB_UNLIKELY(priority <= 0)) {
+      || OB_UNLIKELY(priority <= 0 || mem_limit_pct <= 0 || mem_limit_pct > 100)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument, ", KP(cache_name), K(priority), K(ret));
-  } else if (OB_FAIL(ObKVGlobalCache::get_instance().register_cache(cache_name, priority, cache_id_))) {
+  } else if (OB_FAIL(ObKVGlobalCache::get_instance().register_cache(cache_name, priority, mem_limit_pct, cache_id_))) {
     COMMON_LOG(WARN, "Fail to register cache, ", K(ret));
   } else {
     COMMON_LOG(INFO, "Succ to register cache", K(cache_name), K(priority), K_(cache_id));
@@ -452,6 +454,24 @@ int ObKVCache<Key, Value>::set_priority(const int64_t priority)
   } else if (OB_FAIL(ObKVGlobalCache::get_instance().set_priority(cache_id_, priority))) {
     COMMON_LOG(WARN, "Fail to set priority, ", K(ret));
   }
+  return ret;
+}
+
+template <class Key, class Value>
+int ObKVCache<Key, Value>::set_mem_limit_pct(const int64_t mem_limit_pct)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "The ObKVCache has not been inited, ", K(ret));
+  } else if (OB_UNLIKELY(mem_limit_pct <= 0 || mem_limit_pct > 100)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Invalid argument, ", K(mem_limit_pct), K(ret));
+  } else if (OB_FAIL(ObKVGlobalCache::get_instance().set_mem_limit_pct(cache_id_, mem_limit_pct))) {
+    COMMON_LOG(WARN, "Fail to set mem_limit_pct, ", K(ret));
+  }
+
   return ret;
 }
 

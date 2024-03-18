@@ -36,7 +36,7 @@ Refer to the current memory maintenance mode of ObString and the commonly used i
   *
   * Construct the buffer data and effective data length of the string
   *
-  * There are also some derived constructors, such as omitting the buffer length 
+  * There are also some derived constructors, such as omitting the buffer length
   * (the buffer length is consistent with the data length)
   */
 ObString(const obstr_size_t size, const obstr_size_t length, char *ptr);
@@ -69,8 +69,8 @@ const char *ptr() const;
 /**
  * Case insensitively comparison
  *
- * @NOTE: Although ObString does not specify that it ends with '\0', 
- * strncasecmp is used in the implementation here, so please pay attention 
+ * @NOTE: Although ObString does not specify that it ends with '\0',
+ * strncasecmp is used in the implementation here, so please pay attention
  * when using this function.
  */
 int case_compare(const ObString &obstr) const;
@@ -79,7 +79,7 @@ int case_compare(const char *str) const;
 /**
  * Case-sensitive comparison
  *
- * @NOTE: Compared with case_compare, strncmp is not used here, 
+ * @NOTE: Compared with case_compare, strncmp is not used here,
  * but memcmp is used to compare the buffer length.
  */
 int compare(const ObString &obstr) const;
@@ -107,7 +107,7 @@ ObIArray();
 /**
  * Accept the specified array
  *
- * The interface class will not take over data-related memory. 
+ * The interface class will not take over data-related memory.
  * Memory processing depends on the specific implementation class.
  */
 ObIArray(T *data, const int64_t count);
@@ -120,7 +120,7 @@ int push_back(const T &obj);
 
 /**
  * Remove the last element
- * @NOTE It is very likely that the destructor will not be called. 
+ * @NOTE It is very likely that the destructor will not be called.
  * You need to look at the specific implementation class.
  */
 void pop_back();
@@ -138,7 +138,7 @@ int remove(int64_t idx);
 
 /**
  * Get the element at the specified position
- * @return OB_SUCCESS is returned successfully. 
+ * @return OB_SUCCESS is returned successfully.
  * If the specified location does not exist, a failure will be returned.
  */
 int at(int64_t idx, T &obj);
@@ -164,7 +164,7 @@ void destroy();
 int reserve(int64_t capacity);
 
 /**
- * Reserve a specified size of memory space, usually the implementation 
+ * Reserve a specified size of memory space, usually the implementation
  * class will execute the object's constructor
  */
 int prepare_allocate(int64_t capacity);
@@ -238,7 +238,7 @@ int push_front(const value_type &value);
 int pop_back();
 
 /**
- * Both pop_front functions delete the first element. 
+ * Both pop_front functions delete the first element.
  * The difference is that one will copy the object and the other will not.
  */
 int pop_front(value_type &value);
@@ -350,7 +350,7 @@ void clear();
 /// Insert another linked list at the beginning of the linked list
 void push_range(ObDList<DLinkNode> &range);
 
-/// Delete the specified number of elements from the beginning 
+/// Delete the specified number of elements from the beginning
 /// and place the deleted elements in the range
 void pop_range(int32_t num, ObDList<DLinkNode> &range);
 
@@ -457,32 +457,32 @@ Among them, `_key_type`, `_value_type`, `_hashfunc`, `_equal` have the same mean
 ### ObHashMap Interface Introduction
 ```cpp
 /**
-  * The constructor of ObHashMap does nothing. 
+  * The constructor of ObHashMap does nothing.
   * You must call create for actual initialization.
-  * The parameters of the create function are mainly the number of buckets 
+  * The parameters of the create function are mainly the number of buckets
   * (bucket_num) and the parameters of the memory allocator.
   * Providing a reasonable number of buckets can make hashmap run more efficiently
   * without wasting too much memory.
   *
-  * As you can see from the following interfaces, two memory allocators can be 
+  * As you can see from the following interfaces, two memory allocators can be
   * provided, one is the allocator of the bucket array,
   * and the other is the allocator of element nodes.
   */
-int create(int64_t bucket_num, 
+int create(int64_t bucket_num,
            const ObMemAttr &bucket_attr,
            const ObMemAttr &node_attr);
 int create(int64_t bucket_num, const ObMemAttr &bucket_attr);
-int create(int64_t bucket_num, 
+int create(int64_t bucket_num,
            const lib::ObLabel &bucket_label,
-           const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE, 
+           const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE,
            uint64_t tenant_id = OB_SERVER_TENANT_ID,
            uint64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID);
-int create(int64_t bucket_num, 
-           _allocer *allocer, 
+int create(int64_t bucket_num,
+           _allocer *allocer,
            const lib::ObLabel &bucket_label,
            const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE);
-int create(int64_t bucket_num, 
-           _allocer *allocer, 
+int create(int64_t bucket_num,
+           _allocer *allocer,
            _bucket_allocer *bucket_allocer);
 
 /// Destroy the current object directly
@@ -504,37 +504,37 @@ int get_refactored(const _key_type &key, _value_type &value, const int64_t timeo
 
 /**
   * Set the value of a certain key value
-  * @param flag: 0 means it already exists and will not be overwritten, 
+  * @param flag: 0 means it already exists and will not be overwritten,
   *              otherwise the original value will be overwritten.
-  * @param broadcast: whether to wake up the thread waiting to obtain the 
+  * @param broadcast: whether to wake up the thread waiting to obtain the
   *                   current key
   * @param overwrite_key: not used. Please refer to flag
-  * @param callback: After the insertion or update is successful, you can 
+  * @param callback: After the insertion or update is successful, you can
   * use callback to perform some additional operations on the value.
   */
 template <typename _callback = void>
-int set_refactored(const _key_type &key, 
+int set_refactored(const _key_type &key,
                    const _value_type &value,
                    int flag = 0,
-                   int broadcast = 0, 
-                   int overwrite_key = 0, 
+                   int broadcast = 0,
+                   int overwrite_key = 0,
                    _callback *callback = nullptr);
-                 
+
 /**
   * Traverse all elements
   * @note
   * 1. You cannot delete elements, insert, etc. during the traversal process.
-  * Because some locks will be added during the traversal process, and locks 
-  * will also be added for insertion, deletion and other actions, lock 
+  * Because some locks will be added during the traversal process, and locks
+  * will also be added for insertion, deletion and other actions, lock
   * conflicts may occur;
-  * 2. The callback action should be as small as possible because it works 
+  * 2. The callback action should be as small as possible because it works
   * within the lock scope.
   */
 template<class _callback>
 int foreach_refactored(_callback &callback) const;
 
 /**
-  * Delete the specified key value. 
+  * Delete the specified key value.
   * If the value pointer is not null, the corresponding element will be returned
   * @return If the element does not exist, OB_HASH_NOT_EXIST will be returned
   */
@@ -554,7 +554,7 @@ template<class _pred>
 int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL);
 
 /**
- * There is no need to copy elements, directly access the elements with 
+ * There is no need to copy elements, directly access the elements with
  * specified key values through callback.
  * @note callback executed under write lock protection
  */
@@ -562,7 +562,7 @@ template <class _callback>
 int atomic_refactored(const _key_type &key, _callback &callback);
 
 /**
- * There is no need to copy the element value, just get the element directly 
+ * There is no need to copy the element value, just get the element directly
  * and access it through callback.
  * @note callback executed under write lock protection
  */
@@ -625,13 +625,13 @@ Below are some commonly used interfaces and precautions when using them.
   *Declaration of ObLinkHashMap
   * Template parameters:
   * @param Key Key type
-  * @param Value The type of value, which needs to be inherited from 
+  * @param Value The type of value, which needs to be inherited from
   * LinkHashValue (refer to ob_link_hashmap_deps.h)
-  * @param AllocHandle Class to allocate release values and nodes 
+  * @param AllocHandle Class to allocate release values and nodes
   * (refer to ob_link_hashmap_deps.h)
-  * @param RefHandle Reference counting function. Don't modify it if you 
+  * @param RefHandle Reference counting function. Don't modify it if you
   * don't deeply understand its principles.
-  * @param SHRINK_THRESHOLD When the number of current nodes is too many or too 
+  * @param SHRINK_THRESHOLD When the number of current nodes is too many or too
   * few, it will expand or shrink. Try to keep the current nodes at
   * Between the ratio [1/SHRINK_THRESHOLD, 1] (non-precise control)
   */
@@ -661,7 +661,7 @@ int del(const Key &key);
   */
 int get(const Key &key, Value*& value);
 
-/// Releases the introduction count of the specified element. 
+/// Releases the introduction count of the specified element.
 /// Can be released across threads
 void revert(Value* value);
 
@@ -673,14 +673,14 @@ int contains_key(const Key &key);
 
 /**
   * Traverse all elements
-  * @param fn: bool fn(Key &key, Value *value); The bool return value 
+  * @param fn: bool fn(Key &key, Value *value); The bool return value
   * indicates whether to continue traversing
   */
 template <typename Function> int for_each(Function &fn);
 
 /**
   * Delete elements that meet the conditions
-  * @param fn bool fn(Key &key, Value *value); The bool return value 
+  * @param fn bool fn(Key &key, Value *value); The bool return value
   * indicates whether it needs to be deleted
   */
 template <typename Function> int remove_if(Function &fn);

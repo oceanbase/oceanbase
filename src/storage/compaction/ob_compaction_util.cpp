@@ -26,7 +26,7 @@ const static char * ObMergeTypeStr[] = {
     "MEDIUM_MERGE",
     "DDL_KV_MERGE",
     "BACKFILL_TX_MERGE",
-    "MDS_TABLE_MERGE",
+    "MDS_MINI_MERGE",
     "EMPTY_MERGE_TYPE"
 };
 

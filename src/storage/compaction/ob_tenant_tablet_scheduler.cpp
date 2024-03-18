@@ -1313,7 +1313,7 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
     } // end of while
 
     if (FALSE_IT(start_time_us = common::ObTimeUtility::current_time())) {
-    } else if (OB_TMP_FAIL(ls.batch_tablet_freeze(need_fast_freeze_tablets, true/*is_sync*/))) {
+    } else if (OB_TMP_FAIL(ls.batch_tablet_freeze(checkpoint::INVALID_TRACE_ID, need_fast_freeze_tablets, true/*is_sync*/))) {
       LOG_WARN("failt to batch freeze tablet", KR(tmp_ret), K(ls_id), K(need_fast_freeze_tablets));
     } else {
       LOG_INFO("fast freeze by batch_tablet_freeze finish", KR(tmp_ret),

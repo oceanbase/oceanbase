@@ -37,7 +37,7 @@ const static char *ObSysTaskTypeStr[] = {
     "BACKFILL_TX",
     "REMOVE_MEMBER",
     "TRANSFER",
-    "MDS_TABLE_MERGE",
+    "MDS_MINI_MERGE",
     "TTL_TASK",
     "TENANT_SNAPSHOT_CREATE",
     "TENANT_SNAPSHOT_GC",

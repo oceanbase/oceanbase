@@ -2299,9 +2299,6 @@ int ObTransformJoinElimination::try_remove_semi_info(ObDMLStmt *stmt,
     LOG_WARN("failed to replace relation expr", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_semi_infos(), semi_info))) {
     LOG_WARN("failed to remove item", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(child_stmt->get_condition_exprs(),
-                                                              stmt->get_subquery_exprs()))) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(append(semi_info->semi_conditions_, child_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(trans_semi_condition_exprs(stmt, semi_info))) {

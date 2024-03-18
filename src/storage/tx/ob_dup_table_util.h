@@ -144,7 +144,7 @@ public:
                                bool is_dup_table,
                                int64_t refresh_time);
   // called by rpc thread
-  int recive_lease_request(const ObDupTableLeaseRequest &lease_req);
+  int receive_lease_request(const ObDupTableLeaseRequest &lease_req);
   int handle_ts_sync_response(const ObDupTableTsSyncResponse &ts_sync_reps);
   // called by part_ctx
   // int validate_dup_table_tablet(const ObTabletID &tablet_id, bool &is_dup_tablet);

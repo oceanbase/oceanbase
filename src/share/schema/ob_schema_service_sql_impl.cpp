@@ -8950,12 +8950,20 @@ int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_s
       }
     }
   }
-  // don't need set param_ctx.charset_id_ and param_ctx.ncharset_id_, default value is what we need.
-  param_ctx.pool_type_ = DblinkPoolType::DBLINK_POOL_SCHEMA;
-  param_ctx.sql_request_level_ = sql_request_level;
-  param_ctx.tenant_id_ = tenant_id;
-  param_ctx.dblink_id_ = dblink_id;
-  param_ctx.link_type_ = link_type;
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx,
+                                                     session_info,
+                                                     alloctor, //useless in oracle mode
+                                                     dblink_id,
+                                                     link_type,
+                                                     DblinkPoolType::DBLINK_POOL_SCHEMA))) {
+    LOG_WARN("failed to init dblink param ctx", K(ret), K(param_ctx), K(dblink_id));
+  } else {
+    // param_ctx.charset_id_ and param_ctx.ncharset_id_, default value is what we need.
+    param_ctx.charset_id_ = common::ObNlsCharsetId::CHARSET_AL32UTF8_ID;
+    param_ctx.ncharset_id_ = common::ObNlsCharsetId::CHARSET_AL32UTF8_ID;
+  }
   // skip to process TM process sql within @xxxx send by RM, cause here can not get DBLINK_INFO hint(still unresolved).
   LOG_DEBUG("get link table schema", K(table_name), K(database_name), KP(dblink_schema), KP(reverse_link), K(is_reverse_link), K(conn_type), K(ret));
   if (OB_FAIL(ret)) {// process normal dblink request
@@ -8963,9 +8971,6 @@ int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_s
   } else if (sql::DblinkGetConnType::DBLINK_POOL == conn_type && OB_ISNULL(dblink_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(dblink_schema));
-  } else if (!lib::is_oracle_mode() &&
-             OB_FAIL(ObDblinkService::get_set_sql_mode_cstr(session_info, param_ctx.set_sql_mode_cstr_, alloctor))) {
-    LOG_WARN("failed to get sql mode cstr", K(ret));
   } else if (sql::DblinkGetConnType::DBLINK_POOL == conn_type &&
       OB_FAIL(dblink_proxy_->create_dblink_pool(param_ctx,
                                                 dblink_schema->get_host_addr(),
@@ -9054,7 +9059,6 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(dblink_param_ctx &param_ctx,
       } else {
         LOG_DEBUG("succ to read table meta by reverse_link");
       }
-    } else if (FALSE_IT(param_ctx.sessid_ = session_info->get_sessid())) {
     } else if (OB_FAIL(dblink_proxy_->acquire_dblink(param_ctx,
                                                      dblink_conn))) {
       LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));

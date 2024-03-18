@@ -989,11 +989,15 @@ public:
   static int all_virtual_import_table_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_import_table_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_data_activity_metrics_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_group_mapping_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_group_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_group_mapping_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_clone_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_clone_job_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_memtable_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_checkpoint_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_aux_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_snapshot_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_snapshot_schema(share::schema::ObTableSchema &table_schema);
@@ -3571,11 +3575,15 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_import_table_job_history_schema,
   ObInnerTableSchema::all_virtual_import_table_task_schema,
   ObInnerTableSchema::all_virtual_import_table_task_history_schema,
+  ObInnerTableSchema::all_virtual_data_activity_metrics_schema,
   ObInnerTableSchema::all_virtual_column_group_mapping_schema,
   ObInnerTableSchema::all_virtual_column_group_history_schema,
   ObInnerTableSchema::all_virtual_column_group_mapping_history_schema,
   ObInnerTableSchema::all_virtual_clone_job_schema,
   ObInnerTableSchema::all_virtual_clone_job_history_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_memtable_info_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema,
+  ObInnerTableSchema::all_virtual_checkpoint_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_aux_stat_schema,
   ObInnerTableSchema::all_virtual_tenant_snapshot_job_schema,
   ObInnerTableSchema::all_virtual_ls_snapshot_schema,
@@ -5368,6 +5376,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_COLUMN_GROUP_MAPPING_HISTORY_TID,
   OB_ALL_VIRTUAL_CLONE_JOB_TID,
   OB_ALL_VIRTUAL_CLONE_JOB_HISTORY_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_JOB_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TID,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID,
@@ -7822,6 +7833,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_COLUMN_GROUP_MAPPING_HISTORY_TNAME,
   OB_ALL_VIRTUAL_CLONE_JOB_TNAME,
   OB_ALL_VIRTUAL_CLONE_JOB_HISTORY_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TNAME,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_JOB_TNAME,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TNAME,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TNAME,
@@ -9651,6 +9665,9 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PX_P2P_DATAHUB_TID,
   OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_TID,
   OB_ALL_VIRTUAL_CGROUP_CONFIG_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
+  OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
@@ -12282,11 +12299,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 279;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 776;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 780;
 const int64_t OB_SYS_VIEW_COUNT = 840;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1900;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1904;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1903;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1907;
 
 } // end namespace share
 } // end namespace oceanbase

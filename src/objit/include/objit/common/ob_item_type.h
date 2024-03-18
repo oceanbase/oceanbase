@@ -867,6 +867,7 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_TABLE_OPTION_PRINTER = 1814,
   T_FUN_SYS_INNER_TABLE_SEQUENCE_GETTER = 1815,
   T_FUN_SYS_DECODE_TRACE_ID = 1816,
+  T_FUN_SYS_DOC_LENGTH = 1817,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
   T_FUN_SYS_INNER_ROW_CMP_VALUE = 2011,
@@ -875,6 +876,8 @@ typedef enum ObItemType
   T_FUN_SYS_GTID_SUBTRACT = 2013,
   T_FUN_SYS_WAIT_FOR_EXECUTED_GTID_SET = 2014,
   T_FUN_SYS_WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS = 2015,
+  T_FUN_SYS_LAST_REFRESH_SCN = 2016,
+  T_FUN_SUM_OPNSIZE = 2017,
 
   T_MAX_OP = 3000,
 
@@ -2428,6 +2431,9 @@ typedef enum ObItemType
   T_PARALLEL_DAS_DML,
   T_DISABLE_PARALLEL_DAS_DML,
   T_ENABLE_LOB_PREFETCH,
+  T_MV_OPTIONS,
+  T_MV_REWRITE,
+  T_MV_NO_REWRITE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2459,6 +2465,14 @@ typedef enum ObContextType {
     ACCESSED_GLOBALLY = 2,
     INITIALIZED_GLOBALLY = 3,
   }ObContextType;
+
+typedef enum ObOutlineType
+{
+  OUTLINE_TYPE_INVALID = -1, //Attention: add a new type after CACHE_TYPE_INVALID
+  OUTLINE_TYPE_NORMAL,
+  OUTLINE_TYPE_FORMAT,
+  OUTLINE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
+} ObOutlineType;
 
 #define IS_BOOL_OP(op) \
   (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN && (op) != T_OP_POW) \

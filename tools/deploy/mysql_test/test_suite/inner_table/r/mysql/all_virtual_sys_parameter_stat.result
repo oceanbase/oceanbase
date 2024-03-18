@@ -219,6 +219,7 @@ standby_db_fetch_log_rpc_timeout
 standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
+strict_check_os_params
 syslog_io_bandwidth_limit
 syslog_level
 system_memory
@@ -265,6 +266,7 @@ _balance_wait_killing_transaction_end_threshold
 _bloom_filter_enabled
 _bloom_filter_ratio
 _cache_wash_interval
+_checkpoint_diagnose_preservation_count
 _chunk_row_store_mem_limit
 _ctx_memory_limit
 _datafile_usage_lower_bound_percentage
@@ -325,6 +327,7 @@ _force_hash_groupby_dump
 _force_hash_join_spill
 _force_malloc_for_absent_tenant
 _force_skip_encoding_partition_id
+_global_enable_rich_vector_format
 _hash_area_size
 _hash_join_enabled
 _ha_rpc_timeout
@@ -347,7 +350,6 @@ _max_rpc_packet_size
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
 _mds_memory_limit_percentage
-_memory_large_chunk_cache_size
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor

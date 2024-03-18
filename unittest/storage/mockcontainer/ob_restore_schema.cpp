@@ -67,16 +67,16 @@ int ObRestoreSchema::init()
       STORAGE_LOG(WARN, "fail add database schema", K(ret));
     }
   //ObArray<ObDatabaseSchema> db_array;
-  //if (OB_SUCCESS != (ret = schema_manager_.init())) {
+  //if (OB_FAIL(schema_manager_.init())) {
   //  STORAGE_LOG(WARN, "fail to initialize schema manager", K(ret));
-  //} else if (OB_SUCCESS != (ret = db_array.push_back(db_schema))) {
+  //} else if (OB_FAIL(db_array.push_back(db_schema))) {
   //  STORAGE_LOG(WARN, "fail to add database", K(ret));
-  //} else if (OB_SUCCESS != (ret = schema_manager_.add_new_database_schema_array(db_array))) {
+  //} else if (OB_FAIL(schema_manager_.add_new_database_schema_array(db_array))) {
   //  STORAGE_LOG(WARN, "fail to add default database", K(ret));
   //}
   }
   if (OB_SUCC(ret)) {
-    if (OB_SUCCESS != (ret = ObPreProcessSysVars::init_sys_var())) {
+    if (OB_FAIL(ObPreProcessSysVars::init_sys_var())) {
       STORAGE_LOG(ERROR, "fail to init sys variables", K(ret));
     }
   }
@@ -212,13 +212,14 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
         ret = OB_ERR_ILLEGAL_NAME;
         STORAGE_LOG(WARN, "invalid column name",
                     K_(index_arg.index_columns_[i].column_name));
+      } else if (OB_FAIL(index_column.assign(*col))) {
+        STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(col));
       } else {
-        index_column = *col;
         index_column.set_rowkey_position(++index_rowkey_num);
         if (col->get_column_id() > max_column_id) {
           max_column_id = col->get_column_id();
         }
-        if (OB_SUCCESS != (ret = index_schema.add_column(index_column))) {
+        if (OB_FAIL(index_schema.add_column(index_column))) {
           STORAGE_LOG(WARN, "add column schema error", K(ret));
         }
       }
@@ -229,14 +230,15 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
       uint64_t column_id = OB_INVALID_ID;
       ObColumnSchemaV2 index_column;
-      if (OB_SUCCESS != (ret = rowkey_info.get_column_id(i, column_id))) {
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
         STORAGE_LOG(WARN, "get column id error", K(i), K(ret));
       } else if (NULL == index_schema.get_column_schema(column_id)) {
         if (NULL == (col = table_schema->get_column_schema(column_id))) {
           ret = OB_ERR_ILLEGAL_ID;
           STORAGE_LOG(WARN, "invalid column id", K(column_id));
+        } else if (OB_FAIL(index_column.assign(*col))) {
+          STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(col));
         } else {
-          index_column = *col;
           index_column.set_rowkey_position(++index_rowkey_num);
           // we do not have index of other type now
           OB_ASSERT(INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
@@ -258,9 +260,9 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
                   K(col->get_column_name_str()));
             } else {
               shadow_name[shadow_name_len - 1] = '\0';
-              if (OB_SUCCESS != (ret = index_column.set_column_name(shadow_name))) {
+              if (OB_FAIL(index_column.set_column_name(shadow_name))) {
                 STORAGE_LOG(WARN, "failed to set shadow name", K(*shadow_name));
-              } else if (OB_SUCCESS != (ret = rk_cols.push_back(col))) {
+              } else if (OB_FAIL(rk_cols.push_back(col))) {
                 STORAGE_LOG(WARN, "failed to remember rowkey column", K(ret));
               }
             }
@@ -269,7 +271,7 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
             if (index_column.get_column_id() > max_column_id) {
               max_column_id = index_column.get_column_id();
             }
-            if (OB_SUCCESS != (ret = index_schema.add_column(index_column))) {
+            if (OB_FAIL(index_schema.add_column(index_column))) {
               STORAGE_LOG(WARN, "add column schema error", K(ret));
             }
           }
@@ -279,10 +281,14 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
     //add primary key of unique index
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < rk_cols.count(); ++i) {
-        ObColumnSchemaV2 index_column = *rk_cols.at(i);
-        index_column.set_rowkey_position(0);
-        if (OB_SUCCESS != (ret = index_schema.add_column(index_column))) {
-          STORAGE_LOG(WARN, "add column schema error", K(ret));
+        ObColumnSchemaV2 index_column;
+        if (OB_FAIL(index_column.assign(*rk_cols.at(i)))) {
+          STORAGE_LOG(WARN, "fail to assign col", KR(ret), KPC(rk_cols.at(i)));
+        } else {
+          index_column.set_rowkey_position(0);
+          if (OB_FAIL(index_schema.add_column(index_column))) {
+            STORAGE_LOG(WARN, "add column schema error", K(ret));
+          }
         }
       }
     }
@@ -291,7 +297,7 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
       if (NULL == (col = table_schema->get_column_schema(index_arg.store_columns_[i]))) {
         ret = OB_ERR_ILLEGAL_NAME;
         STORAGE_LOG(WARN, "invalid column name", K(index_arg.store_columns_[i]));
-      } else if (OB_SUCCESS != (ret = index_schema.add_column(*col))) {
+      } else if (OB_FAIL(index_schema.add_column(*col))) {
         STORAGE_LOG(WARN, "add column schema error", K(ret));
       } else {
         if (col->get_column_id() > max_column_id) {
@@ -333,12 +339,12 @@ int ObRestoreSchema::do_create_index(ObStmt *stmt)
       STORAGE_LOG(WARN, "table schema should not be null!", K(index_arg), K(ret));
     } else {
       ObTableSchema index_schema;
-      if (OB_SUCCESS != (ret = gen_columns(*crt_idx_stmt, index_schema))) {
+      if (OB_FAIL(gen_columns(*crt_idx_stmt, index_schema))) {
         STORAGE_LOG(WARN, "get index column(s) error", K(ret));
-      } else if (OB_SUCCESS != (ret = index_schema.set_compress_func_name(
+      } else if (OB_FAIL(index_schema.set_compress_func_name(
                                         index_arg.index_option_.compress_method_))) {
         STORAGE_LOG(WARN, "set compress func error", K(ret));
-      } else if (OB_SUCCESS != (ret = index_schema.set_comment(
+      } else if (OB_FAIL(index_schema.set_comment(
                                         index_arg.index_option_.comment_))) {
         STORAGE_LOG(WARN, "set comment error", K(ret));
       } else {
@@ -385,7 +391,7 @@ int ObRestoreSchema::do_resolve_single_stmt(ParseNode *node,
   } else {
     ObResolver resolver(ctx);
     ObStmt *stmt = NULL;
-    if (OB_SUCCESS != (ret = resolver.resolve(
+    if (OB_FAIL(resolver.resolve(
                                  ObResolver::IS_NOT_PREPARED_STMT,
                                  *node, stmt))) {
       STORAGE_LOG(WARN, "resolver.resolve() failed", K(ret));
@@ -413,7 +419,7 @@ int ObRestoreSchema::do_parse_line(ObArenaAllocator &allocator, const char *quer
   ObParser parser(allocator, mode);
   ObString query = ObString::make_string(query_str);
   ParseResult parse_result;
-  if (OB_SUCCESS != (ret = parser.parse(query, parse_result))) {
+  if (OB_FAIL(parser.parse(query, parse_result))) {
     STORAGE_LOG(WARN, "parser.parse() failed", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -434,23 +440,23 @@ int ObRestoreSchema::do_parse_line(ObArenaAllocator &allocator, const char *quer
     resolver_ctx.expr_factory_ = &expr_factory;
     resolver_ctx.stmt_factory_ = &stmt_factory;
     resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx();
-    if (OB_SUCCESS != (ret = session_info.init_tenant(tenant, tenant_id_))) {
+    if (OB_FAIL(session_info.init_tenant(tenant, tenant_id_))) {
       STORAGE_LOG(WARN, "fail to init sql session info", K(ret), K(tenant_id_));
-    } else if (OB_SUCCESS != (ret = session_info.set_default_database(db_name))) {
+    } else if (OB_FAIL(session_info.set_default_database(db_name))) {
       STORAGE_LOG(WARN, "fail to set default database", K(ret));
-    } else if (OB_SUCCESS != (ret = session_info.test_init(version, 0, 0, &allocator))) {
+    } else if (OB_FAIL(session_info.test_init(version, 0, 0, &allocator))) {
       STORAGE_LOG(WARN, "fail to init session info", K(ret));
     } else if (OB_SUCCESS != (ret= session_info.load_default_sys_variable(false, true))) {
       STORAGE_LOG(WARN, "fail to load default sys variable");
     } else if (T_STMT_LIST == parse_result.result_tree_->type_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < parse_result.result_tree_->num_child_; ++i) {
-        if (OB_SUCCESS != (ret = do_resolve_single_stmt(parse_result.result_tree_->children_[i],
+        if (OB_FAIL(do_resolve_single_stmt(parse_result.result_tree_->children_[i],
                                                         resolver_ctx))) {
           STORAGE_LOG(WARN, "resolve single stmt failed", K(ret));
         }
       }
     } else {
-      if (OB_SUCCESS != (ret = do_resolve_single_stmt(parse_result.result_tree_,
+      if (OB_FAIL(do_resolve_single_stmt(parse_result.result_tree_,
                                                       resolver_ctx))) {
         STORAGE_LOG(WARN, "resolve single stmt failed", K(ret));
       }
@@ -473,7 +479,7 @@ int ObRestoreSchema::parse_from_file(const char *filename,
   }
   schema_guard = &schema_guard_;
  // if (OB_SUCC(ret)) {
- //   if (OB_SUCCESS != (ret = schema_manager_.cons_table_to_index_relation())) {
+ //   if (OB_FAIL(schema_manager_.cons_table_to_index_relation())) {
  //     STORAGE_LOG(WARN, "construct table to index relation error", K(ret));
  //   } else {
  //     schema_manager = &schema_manager_;

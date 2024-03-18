@@ -96,6 +96,8 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
             type.set_calc_scale(calc_scale);
           }
         }
+        type1.set_calc_accuracy(type1.get_accuracy());
+        type2.set_calc_accuracy(type2.get_accuracy());
         if (type.is_decimal_int()) {
           if (OB_UNLIKELY(PRECISION_UNKNOWN_YET == type.get_precision() ||
                           SCALE_UNKNOWN_YET == type.get_scale())) {

@@ -6320,7 +6320,7 @@ int ObLSTabletService::flush_mds_table(int64_t recycle_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls tablet service is not init", KR(ret), KPC(this));
-  } else if (OB_FAIL(mds_table_mgr_.flush(SCN::max_scn(), true))) {
+  } else if (OB_FAIL(mds_table_mgr_.flush(SCN::max_scn(), checkpoint::INVALID_TRACE_ID, true))) {
     LOG_WARN("flush mds table failed", KR(ret), KPC(this));
   }
   LOG_INFO("finish flush mds table", KR(ret), K(recycle_scn));

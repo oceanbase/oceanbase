@@ -4804,7 +4804,6 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret) && spec.report_col_checksum_) {
-    const bool is_oracle_mode = lib::is_oracle_mode();
     spec.ddl_output_cids_.assign(op.get_ddl_output_column_ids());
     for (int64_t i = 0; OB_SUCC(ret) && i < spec.ddl_output_cids_.count(); i++) {
       const ObColumnSchemaV2 *column_schema = NULL;
@@ -4815,7 +4814,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret));
       } else if (column_schema->get_meta_type().is_fixed_len_char_type() &&
-        (column_schema->is_virtual_generated_column() || is_oracle_mode)) {
+        (column_schema->is_virtual_generated_column() || !column_schema->get_orig_default_value().is_null())) {
         // add flag in ddl_output_cids_ in this special scene.
         uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
         spec.ddl_output_cids_.at(i) = spec.ddl_output_cids_.at(i) | VIRTUAL_GEN_FIX_LEN_TAG;
@@ -6847,7 +6846,23 @@ int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, con
 {
   UNUSED(in_root_job);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(op.gen_link_stmt_param_infos())) {
+  const ObLogPlan *log_plan = NULL;
+  ObExecContext *exec_ctx = NULL;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  ObSQLSessionInfo *my_session = NULL;
+  common::ObArenaAllocator allocator;
+  common::sqlclient::dblink_param_ctx dblink_param_ctx;
+  if (OB_ISNULL(log_plan = op.get_plan()) ||
+      OB_ISNULL(my_session = log_plan->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", KP(log_plan), KP(my_session), K(ret));
+  } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan context is null");
+  } else if (OB_FAIL(op.gen_link_stmt_param_infos())) {
     LOG_WARN("failed to generate link stmt", K(ret));
   } else if (OB_FAIL(spec.set_param_infos(op.get_param_infos()))) {
     LOG_WARN("failed to set param infos", K(ret));
@@ -6855,16 +6870,34 @@ int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, con
     LOG_WARN("failed to set stmt fmt", K(ret));
   } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_select_exprs().count()));
-  } else if (OB_ISNULL(op.get_plan())) {
+  } else if (OB_ISNULL(log_plan->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_ISNULL(op.get_plan()->get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(phy_plan_)) {
     LOG_WARN("unexpected null ptr", K(ret));
+  } else if (lib::is_oracle_mode() &&
+             0 != op.get_dblink_id() &&
+             OB_INVALID_ID != op.get_dblink_id() &&
+             OB_FAIL(plan_ctx->keep_dblink_id(op.get_dblink_id()))) {
+    LOG_WARN("failed to keep dblink id in phy_plan", K(ret), K(op.get_dblink_id()), K(phy_plan_));
+  } else if (lib::is_oracle_mode() &&
+             OB_FAIL(ObDblinkService::get_local_session_vars(my_session, allocator, dblink_param_ctx))) {
+    LOG_WARN("failed to get local session vars", K(ret));
   } else {
     spec.has_for_update_ = op.get_plan()->get_stmt()->has_for_update();
     spec.is_reverse_link_ = op.get_reverse_link();
     spec.dblink_id_ = op.get_dblink_id();
+    phy_plan_->set_has_link_sfd(spec.has_for_update_);
+    plan_ctx->set_tx_id(log_plan->get_optimizer_context().get_global_hint().dblink_hints_.tx_id_);
+    plan_ctx->set_tm_sessid(log_plan->get_optimizer_context().get_global_hint().dblink_hints_.tm_sessid_);
+    plan_ctx->set_hint_xa_trans_stop_check_lock(log_plan->get_optimizer_context().get_global_hint().dblink_hints_.hint_xa_trans_stop_check_lock_);
+    plan_ctx->set_main_xa_trans_branch(!spec.is_reverse_link_ &&
+                                       0 == plan_ctx->get_tx_id() && // ensure this sql is not sent by reverse link
+                                       0 == plan_ctx->get_tm_sessid() && // ensure this sql is not sent by reverse link
+                                       ((my_session->is_in_transaction() && OB_NOT_NULL(my_session->get_tx_desc())) ||
+                                        ObDblinkService::SET_ISOLATION_LEVEL_SERIALIZABLE == dblink_param_ctx.set_transaction_isolation_cstr_ ||
+                                        phy_plan_->has_link_sfd()));
+    LOG_TRACE("link set plan_ctx properties", KP(plan_ctx), K(plan_ctx->get_hint_xa_trans_stop_check_lock()), K(!spec.is_reverse_link_), K(plan_ctx->get_main_xa_trans_branch()), K(plan_ctx->get_tx_id()), K(plan_ctx->get_tm_sessid()), K(my_session->is_in_transaction()), KP(my_session->get_tx_desc()), K(phy_plan_->has_link_sfd()), K(dblink_param_ctx.set_transaction_isolation_cstr_));
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_select_exprs().count(); ++i) {
       ObExpr *rt_expr = nullptr;
       const ObRawExpr* select_expr = op.get_select_exprs().at(i);
@@ -6878,6 +6911,7 @@ int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, con
       }
     }
   }
+  allocator.reset();
   return ret;
 }
 
@@ -6885,17 +6919,43 @@ int ObStaticEngineCG::generate_spec(ObLogLinkDml &op, ObLinkDmlSpec &spec, const
 {
   UNUSED(in_root_job);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(op.gen_link_stmt_param_infos())) {
+  const ObLogPlan *log_plan = NULL;
+  ObExecContext *exec_ctx = NULL;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  if (OB_ISNULL(log_plan = op.get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan context is null");
+  } else if (OB_FAIL(op.gen_link_stmt_param_infos())) {
     LOG_WARN("failed to generate link stmt", K(ret));
   } else if (OB_FAIL(spec.set_param_infos(op.get_param_infos()))) {
     LOG_WARN("failed to set param infos", K(ret));
   } else if (OB_FAIL(spec.set_stmt_fmt(op.get_stmt_fmt_buf(), op.get_stmt_fmt_len()))) {
     LOG_WARN("failed to set stmt fmt", K(ret));
+  } else if (lib::is_oracle_mode() &&
+             0 != op.get_dblink_id() &&
+             OB_INVALID_ID != op.get_dblink_id() &&
+             OB_FAIL(plan_ctx->keep_dblink_id(op.get_dblink_id()))) {
+    LOG_WARN("failed to keep dblink id in phy_plan", K(ret), K(op.get_dblink_id()), K(phy_plan_));
   } else {
-    spec.is_reverse_link_ = op.get_reverse_link();
-    spec.dblink_id_ = op.get_dblink_id();
-    spec.plan_->set_returning(false);
-    spec.plan_->need_drive_dml_query_ = true;
+    for (int64_t i = 0; lib::is_oracle_mode() && OB_SUCC(ret) && i < op.get_related_dblink_ids().count(); ++i) {
+      if (OB_FAIL(plan_ctx->keep_dblink_id(op.get_related_dblink_ids().at(i)))) {
+        LOG_WARN("failed to keep dblink id in phy_plan", K(ret), K(op.get_related_dblink_ids().at(i)), K(i), K(phy_plan_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      spec.is_reverse_link_ = op.get_reverse_link();
+      spec.dblink_id_ = op.get_dblink_id();
+      spec.plan_->set_returning(false);
+      spec.plan_->need_drive_dml_query_ = true;
+      plan_ctx->set_main_xa_trans_branch(true);
+      LOG_TRACE("link set plan_ctx properties", KP(plan_ctx), K(ret));
+    }
   }
   return ret;
 }
@@ -7753,8 +7813,6 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     } else {
       phy_plan.set_need_param(param_opt==ObParamOption::FORCE);
     }
-    phy_plan.tx_id_ = log_plan.get_optimizer_context().get_global_hint().tx_id_;
-    phy_plan.tm_sessid_ = log_plan.get_optimizer_context().get_global_hint().tm_sessid_;
   }
 
   if (OB_SUCC(ret)) {

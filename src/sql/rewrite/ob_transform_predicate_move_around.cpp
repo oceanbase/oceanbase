@@ -2457,12 +2457,6 @@ int ObTransformPredicateMoveAround::check_having_expr(ObSelectStmt &stmt,
   ObSEArray<ObRawExpr *, 4> generalized_columns;
   ObSEArray<ObRawExpr *, 4> param_preds;
   all_contain = true;
-  bool contain_op_row = false;
-  if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(&or_qual, contain_op_row))) {
-    LOG_WARN("fail to check contain op row", K(ret));
-  } else if (contain_op_row) {
-    all_contain = false;
-  }
   for (int64_t i = 0; OB_SUCC(ret) && all_contain && i < or_qual.get_param_count(); ++i) {
     ObRawExpr *cur_expr = or_qual.get_param_expr(i);
     generalized_columns.reuse();
@@ -2484,10 +2478,15 @@ int ObTransformPredicateMoveAround::check_having_expr(ObSelectStmt &stmt,
     for (int64_t j = 0; OB_SUCC(ret) && j < param_preds.count(); ++j) {
       ObRawExpr *cur_and_expr = param_preds.at(j);
       generalized_columns.reuse();
+      bool contain_op_row = false;
       if (OB_ISNULL(cur_and_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr in and expr is null", K(ret));
       } else if (cur_and_expr->has_flag(CNT_SUB_QUERY)) {
+        // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(cur_and_expr, contain_op_row))) {
+        LOG_WARN("fail to check contain op row", K(ret));
+      } else if (contain_op_row) {
         // do nothing
       } else if (OB_FAIL(extract_generalized_column(cur_and_expr, generalized_columns))) {
         LOG_WARN("failed to extract generalized columns", K(ret));

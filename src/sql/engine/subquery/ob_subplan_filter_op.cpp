@@ -665,7 +665,8 @@ int ObSubPlanFilterOp::inner_open()
             MY_SPEC.enable_px_batch_rescans_.at(i)) {
           enable_left_px_batch_ = true;
         }
-        if (!MY_SPEC.exec_param_idxs_inited_) {
+        if (!MY_SPEC.exec_param_idxs_inited_ || MY_SPEC.enable_das_group_rescan_) {
+          // spf group rescan can't use hash-map optimize, it will induces skip-scan, which will induces correctness problem
           //unittest or old version, do not init hashmap
         } else if (OB_FAIL(iter->init_mem_entity())) {
           LOG_WARN("failed to init mem_entity", K(ret));

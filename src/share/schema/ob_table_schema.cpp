@@ -4880,7 +4880,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
           is_same = true;
         }
       } else {
-        if (src_column.get_data_precision() == dst_column.get_data_precision() &&
+        if ((ob_is_int_tc(src_column.get_data_type()) ||
+            src_column.get_data_precision() == dst_column.get_data_precision()) &&
             src_column.get_data_scale() == dst_column.get_data_scale()) {
           is_same = true;
         }
@@ -6169,8 +6170,8 @@ int ObSimpleTableSchemaV2::get_index_name(const ObString &table_name, ObString &
     pos = strlen(OB_INDEX_PREFIX);
 
     while (NULL != table_name.ptr() &&
-        isdigit(*(table_name.ptr() + pos)) &&
-        pos < table_name.length()) {
+        pos < table_name.length() &&
+        isdigit(*(table_name.ptr() + pos))) {
       ++pos;
     }
     if (pos == table_name.length()) {
