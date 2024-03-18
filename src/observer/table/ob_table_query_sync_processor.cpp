@@ -527,6 +527,12 @@ int ObTableQuerySyncP::query_scan_with_init()
     audit_row_count_ = result_.get_row_count();
     result_.query_session_id_ = query_session_id_;
     is_full_table_scan_ = tb_ctx.is_full_table_scan();
+    /*
+     *  why destory expr factory:
+     *  In query next, there is no need to hold the ObRawExpr and if do this, it may
+     *  visit memory out of bound when clean_timeout_query_sess
+     */
+    tb_ctx.get_expr_factory().destory();
   }
 
   return ret;
@@ -633,7 +639,7 @@ int ObTableQuerySyncP::try_process()
       query_session_->set_in_use(false);
     }
   }
-  LOG_INFO("one query sync finish", K(result_.is_end_));
+  LOG_INFO("one query sync finish", K(result_.is_end_), K(query_session_id_));
 
   stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_SYNC;  // table querysync
   return ret;

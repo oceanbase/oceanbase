@@ -3079,12 +3079,14 @@ TEST_F(TestBatchExecute, secondary_index)
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, obj3));
       //fprintf(stderr, "%ld: (%s,%s,%s)\n", i, S(obj1), S(obj2), S(obj3));
       ASSERT_EQ(OB_SUCCESS, obj3.get_varchar(str));
-      if (i % 2 == 0) {
+      if (i < BATCH_SIZE/4) {
+        ASSERT_EQ(2+i*8, obj1.get_int());
         ASSERT_EQ(1 , obj2.get_int());
-        ASSERT_EQ(2 + 4 * i, obj1.get_int()); // 2, 10, 18,...
+        ASSERT_TRUE(str == ObString::make_string(c3_values[(i%2==0)?1:5]));
       } else {
+        ASSERT_EQ(4+(i-BATCH_SIZE/4)*8, obj1.get_int());
         ASSERT_EQ(2 , obj2.get_int());
-        ASSERT_EQ(4 + (i - 1) * 4, obj1.get_int()); // 4, 12, 20,...
+        ASSERT_TRUE(str == ObString::make_string(c3_values[((i-BATCH_SIZE/4)%2==0)?2:6]));
       }
     }
     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
