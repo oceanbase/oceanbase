@@ -363,6 +363,11 @@ public:
   }
   inline int64_t get_plan_error_cnt() { return stat_.evolution_stat_.error_cnt_; }
   inline void update_plan_error_cnt() { ATOMIC_INC(&(stat_.evolution_stat_.error_cnt_)); }
+  inline bool get_enable_inc_direct_load() const { return enable_inc_direct_load_; }
+  inline void set_enable_inc_direct_load(const bool enable_inc_direct_load)
+  {
+    enable_inc_direct_load_ = enable_inc_direct_load;
+  }
 
 public:
   int inc_concurrent_num();
@@ -681,6 +686,7 @@ public:
   bool udf_has_dml_stmt_;
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  bool enable_inc_direct_load_; // for incremental direct load
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
