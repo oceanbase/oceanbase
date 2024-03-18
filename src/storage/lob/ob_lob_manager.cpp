@@ -785,6 +785,7 @@ static int read_all(
 {
   int ret = OB_SUCCESS;
   ObLobQueryResult result;
+  meta_iter.set_not_calc_char_len(true);
   while (OB_SUCC(ret)) {
     ret = meta_iter.get_next_row(result.meta_result_);
     const char *lob_data = result.meta_result_.info_.lob_data_.ptr();
