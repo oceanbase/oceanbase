@@ -422,6 +422,7 @@
 #define N_MD5 "md5"
 #define N_CRC32 "crc32"
 #define N_HEX "hex"
+#define N_PASSWORD "password"
 #define N_UNHEX "unhex"
 #define N_HEXTORAW "hextoraw"
 #define N_RAWTOHEX "rawtohex"
@@ -1106,4 +1107,6 @@
 #define N_DECODE_TRACE_ID                   "decode_trace_id"
 #define N_PRIV_ST_GEOHASH                   "_st_geohash"
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
+#define N_INNER_TABLE_OPTION_PRINTER        "inner_table_option_printer"
+#define N_INNER_TABLE_SEQUENCE_GETTER       "inner_table_sequence_getter"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

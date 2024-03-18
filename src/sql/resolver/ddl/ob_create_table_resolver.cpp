@@ -488,7 +488,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
   CHECK_COMPATIBILITY_MODE(session_info_);
   if (OB_ISNULL(create_table_node)
       || T_CREATE_TABLE != create_table_node->type_
-      || (CREATE_TABLE_NUM_CHILD != create_table_node->num_child_ && CREATE_TABLE_AS_SEL_NUM_CHILD != create_table_node->num_child_)
+      || (CREATE_TABLE_NUM_CHILD != create_table_node->num_child_ &&
+          CREATE_TABLE_AS_SEL_NUM_CHILD != create_table_node->num_child_)
       || OB_ISNULL(create_table_node->children_)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument.", K(ret));
@@ -657,6 +658,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           } else {
             if (OB_FAIL(resolve_table_elements(table_element_list_node, index_node_position_list, foreign_key_node_position_list, table_level_constraint_list, RESOLVE_COL_ONLY))) {
               SQL_RESV_LOG(WARN, "resolve table elements col failed", K(ret));
+            } else if (OB_FAIL(resolve_insert_mode(&parse_tree))) {
+              SQL_RESV_LOG(WARN, "resolve ignore_or_replace flag failed", K(ret));
             } else if (OB_FAIL(resolve_table_elements_from_select(parse_tree))) {
               SQL_RESV_LOG(WARN, "resolve table elements from select failed", K(ret));
             } else if (OB_FAIL(resolve_table_elements(table_element_list_node, index_node_position_list, foreign_key_node_position_list, table_level_constraint_list, RESOLVE_NON_COL))) {
@@ -840,7 +843,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
     if (OB_SUCC(ret) && is_create_as_sel) {
-      if (OB_FAIL(resolve_hints(create_table_node->children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1],
+      if (OB_FAIL(resolve_hints(create_table_node->children_[8],
                                *create_table_stmt,
                                create_table_stmt->get_create_table_arg().schema_))) {
         LOG_WARN("fail to resolve hint", K(ret));
@@ -1737,6 +1740,36 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
   }
   return ret;
 }
+int ObCreateTableResolver::resolve_insert_mode(const ParseNode *parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *flag_node = NULL;
+  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
+  ObExecContext *exec_ctx = NULL;
+  ObSqlCtx *sql_ctx = NULL;
+  bool is_support = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0;
+  if (OB_ISNULL(parse_tree) ||
+      OB_ISNULL(create_table_stmt) ||
+      OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error",K(parse_tree), K(create_table_stmt), K(session_info_), K(exec_ctx), K(sql_ctx), K(ret));
+  } else if (lib::is_oracle_mode() || !is_support) {
+    create_table_stmt->set_insert_mode(0);
+  } else if (parse_tree->num_child_ != CREATE_TABLE_AS_SEL_NUM_CHILD){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child_num",K(parse_tree->num_child_), K(ret));
+  } else {
+    flag_node = parse_tree->children_[9];
+    if (flag_node == NULL) {
+      create_table_stmt->set_insert_mode(0);
+    } else if (flag_node->type_ == T_IGNORE) {
+      create_table_stmt->set_insert_mode(1);
+    } else if (flag_node->type_ == T_REPLACE) {
+      create_table_stmt->set_insert_mode(2);
+    }
+  }
+  return ret;
+}
 
 //解析column_list和查询, 然后根据建表语句中的opt_column_list(可能无)和查询, 设置新表的列名和数据类型
 int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &parse_tree)
@@ -1744,7 +1777,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
   const ObTableSchema *base_table_schema = NULL;
-  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 2];
+  ParseNode *sub_sel_node = parse_tree.children_[7];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
   select_resolver.params_.is_from_create_table_ = true;
@@ -2749,13 +2782,14 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             }
             if (OB_SUCC(ret)) {
               //column_order
-              if (NULL != index_column_node->children_[2]
+              if (is_oracle_mode && NULL != index_column_node->children_[2]
                   && T_SORT_DESC == index_column_node->children_[2]->type_) {
                 // sort_item.order_type_ = common::ObOrderType::DESC;
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("not support desc index now", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "desc index");
               } else {
+                //兼容mysql5.7, 降序索引不生效且不报错
                 sort_item.order_type_ = common::ObOrderType::ASC;
               }
               ObColumnNameHashWrapper column_key(column_name);

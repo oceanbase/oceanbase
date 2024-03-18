@@ -386,6 +386,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
     ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_;
+    ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -3306,11 +3307,10 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
   JoinedTable *cur_table = NULL;
   JoinedTable *child_table = NULL;
   TableItem *table_item = NULL;
-  ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   bool reverse_parse = false;
-  if (OB_ISNULL(select_stmt) || OB_UNLIKELY(parse_node.type_ != T_JOINED_TABLE)) {
+  if (OB_ISNULL(stmt_) || OB_UNLIKELY(parse_node.type_ != T_JOINED_TABLE)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(select_stmt), K_(parse_node.type));
+    LOG_WARN("invalid argument", K_(stmt), K_(parse_node.type));
   } else if (OB_FAIL(alloc_joined_table_item(cur_table))) {
     LOG_WARN("create joined table item failed", K(ret));
   } else if (parse_node.children_[0]->type_ == T_JOIN_RIGHT &&
@@ -3403,6 +3403,10 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
       break;
     case T_JOIN_INNER:
       cur_table->joined_type_ = INNER_JOIN;
+      break;
+    case T_STRAIGHT_JOIN:
+      cur_table->joined_type_ = INNER_JOIN;
+      cur_table->is_straight_join_ = true;
       break;
     default:
       /* won't be here */
@@ -5653,7 +5657,7 @@ int ObDMLResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item,
   return ret;
 }
 
-int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
+int ObDMLResolver::resolve_limit_clause(const ParseNode *node, bool disable_offset/*= false*/)
 {
   int ret = OB_SUCCESS;
   if (node) {
@@ -5670,8 +5674,15 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
     }
     ObRawExpr* limit_count = NULL;
     ObRawExpr* limit_offset = NULL;
+    if (disable_offset && OB_NOT_NULL(offset_node)) {
+      ret = OB_ERR_PARSE_SQL;
+      int32_t str_len = static_cast<int32_t>(offset_node->text_len_);
+      int32_t line_no = 1;
+      LOG_WARN("can't set offset for limit clause in delete/update stmt");
+      LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+                    str_len, offset_node->raw_text_, line_no);
     // resolve the question mark with less value first
-    if (limit_node != NULL && limit_node->type_ == T_QUESTIONMARK && offset_node != NULL
+    } else if (limit_node != NULL && limit_node->type_ == T_QUESTIONMARK && offset_node != NULL
         && offset_node->type_ == T_QUESTIONMARK && limit_node->value_ > offset_node->value_) {
       if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *offset_node, limit_offset, NULL))
           || OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *limit_node, limit_count, NULL))) {

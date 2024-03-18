@@ -13772,6 +13772,23 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_virtual_compatibility_control',
+  table_id = '12473',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('name', 'varchar:OB_MAX_CONFIG_NAME_LEN'),
+    ('description', 'varchar:OB_MAX_CONFIG_INFO_LEN'),
+    ('is_enable', 'bool'),
+    ('enable_versions', 'longtext'),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15054,6 +15071,40 @@ def_table_schema(
                       and rp.param_position = 0
                       left join oceanbase.__all_virtual_data_type v on rp.param_type = v.data_type
                     """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'ailing.lcq',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'PROFILING',
+  table_id        = '20016',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT  CAST(00000000000000000000 as SIGNED) as QUERY_ID,
+            CAST(00000000000000000000 as SIGNED) as SEQ,
+            CAST('' as CHAR(30)) as STATE,
+            CAST(0.000000 as DECIMAL(9, 6)) as DURATION,
+            CAST(NULL as DECIMAL(9, 6)) as CPU_USER,
+            CAST(NULL as DECIMAL(9, 6)) as CPU_SYSTEM,
+            CAST(00000000000000000000 as SIGNED) as CONTEXT_VOLUNTARY,
+            CAST(00000000000000000000 as SIGNED) as CONTEXT_INVOLUNTARY,
+            CAST(00000000000000000000 as SIGNED) as BLOCK_OPS_IN,
+            CAST(00000000000000000000 as SIGNED) as BLOCK_OPS_OUT,
+            CAST(00000000000000000000 as SIGNED) as MESSAGES_SENT,
+            CAST(00000000000000000000 as SIGNED) as MESSAGES_RECEIVED,
+            CAST(00000000000000000000 as SIGNED) as PAGE_FAULTS_MAJOR,
+            CAST(00000000000000000000 as SIGNED) as PAGE_FAULTS_MINOR,
+            CAST(00000000000000000000 as SIGNED) as SWAPS,
+            CAST(NULL as CHAR(30)) as SOURCE_FUNCTION,
+            CAST(NULL as CHAR(20)) as SOURCE_FILE,
+            CAST(00000000000000000000 as SIGNED) as SOURCE_LINE
+    FROM DUAL limit 0;
+""".replace("\n", " ")
 )
 
 def_table_schema(
@@ -33177,6 +33228,25 @@ def_table_schema(
         FROM OCEANBASE.GV$OB_TRACEPOINT_INFO
         WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'V$OB_COMPATIBILITY_CONTROL',
+  table_id        = '21545',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+      name as NAME,
+      description as DESCRIPTION,
+      CASE is_enable WHEN 1 THEN 'TRUE' ELSE 'FALSE' END AS IS_ENABLE,
+      enable_versions as ENABLE_VERSIONS
+    FROM oceanbase.__all_virtual_compatibility_control
+""".replace("\n", " "),
+  normal_columns  = [],
 )
 
 # 余留位置（此行之前占位）

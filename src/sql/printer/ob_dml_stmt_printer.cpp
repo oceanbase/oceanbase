@@ -297,7 +297,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
                   break;
                 }
               case INNER_JOIN: {
-                  type_str = "join";
+                  type_str = join_table->is_straight_join_ ? "straight_join" : "join";
                   break;
                 }
               case CONNECT_BY_JOIN: {

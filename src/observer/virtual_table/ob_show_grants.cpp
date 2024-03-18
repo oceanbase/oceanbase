@@ -886,6 +886,15 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" CREATE ROUTINE,");
         }
+        if ((priv_set & OB_PRIV_CREATE_TABLESPACE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE TABLESPACE,");
+        }
+        if ((priv_set & OB_PRIV_SHUTDOWN) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" SHUTDOWN,");
+        }
+        if ((priv_set & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" RELOAD,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

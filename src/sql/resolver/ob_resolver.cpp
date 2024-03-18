@@ -124,6 +124,7 @@
 #include "sql/resolver/cmd/ob_drop_restore_point_resolver.h"
 #include "sql/resolver/cmd/ob_get_diagnostics_resolver.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
+#include "sql/resolver/cmd/ob_mock_resolver.h"
 #include "sql/resolver/dcl/ob_alter_role_resolver.h"
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
@@ -405,6 +406,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_FLUSH_DAG_WARNINGS: {
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
+        break;
+      }
+      case T_FLUSH_PRIVILEGES: {
+        REGISTER_STMT_RESOLVER(Mock);
         break;
       }
       case T_SWITCH_REPLICA_ROLE: {
@@ -716,6 +721,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_TENANT:
       case T_SHOW_CREATE_TENANT:
       case T_SHOW_RECYCLEBIN:
+      case T_SHOW_PROFILE:
       case T_SHOW_PROCEDURE_STATUS:
       case T_SHOW_FUNCTION_STATUS:
       case T_SHOW_PROCEDURE_CODE:

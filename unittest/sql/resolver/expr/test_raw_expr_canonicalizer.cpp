@@ -80,6 +80,11 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
   ctx.stmt_ = &stmt;
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
+
+  EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+  EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+  EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
+
   ObRawExpr *raw_expr = NULL;
   OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
                                             sys_vars, &sub_query_info, aggr_exprs ,win_exprs, udf_info));

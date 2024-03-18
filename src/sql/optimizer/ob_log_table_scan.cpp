@@ -704,9 +704,7 @@ int ObLogTableScan::extract_virtual_gen_access_exprs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("rowscan not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+        // keep orign expr
       } else if (OB_ISNULL(mapping_expr = get_real_expr(expr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr is null", K(ret), KPC(expr));
@@ -912,8 +910,9 @@ int ObLogTableScan::add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_expr
     LOG_DEBUG("debug mapping columns for virtual table", K(first_col_expr->get_table_id()), K(ref_table_id_));
     if (share::is_oracle_mapping_real_virtual_table(ref_table_id_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); ++i) {
-        ObRawExpr *real_expr = NULL;
-        if (OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
+        ObRawExpr *real_expr = access_exprs.at(i);
+        if (T_ORA_ROWSCN != access_exprs.at(i)->get_expr_type()
+            && OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
                                               real_expr))) {
           LOG_WARN("failed to add mapping column for vt", K(ret));
         } else if (OB_FAIL(real_expr_map_.push_back(
@@ -930,6 +929,7 @@ int ObLogTableScan::add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
                                               ObRawExpr *&real_expr)
 {
   int ret = OB_SUCCESS;
+  real_expr = nullptr;
   int64_t mapping_table_id = share::schema::ObSchemaUtils::get_real_table_mappings_tid(ref_table_id_);
   if (OB_INVALID_ID == mapping_table_id) {
     ret = OB_ERR_UNEXPECTED;

@@ -1709,6 +1709,9 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
     user_info.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
     user_info.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+    user_info.set_priv((priv_others & 8) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
+    user_info.set_priv((priv_others & 16) != 0 ? OB_PRIV_SHUTDOWN : 0);
+    user_info.set_priv((priv_others & 32) != 0 ? OB_PRIV_RELOAD : 0);
   }
   return ret;
 }

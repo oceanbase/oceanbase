@@ -543,7 +543,7 @@ int ObVirtualTableIterator::check_priv(const ObString &level_str,
   int ret = OB_SUCCESS;
   share::schema::ObSessionPrivInfo session_priv;
   CK (OB_NOT_NULL(session_) && OB_NOT_NULL(schema_guard_));
-  OX (session_->get_session_priv_info(session_priv));
+  OZ (session_->get_session_priv_info(session_priv));
   // bool allow_show = true;
   if (OB_SUCC(ret)) {
     //tenant_id in table is static casted to int64_t,

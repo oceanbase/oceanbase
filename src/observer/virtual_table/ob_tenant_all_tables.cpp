@@ -32,7 +32,7 @@ namespace oceanbase
 {
 namespace observer
 {
-
+/*ObTenantAllTables is deprecated, please modify NEW_TABLE_STATUS_SQL or NEW_TABLE_STATUS_SQL_ORA directly*/
 #define TABLE_STATUS_SQL  "select /*+ leading(a) no_use_nl(ts)*/" \
                     "cast( coalesce(ts.row_cnt,0) as unsigned) as table_rows," \
                     "cast( coalesce(ts.data_size,0) as unsigned) as data_length," \
@@ -620,8 +620,9 @@ int ObTenantAllTables::inner_get_next_row()
                 is_allow = false;
               } else {
                 priv_info.reset();
-                session_->get_session_priv_info(priv_info);
-                if (OB_FAIL(schema_guard_->check_table_show(priv_info, database_name,
+                if (OB_FAIL(session_->get_session_priv_info(priv_info))) {
+                  SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+                } else if (OB_FAIL(schema_guard_->check_table_show(priv_info, database_name,
                                                             table_schema->get_table_name_str(), is_allow))) {
                   SERVER_LOG(WARN, "check show table priv failed", K(ret));
                 }

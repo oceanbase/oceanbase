@@ -680,6 +680,7 @@ private:
 	int process_string(const char quote);
 	int process_zero_identifier();
 	int process_identifier_begin_with_n();
+	int process_identifier_begin_with_backslash();
 private:
 	ObSEArray<ObValuesTokenPos, 4> values_tokens_;
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserMysql);

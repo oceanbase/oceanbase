@@ -145,6 +145,21 @@ NULL {
   }
 }
 
+\\N {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_NULL, 0);
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  yylval->node->value_ = 1;
+  if (IS_FAST_PARAMETERIZE) {
+    STORE_PARAM_NODE();
+  } else {
+    yylval->node->sql_str_off_ = yylloc->first_column - 1;
+    return NULLX;
+  }
+}
+
 {int_num} {
   int32_t token_ret = INTNUM;
   ParseNode *node = NULL;

@@ -561,7 +561,8 @@ struct JoinedTable : public TableItem
     left_table_(NULL),
     right_table_(NULL),
     single_table_ids_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
-    join_conditions_(common::OB_MALLOC_NORMAL_BLOCK_SIZE)
+    join_conditions_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+    is_straight_join_(false)
   {
   }
 
@@ -573,6 +574,7 @@ struct JoinedTable : public TableItem
   bool is_left_join() const { return LEFT_OUTER_JOIN == joined_type_; }
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
   bool is_full_join() const { return FULL_OUTER_JOIN == joined_type_; }
+  bool is_straight_join() const { return is_inner_join() && is_straight_join_; }
   virtual bool has_for_update() const
   {
     return (left_table_ != NULL &&  left_table_->has_for_update())
@@ -585,13 +587,15 @@ struct JoinedTable : public TableItem
                N_JOIN_TYPE, ob_join_type_str(joined_type_),
                N_LEFT_TABLE, left_table_,
                N_RIGHT_TABLE, right_table_,
-               "join_condition", join_conditions_);
+               "join_condition", join_conditions_,
+               "is_straight_join", is_straight_join_);
 
   ObJoinType joined_type_;
   TableItem *left_table_;
   TableItem *right_table_;
   common::ObSEArray<uint64_t, 16, common::ModulePageAllocator, true> single_table_ids_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> join_conditions_;
+  bool is_straight_join_; // In MySQL mode, mark INNER JOIN as STRAIGHT_JOIN.
 };
 
 class SemiInfo
@@ -724,6 +728,7 @@ public:
   virtual int init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc) override;
 
   bool is_hierarchical_query() const;
+  int is_hierarchical_for_update(bool &is_hsfu) const;
 
   int replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
                              const common::ObIArray<ObRawExpr *> &new_exprs);

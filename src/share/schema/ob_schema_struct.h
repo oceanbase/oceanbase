@@ -5187,7 +5187,8 @@ struct ObSessionPrivInfo
       user_priv_set_(0),
       db_priv_set_(0),
       effective_tenant_id_(common::OB_INVALID_ID),
-      enable_role_id_array_()
+      enable_role_id_array_(),
+      security_version_(0)
   {}
   ObSessionPrivInfo(const uint64_t tenant_id,
                     const uint64_t effective_tenant_id,
@@ -5203,7 +5204,8 @@ struct ObSessionPrivInfo
         user_priv_set_(user_priv_set),
         db_priv_set_(db_priv_set),
         effective_tenant_id_(effective_tenant_id),
-        enable_role_id_array_()
+        enable_role_id_array_(),
+        security_version_(0)
   {}
 
   virtual ~ObSessionPrivInfo() {}
@@ -5219,6 +5221,7 @@ struct ObSessionPrivInfo
     user_priv_set_ = 0;
     db_priv_set_ = 0;
     enable_role_id_array_.reset();
+    security_version_ = 0;
   }
   bool is_valid() const
   {
@@ -5229,7 +5232,7 @@ struct ObSessionPrivInfo
   void set_effective_tenant_id(uint64_t effective_tenant_id) { effective_tenant_id_ = effective_tenant_id; }
   uint64_t get_effective_tenant_id() { return effective_tenant_id_; }
   virtual TO_STRING_KV(K_(tenant_id), K_(effective_tenant_id), K_(user_id), K_(user_name), K_(host_name),
-                       K_(db), K_(user_priv_set), K_(db_priv_set));
+                       K_(db), K_(user_priv_set), K_(db_priv_set), K_(security_version));
 
   uint64_t tenant_id_; //for privilege.Current login tenant. if normal tenant access
                        //sys tenant's object should use other method for priv checking.
@@ -5242,6 +5245,7 @@ struct ObSessionPrivInfo
   // Only used for privilege check to determine whether there are currently tenants, otherwise the value is illegal
   uint64_t effective_tenant_id_;
   common::ObSEArray<uint64_t, 8> enable_role_id_array_;
+  uint64_t security_version_;
 };
 
 struct ObUserLoginInfo

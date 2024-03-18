@@ -39,6 +39,7 @@
 #include "pl/ob_pl_json_type.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "share/ash/ob_active_sess_hist_task.h"
+#include "share/ob_compatibility_control.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -5804,6 +5805,59 @@ int ObBasicSessionInfo::get_sql_audit_mem_conf(int64_t &mem_pct)
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_sys_variable(SYS_VAR_OB_SQL_AUDIT_PERCENTAGE, mem_pct))) {
     LOG_WARN("failed to get memory percentage for sql audit", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_compatibility_control(ObCompatType &compat_type) const
+{
+  int ret = OB_SUCCESS;
+  int64_t val = 0;
+  if (OB_FAIL(get_sys_variable(SYS_VAR_OB_COMPATIBILITY_CONTROL, val))) {
+    LOG_WARN("fail to get ob compatibility control", K(ret));
+  } else {
+    compat_type = static_cast<ObCompatType>(val);
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_sys_variable(SYS_VAR_OB_COMPATIBILITY_VERSION, compat_version))) {
+    LOG_WARN("fail to get ob compatibility version", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_security_version(uint64_t &security_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_sys_variable(SYS_VAR_OB_SECURITY_VERSION, security_version))) {
+    LOG_WARN("fail to get ob security version", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::check_feature_enable(const ObCompatFeatureType feature_type,
+                                             bool &is_enable) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  is_enable = false;
+  if (feature_type < ObCompatFeatureType::COMPAT_FEATURE_END) {
+    if (OB_FAIL(get_compatibility_version(version))) {
+      LOG_WARN("failed to get compat version", K(ret));
+    }
+  } else {
+    if (OB_FAIL(get_security_version(version))) {
+      LOG_WARN("failed to get security version", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(version,
+                                                           feature_type, is_enable))) {
+    LOG_WARN("failed to get feature enable", K(ret));
   }
   return ret;
 }

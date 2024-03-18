@@ -197,9 +197,12 @@ int ObInListResolver::get_const_node_params(const ParseNode *node,
 {
   int ret = OB_SUCCESS;
   ObObjParam obj_param;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected params", K(ret));
+  } else if (OB_FAIL(session_info.get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_UNLIKELY(row_idx == 0 && res_types.count() != column_idx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("res_types should contain next column", K(ret), K(column_idx));
@@ -224,7 +227,7 @@ int ObInListResolver::get_const_node_params(const ParseNode *node,
                        session_info.get_timezone_info(), obj_param, is_paramlize, literal_prefix,
                        session_info.get_actual_nls_length_semantics(),
                        static_cast<ObCollationType>(server_collation), &parents_expr_info,
-                       session_info.get_sql_mode(),
+                       session_info.get_sql_mode(), compat_type,
                        nullptr != cur_resolver_->params_.secondary_namespace_))) {
       LOG_WARN("failed to resolve const", K(ret));
     } else if (OB_FAIL(obj_array.push_back(obj_param))) {

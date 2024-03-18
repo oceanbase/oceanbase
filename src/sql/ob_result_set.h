@@ -298,11 +298,14 @@ public:
   // 往带？的field name填充参数信息
   // 要注意的是，除了cname_以外，其余的string都是从计划里面浅拷出来的，
   // cname_的内存是由result_set的分配器分配出来的
-  int construct_field_name(const common::ObIArray<ObPCParam *> &raw_params, const bool is_first_parse);
+  int construct_field_name(const common::ObIArray<ObPCParam *> &raw_params,
+                           const bool is_first_parse,
+                           const ObSQLSessionInfo &session_info);
 
   int construct_display_field_name(common::ObField &field,
                                    const ObIArray<ObPCParam *> &raw_params,
-                                   const bool is_first_parse);
+                                   const bool is_first_parse,
+                                   const ObSQLSessionInfo &session_info);
 
   // 深拷计划中的field columns，存放在field_columns_成员中
   int copy_field_columns(const ObPhysicalPlan &plan);

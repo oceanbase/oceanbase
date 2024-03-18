@@ -268,9 +268,19 @@ int ObCreateUserExecutor::create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
   return ret;
 }
 
+int ObDropUserExecutor::build_fail_msg_for_one(const ObString &user, const ObString &host,
+                                               common::ObSqlString &msg) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
+                                    user.length(), user.ptr(),
+                                    host.length(), host.ptr()))) {
+    LOG_WARN("Build msg fail", K(user), K(host), K(ret));
+  }
+  return ret;
+}
 
 int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> &users,
-    const common::ObIArray<common::ObString> &hosts, common::ObSqlString &msg)
+                                       const common::ObIArray<common::ObString> &hosts, common::ObSqlString &msg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(users.count() < 1) || OB_UNLIKELY(users.count() != hosts.count())) {
@@ -284,10 +294,8 @@ int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> 
       if (OB_SUCC(ret)) {
         const ObString &user = users.at(i);
         const ObString &host = hosts.at(i);
-        if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
-                                    user.length(), user.ptr(),
-                                    host.length(), host.ptr()))) {
-          LOG_WARN("Build msg fail", K(user), K(host), K(ret));
+        if (OB_FAIL(build_fail_msg_for_one(user, host, msg))) {
+          LOG_WARN("Build fail msg fail", K(user), K(host), K(ret));
         }
       }
     }
@@ -324,6 +332,8 @@ int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
+  const bool if_exists = stmt.get_if_exists();
+
   const ObStrings *user_names = NULL;
 
   if (OB_ISNULL(GCTX.schema_service_)) {
@@ -373,7 +383,7 @@ int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(drop_user(common_rpc_proxy, arg))) {
+      if (OB_FAIL(drop_user(common_rpc_proxy, arg, stmt.get_if_exists()))) {
         LOG_WARN("Drop user completely failed", K(ret));
       } else {
         //do nothing
@@ -384,7 +394,8 @@ int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
 }
 
 int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                                  const obrpc::ObDropUserArg &arg)
+                                  const obrpc::ObDropUserArg &arg,
+                                  bool if_exists)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -409,12 +420,28 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                                                                  failed_index, failed_users,
                                                                  failed_hosts))) {
         LOG_WARN("Failed to extract user name", K(arg), K(ret));
-      } else if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
-        LOG_WARN("Build fail msg error", K(arg), K(ret));
-      } else {
-        const char *ERR_CMD = (arg.is_role_ && lib::is_mysql_mode()) ? "DROP ROLE" : "DROP USER";
-        ret = OB_CANNOT_USER;
-        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen(ERR_CMD), ERR_CMD, (int)fail_msg.length(), fail_msg.ptr());
+      } else if (if_exists) {
+        if (OB_UNLIKELY(failed_users.count() < 1) || OB_UNLIKELY(failed_users.count() != failed_users.count())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(failed_users.count()), K(failed_users.count()), K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < failed_users.count(); ++i) {
+            ObSqlString fail_msg_one;
+            if (OB_FAIL(ObDropUserExecutor::build_fail_msg_for_one(failed_users.at(i), failed_hosts.at(i), fail_msg_one))) {
+              LOG_WARN("Build fail msg error", K(arg), K(ret));
+            } else {
+              LOG_USER_WARN(OB_CANNOT_USER_IF_EXISTS, (int)fail_msg_one.length(), fail_msg_one.ptr());
+            }
+          }
+        }
+      } else if (!if_exists) {
+        if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
+          LOG_WARN("Build fail msg error", K(arg), K(ret));
+        } else {
+          const char *ERR_CMD = (arg.is_role_ && lib::is_mysql_mode()) ? "DROP ROLE" : "DROP USER";
+          ret = OB_CANNOT_USER;
+          LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen(ERR_CMD), ERR_CMD, (int)fail_msg.length(), fail_msg.ptr());
+        }
       }
     }
   }

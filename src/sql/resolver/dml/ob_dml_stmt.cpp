@@ -130,7 +130,8 @@ bool JoinedTable::same_as(const JoinedTable &other) const
   } else {
     if (table_id_ != other.table_id_
         || joined_type_ != other.joined_type_
-        || join_conditions_.count() != other.join_conditions_.count()) {
+        || join_conditions_.count() != other.join_conditions_.count()
+        || is_straight_join_ != other.is_straight_join_) {
       bret = false;
     } else if (left_table_->type_ != other.left_table_->type_
                || right_table_->type_ != other.right_table_->type_) {
@@ -309,6 +310,7 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   joined_type_ = other.joined_type_;
+  is_straight_join_ = other.is_straight_join_;
   if (OB_ISNULL(other.left_table_) || OB_ISNULL(other.right_table_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null table item", K(other.left_table_), K(other.right_table_), K(ret));
@@ -4565,6 +4567,41 @@ bool ObDMLStmt::is_hierarchical_query() const
 {
   return is_select_stmt() ? (static_cast<const ObSelectStmt *>(this)->is_hierarchical_query())
                                   : false;
+}
+
+int ObDMLStmt::is_hierarchical_for_update(bool &is_hsfu) const
+{
+  int ret = OB_SUCCESS;
+  is_hsfu = false;
+  const TableItem *table = NULL;
+  const ObSelectStmt *select_stmt = NULL;
+  const ObSelectStmt *ref_view = NULL;
+  if (!is_select_stmt()) {
+    is_hsfu = false;
+  } else if (OB_ISNULL(select_stmt = static_cast<const ObSelectStmt*>(this))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is NULL", K(ret));
+  } else if (!select_stmt->has_for_update()) {
+    is_hsfu = false;
+  } else if (is_hierarchical_query()) {
+    is_hsfu = true;
+  } else if (get_table_size() != 1) {
+    is_hsfu = false;
+  } else if (OB_ISNULL(table = get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is NULL", K(ret));
+  } else if (!table->for_update_ || !table->is_generated_table()) {
+    is_hsfu = false;
+  } else if (select_stmt->get_for_update_dml_infos().count() == 0) {
+    // For "select * from (select c1 from t1 connect by xxx) view1 where xxx for update;"
+    is_hsfu = false;
+  } else if (OB_ISNULL(ref_view = table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret));
+  } else if (ref_view->is_hierarchical_query()) {
+    is_hsfu = true;
+  }
+  return ret;
 }
 
 bool ObDMLStmt::is_set_stmt() const

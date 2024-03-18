@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array_append.h"
 #include "share/ob_json_access_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;

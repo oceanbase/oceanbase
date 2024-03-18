@@ -8350,6 +8350,15 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" CREATE ROUTINE,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_TABLESPACE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE TABLESPACE,");
+  }
+  if ((priv_set_ & OB_PRIV_SHUTDOWN) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" SHUTDOWN,");
+  }
+  if ((priv_set_ & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" RELOAD,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }

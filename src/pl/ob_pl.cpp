@@ -3834,6 +3834,9 @@ int ObPL::check_exec_priv(
                                       exec_ctx.get_my_session()->get_database_name(),
                                       session_priv))) {
           LOG_WARN("fail to get_session_priv_info", K(ret));
+      } else if (OB_FAIL(exec_ctx.get_my_session()->get_security_version(
+                                                          session_priv.security_version_))) {
+        LOG_WARN("fail to get security version", K(ret));
       } else if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,

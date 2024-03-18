@@ -83,6 +83,10 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_packet_sender.cpp
   mysql/obmp_ping.cpp
   mysql/obmp_query.cpp
+  mysql/obmp_process_info.cpp
+  mysql/obmp_process_kill.cpp
+  mysql/obmp_debug.cpp
+  mysql/obmp_refresh.cpp
   mysql/obmp_reset_connection.cpp
   mysql/obmp_statistic.cpp
   mysql/obmp_stmt_close.cpp
@@ -415,6 +419,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
   virtual_table/ob_all_virtual_sql_stat.cpp
+  virtual_table/ob_all_virtual_compatibility_control.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
 )
 

@@ -137,12 +137,17 @@ int ObWhereSubQueryPullup::transform_one_expr(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   trans_happened = false;
   TransformParam trans_param;
+  bool is_hsfu = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer error", K(ret));
   //bug:
   } else if (expr->has_flag(CNT_ROWNUM)) {
     /*do nothing */
+  } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {
+    LOG_WARN("failed to check hierarchical for update", K(ret), KPC(stmt));
+  } else if (is_hsfu) {
+    // do nothing
   } else if (OB_FAIL(gather_transform_params(stmt, expr, trans_param))) {
     LOG_WARN("failed to check can be pulled up ", K(expr), K(stmt), K(ret));
   } else if (!trans_param.can_be_transform_) {

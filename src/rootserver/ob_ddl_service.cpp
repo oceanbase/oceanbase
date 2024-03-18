@@ -163,6 +163,12 @@ namespace rootserver
             LOG_WARN("failed to print value in buf", K(value), K(ret));\
           }\
         }
+#define VAR_UINT_TO_STRING(buf, value) \
+        if (OB_SUCC(ret)) {\
+          if (OB_FAIL(databuff_printf(buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%lu", static_cast<uint64_t>(value)))) {\
+            LOG_WARN("failed to print value in buf", K(value), K(ret));\
+          }\
+        }
 
 #define GRANT_SYS_ROLE_NUM 2       /* len of role array is 2 */
 #define GRANT_ROLE_MIN_ROLE_NUM 3  /* min len of role array is 3 */
@@ -34954,7 +34960,8 @@ int ObDDLService::init_system_variables(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(sys_params), K(params_capacity), K(var_amount));
   } else {
-    HEAP_VAR(char[OB_MAX_SYS_PARAM_VALUE_LENGTH], val_buf) {
+    HEAP_VARS_2((char[OB_MAX_SYS_PARAM_VALUE_LENGTH], val_buf),
+                (char[OB_MAX_SYS_PARAM_VALUE_LENGTH], version_buf)) {
       // name_case_mode
       if (is_meta_tenant(tenant_id)) {
         sys_variable_schema.set_name_case_mode(OB_ORIGIN_AND_INSENSITIVE);
@@ -34980,6 +34987,8 @@ int ObDDLService::init_system_variables(
 
       int64_t set_sys_var_count = arg.sys_var_list_.count();
       bool use_default_parallel_servers_target = true;
+      bool explicit_set_compatibility_version = false;
+      bool explicit_set_security_version = false;
       for (int64_t j = 0; OB_SUCC(ret) && j < set_sys_var_count; ++j) {
         ObSysVarIdValue sys_var;
         if (OB_FAIL(arg.sys_var_list_.at(j, sys_var))) {
@@ -35004,6 +35013,10 @@ int ObDDLService::init_system_variables(
             }
           } else if (SYS_VAR_PARALLEL_SERVERS_TARGET == sys_var.sys_id_) {
             use_default_parallel_servers_target = false;
+          } else if (SYS_VAR_OB_COMPATIBILITY_VERSION == sys_var.sys_id_) {
+            explicit_set_compatibility_version = true;
+          } else if (SYS_VAR_OB_SECURITY_VERSION == sys_var.sys_id_) {
+            explicit_set_security_version = true;
           }
         }
       } // end for
@@ -35072,6 +35085,15 @@ int ObDDLService::init_system_variables(
         int64_t default_px_servers_target = std::max(3L, static_cast<int64_t>(default_px_thread_count));
         VAR_INT_TO_STRING(val_buf, default_px_servers_target);
         SET_TENANT_VARIABLE(SYS_VAR_PARALLEL_SERVERS_TARGET, val_buf);
+      }
+
+      VAR_UINT_TO_STRING(version_buf, CLUSTER_CURRENT_VERSION);
+      if (OB_SUCC(ret) && !(is_user_tenant(tenant_id) && explicit_set_compatibility_version)) {
+        SET_TENANT_VARIABLE(SYS_VAR_OB_COMPATIBILITY_VERSION, version_buf);
+      }
+
+      if (OB_SUCC(ret) && !(is_user_tenant(tenant_id) && explicit_set_security_version)) {
+        SET_TENANT_VARIABLE(SYS_VAR_OB_SECURITY_VERSION, version_buf);
       }
 
       if (FAILEDx(update_mysql_tenant_sys_var(

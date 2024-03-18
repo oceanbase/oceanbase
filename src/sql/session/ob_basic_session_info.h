@@ -26,6 +26,7 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "rpc/ob_sql_request_operator.h"
+#include "share/ob_compatibility_control.h"
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -1333,6 +1334,10 @@ public:
   common::ObActiveSessionStat &get_ash_stat() { return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
+  int get_compatibility_control(share::ObCompatType &compat_type) const;
+  int get_compatibility_version(uint64_t &compat_version) const;
+  int get_security_version(uint64_t &security_version) const;
+  int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,

@@ -83,6 +83,10 @@ TEST_F(TestRawExprToStr, basic)
   ObSQLSessionInfo session;
   ctx.session_info_ = &session;
 
+  EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
+  EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+  EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
+
   // const int64_t buf_len = 1024;
   //int64_t pos = 0;
   //char buf[buf_len];

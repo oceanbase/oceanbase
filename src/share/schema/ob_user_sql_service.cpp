@@ -884,6 +884,9 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= 1; }
     if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= 2; }
     if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= 4; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_TABLESPACE) != 0) { priv_others |= 8; }
+    if ((user.get_priv_set() & OB_PRIV_SHUTDOWN) != 0) { priv_others |= 16; }
+    if ((user.get_priv_set() & OB_PRIV_RELOAD) != 0) { priv_others |= 32; }
   }
   if (OB_FAIL(ret)) {
   } else if (compat_version < DATA_VERSION_4_2_2_0) {

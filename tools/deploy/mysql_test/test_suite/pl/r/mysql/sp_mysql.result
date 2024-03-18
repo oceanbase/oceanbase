@@ -4508,7 +4508,7 @@ call bug15217()|
 concat('data was: /', var1, '/')
 data was: /1/
 flush tables |
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'flush tables' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'tables' at line 1
 call bug15217()|
 concat('data was: /', var1, '/')
 data was: /1/
@@ -4884,7 +4884,7 @@ drop procedure bug21416|
 DROP PROCEDURE IF EXISTS bug21414|
 CREATE PROCEDURE bug21414() SELECT 1|
 FLUSH TABLES WITH READ LOCK|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'FLUSH TABLES WITH READ LOCK' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'TABLES WITH READ LOCK' at line 1
 DROP PROCEDURE bug21414|
 UNLOCK TABLES|
 The following should succeed.

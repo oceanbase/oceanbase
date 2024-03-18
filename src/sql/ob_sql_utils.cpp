@@ -1558,6 +1558,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SET_NAMES == type //read only not restrict it
                || T_SET_CHARSET == type  //read only not restrict it
                || T_SHOW_RECYCLEBIN == type
+               || T_SHOW_PROFILE == type
                || T_SHOW_TENANT == type
                || T_SHOW_RESTORE_PREVIEW == type
                || T_SHOW_SEQUENCES == type
@@ -3172,6 +3173,26 @@ int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema
   return ret;
 }
 
+int ObSQLUtils::merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+                                                         uint64_t &compat_version)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *local_var = NULL;
+  if (NULL == local_vars) {
+    //do nothing
+  } else if (OB_FAIL(local_vars->get_local_var(SYS_VAR_OB_COMPATIBILITY_VERSION, local_var))) {
+    LOG_WARN("get local session var failed", K(ret));
+  } else if (NULL != local_var) {
+    if (ObUInt64Type == local_var->val_.get_type()) {
+      compat_version = local_var->val_.get_uint64();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid compat version val type", K(ret), K(local_var->val_));
+    }
+  }
+  return ret;
+}
+
 void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx)
 {
   if (NULL != session) {
@@ -3744,6 +3765,9 @@ int ObVirtualTableResultConverter::get_all_columns_schema()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_->count(); ++i) {
     const uint64_t column_id = output_column_ids_->at(i);
+    if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) {
+      continue;
+    }
     const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(column_id);
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;

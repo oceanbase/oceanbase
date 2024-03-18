@@ -31,6 +31,7 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "sql/rewrite/ob_query_range_provider.h"
+#include "share/ob_compatibility_control.h"
 namespace oceanbase
 {
 namespace share {
@@ -519,6 +520,8 @@ public:
                                                   ObCollationType &cs_type);
   static int merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
                                                           int64_t &max_allowed_packet);
+  static int merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+                                                      uint64_t &compat_version);
 
   static bool is_oracle_sys_view(const ObString &table_name);
 

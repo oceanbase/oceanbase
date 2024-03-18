@@ -940,7 +940,7 @@ int ObPrivSqlService::gen_routine_priv_dml(
 int ObPrivSqlService::gen_db_priv_dml(
     const uint64_t exec_tenant_id,
     const ObOriginalDBKey &db_priv_key,
-  const ObPrivSet &priv_set,
+    const ObPrivSet &priv_set,
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;

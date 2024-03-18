@@ -1608,7 +1608,8 @@ struct ObResolveContext
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
     is_variable_allowed_(true),
-    is_need_print_(false)
+    is_need_print_(false),
+    is_from_show_resolver_(false)
   {
   }
 
@@ -1656,6 +1657,7 @@ struct ObResolveContext
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
   bool is_need_print_;
+  bool is_from_show_resolver_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

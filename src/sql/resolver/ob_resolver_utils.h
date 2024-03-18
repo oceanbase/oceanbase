@@ -371,6 +371,7 @@ public:
                            const common::ObCollationType server_collation,
                            ObExprInfo *parents_expr_info,
                            const ObSQLMode mode,
+                           const ObCompatType compat_type,
                            bool is_from_pl = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
@@ -533,6 +534,7 @@ public:
                                   char *str,
                                   int64_t *str_len,
                                   const int64_t max_len);
+  static int check_user_variable_length(char *str, int64_t str_len);
   static int resolve_check_constraint_expr(
              ObResolverParams &params,
              const ParseNode *node,

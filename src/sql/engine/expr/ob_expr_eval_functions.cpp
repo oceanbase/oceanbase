@@ -367,6 +367,8 @@
 #include "ob_expr_decode_trace_id.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
+#include "ob_expr_password.h"
+#include "ob_expr_inner_table_option_printer.h"
 
 namespace oceanbase
 {
@@ -1127,14 +1129,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprXmlConcat::eval_xml_concat,                                   /* 662 */
   ObExprXmlForest::eval_xml_forest,                                   /* 663 */
   ObExprExistsNodeXml::eval_existsnode_xml,                           /* 664 */
-  NULL, //ObExprPassword::eval_password,                              /* 665 */
+  ObExprPassword::eval_password,                                      /* 665 */
   NULL, //ObExprDocID::generate_doc_id,                               /* 666 */
   NULL, //ObExprWordSegment::generate_fulltext_column,                /* 667 */
   NULL, //ObExprWordCount::generate_word_count,                       /* 668 */
   NULL, //ObExprBM25::eval_bm25_relevance_expr,                       /* 669 */
   NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
-  NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 671 */
-  NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 672 */
+  ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
+  ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
   NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
   NULL, //ObExprIs::json_is_true,                                     /* 675 */

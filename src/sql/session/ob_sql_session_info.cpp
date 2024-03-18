@@ -1097,8 +1097,9 @@ void ObSQLSessionInfo::update_show_warnings_buf()
   }
 }
 
-void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
+int ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
 {
+  int ret = OB_SUCCESS;
   session_priv.tenant_id_ = get_priv_tenant_id();
   session_priv.user_id_ = get_priv_user_id();
   session_priv.user_name_ = get_user_name();
@@ -1106,7 +1107,12 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &s
   session_priv.db_ = get_database_name();
   session_priv.user_priv_set_ = user_priv_set_;
   session_priv.db_priv_set_ = db_priv_set_;
-  session_priv.enable_role_id_array_.assign(enable_role_array_);
+  if (OB_FAIL(session_priv.enable_role_id_array_.assign(enable_role_array_))) {
+    LOG_WARN("failed to assign enable role id array", K(ret));
+  } else if (OB_FAIL(get_security_version(session_priv.security_version_))) {
+    LOG_WARN("failed to get security version", K(ret));
+  }
+  return ret;
 }
 
 ObPlanCache *ObSQLSessionInfo::get_plan_cache()
