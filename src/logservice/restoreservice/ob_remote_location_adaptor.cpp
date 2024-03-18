@@ -255,9 +255,42 @@ int ObRemoteLocationAdaptor::add_service_source_(const share::ObLogRestoreSource
 int ObRemoteLocationAdaptor::add_rawpath_source_(const share::ObLogRestoreSourceItem &item,
     ObLogRestoreHandler &restore_handler)
 {
-  UNUSED(item);
-  UNUSED(restore_handler);
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  SMART_VAR(logservice::DirArray, dir_array) {
+    ObSqlString tmp_str;
+    char *token = nullptr;
+    char *saveptr = nullptr;
+
+    if (OB_FAIL(tmp_str.assign(item.value_))) {
+      LOG_WARN("fail to parse rawpath value", K(item));
+    } else {
+      token = tmp_str.ptr();
+      for (char *str = token; OB_SUCC(ret); str = nullptr) {
+        ObBackupDest dest;
+        SMART_VAR(logservice::DirInfo, dir_info) {
+          char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+          token = ::STRTOK_R(str, ",", &saveptr);
+          if (nullptr == token) {
+            break;
+          } else if (OB_FAIL(dest.set(token))) {
+            LOG_WARN("fail to set dest", K(token));
+          } else if (OB_FALSE_IT(dir_info.first = dest.get_root_path())) {
+          } else if (OB_FAIL(dest.get_storage_info()->get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
+            LOG_WARN("fail to get storage info str", K(dest));
+          } else if (OB_FALSE_IT(dir_info.second = storage_info_str)) {
+          } else if (OB_FAIL(dir_array.push_back(dir_info))) {
+            LOG_WARN("fail to push backup dir_array", K(ret), K(dir_array));
+          }
+        }
+      }
+    }
+    if ((OB_SUCC(ret)) && OB_FAIL(restore_handler.add_source(dir_array, item.until_scn_))) {
+      LOG_WARN("fail to add rawpath source", K(ret), K(item), K(dir_array));
+    } else {
+      LOG_INFO("add rawpath source", K(ret), K(dir_array.count()), K(dir_array));
+    }
+  }
+  return ret;
 }
 } // namespace logservice
 } // namespace oceanbase

@@ -5629,7 +5629,6 @@ public:
                K_(passwd_array),
                K_(kms_info),
                K_(table_items),
-               K_(multi_uri),
                K_(with_restore_scn),
                K_(encrypt_key),
                K_(kms_uri),

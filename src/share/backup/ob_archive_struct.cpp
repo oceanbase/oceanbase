@@ -571,6 +571,17 @@ int ObArchivePieceStatus::set_status(const char *status)
   return ret;
 }
 
+/**
+ * -----------------------------------ObPieceKey-----------------------------------
+ */
+uint64_t ObPieceKey::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(&dest_id_, sizeof(dest_id_), hash_val);
+  hash_val = murmurhash(&round_id_, sizeof(round_id_), hash_val);
+  hash_val = murmurhash(&piece_id_, sizeof(piece_id_), hash_val);
+  return hash_val;
+}
 
 /**
  * ------------------------------ObTenantArchivePieceAttr::Key---------------------
@@ -602,6 +613,13 @@ int ObTenantArchivePieceAttr::Key::fill_pkey_dml(share::ObDMLSqlSplicer &dml) co
   return ret;
 }
 
+void ObTenantArchivePieceAttr::Key::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  dest_id_ = 0;
+  round_id_ = 0;
+  piece_id_ = 0;
+}
 
 
 /**
@@ -757,7 +775,25 @@ int ObTenantArchivePieceAttr::assign(const ObTenantArchivePieceAttr &other)
   return ret;
 }
 
-
+void ObTenantArchivePieceAttr::reset()
+{
+  key_.reset();
+  incarnation_ = OB_START_INCARNATION;
+  dest_no_ = -1;
+  file_count_ = 0;
+  input_bytes_ = 0;
+  output_bytes_ = 0;
+  cp_file_id_ = 0;
+  cp_file_offset_ = 0;
+  start_scn_ = share::SCN::min_scn();
+  checkpoint_scn_ = share::SCN::min_scn();
+  max_scn_ = share::SCN::min_scn();
+  end_scn_ = share::SCN::min_scn();
+  compatible_.version_ = ObArchiveCompatible::Compatible::NONE;
+  status_.status_ = ObArchivePieceStatus::Status::MAX_STATUS;
+  file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_MAX;
+  path_.reset();
+}
 
 /**
  * ------------------------------ObLSArchivePersistInfo::Key---------------------

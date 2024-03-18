@@ -199,14 +199,11 @@ int ObRemoteLogIterator<LogEntryType>::build_dest_data_generator_(const share::S
   int ret = OB_SUCCESS;
   UNUSED(pre_scn);
   logservice::DirArray array;
+  ObLogRawPathPieceContext *rawpath_ctx = NULL;
   share::SCN end_scn;
-  int64_t piece_index = 0;
-  int64_t min_file_id = 0;
-  int64_t max_file_id = 0;
-  source->get(array, end_scn);
-  source->get_locate_info(piece_index, min_file_id, max_file_id);
+  source->get(rawpath_ctx, end_scn);
   gen_ = MTL_NEW(RawPathDataGenerator, "ResDataGen", tenant_id_, id_, start_lsn_, end_lsn_,
-      array, end_scn, piece_index, min_file_id, max_file_id, log_ext_handler_);
+      rawpath_ctx, end_scn, log_ext_handler_);
   if (OB_ISNULL(gen_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc dest data generator failed", K(ret), KPC(this));

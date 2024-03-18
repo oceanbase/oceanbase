@@ -8899,7 +8899,13 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
       // just to check sys tenant's schema with latest schema version
       ObDDLSQLTransaction trans(schema_service_, false /*end_signal*/);
-      if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
+      ObTimeoutCtx ctx;
+      const int64_t DEFAULT_TIMEOUT = 60_s;
+      const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+      const int64_t timeout = MAX(DEFAULT_TIMEOUT, INNER_SQL_TIMEOUT);
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
+        LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout));
+      } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
         LOG_WARN("failed to start trans, ", K(ret));
       } else if (OB_FAIL(RS_JOB_CREATE_EXT(job_id, RESTORE_TENANT, trans,
                          "sql_text", ObHexEscapeSqlStr(arg.get_sql_stmt())))) {

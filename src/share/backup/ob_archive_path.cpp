@@ -193,6 +193,20 @@ int ObArchivePathUtil::get_single_piece_file_path(const ObBackupDest &dest, cons
   return ret;
 }
 
+// oss://archive/[user_specified_path]/single_piece_info.obarc
+int ObArchivePathUtil::get_single_piece_file_info_path(const ObBackupDest &dest, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init backup path", K(ret), K(dest));
+  } else if (OB_FAIL(path.join("single_piece_info", ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join single piece info", K(ret), K(path));
+  }
+  return ret;
+}
+
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint
 int ObArchivePathUtil::get_piece_checkpoint_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
@@ -233,6 +247,22 @@ int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, 
     LOG_WARN("failed to assign checkpoint info path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id), K(file_id));
   } else if (OB_FAIL(path.join(file_name, ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join file name", K(ret), K(path), K(file_name)); 
+  }
+  return ret;
+}
+
+// oss://[user_specified_path]/checkpoint/checkpoint_info.[file_id].obarc
+int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t file_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+
+  if (OB_FAIL(get_piece_checkpoint_dir_path(dest, path))) {
+    LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(file_id));
+  } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "checkpoint_info.%ld", file_id))) {
+    LOG_WARN("failed to assign checkpoint info path", K(ret), K(dest), K(file_id));
+  } else if (OB_FAIL(path.join(file_name, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join file name", K(ret), K(path), K(file_name));
   }
   return ret;
 }
@@ -304,6 +334,21 @@ int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int
   return ret;
 }
 
+// oss://[user_specified_path]/logstream_[ls_id]/file_info.obarc
+int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(dest));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("fail to join ls", K(ret), K(path), K(ls_id));
+  } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join ls file info ", K(ret), K(path));
+  }
+  return ret;
+}
+
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/file_info.obarc
 int ObArchivePathUtil::get_piece_info_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
@@ -330,7 +375,7 @@ int ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(const ObBackupDe
   return ret;
 }
 
-// oss://archive/tenant_archive_piece_infos.obarc
+// oss://archive/tenant_archive_piece_infos.obarc, or oss://[user_specified_path]/tenant_archive_piece_infos.obarc
 int ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
