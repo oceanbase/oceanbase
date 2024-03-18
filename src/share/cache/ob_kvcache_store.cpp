@@ -525,7 +525,6 @@ void ObKVCacheStore::flush_washable_mbs(const uint64_t tenant_id, const int64_t 
 }
 
 int ObKVCacheStore::sync_wash_mbs(const uint64_t tenant_id, const int64_t size_need_washed,
-                                  const bool wash_single_mb,
                                   ObICacheWasher::ObCacheMemBlock *&wash_blocks)
 {
   int ret = OB_SUCCESS;
@@ -533,11 +532,10 @@ int ObKVCacheStore::sync_wash_mbs(const uint64_t tenant_id, const int64_t size_n
   if (!inited_) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "not init", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || size_need_washed <= 0
-    || (wash_single_mb && size_need_washed != aligned_block_size_)) {
+  } else if (OB_INVALID_ID == tenant_id || size_need_washed <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(size_need_washed),
-        K(wash_single_mb), K_(aligned_block_size));
+        K_(aligned_block_size));
   } else if (OB_FAIL(try_flush_washable_mb(tenant_id, wash_blocks, -1, size_need_washed))) {
     if (ret != OB_CACHE_FREE_BLOCK_NOT_ENOUGH) {
       COMMON_LOG(WARN, "Fail to try flush mb", K(ret), K(tenant_id));
@@ -1331,26 +1329,24 @@ void *ObKVCacheStore::alloc_mb(ObTenantResourceMgrHandle &resource_handle,
   } else if (NULL == (ptr = resource_handle.get_memory_mgr()->alloc_cache_mb(block_size))) {
     if (block_size == block_size_) {
       ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
-      const bool wash_single_mb = true;
       const int64_t wash_size = aligned_block_size_;
-      if (OB_FAIL(sync_wash_mbs(tenant_id, wash_size, wash_single_mb, washed_blocks))) {
+      if (OB_FAIL(sync_wash_mbs(tenant_id, wash_size, washed_blocks))) {
         COMMON_LOG(WARN, "sync_wash_mbs failed", K(ret),
-            K(tenant_id), K(wash_size), K(wash_single_mb));
+            K(tenant_id), K(wash_size));
       } else {
         ptr = reinterpret_cast<void *>(washed_blocks);
       }
     } else {
       const int64_t max_retry_count = 3;
       int64_t retry_count = 0;
-      const bool wash_single_mb = false;
       while (OB_SUCC(ret) && NULL == ptr && retry_count < max_retry_count) {
         ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
         int64_t wash_size = ObTenantMemoryMgr::align(block_size);
         if (wash_size > aligned_block_size_) {
           wash_size += 2 * aligned_block_size_;
         }
-        if (OB_FAIL(sync_wash_mbs(tenant_id, wash_size, wash_single_mb, washed_blocks))) {
-          COMMON_LOG(WARN, "sync_wash_mbs failed", K(ret), K(tenant_id), K(wash_size), K(wash_single_mb));
+        if (OB_FAIL(sync_wash_mbs(tenant_id, wash_size, washed_blocks))) {
+          COMMON_LOG(WARN, "sync_wash_mbs failed", K(ret), K(tenant_id), K(wash_size));
         } else {
           ObICacheWasher::ObCacheMemBlock *wash_block = washed_blocks;
           ObICacheWasher::ObCacheMemBlock *next = NULL;

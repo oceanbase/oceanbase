@@ -80,76 +80,36 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
         && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
       // try wash memory from cache
       ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
-      bool wash_single_mb = true;
-      int64_t wash_size = hold_size;
-      if (attr.ctx_id_ == ObCtxIds::CO_STACK) {
-        wash_single_mb = false;
-      } else if (wash_size > INTACT_ACHUNK_SIZE) {
-        wash_size = wash_size + LARGE_REQUEST_EXTRA_MB_COUNT * INTACT_ACHUNK_SIZE;
-        wash_single_mb = false;
-      }
-
-      if (wash_single_mb) {
-        if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size,
-            wash_single_mb, washed_blocks))) {
-          LOG_WARN("sync_wash_mbs failed", K(ret), K_(tenant_id), K(wash_size), K(wash_single_mb));
-        } else if (NULL != washed_blocks->next_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not single memory block washed", K(ret), K(wash_single_mb));
+      int64_t wash_size = hold_size + LARGE_REQUEST_EXTRA_MB_COUNT * INTACT_ACHUNK_SIZE;
+      while (!reach_ctx_limit && OB_SUCC(ret) && NULL == chunk && wash_size < cache_hold_) {
+        if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size, washed_blocks))) {
+          LOG_WARN("sync_wash_mbs failed", K(ret), K_(tenant_id), K(wash_size));
         } else {
-          chunk = ptr2chunk(washed_blocks);
-          const int64_t chunk_hold = static_cast<int64_t>(chunk->hold());
-          update_cache_hold(-chunk_hold);
-          if (!update_ctx_hold(attr.ctx_id_, chunk_hold)) {
-            // reach ctx limit
-            // The ctx_id here can be given freely, because ctx_id is meaningless when the label is OB_KVSTORE_CACHE_MB
-            update_hold(-chunk_hold, attr.ctx_id_,
-                        ObNewModIds::OB_KVSTORE_CACHE_MB, reach_ctx_limit);
-            free_chunk_(chunk, attr);
+          // should return back to os, then realloc again
+          ObMemAttr cache_attr;
+          cache_attr.tenant_id_ = tenant_id_;
+          cache_attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
+          ObICacheWasher::ObCacheMemBlock *next = NULL;
+          while (NULL != washed_blocks) {
+            AChunk *chunk = ptr2chunk(washed_blocks);
+            next = washed_blocks->next_;
+            free_chunk(chunk, cache_attr);
             chunk = NULL;
+            washed_blocks = next;
           }
-        }
-      } else {
-        const int64_t max_retry_count = 3;
-        int64_t retry_count = 0;
-        while (!reach_ctx_limit && OB_SUCC(ret) && NULL == chunk && wash_size < cache_hold_
-            && retry_count < max_retry_count) {
-          if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size,
-              wash_single_mb, washed_blocks))) {
-            LOG_WARN("sync_wash_mbs failed", K(ret), K_(tenant_id), K(wash_size), K(wash_single_mb));
-          } else {
-            // should return back to os, then realloc again
-            ObMemAttr cache_attr;
-            cache_attr.tenant_id_ = tenant_id_;
-            cache_attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
-            ObICacheWasher::ObCacheMemBlock *next = NULL;
-            while (NULL != washed_blocks) {
-              AChunk *chunk = ptr2chunk(washed_blocks);
-              next = washed_blocks->next_;
-              free_chunk(chunk, cache_attr);
-              washed_blocks = next;
-            }
 
-            if (update_hold(static_cast<int64_t>(hold_size), attr.ctx_id_, attr.label_,
-                            reach_ctx_limit)) {
-              chunk = alloc_chunk_(size, attr);
-              if (NULL == chunk) {
-                update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
-              }
-            }
-          }
-          ++retry_count;
-          if (OB_SUCC(ret) && NULL == chunk) {
-            if (retry_count < max_retry_count) {
-              LOG_WARN("after wash from cache, still can't alloc large chunk from chunk_mgr, "
-                  "maybe alloc by other thread, need retry",
-                  K(retry_count), K(max_retry_count), K(size));
-            } else {
-              LOG_WARN("after wash from cache, still can't alloc large chunk from chunk_mgr, "
-                  "maybe alloc by other thread", K(max_retry_count), K(size));
+          if (update_hold(static_cast<int64_t>(hold_size), attr.ctx_id_, attr.label_,
+                          reach_ctx_limit)) {
+            chunk = alloc_chunk_(size, attr);
+            if (NULL == chunk) {
+              update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
             }
           }
         }
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("after wash from cache, still can't alloc chunk from chunk_mgr, "
+                "maybe alloc by other thread", K(size), K(wash_size), K(ret));
       }
       ObMallocTimeMonitor::click("WASH_KVCACHE_END");
     }

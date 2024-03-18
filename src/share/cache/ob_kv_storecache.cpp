@@ -894,7 +894,6 @@ int ObKVGlobalCache::get_washable_size(const uint64_t tenant_id, int64_t &washab
 }
 
 int ObKVGlobalCache::sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size,
-                                   const bool wash_single_mb,
                                    ObICacheWasher::ObCacheMemBlock *&wash_blocks)
 {
   int ret = OB_SUCCESS;
@@ -904,9 +903,9 @@ int ObKVGlobalCache::sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_
   } else if (OB_INVALID_ID == tenant_id || wash_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(wash_size));
-  } else if (OB_FAIL(store_.sync_wash_mbs(tenant_id, wash_size, wash_single_mb, wash_blocks))) {
+  } else if (OB_FAIL(store_.sync_wash_mbs(tenant_id, wash_size, wash_blocks))) {
     if (ret != OB_CACHE_FREE_BLOCK_NOT_ENOUGH) {
-      COMMON_LOG(WARN, "sync_wash_mbs failed", K(ret), K(tenant_id), K(wash_size), K(wash_single_mb));
+      COMMON_LOG(WARN, "sync_wash_mbs failed", K(ret), K(tenant_id), K(wash_size));
     }
   }
   return ret;
