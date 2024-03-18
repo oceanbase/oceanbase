@@ -90,6 +90,8 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_majority)
   LSN follower_max_lsn = palf_list[1]->palf_handle_impl_->sw_.get_max_lsn();
   PALF_LOG(INFO, "prepare max_lsn", K(max_lsn), K(follower_max_lsn));
   wait_lsn_until_flushed(max_lsn, leader);
+  wait_lsn_until_flushed(max_lsn, *palf_list[1]);
+  wait_lsn_until_flushed(max_lsn, *palf_list[2]);
 
   PALF_LOG(INFO, "[CASE 1]test throttling interval");
   int64_t throttling_percentage = 60;
@@ -218,6 +220,8 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_leader)
   LSN follower_max_lsn = palf_list[1]->palf_handle_impl_->sw_.get_max_lsn();
   PALF_LOG(INFO, "prepare max_lsn", K(max_lsn), K(follower_max_lsn));
   wait_lsn_until_flushed(max_lsn, leader);
+  wait_lsn_until_flushed(max_lsn, *palf_list[1]);
+  wait_lsn_until_flushed(max_lsn, *palf_list[2]);
 
   PALF_LOG(INFO, "[CASE 2]test throttling interval");
   int64_t throttling_percentage = 60;
