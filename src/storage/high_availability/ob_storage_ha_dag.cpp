@@ -826,7 +826,45 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
   return ret;
 }
 
+int ObStorageHACancelDagNetUtils::cancel_task(const share::ObLSID &ls_id, const share::ObTaskId &task_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  if (!ls_id.is_valid() || !task_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(task_id));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else {
+    bool is_exist = false;
+    if (OB_FAIL(cancel_migration_task_(task_id, ls_handle, is_exist))) {
+      LOG_WARN("failed to cancel migration task.", K(ret), K(ls_id), K(task_id), K(ls_handle));
+    } else if (is_exist) {
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("task is not exist", K(ret), K(ls_id), K(task_id));
+    }
+  }
+  return ret;
+}
 
+int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &task_id,
+    const ObLSHandle &ls_handle, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  is_exist = false;
+  if (!task_id.is_valid() || !ls_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(ls_handle));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be nullptr", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_ls_migration_handler()->cancel_task(task_id, is_exist))) {
+    LOG_WARN("failed to cancel migration task", K(ret), K(task_id), K(ls_handle));
+  }
+  return ret;
+}
 }
 }
 

@@ -220,6 +220,7 @@ public:
   RPC_S(PR5 admin_reload_zone, obrpc::OB_ADMIN_RELOAD_ZONE);
   RPC_S(PR5 admin_clear_merge_error, obrpc::OB_ADMIN_CLEAR_MERGE_ERROR, (ObAdminMergeArg));
   RPC_S(PR5 admin_migrate_unit, obrpc::OB_ADMIN_MIGRATE_UNIT, (ObAdminMigrateUnitArg));
+  RPC_S(PR5 admin_alter_ls_replica, obrpc::OB_ADMIN_ALTER_LS_REPLICA, (ObAdminAlterLSReplicaArg));
   RPC_S(PRD admin_upgrade_virtual_schema, obrpc::OB_ADMIN_UPGRADE_VIRTUAL_SCHEMA);
   RPC_S(PRD run_job, obrpc::OB_RUN_JOB, (ObRunJobArg));
   RPC_S(PRD run_upgrade_job, obrpc::OB_RUN_UPGRADE_JOB, (ObUpgradeJobArg));

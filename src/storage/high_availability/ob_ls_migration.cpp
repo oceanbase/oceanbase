@@ -1527,6 +1527,7 @@ int ObStartMigrationTask::create_all_tablets_(
   ObLS *ls = nullptr;
   ObArray<ObTabletID> tablet_id_array;
   bool need_check_tablet_limit = false;
+  ObIDagNet *dag_net = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1534,6 +1535,12 @@ int ObStartMigrationTask::create_all_tablets_(
   } else if (OB_ISNULL(ob_reader)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create all tablets get ivnalid argument", K(ret));
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
   } else if (FALSE_IT(need_check_tablet_limit = ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP)) {
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
@@ -1544,7 +1551,7 @@ int ObStartMigrationTask::create_all_tablets_(
       ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets(need_check_tablet_limit, ob_reader,
+  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets(need_check_tablet_limit, ob_reader, dag_net,
       ctx_->sys_tablet_id_array_, ctx_->data_tablet_id_array_,
       ctx_->tablet_simple_info_map_))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));
@@ -1624,10 +1631,17 @@ int ObStartMigrationTask::create_all_tablets_with_4_1_rpc_()
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObArray<ObTabletID> tablet_id_array;
+  ObIDagNet *dag_net = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
   } else if (OB_FAIL(append(tablet_id_array, ctx_->sys_tablet_id_array_))) {
     LOG_WARN("failed to append sys tablet id array", K(ret), KPC(ctx_));
   } else if (OB_FAIL(append(tablet_id_array, ctx_->data_tablet_id_array_))) {
@@ -1641,7 +1655,7 @@ int ObStartMigrationTask::create_all_tablets_with_4_1_rpc_()
       ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets_with_4_1_rpc(
+  } else if (OB_FAIL(ha_tablets_builder.create_all_tablets_with_4_1_rpc(dag_net,
       ctx_->tablet_simple_info_map_))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));
   }
@@ -1874,12 +1888,20 @@ int ObSysTabletsMigrationTask::process()
 int ObSysTabletsMigrationTask::build_tablets_sstable_info_()
 {
   int ret = OB_SUCCESS;
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets migration task do not init", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info(dag_net))) {
     LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_));
   }
+
   return ret;
 }
 
@@ -2840,6 +2862,7 @@ int ObTabletMigrationTask::try_update_tablet_()
   ObLS *ls = nullptr;
   bool is_exist = false;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
+  ObIDagNet *dag_net = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2873,9 +2896,12 @@ int ObTabletMigrationTask::try_update_tablet_()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet() && OB_FAIL(ha_tablets_builder.create_or_update_tablets())) {
+    } else if (OB_ISNULL(dag_net = dag->get_dag_net())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+    } else if (copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet() && OB_FAIL(ha_tablets_builder.create_or_update_tablets(dag_net))) {
       LOG_WARN("failed to create or update inner tablet", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ha_tablets_builder.build_tablets_sstable_info())) {
+    } else if (OB_FAIL(ha_tablets_builder.build_tablets_sstable_info(dag_net))) {
       LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
     } else if (OB_FAIL(ctx_->ha_table_info_mgr_.check_tablet_table_info_exist(copy_tablet_ctx_->tablet_id_, is_exist))) {
       LOG_WARN("failed to check tablet table info exist", K(ret), KPC(copy_tablet_ctx_));
@@ -3644,6 +3670,7 @@ int ObDataTabletsMigrationTask::try_remove_unneeded_tablets_()
   ObArray<ObTabletID> tablet_id_array;
   const int64_t MAX_BUCKET_NUM = 1024;
   const bool need_initial_state = true;
+  ObIDagNet *dag_net = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3679,7 +3706,16 @@ int ObDataTabletsMigrationTask::try_remove_unneeded_tablets_()
         LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
       } else {
         while (OB_SUCC(ret)) {
-          if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
+          if (OB_ISNULL(this->get_dag())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+          } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+          } else if (dag_net->is_cancel()) {
+            ret = OB_CANCELED;
+            LOG_WARN("task is cancelled", K(ret), K(*this));
+          } else if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
             if (OB_ITER_END == ret) {
               ret = OB_SUCCESS;
               break;
@@ -4180,6 +4216,7 @@ int ObTabletGroupMigrationTask::build_tablets_sstable_info_()
 {
   int ret = OB_SUCCESS;
   bool has_inner_table = false;
+  ObIDagNet *dag_net = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -4191,7 +4228,13 @@ int ObTabletGroupMigrationTask::build_tablets_sstable_info_()
       DEBUG_SYNC(BEFORE_MIGRATION_BUILD_TABLET_SSTABLE_INFO);
     }
 
-    if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info())) {
+    if (OB_ISNULL(this->get_dag())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+    } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+    } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info(dag_net))) {
       LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_));
     }
   }

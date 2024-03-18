@@ -515,6 +515,30 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(MigrateUnit);
         break;
       }
+      case T_ADD_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(AddLSReplica);
+        break;
+      }
+      case T_REMOVE_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(RemoveLSReplica);
+        break;
+      }
+      case T_MIGRATE_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(MigrateLSReplica);
+        break;
+      }
+      case T_MODIFY_LS_REPLICA_TYPE: {
+        REGISTER_STMT_RESOLVER(ModifyLSReplica);
+        break;
+      }
+      case T_MODIFY_LS_PAXOS_REPLICA_NUM: {
+        REGISTER_STMT_RESOLVER(ModifyLSPaxosReplicaNum);
+        break;
+      }
+      case T_CANCEL_LS_REPLICA_TASK: {
+        REGISTER_STMT_RESOLVER(CancelLSReplicaTask);
+        break;
+      }
       case T_ADD_ARBITRATION_SERVICE: {
         REGISTER_STMT_RESOLVER(AddArbitrationService);
         break;

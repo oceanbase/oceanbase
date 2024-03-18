@@ -626,6 +626,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObMigrateUnitStmt, ObMigrateUnitExecutor);
         break;
       }
+      case stmt::T_ALTER_LS_REPLICA: {
+        DEFINE_EXECUTE_CMD(ObAlterLSReplicaStmt, ObAlterLSReplicaExecutor);
+        break;
+      }
       case stmt::T_ADD_ARBITRATION_SERVICE: {
         DEFINE_EXECUTE_CMD(ObAddArbitrationServiceStmt, ObAddArbitrationServiceExecutor);
         break;

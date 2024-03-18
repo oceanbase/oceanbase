@@ -3785,6 +3785,197 @@ public:
   OB_UNIS_VERSION(3);
 };
 
+class ObAlterLSReplicaTaskType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum AlterLSReplicaTaskType
+  {
+    AddLSReplicaTask = 0,
+    RemoveLSReplicaTask,
+    MigrateLSReplicaTask,
+    ModifyLSReplicaTypeTask,
+    ModifyLSPaxosReplicaNumTask,
+    CancelLSReplicaTask,
+    LSReplicaTaskMax
+  };
+public:
+  ObAlterLSReplicaTaskType() : type_(LSReplicaTaskMax) {}
+  ObAlterLSReplicaTaskType(AlterLSReplicaTaskType type) : type_(type) {}
+
+  ObAlterLSReplicaTaskType &operator=(const AlterLSReplicaTaskType type) { type_ = type; return *this; }
+  ObAlterLSReplicaTaskType &operator=(const ObAlterLSReplicaTaskType &other) { type_ = other.type_; return *this; }
+  bool operator==(const ObAlterLSReplicaTaskType &other) const { return other.type_ == type_; }
+  bool operator!=(const ObAlterLSReplicaTaskType &other) const { return other.type_ != type_; }
+
+  void reset() { type_ = LSReplicaTaskMax; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  void assign(const ObAlterLSReplicaTaskType &other) { type_ = other.type_; }
+  bool is_valid() const { return LSReplicaTaskMax != type_; }
+  bool is_add_task() const { return AddLSReplicaTask == type_; }
+  bool is_remove_task() const { return RemoveLSReplicaTask == type_; }
+  bool is_migrate_task() const { return MigrateLSReplicaTask == type_; }
+  bool is_modify_replica_task() const { return ModifyLSReplicaTypeTask == type_; }
+  bool is_modify_paxos_replica_num_task() const { return ModifyLSPaxosReplicaNumTask == type_; }
+  bool is_cancel_task() const { return CancelLSReplicaTask == type_; }
+  int parse_from_string(const ObString &type);
+  const AlterLSReplicaTaskType &get_type() const { return type_; }
+  const char* get_type_str() const;
+private:
+  AlterLSReplicaTaskType type_;
+};
+
+struct ObAdminAlterLSReplicaArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminAlterLSReplicaArg()
+    : ls_id_(),
+      server_addr_(),
+      destination_addr_(),
+      replica_type_(common::REPLICA_TYPE_MAX),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      task_id_(),
+      data_source_(),
+      paxos_replica_num_(0),
+      alter_task_type_(ObAlterLSReplicaTaskType::LSReplicaTaskMax) {}
+public:
+  int assign(const ObAdminAlterLSReplicaArg &that);
+  int init_add(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObReplicaType& replica_type,
+            const common::ObAddr& data_source,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_remove(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_migrate(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObAddr& destination_addr,
+            const common::ObAddr& data_source,
+            const uint64_t tenant_id);
+  int init_modify_replica(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObReplicaType& replica_type,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_modify_paxos_replica_num(
+            const share::ObLSID& ls_id,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_cancel(
+            const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1>& task_id,
+            const uint64_t tenant_id);
+  void reset();
+  TO_STRING_KV(K_(ls_id),
+               K_(server_addr),
+               K_(destination_addr),
+               K_(replica_type),
+               K_(tenant_id),
+               K_(task_id),
+               K_(data_source),
+               K_(paxos_replica_num),
+               K_(alter_task_type));
+  bool is_valid() const {
+    return alter_task_type_.is_valid() &&
+         ((alter_task_type_.is_add_task() && is_add_valid_())
+       || (alter_task_type_.is_remove_task() && is_remove_valid_())
+       || (alter_task_type_.is_migrate_task() && is_migrate_valid_())
+       || (alter_task_type_.is_modify_replica_task() && is_modify_replica_valid_())
+       || (alter_task_type_.is_modify_paxos_replica_num_task() && is_modify_paxos_replica_num_valid_())
+       || (alter_task_type_.is_cancel_task() && is_cancel_valid_()));
+  }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const common::ObAddr &get_server_addr() const { return server_addr_; }
+  const common::ObAddr &get_destination_addr() const { return destination_addr_; }
+  const common::ObReplicaType& get_replica_type() const { return replica_type_; }
+  const uint64_t& get_tenant_id() const { return tenant_id_; }
+  const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> &get_task_id() const { return task_id_; }
+  const common::ObAddr &get_data_source() const { return data_source_; }
+  const int64_t& get_paxos_replica_num() const { return paxos_replica_num_; }
+  const ObAlterLSReplicaTaskType& get_alter_task_type() const { return alter_task_type_; }
+
+private:
+  bool is_add_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && REPLICA_TYPE_MAX != replica_type_
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_remove_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_migrate_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && destination_addr_.is_valid()
+        && is_valid_tenant_id(tenant_id_);
+  }
+  bool is_modify_replica_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && REPLICA_TYPE_MAX != replica_type_
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_modify_paxos_replica_num_valid_() const {
+    return ls_id_.is_valid()
+        && paxos_replica_num_ > 0
+        && is_valid_tenant_id(tenant_id_);
+  }
+  bool is_cancel_valid_() const {
+    return !task_id_.is_empty() && is_valid_tenant_id(tenant_id_);
+  }
+
+  share::ObLSID ls_id_;
+  common::ObAddr server_addr_;
+  common::ObAddr destination_addr_;
+  common::ObReplicaType replica_type_;
+  uint64_t tenant_id_;
+  common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> task_id_;
+  common::ObAddr data_source_;
+  int64_t paxos_replica_num_;
+  ObAlterLSReplicaTaskType alter_task_type_;
+};
+
+struct ObLSCancelReplicaTaskArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSCancelReplicaTaskArg()
+    : task_id_(),
+      ls_id_(),
+      tenant_id_(OB_INVALID_TENANT_ID) {}
+public:
+  int assign(const ObLSCancelReplicaTaskArg &that);
+  int init(const share::ObTaskId &task_id,
+           const share::ObLSID &ls_id,
+           const uint64_t tenant_id);
+  void reset();
+  TO_STRING_KV(K_(task_id),
+               K_(ls_id),
+               K_(tenant_id));
+  bool is_valid() const;
+  const share::ObTaskId &get_task_id() const { return task_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+private:
+  share::ObTaskId task_id_;
+  share::ObLSID ls_id_;
+  uint64_t tenant_id_;
+};
+
 struct ObLSMigrateReplicaArg
 {
 public:
