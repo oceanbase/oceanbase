@@ -634,7 +634,8 @@ int ObLSRestoreTaskMgr::reload_tablets_()
       }
     }
 
-    if (ls_restore_status.is_restore_major_data() && FAILEDx(restore_state_handler_->report_unfinished_tablet_cnt(unfinished_tablet_cnt))) {
+    if (OB_FAIL(ret)) {
+    } else if (ls_restore_status.is_restore_major_data() && OB_FAIL(restore_state_handler_->report_unfinished_tablet_cnt(unfinished_tablet_cnt))) {
       LOG_WARN("failed to report unfinished tablet cnt", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
     }
   }
@@ -929,7 +930,6 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObArray<ObTabletID> need_remove_tablet;
   ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
-  int64_t finished_tablet_cnt = 0;
   tablet_group.action_ = get_common_restore_action_(ls_restore_status);
   tablet_group.from_q_type_ = ToRestoreFromQType::FROM_WAIT_TABLETS_Q;
   tablet_group.task_type_ = TaskType::TABLET_GROUP_RESTORE_TASK;
@@ -945,7 +945,6 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
       if (OB_FAIL(need_remove_tablet.push_back(iter->first))) {
         LOG_WARN("failed to push back tablet", K(ret));
       } else {
-        ++finished_tablet_cnt;
         LOG_INFO("remove not exist or restored tablet or full tablet", K(ls), K(tablet_id), K(is_exist), K(is_restored), K(restore_status));
       }
     } else if (OB_FAIL(tablet_group.tablet_list_.push_back(iter->first))) {
@@ -957,14 +956,19 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
 
   if(!need_remove_tablet.empty()) {
     int tmp_ret = OB_SUCCESS;
+    int64_t finished_tablet_cnt = 0;
     ARRAY_FOREACH(need_remove_tablet, i) {
       if (OB_TMP_FAIL(wait_tablet_set_.erase_refactored(need_remove_tablet.at(i)))) {
         LOG_WARN("failed to erase from wait_tablet_set_", K(tmp_ret));
+      } else {
+        ++finished_tablet_cnt = 0;
       }
     }
 
-    if (ls_restore_status.is_restore_major_data() && OB_FAIL(restore_state_handler_->add_finished_tablet_cnt(finished_tablet_cnt))) {
-      LOG_WARN("failed to add finished tablet cnt", K(ret));
+    if (ls_restore_status.is_restore_major_data()
+        && finished_tablet_cnt > 0
+        && OB_TMP_FAIL(restore_state_handler_->add_finished_tablet_cnt(finished_tablet_cnt))) {
+      LOG_WARN("failed to add finished tablet cnt", K(ret), K(finished_tablet_cnt), K(tmp_ret));
     }
   }
 
