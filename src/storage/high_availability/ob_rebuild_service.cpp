@@ -170,7 +170,8 @@ ObRebuildService::ObRebuildService()
     wakeup_cnt_(0),
     ls_service_(nullptr),
     map_lock_(),
-    rebuild_ctx_map_()
+    rebuild_ctx_map_(),
+    fast_sleep_cnt_(0)
 {
 }
 
@@ -365,6 +366,12 @@ void ObRebuildService::wakeup()
   thread_cond_.signal();
 }
 
+void ObRebuildService::fast_sleep()
+{
+  ObThreadCondGuard guard(thread_cond_);
+  fast_sleep_cnt_++;
+}
+
 void ObRebuildService::destroy()
 {
   if (is_inited_) {
@@ -372,6 +379,7 @@ void ObRebuildService::destroy()
     thread_cond_.destroy();
     wakeup_cnt_ = 0;
     rebuild_ctx_map_.destroy();
+    fast_sleep_cnt_ = 0;
     is_inited_ = false;
     COMMON_LOG(INFO, "ObRebuildService destroyed");
   }
@@ -436,10 +444,11 @@ void ObRebuildService::run1()
       wakeup_cnt_ = 0;
     } else {
       int64_t wait_time_ms = SCHEDULER_WAIT_TIME_MS;
-      if (OB_SERVER_IS_INIT == ret) {
+      if (OB_SERVER_IS_INIT == ret || fast_sleep_cnt_ > 0) {
         wait_time_ms = WAIT_SERVER_IN_SERVICE_TIME_MS;
       }
       thread_cond_.wait(wait_time_ms);
+      fast_sleep_cnt_ = 0;
     }
   }
 }
@@ -1021,7 +1030,11 @@ int ObLSRebuildMgr::switch_next_status_(
     } else {
       FLOG_INFO("update rebuild info", K(curr_rebuild_info), K(next_rebuild_info));
     }
-    wakeup_();
+    if (OB_SUCCESS == result && OB_SUCC(ret)) {
+      wakeup_();
+    } else {
+      fast_sleep_();
+    }
   }
   return ret;
 }
@@ -1035,6 +1048,18 @@ void ObLSRebuildMgr::wakeup_()
     LOG_ERROR("storage ha handler service should not be NULL", K(ret), KP(rebuild_service));
   } else {
     rebuild_service->wakeup();
+  }
+}
+
+void ObLSRebuildMgr::fast_sleep_()
+{
+  int ret = OB_SUCCESS;
+  ObRebuildService *rebuild_service = MTL(ObRebuildService*);
+  if (OB_ISNULL(rebuild_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("storage ha handler service should not be NULL", K(ret), KP(rebuild_service));
+  } else {
+    rebuild_service->fast_sleep();
   }
 }
 
