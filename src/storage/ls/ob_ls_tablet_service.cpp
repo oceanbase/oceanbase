@@ -5256,9 +5256,12 @@ int ObLSTabletService::delete_lob_col(
     ObString data = obj.get_string();
     // Notice: Only disk locator here!
     ObString sql_data = sql_obj.get_string();
+    ObLobLocatorV2 locator(data, obj.has_lob_header());
     if (data.length() < sizeof(ObLobCommon)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[STORAGE_LOB]Invalid Lob data.", K(ret), K(obj), K(data));
+    } else if (locator.is_inrow()) {
+      // deelete inrow lob no need to use the lob manager
     } else if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
       LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
     } else {
