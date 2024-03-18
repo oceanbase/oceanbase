@@ -345,7 +345,8 @@ public:
   const ObTransferTaskComment &comment,
   const ObBalanceTaskID balance_task_id,
   const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
-  const uint64_t data_version);
+  const uint64_t data_version,
+  const share::SCN &ora_rowscn);
 
   int assign(const ObTransferTask &other);
   bool is_valid() const;
@@ -377,10 +378,11 @@ public:
     return table_lock_owner_id_;
   }
   uint64_t get_data_version() const { return data_version_; }
+  const share::SCN &get_ora_rowscn() const { return ora_rowscn_; }
 
   TO_STRING_KV(K_(task_id), K_(src_ls), K_(dest_ls), K_(part_list),
       K_(not_exist_part_list), K_(lock_conflict_part_list), K_(table_lock_tablet_list), K_(tablet_list), K_(start_scn), K_(finish_scn),
-      K_(status), K_(trace_id), K_(result), K_(comment), K_(balance_task_id), K_(table_lock_owner_id), K_(data_version));
+      K_(status), K_(trace_id), K_(result), K_(comment), K_(balance_task_id), K_(table_lock_owner_id), K_(data_version), K_(ora_rowscn));
 
 private:
   ObTransferTaskID task_id_;
@@ -400,6 +402,7 @@ private:
   ObBalanceTaskID balance_task_id_;
   transaction::tablelock::ObTableLockOwnerID table_lock_owner_id_;
   uint64_t data_version_; // for upgrade compatibility
+  share::SCN ora_rowscn_; // virtual row
 };
 
 struct ObTransferTaskInfo final
@@ -413,7 +416,7 @@ struct ObTransferTaskInfo final
   int fill_tablet_ids(ObIArray<ObTabletID> &tablet_ids) const;
   TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(task_id), K_(trace_id),
       K_(status), K_(table_lock_owner_id), K_(table_lock_tablet_list), K_(tablet_list),
-      K_(start_scn), K_(finish_scn), K_(result), K_(data_version));
+      K_(start_scn), K_(finish_scn), K_(result), K_(data_version), K_(ora_rowscn));
 
   uint64_t tenant_id_;
   share::ObLSID src_ls_id_;
@@ -428,6 +431,7 @@ struct ObTransferTaskInfo final
   share::SCN finish_scn_;
   int32_t result_;
   uint64_t data_version_; // for upgrade compatibility
+  share::SCN ora_rowscn_; // do not need serialize
   DISALLOW_COPY_AND_ASSIGN(ObTransferTaskInfo);
 };
 
