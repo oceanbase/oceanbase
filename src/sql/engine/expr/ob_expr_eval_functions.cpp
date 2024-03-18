@@ -364,6 +364,7 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_decode_trace_id.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
 
@@ -1142,6 +1143,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
   ObExprPrivSTGeoHash::eval_priv_st_geohash,                          /* 679 */
   ObExprPrivSTMakePoint::eval_priv_st_makepoint,                      /* 680 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 681 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1261,7 +1263,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
-  calc_sqrt_expr_oracle_number_in_batch                               /* 116 */
+  calc_sqrt_expr_oracle_number_in_batch,                              /* 116 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 117 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

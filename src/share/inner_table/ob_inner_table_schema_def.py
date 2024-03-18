@@ -13713,11 +13713,39 @@ def_table_schema(
   ],
 )
 
+
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12467',
   table_name = '__all_virtual_ls_replica_task_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_ls_replica_task_history']))
+
+def_table_schema(
+  owner = 'gongyusen.gys',
+  table_name     = '__all_virtual_session_ps_info',
+  table_id       = '12468',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  enable_column_def_enum = True,
+  in_tenant_space = True,
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('proxy_session_id', 'uint'),
+    ('session_id', 'uint'),
+    ('ps_client_stmt_id', 'int'),
+    ('ps_inner_stmt_id', 'int'),
+    ('stmt_type', 'varchar:256'),
+    ('param_count', 'int'),
+    ('param_types', 'longtext'),
+    ('ref_count', 'int'),
+    ('checksum', 'int')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'fy373789',
@@ -14194,6 +14222,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15432', all_def_keywords['__all_virtual_wr_sqltext'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15443', all_def_keywords['__all_virtual_ls_replica_task_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444', all_def_keywords['__all_virtual_session_ps_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
 
 # 余留位置（此行之前占位）
@@ -15535,6 +15564,7 @@ def_table_schema(
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
                          network_wait_time as NETWORK_WAIT_TIME,
+                         stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
@@ -15944,8 +15974,10 @@ def_table_schema(
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
     NETWORK_WAIT_TIME,
+    stmt_type as STMT_TYPE,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
-    TOTAL_SSSTORE_READ_ROW_COUNT FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+    TOTAL_SSSTORE_READ_ROW_COUNT
+  FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
     normal_columns = [
@@ -33040,6 +33072,64 @@ def_table_schema(
   FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
   )
   """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'gongyusen.gys',
+  table_name     = 'GV$OB_SESSION_PS_INFO',
+  table_id       = '21541',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+SELECT
+  SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  PROXY_SESSION_ID,
+  SESSION_ID,
+  PS_CLIENT_STMT_ID,
+  PS_INNER_STMT_ID,
+  STMT_TYPE,
+  PARAM_COUNT,
+  PARAM_TYPES,
+  REF_COUNT,
+  CHECKSUM
+FROM
+  oceanbase.__all_virtual_session_ps_info
+""".replace("\n", " "),
+  normal_columns = [
+  ],
+)
+
+def_table_schema(
+    owner = 'gongyusen.gys',
+    table_name     = 'V$OB_SESSION_PS_INFO',
+    table_id       = '21542',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    PROXY_SESSION_ID,
+    SESSION_ID,
+    PS_CLIENT_STMT_ID,
+    PS_INNER_STMT_ID,
+    STMT_TYPE,
+    PARAM_COUNT,
+    PARAM_TYPES,
+    REF_COUNT,
+    CHECKSUM
+  FROM oceanbase.GV$OB_SESSION_PS_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+    normal_columns = [
+    ],
 )
 
 def_table_schema(
@@ -52362,6 +52452,7 @@ def_table_schema(
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
                          network_wait_time as  NETWORK_WAIT_TIME,
+                         stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
                          total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
@@ -52475,6 +52566,7 @@ FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
 NETWORK_WAIT_TIME,
+STMT_TYPE,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
 TOTAL_SSSTORE_READ_ROW_COUNT FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
@@ -59834,6 +59926,68 @@ def_table_schema(
       JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON T.DATABASE_ID = DB.DATABASE_ID
     WHERE T.TABLE_ID = IUT.OBJECT_ID
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'gongyusen.gys',
+  table_name     = 'GV$OB_SESSION_PS_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28219',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+SELECT
+  SVR_IP,
+  SVR_PORT,
+  TENANT_ID,
+  PROXY_SESSION_ID,
+  SESSION_ID,
+  PS_CLIENT_STMT_ID,
+  PS_INNER_STMT_ID,
+  STMT_TYPE,
+  PARAM_COUNT,
+  PARAM_TYPES,
+  REF_COUNT,
+  CHECKSUM
+FROM
+  SYS.ALL_VIRTUAL_SESSION_PS_INFO;
+""".replace("\n", " "),
+  normal_columns = [
+  ],
+)
+
+def_table_schema(
+    owner = 'gongyusen.gys',
+    table_name     = 'V$OB_SESSION_PS_INFO',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28220',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    PROXY_SESSION_ID,
+    SESSION_ID,
+    PS_CLIENT_STMT_ID,
+    PS_INNER_STMT_ID,
+    STMT_TYPE,
+    PARAM_COUNT,
+    PARAM_TYPES,
+    REF_COUNT,
+    CHECKSUM
+  FROM SYS.GV$OB_SESSION_PS_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+    normal_columns = [
+    ],
 )
 
 def_table_schema(

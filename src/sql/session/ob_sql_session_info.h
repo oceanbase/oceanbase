@@ -973,6 +973,22 @@ public:
   int remove_ps_session_info(const ObPsStmtId stmt_id);
   int get_ps_session_info(const ObPsStmtId stmt_id,
                           ObPsSessionInfo *&ps_session_info) const;
+  template <typename Visitor>
+  int visit_ps_session_info(const ObPsStmtId stmt_id,
+                          Visitor &visitor)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      ret = OB_HASH_NOT_EXIST;
+      SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
+    } else if (OB_FAIL(ps_session_info_map_.read_atomic<Visitor>(stmt_id, visitor))) {
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      if (ret == OB_HASH_NOT_EXIST) {
+        ret = OB_EER_UNKNOWN_STMT_HANDLER;
+      }
+    }
+    return ret;
+  }
   int64_t get_ps_session_info_size() const { return ps_session_info_map_.size(); }
   inline pl::ObPL *get_pl_engine() const { return GCTX.pl_engine_; }
 
@@ -1410,6 +1426,17 @@ public:
   share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
   int set_login_info(const share::schema::ObUserLoginInfo &login_info);
   int set_login_auth_data(const ObString &auth_data);
+  template <typename Function>
+  int for_each_ps_session_info(Function &fn)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      // do nothing
+    } else if (OB_FAIL(ps_session_info_map_.foreach_refactored(fn))) {
+      SQL_ENG_LOG(WARN, "failed to read each ps session info", K(ret));
+    }
+    return ret;
+  }
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }

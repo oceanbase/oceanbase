@@ -183,7 +183,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
       record->data_ = audit_record;
       //deep copy sql
       if ((audit_record.sql_len_ > 0) && (NULL != audit_record.sql_)) {
-        int64_t stmt_len = min(audit_record.sql_len_, OB_MAX_SQL_LENGTH);
+        int64_t stmt_len = min(audit_record.sql_len_, ObSQLUtils::get_query_record_size_limit(get_tenant_id()));
         MEMCPY(buf + pos, audit_record.sql_, stmt_len);
         record->data_.sql_ = buf + pos;
         pos += stmt_len;

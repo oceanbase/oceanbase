@@ -568,7 +568,15 @@ public:
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
                                  bool is_sensitive = false);
-
+  static int64_t get_query_record_size_limit(uint64_t tenant_id)
+  {
+    int64_t thredhold = OB_MAX_SQL_LENGTH;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      thredhold = tenant_config->_query_record_size_limit;
+    }
+    return thredhold;
+  }
   // convert escape char from '\\' to '\\\\';
   static int convert_escape_char(common::ObIAllocator &allocator,
                                  const ObString &in,

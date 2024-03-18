@@ -21,6 +21,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "share/rc/ob_tenant_base.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 #include <algorithm> // std::sort
 
@@ -687,7 +688,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case QUERY_SQL: {
           ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
                 record.data_.sql_cs_type_ : ObCharset::get_system_collation();
-          ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
+          ObString src_string(static_cast<int64_t>(record.data_.sql_len_), record.data_.sql_);
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
                                                         src_string,
@@ -1064,7 +1065,14 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
         case STMT_TYPE: {
-          cells[cell_idx].set_null();
+          ObString stmt_type_name;
+          ObString tmp_type_name = ObResolverUtils::get_stmt_type_string(record.data_.stmt_type_);
+          if (!tmp_type_name.empty()) {
+            stmt_type_name = tmp_type_name.make_string(tmp_type_name.ptr() + 2);
+          } else {
+            stmt_type_name = tmp_type_name;
+          }
+          cells[cell_idx].set_varchar(stmt_type_name);
           cells[cell_idx].set_default_collation_type();
         } break;
         case SEQ_NUM: {

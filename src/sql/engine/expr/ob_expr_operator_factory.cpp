@@ -433,6 +433,7 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 
@@ -1059,6 +1060,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTGeoHash);
     REG_OP(ObExprPrivSTMakePoint);
     REG_OP(ObExprCurrentRole);
+    REG_OP(ObExprDecodeTraceId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1380,6 +1382,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerIsTrue);
   REG_OP_ORCL(ObExprInnerDecodeLike);
   REG_OP_ORCL(ObExprJsonObjectStar);
+  REG_OP_ORCL(ObExprDecodeTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)
