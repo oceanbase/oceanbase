@@ -767,7 +767,7 @@ public:
                              int64_t &into_cnt,
                              bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
-  static int force_refresh_schema(uint64_t tenant_id);
+  static int force_refresh_schema(uint64_t tenant_id, int64_t refresh_version = OB_INVALID_VERSION);
 
   static int spi_update_package_change_info(
     pl::ObPLExecCtx *ctx, uint64_t package_id, uint64_t var_idx);

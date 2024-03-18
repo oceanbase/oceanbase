@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
+#include "share/schema/ob_package_info.h"
 
 namespace oceanbase
 {
@@ -161,16 +162,16 @@ public:
   static int destory_package_state(sql::ObSQLSessionInfo &session_info, uint64_t package_id);
   int check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                     const ObPackageStateVersion &state_version, bool &match);
+  int get_cached_package(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
+                                ObPLPackage *&package_spec,
+                                ObPLPackage *&package_body,
+                                bool for_static_member = false);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageManager);
 
   int get_cached_package_spec(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                               ObPLPackage *&package_spec);
-  int get_cached_package(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                         ObPLPackage *&package_spec,
-                         ObPLPackage *&package_body,
-                         bool for_static_member = false);
 
   int get_package_item_state(const ObPLResolveCtx &resolve_ctx,
                              sql::ObExecContext &exec_ctx,

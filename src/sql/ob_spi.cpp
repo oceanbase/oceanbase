@@ -8849,7 +8849,7 @@ bool ObSPIService::is_get_package_or_subprogram_var_expression(const ObSqlExpres
   return T_OP_GET_PACKAGE_VAR == get_expression_type(expr) || T_OP_GET_SUBPROGRAM_VAR == get_expression_type(expr);
 }
 
-int ObSPIService::force_refresh_schema(uint64_t tenant_id)
+int ObSPIService::force_refresh_schema(uint64_t tenant_id, int64_t refresh_version)
 {
   int ret = OB_SUCCESS;
   int64_t local_version = OB_INVALID_VERSION;
@@ -8863,11 +8863,15 @@ int ObSPIService::force_refresh_schema(uint64_t tenant_id)
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
                      tenant_id, global_version))) {
     LOG_WARN("fail to get global version", K(ret), K(tenant_id));
-  } else if (local_version >= global_version) {
-    // do nothing
-  } else if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id, global_version))) {
-    LOG_WARN("failed to refresh schema",
-             K(ret), K(tenant_id), K(local_version), K(global_version));
+  }
+  if (OB_SUCC(ret)) {
+    int64_t need_refresh_version = OB_INVALID_VERSION == refresh_version ? global_version : refresh_version;
+    if (local_version >= need_refresh_version) {
+      // do nothing
+    } else if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id, need_refresh_version))) {
+      LOG_WARN("failed to refresh schema",
+              K(ret), K(tenant_id), K(local_version), K(global_version), K(refresh_version));
+    }
   }
   return ret;
 }

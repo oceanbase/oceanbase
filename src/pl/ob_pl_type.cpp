@@ -26,6 +26,7 @@
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "pl/ob_pl_user_type.h"
 #include "dblink/ob_pl_dblink_guard.h"
+#include "sql/resolver/ob_stmt_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1592,6 +1593,28 @@ bool ObObjAccessIdx::is_table_column(const common::ObIArray<ObObjAccessIdx> &acc
             || (3 == access_idxs.count()
               && ObObjAccessIdx::IS_DB_NS == access_idxs.at(0).access_type_
               && ObObjAccessIdx::IS_TABLE_NS == access_idxs.at(1).access_type_
+              && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(2).access_type_));
+}
+
+bool ObObjAccessIdx::is_dblink_table(const common::ObIArray<ObObjAccessIdx> &access_idxs)
+{
+  return !access_idxs.empty()
+         && ((1 == access_idxs.count()
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(0).access_type_)
+            || (2 == access_idxs.count()
+               && ObObjAccessIdx::IS_DB_NS == access_idxs.at(0).access_type_
+               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(1).access_type_));
+}
+
+bool ObObjAccessIdx::is_dblink_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs)
+{
+  return !access_idxs.empty()
+         && ((2 == access_idxs.count()
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(0).access_type_
+              && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(1).access_type_)
+            || (3 == access_idxs.count()
+              && ObObjAccessIdx::IS_DB_NS == access_idxs.at(0).access_type_
+              && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(1).access_type_
               && ObObjAccessIdx::IS_TABLE_COL == access_idxs.at(2).access_type_));
 }
 

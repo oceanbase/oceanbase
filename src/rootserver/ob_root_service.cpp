@@ -6267,7 +6267,8 @@ int ObRootService::drop_outline(const obrpc::ObDropOutlineArg &arg)
 }
 //-----End of functions for managing outlines-----
 
-int ObRootService::create_routine(const ObCreateRoutineArg &arg)
+int ObRootService::create_routine_common(const ObCreateRoutineArg &arg,
+                                         obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6384,11 +6385,30 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = routine_info.get_schema_version();
+    }
   }
   return ret;
 }
 
-int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
+int ObRootService::create_routine(const ObCreateRoutineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_routine_common(arg));
+  return ret;
+}
+
+int ObRootService::create_routine_with_res(const ObCreateRoutineArg &arg,
+                                           obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_routine_common(arg, &res));
+  return ret;
+}
+
+int ObRootService::alter_routine_common(const ObCreateRoutineArg &arg,
+                                       obrpc::ObRoutineDDLRes* res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6415,16 +6435,33 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
     if (OB_FAIL(ret)) {
     } else if ((lib::is_oracle_mode() && arg.is_or_replace_) ||
                (lib::is_mysql_mode() && arg.is_need_alter_)) {
-      if (OB_FAIL(create_routine(arg))) {
+      if (OB_FAIL(create_routine_common(arg, res))) {
         LOG_WARN("failed to alter routine with create", K(ret));
       }
     } else {
       if (OB_FAIL(ddl_service_.alter_routine(*routine_info, error_info, &arg.ddl_stmt_str_,
                                              schema_guard))) {
         LOG_WARN("alter routine failed", K(ret), K(arg.routine_info_), K(error_info));
+      } else if (OB_NOT_NULL(res)) {
+        res->store_routine_schema_version_ = routine_info->get_schema_version();
       }
     }
   }
+  return ret;
+}
+
+int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_routine_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_routine_with_res(const ObCreateRoutineArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_routine_common(arg, &res));
   return ret;
 }
 
@@ -6533,7 +6570,8 @@ int ObRootService::drop_routine(const ObDropRoutineArg &arg)
   return ret;
 }
 
-int ObRootService::create_udt(const ObCreateUDTArg &arg)
+int ObRootService::create_udt_common(const ObCreateUDTArg &arg,
+                                    obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6679,7 +6717,25 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = udt_info.get_schema_version();
+    }
   }
+  return ret;
+}
+
+int ObRootService::create_udt(const ObCreateUDTArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_udt_common(arg));
+  return ret;
+}
+
+int ObRootService::create_udt_with_res(const ObCreateUDTArg &arg,
+                                      obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_udt_common(arg, &res));
   return ret;
 }
 
@@ -7002,7 +7058,8 @@ int ObRootService::admin_sync_rewrite_rules(const obrpc::ObSyncRewriteRuleArg &a
   return ret;
 }
 
-int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
+int ObRootService::create_package_common(const obrpc::ObCreatePackageArg &arg,
+                                         obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7116,11 +7173,31 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
                        new_package_info.get_package_name().length(), new_package_info.get_package_name().ptr());
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = new_package_info.get_schema_version();
+    }
   }
   return ret;
 }
 
-int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
+int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_package_common(arg));
+  return ret;
+}
+
+int ObRootService::create_package_with_res(const obrpc::ObCreatePackageArg &arg,
+                                           obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_package_common(arg, &res));
+  return ret;
+}
+
+
+int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
+                                        obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7163,11 +7240,14 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
         } else if (OB_FAIL(ddl_service_.alter_package(schema_guard,
-                                                      *package_info,
+                                                      const_cast<ObPackageInfo &>(*package_info),
                                                       public_routine_infos,
                                                       const_cast<ObErrorInfo &>(arg.error_info_),
                                                       &arg.ddl_stmt_str_))) {
           LOG_WARN("drop package failed", K(ret), K(package_name));
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+          res->store_routine_schema_version_ = package_info->get_schema_version();
         }
       } else {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -7179,6 +7259,21 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
     }
   }
 
+  return ret;
+}
+
+int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_package_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_package_with_res(const obrpc::ObAlterPackageArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_package_common(arg, &res));
   return ret;
 }
 
@@ -7275,7 +7370,8 @@ int ObRootService::create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
   return ret;
 }
 
-int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
+int ObRootService::alter_trigger_common(const obrpc::ObAlterTriggerArg &arg,
+                                        obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7284,9 +7380,24 @@ int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ddl_service_.alter_trigger(arg))) {
+  } else if (OB_FAIL(ddl_service_.alter_trigger(arg, res))) {
     LOG_WARN("failed to alter trigger", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_trigger_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_trigger_with_res(const obrpc::ObAlterTriggerArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_trigger_common(arg, &res));
   return ret;
 }
 

@@ -796,7 +796,7 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
-  int alter_package(const share::schema::ObPackageInfo &package_info,
+  int alter_package(share::schema::ObPackageInfo &package_info,
                     ObSchemaGetterGuard &schema_guard,
                     common::ObMySQLTransaction &trans,
                     ObIArray<ObRoutineInfo> &public_routine_infos,

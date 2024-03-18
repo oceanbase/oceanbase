@@ -1774,6 +1774,10 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       }
     }
   }
+  // generate sql_id using paramiterized sql, and overwrite privious sql_id
+  OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
+                      (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
+  OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
   OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }

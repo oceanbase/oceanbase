@@ -11283,7 +11283,7 @@ index_hint_definition
 }
 ;
 
-/* diff normal_relation_facotr and dot_relation_factor for relation_factor_in_hint*/
+/* diff normal_relation_factor and dot_relation_factor for relation_factor_in_hint*/
 relation_factor:
 normal_relation_factor
 {
@@ -12486,6 +12486,10 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_STATUS, 2, $4, $5); }
 | SHOW FUNCTION STATUS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_STATUS, 2, $4, $5); }
+| SHOW PROCEDURE CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PROCEDURE_CODE, 1, $4); }
+| SHOW FUNCTION CODE relation_factor
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_FUNCTION_CODE, 1, $4); }
 | SHOW TRIGGERS opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_TRIGGERS, 2, $3, $4); }
 | SHOW SERVER STATUS opt_show_condition

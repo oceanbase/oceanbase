@@ -61,6 +61,7 @@
 #include "pl/sys_package/ob_sdo_geometry.h"
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_json_array_type.h"
+#include "pl/sys_package/ob_utl_recomp.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -715,6 +716,13 @@
   // end of dbms_profiler
 #endif // OB_BUILD_ORACLE_PL
   /****************************************************************************/
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of utl_recomp
+  INTERFACE_DEF(INTERFACE_UTL_RECOMP_INVALIDATE_OBJS, "UTL_RECOMP_INVALIDATE_OBJS", (ObUtlRecomp::invalidate_objs))
+  INTERFACE_DEF(INTERFACE_UTL_RECOMP_DELETE_ERRORS, "UTL_RECOMP_DELETE_ERRORS", (ObUtlRecomp::delete_errors))
+  // end of utl_recomp
+#endif
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

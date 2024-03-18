@@ -36,8 +36,22 @@ class ObExecContext;
 class ObCreateUDTStmt;
 class ObDropUDTStmt;
 
+class ObCreateUDTExecutor
+{
+public:
+  ObCreateUDTExecutor() {}
+  virtual ~ObCreateUDTExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateUDTStmt &stmt);
+  static int compile_udt(sql::ObExecContext &ctx,
+                  const ObString &db_name,
+                  const ObString &udt_name,
+                  int64_t type_code,
+                  int64_t schema_version);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateUDTExecutor);
+};
+
 //参考alter system定义
-DEF_SIMPLE_EXECUTOR(ObCreateUDT);
 DEF_SIMPLE_EXECUTOR(ObDropUDT);
 
 }//namespace sql

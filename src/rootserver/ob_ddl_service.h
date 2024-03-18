@@ -974,7 +974,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                              const common::ObString *ddl_stmt_str);
   virtual int alter_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                            const ObPackageInfo &package_info,
+                            ObPackageInfo &package_info,
                             ObIArray<ObRoutineInfo> &public_routine_infos,
                             share::schema::ObErrorInfo &error_info,
                             const common::ObString *ddl_stmt_str);
@@ -988,7 +988,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                              ObSchemaGetterGuard &schema_guard,
                              obrpc::ObCreateTriggerRes *res);
   virtual int drop_trigger(const obrpc::ObDropTriggerArg &arg);
-  virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
+  virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
   //----End of functions for managing trigger----
 
   //----Functions for managing sequence----
