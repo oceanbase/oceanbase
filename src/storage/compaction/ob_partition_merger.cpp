@@ -263,7 +263,7 @@ int ObMerger::prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx)
       } else {
         merge_param_.trans_state_mgr_ = &trans_state_mgr_;
       }
-      if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, merger_arena_, partition_fuser_))) {
+      if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_ ,merger_arena_, partition_fuser_))) {
         STORAGE_LOG(WARN, "failed to build partition fuser", K(ret), K(merge_param_));
       } else if (OB_FAIL(inner_prepare_merge(ctx, idx))) {
         STORAGE_LOG(WARN, "failed to inner prepare merge", K(ret), K(ctx));

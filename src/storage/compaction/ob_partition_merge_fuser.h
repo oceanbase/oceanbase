@@ -145,10 +145,11 @@ protected:
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
 public:
-  ObMajorPartitionMergeFuser(common::ObIAllocator &allocator)
+  ObMajorPartitionMergeFuser(common::ObIAllocator &allocator, const int64_t cluster_version)
     : ObIPartitionMergeFuser(allocator),
       default_row_(),
-      generated_cols_(allocator_)
+      generated_cols_(allocator_),
+      cluster_version_(cluster_version)
   {}
   virtual ~ObMajorPartitionMergeFuser();
   virtual int end_fuse_row(const storage::ObNopPos &nop_pos, blocksstable::ObDatumRow &result_row) override;
@@ -158,21 +159,10 @@ protected:
 protected:
   blocksstable::ObDatumRow default_row_;
   ObFixedArray<int32_t, ObIAllocator> generated_cols_;
+  const int64_t cluster_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMajorPartitionMergeFuser);
 };
-
-class ObMetaPartitionMergeFuser : public ObMajorPartitionMergeFuser
-{
-public:
-  ObMetaPartitionMergeFuser(common::ObIAllocator &allocator) : ObMajorPartitionMergeFuser(allocator) {}
-  virtual ~ObMetaPartitionMergeFuser() {}
-  INHERIT_TO_STRING_KV("ObMajorPartitionMergeFuser", ObMajorPartitionMergeFuser,
-      "cur_fuser", "ObMetaPartitionMergeFuser");
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMetaPartitionMergeFuser);
-};
-
 
 class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser
 {
@@ -197,6 +187,7 @@ protected:
 class ObMergeFuserBuilder {
 public:
   static int build(const ObMergeParameter &merge_param,
+                   const int64_t cluster_version,
                    ObIAllocator &allocator,
                    ObIPartitionMergeFuser *&partition_fuser);
 };

@@ -181,7 +181,8 @@ int ObCOMerger::init_writers(ObSSTable *sstable)
         K(start_cg_idx_), K(cg_array.count()));
   } else if (OB_FAIL(default_row.init(merger_arena_, merge_param_.static_param_.multi_version_column_descs_.count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else if (OB_FAIL(merge_param_.static_param_.schema_->get_orig_default_row(merge_param_.static_param_.multi_version_column_descs_, default_row))) {
+  } else if (OB_FAIL(merge_param_.static_param_.schema_->get_orig_default_row(merge_param_.static_param_.multi_version_column_descs_,
+      merge_infos[start_cg_idx_]->get_sstable_build_desc().get_static_desc().major_working_cluster_version_ >= DATA_VERSION_4_3_1_0, default_row))) {
     STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret), K(merge_param_.static_param_.multi_version_column_descs_));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(merger_arena_, merge_param_.static_param_.multi_version_column_descs_, default_row))) {
     STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret));
