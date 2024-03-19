@@ -4639,7 +4639,7 @@ int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt 
       } else if (schema::EXTERNAL_TABLE == table_item->table_type_) {
         disable_write_table = true;
       } else if (table_item->is_view_table_ && NULL != table_item->ref_query_) {
-        OZ( table_item->ref_query_->disable_writing_external_table(true) );
+        OZ( SMART_CALL(table_item->ref_query_->disable_writing_external_table(true)) );
       }
     }
   }
@@ -4652,7 +4652,7 @@ int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt 
       LOG_WARN("failed to get stmt's child_stmts", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        OZ( child_stmts.at(i)->disable_writing_external_table() );
+        OZ( SMART_CALL(child_stmts.at(i)->disable_writing_external_table()) );
       }
     }
   }
