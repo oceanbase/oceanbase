@@ -398,7 +398,8 @@ TEST_F(TestTenantTabletStatMgr, basic_tablet_stat_mgr)
   ObTabletStreamNode *stream_node = nullptr;
   ASSERT_TRUE(key.is_valid());
   ASSERT_EQ(OB_SUCCESS, stat_mgr_->stream_map_.get_refactored(key, stream_node));
-  ASSERT_FALSE(stream_node->stream_.key_.is_valid());
+  ASSERT_TRUE(stream_node->stream_.key_.is_valid());
+  ASSERT_FALSE(stream_node->stream_.total_stat_.is_valid());
 
   tablet_stat.delete_row_cnt_ = 12345;
   for (int64_t i = 0; i < 1000; i++) {
@@ -454,7 +455,8 @@ TEST_F(TestTenantTabletStatMgr, bacth_clear_tablet_stat)
   ASSERT_EQ(OB_SUCCESS, stat_mgr->batch_clear_tablet_stat(ls_id, tablet_ids));
   ObTenantTabletStatMgr::TabletStreamMap::iterator iter = stat_mgr_->stream_map_.begin();
   for ( ; iter != stat_mgr_->stream_map_.end(); ++iter) {
-    ASSERT_FALSE(iter->second->stream_.key_.is_valid());
+    ASSERT_TRUE(iter->second->stream_.key_.is_valid());
+    ASSERT_FALSE(iter->second->stream_.total_stat_.is_valid());
   }
 }
 

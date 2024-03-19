@@ -327,6 +327,11 @@ ObTabletStream::~ObTabletStream()
 void ObTabletStream::reset()
 {
   key_.reset();
+  clear_stat();
+}
+
+void ObTabletStream::clear_stat()
+{
   total_stat_.reset();
   curr_buckets_.reset();
   latest_buckets_.reset();
@@ -773,7 +778,7 @@ int ObTenantTabletStatMgr::inner_clear_tablet_stat(const ObTabletStatKey &key)
     }
   } else {
     // clear statistics but remain node, otherwise table mode of queuing table will be reset
-    stream_node->reset();
+    stream_node->clear_stat();
   }
   return ret;
 }

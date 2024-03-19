@@ -255,6 +255,7 @@ public:
   ObTabletStream();
   virtual ~ObTabletStream();
   void reset();
+  void clear_stat();
   void add_stat(const ObTabletStat &stat);
   void refresh();
 
@@ -292,6 +293,7 @@ public:
     : stream_(), flag_(flag), mode_(QueuingMode::TABLE_MODE_NORMAL) {}
   ~ObTabletStreamNode() { reset(); }
   void reset() { stream_.reset(); }
+  void clear_stat() { stream_.clear_stat(); }
   TO_STRING_KV(K_(stream), K_(flag));
 
 public:
