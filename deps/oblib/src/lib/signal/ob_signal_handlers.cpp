@@ -26,6 +26,7 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "common/ob_common_utility.h"
+#include <unistd.h>
 
 namespace oceanbase
 {
@@ -59,7 +60,8 @@ static constexpr char FASTSTACK_SCRIPT[] = "if [ -x \"$(command -v obstack)\" ];
 "  obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
 "fi\n"
 "[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* -t | tail -n 1 | xargs rm -f";
-
+const char *const FASTSTACK_SCRIPT_ARGV[] = {"/bin/sh", "-c", FASTSTACK_SCRIPT, NULL};
+const char *const FASTSTACK_SHELL_ARGV[] = {"/bin/sh", FASTSTACK_SHELL_PATH, NULL};
 static inline void handler(int sig, siginfo_t *s, void *p)
 {
   if (get_signal_handler() != nullptr) {
@@ -289,19 +291,42 @@ int faststack()
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last = ATOMIC_LOAD(&last_ts);
   int ret = OB_SUCCESS;
+  pid_t pid;
   if (now - last < ObSigFaststack::get_instance().get_min_interval()) {
     ret = OB_EAGAIN;
   } else if (!ATOMIC_BCAS(&last_ts, last, now)) {
     ret = OB_EAGAIN;
   } else if (-1 == access(FASTSTACK_SHELL_PATH, R_OK)) {
-    if (0 == syscall(__NR_clone, CLONE_VFORK | CLONE_PARENT, nullptr, nullptr, nullptr, nullptr)) {
-      IGNORE_RETURN execlp("sh", "sh", "-c", FASTSTACK_SCRIPT, nullptr);
-      _exit(EXIT_FAILURE);
+    if ((pid = vfork()) < 0) {
+      LOG_WARN("fork first child failed");
+    } else if (pid == 0) { /* first child */
+      if ((pid = vfork()) < 0) {
+        LOG_WARN("fork second child failed");
+      } else if (pid > 0) {
+        _exit(EXIT_SUCCESS); /* parent from second fork == first child */
+      } else {
+        IGNORE_RETURN syscall(SYS_execve, "/bin/sh", FASTSTACK_SCRIPT_ARGV, nullptr);
+        _exit(EXIT_FAILURE);
+      }
+    }
+    if (waitpid(pid, NULL, 0) != pid) {
+      LOG_WARN("wait child process:FASTSTACK_SCRIPT failed");
     }
   } else if (-1 != access(FASTSTACK_SHELL_PATH, X_OK)) {
-    if (0 == syscall(__NR_clone, CLONE_VFORK | CLONE_PARENT, nullptr, nullptr, nullptr, nullptr)) {
-      IGNORE_RETURN execlp("sh", "sh", FASTSTACK_SHELL_PATH, nullptr);
-      _exit(EXIT_FAILURE);
+    if ((pid = vfork()) < 0) {
+      LOG_WARN("fork first child failed");
+    } else if (pid == 0) { /* first child */
+      if ((pid = vfork()) < 0) {
+        LOG_WARN("fork second child failed");
+      } else if (pid > 0) {
+        _exit(EXIT_SUCCESS); /* parent from second vfork == first child */
+      } else {
+        IGNORE_RETURN syscall(SYS_execve, "/bin/sh", FASTSTACK_SHELL_ARGV, nullptr);
+        _exit(EXIT_FAILURE);
+      }
+    }
+    if (waitpid(pid, NULL, 0) != pid) {
+      LOG_WARN("wait child process:FASTSTACK_SHELL failed");
     }
   }
   LOG_WARN("faststack", K(now), K(ret));
