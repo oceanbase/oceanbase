@@ -780,30 +780,30 @@ int ObStorageOssMultiPartWriter::pwrite(const char *buf, const int64_t size, con
 static int add_content_md5(oss_request_options_t *options, const char *buf, const int64_t size, aos_table_t *headers)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(options) || OB_ISNULL(buf) || OB_ISNULL(headers) || OB_UNLIKELY(size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid arguments", K(ret), KP(options), KP(buf), K(size), KP(headers));
-  } else {
-    unsigned char *md5 = nullptr;
-    char *b64_value = nullptr;    // store the base64-encoded MD5 value
-    const int in_len = APR_MD5_DIGESTSIZE + 1;  // including trailing '\0'
-    // Calculate the buffer size needed for the base64-encoded string including the null terminator.
-    // Base64 encoding represents every 3 bytes of input with 4 bytes of output,
-    // so allocate enough space based on this ratio and add extra byte for the null terminator.
-    const int b64_buf_len = (in_len + 1) * 4 / 3 + 1;
+  // if (OB_ISNULL(options) || OB_ISNULL(buf) || OB_ISNULL(headers) || OB_UNLIKELY(size < 0)) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   OB_LOG(WARN, "invalid arguments", K(ret), KP(options), KP(buf), K(size), KP(headers));
+  // } else {
+  //   unsigned char *md5 = nullptr;
+  //   char *b64_value = nullptr;    // store the base64-encoded MD5 value
+  //   const int in_len = APR_MD5_DIGESTSIZE + 1;  // including trailing '\0'
+  //   // Calculate the buffer size needed for the base64-encoded string including the null terminator.
+  //   // Base64 encoding represents every 3 bytes of input with 4 bytes of output,
+  //   // so allocate enough space based on this ratio and add extra byte for the null terminator.
+  //   const int b64_buf_len = (in_len + 1) * 4 / 3 + 1;
 
-    if (OB_ISNULL(md5 = aos_md5(options->pool, buf, (apr_size_t)size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "fail to calculate content md5", K(ret), K(size));
-    } else if (OB_ISNULL(b64_value = (char *)aos_pcalloc(options->pool, b64_buf_len))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "fail to alloc memory for content md5 base64 value buf", K(ret), K(b64_buf_len));
-    } else {
-      int b64_len = aos_base64_encode(md5, in_len, b64_value);
-      b64_value[b64_len] = '\0';
-      apr_table_set(headers, OSS_CONTENT_MD5, b64_value);
-    }
-  }
+  //   if (OB_ISNULL(md5 = aos_md5(options->pool, buf, (apr_size_t)size))) {
+  //     ret = OB_ALLOCATE_MEMORY_FAILED;
+  //     OB_LOG(WARN, "fail to calculate content md5", K(ret), K(size));
+  //   } else if (OB_ISNULL(b64_value = (char *)aos_pcalloc(options->pool, b64_buf_len))) {
+  //     ret = OB_ALLOCATE_MEMORY_FAILED;
+  //     OB_LOG(WARN, "fail to alloc memory for content md5 base64 value buf", K(ret), K(b64_buf_len));
+  //   } else {
+  //     int b64_len = aos_base64_encode(md5, in_len, b64_value);
+  //     b64_value[b64_len] = '\0';
+  //     apr_table_set(headers, OSS_CONTENT_MD5, b64_value);
+  //   }
+  // }
   return ret;
 }
 
@@ -1167,9 +1167,8 @@ int ObStorageOssReader::pread(
           } else {
             apr_table_set(headers, OSS_RANGE_KEY, range_size);
           }
-        } else {
-          oss_option->ctl->options->enable_crc = true;
         }
+        oss_option->ctl->options->enable_crc = false;
 
         if (OB_FAIL(ret)) {
         } else if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,

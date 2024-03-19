@@ -343,11 +343,12 @@ int ObCosWrapper::create_cos_handle(
       ctx->options->ctl->options->speed_time = 60;
       ctx->options->ctl->options->speed_limit = 16000;
 
-      if (check_md5) {
-        cos_set_content_md5_enable(ctx->options->ctl, COS_TRUE);
-      } else {
-        cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
-      }
+      // if (check_md5) {
+      //   cos_set_content_md5_enable(ctx->options->ctl, COS_TRUE);
+      // } else {
+      //   cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
+      // }
+      cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
       ctx->options->ctl->options->enable_crc = false;
     }
   }
@@ -923,10 +924,8 @@ int ObCosWrapper::pread(
         } else {
           apr_table_set(headers, COS_RANGE_KEY, range_size);
         }
-      } else {
-        // support crc checksum when reading entire object
-        ctx->options->ctl->options->enable_crc = true;
       }
+      ctx->options->ctl->options->enable_crc = false;
 
       if (OB_SUCCESS != ret) {
       } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, nullptr, &buffer, &resp_headers)) ||
