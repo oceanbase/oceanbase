@@ -9764,7 +9764,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
                                                        right_keys,
                                                        null_safe_info))) {
         LOG_WARN("failed to get equal join key", K(ret));
-      } else if (child->get_strong_sharding()->get_all_partition_keys(target_part_keys, true)) {
+      } else if (OB_FAIL(child->get_strong_sharding()->get_all_partition_keys(target_part_keys, true))) {
         LOG_WARN("failed to get partition keys", K(ret));
       } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(input_esets,
                                                                           left_keys,

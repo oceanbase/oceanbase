@@ -7508,6 +7508,8 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
   return ret;
 }
 
+// stmt should call formalize_stmt after generate select_list,
+// and ref_query inside ths table has no need  to call formalize again
 int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
                                            ObDMLStmt *stmt,
                                            TableItem *table,
@@ -7546,12 +7548,8 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*stmt))) {
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-  } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*view_stmt))) {
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
   }
@@ -13205,10 +13203,7 @@ int ObTransformUtils::create_view_with_pre_aggregate(ObSelectStmt *stmt,
   }
   // 4. link stmt and view_stmt
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(),
-                                             view_stmt->get_subquery_exprs()))) {
-      LOG_WARN("failed to remove subqueries", K(ret));
-    } else if (OB_FAIL(add_new_table_item(ctx, stmt, view_stmt, view_table_item))) {
+    if (OB_FAIL(add_new_table_item(ctx, stmt, view_stmt, view_table_item))) {
       LOG_WARN("failed to add new table item", K(ret));
     } else if (OB_ISNULL(view_table_item)) {
       ret = OB_ERR_UNEXPECTED;
@@ -13233,8 +13228,6 @@ int ObTransformUtils::create_view_with_pre_aggregate(ObSelectStmt *stmt,
       LOG_WARN("failed to copy and replace stmt expr", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*view_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     }

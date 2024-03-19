@@ -2277,6 +2277,7 @@ int ObTransformOrExpansion::adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds
   ObRawExprFactory *expr_factory = NULL;
   ObRawExpr *transformed_expr = NULL;
   ObSEArray<ObQueryRefRawExpr *, 4> removed_subqueries;
+  ObSEArray<ObRawExpr*, 4> generated_exprs;
   if (OB_ISNULL(conds_exprs) || OB_ISNULL(ctx_)
       || OB_ISNULL(session_info = ctx_->session_info_)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
@@ -2291,54 +2292,28 @@ int ObTransformOrExpansion::adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds
   } else if (OB_ISNULL(transformed_expr = conds_exprs->at(expr_pos))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null transformed expr", K(ret));
-  } else if (OB_FAIL(conds_exprs->remove(expr_pos))) {
-    LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (T_OP_OR == transformed_expr->get_expr_type()) {
-    ObSEArray<ObRawExpr*, 4> generated_exprs;
-    if (OB_FAIL(create_expr_for_or_expr(*transformed_expr,
-                                        param_pos,
-                                        ctx,
-                                        generated_exprs))) {
-      LOG_WARN("failed to create expr", K(ret));
-    } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
-      LOG_WARN("failed to append expr", K(ret));
-    } else { /*do nothing*/ }
-  } else if (T_OP_IN == transformed_expr->get_expr_type()) {
-    ObSEArray<ObRawExpr*, 4> generated_exprs;
-    if (OB_FAIL(create_expr_for_in_expr(*transformed_expr,
-                                        param_pos,
-                                        ctx,
-                                        generated_exprs))) {
-      LOG_WARN("failed to create expr", K(ret), K(generated_exprs));
-    } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else { /*do nothing*/ }
-  } else {
+  } else if (OB_UNLIKELY(T_OP_IN != transformed_expr->get_expr_type() &&
+                         T_OP_OR != transformed_expr->get_expr_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr type", K(transformed_expr->get_expr_type()), K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info))) {
-      LOG_WARN("failed to formalize stmt", K(ret));
-    } else {
-      // clean unused subqueries
-      ObSEArray<ObRawExpr*, 4> relation_exprs;
-      ObSEArray<ObQueryRefRawExpr *, 8> used_subquery_exprs;
-      if (OB_FAIL(or_expansion_stmt->get_relation_exprs(relation_exprs))) {
-        LOG_WARN("failed to get relation exprs");
-      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, used_subquery_exprs))) {
-        LOG_WARN("failed to get query exprs");
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < or_expansion_stmt->get_subquery_exprs().count(); ++i) {
-          ObQueryRefRawExpr *expr = or_expansion_stmt->get_subquery_exprs().at(i);
-          if (ObOptimizerUtil::find_item(used_subquery_exprs, expr)) {
-            // do nothing
-          } else if (OB_FAIL(ObOptimizerUtil::remove_item(or_expansion_stmt->get_subquery_exprs(), expr))) {
-            LOG_WARN("failed to remove item from subquery exprs", K(ret));
-          }
-        }
-      }
-    }
+  } else if (OB_FAIL(conds_exprs->remove(expr_pos))) {
+    LOG_WARN("failed to remove condition expr", K(ret));
+  } else if (T_OP_OR == transformed_expr->get_expr_type() &&
+             OB_FAIL(create_expr_for_or_expr(*transformed_expr,
+                                             param_pos,
+                                             ctx,
+                                             generated_exprs))) {
+    LOG_WARN("failed to create expr", K(ret));
+  } else if (T_OP_IN == transformed_expr->get_expr_type() &&
+             OB_FAIL(create_expr_for_in_expr(*transformed_expr,
+                                             param_pos,
+                                             ctx,
+                                             generated_exprs))) {
+    LOG_WARN("failed to create expr", K(ret), K(generated_exprs));
+  } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
+    LOG_WARN("failed to append expr", K(ret));
+  } else if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info))) {
+    LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
 }

@@ -536,8 +536,6 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     LOG_WARN("right_table should not be null", K(ret), K(right_table));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), expr))) {
     LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_ref))) {
-    LOG_WARN("failed to remove subquery expr", K(ret));
   } else {
     // select * from t1 where exists (select 1 from t2 where t1.c1 = c1 and c2 = 2 limit 1);
     // for the query contains correlated subquery above, limit 1 should be removed after transform.
@@ -599,11 +597,7 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
       LOG_WARN("failed to decorrelate semi conditions", K(ret));
     } else if (OB_FAIL(generate_semi_info(stmt, expr, right_table, semi_conds, info))) {
       LOG_WARN("failed to generate semi info", K(ret));
-    } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(subquery->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     }
   }
@@ -1022,8 +1016,6 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
     LOG_WARN("table_item should not be null", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), expr))) {
     LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), subquery_expr))) {
-    LOG_WARN("failed to remove subquery expr", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table_item,
                                                                stmt, column_exprs))) {
     LOG_WARN("failed to create columns for view", K(ret));
@@ -1032,11 +1024,7 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
     LOG_WARN("failed to generate new condition exprs", K(ret));
   } else if (OB_FAIL(generate_semi_info(stmt, expr, table_item, new_conditions, info))) {
     LOG_WARN("generate semi info failed", K(ret));
-  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
-  } else if (OB_FAIL(subquery->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
-  } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("formalize child stmt failed", K(ret));
   }
   return ret;
@@ -1426,8 +1414,6 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt *stmt,
     } else if (OB_FAIL(stmt->get_stmt_hint().merge_stmt_hint(subquery->get_stmt_hint(),
                                                              LEFT_HINT_DOMINATED))) {
       LOG_WARN("failed to merge subquery stmt hint", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_expr))) {
-      LOG_WARN("remove expr failed", K(ret));
     } else if (OB_FAIL(stmt->replace_relation_exprs(query_refs, select_list))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
