@@ -460,26 +460,19 @@ int ObSql::fill_result_set(ObResultSet &result_set,
         int64_t size = call_stmt.get_call_proc_info()->get_output_count();
         field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
 
-        if (0 == size) {
-          break;
-        }
-
-        if (OB_SUCC(ret) && OB_FAIL(result_set.reserve_field_columns(size))) {
+        if (size > 0 && OB_FAIL(result_set.reserve_field_columns(size))) {
           LOG_WARN("reserve field columns failed", K(ret), K(size));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
           ObCollationType charsetnr;
           ObDataType *type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_data_type();
           ObObjType out_obj_type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_obj_type();
-          if (ObUnknownType == out_obj_type
-            || ObExtendType == out_obj_type) {
+
+          if (ObUnknownType == out_obj_type || ObExtendType == out_obj_type) {
             // do nothing ...
           } else if (OB_NOT_NULL(type)) {
-            if (ob_is_string_or_lob_type(out_obj_type)
-                  && CS_TYPE_ANY == type->get_collation_type()) {
-              charsetnr = ObCharset::is_valid_collation(collation_type)
-                            ? collation_type
-                            : CS_TYPE_UTF8MB4_BIN;
+            if (ob_is_string_or_lob_type(out_obj_type) && CS_TYPE_ANY == type->get_collation_type()) {
+              charsetnr = ObCharset::is_valid_collation(collation_type) ? collation_type : CS_TYPE_UTF8MB4_BIN;
             } else {
               OZ (ObCharset::get_default_collation(type->get_collation_type(), charsetnr));
             }
@@ -2331,31 +2324,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
             LOG_WARN("fail to handle after get plan", K(ret));
           }
         }
-      } else if (stmt::T_ANONYMOUS_BLOCK == stmt_type && !context.is_pre_execute_) {
-        ParseResult parse_result;
-        MEMSET(&parse_result, 0, SIZEOF(ParseResult));
-        if (OB_FAIL(generate_physical_plan(parse_result, NULL, context, result,
-                                            false/*is_begin_commit_stmt*/, PC_PS_MODE))) {
-          LOG_WARN("generate physical plan failed", K(ret));
-        } else {
-          const ObPsSqlMeta &sql_meta = ps_info->get_ps_sql_meta();
-          const common::ObIArray<ObField> &param_fields = sql_meta.get_param_fields();
-          int64_t field_column_cnt = 0;
-          for (int64_t i = 0; OB_SUCC(ret) && i < param_fields.count(); ++i) {
-            if (ObRoutineParamInOut::SP_PARAM_INOUT
-                  == static_cast<ObRoutineParamInOut>(param_fields.at(i).inout_mode_)
-                || ObRoutineParamInOut::SP_PARAM_OUT
-                  == static_cast<ObRoutineParamInOut>(param_fields.at(i).inout_mode_)) {
-              field_column_cnt++;
-            }
-          }
-          OZ (result.reserve_field_columns(field_column_cnt));
-          for (int64_t i = 0; OB_SUCC(ret) && i < field_column_cnt; ++i) {
-            ObField field;
-            field.type_.set_type(ObNullType);
-            OZ (result.add_field_column(field));
-          }
-        }
       } else {
         if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_dynamic_sql_) {
           // call procedure stmt call always parse as dynamic sql
@@ -2896,9 +2864,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_ && context.is_prepare_protocol_ && !context.is_prepare_stage_) {
-    //anonymous + ps在execute阶段不会做parser, 因此不应该检查parser_result
-    //do nothing...
   } else if (OB_ISNULL(parse_result.result_tree_)
         || OB_ISNULL(parse_result.result_tree_->children_)
         || OB_ISNULL(parse_result.result_tree_->children_[0])) {
@@ -2924,13 +2889,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       if (OB_FAIL(plan_ctx->build_subschema_ctx_by_param_store(context.schema_guard_))) {
         // only when param has sql udt types
         SQL_LOG(WARN, "failed to build sbuschema ctx by param_store", K(ret));
-      } else if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_
-          && context.is_prepare_protocol_
-          && !context.is_prepare_stage_
-          && !context.is_pre_execute_) {
-        ParseNode tmp_node;
-        tmp_node.type_ = T_SP_ANONYMOUS_BLOCK;
-        ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, tmp_node, stmt);
       } else {
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
         ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
