@@ -35,6 +35,8 @@
 #include "src/observer/omt/ob_tenant_config.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
 #include "common/ob_role.h"
+#include "observer/omt/ob_tenant.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase::share;
 
@@ -698,6 +700,60 @@ int ObTransferUtils::check_ls_replay_scn(
         }
       }
     }
+  }
+  return ret;
+}
+
+// ObForbidUtil
+
+int ObForbidUtil::check_need_forbid(const ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array)
+{
+  int ret = OB_SUCCESS;
+  bool has_need_forbid = false;
+  ARRAY_FOREACH_X(ddl_sstable_array, idx, cnt, OB_SUCC(ret)) {
+    const ObSSTableWrapper &sstable_wrapper = ddl_sstable_array.at(idx);
+    ObSSTable *sstable_ptr = sstable_wrapper.get_sstable();
+    bool need_forbid = false;
+    if (OB_ISNULL(sstable_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid arg", K(ret), KP(sstable_ptr));
+    } else if (OB_FAIL(is_need_forbid_sstable(sstable_ptr->get_key(), need_forbid))) {
+      LOG_WARN("failed to check is need forbid sstable", K(ret), KPC(sstable_ptr));
+    } else if (need_forbid) {
+      has_need_forbid = true;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && has_need_forbid) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("do not support migrate/backup this type sstable for now", K(ret), K(ddl_sstable_array));
+  }
+  return ret;
+}
+
+int ObForbidUtil::check_need_forbid(const storage::ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  bool need_forbid = false;
+  if (OB_FAIL(is_need_forbid_sstable(table_key, need_forbid))) {
+    LOG_WARN("failed ot check is need forbid sstable", K(ret), K(table_key));
+  }
+  if (OB_SUCC(ret) && need_forbid) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("do not support migrate/backup this type sstable for now", K(ret), K(table_key));
+  }
+  return ret;
+}
+
+int ObForbidUtil::is_need_forbid_sstable(const storage::ObITable::TableKey &table_key, bool &need_forbid)
+{
+  int ret = OB_SUCCESS;
+  need_forbid = false;
+  if (!table_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(table_key));
+  } else {
+    need_forbid = table_key.is_ddl_merge_sstable();
   }
   return ret;
 }

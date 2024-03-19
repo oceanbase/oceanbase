@@ -114,6 +114,8 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
       LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
     } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
       LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
+    } else if (OB_FAIL(ObForbidUtil::check_need_forbid(ddl_sstable_array))) {
+      LOG_WARN("failed to check need forbid", K(ret), K(ddl_sstable_array));
     } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
       LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
     } else if (OB_FAIL(check_tablet_ddl_sstable_validity_(tablet_handle, ddl_sstable_array))) {

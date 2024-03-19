@@ -1681,6 +1681,8 @@ int ObFetchSSTableInfoP::build_sstable_info_(
         } else {
           LOG_WARN("failed to get next sstable info", K(ret), K(arg));
         }
+      } else if (OB_FAIL(ObForbidUtil::check_need_forbid(sstable_info.table_key_))) {
+        LOG_WARN("failed to check need forbid", K(ret), K(sstable_info));
       } else if (OB_FAIL(fill_data(sstable_info))) {
         STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(sstable_info));
       }

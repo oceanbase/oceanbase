@@ -14,6 +14,8 @@
 #include "common/ob_tablet_id.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "ob_storage_ha_struct.h"
+#include "storage/ob_i_table.h"
+#include "storage/column_store/ob_i_cg_iterator.h"
 
 namespace oceanbase
 {
@@ -84,6 +86,17 @@ struct ObTransferUtils
       const common::ObIArray<ObAddr> &member_addr_list,
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
+};
+
+// TODO(wenqu): remove this later
+class ObForbidUtil
+{
+public:
+  static int check_need_forbid(const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array);
+  static int check_need_forbid(const storage::ObITable::TableKey &table_key);
+
+private:
+  static int is_need_forbid_sstable(const storage::ObITable::TableKey &table_key, bool &need_forbid);
 };
 
 } // end namespace storage
