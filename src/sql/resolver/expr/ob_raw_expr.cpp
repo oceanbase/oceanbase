@@ -1609,7 +1609,9 @@ bool ObQueryRefRawExpr::inner_same_as(
   bool bool_ret = false;
   if (get_expr_type() == expr.get_expr_type()) {
     const ObQueryRefRawExpr &u_expr = static_cast<const ObQueryRefRawExpr &>(expr);
-    if (check_context != NULL && check_context->override_query_compare_) {
+    if (is_set_ != u_expr.is_set_ || is_multiset_ != u_expr.is_multiset_) {
+      /* bool bool_ret = false; */
+    } else if (check_context != NULL && check_context->override_query_compare_) {
       bool_ret = check_context->compare_query(*this, u_expr);
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
@@ -2356,6 +2358,27 @@ void ObOpRawExpr::clear_child()
   exprs_.reset();
 }
 
+int ObOpRawExpr::get_subquery_comparison_flag() const
+{
+  enum {
+    INVALID = 0, // not subquery comparison
+    NONE = 1,
+    ALL = 2,
+    ANY = 3
+  } comparison_flag;
+  comparison_flag = INVALID;
+  if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    if (has_flag(IS_WITH_ALL)) {
+      comparison_flag = ALL;
+    } else if (has_flag(IS_WITH_ANY)) {
+      comparison_flag = ANY;
+    } else {
+      comparison_flag = NONE;
+    }
+  }
+  return comparison_flag;
+}
+
 bool ObOpRawExpr::inner_same_as(
     const ObRawExpr &expr,
     ObExprEqualCheckContext *check_context) const
@@ -2391,6 +2414,12 @@ bool ObOpRawExpr::inner_same_as(
                || (T_OP_GT == get_expr_type() && T_OP_LT == expr.get_expr_type())) {
       cmp_type = REVERSE_CMP;
     } else {
+      need_cmp = false;
+    }
+  } else if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    const ObOpRawExpr &tmp = static_cast<const ObOpRawExpr &>(expr);
+    if (tmp.get_expr_type() != get_expr_type() ||
+        tmp.get_subquery_comparison_flag() != get_subquery_comparison_flag()) {
       need_cmp = false;
     }
   } else if (expr.get_expr_type() != get_expr_type()) {

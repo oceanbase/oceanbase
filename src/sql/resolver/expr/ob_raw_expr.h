@@ -2958,6 +2958,7 @@ public:
                                    int64_t &pos,
                                    ExplainType type) const;
   bool is_white_runtime_filter_expr() const override;
+  int get_subquery_comparison_flag() const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
