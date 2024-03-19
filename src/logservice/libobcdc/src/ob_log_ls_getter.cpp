@@ -39,7 +39,7 @@ int TenantLSQueryer::build_sql_statement_(const uint64_t tenant_id, ObSqlString 
   } else {
     uint64_t snapshto_scn_val = snapshot_scn.get_val_for_inner_table_field();
 
-    if (OB_FAIL(sql.assign_fmt(QUERY_LS_INFO_SQL_FORMAT, "__ALL_LS", snapshto_scn_val, snapshto_scn_val))) {
+    if (OB_FAIL(sql.assign_fmt(QUERY_LS_INFO_SQL_FORMAT, OB_ALL_LS_TNAME, snapshto_scn_val, snapshto_scn_val))) {
       LOG_ERROR("assign_fmt for TenantLSQuerySQL failed", KR(ret),
           K_(snapshot_ts_ns), K(snapshot_scn), K(snapshto_scn_val), K(sql));
     }
