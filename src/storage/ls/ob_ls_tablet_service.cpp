@@ -2767,6 +2767,26 @@ int ObLSTabletService::direct_insert_rows(
   return ret;
 }
 
+int ObLSTabletService::mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows)
+{
+  int ret = OB_SUCCESS;
+  ObValueRowIterator *dup_iter = NULL;
+
+  if (OB_ISNULL(dup_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
+  } else {
+    duplicated_rows = dup_iter;
+    if (OB_FAIL(dup_iter->init(true))) {
+      LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
+      ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+      duplicated_rows = nullptr;
+    }
+  }
+
+  return ret;
+}
+
 int ObLSTabletService::insert_row(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
@@ -2816,11 +2836,34 @@ int ObLSTabletService::insert_row(
                                     duplicated_column_ids,
                                     tbl_row.row_val_,
                                     duplicated_rows))) {
-      LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+        LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
       } else if (nullptr == duplicated_rows) {
         if (OB_FAIL(insert_row_to_tablet(tablet_handle, run_ctx, tbl_row))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
             LOG_WARN("failed to write row", K(ret));
+          }
+
+          if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+            int tmp_ret = OB_SUCCESS;
+            // For primary key conflicts caused by concurrent insertions within
+            // a statement, we need to return the corresponding duplicated_rows.
+            // However, under circumstances where an exception may unexpectedly
+            // prevent us from reading the conflicting rows within statements,
+            // at such times, it becomes necessary for us to mock the rows.
+            if (OB_TMP_FAIL(get_conflict_rows(tablet_handle,
+                                              run_ctx,
+                                              flag,
+                                              duplicated_column_ids,
+                                              tbl_row.row_val_,
+                                              duplicated_rows))) {
+              LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+              ret = tmp_ret;
+            } else if (nullptr == duplicated_rows) {
+              if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
+                LOG_WARN("failed to mock duplicated row(s)", K(ret), K(duplicated_column_ids), K(row));
+                ret = tmp_ret;
+              }
+            }
           }
         } else {
           LOG_DEBUG("succeeded to insert row", K(ret), K(row));
