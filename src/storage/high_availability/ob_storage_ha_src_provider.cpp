@@ -505,7 +505,9 @@ int ObStorageHASrcProvider::check_replica_validity(
 
 const char *ObStorageHASrcProvider::ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)] = {
   "idc",
-  "region"
+  "region",
+  "checkpoint",
+  "recommend"
 };
 
 const char *ObStorageHASrcProvider::get_policy_str(const ChooseSourcePolicy policy_type)
@@ -519,19 +521,33 @@ const char *ObStorageHASrcProvider::get_policy_str(const ChooseSourcePolicy poli
   return str;
 }
 
-int ObStorageHASrcProvider::get_policy_type(const char *str, const int64_t len, ChooseSourcePolicy &policy)
+int ObStorageHASrcProvider::get_policy_type(const ObMigrationOpType::TYPE type,
+    const uint64_t tenant_id,
+    ChooseSourcePolicy &policy)
 {
   int ret = OB_SUCCESS;
-  if (str == nullptr || len <= 0) {
+  policy = ChooseSourcePolicy::IDC;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  bool is_config_valid = tenant_config.is_valid();
+  const char *str = nullptr;
+  str = is_config_valid ? tenant_config->choose_migration_source_policy.str() : "idc";
+  if (type >= ObMigrationOpType::TYPE::MAX_LS_OP || type < ObMigrationOpType::TYPE::ADD_LS_OP
+      || OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(str), K(len));
+    LOG_WARN("invalid argument", K(ret), K(type), K(tenant_id));
+  } else if (ObMigrationOpType::TYPE::REBUILD_LS_OP == type) {
+    policy = ChooseSourcePolicy::IDC;
+    LOG_INFO("rebuild set idc policy", K(type));
+  } else if (!is_config_valid) {
+    policy = ChooseSourcePolicy::IDC;
+    LOG_INFO("default set idc policy", K(tenant_id));
   } else if (0 == strcmp(str, get_policy_str(ChooseSourcePolicy::IDC))) {
     policy = ChooseSourcePolicy::IDC;
   } else if (0 == strcmp(str, get_policy_str(ChooseSourcePolicy::REGION))) {
     policy = ChooseSourcePolicy::REGION;
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected type", K(ret), K(str), K(len));
+    LOG_WARN("unexpected type", K(ret));
   }
   return ret;
 }
@@ -1023,6 +1039,7 @@ int ObStorageHAChooseSrcHelper::init(const uint64_t tenant_id, const share::ObLS
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   bool enable_choose_source_policy = true;
   ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  bool is_location_policy = false;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage ha src helper init twice", K(ret));
@@ -1034,33 +1051,42 @@ int ObStorageHAChooseSrcHelper::init(const uint64_t tenant_id, const share::ObLS
     if (tenant_config.is_valid()) {
       enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy;
     }
-    if (arg.data_src_.is_valid()) {
+    if (ObMigrationOpType::TYPE::REBUILD_LS_OP == arg.type_) {
+      is_location_policy = true;
+    } else if (arg.data_src_.is_valid()) {
+      is_location_policy = false;
       if (OB_FAIL(init_rs_recommend_source_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg, storage_rpc))) {
         LOG_WARN("failed to init choose source by rs recommend provider", K(ret), K(tenant_id),
             K(ls_id), K(local_clog_checkpoint_scn), K(arg));
       }
     } else if (!enable_choose_source_policy) {
+      is_location_policy = false;
       if (OB_FAIL(init_choose_source_by_checkpoint_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg, storage_rpc))) {
         LOG_WARN("failed to init choose source by checkpoint provider", K(ret), K(tenant_id),
             K(ls_id), K(local_clog_checkpoint_scn), K(arg));
       }
-    } else if (tenant_config.is_valid() && OB_FAIL(ObStorageHASrcProvider::get_policy_type(tenant_config->choose_migration_source_policy.str(),
-        strlen(tenant_config->choose_migration_source_policy.str()), policy))) {
-      LOG_WARN("failed to get policy type.", K(ret), K(tenant_config->choose_migration_source_policy.str()));
     } else {
-      void *buf = nullptr;
-      switch (policy) {
-        case ObStorageHASrcProvider::ChooseSourcePolicy::IDC:
-        case ObStorageHASrcProvider::ChooseSourcePolicy::REGION: {
-          if (OB_FAIL(init_choose_source_by_location_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg, policy, storage_rpc))) {
-            LOG_WARN("failed to init choose source by location provider", K(ret), K(tenant_id),
-                K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+      is_location_policy = true;
+    }
+
+    if (OB_SUCC(ret) && is_location_policy) {
+      if (OB_FAIL(ObStorageHASrcProvider::get_policy_type(arg.type_, tenant_id, policy))) {
+        LOG_WARN("failed to get policy type.", K(ret), K(arg), K(tenant_id));
+      } else {
+        void *buf = nullptr;
+        switch (policy) {
+          case ObStorageHASrcProvider::ChooseSourcePolicy::IDC:
+          case ObStorageHASrcProvider::ChooseSourcePolicy::REGION: {
+            if (OB_FAIL(init_choose_source_by_location_provider_(tenant_id, ls_id, local_clog_checkpoint_scn, arg, policy, storage_rpc))) {
+              LOG_WARN("failed to init choose source by location provider", K(ret), K(tenant_id),
+                  K(ls_id), K(local_clog_checkpoint_scn), K(arg), K(policy));
+            }
+            break;
           }
-          break;
-        }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected choose source policy", K(ret), K(arg), K(policy), K(tenant_config->choose_migration_source_policy.str()));
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected choose source policy", K(ret), K(arg), K(policy), K(tenant_config->choose_migration_source_policy.str()));
+          }
         }
       }
     }
@@ -1105,7 +1131,7 @@ int ObStorageHAChooseSrcHelper::init_rs_recommend_source_provider_(
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   ObRSRecommendSrcProvider *recommend_src_provider = nullptr;
-  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::IDC;
+  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::RECOMMEND;
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObRSRecommendSrcProvider)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
@@ -1165,7 +1191,7 @@ int ObStorageHAChooseSrcHelper::init_choose_source_by_checkpoint_provider_(
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   ObMigrationSrcByCheckpointProvider *choose_src_by_checkpoint_provider = nullptr;
-  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::IDC;
+  const ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::CHECKPOINT;
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMigrationSrcByCheckpointProvider)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));

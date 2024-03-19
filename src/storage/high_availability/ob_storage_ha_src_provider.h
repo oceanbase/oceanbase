@@ -54,6 +54,8 @@ public:
   {
     IDC = 0,
     REGION = 1,
+    CHECKPOINT = 2,
+    RECOMMEND = 3,
     MAX_POLICY
   };
 
@@ -76,7 +78,7 @@ public:
 
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
   const static char *get_policy_str(const ChooseSourcePolicy policy_type);
-  static int get_policy_type(const char *str, const int64_t len, ChooseSourcePolicy &policy);
+  static int get_policy_type(const ObMigrationOpType::TYPE type, const uint64_t tenant_id, ChooseSourcePolicy &policy);
 
 protected:
   // The validity assessment of replicas includes:
