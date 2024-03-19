@@ -853,7 +853,7 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
   share::ObTenantRole tenant_role;
   share::schema::ObTenantStatus tenant_status;
   palf::AccessMode access_mode;
-  const char *db_name = service_attr.user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? "OCEANBASE" : "SYS";
+  const char *db_name = service_attr.user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME;
   ObSqlString user;
   char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
   SMART_VAR(share::ObLogRestoreProxyUtil, proxy_util) {
