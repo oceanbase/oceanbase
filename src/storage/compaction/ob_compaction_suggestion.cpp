@@ -207,7 +207,7 @@ int64_t ObCompactionDagStatus::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_START();
     // mini
     J_TMP_STRING(ObDagType::DAG_TYPE_MINI_MERGE);
-    J_TMP_STRING(ObDagType::DAG_TYPE_MDS_TABLE_MERGE);
+    J_TMP_STRING(ObDagType::DAG_TYPE_MDS_MINI_MERGE);
     J_TMP_STRING(ObDagType::DAG_TYPE_TX_TABLE_MERGE);
     // minor
     J_TMP_STRING(ObDagType::DAG_TYPE_MERGE_EXECUTE);
@@ -394,7 +394,7 @@ int ObCompactionSuggestionMgr::analyze_for_suggestion(
       "suggest", ObCompactionSuggestionMgr::get_add_thread_suggestion(priority));
   if (share::ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority) {
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_MINI_MERGE);
-    ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_TABLE_MERGE);
+    ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE);
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_TX_TABLE_MERGE);
   } else if (share::ObDagPrio::DAG_PRIO_COMPACTION_MID == priority) {
     ADD_COMPACTION_DAG_INFO_PARAM(ObDagType::ObDagTypeEnum::DAG_TYPE_MERGE_EXECUTE);

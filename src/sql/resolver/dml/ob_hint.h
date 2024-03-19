@@ -134,6 +134,24 @@ struct ObOptParamHint
 
 class ObDDLSchemaVersionHint;
 
+struct ObDBLinkHit {
+  ObDBLinkHit() { reset(); }
+  void reset() {
+    tx_id_ = 0;
+    tm_sessid_ =0;
+    hint_xa_trans_stop_check_lock_ = false;
+  }
+  int print(char *buf, int64_t &buf_len, int64_t &pos, const char* outline_indent) const;
+  bool has_valid_hint() const { return (0 < tx_id_ && 0 != tm_sessid_) || hint_xa_trans_stop_check_lock_; }
+
+  TO_STRING_KV(K_(tx_id),
+               K_(tm_sessid),
+               K_(hint_xa_trans_stop_check_lock));
+  int64_t tx_id_;
+  uint32_t tm_sessid_;
+  bool hint_xa_trans_stop_check_lock_;
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -167,8 +185,10 @@ struct ObGlobalHint {
   int merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints);
   void merge_query_timeout_hint(int64_t hint_time);
   void reset_query_timeout_hint() { query_timeout_ = -1; }
-  void merge_dblink_info_hint(int64_t tx_id, int64_t tm_sessid);
-  void reset_dblink_info_hint();
+  void merge_tm_sessid_tx_id(int64_t tx_id, uint32_t tm_sessid);
+  void merge_dblink_info_tx_id(int64_t tx_id);
+  void merge_dblink_info_tm_sessid(uint32_t tm_sessid);
+  void reset_tm_sessid_tx_id_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
@@ -187,8 +207,8 @@ struct ObGlobalHint {
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
   ObParamOption get_param_option() const { return param_option_; }
-  int64_t get_dblink_tx_id_hint() const { return tx_id_; }
-  int64_t get_dblink_tm_sessid_hint() const { return tm_sessid_; }
+  int64_t get_dblink_tx_id_hint() const { return dblink_hints_.tx_id_; }
+  uint32_t get_dblink_tm_sessid_hint() const { return dblink_hints_.tm_sessid_; }
   int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
   bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
@@ -202,6 +222,8 @@ struct ObGlobalHint {
   inline void set_dbms_stats() { has_dbms_stats_hint_ = true; }
   bool get_flashback_read_tx_uncommitted() const { return flashback_read_tx_uncommitted_; }
   void set_flashback_read_tx_uncommitted(bool v) { flashback_read_tx_uncommitted_ = v; }
+  bool get_xa_trans_stop_check_lock() const { return dblink_hints_.hint_xa_trans_stop_check_lock_; }
+  void set_xa_trans_stop_check_lock(bool v) { dblink_hints_.hint_xa_trans_stop_check_lock_ = v; }
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -237,8 +259,6 @@ struct ObGlobalHint {
                K_(topk_precision),
                K_(sharding_minimum_row_count),
                K_(query_timeout),
-               K_(tx_id),
-               K_(tm_sessid),
                K_(read_consistency),
                K_(plan_cache_policy),
                K_(force_trace_log),
@@ -261,14 +281,13 @@ struct ObGlobalHint {
                K_(osg_hint),
                K_(has_dbms_stats_hint),
                K_(dynamic_sampling),
-               K_(alloc_op_hints));
+               K_(alloc_op_hints),
+               K_(dblink_hints));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
   int64_t query_timeout_;
-  int64_t tx_id_;
-  int64_t tm_sessid_;
   common::ObConsistencyLevel read_consistency_;
   ObPlanCachePolicy plan_cache_policy_;
   bool force_trace_log_;
@@ -292,6 +311,7 @@ struct ObGlobalHint {
   bool flashback_read_tx_uncommitted_;
   int64_t dynamic_sampling_;
   common::ObSArray<ObAllocOpHint> alloc_op_hints_;
+  ObDBLinkHit dblink_hints_;
 };
 
 // used in physical plan

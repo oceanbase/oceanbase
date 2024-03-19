@@ -70,6 +70,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), KPC(execute_ctx));
   } else {
+    DISABLE_SQL_MEMLEAK_GUARD;
     execute_ctx_ = execute_ctx;
     allocator_ = execute_ctx->get_allocator();
     if (OB_FAIL(param.normalize())) {

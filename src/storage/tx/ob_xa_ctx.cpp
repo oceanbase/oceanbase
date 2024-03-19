@@ -322,7 +322,7 @@ int ObXACtx::init_xa_branch_info_()
 
   if (NULL == xa_branch_info_) {
     void *ptr = NULL;
-    if (NULL == (ptr = mtl_malloc(sizeof(ObXABranchInfoArray), "XABranchInfo"))) {
+    if (NULL == (ptr = mtl_malloc(sizeof(ObXABranchInfoArray), SET_IGNORE_MEM_VERSION("XABranchInfo")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", K(ret), K(*this));
     } else {
@@ -1144,7 +1144,7 @@ int ObXACtx::get_dblink_client_(const DblinkDriverProto dblink_type,
     if (dblink_client_array_.count() >= OB_MAX_DBLINK_CLIENT_COUNT) {
       ret = OB_SIZE_OVERFLOW;
       TRANS_LOG(WARN, "create unexpected dblink client num", K(ret), K(*this));
-    } else if (NULL == (ptr = mtl_malloc(sizeof(ObDBLinkClient), "ObDBLinkClient"))) {
+    } else if (NULL == (ptr = mtl_malloc(sizeof(ObDBLinkClient), SET_IGNORE_MEM_VERSION("ObDBLinkClient")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", K(ret), K(*this));
     } else {

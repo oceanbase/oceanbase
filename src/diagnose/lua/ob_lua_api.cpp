@@ -1217,7 +1217,7 @@ int select_sql_workarea_active(lua_State *L)
     lua_pushnil(L);
   } else {
     ObArray<uint64_t> ids;
-    common::ObSEArray<sql::ObSqlWorkareaProfileInfo, 32> wa_actives;
+    common::ObSEArray<sql::ObSqlWorkareaProfileInfo, 20> wa_actives;
     std::vector<const char*> columns = {
       "plan_id",
       "sql_id",

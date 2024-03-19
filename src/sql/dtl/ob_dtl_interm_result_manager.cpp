@@ -203,6 +203,7 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
   int ret = OB_SUCCESS;
   void *result_info_buf = NULL;
   void *store_buf = NULL;
+  SET_IGNORE_MEM_VERSION(attr);
   const int64_t store_size = use_rich_format ? sizeof(ObTempColumnStore) : sizeof(ObChunkDatumStore);
   if (OB_ISNULL(result_info_buf = ob_malloc(sizeof(ObDTLIntermResultInfo), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -345,7 +346,7 @@ int ObDTLIntermResultManager::atomic_append_block(ObDTLIntermResultKey &key, ObA
   if (OB_FAIL(map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
   } else if (OB_FAIL(call.ret_)) {
-    LOG_WARN("ObAtomicAppendBlockCall fail", K(ret), K(call.ret_));
+    LOG_WARN("ObAtomicAppendBlockCall fail", K(ret));
   } else {
     LOG_DEBUG("debug append block to interm result info", K(key));
   }
@@ -358,7 +359,7 @@ int ObDTLIntermResultManager::atomic_append_part_block(ObDTLIntermResultKey &key
   if (OB_FAIL(map_.atomic_refactored(key, call))) {
     LOG_WARN("fail to get row store in result manager", K(ret));
   } else if (OB_FAIL(call.ret_)) {
-    LOG_WARN("ObAtomicAppendPartBlockCall fail", K(ret), K(call.ret_));
+    LOG_WARN("ObAtomicAppendPartBlockCall fail", K(ret));
   } else {
     LOG_DEBUG("debug append part block to interm result info", K(key));
   }

@@ -670,8 +670,9 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             } else if (NULL == table_schema.get_column_schema(col->get_column_id())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get column schema from data table failed", K(ret));
+            } else if (OB_FAIL(last_col.assign(*table_schema.get_column_schema(col->get_column_id())))) {
+              LOG_WARN("fail to assign column", KR(ret));
             } else {
-              last_col = *table_schema.get_column_schema(col->get_column_id());
               is_valid_col = true;
             }
           } else {

@@ -1131,6 +1131,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
   NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
+  NULL, // ObExprLastRefreshScn::eval_last_refresh_scn                         /* 690 */
+  NULL, // ObExprDocLength::generate_doc_length,                      /*691*/
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

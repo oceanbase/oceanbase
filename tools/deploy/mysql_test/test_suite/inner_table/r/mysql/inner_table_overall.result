@@ -697,11 +697,15 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12425	__all_virtual_import_table_job_history	2	201001	1
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
+12429	__all_virtual_data_activity_metrics	2	201001	1
 12430	__all_virtual_column_group_mapping	2	201001	1
 12431	__all_virtual_column_group_history	2	201001	1
 12432	__all_virtual_column_group_mapping_history	2	201001	1
 12435	__all_virtual_clone_job	2	201001	1
 12436	__all_virtual_clone_job_history	2	201001	1
+12437	__all_virtual_checkpoint_diagnose_memtable_info	2	201001	1
+12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
+12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
 12453	__all_virtual_tenant_snapshot_job	2	201001	1
 12458	__all_virtual_ls_snapshot	2	201001	1

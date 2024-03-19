@@ -56,10 +56,6 @@ static const unsigned char SHARE_ROW_EXCLUSIVE = 0x6; // binary 0110, SHARE | RO
 static const unsigned char EXCLUSIVE           = 0x1; // binary 0001
 static const unsigned char MAX_LOCK_MODE       = 0xf;
 
-static const unsigned char LOCK_MODE_ARRAY[TABLE_LOCK_MODE_COUNT] = {
-      ROW_SHARE, ROW_EXCLUSIVE, SHARE, SHARE_ROW_EXCLUSIVE, EXCLUSIVE
-};
-
 // Each item occupies 4 bits, stand for ROW SHARE, ROW EXCLUSIVE, SHARE, EXCLUSIVE.
 static const unsigned char compatibility_matrix[] = { 0x0, /* EXCLUSIVE    : 0000 */
                                                       0xa, /* SHARE        : 1010 */
@@ -110,6 +106,31 @@ static inline
 bool is_lock_mode_valid(const ObTableLockMode lock_mode)
 {
   return lock_mode < MAX_LOCK_MODE;
+}
+
+static inline
+int get_index_by_lock_mode(const ObTableLockMode &lock_mode)
+{
+  int index = -1;
+  if (is_lock_mode_valid(lock_mode)) {
+    index = lock_mode >> 1;
+  }
+  return index;
+}
+
+static inline
+ObTableLockMode get_lock_mode_by_index(const int index)
+{
+  ObTableLockMode lock_mode = MAX_LOCK_MODE;
+  if (index >= 0 && index < TABLE_LOCK_MODE_COUNT) {
+    // EXCLUSIVE is 0001, the lowest bit will be lost during left shift
+    if (index == 0) {
+      lock_mode = EXCLUSIVE;
+    } else {
+      lock_mode = index << 1;
+    }
+  }
+  return lock_mode;
 }
 
 static inline

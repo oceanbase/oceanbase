@@ -2173,8 +2173,6 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt &stmt)
     } else if (view_stmt->get_select_item_size() == 0 &&
                 OB_FAIL(ObTransformUtils::create_dummy_select_item(*view_stmt, ctx_))) {
       LOG_WARN("failed to create dummy select item", K(ret));
-    } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*view_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     }
@@ -2183,13 +2181,7 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt &stmt)
   TableItem *table_item = NULL;
   ObSEArray<ObRawExpr *, 4> columns;
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOptimizerUtil::remove_item(stmt.get_subquery_exprs(),
-                                             view_stmt->get_subquery_exprs()))) {
-      LOG_WARN("failed to remove subqueries", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
-                                                            &stmt,
-                                                            view_stmt,
-                                                            table_item))) {
+    if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, &stmt, view_stmt, table_item))) {
       LOG_WARN("failed to add new table item", K(ret));
     } else if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2337,8 +2329,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     } else if (left_view_stmt->get_select_item_size() == 0 &&
               OB_FAIL(ObTransformUtils::create_dummy_select_item(*left_view_stmt, ctx_))) {
       LOG_WARN("failed to create dummy select item", K(ret));
-    } else if (OB_FAIL(left_view_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(left_view_stmt->formalize_stmt(session_info))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
     }
   }
   // 5. copy left stmt to right stmt
@@ -2398,10 +2390,6 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(left_view_stmt->add_condition_exprs(left_view_stmt->get_start_with_exprs()))) {
       LOG_WARN("failed to push start with exprs to view", K(ret));
-    } else if (OB_FAIL(left_view_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(right_view_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*left_view_stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*right_view_stmt))) {
@@ -2488,11 +2476,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
 
   // 11. replace expr in parent stmt and formalize
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOptimizerUtil::remove_item(stmt.get_subquery_exprs(),
-                                             left_view_stmt->get_subquery_exprs()))) {
-      LOG_WARN("failed to remove subqueries", K(ret));
-    } else if (!select_list.empty()
-               && OB_FAIL(stmt.replace_relation_exprs(select_list, right_columns))) {
+    if (!select_list.empty() && OB_FAIL(stmt.replace_relation_exprs(select_list, right_columns))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
@@ -5233,12 +5217,12 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
       LOG_WARN("failed to assign semi infos", K(ret));
     } else if (OB_FAIL(select_stmt->replace_relation_exprs(old_column_exprs, new_column_exprs))) {
       LOG_WARN("failed to replace relation exprs", K(ret));
-    } else if (OB_FAIL(select_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(transform_exprs(select_stmt, dummy))) {
       LOG_WARN("failed to transform exprs", K(ret));
-    } else if (OB_FAIL(insert_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(insert_stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
     } else {
       out = insert_stmt;
     }

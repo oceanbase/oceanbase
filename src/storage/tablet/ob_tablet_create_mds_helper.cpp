@@ -183,31 +183,25 @@ int ObTabletCreateMdsHelper::on_replay(
     LOG_INFO("skip replay create tablet for old mds", K(ret), K(scn), "arg", PRETTY_ARG(arg));
   } else if (OB_FAIL(convert_schemas(arg))) {
     LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
-  } else {
-    // Should not fail the replay process when tablet count excceed recommended value
-    // Only print ERROR log to notice user scale up the unit memory
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
-      if (OB_TOO_MANY_PARTITIONS_ERROR == tmp_ret) {
-        LOG_ERROR("tablet count is too big, consider scale up the unit memory", K(tmp_ret));
-      } else {
-        LOG_WARN("failed to check create new tablets", K(tmp_ret));
-      }
-    }
+  } else if (CLICK_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
+    LOG_WARN("failed to check create new tablets", K(ret));
+  }
 
-    if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
-      LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
-    }
+  if (OB_FAIL(ret)) {
+  } else if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
+    LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
+  }
 
-    if (OB_FAIL(ret)) {
-      handle_ret_for_replay(ret);
-    }
+  if (OB_FAIL(ret)) {
+    handle_ret_for_replay(ret);
   }
 
   return ret;
 }
 
-int ObTabletCreateMdsHelper::check_create_new_tablets(const int64_t inc_tablet_cnt, const bool is_soft_limit)
+int ObTabletCreateMdsHelper::check_create_new_tablets(
+  const int64_t inc_tablet_cnt,
+  const ObTabletCreateThrottlingLevel level)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -222,7 +216,17 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const int64_t inc_tablet_c
       LOG_ERROR("get invalid tenant config", K(ret));
     } else {
       tablet_cnt_per_gb = tenant_config->_max_tablet_cnt_per_gb;
-      tablet_cnt_per_gb = !is_soft_limit ? tablet_cnt_per_gb : MAX(tablet_cnt_per_gb, 30000);
+      switch (level) {
+        case ObTabletCreateThrottlingLevel::SOFT:
+          tablet_cnt_per_gb = MAX(tablet_cnt_per_gb, 30000);
+          break;
+        case ObTabletCreateThrottlingLevel::FREE:
+          tablet_cnt_per_gb = MAX(tablet_cnt_per_gb, 40000);
+          break;
+        default:
+          // do nothing
+          break;
+      }
     }
   }
 
@@ -240,7 +244,7 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const int64_t inc_tablet_c
 
     if (OB_UNLIKELY(cur_tablet_cnt + inc_tablet_cnt > max_tablet_cnt)) {
       ret = OB_TOO_MANY_PARTITIONS_ERROR;
-      LOG_WARN("too many partitions of tenant", K(ret), K(tenant_id), K(is_soft_limit), K(memory_limit), K(tablet_cnt_per_gb),
+      LOG_WARN("too many partitions of tenant", K(ret), K(tenant_id), K(level), K(memory_limit), K(tablet_cnt_per_gb),
           K(max_tablet_cnt), K(cur_tablet_cnt), K(inc_tablet_cnt));
     }
   }
@@ -278,15 +282,17 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreate
         ret = OB_TIMEOUT;
         LOG_WARN("too many partitions, retry timeout", K(ret));
         break;
-      } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(), true/*is_soft_limit*/))) {
+      } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(),
+                  is_replay ? ObTabletCreateThrottlingLevel::FREE : ObTabletCreateThrottlingLevel::SOFT))) {
         if (OB_TOO_MANY_PARTITIONS_ERROR != ret) {
           LOG_WARN("fail to check create new tablets", K(ret));
         } else {
           need_wait = true;
         }
       }
-    } while (need_wait && !is_replay); /* only retry for on_register truncate */
-  } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count()))) {
+    } while (need_wait);
+  } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(),
+              is_replay ? ObTabletCreateThrottlingLevel::FREE : ObTabletCreateThrottlingLevel::STRICT))) {
     LOG_WARN("fail to create new tablets", K(ret));
   }
   return ret;
@@ -1045,9 +1051,10 @@ int ObTabletCreateMdsHelper::set_tablet_normal_status(
 
 void ObTabletCreateMdsHelper::handle_ret_for_replay(int &ret)
 {
-  if (OB_TIMEOUT == ret) {
+  if (OB_TIMEOUT == ret || OB_TOO_MANY_PARTITIONS_ERROR == ret) {
+    int origin_ret = ret;
     ret = OB_EAGAIN;
-    LOG_INFO("rewrite ret from OB_TIMEOUT to OB_EAGAIN to retry clog replay", K(ret));
+    LOG_INFO("rewrite failure to OB_EAGAIN to retry clog replay", K(ret), K(origin_ret));
   }
 }
 } // namespace storage

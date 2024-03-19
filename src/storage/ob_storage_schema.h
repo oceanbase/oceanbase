@@ -22,6 +22,7 @@ namespace oceanbase
 namespace blocksstable
 {
 struct ObSSTableColumnMeta;
+class ObStorageDatum;
 }
 
 namespace storage
@@ -245,7 +246,8 @@ public:
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int get_orig_default_row(const common::ObIArray<share::schema::ObColDesc> &column_ids,
-                                          blocksstable::ObDatumRow &default_row) const;
+                           bool need_trim,
+                           blocksstable::ObDatumRow &default_row) const;
   const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
 
   // Use this comparison function to determine which schema has been updated later
@@ -299,6 +301,7 @@ private:
   int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
+  void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum) const;
 
 public:
   static const uint32_t INVALID_ID = UINT32_MAX;

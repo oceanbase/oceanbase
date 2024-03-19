@@ -387,8 +387,9 @@ OB_INLINE int ObTableScanOp::reuse_table_rescan_allocator()
   if (OB_ISNULL(table_rescan_allocator_)) {
     ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
     lib::ContextParam param;
-    param.set_mem_attr(my_session->get_effective_tenant_id(),
-                       "TableRescanCtx", ObCtxIds::DEFAULT_CTX_ID)
+    ObMemAttr attr(my_session->get_effective_tenant_id(),
+                       "TableRescanCtx", ObCtxIds::DEFAULT_CTX_ID);
+    param.set_mem_attr(SET_IGNORE_MEM_VERSION(attr))
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
     lib::MemoryContext mem_context;

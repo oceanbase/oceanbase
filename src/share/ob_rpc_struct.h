@@ -6857,13 +6857,16 @@ public:
       package_type_(share::schema::INVALID_PACKAGE_TYPE),
       compatible_mode_(-1),
       public_routine_infos_(),
-      error_info_()
+      error_info_(),
+      exec_env_(),
+      dependency_infos_()
       {}
   virtual ~ObAlterPackageArg() {}
   bool is_valid() const;
   int assign(const ObAlterPackageArg &other);
   TO_STRING_KV(K_(tenant_id), K_(db_name), K_(package_name), K_(package_type),
-               K_(compatible_mode), K_(public_routine_infos), K_(error_info));
+               K_(compatible_mode), K_(public_routine_infos), K_(error_info),
+               K_(exec_env), K_(dependency_infos));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
@@ -6872,6 +6875,8 @@ public:
   int64_t compatible_mode_;
   common::ObSArray<share::schema::ObRoutineInfo> public_routine_infos_;
   share::schema::ObErrorInfo error_info_;
+  common::ObString exec_env_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
 };
 
 struct ObDropPackageArg : public ObDDLArg

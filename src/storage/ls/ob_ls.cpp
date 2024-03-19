@@ -1810,7 +1810,7 @@ int ObLS::replay_get_tablet(
   return ret;
 }
 
-int ObLS::logstream_freeze(const bool is_sync, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1828,7 +1828,7 @@ int ObLS::logstream_freeze(const bool is_sync, const int64_t abs_timeout_ts)
     } else if (OB_UNLIKELY(is_offline())) {
       ret = OB_MINOR_FREEZE_NOT_ALLOW;
       LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.logstream_freeze(&result))) {
+    } else if (OB_FAIL(ls_freezer_.logstream_freeze(trace_id, &result))) {
       LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
     } else {
       // do nothing
@@ -1899,9 +1899,10 @@ int ObLS::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id, const int
   return ret;
 }
 
-int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
-                              const bool is_sync,
-                              const int64_t abs_timeout_ts)
+int ObLS::batch_tablet_freeze(const int64_t trace_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    const bool is_sync,
+    const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1919,7 +1920,7 @@ int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
     } else if (OB_UNLIKELY(is_offline())) {
       ret = OB_MINOR_FREEZE_NOT_ALLOW;
       LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(tablet_ids, &result))) {
+    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(trace_id, tablet_ids, &result))) {
       LOG_WARN("batch tablet freeze failed", K(ret));
     } else {
       // do nothing

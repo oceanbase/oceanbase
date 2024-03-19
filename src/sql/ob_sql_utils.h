@@ -128,11 +128,13 @@ public:
   ObSqlPrinter(const ObStmt *stmt,
                ObSchemaGetterGuard *schema_guard,
                ObObjPrintParams print_params,
-               const ParamStore *param_store) :
+               const ParamStore *param_store,
+               const ObSQLSessionInfo *session) :
     stmt_(stmt),
     schema_guard_(schema_guard),
     print_params_(print_params),
-    param_store_(param_store)
+    param_store_(param_store),
+    session_(session)
     {}
   virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
 
@@ -141,6 +143,7 @@ protected:
   ObSchemaGetterGuard *schema_guard_;
   ObObjPrintParams print_params_;
   const ParamStore *param_store_;
+  const ObSQLSessionInfo *session_;
 };
 
 class ObSQLUtils
@@ -425,14 +428,16 @@ public:
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                              ObSchemaGetterGuard *schema_guard,
                              ObObjPrintParams print_params = ObObjPrintParams(),
-                             const ParamStore *param_store = NULL);
+                             const ParamStore *param_store = NULL,
+                             const ObSQLSessionInfo *session = NULL);
   static int print_sql(char *buf,
                        int64_t buf_len,
                        int64_t &pos,
                        const ObStmt *stmt,
                        ObSchemaGetterGuard *schema_guard,
                        ObObjPrintParams print_params,
-                       const ParamStore *param_store = NULL);
+                       const ParamStore *param_store = NULL,
+                       const ObSQLSessionInfo *session = NULL);
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,

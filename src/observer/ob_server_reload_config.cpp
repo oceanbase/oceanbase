@@ -183,21 +183,15 @@ int ObServerReloadConfig::operator()()
         reserve);
   }
 
-
-
   int64_t cache_size = GCONF.memory_chunk_cache_size;
-  if (0 == cache_size) {
+  bool use_large_chunk_cache = 1 != cache_size;
+  if (0 == cache_size || 1 == cache_size) {
     cache_size = GMEMCONF.get_server_memory_limit();
     if (cache_size >= (32L<<30)) {
       cache_size -= (4L<<30);
     }
   }
-  int64_t large_cache_size = GCONF._memory_large_chunk_cache_size;
-  if (0 == large_cache_size) {
-    large_cache_size = lib::AChunkMgr::DEFAULT_LARGE_CHUNK_CACHE_SIZE;
-  }
-  lib::AChunkMgr::instance().set_max_chunk_cache_size(cache_size);
-  lib::AChunkMgr::instance().set_max_large_chunk_cache_size(large_cache_size);
+  lib::AChunkMgr::instance().set_max_chunk_cache_size(cache_size, use_large_chunk_cache);
 
   if (!is_arbitration_mode) {
     // Refresh cluster_id, cluster_name_hash for non arbitration mode

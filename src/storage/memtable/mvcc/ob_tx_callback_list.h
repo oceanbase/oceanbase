@@ -137,16 +137,17 @@ private:
     LOCK_ITERATE = 1,
     LOCK_APPEND = 2,
     LOCK_ALL = 3,
-    TRY_LOCK_ITERATE = 4
+    TRY_LOCK_ITERATE = 4,
+    TRY_LOCK_APPEND = 5,
   };
   struct LockGuard {
-    LockGuard(ObTxCallbackList &host, const LOCK_MODE m, ObTimeGuard *tg = NULL);
+    LockGuard(const ObTxCallbackList &host, const LOCK_MODE m, ObTimeGuard *tg = NULL);
     ~LockGuard();
     bool is_locked() const { return state_.is_locked(); }
     union LockState state_;
-    ObTxCallbackList &host_;
+    const ObTxCallbackList &host_;
   private:
-    void lock_append_();
+    void lock_append_(const bool try_lock);
     void lock_iterate_(const bool try_lock);
   };
   friend class LockGuard;
@@ -241,11 +242,11 @@ private:
   uint64_t tmp_checksum_;
   ObTransCallbackMgr &callback_mgr_;
   // used to serialize append callback to list tail
-  common::ObByteLock append_latch_;
+  mutable common::ObByteLock append_latch_;
   // used to serialize fill and flush log of this list
   mutable common::ObByteLock log_latch_;
   // used to serialize operates on synced callbacks
-  common::ObByteLock iter_synced_latch_;
+  mutable common::ObByteLock iter_synced_latch_;
   DISALLOW_COPY_AND_ASSIGN(ObTxCallbackList);
 };
 

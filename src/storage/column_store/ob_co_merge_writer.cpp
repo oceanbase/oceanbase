@@ -124,8 +124,8 @@ int ObWriteHelper::init(
   int ret = OB_SUCCESS;
   ObMacroDataSeq macro_start_seq(0);
 
-  if (OB_FAIL(ObDataDescHelper::build(merge_param, merge_info, data_store_desc_, merge_info_, cg_idx, &cg_schema))) {
-    STORAGE_LOG(WARN, "fail to build data desc", K(ret), K(cg_schema));
+  if (OB_FAIL(ObDataDescHelper::build(merge_param, merge_info, data_store_desc_, merge_info_))) {
+    STORAGE_LOG(WARN, "fail to build data desc", K(ret));
   } else if (OB_FAIL(macro_start_seq.set_parallel_degree(parallel_idx))) {
     STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq", K(ret), K(parallel_idx));
   } else if (OB_FAIL(macro_writer_.open(data_store_desc_, macro_start_seq))) {

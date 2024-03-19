@@ -43,7 +43,9 @@ when "$table_name" in (
 "__all_virtual_sesstat",
 "__all_virtual_session_event") then 4
 when "$table_name" in (
-"__all_virtual_tx_data") then 5
+"__all_virtual_tx_data",
+"__all_virtual_checkpoint_diagnose_memtable_info",
+"__all_virtual_checkpoint_diagnose_checkpoint_unit_info") then 5
 else 1 end) as query_type from dual`;
 
 

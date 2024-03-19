@@ -144,7 +144,7 @@ public:  // ObTxDataMemtableMgr
   // ================ INHERITED FROM ObCommonCheckpoint ===============
   virtual share::SCN get_rec_scn() override;
 
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
+  virtual int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze = true) override;
 
   virtual ObTabletID get_tablet_id() const override;
 
@@ -179,7 +179,8 @@ private:  // ObTxDataMemtableMgr
 
   int get_all_memtables_(ObTableHdlArray &handles);
 
-  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles);
+  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles,
+      const int64_t trace_id);
 
   ObTxDataMemtable *get_tx_data_memtable_(const int64_t pos) const;
 

@@ -1368,7 +1368,8 @@ int ObTransformDBlink::inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &h
                                          helper.is_reverse_link_ ? 0
                                          : helper.dblink_id_))) {
     LOG_WARN("failed to reverse link table", K(ret));
-  } else if (ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), helper.conditions_)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(),
+                                                  helper.conditions_))) {
     LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                stmt,
@@ -1425,7 +1426,8 @@ int ObTransformDBlink::extract_limit(ObDMLStmt *stmt, ObDMLStmt *&dblink_stmt)
             || stmt->is_fetch_with_ties()
             || NULL != stmt->get_limit_percent_expr()) {
     dblink_stmt = stmt;
-  } else if (ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt), &child_stmt)) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(stmt),
+                                                 &child_stmt))) {
     LOG_WARN("failed to pack the stmt", K(ret));
   } else {
     stmt->set_limit_offset(child_stmt->get_limit_expr(), child_stmt->get_offset_expr());
@@ -1713,8 +1715,9 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null param", K(ret));
       } else if (!table_item->is_link_table()
-                 || TableItem::NOT_USING != table_item->flashback_query_type_) {
-      // do nothing if not dblink table or already have flashback query
+                 || TableItem::NOT_USING != table_item->flashback_query_type_
+                 || table_item->has_for_update()) {
+      // do nothing if not dblink table or already have flashback query or table has for update
       } else if (FALSE_IT(dblink_id = table_item->dblink_id_)) {
       } else if (table_item->is_reverse_link_) {
         need_add = true;

@@ -157,6 +157,7 @@ void ObLogFetcherIdlePool::mark_stop_flag()
   }
 }
 
+// TODO: consider retry on failure
 void ObLogFetcherIdlePool::handle(void *data, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;

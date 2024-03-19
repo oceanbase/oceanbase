@@ -1939,11 +1939,16 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
             if (OB_NOT_NULL(org_column)) {
               //同名列存在, 为了和mysql保持一致, 需要调整原列的顺序
-              ObColumnSchemaV2 new_column(*org_column);
-              new_column.set_column_id(gen_column_id());
-              new_column.set_prev_column_id(UINT64_MAX);
-              new_column.set_next_column_id(UINT64_MAX);
-              if (1 == table_schema.get_column_count()) {
+              ObColumnSchemaV2 new_column;
+              if (OB_FAIL(new_column.assign(*org_column))) {
+                LOG_WARN("fail to assign column", KR(ret), KPC(org_column));
+              } else {
+                new_column.set_column_id(gen_column_id());
+                new_column.set_prev_column_id(UINT64_MAX);
+                new_column.set_next_column_id(UINT64_MAX);
+              }
+              if (OB_FAIL(ret)) {
+              } else if (1 == table_schema.get_column_count()) {
                 //do nothing, 只有一列就不用调整了
                 if (OB_FAIL(set_nullable_for_cta_column(select_stmt, *org_column, expr, table_name_, *allocator_, stmt_))) {
                   LOG_WARN("failed to check and set nullable for cta.", K(ret));

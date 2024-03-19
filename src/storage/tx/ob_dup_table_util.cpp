@@ -674,7 +674,7 @@ int ObDupTableLSHandler::refresh_dup_table_tablet(common::ObTabletID tablet_id,
   return ret;
 }
 
-int ObDupTableLSHandler::recive_lease_request(const ObDupTableLeaseRequest &lease_req)
+int ObDupTableLSHandler::receive_lease_request(const ObDupTableLeaseRequest &lease_req)
 {
   int ret = OB_SUCCESS;
   if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
@@ -682,11 +682,11 @@ int ObDupTableLSHandler::recive_lease_request(const ObDupTableLeaseRequest &leas
     DUP_TABLE_LOG(WARN, "DupTableLSHandler not init", K(ret), K(is_inited_), KP(lease_mgr_ptr_));
   } else if (!ls_state_helper_.is_leader_serving()) {
     ret = OB_NOT_MASTER;
-    DUP_TABLE_LOG(WARN, "No need to recive lease request", K(ret), K(lease_req), KPC(this));
+    DUP_TABLE_LOG(WARN, "No need to receive lease request", K(ret), K(lease_req), KPC(this));
   } else if (OB_FAIL(ts_sync_mgr_ptr_->handle_ts_sync_response(lease_req))) {
     DUP_TABLE_LOG(WARN, "handle ts sync response failed", K(ret));
-  } else if (OB_FAIL(lease_mgr_ptr_->recive_lease_request(lease_req))) {
-    DUP_TABLE_LOG(WARN, "recive lease request failed", K(ret), K(lease_req));
+  } else if (OB_FAIL(lease_mgr_ptr_->receive_lease_request(lease_req))) {
+    DUP_TABLE_LOG(WARN, "receive lease request failed", K(ret), K(lease_req));
   }
   return ret;
 }

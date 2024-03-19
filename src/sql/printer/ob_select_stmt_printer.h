@@ -44,8 +44,9 @@ public:
                       ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params,
                       const ParamStore *param_store,
-                      const bool force_col_alias = false)
-  : ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store),
+                      const bool force_col_alias = false,
+                      const ObSQLSessionInfo *session = NULL)
+  : ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store, session),
     column_list_(NULL),
     force_col_alias_(force_col_alias) {}
   virtual ~ObSelectStmtPrinter() {}

@@ -18,6 +18,11 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_partition_merge_progress.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
+#include "ob_tenant_compaction_progress.h"
+#include "ob_compaction_diagnose.h"
+#include "ob_compaction_suggestion.h"
+#include "ob_partition_merge_progress.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -35,6 +40,7 @@
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
 {
@@ -971,6 +977,36 @@ int ObTabletMergeFinishTask::init()
   return ret;
 }
 
+int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObITable *table = nullptr;
+  storage::ObTablesHandleArray &tables_handle = ctx.static_param_.tables_handle_;
+  for (int64_t i = 0; i < tables_handle.get_count() && OB_SUCC(ret); i++) {
+    if (OB_ISNULL(table = tables_handle.get_table(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(tables_handle), KP(table));
+    } else if (OB_UNLIKELY(!table->is_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not memtable", K(ret), K(tables_handle), KPC(table));
+    } else {
+      const ObSSTableMergeInfo &sstable_merge_info = ctx.get_merge_info().get_sstable_merge_info();
+      if (table->is_data_memtable()) {
+        ObMemtable *memtable = nullptr;
+        memtable = static_cast<ObMemtable*>(table);
+        memtable->report_memtable_diagnose_info(ObMemtable::UpdateMergeInfoForMemtable(
+              sstable_merge_info.merge_start_time_, sstable_merge_info.merge_finish_time_,
+              sstable_merge_info.occupy_size_, sstable_merge_info.concurrent_cnt_));
+      } else {
+        ObIMemtable *memtable = nullptr;
+        memtable = static_cast<ObIMemtable*>(table);
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, memtable)
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletMergeFinishTask::process()
 {
   int ret = OB_SUCCESS;
@@ -999,6 +1035,13 @@ int ObTabletMergeFinishTask::process()
         KPC(sstable), "mem_peak", ctx_ptr->mem_ctx_.get_total_mem_peak(), "compat_mode", merge_dag_->get_compat_mode(),
         "time_guard", ctx_ptr->info_collector_.time_guard_);
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (is_mini_merge(ctx_ptr->static_param_.get_merge_type())
+      && OB_TMP_FAIL(report_checkpoint_diagnose_info(*ctx_ptr))) {
+    LOG_WARN("failed to report_checkpoint_diagnose_info", K(tmp_ret), KPC(ctx_ptr));
+  }
+
   return ret;
 }
 /*
@@ -1382,6 +1425,8 @@ int ObBatchFreezeTabletsTask::process()
     } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_, true/*need_rewrite*/, true/*is_sync*/))) {
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++fail_freeze_cnt;
+    } else if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
+      // merge is suspended
     } else if (OB_TMP_FAIL(ls->get_tablet_svr()->get_tablet(cur_pair.tablet_id_,
                                                             tablet_handle,
                                                             0/*timeout_us*/,
@@ -1390,6 +1435,8 @@ int ObBatchFreezeTabletsTask::process()
     } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
     } else if (OB_UNLIKELY(tablet->get_snapshot_version() < cur_pair.schedule_merge_scn_)) {
       // do nothing
+    } else if (!tablet->is_data_complete()) {
+      // no need to schedule merge
     } else if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(param.ls_id_,
                                                                                    *tablet,
                                                                                    MEDIUM_MERGE,

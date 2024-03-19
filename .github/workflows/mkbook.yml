@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir mdbook
           mv docs mdbook/src
-          
+
       - name: Install mdBook
         run: |
           curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf -y | sh

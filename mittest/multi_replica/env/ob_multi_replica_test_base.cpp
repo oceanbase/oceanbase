@@ -444,10 +444,9 @@ int ObMultiReplicaTestBase::init_replicas_()
       for (int j = 0; j < MAX_ZONE_COUNT && OB_SUCC(ret); j++) {
         std::string rpc_port_str = "";
         if (OB_FAIL(wait_event_finish("ZONE" + std::to_string(j + 1) + "_RPC_PORT", rpc_port_str,
-                                      5000 /*5s*/, 100 /*100ms*/))) {
+                                      30000 /*30s*/, 100 /*100ms*/))) {
 
-          SERVER_LOG(ERROR, "read RPC_PORT event failed", K(ret), K(j), K(rpc_ports_[j]),
-                     K(rpc_port_str.c_str()));
+          SERVER_LOG(ERROR, "read RPC_PORT event failed", K(ret), K(j), K(rpc_port_str.c_str()));
         } else {
 
           int tmp_rpc_port = std::stoi(rpc_port_str);
@@ -462,8 +461,7 @@ int ObMultiReplicaTestBase::init_replicas_()
           obrpc::ObServerInfo server_info;
           std::string zone_dir = "zone" + std::to_string(j + 1);
           server_info.zone_ = zone_dir.c_str();
-          server_info.server_ =
-              common::ObAddr(common::ObAddr::IPV4, local_ip_.c_str(), tmp_rpc_port);
+          server_info.server_ = common::ObAddr(common::ObAddr::IPV4, local_ip_.c_str(), tmp_rpc_port);
           server_info.region_ = "sys_region";
           server_list_.push_back(server_info);
         }

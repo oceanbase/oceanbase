@@ -97,8 +97,6 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     stat_(),
     op_stats_(),
     need_drive_dml_query_(false),
-    tx_id_(-1),
-    tm_sessid_(-1),
     var_init_exprs_(allocator_),
     is_returning_(false),
     is_late_materialized_(false),
@@ -137,7 +135,9 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     subschema_ctx_(allocator_),
     disable_auto_memory_mgr_(false),
     all_local_session_vars_(&allocator_),
-    udf_has_dml_stmt_(false)
+    udf_has_dml_stmt_(false),
+    mview_ids_(&allocator_),
+    enable_inc_direct_load_(false)
 {
 }
 
@@ -227,17 +227,15 @@ void ObPhysicalPlan::reset()
   append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
-  tx_id_ = -1;
-  tm_sessid_ = -1;
-  var_init_exprs_.reset();
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
   udf_has_dml_stmt_ = false;
+  mview_ids_.reset();
+  enable_inc_direct_load_ = false;
 }
-
 void ObPhysicalPlan::destroy()
 {
 #ifndef NDEBUG
@@ -797,7 +795,9 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     use_rich_format_,
                     disable_auto_memory_mgr_,
                     udf_has_dml_stmt_,
-                    stat_.format_sql_id_);
+                    stat_.format_sql_id_,
+                    mview_ids_,
+                    enable_inc_direct_load_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

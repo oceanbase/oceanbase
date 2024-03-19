@@ -49,6 +49,8 @@
 #include "observer/ob_req_time_service.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/dblink/ob_tm_service.h"
+#include "storage/tx/ob_xa_ctx.h"
+#include "sql/engine/dml/ob_link_op.h"
 #include <cctype>
 
 using namespace oceanbase::sql;
@@ -301,14 +303,17 @@ int ObResultSet::start_stmt()
   int ret = OB_SUCCESS;
   bool ac = true;
   ObPhysicalPlan* phy_plan = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-  if (OB_ISNULL(phy_plan)) {
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(get_exec_context());
+  if (OB_ISNULL(phy_plan) || OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid inner state", K(phy_plan));
+    LOG_WARN("invalid inner state", KP(phy_plan), KP(plan_ctx));
   } else if (OB_ISNULL(phy_plan->get_root_op_spec())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root_op_spec of phy_plan is NULL", K(phy_plan), K(ret));
   } else if (OB_FAIL(my_session_.get_autocommit(ac))) {
     LOG_WARN("fail to get autocommit", K(ret));
+  } else if (lib::is_oracle_mode() && OB_FAIL(ObSqlTransControl::dblink_xa_prepare(get_exec_context()))) {
+    LOG_WARN("failed to prepare dblink xa connection", K(ret));
   } else if (phy_plan->is_link_dml_plan() || phy_plan->has_link_sfd()) {
     if (ac) {
       my_session_.set_autocommit(false);
@@ -316,8 +321,8 @@ int ObResultSet::start_stmt()
     }
     LOG_DEBUG("dblink xa trascaction need skip start_stmt()", K(PHY_LINK_DML == phy_plan->get_root_op_spec()->type_), K(my_session_.get_dblink_context().is_dblink_xa_tras()));
   } else {
-    if (-1 != phy_plan->tx_id_) {
-      const transaction::ObTransID tx_id(phy_plan->tx_id_);
+    if (0 < plan_ctx->get_tx_id()) {
+      const transaction::ObTransID tx_id(plan_ctx->get_tx_id());
       if (OB_FAIL(sql::ObTMService::recover_tx_for_callback(tx_id, get_exec_context()))) {
         LOG_WARN("failed to recover dblink xa transaction", K(ret), K(tx_id));
       } else {
@@ -325,7 +330,7 @@ int ObResultSet::start_stmt()
         LOG_DEBUG("succ to recover dblink xa transaction", K(tx_id));
       }
     } else {
-      LOG_DEBUG("recover dblink xa skip", K(phy_plan->tx_id_));
+      LOG_DEBUG("recover dblink xa skip", K(plan_ctx->get_tx_id()));
     }
     bool in_trans = my_session_.get_in_transaction();
 
@@ -355,6 +360,28 @@ int ObResultSet::start_stmt()
       }
       get_trans_state().set_start_stmt_executed(OB_SUCC(ret));
     }
+    if (OB_SUCC(ret) &&
+        (plan_ctx->get_hint_xa_trans_stop_check_lock() ||
+         plan_ctx->get_main_xa_trans_branch())) {
+      transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
+      ObXACtx *xa_ctx = NULL;
+      const transaction::ObXATransID xid = my_session_.get_xid();
+      LOG_TRACE("stop check stmt lock", KP(plan_ctx), K(ret), K(plan_ctx->get_hint_xa_trans_stop_check_lock()), K(plan_ctx->get_main_xa_trans_branch()), K(tx_desc));
+      if (OB_ISNULL(tx_desc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret), KP(tx_desc), KP(xa_ctx));
+      } else if (OB_ISNULL(xa_ctx = tx_desc->get_xa_ctx())) {
+        LOG_TRACE("not in xa transaction, skip", K(ret), KP(tx_desc), KP(xa_ctx));
+      } else if (xa_ctx->is_executing()) {
+        if (OB_FAIL(xa_ctx->stop_check_stmt_lock(xid))) {
+          LOG_WARN("failed to stop check stmt lock", K(ret), K(xid));
+        } else {
+          // is_executing() can not tell us weather xa checking lock is stoped, need a var to record this.
+          //succ to stop check stmt lock", K(ret), K(xid));
+          xa_checking_lock_stoped_ = true;
+        }
+      }
+    }
   }
   NG_TRACE(sql_start_stmt_end);
   return ret;
@@ -364,7 +391,30 @@ int ObResultSet::end_stmt(const bool is_rollback)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(start_end_stmt);
-  if (get_trans_state().is_start_stmt_executed()
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(get_exec_context());
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid inner state", K(plan_ctx));
+  } else if (xa_checking_lock_stoped_ &&
+             (plan_ctx->get_hint_xa_trans_stop_check_lock() ||
+              plan_ctx->get_main_xa_trans_branch())) {
+    transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
+    LOG_TRACE("start check stmt lock", KP(plan_ctx), K(ret), K(plan_ctx->get_hint_xa_trans_stop_check_lock()), K(plan_ctx->get_main_xa_trans_branch()), K(tx_desc));
+    ObXACtx *xa_ctx = NULL;
+    const transaction::ObXATransID xid = my_session_.get_xid();
+    if (OB_ISNULL(tx_desc) || OB_ISNULL(xa_ctx = tx_desc->get_xa_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), KP(tx_desc), KP(xa_ctx));
+    } else if (OB_FAIL(xa_ctx->start_check_stmt_lock(xid))) {
+      LOG_WARN("failed to start check stmt lock", K(ret), K(xid));
+    } else {
+      LOG_TRACE("succ to start check stmt lock", K(ret), K(xid));
+    }
+    xa_checking_lock_stoped_ = false;
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (get_trans_state().is_start_stmt_executed()
       && get_trans_state().is_start_stmt_success()) {
     ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
     if (OB_ISNULL(physical_plan_)) {

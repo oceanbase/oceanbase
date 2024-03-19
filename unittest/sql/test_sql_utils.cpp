@@ -818,7 +818,7 @@ void TestSqlUtils::generate_index_column_schema(ObCreateIndexStmt &stmt,
     ObColumnSchemaV2 index_column;
     const ObColumnSchemaV2 *col = table_schema->get_column_schema(index_arg.index_columns_[i].column_name_);
     ASSERT_FALSE(NULL == col);
-    index_column = *col;
+    ASSERT_TRUE(OB_SUCCESS == index_column.assign(*col));
     ++index_rowkey_num;
     index_column.set_rowkey_position(index_rowkey_num);
     index_column.set_index_position(index_rowkey_num);
@@ -838,7 +838,7 @@ void TestSqlUtils::generate_index_column_schema(ObCreateIndexStmt &stmt,
       const ObColumnSchemaV2 *col = table_schema->get_column_schema(column_id);
       ASSERT_FALSE(NULL == col);
       ObColumnSchemaV2 index_column;
-      index_column = *col;
+      ASSERT_TRUE(OB_SUCCESS == index_column.assign(*col));
       index_column.set_rowkey_position(index_rowkey_num);
       if (col->get_column_id() > max_column_id) {
         max_column_id = col->get_column_id();

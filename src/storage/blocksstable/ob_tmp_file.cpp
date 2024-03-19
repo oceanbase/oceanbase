@@ -1080,6 +1080,7 @@ int ObTmpFile::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &hand
 {
   // only support append at present.
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFile has not been inited", K(ret));

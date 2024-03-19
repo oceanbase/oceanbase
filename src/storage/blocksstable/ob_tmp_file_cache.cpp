@@ -229,12 +229,15 @@ int ObTmpPageCache::prefetch(
       callback->allocator_ = &allocator;
       if (OB_FAIL(callback->page_io_infos_.assign(page_io_infos))) {
         STORAGE_LOG(WARN, "fail to assign page io infos", K(ret), K(page_io_infos.count()), K(info));
+        if (OB_NOT_NULL(callback)) {  // handle ObArray assign fail case and free callback
+          callback->~ObTmpMultiPageIOCallback();
+          allocator.free(callback);
+          callback = nullptr;
+        }
       } else if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
         STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
       }
-      // There is no need to handle error cases (freeing the memory of the
-      // callback) because inner_read_io will handle error cases and free the
-      // memory of the callback.
+      // inner_read_io will handle error cases and free the memory of callback.
     }
   }
   return ret;

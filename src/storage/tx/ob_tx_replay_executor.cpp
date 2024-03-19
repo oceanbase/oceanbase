@@ -310,7 +310,7 @@ int ObTxReplayExecutor::before_replay_redo_()
     const bool parallel_replay = !is_tx_log_replay_queue();
     if (OB_ISNULL(ctx_) || OB_ISNULL(mt_ctx_ = ctx_->get_memtable_ctx())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (mt_ctx_->replay_begin(parallel_replay, log_ts_ns_)) {
+    } else if (OB_FAIL(mt_ctx_->replay_begin(parallel_replay, log_ts_ns_))) {
       TRANS_LOG(ERROR, "[Replay Tx] replay_begin fail or mt_ctx_ is NULL", K(ret), K(mt_ctx_));
     } else {
       has_redo_ = true;

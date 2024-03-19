@@ -84,10 +84,8 @@ AObject *ObjectSet::alloc_object(
   if (NULL != obj) {
     abort_unless(obj->in_use_);
     abort_unless(obj->is_valid());
-
     reinterpret_cast<uint64_t&>(obj->data_[size]) = AOBJECT_TAIL_MAGIC_CODE;
     obj->alloc_bytes_ = static_cast<uint32_t>(size);
-
     if (attr.label_.str_ != nullptr) {
       STRNCPY(&obj->label_[0], attr.label_.str_, sizeof(obj->label_));
       obj->label_[sizeof(obj->label_) - 1] = '\0';

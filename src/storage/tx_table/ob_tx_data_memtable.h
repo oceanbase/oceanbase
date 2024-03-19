@@ -305,6 +305,7 @@ public: /* derived from ObIMemtable */
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
                   blocksstable::ObDatumRow &row) override;
+  virtual ObTabletID get_tablet_id() const { return LS_TX_DATA_TABLET; }
 
 public:  // checkpoint
   share::SCN get_rec_scn()
@@ -312,7 +313,7 @@ public:  // checkpoint
     return get_min_tx_scn();
   }
 
-  int flush();
+  int flush(const int64_t trace_id);
   
   /**
    * @brief Because of the random order of clog callbacks, the tx data in a freezing tx data

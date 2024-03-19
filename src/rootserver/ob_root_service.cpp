@@ -7270,15 +7270,17 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    ObPackageInfo new_package_info = arg.package_info_;
+    ObPackageInfo new_package_info;
     const ObPackageInfo *old_package_info = NULL;
-    uint64_t tenant_id = new_package_info.get_tenant_id();
+    uint64_t tenant_id = arg.package_info_.get_tenant_id();
     ObString database_name = arg.db_name_;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     const ObUserInfo *user_info = NULL;
     bool is_oracle_mode = false;
-    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+    if (OB_FAIL(new_package_info.assign(arg.package_info_))) {
+      LOG_WARN("fail to assign package info", K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
                 tenant_id, is_oracle_mode))) {
       LOG_WARN("fail to check is oracle mode", K(ret));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -7424,12 +7426,34 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
         } else if (OB_ISNULL(package_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
-        } else if (OB_FAIL(ddl_service_.alter_package(schema_guard,
-                                                      *package_info,
-                                                      public_routine_infos,
-                                                      const_cast<ObErrorInfo &>(arg.error_info_),
-                                                      &arg.ddl_stmt_str_))) {
-          LOG_WARN("drop package failed", K(ret), K(package_name));
+        }
+        if (OB_SUCC(ret)) {
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+            if (OB_FAIL(ddl_service_.alter_package(schema_guard,
+                                                    *package_info,
+                                                    public_routine_infos,
+                                                    const_cast<ObErrorInfo &>(arg.error_info_),
+                                                    &arg.ddl_stmt_str_))) {
+              LOG_WARN("drop package failed", K(ret), K(package_name));
+            }
+          } else {
+            ObSArray<ObDependencyInfo> &dep_infos =
+                               const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
+            ObPackageInfo new_package_info;
+            if (OB_FAIL(new_package_info.assign(*package_info))) {
+              LOG_WARN("failed to copy new package info", K(ret));
+            } else if (OB_FAIL(new_package_info.set_exec_env(arg.exec_env_))) {
+              LOG_WARN("fail to set exec env", K(ret));
+            } else if (OB_FAIL(ddl_service_.create_package(schema_guard,
+                                                    package_info,
+                                                    new_package_info,
+                                                    public_routine_infos,
+                                                    const_cast<ObErrorInfo &>(arg.error_info_),
+                                                    dep_infos,
+                                                    &arg.ddl_stmt_str_))) {
+              LOG_WARN("create package failed", K(ret), K(new_package_info));
+            }
+          }
         }
       } else {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;

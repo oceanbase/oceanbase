@@ -460,6 +460,10 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   if (obj != NULL) {
     obj->on_malloc_sample_ = sample_allowed;
     ob_malloc_sample_backtrace(obj, size);
+    obj->ignore_version_ = attr.ignore_version() || ObMemVersionNode::tl_ignore_node;
+    if (!obj->ignore_version_) {
+      obj->version_ = ObMemVersionNode::tl_node->version_;
+    }
     nptr = obj->data_;
     get_mem_leak_checker().on_alloc(*obj, attr);
     SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
@@ -467,9 +471,6 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + size, 8),
                                      alloc_size - size + sizeof(AOBJECT_TAIL_MAGIC_CODE));
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    int level = ObFreeLogPrinter::get_level();
-    ObFreeLogPrinter::get_instance().enable_free_log(attr.tenant_id_,
-                                                     attr.ctx_id_, level);
     const char *msg = is_errsim ? "[ERRSIM] errsim inject memory error" : alloc_failed_msg();
     LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "

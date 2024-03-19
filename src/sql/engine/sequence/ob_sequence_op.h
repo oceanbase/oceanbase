@@ -47,7 +47,11 @@ public:
 class ObSequenceExecutor {
   public:
     ObSequenceExecutor()
-    :dblink_id_(OB_INVALID_ID) {}
+      : dblink_id_(OB_INVALID_ID)
+    {
+      seq_schemas_.set_attr(SET_IGNORE_MEM_VERSION("SeqSchema"));
+      seq_ids_.set_attr(SET_IGNORE_MEM_VERSION("SeqId"));
+    }
     ~ObSequenceExecutor() { destroy(); }
     virtual int init(ObExecContext &ctx)=0;
     virtual void reset() { seq_ids_.reset(); seq_schemas_.reset();}

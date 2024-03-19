@@ -25,6 +25,7 @@
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/utility/utility.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "lib/alloc/memory_dump.h"
 
 #include "common/ob_member_list.h"
 #include "common/ob_zone.h"
@@ -2423,7 +2424,12 @@ int ObService::get_wrs_info(const obrpc::ObGetWRSArg &arg,
 
 int ObService::refresh_memory_stat()
 {
-  return ObDumpTaskGenerator::generate_mod_stat_task();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObMemoryDump::get_instance().check_sql_memory_leak())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "there has sql memory leak");
+  }
+  return ret;
 }
 
 int ObService::wash_memory_fragmentation()

@@ -38,6 +38,7 @@ constexpr int OB_SUCCESS                             = 0;
 constexpr int OB_INVALID_ARGUMENT                    = -4002;
 constexpr int OB_INIT_TWICE                          = -4005;
 constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
+constexpr int OB_ERR_UNEXPECTED                      = -4016;
 constexpr int OB_SIZE_OVERFLOW                       = -4019;
 constexpr int OB_CHECKSUM_ERROR                      = -4103;
 constexpr int OB_BACKUP_FILE_NOT_EXIST               = -9011;
@@ -1564,6 +1565,7 @@ int ObCosWrapper::complete_multipart_upload(
     ret = OB_INVALID_ARGUMENT;
     cos_warn_log("[COS]upload_id is null, ret=%d\n", ret);
   } else {
+    int64_t total_parts = 0;
     cos_string_t bucket;
     cos_string_t object;
     cos_string_t upload_id;
@@ -1604,6 +1606,12 @@ int ObCosWrapper::complete_multipart_upload(
               cos_str_set(&complete_part->etag, part_content->etag.data);
               cos_list_add_tail(&complete_part->node, &complete_part_list);
             }
+
+            if (OB_SUCCESS != ret) {
+              break;
+            } else {
+              total_parts++;
+            }
           }
 
           if (OB_SUCCESS == ret && COS_TRUE == params->truncated) {
@@ -1628,7 +1636,14 @@ int ObCosWrapper::complete_multipart_upload(
       } while (OB_SUCCESS == ret && COS_TRUE == params->truncated);
 
       if (OB_SUCCESS == ret) {
-        if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object, &upload_id, &complete_part_list, NULL, &resp_headers))
+        if (total_parts == 0) {
+          // If 'complete' without uploading any data, COS will return the error
+          // 'MalformedXML, The XML you provided was not well-formed or did not validate against our published schema'
+          ret = OB_ERR_UNEXPECTED;
+          cos_warn_log("[COS]no parts have been uploaded, ret=%d, upload_id=%s\n", ret, upload_id.data);
+        } else if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object,
+                                                                    &upload_id, &complete_part_list,
+                                                                    NULL, &resp_headers))
             || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
@@ -1755,6 +1770,10 @@ int ObCosWrapper::del_unmerged_parts(
           } else {
             cos_info_log("[COS]succeed to abort multipart upload, bucket=%s, object=%s, upload_id=%s\n",
                 bucket_name.data_, content->key.data, content->upload_id.data);
+          }
+
+          if (OB_SUCCESS != ret) {
+            break;
           }
         }
       }

@@ -151,6 +151,7 @@ int ObDtlChannelLoop::ObDtlChannelLoopProc::process(
   const ObDtlLinkedBuffer &buffer, bool &transferred)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDtlMsgHeader header;
   if (buffer.is_data_msg()) {
     last_msg_type_ = static_cast<int16_t>(ObDtlMsgType::PX_NEW_ROW);

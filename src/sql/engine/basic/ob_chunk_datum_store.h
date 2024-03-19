@@ -1034,7 +1034,7 @@ public:
   //void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
   void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
   void set_dumped(bool dumped) { enable_dump_ = dumped; }
-  inline int64_t get_mem_limit() { return mem_limit_; }
+  inline int64_t get_mem_limit() const { return mem_limit_; }
   void set_block_size(const int64_t size) { default_block_size_ = size; }
   inline int64_t get_block_cnt() const { return n_blocks_; }
   inline int64_t get_block_list_cnt() { return blocks_.get_size(); }
@@ -1081,8 +1081,9 @@ public:
   {
     return nullptr == cur_blk_ ? 0 : cur_blk_->get_buffer()->mem_size();
   }
-  uint64_t get_tenant_id() { return tenant_id_; }
-  const char* get_label() { return label_; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_mem_ctx_id() const { return ctx_id_;}
+  const char* get_label() const { return label_; }
   void free_tmp_dump_blk();
   inline void set_io_event_observer(ObIOEventObserver *observer)
   {

@@ -76,7 +76,7 @@ public:
   virtual int execute(sql::ObSql &engine, sql::ObSqlCtx &ctx, sql::ObResultSet &res)
   {
     int ret = OB_SUCCESS;
-    common::ObSqlInfoGuard si_guard(sql_);
+    SQL_INFO_GUARD(sql_, ObString(OB_MAX_SQL_ID_LENGTH, ctx.sql_id_));
     // Deep copy sql, because sql may be destroyed before result iteration.
     const int64_t alloc_size = sizeof(ObString) + sql_.length() + 1; // 1 for C terminate char
     void *mem = res.get_mem_pool().alloc(alloc_size);
@@ -914,6 +914,7 @@ template <typename T>
 int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
@@ -1827,6 +1828,7 @@ int ObInnerSQLConnection::execute(
     const uint64_t tenant_id, sqlclient::ObIExecutor &executor)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   FLTSpanGuard(inner_execute);
   SMART_VAR(ObInnerSQLResult, res, get_session()) {
     if (OB_FAIL(res.init())) {

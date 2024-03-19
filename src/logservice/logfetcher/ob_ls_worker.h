@@ -48,10 +48,10 @@ public:
   virtual int dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reason) = 0;
 
   // Putting the fetch log stream task into the work thread task pool
-  virtual int dispatch_stream_task(FetchStream &task, const char *from_mod) = 0;
+  virtual int dispatch_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ = false) = 0;
 
   // Hibernate fetch log stream task
-  virtual int hibernate_stream_task(FetchStream &task, const char *from_mod) = 0;
+  virtual int hibernate_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ = false) = 0;
 };
 
 //////////////////////////////////////////// ObLSWorker ////////////////////////////////////////////
@@ -93,8 +93,8 @@ public:
   int64_t get_fetcher_resume_tstamp();
 
   int dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reason);
-  int dispatch_stream_task(FetchStream &task, const char *from_mod);
-  int hibernate_stream_task(FetchStream &task, const char *from_mod);
+  int dispatch_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ = false);
+  int hibernate_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ = false);
 
 public:
   virtual void handle(void *data) {}

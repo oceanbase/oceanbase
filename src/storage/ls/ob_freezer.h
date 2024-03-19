@@ -178,12 +178,12 @@ public:
 
 public:
   /* freeze */
-  int logstream_freeze(ObFuture<int> *result = nullptr);
+  int logstream_freeze(const int64_t trace_id, ObFuture<int> *result = nullptr);
   int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   int tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id);
   int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
   int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
-  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result = nullptr);
+  int batch_tablet_freeze(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result = nullptr);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
@@ -282,7 +282,7 @@ private:
   int check_ls_state(); // must be used under the protection of ls_lock
   int freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   int freeze_ls_inner_tablet_(const ObTabletID &tablet_id);
-  int batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze);
+  int batch_tablet_freeze_(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze);
   int submit_batch_tablet_freeze_task(const ObTableHandleArray &tables_array, ObFuture<int> *result);
   int batch_tablet_freeze_task(ObTableHandleArray tables_array);
   int finish_freeze_with_ls_lock(memtable::ObMemtable *memtable);

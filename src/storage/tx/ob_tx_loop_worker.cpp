@@ -232,7 +232,7 @@ void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, const SCN &min_start_scn, MinS
 {
   int ret = OB_SUCCESS;
 
-  if (ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status)) {
+  if (OB_FAIL(ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] try submit keep alive log failed", K(ret));
   } else if (REACH_TIME_INTERVAL(KEEP_ALIVE_PRINT_INFO_INTERVAL)) {
     ls_ptr->get_keep_alive_ls_handler()->print_stat_info();
@@ -294,7 +294,7 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr  is not inited", K(ret), K(MTL_ID()),
               K(*ls_ptr));
 
-  } else if (retain_ctx_mgr->try_gc_retain_ctx(ls_ptr)) {
+  } else if (OB_FAIL(retain_ctx_mgr->try_gc_retain_ctx(ls_ptr))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr try to gc retain ctx failed", K(ret),
               K(MTL_ID()), K(*ls_ptr));
   } else {

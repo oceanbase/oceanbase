@@ -333,7 +333,7 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     const ObTableLockMode mode,
     const ObTableLockOpType op_type,
     bool &is_exist,
-    ObTableLockMode &lock_mode_in_same_trans) const
+    uint64_t lock_mode_cnt_in_same_trans[]) const
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -347,12 +347,12 @@ int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it
     DLIST_FOREACH(curr, lock_list_) {
       if (curr->lock_op_.lock_id_ == lock_id) {
         // BE CAREFUL: get all the lock mode curr trans has got.
-        lock_mode_in_same_trans |= curr->lock_op_.lock_mode_;
+        lock_mode_cnt_in_same_trans[get_index_by_lock_mode(curr->lock_op_.lock_mode_)]++;
         // check exist.
         if (curr->lock_op_.owner_id_ == owner_id &&
             curr->lock_op_.op_type_ == op_type && /* different op type may lock twice */
             curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
-          // dbms_lock can only have one obj lock
+          // dbms_lock can only have one obj lock, no matter what lock_mode
           is_exist = lock_id.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK ? true : curr->lock_op_.lock_mode_ == mode;
           if (is_exist) break;
         }
