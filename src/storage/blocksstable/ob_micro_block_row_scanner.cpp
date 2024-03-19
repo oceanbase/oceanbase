@@ -1358,6 +1358,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   int tmp_ret = OB_SUCCESS;
   SCN scn_trans_version = SCN::invalid_scn();
   auto &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
+  int64_t cost_time = common::ObClockGenerator::getClock();
 
   if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_read, scn_trans_version,
       is_determined_state))) {
@@ -1371,6 +1372,12 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
       LOG_WARN("failed to add trans state to cache", K(tmp_ret),
         "trans_id", lock_for_read_arg.data_trans_id_,
         "sql_seq", lock_for_read_arg.data_sql_sequence_);
+    }
+  }
+  if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+    cost_time = common::ObClockGenerator::getClock() - cost_time;
+    if (cost_time > 10 * 1000 /*10ms*/) {
+      LOG_INFO("multi-ver row scanner lock for read", K(ret), K(cost_time));
     }
   }
   return ret;
@@ -2275,7 +2282,8 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
     OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(trans_id, sql_seq, trans_state)) {
     can_read = trans_state.can_read_;
   } else {
-    storage::ObTxTableGuards tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
+    storage::ObTxTableGuards &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
+    int64_t cost_time = common::ObClockGenerator::getClock();
     if (OB_FAIL(tx_table_guards.check_sql_sequence_can_read(
             trans_id,
             sql_seq,
@@ -2286,6 +2294,12 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(trans_id, sql_seq,
         committed_trans_version_, last_trans_state_, can_read, 0))) {
       LOG_WARN("failed to add minor trans state", K(tmp_ret), K(trans_id), K(sql_seq), K(can_read));
+    }
+    if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+      cost_time = common::ObClockGenerator::getClock() - cost_time;
+      if (cost_time > 10 * 1000 /*10ms*/) {
+        LOG_INFO("multi-ver minor row scanner check seq", K(ret), K(cost_time));
+      }
     }
   }
   LOG_DEBUG("cxf debug check sql sequence can read", K(ret), K(can_read), K(trans_id), K(sql_seq));
