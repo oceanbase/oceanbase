@@ -1140,7 +1140,7 @@ int ObMicroBlockReader::get_aggregate_result(
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset),
                        K(row_buf.storage_datums_[col_offset]), K(obj_meta.get_type()), K(map_type));
             } else if (has_lob_out_row && obj_meta.is_lob_storage()) {
-              if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(tmp_datum, *col_params->at(i), iter_param, context))) {
+              if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(tmp_datum, *col_params->at(col_offset), iter_param, context))) {
                 LOG_WARN("Failed to fill lob loactor", K(ret), K(tmp_datum), K(context), K(iter_param));
               } else {
                 need_reuse_lob_locator = true;
