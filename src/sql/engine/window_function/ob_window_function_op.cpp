@@ -2594,7 +2594,8 @@ int ObWindowFunctionOp::get_whole_msg(bool is_end,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(proxy.get_dh_msg(MY_SPEC.id_,
+      // Synchronization is requested here.
+      if (OB_FAIL(proxy.get_dh_msg_sync(MY_SPEC.id_,
           dtl::DH_WINBUF_WHOLE_MSG,
           piece,
           temp_whole_msg,
