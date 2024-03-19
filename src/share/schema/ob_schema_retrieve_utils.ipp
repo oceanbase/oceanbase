@@ -2017,6 +2017,7 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
   is_deleted  = false;
   int ret = common::OB_SUCCESS;
   outline_info.set_tenant_id(tenant_id);
+  bool ignore_column_error = true;
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, outline_id, outline_info, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -2036,6 +2037,12 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, format, outline_info, ObHintFormat);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_params, outline_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_target, outline_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_sql_text, outline_info, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_sql_id, outline_info, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_outline, outline_info, bool, true, ignore_column_error, false);
   }
   return ret;
 }
@@ -4189,6 +4196,7 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     bool &is_deleted)
 {
   int ret = common::OB_SUCCESS;
+  bool ignore_column_error = true;
   outline_schema.reset();
   is_deleted = false;
 
@@ -4202,6 +4210,10 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, signature, outline_schema);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, sql_id, outline_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, ObString::make_string(""));
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, format_sql_id, outline_schema, true, ignore_column_error, ObString::make_string(""));
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, format_outline, outline_schema, bool, true, ignore_column_error, false);
   }
   return ret;
 }

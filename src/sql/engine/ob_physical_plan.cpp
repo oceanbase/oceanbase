@@ -134,8 +134,11 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    use_rich_format_(false),
     subschema_ctx_(allocator_),
-    all_local_session_vars_(&allocator_)
+    disable_auto_memory_mgr_(false),
+    all_local_session_vars_(&allocator_),
+    udf_has_dml_stmt_(false)
 {
 }
 
@@ -233,6 +236,9 @@ void ObPhysicalPlan::reset()
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
   sql_stat_record_value_.reset();
+  use_rich_format_ = false;
+  udf_has_dml_stmt_ = false;
+  disable_auto_memory_mgr_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -788,7 +794,11 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    subschema_ctx_);
+                    subschema_ctx_,
+                    use_rich_format_,
+                    disable_auto_memory_mgr_,
+                    udf_has_dml_stmt_,
+                    stat_.format_sql_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

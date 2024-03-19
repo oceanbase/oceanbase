@@ -6333,6 +6333,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     uint64_t &outline_id,
     bool &exist)
 {
@@ -6356,7 +6357,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id, database_id,
-        name, schema))) {
+        name, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(name));
     } else if (NULL != schema) {
@@ -6372,6 +6373,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6393,7 +6395,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id, database_id,
-        sql_id, schema))) {
+        sql_id, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(sql_id));
     } else if (NULL != schema) {
@@ -6408,6 +6410,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &paramlized_sql,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6429,7 +6432,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id, database_id,
-        paramlized_sql, schema))) {
+        paramlized_sql, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(paramlized_sql));
     } else if (NULL != schema) {
@@ -6852,6 +6855,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6872,7 +6876,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, name, simple_outline))) {
+      database_id, name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(name));
   } else if (NULL == simple_outline) {
     LOG_INFO("outline not exist", K(tenant_id), K(database_id), K(name));
@@ -6894,6 +6898,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const ObString &db_name,
     const ObString &outline_name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6919,7 +6924,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_INVALID_ID == database_id) {
     // do-nothing
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, outline_name, simple_outline))) {
+      database_id, outline_name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(outline_name));
   } else if (NULL == simple_outline) {
     LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(outline_name));
@@ -6940,6 +6945,7 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &signature,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6960,10 +6966,10 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id,
-      database_id, signature, simple_outline))) {
+      database_id, signature, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(signature));
   } else if (NULL == simple_outline) {
-    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(signature));
+    LOG_TRACE("outline not exist", K(tenant_id), K(is_format), K(database_id), K(signature));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),
@@ -7527,6 +7533,7 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7547,10 +7554,10 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id,
-      database_id, sql_id, simple_outline))) {
+      database_id, sql_id, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(sql_id));
   } else if (NULL == simple_outline) {
-    LOG_DEBUG("outline not exist", K(tenant_id), K(database_id), K(sql_id));
+    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(sql_id));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),

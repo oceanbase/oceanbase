@@ -1033,6 +1033,9 @@ all_outline_def = dict(
       ('outline_target', 'longtext', 'false'),
       ('sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('owner_id', 'int', 'true'),
+      ('format_sql_text', 'longtext', 'true'),
+      ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
+      ('format_outline', 'int', 'false', '0'),
     ],
 )
 
@@ -8084,7 +8087,9 @@ def_table_schema(
     ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
     ('seq_num', 'int'),
     ('total_memstore_read_row_count', 'int'),
-    ('total_ssstore_read_row_count', 'int')
+    ('total_ssstore_read_row_count', 'int'),
+    ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8383,6 +8388,9 @@ def_table_schema(
       ('outline_sql', 'longtext', 'false'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('outline_content', 'longtext', 'false'),
+      ('format_sql_text', 'longtext', 'true'),
+      ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
+      ('format_outline', 'int', 'false', '0')
   ],
 )
 
@@ -15614,6 +15622,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          network_wait_time as NETWORK_WAIT_TIME,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
@@ -16024,6 +16033,7 @@ def_table_schema(
     FLT_TRACE_ID,
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
+    FORMAT_SQL_ID,
     NETWORK_WAIT_TIME,
     stmt_type as STMT_TYPE,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
@@ -25465,7 +25475,7 @@ def_table_schema(
       A.SQL_ID,
       A.OUTLINE_CONTENT
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " "),
 
     normal_columns = [
@@ -32000,7 +32010,37 @@ def_table_schema(
     oceanbase.__all_virtual_wr_event_name SETTING
   """.replace("\n", " ")
 )
-# 21485: DBA_OB_FORMAT_OUTLINES
+
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    table_id       = '21485',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      B.GMT_CREATE AS CREATE_TIME,
+      B.GMT_MODIFIED AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0
+""".replace("\n", " "),
+    normal_columns = [
+   ],
+
+)
 
 def_table_schema(
   owner = 'mingye.swj',
@@ -46988,6 +47028,7 @@ def_table_schema(
         WHEN 'USER_TAB_PRIVS' THEN ''
         WHEN 'STMT_AUDIT_OPTION_MAP' THEN ''
         WHEN 'DBA_OB_OUTLINES' THEN ''
+        WHEN 'DBA_OB_FORMAT_OUTLINES' THEN ''
         WHEN 'GV$OB_SQL_AUDIT' THEN ''
         WHEN 'V$OB_SQL_AUDIT' THEN ''
         WHEN 'DBA_AUDIT_SESSION' THEN ''
@@ -52075,8 +52116,37 @@ def_table_schema(
 )
 
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
-
-#25272: DBA_OB_FORMAT_OUTLINES
+def_table_schema(
+    owner = 'guoyun.lgy',
+    table_name     = 'DBA_OB_FORMAT_OUTLINES',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25272',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
+      CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
+      A.TENANT_ID,
+      A.DATABASE_ID,
+      A.OUTLINE_ID,
+      A.DATABASE_NAME,
+      A.OUTLINE_NAME,
+      A.VISIBLE_SIGNATURE,
+      A.FORMAT_SQL_TEXT,
+      A.OUTLINE_TARGET,
+      A.OUTLINE_SQL,
+      A.FORMAT_SQL_ID,
+      A.OUTLINE_CONTENT
+    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0;
+""".replace("\n", " "),
+   normal_columns = [
+   ],
+)
 
 def_table_schema(
   owner           = 'jiajingzhe.jjz',
@@ -52521,6 +52591,7 @@ def_table_schema(
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
+                         format_sql_id as FORMAT_SQL_ID,
                          network_wait_time as  NETWORK_WAIT_TIME,
                          stmt_type as STMT_TYPE,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
@@ -52635,6 +52706,7 @@ TX_STATE_VERSION,
 FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
+FORMAT_SQL_ID,
 NETWORK_WAIT_TIME,
 STMT_TYPE,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
@@ -58002,7 +58074,7 @@ def_table_schema(
                           A.SQL_ID,
                           A.OUTLINE_CONTENT
                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
-                   WHERE A.OUTLINE_ID = B.OUTLINE_ID
+                   WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " ")
 )
 
@@ -60145,6 +60217,7 @@ def_table_schema(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
 
 ################################################################################
 # Lob Table (50000, 70000)

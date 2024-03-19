@@ -1669,6 +1669,7 @@ public:
   static int cdb_wr_system_event_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_format_outlines_schema(share::schema::ObTableSchema &table_schema);
   static int procs_priv_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sqlstat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sqlstat_schema(share::schema::ObTableSchema &table_schema);
@@ -1959,6 +1960,7 @@ public:
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_system_event_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_event_name_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_format_outlines_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_sys_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_transfer_partition_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -4349,6 +4351,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_wr_system_event_schema,
   ObInnerTableSchema::dba_wr_event_name_schema,
   ObInnerTableSchema::cdb_wr_event_name_schema,
+  ObInnerTableSchema::dba_ob_format_outlines_schema,
   ObInnerTableSchema::procs_priv_schema,
   ObInnerTableSchema::gv_ob_sqlstat_schema,
   ObInnerTableSchema::v_ob_sqlstat_schema,
@@ -4639,6 +4642,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
   ObInnerTableSchema::dba_wr_system_event_ora_schema,
   ObInnerTableSchema::dba_wr_event_name_ora_schema,
+  ObInnerTableSchema::dba_ob_format_outlines_ora_schema,
   ObInnerTableSchema::dba_wr_sqlstat_ora_schema,
   ObInnerTableSchema::dba_wr_sys_time_model_ora_schema,
   ObInnerTableSchema::dba_ob_transfer_partition_tasks_ora_schema,
@@ -5955,6 +5959,7 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_CGROUP_CONFIG_TID,
   OB_DBA_WR_SYSTEM_EVENT_TID,
   OB_DBA_WR_EVENT_NAME_TID,
+  OB_DBA_OB_FORMAT_OUTLINES_TID,
   OB_PROCS_PRIV_TID,
   OB_GV_OB_SQLSTAT_TID,
   OB_V_OB_SQLSTAT_TID,
@@ -6237,6 +6242,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
   OB_DBA_WR_SYSTEM_EVENT_ORA_TID,
   OB_DBA_WR_EVENT_NAME_ORA_TID,
+  OB_DBA_OB_FORMAT_OUTLINES_ORA_TID,
   OB_DBA_WR_SQLSTAT_ORA_TID,
   OB_DBA_WR_SYS_TIME_MODEL_ORA_TID,
   OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TID,
@@ -8423,6 +8429,7 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_CGROUP_CONFIG_TNAME,
   OB_DBA_WR_SYSTEM_EVENT_TNAME,
   OB_DBA_WR_EVENT_NAME_TNAME,
+  OB_DBA_OB_FORMAT_OUTLINES_TNAME,
   OB_PROCS_PRIV_TNAME,
   OB_GV_OB_SQLSTAT_TNAME,
   OB_V_OB_SQLSTAT_TNAME,
@@ -8705,6 +8712,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
   OB_DBA_WR_SYSTEM_EVENT_ORA_TNAME,
   OB_DBA_WR_EVENT_NAME_ORA_TNAME,
+  OB_DBA_OB_FORMAT_OUTLINES_ORA_TNAME,
   OB_DBA_WR_SQLSTAT_ORA_TNAME,
   OB_DBA_WR_SYS_TIME_MODEL_ORA_TNAME,
   OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TNAME,
@@ -12319,10 +12327,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 273;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 782;
-const int64_t OB_SYS_VIEW_COUNT = 858;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1918;
+const int64_t OB_SYS_VIEW_COUNT = 860;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1920;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1921;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1923;
 
 } // end namespace share
 } // end namespace oceanbase

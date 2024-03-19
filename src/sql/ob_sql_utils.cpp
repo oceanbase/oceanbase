@@ -1935,7 +1935,8 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                 ObString &outline_key,
                                 ObMaxConcurrentParam::FixParamStore &fix_param_store,
                                 ParseMode parse_mode,
-                                bool &has_questionmark_in_sql)
+                                bool &has_questionmark_in_sql,
+                                bool need_format)
 {
   int ret = OB_SUCCESS;
   has_questionmark_in_sql = false;
@@ -1979,11 +1980,16 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
     ObSEArray<ObPCParam *, OB_PC_RAW_PARAM_COUNT> raw_params;
     SqlInfo sql_info;
     char *buf = NULL;
+    char *buf2 = NULL;
     int32_t pos = 0;
+    int32_t pos2 = 0;
+    bool can_format = false;
+    ObString constructed_sql;
     const bool is_transform_outline = true;
     const bool is_parameterized_execute = false;
     ParseNode *type_node = NULL;
     sql_info.need_check_fp_ = false;
+    int64_t format_len = query_sql.length() * 2;
     if (OB_FAIL(parser.parse(query_sql, parse_result))) {
       LOG_WARN("Generate syntax tree failed", "sql", query_sql, K(ret));
     } else if (OB_ISNULL(parse_result.result_tree_)) {
@@ -2019,6 +2025,9 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                                                         raw_params,
                                                                         parse_mode))) {
       LOG_WARN("fail to fast_parameterize_sql", K(ret));
+    } else if (need_format
+          && OB_FAIL(ObSqlParameterization::formalize_sql_filter_hint(allocator, no_param_sql, no_param_sql, raw_params))) {
+      LOG_WARN("failed to formalize fast parser sql", K(no_param_sql), K(ret));
     } else if (check_param && OB_FAIL(ObSqlParameterization::check_and_generate_param_info(raw_params,
                                                                             sql_info,
                                                                             special_params))) {
@@ -2029,13 +2038,23 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
         LOG_WARN("fail to check and generate not params",
                  K(ret), K(query_sql), K(no_param_sql));
       }
-    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(query_sql.length())))) {
+    } else if (OB_UNLIKELY(NULL == (buf = (char *)allocator.alloc(format_len))) ||
+        OB_UNLIKELY(NULL == (buf2 = (char *)allocator.alloc(format_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc buf", K(ret));
-    } else if (OB_FAIL(ObSqlParameterization::construct_sql(no_param_sql, special_params, buf, query_sql.length(), pos))) {
+    } else if (OB_FAIL(ObSqlParameterization::construct_sql(no_param_sql, special_params, buf, format_len, pos))) {
       LOG_WARN("fail to construct_sql", K(ret), K(no_param_sql), K(special_params.count()));
+    } else if (FALSE_IT(constructed_sql.assign_ptr(buf, pos))) {
+      // do nothing
+    } else if (need_format
+          && OB_FAIL(ObSqlParameterization::try_format_in_expr(constructed_sql, buf2, format_len, pos2, can_format))) {
+      LOG_WARN("fail to format in expr", K(ret));
     } else {
-      ObString constructed_sql(pos, buf);
+      if (need_format) {
+        constructed_sql.assign_ptr(buf2, pos2);
+      } else {
+        constructed_sql.assign_ptr(buf, pos);
+      }
       int64_t size = constructed_sql.get_serialize_size();
       if (0 == size) {
         ret = OB_ERR_UNEXPECTED;

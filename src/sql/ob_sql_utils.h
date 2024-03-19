@@ -405,7 +405,8 @@ public:
                               common::ObString &outline_key,
                               share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                               ParseMode mode,
-                              bool &has_questionmark_in_sql);
+                              bool &has_questionmark_in_sql,
+                              bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,

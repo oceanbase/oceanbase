@@ -669,9 +669,14 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  bool disable_auto_memory_mgr_;
+
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
+public:
+  bool udf_has_dml_stmt_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

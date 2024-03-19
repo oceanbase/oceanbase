@@ -379,6 +379,7 @@ private:
   //*************************
   //not param回填后的sql序列化结果, 主要是用于outline 的signature
   common::ObString outline_signature_;
+  common::ObString outline_format_signature_;
   common::ObString constructed_sql_;
   ObPCVSet *pcv_set_;
   common::ObIAllocator *pc_alloc_;
@@ -394,6 +395,7 @@ private:
   ObOutlineState outline_state_;
   share::schema::ObOutlineParamsWrapper outline_params_wrapper_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
+  char format_sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 
   // session id for temporary table
   uint64_t sessid_;

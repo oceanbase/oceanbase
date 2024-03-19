@@ -408,6 +408,7 @@ struct ObAuditRecordData {
   ObCurTraceId::TraceId pl_trace_id_;
   int64_t plsql_exec_time_;
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
+  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   stmt::StmtType stmt_type_;
   uint64_t total_memstore_read_row_count_;
   uint64_t total_ssstore_read_row_count_;
