@@ -181,6 +181,9 @@ int ObLobPersistInsertIter::get_next_row(ObNewRow *&row)
       LOG_WARN("get next meta info failed.", K(ret));
     }
   } else if (OB_FALSE_IT(result_.info_.lob_data_.assign_ptr(result_.data_.ptr(), result_.data_.length()))) {
+  } else if (! param_->is_store_char_len_ && result_.info_.char_len_ != UINT32_MAX) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("char length invalid", K(ret), K(result_.info_), KPC(param_));
   } else if (0 == result_.info_.byte_len_ || result_.info_.byte_len_ != result_.info_.lob_data_.length()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("byte length invalid", K(ret), K(result_.info_));

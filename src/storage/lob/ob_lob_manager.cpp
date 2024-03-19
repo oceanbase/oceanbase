@@ -85,6 +85,19 @@ static int is_store_char_len(ObLobAccessParam& param, int64_t store_chunk_size, 
   return ret;
 }
 
+static bool lob_handle_has_char_len_field(ObLobAccessParam& param)
+{
+  bool bret = false;
+  if (param.lob_common_ != nullptr && !param.lob_common_->in_row_) {
+    if (param.handle_size_ >= ObLobManager::LOB_OUTROW_FULL_SIZE) {
+      bret = true;
+    } else {
+      LOG_INFO("old old data", K(param));
+    }
+  }
+  return bret;
+}
+
 int ObLobManager::mtl_new(ObLobManager *&m) {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -1385,13 +1398,15 @@ int ObLobManager::update_one_piece(ObLobAccessParam& param,
 {
   int ret = OB_SUCCESS;
   new_meta_info.lob_data_.assign_ptr(data.ptr(), data.length());
-  if (!param.is_store_char_len_) {
+  if (!param.is_store_char_len_ && lob_handle_has_char_len_field(param)) {
     old_meta_info.char_len_ = UINT32_MAX;
-    new_meta_info.char_len_ = UINT32_MAX;
   }
   if (param.is_store_char_len_ && new_meta_info.char_len_ > new_meta_info.byte_len_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("char len should not bigger than byte len", K(ret), K(new_meta_info));
+  } else if (! param.is_store_char_len_ && new_meta_info.char_len_ != UINT32_MAX) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("char length invalid", K(ret), K(new_meta_info), K(param));
   } else if (0 == new_meta_info.byte_len_ || new_meta_info.byte_len_ != new_meta_info.lob_data_.length()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("byte length invalid", K(ret), K(new_meta_info));
@@ -1420,7 +1435,7 @@ int ObLobManager::erase_one_piece(ObLobAccessParam& param,
                                   ObLobPieceInfo& piece_info)
 {
   int ret = OB_SUCCESS;
-  if (!lob_handle_has_char_len(param)) {
+  if (!lob_handle_has_char_len(param) && lob_handle_has_char_len_field(param)) {
     meta_info.char_len_ = UINT32_MAX;
   }
   if (OB_FAIL(lob_ctx.lob_meta_mngr_->erase(param, meta_info))) {
@@ -1553,10 +1568,70 @@ int ObLobManager::check_need_out_row(
   } else if (! param.lob_common_->in_row_ && need_out_row) {
     // outrow -> outrow : keep outrow
     int64_t store_chunk_size = 0;
-    if (OB_FAIL(param.get_store_chunk_size(store_chunk_size))) {
+    bool has_char_len = lob_handle_has_char_len(param);
+    if (add_len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("add_len is negative", K(ret), K(param));
+    } else if (add_len == 0) {
+      // no data add, keep char_len state
+      param.is_store_char_len_ = has_char_len;
+    } else if (OB_FAIL(param.get_store_chunk_size(store_chunk_size))) {
       LOG_WARN("get_store_chunk_size fail", K(ret), K(param));
     } else if (OB_FAIL(is_store_char_len(param, store_chunk_size, add_len))) {
       LOG_WARN("cacl is_store_char_len failed.", K(ret), K(store_chunk_size), K(add_len), K(param));
+    } else if (param.op_type_ != ObLobDataOutRowCtx::OpType::SQL) {
+      if (! param.is_store_char_len_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected case", K(ret), K(param), K(has_char_len));
+      }
+    } else if (0 != param.offset_ || 0 != param.byte_size_) {
+      if (! param.is_store_char_len_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected case", K(ret), K(param), K(has_char_len));
+      }
+    } else if (has_char_len && param.is_store_char_len_) {
+      // keep char_len
+    } else if (! has_char_len && ! param.is_store_char_len_) {
+      // keep no char_len
+    } else if (has_char_len && ! param.is_store_char_len_) {
+      // old data has char , but new data no char_len
+      // reset char_len to UINT64_MAX from 0
+      int64_t *char_len = ObLobManager::get_char_len_ptr(param);
+      if (OB_ISNULL(char_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("char_len ptr is null", K(ret), K(param), K(has_char_len));
+      } else if (*char_len != 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("char_len should be zero", K(ret), K(param), K(has_char_len), K(*char_len));
+      } else {
+        *char_len = UINT64_MAX;
+        LOG_DEBUG("has_char_len to no_char_len", K(param));
+      }
+    } else if (! has_char_len && param.is_store_char_len_) {
+      if (param.handle_size_ < LOB_OUTROW_FULL_SIZE) {
+        LOG_INFO("old old data", K(param));
+        param.is_store_char_len_ = true;
+      } else if (param.is_full_insert()) {
+        // reset char_len to 0 from UINT64_MAX
+        int64_t *char_len = ObLobManager::get_char_len_ptr(param);
+        if (OB_ISNULL(char_len)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("char_len ptr is null", K(ret), K(param), K(has_char_len));
+        } else if (*char_len != UINT64_MAX) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("char_len should be zero", K(ret), K(param), K(has_char_len), K(*char_len));
+        } else {
+          *char_len = 0;
+          LOG_DEBUG("no_char_len to has_char_len", K(param));
+        }
+      } else {
+        // partial update aloways store char_len beacaure is only support in oracle mode
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unsupport situation", K(ret), K(param), K(has_char_len));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unkown situation", K(ret), K(param), K(has_char_len));
     }
   }
   return ret;
@@ -2962,7 +3037,7 @@ int ObLobManager::erase_imple_inner(ObLobAccessParam& param)
     LOG_WARN("init lob data out row ctx failed", K(ret));
   } else if (OB_FAIL(lob_ctx.lob_meta_mngr_->scan(param, meta_iter))) {
     LOG_WARN("do lob meta scan failed.", K(ret), K(param));
-  } else if (!param.tablet_id_.is_inner_tablet() && param.is_full_delete()) {
+  } else if (param.is_full_delete()) {
     if (OB_FAIL(batch_delete(param, meta_iter))) {
       LOG_WARN("batch_delete fail", K(ret), K(param));
     }
@@ -3175,7 +3250,7 @@ int ObLobManager::append_outrow(ObLobAccessParam& param, bool ori_is_inrow, ObSt
     LOG_WARN("get_store_chunk_size fail", KR(ret), K(param));
   } else if (OB_FAIL(init_out_row_ctx(param, data.length(), param.op_type_))) {
     LOG_WARN("init lob data out row ctx failed", K(ret));
-  } else if (!param.tablet_id_.is_inner_tablet() && param.is_full_insert()) {
+  } else if (param.is_full_insert()) {
     ObLobMetaWriteIter iter(param.allocator_, store_chunk_size);
     if (OB_FAIL(iter.open(param, data))) {
       LOG_WARN("Failed to open lob meta write iter.", K(ret), K(param));
@@ -3201,7 +3276,6 @@ int ObLobManager::append_outrow(
 {
   int ret = OB_SUCCESS;
   ObLobCtx lob_ctx = lob_ctx_;
-  ObString write_buffer;
   ObString read_buffer;
   int64_t store_chunk_size = 0;
   bool need_get_last_info = ! (ori_inrow_data.length() > 0 || param.byte_size_ == 0);
@@ -3212,8 +3286,6 @@ int ObLobManager::append_outrow(
     LOG_WARN("get_store_chunk_size fail", KR(ret), K(param));
   } else if (OB_FAIL(init_out_row_ctx(param, append_lob_len, param.op_type_))) {
     LOG_WARN("init lob data out row ctx failed", K(ret));
-  } else if(OB_FAIL(prepare_data_buffer(param, write_buffer, store_chunk_size))) {
-    LOG_WARN("fail to prepare write buffer", K(ret), K(param));
   } else if(OB_FAIL(prepare_data_buffer(param, read_buffer, store_chunk_size))) {
     LOG_WARN("fail to prepare reaed buffer", K(ret), K(param));
   } else {
