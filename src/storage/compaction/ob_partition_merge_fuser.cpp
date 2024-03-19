@@ -179,7 +179,7 @@ int ObMajorPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &
 int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-
+  const bool need_trim_default_row = major_working_cluster_version_ >= DATA_VERSION_4_2_1_5;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIPartitionMergeFuser init twice", K(ret));
@@ -187,7 +187,7 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
     STORAGE_LOG(WARN, "Failed to get column ids", K(ret));
   } else if (OB_FAIL(default_row_.init(allocator_, multi_version_column_ids_.count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else if (OB_FAIL(merge_param.merge_schema_->get_orig_default_row(multi_version_column_ids_, default_row_))) {
+  } else if (OB_FAIL(merge_param.merge_schema_->get_orig_default_row(multi_version_column_ids_, need_trim_default_row, default_row_))) {
     STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids_, default_row_))) {
     STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret));
