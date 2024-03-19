@@ -150,6 +150,7 @@ WAIT_EVENT_DEF(TIERED_BLOCK_READ_LOCAL, 21014, "tiered block read local", "addre
 
 // inner sql
 WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sql class", "inner session id", "", OTHER, true, true)
+WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called", "inner session id", "parent session id", "", IDLE, true, false)
 
 // CONFIGURATION
 WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
