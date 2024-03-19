@@ -187,9 +187,13 @@ int ObTableStoreCache::init(
       const ObSSTableMeta &sstable_meta = sst_meta_hdl.get_sstable_meta();
       last_major_snapshot_version_ = last_major->get_snapshot_version();
       recycle_version_ = last_major_snapshot_version_;
-      last_major_column_count_ = sstable_meta.get_column_count();
       last_major_compressor_type_ = sstable_meta.get_basic_meta().get_compressor_type();
       last_major_latest_row_store_type_ = sstable_meta.get_basic_meta().get_latest_row_store_type();
+      if (last_major->is_co_sstable()) {
+        last_major_column_count_ = static_cast<const storage::ObCOSSTableV2 *>(last_major)->get_cs_meta().full_column_cnt_;
+      } else {
+        last_major_column_count_ = sstable_meta.get_column_count();
+      }
     }
   }
 
