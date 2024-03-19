@@ -442,8 +442,15 @@ sql_stmt:
         $$ = sql_stmt;
       }
       if(T_VARIABLE_SET == $$->type_) {
+        int64_t child_cnt = $$->num_child_;
         for(int64_t i = 0; i < $$->num_child_; ++i) {
-          if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
+          if (T_SET_NAMES == $$->children_[i]->type_ || T_SET_CHARSET == $$->children_[i]->type_) {
+            malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+            if (child_cnt > 1) {
+              obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+              YYERROR;
+            }
+          } else if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
             YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
           } else {
             obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[i]->children_[1]);
