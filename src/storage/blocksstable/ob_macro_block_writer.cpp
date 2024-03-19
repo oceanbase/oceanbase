@@ -1024,6 +1024,7 @@ int ObMacroBlockWriter::get_estimate_meta_block_size(const ObDataMacroBlockMeta 
   estimate_size = 0;
 
   if (OB_ISNULL(builder_)) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null builder", K(ret));
   } else if (OB_FAIL(builder_->cal_macro_meta_block_size(macro_meta.end_key_, estimate_size))) {
     STORAGE_LOG(WARN, "fail to cal macro meta size", K(ret), K(macro_meta));
