@@ -1183,7 +1183,6 @@ ob_set_subtarget(ob_sql resolver_dml
 ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_expr_relation_analyzer.cpp
   resolver/expr/ob_raw_expr.cpp
-  resolver/expr/ob_raw_expr_canonicalizer_impl.cpp
   resolver/expr/ob_raw_expr_copier.cpp
   resolver/expr/ob_raw_expr_deduce_type.cpp
   resolver/expr/ob_raw_expr_info_extractor.cpp
@@ -1254,6 +1253,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_expr_pullup.cpp
   rewrite/ob_transformer_impl.cpp
   rewrite/ob_transform_dblink.cpp
+  rewrite/ob_transform_conditional_aggr_coalesce.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
 )

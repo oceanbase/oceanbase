@@ -1629,7 +1629,8 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
-                                        ObQueryRangeProvider* &range);
+                                        ObQueryRangeProvider* &range,
+                                        int64_t index_id);
 
     int check_enable_better_inlist(int64_t table_id, bool &enable);
 
@@ -2380,6 +2381,7 @@ struct NullAwareAntiJoinInfo {
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,
                                     const ObBitSet<> &ex_prefix_column_bs,
+                                    const ObIArray<ObRawExpr*> &unprecise_exprs,
                                     bool &can_extract);
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,

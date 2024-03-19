@@ -66,6 +66,8 @@ void ObTransformerCtx::reset()
   used_trans_hints_.reset();
   groupby_pushdown_stmts_.reset();
   is_spm_outline_ = false;
+  in_accept_transform_ = false;
+  push_down_filters_.reset();
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -134,6 +136,7 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(SELECT_EXPR_PULLUP)
     TRANS_TYPE_TO_STR(PROCESS_DBLINK)
     TRANS_TYPE_TO_STR(DECORRELATE)
+    TRANS_TYPE_TO_STR(CONDITIONAL_AGGR_COALESCE)
     default:  return NULL;
   }
 }
@@ -323,6 +326,9 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
       trans_happened = is_original_expected;
     } else {
       trans_happened = trans_stmt_cost < stmt_cost_;
+    }
+    if (stmt->get_query_ctx()->get_injected_random_status()) {
+      trans_happened = true;
     }
     ctx_->in_accept_transform_ = false;
   }

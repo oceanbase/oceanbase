@@ -113,21 +113,11 @@ private:
 
   int check_cartesian(ObSelectStmt *stmt, UnionFind &uf, bool &is_valid);
 
-  int connect_tables(ObSelectStmt *stmt,
-                     const ObIArray<uint64_t> &table_ids,
-                     const ObIArray<TableItem *> &from_tables,
-                     UnionFind &uf);
-
   int collect_cartesian_infos(ObSelectStmt *stmt,
                               UnionFind &uf,
                               ObIArray<LimitPushDownHelper*> &helpers);
 
   int collect_cartesian_exprs(ObSelectStmt *stmt, LimitPushDownHelper *helper);
-
-  int get_idx_from_table_ids(ObSelectStmt *stmt,
-                             const ObIArray<uint64_t> &src_table_ids,
-                             const ObIArray<TableItem *> &target_tables,
-                             ObIArray<int64_t> &indices);
 
   int check_table_validity(const ObIArray<TableItem *> &target_tables, bool &is_valid);
 

@@ -76,6 +76,7 @@ ObQueryRange::ObQueryRange()
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -101,6 +102,7 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -144,6 +146,7 @@ void ObQueryRange::reset()
   table_graph_.reset();
   range_exprs_.reset();
   ss_range_exprs_.reset();
+  unprecise_range_exprs_.reset();
   inner_allocator_.reset();
   has_exec_param_ = false;
   is_equal_and_ = false;
@@ -161,7 +164,8 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
                                        const ParamsIArray *params,
                                        const bool phy_rowid_for_table_loc,
                                        const bool ignore_calc_failure,
-                                       const bool use_in_optimization)
+                                       const bool use_in_optimization,
+                                       const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -179,6 +183,7 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
     query_range_ctx_ = new(ptr) ObQueryRangeCtx(exec_ctx, expr_constraints, params);
     query_range_ctx_->phy_rowid_for_table_loc_ = phy_rowid_for_table_loc;
     query_range_ctx_->ignore_calc_failure_ = ignore_calc_failure;
+    query_range_ctx_->index_prefix_ = index_prefix;
     query_range_ctx_->range_optimizer_max_mem_size_ = exec_ctx->get_my_session()->get_range_optimizer_max_mem_size();
     if (0 == query_range_ctx_->range_optimizer_max_mem_size_) {
       query_range_ctx_->range_optimizer_max_mem_size_ = INT64_MAX;
@@ -267,12 +272,13 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   ObExecContext *exec_ctx,
                                                   ExprConstrantArray *expr_constraints /* = NULL */,
                                                   const ParamsIArray *params /* = NULL */,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx, expr_constraints, params,
-                                   false, true, use_in_optimization))) {
+                                   false, true, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -736,7 +742,8 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
                                                   const ParamsIArray *params /* = NULL */,
                                                   const bool phy_rowid_for_table_loc /* = false*/,
                                                   const bool ignore_calc_failure /* = true*/,
-                                                  const bool use_in_optimization /* = false */)
+                                                  const bool use_in_optimization /* = false */,
+                                                  const int64_t index_prefix/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObKeyPartList and_ranges;
@@ -749,7 +756,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
   ObArenaAllocator ctx_allocator(ObModIds::OB_QUERY_RANGE_CTX);
   if (OB_FAIL(init_query_range_ctx(ctx_allocator, range_columns, exec_ctx,
                                    expr_constraints, params, phy_rowid_for_table_loc,
-                                   ignore_calc_failure, use_in_optimization))) {
+                                   ignore_calc_failure, use_in_optimization, index_prefix))) {
     LOG_WARN("init query range context failed", K(ret));
   } else if (OB_ISNULL(query_range_ctx_)) {
     ret = OB_NOT_INIT;
@@ -1286,6 +1293,7 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
   } else {
     ObSEArray<ObRawExpr*, 4> range_exprs;
     ObSEArray<ObRawExpr*, 4> ss_range_exprs;
+    ObSEArray<ObRawExpr*, 4> unprecise_range_exprs;
     bool precise = true;
     bool ss_precise = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < query_range_ctx_->precise_range_exprs_.count(); ++i) {
@@ -1314,6 +1322,8 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
       LOG_WARN("failed to assign range exprs", K(ret));
     } else if (OB_FAIL(ss_range_exprs_.assign(ss_range_exprs))) {
       LOG_WARN("failed to assign skip scan range exprs", K(ret));
+    } else if (OB_FAIL(unprecise_range_exprs_.assign(unprecise_range_exprs))) {
+      LOG_WARN("failed to assign unprecise range exprs", K(ret));
     } else {
       LOG_DEBUG("finish fill range exprs", K(max_precise_pos), K(range_exprs));
       LOG_DEBUG("finish fill skip scan range exprs", K(ss_offset), K(ss_max_precise_pos), K(ss_range_exprs));
@@ -3985,6 +3995,9 @@ int ObQueryRange::is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &i
     if (OB_SUCCESS == map_ret && OB_NOT_NULL(pos) &&
         (max_off == -1 || (max_off != - 1 && pos->offset_ <= max_off))) {
       is_key_part = true;
+      if (query_range_ctx_->index_prefix_ > -1 && pos->offset_ >= query_range_ctx_->index_prefix_) {
+        is_key_part = false;
+      }
       SQL_REWRITE_LOG(DEBUG, "id pair is  key part", K_(id.table_id), K_(id.column_id));
     } else if (OB_HASH_NOT_EXIST != map_ret) {
       ret = map_ret;
@@ -8163,6 +8176,8 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
     LOG_WARN("assign range exprs failed", K(ret));
   } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));
+  } else if (OB_FAIL(unprecise_range_exprs_.assign(other.unprecise_range_exprs_))) {
+    LOG_WARN("assign unprecise range exprs failed", K(ret));
   } else if (OB_FAIL(table_graph_.assign(other_graph))) {
     LOG_WARN("Deep copy range columns failed", K(ret));
   } else if (OB_FAIL(equal_offs_.assign(other.equal_offs_))) {
@@ -9291,6 +9306,12 @@ void ObQueryRange::inner_get_prefix_info(const ObKeyPart *key_part,
       range_prefix_count = std::min(cur_range_prefix_count, range_prefix_count);
     }
   }
+}
+
+int ObQueryRange::get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const
+{
+  UNUSED(total_range_sizes);
+  return OB_SUCCESS;
 }
 
 }  // namespace sql

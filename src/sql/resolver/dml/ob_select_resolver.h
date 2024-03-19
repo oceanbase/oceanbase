@@ -116,7 +116,7 @@ protected:
                                    const bool is_left_child = false);
   int check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt);
   int set_stmt_set_type(ObSelectStmt *select_stmt, ParseNode *set_node);
-  int is_set_type_same(const ObSelectStmt *select_stmt, ParseNode *set_node, bool &is_type_same);
+  int is_set_type_same(const ObSelectStmt &select_stmt, const ParseNode *set_node, bool &is_type_same);
   int check_recursive_cte_limited();
   int check_pseudo_column_name_legal(const ObString& name);
   int search_connect_group_by_clause(const ParseNode &parent,
@@ -355,6 +355,14 @@ private:
   int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
   int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
   int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
+  int try_resolve_values_table_from_union(const ParseNode &parse_node, bool &resolve_happened);
+  int check_union_to_values_table_valid(const ParseNode &parse_node,
+                                        const ObSelectStmt &select_stmt,
+                                        ObIArray<int64_t> &leaf_nodes,
+                                        bool &is_valid);
+  int check_union_leaf_to_values_table_valid(const ParseNode &parse_node, bool &is_valid);
+  int resolve_values_table_from_union(const ObIArray<int64_t> &values_nodes,
+                                      ObValuesTableDef *&table_def);
 protected:
   // data members
   /*these member is only for with clause*/

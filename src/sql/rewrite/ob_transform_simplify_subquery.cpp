@@ -1351,6 +1351,8 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
       select 1+1 from dual limit 0 -> not satisfy but limit will be checked later
     situation 2:
       select max(c1) from t1 ->always not empty
+    situation 3:
+      select * from (values row(1));
     */
 
     return  (0 == stmt.get_table_size()
@@ -1359,7 +1361,12 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
           || (0 == stmt.get_group_expr_size()
              && !stmt.has_rollup()
              && stmt.get_aggr_item_size() > 0
-             && !stmt.has_having());
+             && !stmt.has_having())
+          || (
+            stmt.is_values_table_query() &&
+            0 == stmt.get_having_expr_size() &&
+            0 == stmt.get_condition_size()
+          );
 }
 
 int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType op_type,

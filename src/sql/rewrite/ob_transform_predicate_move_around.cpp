@@ -2262,7 +2262,7 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
       pushed = true;
     }
     if (OB_SUCC(ret) && !pushed) {
-      if (T_OP_OR == pred->get_expr_type()) {
+      if (T_OP_OR == pred->get_expr_type() && !ObOptimizerUtil::find_equal_expr(ctx_->push_down_filters_, pred)) {
         //对于having c1 > 1 or (c1 < 0 and count(*) > 1)
         //可以拆分出c1 > 1 or c1 < 0下推过group by
         ObRawExpr *new_pred = NULL;
@@ -2281,6 +2281,12 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
       if (OB_FAIL(new_having_exprs.push_back(pred))) {
         LOG_WARN("failed to push back new having expr", K(ret));
       }
+    }
+    //no matter new_pred is valid, pred not need to generate new_pred and try push again
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(ctx_->push_down_filters_.push_back(pred))) {
+      LOG_WARN("failed to append table filters", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

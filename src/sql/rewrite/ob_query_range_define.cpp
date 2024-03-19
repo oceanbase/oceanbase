@@ -319,7 +319,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ParamStore *params,
                           ObRawExprFactory *expr_factory,
                           const bool phy_rowid_for_table_loc,
-                          const bool ignore_calc_failure)
+                          const bool ignore_calc_failure,
+                          const int64_t index_prefix)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
@@ -328,9 +329,14 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
   } else if (OB_FAIL(column_metas_.assign(pre_range_graph->get_column_metas()))) {
     LOG_WARN("failed to assign column meta");
+  } else if (OB_FAIL(column_flags_.prepare_allocate(pre_range_graph->get_column_metas().count()))) {
+    LOG_WARN("failed to prepare allocate");
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              is_enable_range_extraction_for_not_in(enable_not_in_range_))) {
     LOG_WARN("failed to check not in range enabled", K(ret));
+  } else if (OB_FAIL(exec_ctx_->get_my_session()->
+             get_optimizer_features_enable_version(optimizer_features_enable_version_))) {
+    LOG_WARN("failed to get optimizer features enable version", K(ret));
   } else {
     column_cnt_ = range_columns.count();
     expr_constraints_ = expr_constraints;
@@ -340,6 +346,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     expr_factory_ = expr_factory;
     session_info_ = exec_ctx_->get_my_session();
     max_mem_size_ = exec_ctx_->get_my_session()->get_range_optimizer_max_mem_size();
+    index_prefix_ = index_prefix;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);
@@ -349,6 +356,9 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     } else if (OB_FAIL(range_column_map_.set_refactored(col.column_id_, i))) {
       LOG_WARN("failed to set column map", K(col), K(i));
     }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_flags_.count(); ++i) {
+    column_flags_.at(i) = 0;
   }
   return ret;
 }
@@ -371,6 +381,8 @@ void ObPreRangeGraph::reset()
   skip_scan_offset_ = -1;
   range_exprs_.reset();
   ss_range_exprs_.reset();
+  unprecise_range_exprs_.reset();
+  total_range_sizes_.reset();
 }
 
 int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
@@ -390,6 +402,10 @@ int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
     LOG_WARN("failed to assign range exprs");
   } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
     LOG_WARN("failed to assign ss range exprs");
+  } else if (OB_FAIL(unprecise_range_exprs_.assign(other.unprecise_range_exprs_))) {
+    LOG_WARN("failed to assign unprecise range exprs");
+  } else if (OB_FAIL(total_range_sizes_.assign(other.total_range_sizes_))) {
+    LOG_WARN("failed to assign total range sizes");
   } else if (OB_FAIL(deep_copy_range_graph(other.node_head_))) {
     LOG_WARN("failed to deep copy range graph");
   } else if (OB_FAIL(deep_copy_column_metas(other.column_metas_))) {
@@ -566,7 +582,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      ExprConstrantArray *expr_constraints,
                                                      const ParamStore *params,
                                                      const bool phy_rowid_for_table_loc,
-                                                     const bool ignore_calc_failure)
+                                                     const bool ignore_calc_failure,
+                                                     const int64_t index_prefix /* =-1*/)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator_);
@@ -575,7 +592,7 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
     LOG_WARN("failed to fill column metas");
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
-                              phy_rowid_for_table_loc, ignore_calc_failure))) {
+                              phy_rowid_for_table_loc, ignore_calc_failure, index_prefix))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -994,6 +1011,23 @@ int64_t ObPreRangeGraph::range_graph_to_string(char *buf,
     }
   }
   return pos;
+}
+
+int64_t ObPreRangeGraph::set_total_range_sizes(uint64_t* total_range_sizes, int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(total_range_sizes_.prepare_allocate(count))) {
+    LOG_WARN("failed to prepare allocate");
+  } else {
+    for (int64_t i = 0; i < count; ++i) {
+      total_range_sizes_.at(i) = total_range_sizes[i];
+    }
+  }
+  return ret;
+}
+int ObPreRangeGraph::get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const
+{
+  return total_range_sizes.assign(total_range_sizes_);
 }
 
 } // namespace sql

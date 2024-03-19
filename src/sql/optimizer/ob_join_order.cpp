@@ -628,8 +628,10 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
   ObSEArray<OrderItem, 8> range_orders;
   path->is_local_order_ = false;
   path->is_range_order_ = false;
+  const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(path) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
-      OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_)) {
+      OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_) ||
+      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
   } else if (path->use_das_ &&
@@ -639,6 +641,10 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     path->is_local_order_ = false;
   } else if (get_plan()->get_optimizer_context().is_online_ddl()) {
     path->is_local_order_ = true;
+  } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
+            path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count() == 1 &&
+            !is_virtual_table(path->ref_table_id_)) {
+    path->is_range_order_ = true;
   } else if (OB_FAIL(path->table_partition_info_->get_not_insert_dml_part_sort_expr(*get_plan()->get_stmt(),
                                                                                     &range_exprs))) {
     LOG_WARN("fail to get_not_insert_dml_part_sort_expr", K(ret));
@@ -1064,7 +1070,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                     : helper.filters_,
                                                                  range_info.get_expr_constraints(),
                                                                  table_id,
-								             query_range_provider))) {
+								             query_range_provider,
+                                                                 index_id))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
                                                                       is_oracle_inner_index_table
@@ -3359,7 +3366,8 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                  const ObIArray<ObRawExpr*> &predicates,
                                                  ObIArray<ObExprConstraint> &expr_constraints,
                                                  int64_t table_id,
-                                                 ObQueryRangeProvider *&query_range)
+                                                 ObQueryRangeProvider *&query_range,
+                                                 int64_t index_id)
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
@@ -3367,6 +3375,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   ObSQLSessionInfo *session_info = NULL;
   bool enable_better_inlist = false;
   ObSEArray<ObRawExpr*, 4> range_predicates;
+  int64_t index_prefix = -1;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(allocator_) ||
@@ -3385,6 +3394,10 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   } else if (!enable_better_inlist &&
              OB_FAIL(range_predicates.assign(predicates))) {
     LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id,
+                                                      index_id,
+                                                      index_prefix))) {
+    LOG_WARN("failed to get index prefix", K(table_id), K(index_id), K(index_prefix), K(ret));
   } else if (opt_ctx->enable_new_query_range()) {
     void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
     ObPreRangeGraph *pre_range_graph = NULL;
@@ -3393,10 +3406,13 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       LOG_WARN("failed to allocate memory for pre range graph", K(ret));
     } else {
       pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
-      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, range_predicates,
-                                                                   opt_ctx->get_exec_ctx(),
-                                                                   &expr_constraints,
-                                                                   params, false, true))) {
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, range_predicates,
+                                                                          opt_ctx->get_exec_ctx(),
+                                                                          &expr_constraints,
+                                                                          params, false, true,
+                                                                          index_prefix))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -3427,7 +3443,8 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                           dtc_params, opt_ctx->get_exec_ctx(),
                                                           &expr_constraints,
                                                           params, false, true,
-                                                          is_in_range_optimization_enabled))) {
+                                                          is_in_range_optimization_enabled,
+                                                          index_prefix))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -4516,11 +4533,14 @@ int ObJoinOrder::add_path(ObLogPlan &plan, Path* path)
 {
   int ret = OB_SUCCESS;
   bool should_add = true;
+
   if (OB_ISNULL(path) || OB_ISNULL(get_plan())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(path), K(ret));
   } else if (OB_UNLIKELY(plan.get_optimizer_context().generate_random_plan())) {
-    should_add = interesting_paths_.empty() || ObRandom::rand(0,1) == 1;
+    ObQueryCtx* query_ctx = plan.get_optimizer_context().get_query_ctx();
+    bool random_flag = !OB_ISNULL(query_ctx) && (query_ctx->rand_gen_.get(0, 1) == 1);
+    should_add = interesting_paths_.empty() || random_flag;
   } else {
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
     OPT_TRACE_TITLE("new candidate path:", path);
@@ -5734,10 +5754,9 @@ int TempTablePath::compute_sharding_info()
 int TempTablePath::compute_path_ordering()
 {
   int ret = OB_SUCCESS;
-  if (!ordering_.empty()) {
-    is_local_order_ = true;
-    is_range_order_ = false;
-  }
+  ordering_.reuse();
+  is_local_order_ = false;
+  is_range_order_ = false;
   return  ret;
 }
 
@@ -5781,6 +5800,7 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   can_use_batch_nlj_ = other.can_use_batch_nlj_;
   is_naaj_ = other.is_naaj_;
   is_sna_ = other.is_sna_;
+  inherit_sharding_index_ = other.inherit_sharding_index_;
 
   if (OB_FAIL(Path::assign(other, allocator))) {
     LOG_WARN("failed to deep copy path", K(ret));
@@ -7210,6 +7230,7 @@ void JoinPath::reuse()
   contain_normal_nl_ = false;
   is_naaj_ = false;
   is_sna_ = false;
+  inherit_sharding_index_ = -1;
 }
 
 int JoinPath::compute_pipeline_info()
@@ -11729,6 +11750,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
     ObBitSet<> prefix_column_bs;
     ObBitSet<> ex_prefix_column_bs;
     ObSEArray<ObColDesc, 16> index_column_descs;
+    const ObIArray<ObRawExpr*> &unprecise_range_exprs = query_range_provider->get_unprecise_range_exprs();
     if (OB_ISNULL(get_plan()) ||
         OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
@@ -11832,7 +11854,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         } else if (!expr_column_bs.is_subset(index_column_bs)) {
           ret = est_cost_info.table_filters_.push_back(filter);
         } else if (OB_FAIL(can_extract_unprecise_range(est_cost_info.table_id_, filter,
-                                                       ex_prefix_column_bs, can_extract))) {
+                                                       ex_prefix_column_bs,
+                                                       unprecise_range_exprs,
+                                                       can_extract))) {
           LOG_WARN("failed to extract column ids", K(ret));
         } else if (can_extract) {
           ret = est_cost_info.pushdown_prefix_filters_.push_back(filter);
@@ -11892,6 +11916,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
 int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
                                              const ObRawExpr *filter,
                                              const ObBitSet<> &ex_prefix_column_bs,
+                                             const ObIArray<ObRawExpr*> &unprecise_exprs,
                                              bool &can_extract)
 {
   int ret = OB_SUCCESS;
@@ -11901,6 +11926,9 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
   if (OB_ISNULL(filter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret));
+  } else if (ObOptimizerUtil::find_equal_expr(unprecise_exprs, filter) &&
+             filter->has_flag(CNT_DYNAMIC_PARAM)) {
+    can_extract = true;
   } else if (T_OP_EQ == filter->get_expr_type() || T_OP_NSEQ == filter->get_expr_type()) {
     const ObRawExpr *l_expr = filter->get_param_expr(0);
     const ObRawExpr *r_expr = filter->get_param_expr(1);

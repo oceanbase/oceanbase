@@ -600,3 +600,14 @@ int ObLogWindowFunction::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr);
   return OB_SUCCESS;
 }
+
+int ObLogWindowFunction::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (get_sort_keys().empty()) {
+    used = false;
+  }
+  return ret;
+}

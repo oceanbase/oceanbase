@@ -15,8 +15,6 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/code_generator/ob_column_index_provider.h"
-
-
 namespace oceanbase
 {
 using namespace common;
@@ -24,6 +22,8 @@ using namespace share::schema;
 namespace sql
 {
 
+static const int64_t MAX_RANGE_SIZE = 100000;
+ERRSIM_POINT_DEF(ERRSIM_CROP_RANGE_GRAPH_WITH_CHECK);
 int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &exprs,
                                                 ObExprRangeConverter &range_node_generator)
 {
@@ -31,11 +31,16 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
   ObRawExpr *expr = nullptr;
   ObSEArray<ObRangeNode*, 4> range_nodes;
   ObSEArray<ObPriciseExprItem, 4> pricise_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+  ObSEArray<ObPriciseExprItem, 4> unprecise_exprs;
+  ObSEArray<ObRawExpr*, 4> sorted_exprs;
+  if (OB_FAIL(range_node_generator.sort_range_exprs(exprs, sorted_exprs))) {
+    LOG_WARN("failed to sort range exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sorted_exprs.count(); ++i) {
     ObRangeNode *range_node = nullptr;
     bool is_precise = false;
     int64_t max_offset = 0;
-    if (OB_ISNULL(expr = exprs.at(i))) {
+    if (OB_ISNULL(expr = sorted_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr");
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, max_offset))) {
@@ -46,6 +51,9 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       // isolated const expr which can be used as startup filter. Consider it imprecise.
     } else if (is_precise && OB_FAIL(pricise_exprs.push_back(ObPriciseExprItem(expr, max_offset)))) {
       LOG_WARN("failed to push back pricise expr item");
+    } else if (!is_precise && !range_node->always_true_ &&
+               OB_FAIL(unprecise_exprs.push_back(ObPriciseExprItem(expr, max_offset)))) {
+      LOG_WARN("failed to push back unprecise expr");
     }
   }
   LOG_DEBUG("total memory used to get pre range graph",
@@ -84,7 +92,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("check graph type failed", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(fill_range_exprs(pricise_exprs))) {
+    } else if (OB_FAIL(fill_range_exprs(pricise_exprs, unprecise_exprs))) {
       LOG_WARN("failed to fill range exprs", K(ret));
     } else if (OB_FAIL(generate_expr_final_info())) {
       LOG_WARN("failed to generate final exprs");
@@ -113,11 +121,17 @@ int ObRangeGraphGenerator::generate_range_node(ObRawExpr* expr,
     if (OB_FAIL(generate_or_range_node(expr, range_node_generator, range_node, expr_depth+1, is_precise, max_offset))) {
       LOG_WARN("failed to generate or range node");
     }
+  } else if (OB_FALSE_IT(ctx_.refresh_max_offset_ = false)) {
   } else if (OB_FAIL(range_node_generator.convert_expr_to_range_node(expr, range_node, expr_depth, is_precise))) {
     LOG_WARN("failed to generate range node");
   } else if (OB_ISNULL(range_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null range node");
+  } else if (ctx_.refresh_max_offset_) {
+    max_offset = -1;
+    if (OB_FAIL(get_max_offset(range_node, max_offset))) {
+      LOG_WARN("failed to get max offset", K(ret));
+    }
   } else {
     max_offset = range_node->max_offset_;
   }
@@ -251,7 +265,8 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
         range_node = cur_node;
         last_node = cur_node;
       }
-    } else if (cur_node->min_offset_ == -1 || last_node->min_offset_ == -1) {
+    } else if (cur_node->min_offset_ == -1 || last_node->min_offset_ == -1 ||
+               cur_node->is_not_in_node_ || last_node->is_not_in_node_) {
       and_link_range_node(last_node, cur_node);
       last_node = cur_node;
     } else if (nullptr == cur_node->and_next_ && nullptr == cur_node->or_next_ &&
@@ -645,41 +660,60 @@ int ObRangeGraphGenerator::get_and_tails(ObRangeNode *range_node,
  * 3. remove useless range node for standard range
  * 4. generate node id
 */
-int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *range_node)
+int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
   if (range_node->always_false_ || range_node->always_true_) {
     pre_range_graph_->set_range_size(1);
   } else {
     bool start_from_zero = false;
+    int64_t min_offset = 0;
     uint64_t total_range_sizes[pre_range_graph_->get_column_count()];
     uint64_t range_sizes[pre_range_graph_->get_column_count()];
     for (int64_t i = 0; i < pre_range_graph_->get_column_count(); ++i) {
       total_range_sizes[i] = 0;
       range_sizes[i] = 1;
     }
-    if (OB_FAIL(collect_graph_infos(range_node, total_range_sizes, range_sizes, start_from_zero))) {
+    if (OB_FAIL(collect_graph_infos(range_node, total_range_sizes, range_sizes, start_from_zero, min_offset))) {
       LOG_WARN("failed to collect graph infos");
     } else {
-      // no not refine large graph for now
-      // bool need_refine = false;
-      // int64_t i = 0;
-      // for (; !need_refine && i < pre_range_graph_->get_column_count(); ++i) {
-      //   if (total_range_sizes[i] > 10000) {
-      //     need_refine = true;
-      //   }
-      // }
-      // if (OB_SUCC(ret)) {
-      //   int64_t range_size = need_refine ? (i > 0 ? total_range_sizes[i - 1] : 1) : total_range_sizes[pre_range_graph_->get_column_count() - 1];
-      //   pre_range_graph_->set_range_size(range_size);
-      //   if (need_refine) {
-      //     if (i == 0) {
-      //       range_node->set_always_true();
-      //     } else {
-      //       // refine range graph
-      //     }
-      //   }
-      // }
+      bool need_refine = false;
+      int64_t crop_offset = 0;
+      int64_t max_range_size = MAX_RANGE_SIZE;
+      if (ERRSIM_CROP_RANGE_GRAPH_WITH_CHECK) {
+        max_range_size = -ERRSIM_CROP_RANGE_GRAPH_WITH_CHECK;
+      }
+      for (int64_t i = 1; i < pre_range_graph_->get_column_count(); ++i) {
+        if (0 == total_range_sizes[i]) {
+          total_range_sizes[i] = total_range_sizes[i - 1];
+        }
+      }
+      for (int64_t i = 0; !need_refine && i < pre_range_graph_->get_column_count(); ++i) {
+        if (total_range_sizes[i] > max_range_size) {
+          need_refine = true;
+          crop_offset = i;
+        }
+      }
+      if (OB_SUCC(ret) && need_refine) {
+        ObRangeNode* crop_range_node = range_node;
+        if (crop_offset == 0) {
+          range_node->set_always_true();
+        } else if (OB_FAIL(crop_final_range_node(crop_range_node, crop_offset))) {
+          LOG_WARN("failed to crop final range node", K(ret));
+        } else {
+          range_node = crop_range_node;
+        }
+        if (OB_SUCC(ret)) {
+          update_max_precise_offset(crop_offset);
+          start_from_zero = false;
+          if (range_node->always_true_) {
+            start_from_zero = true;
+            pre_range_graph_->set_range_size(1);
+          } else if (OB_FAIL(get_start_from_zero(range_node, start_from_zero))) {
+            LOG_WARN("failed to get start from zero", K(ret));
+          }
+        }
+      }
     }
     if (OB_SUCC(ret) && is_standard_range(range_node)) {
       ObRangeNode *ss_head = nullptr;
@@ -697,6 +731,9 @@ int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *range_node)
       range_node->set_always_true();
       pre_range_graph_->set_range_size(1);
     }
+    if (OB_SUCC(ret)) {
+      pre_range_graph_->set_total_range_sizes(total_range_sizes, pre_range_graph_->get_column_count());
+    }
   }
   if (OB_SUCC(ret)) {
     uint64_t node_count = 0;
@@ -712,7 +749,8 @@ int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *range_node)
 int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
                                                uint64_t *total_range_sizes,
                                                uint64_t *range_sizes,
-                                               bool &start_from_zero)
+                                               bool &start_from_zero,
+                                               int64_t &min_offset)
 {
   int ret = OB_SUCCESS;
   uint64_t cur_or_count = 0;
@@ -720,9 +758,19 @@ int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
     ret= OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected pos", KPC(range_node));
   } else {
+    int64_t idx = range_node->min_offset_;
+    for (const ObRangeNode *cur_node = range_node->or_next_;
+         -1 == idx && cur_node != nullptr; cur_node = cur_node->or_next_) {
+      idx = cur_node->min_offset_;
+    }
+    if (-1 == idx) {
+      idx = 0;
+    }
     for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
       if (cur_node->contain_in_) {
         cur_or_count += cur_node->in_param_count_;
+      } else if (cur_node->is_not_in_node_) {
+        cur_or_count += cur_node->in_param_count_ + 1;
       } else {
         ++cur_or_count;
       }
@@ -733,16 +781,29 @@ int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
         if (cur_node->min_offset_ <= 0) {
           start_from_zero = true;
         }
-        int64_t idx = range_node->min_offset_ == -1 ? 0 : range_node->min_offset_;
         range_sizes[idx] *= cur_or_count;
+        min_offset = std::min(idx, min_offset);
         if (cur_node->and_next_ != nullptr) {
+          int64_t child_min_offset = idx + 1;
           if (OB_FAIL(SMART_CALL(collect_graph_infos(cur_node->and_next_, total_range_sizes,
-                                                     range_sizes, start_from_zero)))) {
+                                                     range_sizes, start_from_zero,
+                                                     child_min_offset)))) {
             LOG_WARN("failed to collect graph infos");
+          } else if (idx < child_min_offset) {
+            uint64_t range_size = 1;
+            for (int64_t i = 0; i <= idx; ++i) {
+              range_size *= range_sizes[i];
+            }
+            total_range_sizes[idx] += range_size;
           }
+          min_offset = std::min(child_min_offset, min_offset);
         } else {
           uint64_t range_size = 1;
-          for (int64_t i = 0; i < cur_node->column_cnt_; ++i) {
+          for (int64_t i = 0; i <= idx; ++i) {
+            range_size *= range_sizes[i];
+          }
+          total_range_sizes[idx] += range_size;
+          for (int64_t i = idx + 1; i < cur_node->column_cnt_; ++i) {
             range_size *= range_sizes[i];
             total_range_sizes[i] += range_size;
           }
@@ -845,7 +906,8 @@ bool ObRangeGraphGenerator::is_precise_get(ObRangeNode *range_node) const
   bool is_precise_get = false;
   if (range_node->and_next_ == nullptr && range_node->or_next_ == nullptr && range_node->min_offset_ == 0) {
     // range nodes can always merge to one node if is precise get
-    if (range_node->is_geo_node_ || range_node->contain_in_) {
+    if (range_node->is_geo_node_ || range_node->contain_in_ ||
+        range_node->is_not_in_node_) {
       is_precise_get = false;
     } else if (is_strict_equal_node(range_node)) {
       is_precise_get = true;
@@ -860,7 +922,8 @@ bool ObRangeGraphGenerator::is_standard_range(ObRangeNode *range_node) const
   for (const ObRangeNode *cur_node = range_node;
        is_standard_range && cur_node != nullptr;
        cur_node = cur_node->and_next_) {
-    if (cur_node->contain_in_ || cur_node->or_next_ != nullptr) {
+    if (cur_node->contain_in_ || cur_node->or_next_ != nullptr ||
+        cur_node->is_not_in_node_) {
       is_standard_range = false;
     }
   }
@@ -896,6 +959,7 @@ int ObRangeGraphGenerator::inner_get_max_precise_pos(const ObRangeNode *range_no
     new_idx.reset();
 
     if (cur_node->min_offset_ >= 0 &&
+        !cur_node->is_not_in_node_ &&
       OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
@@ -975,6 +1039,7 @@ int ObRangeGraphGenerator::inner_is_strict_equal_graph(const ObRangeNode *range_
     }
 
     if (cur_node->min_offset_ >= 0 &&
+        !cur_node->is_not_in_node_ &&
         OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
@@ -1078,11 +1143,13 @@ bool ObRangeGraphGenerator::is_equal_node(const ObRangeNode *range_node) const
   return is_equal;
 }
 
-int ObRangeGraphGenerator::fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise_exprs)
+int ObRangeGraphGenerator::fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise_exprs,
+                                            ObIArray<ObPriciseExprItem> &unpricise_exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> range_exprs;
   ObSEArray<ObRawExpr*, 4> ss_range_exprs;
+  ObSEArray<ObRawExpr*, 4> unpricise_range_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < pricise_exprs.count(); ++i) {
     ObPriciseExprItem &expr_item = pricise_exprs.at(i);
     if (expr_item.max_offset_ < max_precise_offset_) {
@@ -1095,14 +1162,24 @@ int ObRangeGraphGenerator::fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise
       }
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < unpricise_exprs.count(); ++i) {
+    ObPriciseExprItem &expr_item = unpricise_exprs.at(i);
+    if (expr_item.max_offset_ < max_precise_offset_) {
+      if (OB_FAIL(unpricise_range_exprs.push_back(const_cast<ObRawExpr*>(expr_item.expr_)))) {
+        LOG_WARN("push back precise range expr failed", K(ret));
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pre_range_graph_->set_range_exprs(range_exprs))) {
       LOG_WARN("failed to assign range exprs", K(ret));
     } else if (OB_FAIL(pre_range_graph_->set_ss_range_exprs(ss_range_exprs))) {
       LOG_WARN("failed to assign range exprs", K(ret));
+    } else if (OB_FAIL(pre_range_graph_->set_unprecise_range_exprs(unpricise_range_exprs))) {
+      LOG_WARN("failed to assign range exprs", K(ret));
     } else {
       LOG_TRACE("finish fill range exprs", K(max_precise_offset_), K(ss_max_precise_offset_),
-                  K(range_exprs), K(ss_range_exprs));
+                  K(range_exprs), K(ss_range_exprs), K(unpricise_range_exprs));
     }
   }
   return ret;
@@ -1229,6 +1306,296 @@ int ObRangeGraphGenerator::relink_standard_range_if_needed(ObRangeNode *&range_n
       if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
         LOG_WARN("failed to and range nodes");
       }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::crop_final_range_node(ObRangeNode *&range_node, int64_t crop_offset)
+{
+  int ret = OB_SUCCESS;
+  uint64_t node_count = 0;
+  common::hash::ObHashMap<uint64_t, ObRangeNode*> refined_ranges;
+  common::hash::ObHashSet<uint64_t> shared_ranges;
+  ObArenaAllocator alloc("CropRangeAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObRangeNode *out_range_node = nullptr;
+  RangeNodeConnectInfo connect_info;
+  bool check_range_graph = ERRSIM_CROP_RANGE_GRAPH_WITH_CHECK;
+  if (OB_ISNULL(out_range_node = range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(generate_node_id(range_node, node_count))) {
+    LOG_WARN("failed to generate node id", K(ret));
+  } else if (OB_FAIL(refined_ranges.create(node_count, "RefinedRanges", "RefinedRanges", MTL_ID()))) {
+    LOG_WARN("fail to init hashmap", K(ret));
+  } else if (OB_FAIL(shared_ranges.create(1000, "SharedRanges", "SharedRanges", MTL_ID()))) {
+    LOG_WARN("failed to init hashset", K(ret));
+  } else if (check_range_graph &&
+             OB_FAIL(generate_range_node_connect_info(alloc, range_node, node_count, connect_info))) {
+    LOG_WARN("failed to generate range node connect info", K(ret));
+  } else {
+    for (ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->and_next_) {
+      if (OB_FAIL(shared_ranges.set_refactored(reinterpret_cast<uint64_t>(cur_node), 0))) {
+        LOG_WARN("failed to set refactored", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(crop_final_range_node(out_range_node, crop_offset, connect_info, refined_ranges, shared_ranges))) {
+    LOG_WARN("failed to crop final range node", K(ret));
+  } else if (OB_ISNULL(out_range_node)) {
+    range_node->set_always_true();
+  } else {
+    range_node = out_range_node;
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(reset_node_id(range_node))) {
+    LOG_WARN("failed to reset node id", K(ret));
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::crop_final_range_node(
+                           ObRangeNode *&range_node, int64_t crop_offset,
+                           RangeNodeConnectInfo &connect_info,
+                           common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
+                           common::hash::ObHashSet<uint64_t> &shared_ranges)
+{
+  int ret = OB_SUCCESS;
+  ObRangeNode *out_range_node = nullptr;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (OB_FAIL(refined_ranges.get_refactored(reinterpret_cast<uint64_t>(range_node),
+                                                   out_range_node))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      bool crop_or_node = false;
+      ObRangeNode* last_range_node = nullptr;
+      out_range_node = range_node;
+      ObRangeNode* prev_and_next = nullptr;
+      ObRangeNode* prev_and_next_out = nullptr;
+      for (ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr;
+           cur_node = cur_node->or_next_) {
+        if (cur_node->and_next_ != nullptr) {
+          if (cur_node->and_next_ == prev_and_next) {
+            cur_node->and_next_ = prev_and_next_out;
+          } else if (OB_FALSE_IT(prev_and_next = cur_node->and_next_)) {
+          } else if (OB_FAIL(SMART_CALL(crop_final_range_node(cur_node->and_next_,
+                                                              crop_offset,
+                                                              connect_info,
+                                                              refined_ranges,
+                                                              shared_ranges)))) {
+            LOG_WARN("failed to refine range node");
+          } else {
+            prev_and_next_out = cur_node->and_next_;
+          }
+        }
+        if (OB_SUCC(ret) && nullptr == cur_node->or_next_) {
+          last_range_node = cur_node;
+        }
+      }
+      if(OB_FAIL(ret)) {
+      } else if (range_node->or_next_ == nullptr) {
+        if (range_node->min_offset_ >= crop_offset) {
+          out_range_node = range_node->and_next_;
+        }
+      } else {
+        for (ObRangeNode *cur_node = range_node;
+            OB_SUCC(ret) && !crop_or_node && cur_node != nullptr;
+            cur_node = cur_node->or_next_) {
+          if (cur_node->min_offset_ >= crop_offset) {
+            crop_or_node = true;
+          }
+        }
+        if (OB_SUCC(ret) && crop_or_node) {
+          out_range_node = nullptr;
+          bool find = false;
+          for (ObRangeNode *cur_node = last_range_node->and_next_; OB_SUCC(ret) && cur_node != nullptr && !find;
+              cur_node = cur_node->and_next_) {
+            if (OB_HASH_EXIST == (ret = shared_ranges.exist_refactored(reinterpret_cast<uint64_t>(cur_node)))) {
+              out_range_node = cur_node;
+              find = true;
+              ret = OB_SUCCESS;
+            } else if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to get exist refactored", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && crop_or_node && connect_info.inited_) {
+          if (nullptr != out_range_node &&
+              OB_FAIL(check_crop_range_node_valid(range_node, out_range_node, connect_info))) {
+            LOG_WARN("failed to check crop range node valid", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(refined_ranges.set_refactored(reinterpret_cast<uint64_t>(range_node),
+                                                  out_range_node))) {
+          LOG_WARN("failed to set refined ranges refactored", K(ret));
+        } else {
+          range_node = out_range_node;
+        }
+      }
+    } else {
+      LOG_WARN("failed to get refined ranges from map", K(ret));
+    }
+  } else {
+    range_node = out_range_node;
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::reset_node_id(ObRangeNode *range_node)
+{
+  int ret = OB_SUCCESS;
+  for (ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
+    cur_node->node_id_ = -1;
+    if (cur_node->and_next_ != nullptr && -1 != cur_node->and_next_->node_id_) {
+      if (OB_FAIL(SMART_CALL(reset_node_id(cur_node->and_next_)))) {
+        LOG_WARN("failed to generate node id");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::generate_range_node_connect_info(ObIAllocator &allocator,
+                                                            ObRangeNode *range_node,
+                                                            uint64_t node_count,
+                                                            RangeNodeConnectInfo &connect_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t alloc_size = 0;
+  connect_info.inited_ = true;
+  connect_info.data_ = nullptr;
+  connect_info.node_count_ = node_count;
+  connect_info.per_node_info_len_ = 0;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(connect_info.per_node_info_len_ = ((connect_info.node_count_ + 8) / 8))) {
+  } else if (OB_FALSE_IT(alloc_size = connect_info.node_count_ * connect_info.per_node_info_len_)) {
+  } else if (OB_ISNULL(connect_info.data_ = (uint8_t*)allocator.alloc(alloc_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc connect info", K(ret));
+  } else {
+    memset(connect_info.data_, 0, alloc_size);
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(collect_range_node_connect_info(range_node, connect_info))) {
+    LOG_WARN("failed to collect range node connect info", K(ret));
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::collect_range_node_connect_info(ObRangeNode *range_node,
+                                                           RangeNodeConnectInfo &connect_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t flag_index = 0;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(range_node->node_id_ == -1) ||
+             OB_UNLIKELY(range_node->node_id_ >= connect_info.node_count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range node", K(ret), KPC(range_node));
+  } else if (OB_FALSE_IT(flag_index = (range_node->node_id_ + 1) * connect_info.per_node_info_len_ - 1)) {
+  } else if ((connect_info.data_[flag_index] & 128) == 128) {
+    // do nothing
+  } else {
+    int64_t range_node_offset = range_node->node_id_ * connect_info.per_node_info_len_;
+    for (ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
+      int64_t offset = cur_node->node_id_ * connect_info.per_node_info_len_ + cur_node->node_id_ / 8;
+      connect_info.data_[offset] |= 1 << (cur_node->node_id_ % 8);
+      if (cur_node->and_next_ == nullptr) {
+        // do nothing
+      } else if (OB_FAIL(SMART_CALL(collect_range_node_connect_info(cur_node->and_next_,
+                                                                    connect_info)))) {
+        LOG_WARN("failed to collect range node connect info", K(ret));
+      } else {
+        int64_t cur_node_offset = cur_node->node_id_ * connect_info.per_node_info_len_;
+        int64_t next_node_offset = cur_node->and_next_->node_id_ * connect_info.per_node_info_len_;
+        for (int64_t i = 0; OB_SUCC(ret) && i < connect_info.per_node_info_len_; ++i) {
+          connect_info.data_[cur_node_offset + i] |= connect_info.data_[next_node_offset + i];
+        }
+        if (OB_SUCC(ret) && cur_node != range_node) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < connect_info.per_node_info_len_; ++i) {
+            connect_info.data_[range_node_offset + i] |= connect_info.data_[cur_node_offset + i];
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      connect_info.data_[flag_index] |= 128;
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::check_crop_range_node_valid(
+                           ObRangeNode *range_node,
+                           ObRangeNode *next_range_node,
+                           RangeNodeConnectInfo &connect_info)
+{
+  int ret = OB_SUCCESS;
+  for (ObRangeNode *check_node = range_node; OB_SUCC(ret) && check_node != nullptr; check_node = check_node->or_next_) {
+    if (next_range_node == nullptr) {
+      // do nothing
+    } else if (OB_ISNULL(check_node->and_next_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected range graph", K(ret));
+    } else if (next_range_node == check_node->and_next_) {
+      // do nothing
+    } else {
+      int64_t offset = check_node->and_next_->node_id_ * connect_info.per_node_info_len_ +
+                        (next_range_node->node_id_ / 8);
+      uint8_t bit_mask = 1 << (next_range_node->node_id_ % 8);
+      if ((connect_info.data_[offset] & bit_mask ) != bit_mask) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected range graph", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::get_max_offset(const ObRangeNode *range_node, int64_t &max_offset)
+{
+  int ret = OB_SUCCESS;
+  for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr ; cur_node = cur_node->or_next_) {
+    max_offset = std::max(max_offset, cur_node->max_offset_);
+    if (cur_node->and_next_ == nullptr) {
+      // do nothing
+    } else if (OB_FAIL(SMART_CALL(get_max_offset(cur_node->and_next_, max_offset)))) {
+      LOG_WARN("failed to get max offset", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::get_start_from_zero(const ObRangeNode *range_node, bool &start_from_zero)
+{
+  int ret = OB_SUCCESS;
+  for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr && !start_from_zero;
+        cur_node = cur_node->or_next_) {
+    if (nullptr == cur_node->or_next_ ||
+        cur_node->min_offset_ != cur_node->or_next_->min_offset_ ||
+        cur_node->or_next_->and_next_ != cur_node->and_next_) {
+      if (cur_node->min_offset_ <= 0) {
+        start_from_zero = true;
+      }
+      if (cur_node->and_next_ != nullptr && !start_from_zero) {
+        if (OB_FAIL(SMART_CALL(get_start_from_zero(cur_node->and_next_, start_from_zero)))) {
+          LOG_WARN("failed to collect graph infos");
+        }
+      }
+
     }
   }
   return ret;

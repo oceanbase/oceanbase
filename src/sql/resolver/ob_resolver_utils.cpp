@@ -8878,6 +8878,165 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
   return ret;
 }
 
+/* If ParseNode is a const param, fast know obj_type、collation_type、collation level */
+int ObResolverUtils::fast_get_param_type(const ParseNode &node,
+                                         const ParamStore *param_store,
+                                         const ObCollationType connect_collation,
+                                         const ObCollationType nchar_collation,
+                                         const ObCollationType server_collation,
+                                         ObObjType &obj_type,
+                                         ObCollationType &coll_type,
+                                         ObCollationLevel &coll_level)
+{
+  int ret = OB_SUCCESS;
+  if (T_QUESTIONMARK == node.type_) {
+    if (OB_ISNULL(param_store) ||
+        OB_UNLIKELY(node.value_ < 0 || node.value_ >= param_store->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      obj_type = param_store->at(node.value_).get_param_meta().get_type();
+      coll_type = param_store->at(node.value_).get_param_meta().get_collation_type();
+      coll_level = param_store->at(node.value_).get_param_meta().get_collation_level();
+    }
+  } else if (IS_DATATYPE_OP(node.type_)) {
+    if (T_VARCHAR == node.type_ || T_CHAR == node.type_ ||
+        T_NVARCHAR2 == node.type_ || T_NCHAR == node.type_) {
+      bool is_nchar = T_NVARCHAR2 == node.type_ || T_NCHAR == node.type_;
+      obj_type = lib::is_mysql_mode() && is_nchar ? ObVarcharType :
+                                                    static_cast<ObObjType>(node.type_);
+      coll_level = CS_LEVEL_COERCIBLE;
+      if (OB_UNLIKELY(node.str_len_ > OB_MAX_LONGTEXT_LENGTH)) {
+        ret = OB_ERR_INVALID_INPUT_ARGUMENT;
+      } else if (lib::is_oracle_mode()) {
+        coll_type = is_nchar ? nchar_collation : server_collation;
+        if (node.str_len_ == 0) {
+          obj_type = is_nchar ? ObNCharType : ObCharType;
+        }
+      } else {
+        if (0 == node.num_child_) {
+          coll_type = is_nchar ? CS_TYPE_UTF8MB4_GENERAL_CI : connect_collation;
+        } else if (NULL != node.children_[0] && T_CHARSET == node.children_[0]->type_) {
+          ObString charset(node.children_[0]->str_len_, node.children_[0]->str_value_);
+          ObCharsetType charset_type = ObCharset::charset_type(charset.trim());
+          coll_type = ObCharset::get_default_collation(charset_type);
+        } else {
+          coll_type = connect_collation;
+        }
+      }
+    } else if (T_IEEE754_NAN == node.type_ || T_IEEE754_INFINITE == node.type_) {
+      obj_type = ObDoubleType;
+      coll_type = CS_TYPE_BINARY;
+      coll_level = CS_LEVEL_NUMERIC;
+    } else if (T_BOOL == node.type_) {
+      obj_type = ObTinyIntType;
+      coll_type = CS_TYPE_BINARY;
+      coll_level = CS_LEVEL_NUMERIC;
+    } else {
+      obj_type = static_cast<ObObjType>(node.type_);
+      coll_type = CS_TYPE_BINARY;
+      coll_level = CS_LEVEL_NUMERIC;
+    }
+    if (OB_SUCC(ret)) {
+      if (ObMaxType == obj_type || CS_TYPE_INVALID == coll_type || CS_LEVEL_INVALID == coll_level) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("resolve node type failed.", K(ret), K(obj_type), K(coll_type), K(coll_level));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::create_values_table_query(ObSQLSessionInfo *session_info,
+                                               ObIAllocator *allocator,
+                                               ObRawExprFactory *expr_factory,
+                                               ObQueryCtx *query_ctx,
+                                               ObSelectStmt *select_stmt,
+                                               ObValuesTableDef *table_def)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  ObString alias_name;
+  if (OB_ISNULL(session_info) || OB_ISNULL(allocator) || OB_ISNULL(expr_factory) ||
+      OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected ptr", K(ret));
+  } else if (OB_ISNULL(table_item = select_stmt->create_table_item(*allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("create table item failed");
+  } else if (OB_FAIL(select_stmt->generate_values_table_name(*allocator, alias_name))) {
+    LOG_WARN("failed to generate func table name", K(ret));
+  } else {
+    table_item->table_id_ = query_ctx->available_tb_id_--;
+    table_item->table_name_ = alias_name;
+    table_item->alias_name_ = alias_name;
+    table_item->type_ = TableItem::VALUES_TABLE;
+    table_item->is_view_table_ = false;
+    table_item->values_table_def_ = table_def;
+    if (OB_FAIL(select_stmt->add_table_item(session_info, table_item))) {
+      LOG_WARN("add table item failed", K(ret));
+    } else if (OB_FAIL(select_stmt->add_from_item(table_item->table_id_))) {
+      LOG_WARN("add from table failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t column_cnt = table_def->column_cnt_;
+    ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+    bool has_select_item = !select_items.empty();
+    if (OB_UNLIKELY(table_def->column_types_.count() != column_cnt) ||
+        OB_UNLIKELY(has_select_item && select_items.count() != column_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected ptr", K(ret), K(column_cnt), K(table_def->column_types_.count()), K(select_items.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+        ObColumnRefRawExpr *column_expr = NULL;
+        ObSqlString tmp_col_name;
+        char *buf = NULL;
+        if (OB_FAIL(expr_factory->create_raw_expr(T_REF_COLUMN, column_expr))) {
+          LOG_WARN("create column ref raw expr failed", K(ret));
+        } else if (OB_ISNULL(column_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN(("value desc is null"), K(ret));
+        } else if (OB_FAIL(column_expr->add_flag(IS_COLUMN))) {
+          LOG_WARN("failed to add flag IS_COLUMN", K(ret));
+        } else if (OB_FAIL(tmp_col_name.append_fmt("column_%ld", i))) {
+          LOG_WARN("failed to append fmt", K(ret));
+        } else if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(tmp_col_name.length())))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret), K(buf));
+        } else {
+          column_expr->set_result_type(table_def->column_types_.at(i));
+          column_expr->set_ref_id(table_item->table_id_, i + OB_APP_MIN_COLUMN_ID);
+          MEMCPY(buf, tmp_col_name.ptr(), tmp_col_name.length());
+          ObString column_name(tmp_col_name.length(), buf);
+          column_expr->set_column_attr(table_item->table_name_, column_name);
+          ColumnItem column_item;
+          column_item.expr_ = column_expr;
+          column_item.table_id_ = column_expr->get_table_id();
+          column_item.column_id_ = column_expr->get_column_id();
+          column_item.column_name_ = column_expr->get_column_name();
+          if (OB_FAIL(select_stmt->add_column_item(column_item))) {
+            LOG_WARN("failed to add column item", K(ret));
+          } else if (has_select_item) {
+            SelectItem &select_item = select_items.at(i);
+            select_item.expr_ = column_expr;
+          } else {
+            SelectItem select_item;
+            select_item.alias_name_ = column_expr->get_column_name();
+            select_item.expr_name_ = column_expr->get_column_name();
+            select_item.is_real_alias_ = false;
+            select_item.expr_ = column_expr;
+            if (OB_FAIL(select_stmt->add_select_item(select_item))) {
+              LOG_WARN("failed to add select item", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
 {
   int64_t max_partition_num = OB_MAX_PARTITION_NUM_MYSQL;

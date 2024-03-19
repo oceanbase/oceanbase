@@ -1833,16 +1833,16 @@ Query Plan
 =============================================================================
 |ID|OPERATOR                   |NAME                  |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------
-|0 |SORT                       |                      |5       |51          |
-|1 |└─SUBPLAN SCAN             |TUT                   |5       |49          |
-|2 |  └─MERGE UNION DISTINCT   |                      |11      |49          |
+|0 |SORT                       |                      |5       |85          |
+|1 |└─SUBPLAN SCAN             |TUT                   |5       |83          |
+|2 |  └─MERGE UNION DISTINCT   |                      |11      |83          |
 |3 |    ├─MERGE UNION DISTINCT |                      |6       |39          |
 |4 |    │ ├─TABLE GET          |table2_bigint         |5       |26          |
 |5 |    │ └─SORT               |                      |1       |11          |
 |6 |    │   └─TOP-N SORT       |                      |1       |11          |
 |7 |    │     └─TABLE FULL SCAN|table100_bigint       |1       |10          |
-|8 |    └─SORT                 |                      |5       |7           |
-|9 |      └─TABLE FULL SCAN    |table2_bigint(Reverse)|5       |6           |
+|8 |    └─SORT                 |                      |5       |42          |
+|9 |      └─TABLE FULL SCAN    |table2_bigint(Reverse)|5       |40          |
 =============================================================================
 Outputs & filters:
 -------------------------------------

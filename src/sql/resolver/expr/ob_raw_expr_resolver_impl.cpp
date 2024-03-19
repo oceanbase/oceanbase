@@ -518,12 +518,24 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         break;
       }
       case T_OP_AND:
-      case T_OP_OR:
+      case T_OP_OR: {
+        ObOpRawExpr *m_expr = NULL;
+        if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
+          LOG_WARN("fail to process node with children", K(ret), K(node));
+        } else if (OB_ISNULL(ctx_.session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session_info_ is NULL", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
+          LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
+        } else {
+          expr = m_expr;
+        }
+        break;
+      }
       case T_OP_XOR: {
         ObOpRawExpr *m_expr = NULL;
         int64_t num_child = 2;
-        if (OB_FAIL(process_node_with_children(node, num_child, m_expr,
-                                               node->type_ == T_OP_XOR ? false : is_root_expr))) {
+        if (OB_FAIL(process_node_with_children(node, num_child, m_expr, false))) {
           LOG_WARN("fail to process node with children", K(ret), K(node));
         } else if (OB_ISNULL(ctx_.session_info_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -8442,7 +8454,6 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
   }
   return ret;
 }
-
 
 } //namespace sql
 } //namespace oceanbase

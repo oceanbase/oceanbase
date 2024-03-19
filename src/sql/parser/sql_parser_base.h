@@ -159,6 +159,14 @@ do {                                                                            
     }                                                                   \
   } while(0)
 
+#define malloc_list_node(node, malloc_pool, node_tag, ...)              \
+  do {                                                                  \
+    if (OB_UNLIKELY(NULL == (node = new_list_node(malloc_pool, node_tag, ##__VA_ARGS__)))) {\
+      yyerror(NULL, result, "No more space for malloc\n");                \
+      YYABORT_NO_MEMORY;                                                \
+    }                                                                   \
+  } while(0)
+
 #define merge_nodes(node, result, node_tag, source_tree)                \
   do {                                                                  \
     if (OB_UNLIKELY(NULL == source_tree)) {                             \

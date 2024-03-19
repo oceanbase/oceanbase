@@ -1389,6 +1389,7 @@ void ObLogPlanHint::reset()
   table_hints_.reuse();
   join_hints_.reuse();
   normal_hints_.reuse();
+  enable_index_prefix_ = false;
 }
 
 #ifndef OB_BUILD_SPM
@@ -1408,6 +1409,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
 #ifdef OB_BUILD_SPM
   is_spm_evolution_ = is_spm_evolution;
 #endif
+  enable_index_prefix_ = (stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3);
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
   if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
@@ -1897,6 +1899,21 @@ DistAlgo ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* defa
   return set_dist_algo;
 }
 
+int ObLogPlanHint::get_index_prefix(const uint64_t table_id,
+                                    const uint64_t index_id,
+                                    int64_t &index_prefix) const
+{
+  int ret = OB_SUCCESS;
+  const LogTableHint *log_table_hint = NULL;
+  if (!enable_index_prefix_ || OB_ISNULL(log_table_hint = get_index_hint(table_id))) {
+    //do nothing
+  } else if (!log_table_hint->is_use_index_hint()) {
+    //do nothing
+  } else if (OB_FAIL(log_table_hint->get_index_prefix(index_id, index_prefix))) {
+    LOG_WARN("fail to get index prefix", K(ret));
+  }
+  return ret;
+}
 int ObLogPlanHint::check_valid_set_left_branch(const ObSelectStmt *select_stmt,
                                                bool &hint_valid,
                                                bool &need_swap) const
@@ -2509,6 +2526,31 @@ int LogTableHint::allowed_skip_scan(const uint64_t index_id, bool &allowed) cons
       } else {
         allowed = T_INDEX_SS_HINT == index_hints_.at(i)->get_hint_type();
         find = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int LogTableHint::get_index_prefix(const uint64_t index_id, int64_t &index_prefix) const
+{
+  int ret = OB_SUCCESS;
+  index_prefix = -1;
+  if (!is_use_index_hint()) {
+    /* do nothing */
+  } else if (OB_UNLIKELY(index_list_.count() != index_hints_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", K(ret), K(index_list_.count()), K(index_hints_.count()));
+  } else {
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < index_list_.count(); ++i) {
+      if (index_list_.at(i) != index_id)  {
+        /* do nothing */
+      } else if (OB_ISNULL(index_hints_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i), K(index_hints_));
+      } else if (T_INDEX_HINT == index_hints_.at(i)->get_hint_type()) {
+        index_prefix = index_hints_.at(i)->get_index_prefix();
       }
     }
   }

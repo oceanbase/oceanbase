@@ -231,9 +231,10 @@ struct ObValuesTableDef {
   int64_t column_cnt_;
   int64_t row_cnt_;
   TableAccessType access_type_;
+  common::ObArray<ObExprResType, common::ModulePageAllocator, true> column_types_;
   virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
                        K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
-                       K(access_type_));
+                       K(access_type_), K(column_types_));
 };
 
 struct TableItem
@@ -775,6 +776,7 @@ public:
   int remove_from_item(uint64_t tid, bool *remove_happened = NULL);
   int remove_joined_table_item(const ObIArray<JoinedTable*> &tables);
   int remove_joined_table_item(const JoinedTable *joined_table);
+  int remove_joined_table_item(uint64_t tid, bool *remove_happened = NULL);
 
   TableItem *create_table_item(common::ObIAllocator &allocator);
   int merge_from_items(const ObDMLStmt &stmt);
@@ -939,6 +941,8 @@ public:
   TableItem *get_table_item(int64_t index) { return table_items_.at(index); }
   int remove_table_item(const TableItem *ti);
   int remove_table_item(const ObIArray<TableItem *> &table_items);
+  int remove_table_item(const uint64_t tid, bool *remove_happened = NULL);
+  int remove_table_item(const ObIArray<uint64_t> &tids, bool *remove_happened = NULL);
   int remove_table_info(const TableItem *table);
   int remove_table_info(const ObIArray<TableItem *> &table_items);
   TableItem *get_table_item(const FromItem item);
@@ -956,6 +960,8 @@ public:
   int get_from_tables(ObRelIds &table_set) const;
   int get_from_tables(ObSqlBitSet<> &table_set) const;
   int get_from_tables(common::ObIArray<TableItem*>& from_tables) const;
+  int get_from_tables(common::ObIArray<int64_t>& table_ids) const;
+  int get_from_table(int64_t from_idx, TableItem* &from_table) const;
 
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item);
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item, bool &have_same_table_name);
@@ -997,6 +1003,8 @@ public:
   int update_column_item_rel_id();
   common::ObIArray<TableItem*> &get_table_items() { return table_items_; }
   const common::ObIArray<TableItem*> &get_table_items() const { return table_items_; }
+  int get_from_item_rel_ids(int64_t from_idx, ObSqlBitSet<> &rel_ids) const;
+  int get_table_items(common::ObIArray<int64_t> &table_ids) const;
   int get_CTE_table_items(ObIArray<TableItem *> &cte_table_items) const;
   int get_all_CTE_table_items_recursive(ObIArray<TableItem *> &cte_table_items) const;
   const common::ObIArray<uint64_t> &get_nextval_sequence_ids() const { return nextval_sequence_ids_; }

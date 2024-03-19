@@ -7740,7 +7740,13 @@ int ObLogPlan::get_minimal_cost_candidate(const ObIArray<CandidatePlan> &candida
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
-    candidate = candidates.at(ObRandom::rand(0, candidates.count() - 1));
+    ObQueryCtx* query_ctx;
+    if (OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+      LOG_WARN("unexpected null value", K(query_ctx));
+      candidate = candidates.at(0);
+    } else {
+      candidate = candidates.at(query_ctx->rand_gen_.get(0, candidates.count() - 1));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); i++) {
       if (OB_ISNULL(candidates.at(i).plan_tree_)) {
@@ -7920,7 +7926,7 @@ int ObLogPlan::create_order_by_plan(ObLogicalOperator *&top,
                                                        topn_expr,
                                                        is_fetch_with_ties))) {
     LOG_WARN("failed to allocate sort as top", K(ret));
-  } else { /*do nothing*/ }
+  }
   return ret;
 }
 
@@ -10750,8 +10756,10 @@ int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plan
   ObSEArray<CandidatePlan, 8> best_plans;
   OPT_TRACE_TITLE("prune and keep best plans");
   if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+    ObQueryCtx* query_ctx = get_optimizer_context().get_query_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
-      if (ObRandom::rand(0,1) == 1 && OB_FAIL(best_plans.push_back(candidate_plans.at(i)))) {
+      bool random_flag = !OB_ISNULL(query_ctx) && query_ctx->rand_gen_.get(0, 1) == 1;
+      if (random_flag && OB_FAIL(best_plans.push_back(candidate_plans.at(i)))) {
         LOG_WARN("failed to push back random candi plan", K(ret));
       }
     }

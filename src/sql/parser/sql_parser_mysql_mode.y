@@ -26,7 +26,7 @@
   const struct _NonReservedKeyword *non_reserved_keyword;
   const struct _NonReservedKeyword *reserved_keyword;
   int32_t ival[2]; //ival[0]表示value, ival[1]表示fast parse在对应的该node及其子node可识别的常量个数
- }
+}
 
 %{
 #include "../../../src/sql/parser/sql_parser_mysql_mode_lex.h"
@@ -173,7 +173,7 @@ PROJECT_PRUNE NO_PROJECT_PRUNE SIMPLIFY_SET NO_SIMPLIFY_SET OUTER_TO_INNER NO_OU
 COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LEFT_TO_ANTI
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
-DECORRELATE NO_DECORRELATE
+DECORRELATE NO_DECORRELATE COALESCE_AGGR NO_COALESCE_AGGR WITH_PULLUP WO_PULLUP
 // optimize hint
 INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
 INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
@@ -416,11 +416,12 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
-%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
+%type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list opt_index_prefix
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
+%type <node> coalesce_strategy_list
 %type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
 %type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i opt_cast_float_precision
 %type <node> opt_float_precision opt_number_precision
@@ -525,7 +526,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
-%type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
+%type <node> table_values_clause table_values_clause_with_order_by_and_limit values_row_list row_value
 %type <node> transfer_partition_stmt transfer_partition_clause part_info
 %type <node> geometry_collection
 %type <node> mock_stmt
@@ -731,15 +732,15 @@ pl_expr_stmt:
 expr_list:
 expr %prec LOWER_COMMA
 {
-  $$ = $1;
   /* every mysql's item(same as ob's expr) has its own name */
-  if (OB_UNLIKELY((NULL == $$->str_value_)) && $$->type_ != T_VARCHAR) {
-    dup_string($$, result, @1.first_column, @1.last_column);
+  if (OB_UNLIKELY((NULL == $1->str_value_)) && $1->type_ != T_VARCHAR) {
+    dup_string($1, result, @1.first_column, @1.last_column);
   }
+  malloc_list_node($$, result->malloc_pool_, T_EXPR_LIST, 2, 1, $1);
 }
 | expr_list ',' expr
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $1, $3);
 }
 ;
 
@@ -1634,15 +1635,11 @@ simple_expr collation %prec NEG
 { $$ = $2; $$->is_assigned_from_child_ = 1; }
 | '(' expr_list ',' expr ')'
 {
-  ParseNode *node = NULL;
-  malloc_non_terminal_node(node, result->malloc_pool_, T_LINK_NODE, 2, $2, $4);
-  merge_nodes($$, result, T_EXPR_LIST, node);
+  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $2, $4);
 }
 | ROW '(' expr_list ',' expr ')'
 {
-  ParseNode *node = NULL;
-  malloc_non_terminal_node(node, result->malloc_pool_, T_LINK_NODE, 2, $3, $5);
-  merge_nodes($$, result, T_EXPR_LIST, node);
+  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, $5);
 }
 | EXISTS select_with_parens
 {
@@ -1742,28 +1739,28 @@ simple_expr collation %prec NEG
 expr:
 expr AND expr %prec AND
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_AND, 2, $1, $3);
+  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr AND_OP expr %prec AND
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_AND, 2, $1, $3);
+  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR expr %prec OR
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_OR, 2, $1, $3);
+  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR_OP expr %prec OR
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_OP_OR, 2, $1, $3);
+  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
@@ -1869,7 +1866,9 @@ select_with_parens %prec NEG
   $$ = $1;
 }
 | '(' expr_list ')'
-{ merge_nodes($$, result, T_EXPR_LIST, $2); }
+{
+  $$ = $2;
+}
 ;
 
 case_expr:
@@ -1899,22 +1898,19 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 {
   ParseNode *distinct = NULL;
   malloc_terminal_node(distinct, result->malloc_pool_, T_DISTINCT);
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $4);
+  ParseNode *expr_list = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_COUNT, 2, distinct, expr_list);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
 | APPROX_COUNT_DISTINCT '(' expr_list ')' OVER new_generalized_window_clause
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT, 1, expr_list);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $6);
 }
 | APPROX_COUNT_DISTINCT_SYNOPSIS '(' expr_list ')' OVER new_generalized_window_clause
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, 1, expr_list);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $6);
 }
@@ -1990,15 +1986,13 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 }
 | GROUP_CONCAT '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
-  ParseNode *group_concat_exprs = NULL;
-  merge_nodes(group_concat_exprs, result, T_EXPR_LIST, $4);
+  ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
 }
 | LISTAGG '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
-  ParseNode *group_concat_exprs = NULL;
-  merge_nodes(group_concat_exprs, result, T_EXPR_LIST, $4);
+  ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
 }
@@ -2155,15 +2149,12 @@ win_fun_lead_lag_params:
 |
 '(' expr respect_or_ignore NULLS ',' expr_list ')'
 {
-  ParseNode *params_node = NULL;
-  malloc_non_terminal_node(params_node, result->malloc_pool_, T_LINK_NODE, 2, $2, $6);
-  merge_nodes(params_node, result, T_EXPR_LIST, params_node);
+  ParseNode *params_node = push_front_child(result->malloc_pool_, &(result->extra_errno_), $6, $2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INVALID, 2, params_node, $3);
 }
 | '(' expr_list ')' opt_respect_or_ignore_nulls
 {
-  ParseNode *params_node = NULL;
-  merge_nodes(params_node, result, T_EXPR_LIST, $2);
+  ParseNode *params_node = $2;
   malloc_non_terminal_node($$, result->malloc_pool_, T_INVALID, 2, params_node, $4);
 }
 ;
@@ -2231,7 +2222,7 @@ opt_partition_by:
 { $$ = NULL;}
 | PARTITION BY expr_list
 {
-  merge_nodes($$, result, T_EXPR_LIST, $3);
+  $$ = $3;
 };
 
 win_rows_or_range:
@@ -2382,28 +2373,24 @@ MOD '(' expr ',' expr ')'
 {
   ParseNode *distinct = NULL;
   malloc_terminal_node(distinct, result->malloc_pool_, T_DISTINCT);
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $4);
+  ParseNode *expr_list = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_COUNT, 2, distinct, expr_list);
 }
 | COUNT '(' UNIQUE expr_list ')'
 {
   ParseNode *distinct = NULL;
   malloc_terminal_node(distinct, result->malloc_pool_, T_DISTINCT);
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $4);
+  ParseNode *expr_list = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_COUNT, 2, distinct, expr_list);
 }
 | APPROX_COUNT_DISTINCT '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT, 1, expr_list);
 }
 | APPROX_COUNT_DISTINCT_SYNOPSIS '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, 1, expr_list);
 }
 | APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE '(' expr ')'
@@ -2480,8 +2467,7 @@ MOD '(' expr ',' expr ')'
 }
 | GROUP_CONCAT '(' opt_distinct expr_list opt_order_by opt_separator ')'
 {
-  ParseNode *group_concat_exprs = NULL;
-  merge_nodes(group_concat_exprs, result, T_EXPR_LIST, $4);
+  ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
 }
 | TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ','  expr_const ')'
@@ -2809,21 +2795,14 @@ MOD '(' expr ',' expr ')'
     yyerror(NULL, result, "No more space for mallocing string\n");
     YYABORT_NO_MEMORY;
   }
-
-  ParseNode *params_node = NULL;
-  malloc_non_terminal_node(params_node, result->malloc_pool_, T_LINK_NODE, 2, $3, charset_node);
-  merge_nodes(params_node, result, T_EXPR_LIST, params_node);
-
+  ParseNode *params_node = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, charset_node);
   make_name_node($$, result->malloc_pool_, "char");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params_node);
 
 }
 | CHARACTER '(' expr_list USING charset_name')'
 {
-  ParseNode *params_node = NULL;
-  malloc_non_terminal_node(params_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $5);
-  merge_nodes(params_node, result, T_EXPR_LIST, params_node);
-
+  ParseNode *params_node = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, $5);
   make_name_node($$, result->malloc_pool_, "char");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params_node);
 }
@@ -2996,39 +2975,33 @@ MOD '(' expr ',' expr ')'
 }
 | LINESTRING '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_LINESTRING, 1, expr_list);
 }
 | MULTIPOINT '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTIPOINT, 1, expr_list);
 }
 | MULTILINESTRING '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTILINESTRING, 1, expr_list);
 }
 | POLYGON '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_POLYGON, 1, expr_list);
 }
 | MULTIPOLYGON '(' expr_list ')'
 {
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTIPOLYGON, 1, expr_list);
 }
 | geometry_collection '(' expr_list ')'
 {
   UNUSED($1);
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
+  ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, expr_list);
 }
 | geometry_collection '(' ')'
@@ -3083,11 +3056,8 @@ INTERVAL '(' expr ',' expr ')'
 }
 | INTERVAL '(' expr ',' expr ',' expr_list ')'
 {
-  ParseNode *params = NULL;
-  ParseNode *params_node = NULL;
   make_name_node($$, result->malloc_pool_, "interval");
-  malloc_non_terminal_node(params, result->malloc_pool_, T_LINK_NODE, 2, $5, $7);
-  merge_nodes(params_node, result, T_EXPR_LIST, params);
+  ParseNode *params_node = push_front_child(result->malloc_pool_, &(result->extra_errno_), $7, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_INTERVAL, 2, $3, params_node);
 }
 | CHECK '(' expr ')'
@@ -7695,8 +7665,7 @@ TYPE COMP_EQ STRING_VALUE
 }
 | NULL_IF_EXETERNAL COMP_EQ '(' expr_list ')'
 {
-  ParseNode *expr_list_node = NULL;
-  merge_nodes(expr_list_node, result, T_EXPR_LIST, $4);
+  ParseNode *expr_list_node = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_NULL_IF_EXETERNAL, 1, expr_list_node);
   dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
@@ -8956,11 +8925,11 @@ no_table_select
 {
   $$ = $1;
 }
-| table_values_caluse
+| table_values_clause
 {
   $$ = $1;
 }
-| table_values_caluse_with_order_by_and_limit
+| table_values_clause_with_order_by_and_limit
 {
   $$ = $1;
 }
@@ -9013,7 +8982,7 @@ no_table_select
 {
   $$ = $1;
 }
-| table_values_caluse
+| table_values_clause
 {
   $$ = $1;
 }
@@ -9951,6 +9920,18 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_DECORRELATE, 1, $2);
 }
+| COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 1, $2);
+}
+| COALESCE_AGGR '(' qb_name_option coalesce_strategy_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_AGGR, 2, $3, $4);
+}
+| NO_COALESCE_AGGR opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_COALESCE_AGGR, 1, $2);
+}
 ;
 
 multi_qb_name_list:
@@ -9982,9 +9963,9 @@ qb_name_list:
   ;
 
 optimize_hint:
-INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 3, $3, $4, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $5,$6);
 }
 | NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
@@ -10204,6 +10185,18 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   $$ = $3;
 }
 ;
+
+opt_index_prefix:
+INTNUM
+{
+  $$=$1;
+}
+| NEG_SIGN INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
+}
+| /*emtpy*/ {$$ = NULL;};
 
 win_dist_list:
 win_dist_desc
@@ -11730,6 +11723,32 @@ relation_factor_in_hint
 }
 ;
 
+coalesce_strategy_list:
+WO_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WO_PULLUP";
+  $$->str_len_ = strlen("WO_PULLUP");
+}
+| WITH_PULLUP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
+  $$->str_value_ = "WITH_PULLUP";
+  $$->str_len_ = strlen("WITH_PULLUP");
+}
+| WO_PULLUP WITH_PULLUP
+{
+  ParseNode *basic_node = NULL;
+  ParseNode *split_node = NULL;
+  malloc_terminal_node(basic_node, result->malloc_pool_, T_VARCHAR);
+  basic_node->str_value_ = "WO_PULLUP";
+  basic_node->str_len_ = strlen("WO_PULLUP");
+  malloc_terminal_node(split_node, result->malloc_pool_, T_VARCHAR);
+  split_node->str_value_ = "WITH_PULLUP";
+  split_node->str_len_ = strlen("WITH_PULLUP");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, basic_node, split_node);
+}
+
 intnum_list:
 INTNUM relation_sep_option intnum_list
 {
@@ -12072,7 +12091,7 @@ column_name opt_asc_desc
  *  https://dev.mysql.com/doc/refman/8.0/en/values.html
  *
 *****************************************************************************/
-table_values_caluse:
+table_values_clause:
 VALUES values_row_list
 {
   ParseNode *values_node = NULL;
@@ -12083,7 +12102,7 @@ VALUES values_row_list
 }
 ;
 
-table_values_caluse_with_order_by_and_limit:
+table_values_clause_with_order_by_and_limit:
 VALUES values_row_list order_by
 {
   ParseNode *values_node = NULL;

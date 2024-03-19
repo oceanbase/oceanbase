@@ -1509,3 +1509,25 @@ int ObLogJoin::get_card_without_filter(double &card)
   }
   return ret;
 }
+
+int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_JOIN == get_join_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (NESTED_LOOP_JOIN == get_join_algo()) {
+    used = false;
+    if (CONNECT_BY_JOIN == get_join_type()) {
+      inherit_child_ordering_index = -1;
+    } else {
+      inherit_child_ordering_index = first_child;
+    }
+  } else if (MERGE_JOIN == get_join_algo()) {
+    used = true;
+    inherit_child_ordering_index = first_child;
+  }
+  return ret;
+}

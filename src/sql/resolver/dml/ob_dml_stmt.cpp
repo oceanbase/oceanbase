@@ -2743,6 +2743,48 @@ int ObDMLStmt::remove_table_item(const TableItem *ti)
   return ret;
 }
 
+int ObDMLStmt::remove_table_item(const uint64_t tid, bool *remove_happened /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  bool happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_table_size(); ++i) {
+    TableItem *table_item = get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is NULL", K(ret));
+    } else if (table_item->table_id_ != tid) {
+      // do nothing
+    } else if (OB_FAIL(table_items_.remove(i))) {
+      LOG_WARN("fail to remove table item", K(ret));
+    } else {
+      happened = true;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && remove_happened != NULL) {
+    *remove_happened = happened;
+  }
+  return ret;
+}
+
+int ObDMLStmt::remove_table_item(const ObIArray<uint64_t> &tids, bool *remove_happened /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  bool happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tids.count(); ++i) {
+    bool sub_hanppened = false;
+    if (OB_FAIL(remove_table_item(tids.at(i), &sub_hanppened))) {
+      LOG_WARN("fail to remove table item", K(ret), K(tids.at(i)));
+    } else {
+      happened |= sub_hanppened;
+    }
+  }
+  if (OB_SUCC(ret) && remove_happened != NULL) {
+    *remove_happened = happened;
+  }
+  return ret;
+}
+
 int ObDMLStmt::remove_table_info(const TableItem *table)
 {
   int ret = OB_SUCCESS;
@@ -3122,6 +3164,79 @@ int ObDMLStmt::get_from_tables(common::ObIArray<TableItem *>& from_tables) const
   return ret;
 }
 
+int ObDMLStmt::get_from_tables(common::ObIArray<int64_t>& table_ids) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
+    const FromItem &from_item = from_items_.at(i);
+    if (OB_FAIL(table_ids.push_back(from_item.table_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_from_table(int64_t from_idx, TableItem* &from_table) const
+{
+  int ret = OB_SUCCESS;
+  from_table = NULL;
+  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_items_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("from table idx invalid", K(ret), K(from_idx));
+  } else {
+    const FromItem &from_item = from_items_.at(from_idx);
+    if (from_item.is_joined_ &&
+        OB_ISNULL(from_table = get_joined_table(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (!from_item.is_joined_ &&
+               OB_ISNULL(from_table = get_table_item_by_id(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_from_item_rel_ids(int64_t from_idx, ObSqlBitSet<> &rel_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_items_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("from table idx invalid", K(ret), K(from_idx));
+  } else {
+    const FromItem &from_item = from_items_.at(from_idx);
+    TableItem *table_item = NULL;
+    if (from_item.is_joined_ &&
+        OB_ISNULL(table_item = get_joined_table(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is NULL", K(ret));
+    } else if (!from_item.is_joined_ &&
+               OB_ISNULL(table_item = get_table_item_by_id(from_item.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is NULL", K(ret));
+    } else if (OB_FAIL(get_table_rel_ids(*table_item, rel_ids))) {
+      LOG_WARN("fail to get rel ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_items(common::ObIArray<int64_t>& table_ids) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); ++i) {
+    const TableItem *table_item;
+    if (OB_ISNULL(table_item = table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is NULL", K(ret), K(i), K(table_items_.count()));
+    } else if (OB_FAIL(table_ids.push_back(table_item->table_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_name)
 {
   ColumnItem *item = NULL;
@@ -3247,7 +3362,7 @@ int ObDMLStmt::remove_column_item(const ObIArray<ObRawExpr *> &column_exprs)
 int ObDMLStmt::remove_joined_table_item(const ObIArray<JoinedTable*> &tables)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
     ret = remove_joined_table_item(tables.at(i));
   }
   return ret;
@@ -3256,10 +3371,30 @@ int ObDMLStmt::remove_joined_table_item(const ObIArray<JoinedTable*> &tables)
 int ObDMLStmt::remove_joined_table_item(const JoinedTable *joined_table)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
     if (joined_table == joined_tables_.at(i)) {
       if (OB_FAIL(joined_tables_.remove(i))) {
         LOG_WARN("failed to remove joined table item", K(ret));
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::remove_joined_table_item(uint64_t tid, bool *remove_happened/* = NULL*/)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != remove_happened) {
+    *remove_happened = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
+    JoinedTable *table = joined_tables_.at(i);
+    if (table->table_id_ == tid) {
+      if (OB_FAIL(joined_tables_.remove(i))) {
+        LOG_WARN("failed to remove joined table item", K(ret));
+      } else if (NULL != remove_happened) {
+        *remove_happened = true;
       }
       break;
     }

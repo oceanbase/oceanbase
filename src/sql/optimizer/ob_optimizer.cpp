@@ -607,8 +607,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_merge_join_enabled(tenant_config->_optimizer_sortmerge_join_enabled);
       ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
     }
-    int tmp_ret = OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS;
-    if (!session.is_inner() && (OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS) != OB_SUCCESS) {
+    if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);
     }
     if (session.is_enable_new_query_range() &&
