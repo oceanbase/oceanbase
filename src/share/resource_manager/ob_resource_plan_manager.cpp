@@ -30,6 +30,9 @@ int ObResourcePlanManager::init()
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
   } else if (OB_FAIL(tenant_plan_map_.create(7, "TENANT_PLAN_MAP"))) {
     LOG_WARN("fail create tenant_plan_map", K(ret));
+  } else if (!GCONF.enable_global_background_resource_isolation &&
+             OB_FAIL(GCTX.cgroup_ctrl_->remove_cgroup(OB_INVALID_TENANT_ID, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+    LOG_WARN("fail to remove background cgroup");
   } else {
     LOG_INFO("resource plan manager init ok");
   }
@@ -58,9 +61,7 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
   } else if (origin_plan != cur_plan) {
     // switch plan，reset 原来plan下对应directive的io资源
     ObResourceManagerProxy proxy;
-    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(
-                      tenant_id,
-                      1))) {
+    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
       LOG_ERROR("reset old plan group directive failed", K(tenant_id), K(ret));
     }
     if (OB_SUCC(ret) && plan_name.empty()) {
@@ -75,6 +76,30 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
       } else {
         LOG_INFO("switch resource plan success", K(tenant_id), K(origin_plan), K(cur_plan));
       }
+    }
+  }
+  return ret;
+}
+
+int ObResourcePlanManager::refresh_global_background_cpu()
+{
+  int ret = OB_SUCCESS;
+  int32_t cfs_period_us = 0;
+  if (GCONF.enable_global_background_resource_isolation) {
+    int32_t cpu = static_cast<int32_t>(GCONF.global_background_cpu_quota);
+    if (cpu <= 0) {
+      cpu = -1;
+    }
+    if (background_quota_ == cpu) {
+      // do nothing
+    } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(  // set cgroup/background/cpu.cfs_quota_us
+                   OB_INVALID_TENANT_ID,
+                   cpu,
+                   OB_INVALID_GROUP_ID,
+                   BACKGROUND_CGROUP))) {
+      LOG_WARN("fail to set background cpu cfs quota", K(ret));
+    } else {
+      background_quota_ = cpu;
     }
   }
   return ret;
@@ -110,11 +135,11 @@ int ObResourcePlanManager::refresh_resource_plan(const uint64_t tenant_id, ObStr
       //   step1: 以 100 为总值做归一化
       //   step2: 将值转化成 cgroup 值 （utilization=>cfs_cpu_quota 的值和 cpu 核数等有关)
       //      - 如果 utilization = 100，那么 cfs_cpu_quota = -1
-    } else if (OB_FAIL(create_cgroup_dir_if_not_exist(directives))) {
-      LOG_WARN("fail create cgroup dir", K(directives), K(ret));
+    } else if (OB_FAIL(refresh_global_background_cpu())) {
+      LOG_WARN("fail refresh background cpu quota", K(ret));
     } else if (OB_FAIL(normalize_cpu_directives(directives))) {
       LOG_WARN("fail normalize directive", K(ret));
-    } else if (OB_FAIL(flush_directive_to_cgroup_fs(directives))) { // for CPU
+    } else if (OB_FAIL(flush_directive_to_cgroup_fs(directives))) {  // for CPU
       LOG_WARN("fail flush directive to cgroup fs", K(ret));
     }
   }
@@ -146,12 +171,10 @@ int ObResourcePlanManager::get_cur_plan(const uint64_t tenant_id, ObResMgrVarcha
 int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directives)
 {
   int ret = OB_SUCCESS;
-  int64_t total_mgmt = 0;
-  int64_t total_util = 0;
+  double total_mgmt = 0;
   for (int64_t i = 0; i < directives.count(); ++i) {
     const ObPlanDirective &d = directives.at(i);
     total_mgmt += d.mgmt_p1_;
-    total_util += d.utilization_limit_;
   }
 
   // 计算：cfs_cpu_quota 值
@@ -176,29 +199,24 @@ int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directiv
     if (0 == total_mgmt) {
       d.mgmt_p1_ = 0;
     } else {
-      d.mgmt_p1_ = 100 * d.mgmt_p1_ / total_mgmt;
+      d.mgmt_p1_ = d.mgmt_p1_ / total_mgmt;
     }
-    if (0 == total_util) {
-      d.utilization_limit_ = 0;
+    double tenant_shares_cpu = 0;
+    int32_t cfs_period_us = 0;
+    if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_shares(
+            d.tenant_id_,
+            tenant_shares_cpu,
+            OB_INVALID_GROUP_ID,
+            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
+                                                              : ""))) {
+      LOG_WARN("fail get cpu shares", K(d), K(ret));
     } else {
-      int32_t tenant_cpu_shares = 0;
-      int32_t cfs_period_us = 0;
-      if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_shares(tenant_cpu_shares, d.tenant_id_))) {
-        LOG_WARN("fail get cpu shares", K(d), K(ret));
-      } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_period(
-                  d.tenant_id_,
-                  d.level_,
-                  d.group_name_,
-                  cfs_period_us))) {
-        LOG_WARN("fail get cpu cfs period", K(d), K(ret));
+      if (d.utilization_limit_ == 100) {
+        // 不限制
+        d.utilization_limit_ = -1;
       } else {
-        if (d.utilization_limit_ == 100) {
-          // 不限制
-          d.utilization_limit_ = -1;
-        } else {
-          d.utilization_limit_ =
-              (int64_t)cfs_period_us * tenant_cpu_shares *  d.utilization_limit_ / 100 / 1024;
-        }
+        d.utilization_limit_ =
+            tenant_shares_cpu * d.utilization_limit_ / 100;
       }
     }
   }
@@ -253,27 +271,6 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   return ret;
 }
 
-int ObResourcePlanManager::create_cgroup_dir_if_not_exist(const ObPlanDirectiveSet &directives)
-{
-  int ret = OB_SUCCESS;
-  share::ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;
-  if (OB_ISNULL(cgroup_ctrl) || !cgroup_ctrl->is_valid()) {
-    ret = OB_NOT_INIT;
-  } else {
-    for (int64_t i = 0; i < directives.count(); ++i) {
-      const ObPlanDirective &d = directives.at(i);
-      if (OB_FAIL(cgroup_ctrl->create_user_tenant_group_dir(
-                  d.tenant_id_,
-                  d.level_,
-                  d.group_name_))) {
-        LOG_WARN("fail init user tenant group", K(d), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-
 /*
  * cpu share 比较简单，给相对值即可。
  * cfs_quota_us 相对复杂，需要考虑 cpu 数量。具体规则如下：
@@ -315,16 +312,18 @@ int ObResourcePlanManager::flush_directive_to_cgroup_fs(ObPlanDirectiveSet &dire
     const ObPlanDirective &d = directives.at(i);
     if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_shares(
                 d.tenant_id_,
-                d.level_,
-                d.group_name_,
-                static_cast<int32_t>(d.mgmt_p1_)))) {
+                d.mgmt_p1_,
+                d.group_id_,
+                GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
+                                                                  : ""))) {
       LOG_ERROR("fail set cpu shares. tenant isolation function may not functional!!",
                 K(d), K(ret));
     } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
                        d.tenant_id_,
-                       d.level_,
-                       d.group_name_,
-                       static_cast<int32_t>(d.utilization_limit_)))) {
+                       d.utilization_limit_,
+                       d.group_id_,
+                       GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
+                                                                         : ""))) {
       LOG_ERROR("fail set cpu quota. tenant isolation function may not functional!!",
                 K(d), K(ret));
     }
@@ -349,7 +348,6 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
         LOG_ERROR("fail init group io info", K(cur_directive), K(ret));
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_group_iops(
                         cur_directive.tenant_id_,
-                        cur_directive.level_,
                         cur_directive.group_id_,
                         cur_io_info))) {
         LOG_ERROR("fail set iops. tenant isolation function may not functional!!",
@@ -365,7 +363,6 @@ int ObResourcePlanManager::flush_directive_to_iops_control(const uint64_t tenant
         LOG_ERROR("fail init other group io info", K(other_group_directive), K(ret));
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_group_iops(
                         other_group_directive.tenant_id_,
-                        other_group_directive.level_,
                         other_group_directive.group_id_,
                         other_io_info))) {
         LOG_ERROR("fail set iops. tenant isolation function may not functional!!",

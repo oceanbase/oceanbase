@@ -69,6 +69,28 @@ enum ObIOModule {
   MAX_IO = 20021
 };
 
+const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
+const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
+const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
+const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
+const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
+const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+OB_INLINE bool is_user_group(const int64_t group_id)
+{
+  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
+}
+
+OB_INLINE bool is_sys_group(const int64_t group_id)
+{
+  return group_id >= SYS_RESOURCE_GROUP_START_ID && group_id <= SYS_RESOURCE_GROUP_START_ID + SYS_RESOURCE_GROUP_CNT;
+}
+
+OB_INLINE bool is_valid_resource_group(const int64_t group_id)
+{
+  //other group or user group
+  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
+}
+
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
 {
