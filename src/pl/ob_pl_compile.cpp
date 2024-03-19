@@ -1442,7 +1442,10 @@ int ObPLCompiler::generate_package_routines(
     for (int64_t i = 0; OB_SUCC(ret) && i < package.get_routine_table().count(); ++i) {
       if (OB_NOT_NULL(package.get_routine_table().at(i))) {
         package.get_routine_table().at(i)->set_profiler_unit_info(
-          package_id, package.get_routine_table().at(i)->get_proc_type());
+            package_id, package.get_routine_table().at(i)->get_proc_type());
+
+        OZ (SMART_CALL(
+              ObPLCodeGenerator::set_profiler_unit_info_recursive(*package.get_routine_table().at(i))));
       }
     }
   }

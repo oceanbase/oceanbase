@@ -3022,32 +3022,6 @@ int ObPLExecState::final(int ret)
     }
   }
 
-  if (OB_NOT_NULL(top_context_)
-      && top_context_->get_exec_stack().count() > 0
-      && top_context_->get_exec_stack().at(
-        top_context_->get_exec_stack().count() - 1
-      ) == this) {
-    top_context_->get_exec_stack().pop_back();
-  }
-
-  // reset physical plan context
-  if (need_reset_physical_plan_) {
-    if (func_.get_expr_op_size() > 0) {
-      //Memory leak
-      //Must be reset before free expr_op_ctx!
-      ctx_.exec_ctx_->reset_expr_op();
-      ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
-    }
-    exec_ctx_bak_.restore(*ctx_.exec_ctx_);
-  }
-
-  if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
-  #ifdef OB_BUILD_ORACLE_PL
-    ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
-    ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
-  #endif
-  }
-
 #ifdef OB_BUILD_ORACLE_PL
   // save profiler time stack data
   if (OB_NOT_NULL(profiler_time_stack_)) {
@@ -3076,6 +3050,32 @@ int ObPLExecState::final(int ret)
     profiler_time_stack_ = nullptr;
   }
 #endif // OB_BUILD_ORACLE_PL
+
+  if (OB_NOT_NULL(top_context_)
+      && top_context_->get_exec_stack().count() > 0
+      && top_context_->get_exec_stack().at(
+        top_context_->get_exec_stack().count() - 1
+      ) == this) {
+    top_context_->get_exec_stack().pop_back();
+  }
+
+  // reset physical plan context
+  if (need_reset_physical_plan_) {
+    if (func_.get_expr_op_size() > 0) {
+      //Memory leak
+      //Must be reset before free expr_op_ctx!
+      ctx_.exec_ctx_->reset_expr_op();
+      ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
+    }
+    exec_ctx_bak_.restore(*ctx_.exec_ctx_);
+  }
+
+  if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
+  #ifdef OB_BUILD_ORACLE_PL
+    ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+    ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
+  #endif
+  }
 
   return OB_SUCCESS;
 }

@@ -4521,6 +4521,17 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
           ret = OB_SUCCESS;
         }
       }
+
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match("pkg."))) {
+        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
+                      this, user_var_name, user_var_val))) {
+          LOG_WARN("fail to notify package variable deserialize",
+                   K(user_var_name), K(user_var_val), K(ret));
+        }
+      }
+#endif // OB_BUILD_ORACLE_PL
+
     }
   }
 

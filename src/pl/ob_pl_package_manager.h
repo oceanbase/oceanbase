@@ -31,6 +31,8 @@ namespace sql
 class ObExecContext;
 class ObSQLSessionInfo;
 class ObSqlExpression;
+class ObBasicSessionInfo;
+class ObSessionVariable;
 }
 
 namespace share
@@ -166,6 +168,8 @@ public:
                                 ObPLPackage *&package_spec,
                                 ObPLPackage *&package_body,
                                 bool for_static_member = false);
+
+  static int notify_package_variable_deserialize(sql::ObBasicSessionInfo *session, const ObString &name, const sql::ObSessionVariable &value);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageManager);

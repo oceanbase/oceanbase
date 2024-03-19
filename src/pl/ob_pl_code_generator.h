@@ -791,11 +791,11 @@ public:
   int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
   int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
 
+  static int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
+
 private:
   int init_di_adt_service();
   int generate_di_prototype();
-
-  int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
 
 private:
   jit::ObLLVMDIHelper &di_helper_;

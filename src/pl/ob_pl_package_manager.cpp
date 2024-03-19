@@ -28,6 +28,7 @@
 #include "observer/ob_req_time_service.h"
 #include "lib/file/file_directory_utils.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
+#include "sql/session/ob_session_val_map.h"
 
 namespace oceanbase
 {
@@ -1550,5 +1551,48 @@ int ObPLPackageManager::destory_package_state(sql::ObSQLSessionInfo &session_inf
   }
   return ret;
 }
+
+int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *session, const ObString &name, const ObSessionVariable &value)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef OB_BUILD_ORACLE_PL
+
+  ObPackageVarSetName pkg_var_info;
+  ObArenaAllocator allocator;
+
+  CK (OB_NOT_NULL(session));
+
+  OZ (pkg_var_info.decode(allocator, name), name);
+
+  if (OB_SUCC(ret) && OB_SYS_TENANT_ID == get_tenant_id_by_object_id(pkg_var_info.package_id_)) {
+    ObSchemaGetterGuard schema_guard;
+    const ObPackageInfo *package_info = nullptr;
+
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL GCTX.schema_service_", K(ret), K(GCTX.schema_service_));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info))) {
+      LOG_WARN("failed to get package info", K(ret), K(pkg_var_info), KPC(package_info));
+    } else if (OB_ISNULL(package_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL package info", K(ret), K(pkg_var_info), KPC(package_info));
+    } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
+      if (OB_FAIL(ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
+                                                                       pkg_var_info,
+                                                                       value))) {
+        LOG_WARN("[DBMS_PROFILER] failed to set session profiler status by package var deserialize",
+                 K(ret), K(pkg_var_info), K(value));
+      }
+    }
+  }
+
+#endif // OB_BUILD_ORACLE_PL
+
+  return ret;
+}
+
 } // end namespace pl
 } // end namespace oceanbase
