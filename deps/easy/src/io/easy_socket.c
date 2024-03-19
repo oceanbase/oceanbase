@@ -169,7 +169,7 @@ char* easy_socket_err_reason(int error_no)
     case ENETUNREACH:
         /* 101 - Network is unreachable */
     case EHOSTUNREACH:
-        /* 113 - No route to host */   
+        /* 113 - No route to host */
     default:
         err_reason = "";
         break;
@@ -184,7 +184,7 @@ char* easy_socket_err_reason(int error_no)
  */
 ssize_t easy_socket_read(easy_connection_t *conn, char *buf, size_t size, int *pending)
 {
-    ssize_t n;  
+    ssize_t n;
     EASY_SOCKET_IO_TIME_GUARD(ev_read_count, ev_read_time, size);
 
     do {

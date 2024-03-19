@@ -106,7 +106,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
                                bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
 {
   int ret = OB_SUCCESS;
-  const static int MAX_IP_BUFFER_LEN = 32;
+  const static int MAX_IP_BUFFER_LEN = common::OB_IP_STR_BUFF;
   char host[MAX_IP_BUFFER_LEN];
   host[0] = '\0';
   // if db is NULL, the default database is used.
@@ -180,7 +180,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
                                bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
 {
   int ret = OB_SUCCESS;
-  const static int MAX_IP_BUFFER_LEN = 32;
+  const static int MAX_IP_BUFFER_LEN = common::OB_IP_STR_BUFF;
   char host[MAX_IP_BUFFER_LEN];
   host[0] = '\0';
   // if db is NULL, the default database is used.

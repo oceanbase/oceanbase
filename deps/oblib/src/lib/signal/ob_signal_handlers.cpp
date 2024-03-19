@@ -96,7 +96,7 @@ signal_handler_t &get_signal_handler()
 bool g_redirect_handler = false;
 static __thread int g_coredump_num = 0;
 
-#define COMMON_FMT "timestamp=%ld, tid=%ld, tname=%s, trace_id="TRACE_ID_FORMAT_V2", extra_info=(%s), lbt=%s"
+#define COMMON_FMT "timestamp=%ld, tid=%ld, tname=%s, trace_id=%s, extra_info=(%s), lbt=%s"
 
 void coredump_cb(int, int, void*, void*);
 void ob_signal_handler(int sig, siginfo_t *si, void *context)
@@ -193,10 +193,13 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
     bt[len++] = '\0';
     // extra
     const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-    uint64_t uval[4] = {0};
     auto *trace_id = ObCurTraceId::get_trace_id();
+    char trace_id_buf[128] = {'\0'};
     if (trace_id != nullptr) {
-      trace_id->get_uval(uval);
+      int64_t pos = trace_id->to_string(trace_id_buf, sizeof(trace_id_buf));
+      if (pos < sizeof(trace_id_buf)) {
+        trace_id_buf[pos]= '\0';
+      }
     }
     char print_buf[1024];
     const ucontext_t *con = (ucontext_t *)context;
@@ -222,7 +225,7 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
     ssize_t print_len = lnprintf(print_buf, sizeof(print_buf),
                                  "%s IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
                                   crash_info, ip, bp, sig, sig_code, sig_addr, rlimit_core,
-                                  ts, GETTID(), tname, TRACE_ID_FORMAT_PARAM(uval),
+                                  ts, GETTID(), tname, trace_id_buf,
                                   (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
     ObSqlInfo sql_info = ObSqlInfoGuard::get_tl_sql_info();
     char sql_id[] = "SQL_ID=";

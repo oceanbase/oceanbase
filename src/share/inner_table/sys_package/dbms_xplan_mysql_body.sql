@@ -31,7 +31,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_xplan
     -- display sql plan table`s plan
     function display_cursor(plan_id      DECIMAL default 0,             -- default value: last plan
                             format		 VARCHAR(32) default 'TYPICAL',
-                            svr_ip       VARCHAR(32) default null,      -- default value: server connected by client
+                            svr_ip       VARCHAR(64) default null,      -- default value: server connected by client
                             svr_port     DECIMAL default 0,             -- default value: server connected by client
                             tenant_id	 DECIMAL default 0              -- default value: current tenant
                         )
@@ -42,7 +42,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_xplan
     function display_sql_plan_baseline(sql_handle   VARCHAR(32)  default  NULL,
                                         plan_name    VARCHAR(32)  default  NULL,
                                         format       VARCHAR(32)  default  'TYPICAL',
-                                        svr_ip       VARCHAR(32) default null,      -- default value: server connected by client
+                                        svr_ip       VARCHAR(64) default null,      -- default value: server connected by client
                                         svr_port     DECIMAL default 0,             -- default value: server connected by client
                                         tenant_id	 DECIMAL default 0              -- default value: current tenant
                                     )
@@ -53,7 +53,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_xplan
     function display_active_session_plan(
                 session_id   DECIMAL default 0,
                 format       VARCHAR(32)  default  'TYPICAL',
-                svr_ip       VARCHAR(32) default null,          -- default value: server connected by client
+                svr_ip       VARCHAR(64) default null,          -- default value: server connected by client
                 svr_port     DECIMAL default 0                  -- default value: server connected by client
                 )
     return text;

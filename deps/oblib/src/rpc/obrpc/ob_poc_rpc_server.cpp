@@ -197,13 +197,7 @@ void ObPocServerHandleContext::set_peer_unsafe()
 {
   struct sockaddr_storage sock_addr;
   if (0 == pn_get_peer(resp_id_, &sock_addr)) {
-    if (AF_INET == sock_addr.ss_family) {
-      struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
-      peer_.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
-    } else if (AF_INET6 == sock_addr.ss_family) {
-      struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
-      peer_.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
-    }
+    peer_.from_sockaddr(&sock_addr);
   }
 }
 

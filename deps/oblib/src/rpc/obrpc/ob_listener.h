@@ -29,15 +29,6 @@ namespace obrpc
 #define MAX_PROTOCOL_TYPE_SIZE (5)
 #define OB_LISTENER_MAX_THREAD_CNT         64
 
-inline struct sockaddr_in* make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
-  if (NULL != sin) {
-    sin->sin_port = (uint16_t)htons((uint16_t)port);
-    sin->sin_addr.s_addr = ip;
-    sin->sin_family = AF_INET;
-  }
-  return sin;
-}
-
 typedef struct io_threads_pipefd_pool_t{
     int count;
     int pipefd[OB_LISTENER_MAX_THREAD_CNT];
@@ -67,6 +58,7 @@ public:
 
 private:
   void do_work();
+  int listen_special(int family, int port);
 private:
   int listen_fd_;
   int port_;
