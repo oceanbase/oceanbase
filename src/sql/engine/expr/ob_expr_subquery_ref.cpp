@@ -347,7 +347,9 @@ int ObExprSubQueryRef::expr_eval(
     OZ (session->get_tmp_table_size(size));
     OZ (cursor->prepare_spi_cursor(spi_cursor,
                                    session->get_effective_tenant_id(),
-                                   size));
+                                   size,
+                                   false,
+                                   session));
     OZ (spi_cursor->row_desc_.assign(extra_info->row_desc_));
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter->get_next_row())) {

@@ -4044,7 +4044,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                   OZ (cursor->prepare_spi_cursor(spi_cursor,
                                                 session_info->get_effective_tenant_id(),
                                                 size,
-                                                for_update && !is_server_cursor), K(size));
+                                                for_update && !is_server_cursor,
+                                                session_info), K(size));
                   //if (is_server_cursor) {
                     // not only server cursor need field set
                     // normal cursor maybe convert to session cursor by to_cursor_number
@@ -4371,7 +4372,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           OZ (cursor.prepare_spi_cursor(spi_cursor,
                                         session->get_effective_tenant_id(),
-                                        size));
+                                        size,
+                                        false,
+                                        session));
           OZ (GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), spi_result.get_scheme_guard()));
           OZ (spi_result.get_scheme_guard().get_schema_version(session->get_effective_tenant_id(), tenant_version));
           OZ (spi_result.get_scheme_guard().get_schema_version(OB_SYS_TENANT_ID, sys_version));
@@ -6520,7 +6523,12 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
     if (OB_FAIL(ret)) {
     } else if (src->is_null() || ObMaxType == src->get_type()) {
       //ObMaxTC means deleted element in Collection, no need to copy
-      *dest = *src;
+      uint8 type = dest->get_meta().get_extend_type();
+      if ((PL_CURSOR_TYPE == type || PL_REF_CURSOR_TYPE == type) && dest->get_ext() != 0) {
+        OZ (spi_add_ref_cursor_refcount(ctx, dest, -1));
+      } else {
+        *dest = *src;
+      }
     } else if (PL_CURSOR_TYPE == src->get_meta().get_extend_type()
         || PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type()) {
       OZ (spi_copy_ref_cursor(ctx, allocator, src, dest, dest_type, package_id));
