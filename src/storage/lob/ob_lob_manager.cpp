@@ -67,6 +67,8 @@ static int is_store_char_len(ObLobAccessParam& param, int64_t store_chunk_size, 
     LOG_DEBUG("not text", K(add_len), K(store_chunk_size), K(param));
   } else if (store_chunk_size <= (param.byte_size_ + add_len)) {
     LOG_DEBUG("not single", K(add_len), K(store_chunk_size), K(param));
+  } else if (param.tablet_id_.is_inner_tablet()) {
+    LOG_DEBUG("inner table skip", K(add_len), K(store_chunk_size), K(param));
   } else {
     uint64_t tenant_id = param.tenant_id_;
     uint64_t data_version = 0;
