@@ -225,10 +225,10 @@ protected:
 inline ObMulModeBinType get_mul_mode_tc(ObMulModeNodeType type)
 {
   ObMulModeBinType res = MulModeMaxType;
-  if (type >= ObMulModeNodeType::M_EXTENT_LEVEL2 && type <= ObMulModeNodeType::M_EXTENT_LEVEL0) {
+  if (type >= M_MAX_TYPE) {
     // do nothing,current not used
-  } else if (type >= M_NULL && type <= M_MAX_TYPE) {
-     res = g_mul_mode_tc[type];
+  } else if (type >= M_NULL && type < M_MAX_TYPE) {
+    res = g_mul_mode_tc[type];
   }
   return res;
 }
