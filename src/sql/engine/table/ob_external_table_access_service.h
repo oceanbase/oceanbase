@@ -165,7 +165,8 @@ private:
 private:
   ObBitVector *bit_vector_cache_;
   StateValues state_;
-  common::ObMalloc allocator_;
+  common::ObMalloc malloc_alloc_; //for internal data buffers
+  common::ObArenaAllocator arena_alloc_;
   ObCSVGeneralParser parser_;
   ObExternalDataAccessDriver data_access_driver_;
   ObSqlString url_;
