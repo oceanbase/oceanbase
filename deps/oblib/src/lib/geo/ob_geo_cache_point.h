@@ -25,6 +25,7 @@ public:
     : ObCachedGeomBase(geom, allocator, srs) {}
   virtual ~ObCachedGeoPoint() {};
   virtual ObGeoCacheType get_cache_type() { return ObGeoCacheType::GEO_POINT_CACHE;}
+  virtual void destroy_cache() { this->~ObCachedGeoPoint(); }
   virtual int intersects(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
 };
 
