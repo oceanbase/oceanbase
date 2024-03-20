@@ -286,8 +286,8 @@ int ObChecksumValidator::validate_checksum(
     } else {
       last_table_ckm_items_.clear();
     }
-    cur_tablet_ls_pair_array_.reuse();
   }
+  cur_tablet_ls_pair_array_.reuse(); // need reuse array when get_tablet_ls_pairs failed
   if (FAILEDx(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
     LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
   } else {
