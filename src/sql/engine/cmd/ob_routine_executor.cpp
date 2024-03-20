@@ -61,6 +61,7 @@ int ObCompileRoutineInf::compile_routine(ObExecContext &ctx,
                                                                       routine_name,
                                                                       routine_info));
   }
+  OZ (ctx.get_my_session()->get_database_id(db_id));
   if (OB_SUCC(ret) && OB_NOT_NULL(routine_info) && schema_version == routine_info->get_schema_version()) {
     pl::ObPLCacheCtx pc_ctx;
     pc_ctx.session_info_ = ctx.get_my_session();
