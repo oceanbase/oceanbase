@@ -85,6 +85,8 @@ int ObExprInnerTableOptionPrinter::eval_inner_table_option_printer(const ObExpr 
     LOG_WARN("failed to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id->get_int(), table_id->get_int(), table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(table_id->get_int()));
+  } else if (nullptr == table_schema) {
+    expr_datum.set_null();
   } else {
     ObSchemaPrinter schema_printer(schema_guard);
     int64_t pos = 0;
@@ -177,6 +179,8 @@ int ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter(const ObExp
     LOG_WARN("failed to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id->get_int(), table_id->get_int(), table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(table_id->get_int()));
+  } else if (nullptr == table_schema) {
+    expr_datum.set_null();
   } else {
     uint64_t auto_increment = 0;
     if (OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_value(
