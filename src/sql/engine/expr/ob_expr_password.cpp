@@ -32,7 +32,7 @@ ObExprPassword::~ObExprPassword()
 {
 }
 
-# define SHA_PASSWORD_CHAR_LENGTH (SHA_DIGEST_LENGTH * 2 + 1)
+# define SHA_PASSWORD_CHAR_LENGTH (SHA_DIGEST_LENGTH * 2 + 2)
 
 int ObExprPassword::calc_result_type1(ObExprResType &type, ObExprResType &text,
                                       common::ObExprTypeCtx &type_ctx) const
@@ -71,7 +71,8 @@ int ObExprPassword::eval_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   } else if (arg->get_string().empty()) {
     expr_datum.set_string("", 0);
   } else {
-    char *enc_buf = expr.get_str_res_mem(ctx, SHA_PASSWORD_CHAR_LENGTH);
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    char *enc_buf = static_cast<char *>(alloc_guard.get_allocator().alloc(SHA_PASSWORD_CHAR_LENGTH));
     if (enc_buf == NULL) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc memory failed", K(ret));
@@ -79,18 +80,25 @@ int ObExprPassword::eval_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
       ObString tmp_str;
       ObString upp_str;
       ObString res_str;
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      tmp_str.assign(enc_buf, SHA_PASSWORD_CHAR_LENGTH);
+      ObString str_in_ctx;
+      tmp_str.assign_ptr(enc_buf, SHA_PASSWORD_CHAR_LENGTH);
       if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(arg->get_string(), tmp_str))) {
         LOG_WARN("encrypt password failed", K(ret));
-      } else if (OB_FAIL(ObCharset::toupper(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, tmp_str, upp_str, alloc_guard.get_allocator()))) {
+      } else if (OB_FAIL(ObCharset::toupper(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI,
+                                            tmp_str,
+                                            upp_str,
+                                            alloc_guard.get_allocator()))) {
         LOG_WARN("convert string to upper failed", K(ret), K(tmp_str));
-      } else if (OB_FAIL(ObExprUtil::convert_string_collation(upp_str, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI,
-                                                              res_str, expr.datum_meta_.cs_type_,
+      } else if (OB_FAIL(ObExprUtil::convert_string_collation(upp_str,
+                                                              ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                              res_str,
+                                                              expr.datum_meta_.cs_type_,
                                                               alloc_guard.get_allocator()))) {
         LOG_WARN("convert string collation failed", K(ret), K(upp_str));
+      } else if (OB_FAIL(ObExprUtil::deep_copy_str(res_str, str_in_ctx, ctx.get_expr_res_alloc()))) {
+        LOG_WARN("failed to cpoy str to context", K(ret));
       } else {
-        expr_datum.set_string(res_str);
+        expr_datum.set_string(str_in_ctx);
         LOG_USER_WARN(OB_ERR_DEPRECATED_SYNTAX_NO_REP, "\'PASSWORD\'");
       }
     }
