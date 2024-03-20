@@ -593,11 +593,65 @@ public:
       const uint64_t tenant_id,
       const int64_t target_schema_version);
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
-
+  static int check_table_compaction_checksum_error(
+      const uint64_t tenant_id,
+      const uint64_t table_id);
   static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                           const int64_t parallel,
                                           ObCompressorType &compr_type);
+  static inline bool is_verifying_checksum_error_needed(share::ObDDLType type)
+  {
+    bool res = false;
+    switch (type) {
+      case DDL_MODIFY_COLUMN:
+      case DDL_ADD_PRIMARY_KEY:
+      case DDL_DROP_PRIMARY_KEY:
+      case DDL_ALTER_PRIMARY_KEY:
+      case DDL_ALTER_PARTITION_BY:
+      case DDL_DROP_COLUMN:
+      case DDL_CONVERT_TO_CHARACTER:
+      case DDL_ADD_COLUMN_OFFLINE:
+      case DDL_COLUMN_REDEFINITION:
+      case DDL_TABLE_REDEFINITION:
+      case DDL_DIRECT_LOAD:
+      case DDL_DIRECT_LOAD_INSERT:
+      case DDL_MVIEW_COMPLETE_REFRESH:
+      case DDL_CREATE_MVIEW:
+      case DDL_ALTER_COLUMN_GROUP:
+      case DDL_CREATE_INDEX:
+      case DDL_CREATE_MLOG:
+      case DDL_CREATE_FTS_INDEX:
+      case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
+      case DDL_AUTO_SPLIT_BY_RANGE:
+      case DDL_AUTO_SPLIT_NON_RANGE:
+      case DDL_MANUAL_SPLIT_BY_RANGE:
+      case DDL_MANUAL_SPLIT_NON_RANGE:
+      case DDL_CHECK_CONSTRAINT:
+      case DDL_FOREIGN_KEY_CONSTRAINT:
+      case DDL_ADD_NOT_NULL_COLUMN:
+        res = true;
+        break;
+      default:
+        res = false;
+    }
+    return res;
+  }
+
 private:
+  static int batch_check_tablet_checksum(
+      const uint64_t tenant_id,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      const ObArray<ObTabletID> &tablet_ids);
+
+  static int check_table_column_checksum_error(
+      const uint64_t tenant_id,
+      const int64_t table_id);
+
+  static int check_tablet_checksum_error(
+      const uint64_t tenant_id,
+      const int64_t table_id);
+
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
       const ObIArray<int64_t> &order_column_ids,
@@ -605,6 +659,9 @@ private:
   static int find_table_scan_table_id(
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
+
+private:
+  const static int64_t MAX_BATCH_COUNT = 128;
 };
 
 class ObCODDLUtil

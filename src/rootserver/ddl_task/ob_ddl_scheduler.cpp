@@ -970,7 +970,16 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
-  } else {
+  } else if (ObDDLUtil::is_verifying_checksum_error_needed(param.type_)
+      && OB_FAIL(ObDDLUtil::check_table_compaction_checksum_error(param.tenant_id_,param.src_table_schema_->get_table_id()))) {
+    if (OB_NOT_SUPPORTED != ret) {
+      LOG_WARN("unexpected error in check_table_compaction_checksum_error, choose to suppress the error", K(ret), K(param));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("check_table_compaction_checksum_error fail", K(ret), K(param));
+    }
+  }
+  if (OB_SUCC(ret)) {
     switch (param.type_) {
       case DDL_CREATE_INDEX:
       case DDL_CREATE_MLOG:
