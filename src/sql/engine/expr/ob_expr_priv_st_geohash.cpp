@@ -68,6 +68,7 @@ int ObExprPrivSTGeoHash::calc_result_typeN(
     type.set_varchar();
     type.set_collation_type(type_ctx.get_coll_type());
     type.set_collation_level(CS_LEVEL_IMPLICIT);
+    type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
   }
 
   return ret;
