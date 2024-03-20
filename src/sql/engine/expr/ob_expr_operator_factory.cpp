@@ -1005,6 +1005,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprExtractExpiredTime);
     REG_OP(ObExprTransactionId);
     REG_OP(ObExprInnerRowCmpVal);
+    // REG_OP(ObExprTopNFilter);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1318,6 +1319,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprJsonObjectStar);
   REG_OP_ORCL(ObExprTransactionId);
   REG_OP_ORCL(ObExprInnerRowCmpVal);
+  // REG_OP_ORCL(ObExprTopNFilter);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

@@ -213,6 +213,7 @@ typedef enum ObItemType
   T_OP_AGG_DIV = 185,
   T_OP_OUTPUT_PACK = 186,
   T_FUN_GET_TEMP_TABLE_SESSID = 187,
+  T_OP_PUSHDOWN_TOPN_FILTER = 188,
   ///< @note add new operator before this line
 
   // system functions
