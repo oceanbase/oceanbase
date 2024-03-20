@@ -1911,7 +1911,7 @@ int ObLobManager::append(
     ObLobCommon *lob_common = param.lob_common_;
     ObLobData *lob_data = param.lob_data_;
     bool is_remote_lob = false;
-    bool ori_is_inrow = lob_common->in_row_ == 1;
+    bool ori_is_inrow = (lob_common == nullptr) ? false : (lob_common->in_row_ == 1);
     common::ObAddr dst_addr;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_handle_size(param))) {
