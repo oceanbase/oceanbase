@@ -624,7 +624,7 @@ PRIMARY KEY (`p_id`),
 SPATIAL KEY `idx_geohash_code_geog_poi_7` (`geog_poi`) BLOCK_SIZE 16384 LOCAL,
 KEY `idx_poi_del_time_7` (`p_delete_time`) BLOCK_SIZE 16384 LOCAL
 );
-explain EXTENDED_NOADDR SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
+explain SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
 Query Plan
 =========================================================================
 |ID|OPERATOR       |NAME                          |EST.ROWS|EST.TIME(us)|
@@ -633,8 +633,8 @@ Query Plan
 =========================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [(T_OP_LIKE, p.geohash_code, 'ws0emp%', '\\')], [BOOL(ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 
-      23.11138916015625)')))])
+  0 - output([p.p_id], [0]), filter([p.p_delete_time = 0], [ST_Contains(p.geog_poi, _ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'))], [(T_OP_LIKE,
+       p.geohash_code, 'ws0emp%', '\\')])
       access([p.p_id], [p.geog_poi], [p.geohash_code], [p.p_delete_time]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([p.__cellid_50], [p.__mbr_50], [p.p_id]), range(3747839687816876905,MIN,MIN ; 3747839687816876905,MAX,MAX), (3747839687816876908,MIN,MIN 
@@ -650,39 +650,3 @@ Outputs & filters:
        (3747839314902384640,MIN,MIN ; 3747839314902384640,MAX,MAX), (3748120789879095296,MIN,MIN ; 3748120789879095296,MAX,MAX), (3751498489599623168,MIN,MIN 
       ; 3751498489599623168,MAX,MAX), (3765009288481734656,MIN,MIN ; 3765009288481734656,MAX,MAX), (3819052484010180608,MIN,MIN ; 3819052484010180608,MAX,MAX),
        (3746994889972252672,MIN,MIN ; 3746994889972252672,MAX,MAX), (3458764513820540928,MIN,MIN ; 3458764513820540928,MAX,MAX)
-Used Hint:
--------------------------------------
-  /*+
-      
-  */
-Qb name trace:
--------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN 
-  stmt_id:1, SEL$1
-Outline Data: 
--------------------------------------
-  /*+
-      BEGIN_OUTLINE_DATA
-      INDEX(@"SEL$1" "p"@"SEL$1" "idx_geohash_code_geog_poi_7")
-      OPTIMIZER_FEATURES_ENABLE('')
-      END_OUTLINE_DATA
-  */
-Optimization Info:
--------------------------------------
-  p:
-      table_rows:10002
-      physical_range_rows:3
-      logical_range_rows:3
-      index_back_rows:0
-      output_rows:0
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[idx_geohash_code_geog_poi_7, idx_poi_del_time_7, geek_poi_7]
-      unstable_index_name:[geek_poi_7]
-      stats version:0
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
-  Plan Type:
-      LOCAL
-  Note:
-      Degree of Parallelisim is 1 because of table property
