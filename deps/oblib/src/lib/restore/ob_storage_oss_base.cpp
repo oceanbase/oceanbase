@@ -896,6 +896,7 @@ int ObStorageOssMultiPartWriter::complete()
   }
 
   if (OB_SUCC(ret)) {
+    int64_t total_parts = 0;
     aos_string_t bucket;
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
@@ -926,17 +927,21 @@ int ObStorageOssMultiPartWriter::complete()
             if (OB_ISNULL(complete_part_content = oss_create_complete_part_content(aos_pool_))) {
               ret = OB_OSS_ERROR;
               OB_LOG(WARN, "fail to create complete part content", K_(bucket), K_(object), K(ret));
-              break;
             } else if (OB_ISNULL(part_content->part_number.data)
                       || OB_ISNULL(part_content->etag.data)) {
               ret = OB_OSS_ERROR;
               OB_LOG(WARN, "invalid part_number or etag",
                   K(ret), KP(part_content->part_number.data), KP(part_content->etag.data));
-              break;
             } else {
               aos_str_set(&complete_part_content->part_number, part_content->part_number.data);
               aos_str_set(&complete_part_content->etag, part_content->etag.data);
               aos_list_add_tail(&complete_part_content->node, &complete_part_list);
+            }
+
+            if (OB_FAIL(ret)) {
+              break;
+            } else {
+              total_parts++;
             }
           }
 
@@ -964,7 +969,12 @@ int ObStorageOssMultiPartWriter::complete()
     }
 
     //complete multipart upload
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(total_parts == 0)) {
+      // If 'complete' without uploading any data, OSS will create an object with a size of 0
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(total_parts), K(upload_id_.data));
+    } else {
       if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
@@ -988,6 +998,14 @@ int ObStorageOssMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
+  mod_.reset();
+  base_buf_pos_ = 0;
+  partnum_ = 0;
+  base_buf_ = nullptr;
+  is_opened_ = false;
+  file_length_ = -1;
+  upload_id_.len = -1;
+  upload_id_.data = NULL;
   reset();
   return ret;
 }
@@ -1193,6 +1211,10 @@ int ObStorageOssReader::pread(
                 if (buf_pos >= get_data_size) {
                   break;
                 }
+              }
+
+              if (OB_FAIL(ret)) {
+                break;
               }
             } // end aos_list_for_each_entry
           }
@@ -1906,6 +1928,10 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
           } else {
             OB_LOG(INFO, "succeed abort oss multipart upload",
                 K(bucket_str), K(content->key.data), K(content->upload_id.data));
+          }
+
+          if (OB_FAIL(ret)) {
+            break;
           }
         }
       }
