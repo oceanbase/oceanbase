@@ -59,6 +59,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_latlong_check_visitor.cpp
   geo/ob_geo_longtitude_correct_visitor.cpp
   geo/ob_geo_to_tree_visitor.cpp
+  geo/ob_geo_pointn_visitor.cpp
   geo/ob_geo_to_s2_visitor.cpp
   geo/ob_geo_to_wkt_visitor.cpp
   geo/ob_geo_reverse_coordinate_visitor.cpp

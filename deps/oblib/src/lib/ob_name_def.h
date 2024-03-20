@@ -1095,6 +1095,7 @@
 #define N_ST_ASGEOJSON                      "st_asgeojson"
 #define N_ST_CENTROID                       "st_centroid"
 #define N_ST_SYMDIFFERENCE                  "st_symdifference"
+#define N_ST_POINTN                         "st_pointn"
 #define N_PRIV_ST_ASMVTGEOM                 "_st_asmvtgeom"
 #define N_PRIV_ST_MAKEVALID                 "_st_makevalid"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

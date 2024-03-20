@@ -699,6 +699,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_overlaps.cpp
   engine/expr/ob_expr_st_union.cpp
   engine/expr/ob_expr_st_length.cpp
+  engine/expr/ob_expr_st_pointn.cpp
   engine/expr/ob_expr_st_difference.cpp
   engine/expr/ob_expr_st_asgeojson.cpp
   engine/expr/ob_expr_st_centroid.cpp

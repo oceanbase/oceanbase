@@ -356,6 +356,7 @@
 #include "ob_expr_st_overlaps.h"
 #include "ob_expr_st_union.h"
 #include "ob_expr_st_length.h"
+#include "ob_expr_st_pointn.h"
 #include "ob_expr_st_difference.h"
 #include "ob_expr_st_asgeojson.h"
 #include "ob_expr_st_centroid.h"
@@ -1141,7 +1142,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIs::json_is_true,                                             /* 675 */
   ObExprIs::json_is_false,                                            /* 676 */
   NULL, //ObExprCurrentRole::eval_current_role                        /* 677 */
-  ObExprMod::mod_decimalint,                                          /* 678 */
+  NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
   NULL, // ObExprPrivSTGeoHash::eval_priv_st_geohash,                 /* 679 */
   NULL, // ObExprPrivSTMakePoint::eval_priv_st_makepoint,             /* 680 */
   NULL, // ObExprGetLock::get_lock,                                   /* 681 */
@@ -1156,6 +1157,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprLastRefreshScn::eval_last_refresh_scn                         /* 690 */
   NULL, // ObExprDocLength::generate_doc_length,                      /*691*/
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
+  ObExprSTPointN::eval_st_pointn,                                     /* 679 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
