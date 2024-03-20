@@ -397,6 +397,7 @@ int ObExtInfoCbRegister::get_data(ObString &data)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(data_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data iter is null", K(ret));
   } else if (! header_writed_) {
     char *buf = data_buffer_.ptr();
