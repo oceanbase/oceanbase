@@ -137,9 +137,19 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
     CK (user_type->is_record_type());
     CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType *>(user_type)));
     for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
+      ObString name;
       const ObString *member_name = record_type->get_record_member_name(i);
       CK (OB_NOT_NULL(member_name));
-      OZ (column_names.push_back(*member_name));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (PL_TYPE_PACKAGE == user_type->get_type_from()) {
+        OZ (ob_write_string(*params.allocator_, *member_name, name));
+      } else {
+        name = *member_name;
+      }
+
+      OZ (column_names.push_back(name));
     }
   }
   return ret;
