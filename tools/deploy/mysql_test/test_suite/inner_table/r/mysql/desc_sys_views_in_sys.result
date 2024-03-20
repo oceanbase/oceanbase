@@ -8141,6 +8141,68 @@ LAST_USED	varchar(128)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_INDEX_USAGE limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_TRANSFER_PARTITION_TASKS;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASKS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TRANSFER_PARTITION_TASKS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+MODIFY_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TRANSFER_PARTITION_TASKS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+FINISH_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TRANSFER_PARTITION_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+FINISH_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_TRUSTED_ROOT_CERTIFICATE;
 Field	Type	Null	Key	Default	Extra
 COMMON_NAME	varchar(256)	NO		NULL	

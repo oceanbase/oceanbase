@@ -17,6 +17,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
+#include "rootserver/ob_transfer_partition_command.h"
 
 namespace oceanbase
 {
@@ -1363,6 +1364,18 @@ public:
 	TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(clone_tenant_name));
 private:
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> clone_tenant_name_;
+};
+class ObTransferPartitionStmt : public ObSystemCmdStmt
+{
+public:
+  ObTransferPartitionStmt()
+    : ObSystemCmdStmt(stmt::T_TRANSFER_PARTITION),
+      arg_() {}
+  virtual ~ObTransferPartitionStmt() {}
+
+  rootserver::ObTransferPartitionArg &get_arg() { return arg_; }
+private:
+  rootserver::ObTransferPartitionArg arg_;
 };
 
 } // end namespace sql

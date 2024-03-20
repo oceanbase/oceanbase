@@ -320,6 +320,7 @@ END_P SET_VAR DELIMITER
 
         OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
+        OBJECT_ID
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PERCENTAGE
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
@@ -353,6 +354,7 @@ END_P SET_VAR DELIMITER
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
+        TRANSFER
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
@@ -367,7 +369,7 @@ END_P SET_VAR DELIMITER
         YEAR
 
         ZONE ZONE_LIST ZONE_TYPE
-
+//-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
@@ -532,7 +534,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 %type <node> create_tenant_snapshot_stmt snapshot_name drop_tenant_snapshot_stmt clone_tenant_stmt clone_snapshot_option clone_tenant_option clone_tenant_option_list
-
+%type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %start sql_stmt
@@ -706,6 +708,7 @@ stmt:
   | create_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
   | drop_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
   | clone_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -18929,7 +18932,53 @@ opt_restore_until
 {
   malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_CANCEL);
 };
-
+/*===========================================================
+ *
+ * 手动transfer命令
+ *
+ *===========================================================*/
+transfer_partition_stmt:
+alter_with_opt_hint SYSTEM transfer_partition_clause opt_tenant_name
+{
+  (void)($1);
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION, 2, $3, $4);
+}
+| alter_with_opt_hint SYSTEM CANCEL TRANSFER PARTITION cancel_transfer_partition_clause opt_tenant_name
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TRANSFER_PARTITION, 2, $6, $7);
+}
+| alter_with_opt_hint SYSTEM CANCEL BALANCE JOB opt_tenant_name
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_BALANCE_JOB, 1, $6)
+}
+;
+transfer_partition_clause:
+TRANSFER PARTITION part_info TO LS INTNUM
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION_TO_LS, 2, $3, $6);
+}
+;
+part_info:
+TABLE_ID opt_equal_mark INTNUM ',' OBJECT_ID opt_equal_mark INTNUM
+{
+  (void) ($2);
+  (void) ($6);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_INFO, 2, $3, $7);
+};
+cancel_transfer_partition_clause:
+part_info
+{
+  $$ = $1;
+}
+| ALL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALL);
+}
+;
 /*===========================================================
  *
  *	Name classification
@@ -20403,6 +20452,8 @@ ACCOUNT
 |       CONNECT
 |       STATEMENT_ID
 |       KV_ATTRIBUTES
+|       OBJECT_ID
+|       TRANSFER
 ;
 
 unreserved_keyword_special:

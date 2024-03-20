@@ -30,6 +30,7 @@
 #include "share/scn.h" // SCN
 #include "share/ls/ob_ls_operator.h" //ObLSFlag
 #include "share/ls/ob_ls_status_operator.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"//OBCG_DEFAULT
 
 using namespace oceanbase;
 using namespace oceanbase::common;

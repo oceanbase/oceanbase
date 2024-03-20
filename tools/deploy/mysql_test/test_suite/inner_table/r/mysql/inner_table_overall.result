@@ -279,6 +279,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 486	__all_clone_job_history	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
+498	__all_transfer_partition_task	0	201001	1
+499	__all_transfer_partition_task_history	0	201001	1
 500	__all_tenant_snapshot_job	0	201001	1
 502	__all_trusted_root_certificate	0	201001	1
 507	__all_tenant_snapshot_ls_replica_history	0	201001	1
@@ -707,6 +709,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
+12451	__all_virtual_transfer_partition_task	2	201001	1
+12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12453	__all_virtual_tenant_snapshot_job	2	201001	1
 12458	__all_virtual_ls_snapshot	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
@@ -1083,6 +1087,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1
+21501	DBA_OB_TRANSFER_PARTITION_TASKS	1	201001	1
+21502	CDB_OB_TRANSFER_PARTITION_TASKS	1	201001	1
+21503	DBA_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
+21504	CDB_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
 21509	DBA_OB_TRUSTED_ROOT_CERTIFICATE	1	201001	1
 21510	DBA_OB_CLONE_PROGRESS	1	201001	1
 21513	CDB_INDEX_USAGE	1	201001	1

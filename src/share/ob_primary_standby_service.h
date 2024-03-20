@@ -99,6 +99,17 @@ public:
    * @return return code
    */
   int wait_create_standby_tenant_end(const uint64_t tenant_id);
+  /**
+   * @description:
+   *    get tenant status from all_tenant
+   * @param[in] tenant_id
+   * @param[out] status tenant status from all_tenant
+   * @return return code
+   */
+  int get_tenant_status(
+      const uint64_t tenant_id,
+      ObTenantStatus &status);
+
 
 private:
   int check_inner_stat_();
@@ -192,17 +203,6 @@ private:
       const ObTenantSwitchoverStatus &status,
       const int64_t switchover_epoch,
       ObAllTenantInfo &new_tenant_info);
-
-  /**
-   * @description:
-   *    get tenant status from all_tenant
-   * @param[in] tenant_id
-   * @param[out] status tenant status from all_tenant
-   * @return return code
-   */
-  int get_tenant_status_(
-      const uint64_t tenant_id,
-      ObTenantStatus &status);
 
   /**
    * @description:

@@ -85,6 +85,7 @@ ob_set_subtarget(ob_rootserver common
   ob_ls_service_helper.cpp
   ob_tenant_role_transition_service.cpp
   ob_tenant_transfer_service.cpp
+  ob_transfer_partition_task.cpp
   ob_tenant_balance_service.cpp
   ob_ls_balance_helper.cpp
   ob_balance_task_execute_service.cpp
@@ -98,6 +99,7 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
+  ob_transfer_partition_command.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
