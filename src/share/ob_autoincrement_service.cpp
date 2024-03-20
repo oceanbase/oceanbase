@@ -311,7 +311,7 @@ int ObAutoincrementService::get_handle(AutoincParam &param,
   return ret;
 }
 
-int ObAutoincrementService::get_handle(ObSequenceSchema &schema, ObSequenceValue &nextval)
+int ObAutoincrementService::get_handle(const ObSequenceSchema &schema, ObSequenceValue &nextval)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;

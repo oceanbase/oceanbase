@@ -372,7 +372,7 @@ public:
                       share::schema::ObMultiVersionSchemaService *schema_service,
                       rpc::frame::ObReqTransport *req_transport);
   int get_handle(AutoincParam &param, CacheHandle *&handle);
-  int get_handle(ObSequenceSchema &schema, ObSequenceValue &nextval);
+  int get_handle(const ObSequenceSchema &schema, ObSequenceValue &nextval);
   void release_handle(CacheHandle *&handle);
 
   int sync_insert_value_global(AutoincParam &param);
