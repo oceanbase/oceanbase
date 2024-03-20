@@ -350,6 +350,8 @@ TEST_F(TestObSimpleLogApplyFunc, get_max_decided_scn)
     end_lsn = leader.palf_handle_impl_->get_end_lsn();
     if (end_lsn <= max_lsn) {
       CLOG_LOG(INFO, "wait end_lsn", K(end_lsn), K(max_lsn));
+      ret = submit_log(new_leader, 1, id, 100);
+      wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->get_max_lsn());
       sleep (1);
     }
   } while (end_lsn <= max_lsn);
