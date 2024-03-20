@@ -333,10 +333,11 @@ private:
 class ObRPCActiveGuard
 {
 public:
-  ObRPCActiveGuard(int pcode);
+  ObRPCActiveGuard(int pcode, int64_t tenant_id);
   ~ObRPCActiveGuard();
 private:
   bool prev_is_bkgd_active_;
+  int64_t prev_tenant_id_;
 };
 
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \

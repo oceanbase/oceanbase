@@ -136,6 +136,8 @@ protected:
             ret = OB_OP_NOT_ALLOW;
             RS_LOG(WARN, "ddl operation not allow in standby", KR(ret), KPC(ddl_arg_));
           } else {
+            // tenant_id_ will be reset in ~ObRPCActiveGuard()
+            ObActiveSessionGuard::get_stat().tenant_id_ = ddl_arg_->exec_tenant_id_;
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);
             // used for parallel ddl
             auto *tsi_generator = GET_TSI(share::schema::TSISchemaVersionGenerator);
