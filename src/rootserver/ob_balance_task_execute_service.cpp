@@ -581,6 +581,12 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
     share::ObLSAttr ls_info;
     share::ObLSFlag flag;
     SCN create_scn;
+    share::ObLSAttr src_ls_info;
+    // when ls_group_id of split task is 0, it means creating a duplicate ls
+    // TODO: add new task type like split_dup_ls
+    if (0 == task.get_ls_group_id()) {
+      flag.set_duplicate();
+    }
     if (OB_FAIL(wait_can_create_new_ls_(create_scn))) {
       LOG_WARN("failed to wait create new ls", KR(ret), K(tenant_id_));
       if (OB_NEED_WAIT == ret && !task_comment_.empty()) {
@@ -589,12 +595,14 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
         ret = OB_SUCCESS;
         skip_next_status = true;
       }
-    } else if (OB_FAIL(ls_info.init(task.get_dest_ls_id(), task.get_ls_group_id(), flag,
+    } else if (OB_FAIL(ls_op.get_ls_attr(task.get_src_ls_id(), false, trans, src_ls_info))) {
+      LOG_WARN("failed to get ls attr", KR(ret), K(task));
+    } else if (OB_FAIL(ls_info.init(task.get_dest_ls_id(), src_ls_info.get_ls_group_id(), flag,
                              share::OB_LS_CREATING, share::OB_LS_OP_CREATE_PRE, create_scn))) {
       LOG_WARN("failed to init new operation", KR(ret), K(create_scn), K(task),
           K(skip_next_status), K(task_comment_));
       //TODO msy164651
-    } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans))) {
+    } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans, true/*skip_dup_ls_check*/))) {
       LOG_WARN("failed to insert new operation", KR(ret), K(ls_info));
     }
     ISTAT("create new ls", KR(ret), K(ls_info), K(task));

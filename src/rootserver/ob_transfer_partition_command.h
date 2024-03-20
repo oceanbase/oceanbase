@@ -57,8 +57,12 @@ public:
   int execute(const ObTransferPartitionArg &arg);
 private:
   int check_tenant_status_data_version_and_config_(const uint64_t tenant_id);
-  int check_table_schema_(const uint64_t tenant_id, const uint64_t table_id, const ObObjectID &object_id);
-  int check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int check_table_schema_(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const ObObjectID &object_id,
+      bool &is_dup_table);
+  int check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool is_dup_table);
 };
 }
 }

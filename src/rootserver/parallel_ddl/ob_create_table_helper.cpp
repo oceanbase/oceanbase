@@ -883,7 +883,22 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("create table with table_id in 4.x is not supported",
              KR(ret), K_(tenant_id), "table_id", arg_.schema_.get_table_id());
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create table with id is");
-  } else if (OB_FAIL(new_table.assign(arg_.schema_))) {
+  } else if (arg_.schema_.is_duplicate_table()) { // check compatibility for duplicate table
+    bool is_compatible = false;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {
+      LOG_WARN("fail to check compat version for duplicate log stream", KR(ret), K_(tenant_id));
+    } else if (!is_compatible) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("duplicate table is not supported below 4.2", KR(ret), K_(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create duplicate table below 4.2");
+    } else if (!is_user_tenant(tenant_id_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not user tenant, create duplicate table not supported", KR(ret), K_(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create duplicate table");
+    }
+  }
+
+  if (FAILEDx(new_table.assign(arg_.schema_))) {
     LOG_WARN("fail to assign table schema", KR(ret), K_(tenant_id));
   } else if (FALSE_IT(new_table.set_table_id(mock_table_id))) {
   } else if (OB_FAIL(ddl_service_->try_format_partition_schema(new_table))) {

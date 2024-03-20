@@ -1070,6 +1070,16 @@ private:
       const bool &only_for_display,
       int64_t &acc_dr_task);
 
+  // migrate replica to a certain unit
+  int try_migrate_replica_for_migrate_to_unit_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica *ls_replica,
+      const DRUnitStatInfo *unit_stat_info,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool is_unit_in_group_related,
+      const bool only_for_display,
+      int64_t &acc_dr_task);
+
   // If unit is deleting and a F-replica of duplicate log stream is on it,
   // we have to type transform another valid R-replica to F-replica
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
@@ -1082,11 +1092,29 @@ private:
       const bool &only_for_display,
       int64_t &acc_dr_task);
 
+  // do type tranfrom for duplicate ls when it needs to migrate to a certain unit
+  int try_type_transform_for_migrate_to_unit_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool only_for_display,
+      int64_t &acc_dr_task);
+
+  int try_gen_type_transform_task_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool only_for_display,
+      const ObString &comment,
+      int64_t &acc_dr_task,
+      bool &find_a_valid_readonly_replica);
+
   // When need to type transform a R-replica to F-replica,
   // use this function to get a valid R-replica
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[in]  exclude_replica, excluded replica
   // @params[in]  target_zone, which zone to scan
+  // @params[in]  specified_unit_in_group, dest unit for transform, can be null
   // @params[out] replica, the expected valid R-replica
   // @params[out] unit_id, which unit does this replica belongs to
   // @params[out] unit_group_id, which unit group does this replica belongs to
@@ -1095,6 +1123,7 @@ private:
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &exclude_replica,
       const ObZone &target_zone,
+      const DRUnitStatInfo *specified_unit_in_group,
       share::ObLSReplica &replica,
       uint64_t &unit_id,
       uint64_t &unit_group_id,
@@ -1139,6 +1168,7 @@ private:
   // @params[in]  src_member, source member
   // @params[in]  old_paxos_replica_number, previous number of F-replica count
   // @params[in]  new_paxos_replica_number, new number of F-replica count
+  // @params[in]  comment, comment on task generation
   // @params[out] acc_dr_task, accumulated disaster recovery task count
   int generate_type_transform_task_(
       const ObDRTaskKey &task_key,
@@ -1150,6 +1180,7 @@ private:
       const ObReplicaMember &src_member,
       const int64_t old_paxos_replica_number,
       const int64_t new_paxos_replica_number,
+      const ObString &comment,
       int64_t &acc_dr_task);
 
 private:

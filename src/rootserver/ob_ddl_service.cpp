@@ -87,6 +87,7 @@
 #include "rootserver/ob_tablet_creator.h"
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
+#include "rootserver/ob_primary_ls_service.h" // ObDupLSCreateHelper
 #include "share/ob_share_util.h"
 #include "share/ob_leader_election_waiter.h"
 #include "rootserver/ob_tablet_drop.h"
@@ -454,6 +455,10 @@ int ObDDLService::create_user_tables(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("duplicate table is not supported below 4.2", KR(ret), K(tenant_id));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create duplicate table below 4.2");
+  } else if (!is_user_tenant(tenant_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not user tenant, create duplicate table not supported", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create duplicate table");
   }
 
   if (OB_FAIL(ret)) {
@@ -1852,10 +1857,10 @@ int ObDDLService::set_tablegroup_id(ObTableSchema &table_schema)
     if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema.get_duplicate_scope()
         && OB_INVALID_ID != table_schema.get_tablegroup_id()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("duplicated table in tablegroup is not supported", K(ret),
+      LOG_WARN("changing tablegroup of duplicate table is not supported", K(ret),
                "table_id", table_schema.get_table_id(),
                "tablegroup_id", table_schema.get_tablegroup_id());
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicated table in tablegroup");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing tablegroup of duplicate table is");
     }
   }
 
@@ -2407,10 +2412,10 @@ int ObDDLService::set_new_table_options(
   } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != new_table_schema.get_duplicate_scope()
              && OB_INVALID_ID != new_table_schema.get_tablegroup_id()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("duplicated table in tablegroup is not supported", K(ret),
+    LOG_WARN("changing duplicate_scope of table in tablegroup is not supported", K(ret),
              "table_id", new_table_schema.get_table_id(),
              "tablegroup_id", new_table_schema.get_tablegroup_id());
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicated table in tablegroup");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing duplicate_scope of table in tablegroup is");
   } else {
     if (OB_SUCC(ret)
         && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLEGROUP_NAME)) {
@@ -2755,6 +2760,7 @@ int ObDDLService::set_raw_table_options(
         }
         case ObAlterTableArg::DUPLICATE_SCOPE: {
           new_table_schema.set_duplicate_scope(alter_table_schema.get_duplicate_scope());
+          need_update_index_table = true;
           break;
         }
         case ObAlterTableArg::ENABLE_ROW_MOVEMENT: {
@@ -11270,6 +11276,19 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("failed to lock ddl", K(ret));
           }
         }
+        // create duplicate ls if needed when altering normal table to duplicate table
+        if (OB_SUCC(ret)
+            && alter_table_arg.has_alter_duplicate_scope()
+            && ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER == new_table_schema.get_duplicate_scope()) {
+          ObLSID dup_ls_id;
+          ObDupLSCreateHelper dup_ls_create_helper;
+          if (OB_FAIL(dup_ls_create_helper.init(tenant_id, sql_proxy_, rpc_proxy_, GCTX.location_service_))) {
+            LOG_WARN("init failed", KR(ret), K(tenant_id));
+          } else if (OB_FAIL(dup_ls_create_helper.check_and_create_duplicate_ls_if_needed(dup_ls_id))) {
+            LOG_WARN("check and create duplicate ls ready if needed failed", KR(ret), K(tenant_id));
+          }
+        }
+
         // table foreign key
         if (OB_SUCC(ret)
             && !alter_table_arg.alter_table_schema_.get_foreign_key_infos().empty()) {
@@ -13983,7 +14002,6 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   int64_t cost_usec = 0;
   start_usec = ObTimeUtility::current_time();
   bool is_alter_sess_active_time = false;
-  bool is_alter_duplicate_scope = false;
   bool is_alter_comment = false;
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
@@ -14000,15 +14018,21 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
     schema_guard.set_session_id(alter_table_arg.session_id_);
     const ObTableSchema *orig_table_schema =  NULL;
     is_alter_sess_active_time = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::SESSION_ACTIVE_TIME);
-    is_alter_duplicate_scope = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DUPLICATE_SCOPE);
     is_alter_comment = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT);
     LOG_DEBUG("debug view comment", K(is_alter_comment), K(alter_table_schema));
     ObTZMapWrap tz_map_wrap;
+    uint64_t tenant_data_version = 0;
     if (OB_FAIL(ret)) {
-    } else if (is_alter_duplicate_scope) {
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", KR(ret), K(tenant_id));
+    } else if (alter_table_arg.has_alter_duplicate_scope() && tenant_data_version < DATA_VERSION_4_2_3_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("alter table duplicate scope not supported", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
+    } else if (alter_table_arg.has_alter_duplicate_scope() && !is_user_tenant(tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not user tenant, alter table duplicate scope not supported", KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, alter table duplicate scope");
     } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
       LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id));
     } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {

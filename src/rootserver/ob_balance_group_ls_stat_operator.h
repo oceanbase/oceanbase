@@ -197,9 +197,6 @@ private:
       const share::schema::ObTableSchema &primary_schema,
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObSimpleTablegroupSchema &tablegroup_schema);
-  int wait_ls_elect_leader_(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
   int get_tablet_id_array(
       const share::schema::ObTableSchema &table_schema,
       common::ObIArray<common::ObTabletID> &ls_id_array);
