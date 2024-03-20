@@ -1331,9 +1331,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
             }
           }
         }
-        if (lob_cnt % 128 == 0) {
-          lob_allocator.reuse(); // reuse after append_row to macro block to save memory
-        }
+        lob_allocator.reuse(); // reuse after append_row to macro block to save memory
       }
     }
     if (OB_ITER_END == ret) {
