@@ -117,7 +117,7 @@ int ObMPStmtFetch::before_process()
               pos += len;
             } else {
               ret = OB_ERR_FETCH_OUT_SEQUENCE;
-              LOG_ERROR("cursor not found", K(cursor_id_), K(ret));
+              LOG_WARN("cursor not found", K(cursor_id_), K(ret));
             }
             if (session != NULL) {
               revert_session(session);
@@ -167,7 +167,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
   ObPLCursorInfo *cursor = session.get_cursor(cursor_id_);
   if (OB_ISNULL(cursor)) {
     ret = OB_ERR_FETCH_OUT_SEQUENCE;
-    LOG_ERROR("cursor not found", K(cursor_id_), K(ret));
+    LOG_WARN("cursor not found", K(cursor_id_), K(ret));
     //如果发生fetch过程中找不到cursor的情况，无论什么原因立刻断连接，由应用程序进行容错
     //disconnect();
   } else {
