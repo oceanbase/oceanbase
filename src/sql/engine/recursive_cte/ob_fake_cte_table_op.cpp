@@ -350,8 +350,12 @@ int ObFakeCTETableOp::inner_open()
 int ObFakeCTETableOp::inner_close()
 {
   int ret = OB_SUCCESS;
-  reuse();
   sql_mem_processor_.unregister_profile();
+  bulk_rows_.reset();
+  if (OB_NOT_NULL(pump_row_)) {
+    allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pump_row_));
+    pump_row_ = nullptr;
+  }
   return ret;
 }
 
