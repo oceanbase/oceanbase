@@ -365,6 +365,19 @@ protected:
     };
   };
 };
+
+// NOTE: ObDASGroupScanOp defined here is For cross-version compatibility， and it will be removed in future barrier-version;
+// For das remote execution in upgrade stage, ctrl(4.2.1) -> executor (4.2.3)
+// the executor will execute das group-rescan op as the logic of das-scan op, and return the result to ctr;
+class ObDASGroupScanOp : public ObDASScanOp
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASGroupScanOp(common::ObIAllocator &op_alloc);
+  virtual ~ObDASGroupScanOp();
+};
+
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_SCAN_OP_H_ */

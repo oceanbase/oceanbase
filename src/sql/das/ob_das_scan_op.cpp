@@ -705,6 +705,18 @@ OB_SERIALIZE_MEMBER((ObDASScanOp, ObIDASTaskOp),
                     scan_rtdef_,
                     scan_param_.ss_key_ranges_);
 
+ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
+  : ObDASScanOp(op_alloc)
+{
+
+}
+
+ObDASGroupScanOp::~ObDASGroupScanOp()
+{
+}
+
+OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp));
+
 ObDASScanResult::ObDASScanResult()
   : ObIDASTaskResult(),
     ObNewRowIterator(),
