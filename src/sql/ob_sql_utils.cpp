@@ -3501,6 +3501,9 @@ int ObVirtualTableResultConverter::get_all_columns_schema()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_->count(); ++i) {
     const uint64_t column_id = output_column_ids_->at(i);
+    if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) {
+      continue;
+    }
     const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(column_id);
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;

@@ -936,6 +936,9 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tsc_ctdef.flashback_item_.set_flashback_query_info(eval_ctx_, das_rtdef))) {
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
+    } else if (share::is_oracle_mapping_real_virtual_table(MY_SPEC.ref_table_id_)
+              && das_ctdef.ref_table_id_ < OB_MIN_SYS_TABLE_INDEX_ID) {
+      //not index scan, keep need_scn_
     } else if (MY_SPEC.ref_table_id_ != das_ctdef.ref_table_id_) {
       //only data table scan need to set row scn flag
       das_rtdef.need_scn_ = false;
