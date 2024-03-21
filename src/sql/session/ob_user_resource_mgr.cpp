@@ -164,6 +164,7 @@ void ObConnectResourceMgr::release_tenant_conn_resource(const uint64_t tenant_id
     } else {
       tenant_res->cur_connections_--;
     }
+    tenant_res_map_.revert(tenant_res);
   }
 }
 
