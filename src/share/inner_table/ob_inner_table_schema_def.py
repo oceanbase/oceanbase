@@ -13904,6 +13904,24 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12485: __all_virtual_storage_io_usage
 # 12486: __all_zone_storage
 
+def_table_schema(
+  owner             = 'gengfu.zpc',
+  table_name        = '__all_virtual_nic_info',
+  table_id          = '12487',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('devname',   'varchar:MAX_IFNAME_LENGTH'),
+    ('speed_Mbps', 'int')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14377,6 +14395,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15453: __all_storage_io_usage
 # 15454: __all_virtual_storage_io_usage
 # 15455: __all_zone_storage
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -33162,6 +33181,46 @@ def_table_schema(
 # 21577: INNODB_SYS_VIRTUAL
 # 21578: INNODB_TEMP_TABLE_INFO
 # 21579: INNODB_METRICS
+
+
+def_table_schema(
+  owner = 'gengfu.zpc',
+  table_name      = 'GV$OB_NIC_INFO',
+  table_id        = '21580',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    DEVNAME,
+    SPEED_MBPS
+  FROM oceanbase.__all_virtual_nic_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'gengfu.zpc',
+  table_name      = 'V$OB_NIC_INFO',
+  table_id        = '21581',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    DEVNAME,
+    SPEED_MBPS
+  FROM oceanbase.GV$OB_NIC_INFO
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
 
 #
 # 余留位置（此行之前占位）
@@ -60265,6 +60324,50 @@ def_table_schema(
 # 28228: V$OB_GROUP_IO_STAT
 # 28229: GV$OB_GROUP_IO_STAT
 
+def_table_schema(
+  owner = 'gengfu.zpc',
+  table_name      = 'GV$OB_NIC_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28230',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    DEVNAME,
+    SPEED_MBPS
+  FROM SYS.ALL_VIRTUAL_NIC_INFO
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'gengfu.zpc',
+  table_name      = 'V$OB_NIC_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28231',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    DEVNAME,
+    SPEED_MBPS
+  FROM SYS.GV$OB_NIC_INFO
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
+#
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

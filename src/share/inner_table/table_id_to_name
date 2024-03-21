@@ -1069,6 +1069,7 @@
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
 # 12464: __all_virtual_tenant_snapshot_ls_replica_history
 # 12464: __all_tenant_snapshot_ls_replica_history  # BASE_TABLE_NAME
+# 12487: __all_virtual_nic_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1652,6 +1653,8 @@
 # 15439: __all_virtual_ls_snapshot  # BASE_TABLE_NAME
 # 15440: ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
+# 15456: ALL_VIRTUAL_NIC_INFO
+# 15456: __all_virtual_nic_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2050,6 +2053,8 @@
 # 21538: DBA_MVREF_CHANGE_STATS
 # 21539: CDB_MVREF_STMT_STATS
 # 21540: DBA_MVREF_STMT_STATS
+# 21580: GV$OB_NIC_INFO
+# 21581: V$OB_NIC_INFO
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2498,6 +2503,8 @@
 # 28214: DBA_INDEX_USAGE
 # 28215: GV$OB_LS_SNAPSHOTS
 # 28216: V$OB_LS_SNAPSHOTS
+# 28230: GV$OB_NIC_INFO
+# 28231: V$OB_NIC_INFO
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

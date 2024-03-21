@@ -715,6 +715,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12458	__all_virtual_ls_snapshot	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
 12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
+12487	__all_virtual_nic_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1113,6 +1114,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21538	DBA_MVREF_CHANGE_STATS	1	201001	1
 21539	CDB_MVREF_STMT_STATS	1	201001	1
 21540	DBA_MVREF_STMT_STATS	1	201001	1
+21580	GV$OB_NIC_INFO	1	201001	1
+21581	V$OB_NIC_INFO	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

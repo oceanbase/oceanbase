@@ -406,6 +406,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_activity_metrics.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_info.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.cpp
+  virtual_table/ob_all_virtual_nic_info.cpp
 )
 
 ob_server_add_target(ob_server)
