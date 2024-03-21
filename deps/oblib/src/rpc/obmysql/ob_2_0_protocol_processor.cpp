@@ -506,7 +506,10 @@ inline int Ob20ProtocolProcessor::after_process_mysql_packet(
     input_packet->set_proxy_switch_route(pkt20->get_flags().proxy_switch_route());
     const int64_t t_len = context.extra_info_.get_total_len();
     char *t_buffer = NULL;
-    if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
+    if (t_len <= 0) {
+      // empty extra info, do nothing
+      // the allocate action would failed in `load data local` allocator
+    } else if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("no memory available", "alloc_size", t_len, K(ret));
     } else if (OB_FAIL(input_packet->extra_info_.assign(context.extra_info_, t_buffer, t_len))) {
