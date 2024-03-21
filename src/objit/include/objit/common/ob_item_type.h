@@ -2435,6 +2435,11 @@ typedef enum ObItemType
   T_MV_OPTIONS,
   T_MV_REWRITE,
   T_MV_NO_REWRITE,
+
+  // select into outfile
+  T_INTO_FILE_LIST,
+  T_SINGLE_OPT,
+  T_MAX_FILE_SIZE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

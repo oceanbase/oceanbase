@@ -26,7 +26,8 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_,
-    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_, select_exprs_);
+    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_, select_exprs_, is_single_,
+    max_file_size_, escaped_cht_, cs_type_);
 
 
 int ObSelectIntoOp::inner_open()
