@@ -1132,8 +1132,9 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, len, pos))) {
         SQL_PC_LOG(WARN, "fail to construct_sql", K(ret));
-      } else if (!pc_ctx.is_batch_insert_opt_
-                   && OB_FAIL(ObSqlParameterization::formalize_sql_text(allocator, pc_ctx.raw_sql_,
+      } else if (!pc_ctx.is_batch_insert_opt_ &&
+                 !pc_ctx.exec_ctx_.has_dynamic_values_table() &&
+                 OB_FAIL(ObSqlParameterization::formalize_sql_text(allocator, pc_ctx.raw_sql_,
                                                   pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_,
                                                   sql_info, fp_ctx))) {
         SQL_PC_LOG(WARN, "fail to formalize sql text", K(ret), K(pc_ctx.raw_sql_));
