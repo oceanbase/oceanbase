@@ -1566,7 +1566,7 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   ObMacroBlock &macro_block = data_writer.macro_blocks_[0];
   ObMacroBlockHandle &macro_handle = data_writer.macro_handles_[0];
   OK(data_writer.build_micro_block());
-  OK(data_writer.builder_->generate_macro_row(macro_block, macro_handle.get_macro_id()));
+  OK(data_writer.builder_->generate_macro_row(macro_block, macro_handle.get_macro_id(), -1/*ddl_start_row_offset*/));
   const ObSSTableMacroBlockHeader &macro_header_ = macro_block.macro_header_;
   ASSERT_EQ(macro_header_.fixed_header_.idx_block_offset_ + macro_header_.fixed_header_.idx_block_size_,
             macro_header_.fixed_header_.meta_block_offset_);
@@ -1652,7 +1652,8 @@ TEST_F(TestIndexTree, test_absolute_offset)
   ASSERT_EQ(test_row_num, merge_info_list->count());
   vector<int64_t> absolute_offsets;
   for (int meta_idx = 0; meta_idx < test_row_num; meta_idx += 10) {
-    rebuilder.append_macro_row(*merge_info_list->at(meta_idx), meta_idx);
+    merge_info_list->at(meta_idx)->val_.ddl_end_row_offset_ = meta_idx;
+    rebuilder.append_macro_row(*merge_info_list->at(meta_idx));
     absolute_offsets.push_back(meta_idx);
   }
   OK(rebuilder.close());

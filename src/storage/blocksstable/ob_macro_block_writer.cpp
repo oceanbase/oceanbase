@@ -1354,7 +1354,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
 
   ObMacroBlockHandle &macro_handle = macro_handles_[current_index_];
   ObMacroBlockHandle &prev_handle = macro_handles_[(current_index_ + 1) % 2];
-
+  const int64_t ddl_start_row_offset = callback_ == nullptr ? -1 : callback_->get_ddl_start_row_offset();
   if (OB_UNLIKELY(!macro_block.is_dirty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "empty macro block has no pre-alloc macro id", K(ret), K(current_index_));
@@ -1363,7 +1363,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   } else if (is_need_macro_buffer_ && OB_FAIL(wait_io_finish(prev_handle))) {
     STORAGE_LOG(WARN, "Fail to wait io finish, ", K(ret));
   } else if (OB_NOT_NULL(builder_)
-      && OB_FAIL(builder_->generate_macro_row(macro_block, macro_handle.get_macro_id()))) {
+      && OB_FAIL(builder_->generate_macro_row(macro_block, macro_handle.get_macro_id(), ddl_start_row_offset))) {
     STORAGE_LOG(WARN, "fail to generate macro row", K(ret), K_(current_macro_seq));
   } else if (OB_FAIL(macro_block.flush(macro_handle, block_write_ctx_))) {
     STORAGE_LOG(WARN, "macro block writer fail to flush macro block.", K(ret));

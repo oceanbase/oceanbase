@@ -20,7 +20,7 @@ namespace oceanbase
 namespace blocksstable
 {
 ObDataBlockMetaVal::ObDataBlockMetaVal()
-  : version_(DATA_BLOCK_META_VAL_VERSION),
+  : version_(DATA_BLOCK_META_VAL_VERSION_V2),
     length_(0),
     data_checksum_(0),
     rowkey_count_(0),
@@ -52,13 +52,14 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     has_string_out_row_(false),
     all_lob_in_row_(false),
     agg_row_len_(0),
-    agg_row_buf_(nullptr)
+    agg_row_buf_(nullptr),
+    ddl_end_row_offset_(-1)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 
 ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
-    : version_(DATA_BLOCK_META_VAL_VERSION),
+    : version_(DATA_BLOCK_META_VAL_VERSION_V2),
     length_(0),
     data_checksum_(0),
     rowkey_count_(0),
@@ -134,11 +135,12 @@ void ObDataBlockMetaVal::reset()
   all_lob_in_row_ = false;
   agg_row_len_ = 0;
   agg_row_buf_ = nullptr;
+  ddl_end_row_offset_ = -1;
 }
 
 bool ObDataBlockMetaVal::is_valid() const
 {
-return DATA_BLOCK_META_VAL_VERSION == version_
+return (DATA_BLOCK_META_VAL_VERSION == version_ || DATA_BLOCK_META_VAL_VERSION_V2 == version_)
     && rowkey_count_ >= 0
     && column_count_ > 0
     && micro_block_count_ >= 0
@@ -155,7 +157,8 @@ return DATA_BLOCK_META_VAL_VERSION == version_
     && row_store_type_ < ObRowStoreType::MAX_ROW_STORE
     && logic_id_.is_valid()
     && macro_id_.is_valid()
-    && (0 == agg_row_len_ || nullptr != agg_row_buf_);
+    && (0 == agg_row_len_ || nullptr != agg_row_buf_)
+    && (ddl_end_row_offset_ == -1 || (version_ >= DATA_BLOCK_META_VAL_VERSION_V2 && ddl_end_row_offset_ >= 0));
 }
 
 int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
@@ -201,6 +204,7 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     all_lob_in_row_ = val.all_lob_in_row_;
     agg_row_len_ = val.agg_row_len_;
     agg_row_buf_ = val.agg_row_buf_;
+    ddl_end_row_offset_ = val.ddl_end_row_offset_;
   }
   return ret;
 }
@@ -283,6 +287,9 @@ DEFINE_SERIALIZE(ObDataBlockMetaVal)
       if (OB_SUCC(ret)) {
         MEMCPY(buf + pos, agg_row_buf_, agg_row_len_);
         pos += agg_row_len_;
+        if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+          LST_DO_CODE(OB_UNIS_ENCODE, ddl_end_row_offset_);
+        }
         if (OB_UNLIKELY(length_ != pos - start_pos)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, serialize may have bug", K(ret), K(pos), K(start_pos), KPC(this));
@@ -303,7 +310,7 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
     int64_t start_pos = pos;
     if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &version_))) {
       LOG_WARN("fail to decode version", K(ret), K(data_len), K(pos));
-    } else if (OB_UNLIKELY(version_ != DATA_BLOCK_META_VAL_VERSION)) {
+    } else if (OB_UNLIKELY(version_ != DATA_BLOCK_META_VAL_VERSION && version_ != DATA_BLOCK_META_VAL_VERSION_V2)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("object version mismatch", K(ret), K(version_));
     } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
@@ -350,6 +357,11 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
           agg_row_buf_ = buf + pos;
           pos += agg_row_len_;
         }
+        if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+          LST_DO_CODE(OB_UNIS_DECODE, ddl_end_row_offset_);
+        } else {
+          ddl_end_row_offset_ = -1;
+        }
         if (OB_UNLIKELY(length_ != pos - start_pos)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
@@ -366,6 +378,9 @@ int64_t ObDataBlockMetaVal::get_max_serialize_size() const
   len += sizeof(int64_t); // serialize column count
   len += sizeof(int64_t) * column_count_; // serialize each checksum
   len += agg_row_len_;
+  if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+    len += sizeof(int64_t);
+  }
   return len;
 }
 DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
@@ -406,6 +421,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
               is_last_row_last_flag_,
               agg_row_len_);
   len += agg_row_len_;
+  if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, ddl_end_row_offset_);
+  }
   return len;
 }
 

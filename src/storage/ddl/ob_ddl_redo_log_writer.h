@@ -358,6 +358,7 @@ public:
       const int64_t buf_len,
       const int64_t row_count);
   int wait();
+  virtual int64_t get_ddl_start_row_offset() const override { return row_id_offset_; }
 private:
   bool is_column_group_info_valid() const;
   int retry(const int64_t timeout_us);
@@ -371,6 +372,9 @@ private:
   int64_t task_id_;
   share::SCN start_scn_;
   uint64_t data_format_version_;
+  // if has one macro block with 100 rows before, this macro block's ddl_start_row_offset will be 100.
+  // if current macro block finish with 50 rows, current macro block's end_row_offset will be 149.
+  // end_row_offset = ddl_start_row_offset + curr_row_count - 1.
   int64_t row_id_offset_;
 };
 
