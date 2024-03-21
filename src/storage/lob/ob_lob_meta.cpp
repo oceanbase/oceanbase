@@ -38,7 +38,7 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 }
 
 ObLobMetaScanIter::ObLobMetaScanIter()
-  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0) {}
+  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -77,6 +77,19 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
         LOG_WARN("get meta info from row failed.", K(ret), KPC(datum_row));
       } else {
         cur_info_ = row;
+        if (is_char && row.char_len_ == UINT32_MAX) {
+          LOG_INFO("found no char_len, this only happen in inner QA upgrade test, can not happen in user situation", K(param_), KPC(this));
+          if (row.byte_len_ != param_.byte_size_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected situation", K(ret), K(param_), KPC(this), K(row));
+          } else if (not_calc_char_len()) {
+            LOG_DEBUG("not_calc_char_len", K(param_), KPC(this), K(row));
+          } else {
+            // char len has not been calc, just calc char len here
+            row.char_len_ = ObCharset::strlen_char(param_.coll_type_, row.lob_data_.ptr(), row.lob_data_.length());
+            LOG_DEBUG("calc_char_len", K(param_), KPC(this), K(row));
+          }
+        }
         if (is_range_over(row)) {
           // if row cur_pos > offset + len, need break;
           ret = OB_ITER_END;

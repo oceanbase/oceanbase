@@ -277,6 +277,8 @@ private:
                       ObLobMetaInfo& meta_info,
                       ObLobPieceInfo& piece_info);
 
+  int batch_delete(ObLobAccessParam& param, ObLobMetaScanIter &iter);
+
   void transform_query_result_charset(const common::ObCollationType& coll_type,
                                       const char* data,
                                       uint32_t len,
