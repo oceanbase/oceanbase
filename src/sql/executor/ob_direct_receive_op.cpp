@@ -257,6 +257,8 @@ int ObDirectReceiveOp::setup_next_scanner()
         }
       } else {
         ret = OB_ITER_END;
+        plan_ctx->add_total_memstore_read_row_count(scanner_->get_memstore_read_row_count());
+        plan_ctx->add_total_ssstore_read_row_count(scanner_->get_ssstore_read_row_count());
         // only successful select affect last_insert_id
         // for select, last_insert_id may changed because last_insert_id(#) called
         // last_insert_id values should be the last row calling last_insert_id(#)

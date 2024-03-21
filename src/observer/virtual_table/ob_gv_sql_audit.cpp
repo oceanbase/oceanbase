@@ -1079,21 +1079,23 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_null();
         } break;
         case TOTAL_MEMSTORE_READ_ROW_COUNT: {
-          if (record.data_.total_memstore_read_row_count_ == 0) {
-            // local, remote plan
-            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_
+                                + record.data_.total_memstore_read_row_count_);
           } else {
-            // px plan
-            cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
           }
         } break;
         case TOTAL_SSSTORE_READ_ROW_COUNT: {
-          if (record.data_.total_ssstore_read_row_count_ == 0) {
-            // local, remote plan
-            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_
+                                  + record.data_.total_ssstore_read_row_count_);
           } else {
-            // px plan
-            cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
           }
         } break;
         case PROXY_USER_NAME: {

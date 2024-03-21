@@ -148,6 +148,32 @@ struct ObExecRecord
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
     UPDATE_EVENT(network_wait_time);
   }
+
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_memstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_memstore_read_row_count = memstore_read_row_count_ +
+                                    (EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT)
+                                    - memstore_read_row_count_start_);
+    }
+    return cur_memstore_read_row_count;
+  }
+
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_ssstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_ssstore_read_row_count = ssstore_read_row_count_ +
+                                   (EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT)
+                                   - ssstore_read_row_count_start_);
+    }
+    return cur_ssstore_read_row_count;
+  }
 };
 
 enum ExecType {

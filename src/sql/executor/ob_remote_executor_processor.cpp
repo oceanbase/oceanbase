@@ -354,6 +354,10 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
         //scanner.set_force_rollback(plan_ctx->is_force_rollback());
       }
 
+      scanner.set_memstore_read_row_count(
+        my_session->get_raw_audit_record().exec_record_.get_cur_memstore_read_row_count());
+      scanner.set_ssstore_read_row_count(
+        my_session->get_raw_audit_record().exec_record_.get_cur_ssstore_read_row_count());
       // set last_insert_id no matter success or fail after open
       scanner.set_last_insert_id_to_client(plan_ctx->calc_last_insert_id_to_client());
       scanner.set_last_insert_id_session(plan_ctx->calc_last_insert_id_session());
