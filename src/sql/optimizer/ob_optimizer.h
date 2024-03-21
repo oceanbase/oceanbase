@@ -209,6 +209,13 @@ namespace sql
     int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
+    int check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
+                                       ObSQLSessionInfo &session);
+    int check_parallel_das_dml_supported_feature(const ObDelUpdStmt &pdml_stmt,
+                                                 const ObSQLSessionInfo &session,
+                                                 bool &use_parallel_das_dml);
+
+    int check_dml_parallel_mode();
     int check_is_heap_table(const ObDMLStmt &stmt);
     int check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
                                                 const ObDMLStmt &stmt,

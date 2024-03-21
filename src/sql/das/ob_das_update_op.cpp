@@ -317,7 +317,6 @@ int ObDASUpdateOp::open_op()
       LOG_WARN("update row to partition storage failed", K(ret));
     }
   } else {
-    upd_rtdef_->affected_rows_ += affected_rows;
     affected_rows_ = affected_rows;
   }
   return ret;
@@ -326,6 +325,26 @@ int ObDASUpdateOp::open_op()
 int ObDASUpdateOp::release_op()
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObDASUpdateOp::assign_task_result(ObIDASTaskOp *other)
+{
+  int ret = OB_SUCCESS;
+  if (other->get_type() != get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), KPC(other));
+  } else {
+    ObDASUpdateOp *upd_op = static_cast<ObDASUpdateOp *>(other);
+    affected_rows_ = upd_op->get_affected_rows();
+  }
+  return ret;
+}
+
+int ObDASUpdateOp::record_task_result_to_rtdef()
+{
+  int ret = OB_SUCCESS;
+  upd_rtdef_->affected_rows_ += affected_rows_;
   return ret;
 }
 
@@ -338,7 +357,7 @@ int ObDASUpdateOp::decode_task_result(ObIDASTaskResult *task_result)
 #endif
   if (OB_SUCC(ret)) {
     ObDASUpdateResult *del_result = static_cast<ObDASUpdateResult*>(task_result);
-    upd_rtdef_->affected_rows_ += del_result->get_affected_rows();
+    affected_rows_ = del_result->get_affected_rows();
   }
   return ret;
 }

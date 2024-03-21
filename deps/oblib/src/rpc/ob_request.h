@@ -43,7 +43,7 @@ class ObRequest: public common::ObLink
 {
 public:
   friend class ObSqlRequestOperator;
-  enum Type { OB_RPC, OB_MYSQL, OB_TASK, OB_TS_TASK, OB_SQL_TASK, OB_SQL_SOCK_TASK };
+  enum Type { OB_RPC, OB_MYSQL, OB_TASK, OB_TS_TASK, OB_SQL_TASK, OB_SQL_SOCK_TASK, OB_DAS_PARALLEL_TASK };
   enum TransportProto { TRANSPORT_PROTO_EASY = 0, TRANSPORT_PROTO_POC = 1 };
   enum Stat {
       OB_EASY_REQUEST_EZ_RECV                 = 0,

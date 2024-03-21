@@ -37,7 +37,7 @@ public:
            const common::ObAddr &self_addr);
   //开启DAS Task分区相关的事务控制，并执行task对应的op
   int execute_das_task(ObDASRef &das_ref,
-      ObDasAggregatedTasks &task_ops, bool async = true);
+      ObDasAggregatedTask &task_ops, bool async = true);
   //关闭DAS Task的执行流程，并释放task持有的资源，并结束相关的事务控制
   int end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op);
   int get_das_task_id(int64_t &das_id);
@@ -54,16 +54,22 @@ public:
                         const ObIDASTaskOp *task_op,
                         ObDASExtraData *&extra_result);
   int process_task_resp(ObDASRef &das_ref, const ObDASTaskResp &task_resp, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops);
+  int parallel_execute_das_task(common::ObIArray<ObIDASTaskOp *> &task_list);
+  int parallel_submit_das_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task);
+  int push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task, int32_t group_id);
+  int collect_das_task_info(ObIArray<ObIDASTaskOp*> &task_list, ObDASRemoteInfo &remote_info);
 private:
   int execute_dist_das_task(ObDASRef &das_ref,
-      ObDasAggregatedTasks &task_ops, bool async = true);
+      ObDasAggregatedTask &task_ops, bool async = true);
   int clear_task_exec_env(ObDASRef &das_ref, ObIDASTaskOp &task_op);
   int refresh_task_location_info(ObDASRef &das_ref, ObIDASTaskOp &task_op);
-  int do_local_das_task(ObDASRef &das_ref, ObDASTaskArg &task_arg);
-  int do_async_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
-  int do_sync_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks, ObDASTaskArg &task_arg);
-  int collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemoteInfo &remote_info);
-  void calc_das_task_parallelism(const ObDASRef &das_ref, const ObDasAggregatedTasks &task_ops, int &target_parallelism);
+  int do_local_das_task(ObIArray<ObIDASTaskOp*> &task_list);
+  int do_async_remote_das_task(ObDASRef &das_ref,
+                               ObDasAggregatedTask &aggregated_tasks,
+                               ObDASTaskArg &task_arg,
+                               int32_t group_id);
+  int do_sync_remote_das_task(ObDASRef &das_ref, ObDasAggregatedTask &aggregated_tasks, ObDASTaskArg &task_arg);
+  void calc_das_task_parallelism(const ObDASRef &das_ref, const ObDasAggregatedTask &task_ops, int &target_parallelism);
 private:
   obrpc::ObDASRpcProxy das_rpc_proxy_;
   common::ObAddr ctrl_addr_;

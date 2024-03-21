@@ -286,17 +286,18 @@ int ObDASTaskFactory::create_das_async_cb(
   int ret = OB_SUCCESS;
   void *buffer = nullptr;
   ObDasAsyncRpcCallBackContext *context = nullptr;
+  DASRefCountContext &ref_count_ctx = das_ref.get_das_ref_count_ctx();
   if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObDasAsyncRpcCallBackContext)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate das async cb context memory", K(ret), K(sizeof(ObDasAsyncRpcCallBackContext)));
-  } else if (FALSE_IT(context = new (buffer) ObDasAsyncRpcCallBackContext(das_ref, task_ops, timeout_ts))) {
+  } else if (FALSE_IT(context = new (buffer) ObDasAsyncRpcCallBackContext(ref_count_ctx, task_ops, timeout_ts))) {
   } else if (OB_FAIL(context->init(attr))) {
     LOG_WARN("fail to init das async cb context", K(ret));
   } else if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObRpcDasAsyncAccessCallBack)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate das async cb memory", K(ret), K(sizeof(ObRpcDasAsyncAccessCallBack)));
   } else {
-    async_cb = new (buffer) ObRpcDasAsyncAccessCallBack(context);
+    async_cb = new (buffer) ObRpcDasAsyncAccessCallBack(context, &das_ref.get_das_factory());
     STORE_DAS_OBJ(das_async_cb_store_, async_cb, ObRpcDasAsyncAccessCallBack);
   }
   return ret;

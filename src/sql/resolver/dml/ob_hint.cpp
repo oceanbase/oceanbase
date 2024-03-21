@@ -201,6 +201,19 @@ void ObGlobalHint::merge_parallel_dml_hint(ObPDMLOption pdml_option)
   }
 }
 
+void ObGlobalHint::merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option)
+{
+  if (ObParallelDASOption::DISABLE != parallel_das_dml_option_ && ObParallelDASOption::ENABLE != parallel_das_dml_option_) {
+    if (ObParallelDASOption::DISABLE == parallel_das_option || ObParallelDASOption::ENABLE == parallel_das_option) {
+      parallel_das_dml_option_ = parallel_das_option;
+    }
+  } else if (ObParallelDASOption::ENABLE == parallel_das_dml_option_ || ObParallelDASOption::ENABLE == parallel_das_option) {
+    parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+  } else {
+    parallel_das_dml_option_ = ObParallelDASOption::DISABLE;
+  }
+}
+
 void ObGlobalHint::merge_param_option_hint(ObParamOption opt)
 {
   if (ObParamOption::FORCE != param_option_ && ObParamOption::EXACT != param_option_) {
@@ -301,7 +314,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || has_gather_opt_stat_hint()
          || false != has_dbms_stats_hint_
          || -1 != dynamic_sampling_
-         || flashback_read_tx_uncommitted_;
+         || flashback_read_tx_uncommitted_
+         || ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_;
 }
 
 void ObGlobalHint::reset()
@@ -334,6 +348,7 @@ void ObGlobalHint::reset()
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
   flashback_read_tx_uncommitted_ = false;
+  parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
 }
 
@@ -362,6 +377,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
+  merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
@@ -497,6 +513,19 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
     }
   }
+
+  if (OB_SUCC(ret) && ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_) { //PDML
+     if (ObParallelDASOption::ENABLE == parallel_das_dml_option_) {
+       if (!ignore_parallel_for_dblink) {
+         PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DAS_DML");
+       }
+     } else if (ObParallelDASOption::DISABLE == parallel_das_dml_option_) {
+       PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DAS_DML");
+     } else {
+       ret = OB_ERR_UNEXPECTED;
+       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
+     }
+   }
   if (OB_SUCC(ret) && ObParamOption::NOT_SPECIFIED != param_option_) { // PARAM
     if (OB_UNLIKELY(ObParamOption::EXACT != param_option_)) {
       ret = OB_ERR_UNEXPECTED;

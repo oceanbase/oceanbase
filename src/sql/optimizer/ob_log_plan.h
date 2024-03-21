@@ -435,6 +435,7 @@ public:
   int check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                      ObLogicalOperator &top,
                                      const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                     bool use_parallel_das,
                                      bool &is_multi_part_dml,
                                      bool &is_result_local);
 

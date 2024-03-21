@@ -52,7 +52,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
-  } else if (!opt_ctx.can_use_pdml()) {
+  } else if (!opt_ctx.can_use_pdml() && !opt_ctx.get_can_use_parallel_das_dml()) {
     max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
     use_pdml_ = false;
     if (opt_ctx.is_online_ddl()) {
@@ -69,14 +69,20 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
     } else {
       max_dml_parallel_ = dml_parallel;
-      use_pdml_ = (opt_ctx.is_online_ddl() ||
-                  (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                  is_strict_mode(session_info->get_sql_mode())));
+      if (opt_ctx.can_use_pdml()) {
+        use_pdml_ = (opt_ctx.is_online_ddl() ||
+                        (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                        is_strict_mode(session_info->get_sql_mode())));
+      } else {
+        use_parallel_das_dml_ = (!opt_ctx.is_online_ddl() &&
+                                    (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                                    is_strict_mode(session_info->get_sql_mode())));
+      }
     }
   }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_),
-                              K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
-                              K(opt_ctx.get_parallel_rule()), K(opt_ctx.get_parallel()));
+      K(use_parallel_das_dml_), K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
+      K(opt_ctx.get_parallel_rule()), K(opt_ctx.get_parallel()));
   return ret;
 }
 

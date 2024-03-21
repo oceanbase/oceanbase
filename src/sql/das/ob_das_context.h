@@ -71,6 +71,7 @@ public:
       savepoint_(),
       del_ctx_list_(allocator),
       same_tablet_addr_(),
+      real_das_dop_(0),
       group_params_(nullptr),
       jump_read_group_id_(-1),
       group_rescan_cnt_(-1),
@@ -152,6 +153,8 @@ public:
       uint64_t table_loc_id, uint64_t ref_table_id, common::ObIArray<ObAddr> &locations);
   int build_related_tablet_map(const ObDASTableLocMeta &loc_meta);
   const ObAddr &same_tablet_addr() const { return same_tablet_addr_; }
+  int64_t get_real_das_dop() { return real_das_dop_; }
+  void set_real_das_dop(int64_t v) { real_das_dop_ = v; }
 
   int find_group_param_by_param_idx(int64_t param_idx,
                                     bool &exist, uint64_t &array_idx);
@@ -160,7 +163,8 @@ public:
                K_(external_table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
-               K_(savepoint));
+               K_(savepoint),
+               K_(real_das_dop));
 private:
   int check_same_server(const ObDASTabletLoc *tablet_loc);
 private:
@@ -180,6 +184,7 @@ private:
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
   ObAddr same_tablet_addr_;
+  int64_t real_das_dop_; // das并发写真实可用的并行度
   const GroupParamArray *group_params_;
 public:
   int64_t jump_read_group_id_;

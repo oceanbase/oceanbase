@@ -68,6 +68,7 @@
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
 #include "logservice/palf/log_rpc_processor.h"
+#include "sql/das/ob_das_parallel_handler.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -358,7 +359,8 @@ ObReqProcessor *ObSrvXlator::get_processor(ObRequest &req)
     }
   } else if (ObRequest::OB_TASK == req.get_type() ||
              ObRequest::OB_TS_TASK == req.get_type() ||
-             ObRequest::OB_SQL_TASK == req.get_type()) {
+             ObRequest::OB_SQL_TASK == req.get_type() ||
+             ObRequest::OB_DAS_PARALLEL_TASK == req.get_type()) {
     processor = &static_cast<ObSrvTask&>(req).get_processor();
   } else {
     LOG_WARN("can't translate packet", "type", req.get_type());
@@ -425,6 +427,9 @@ int ObSrvXlator::release(ObReqProcessor *processor)
       req = NULL;
     } else if (ObRequest::OB_SQL_TASK == req_type) {
       ObSqlTaskFactory::get_instance().free(static_cast<ObSqlTask *>(req));
+      req = NULL;
+    } else if (ObRequest::OB_DAS_PARALLEL_TASK == req_type) {
+      ObDASParallelTaskFactory::free(static_cast<ObDASParallelTask *>(req));
       req = NULL;
     } else {
       worker_allocator_delete(processor);

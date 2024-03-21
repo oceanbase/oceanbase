@@ -157,6 +157,7 @@ struct ObGlobalHint {
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
+  void merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option);
   void merge_param_option_hint(ObParamOption opt);
   void merge_topk_hint(int64_t precision, int64_t sharding_minimum_row_count);
   void merge_plan_cache_hint(ObPlanCachePolicy policy);
@@ -187,6 +188,8 @@ struct ObGlobalHint {
   inline void set_dbms_stats() { has_dbms_stats_hint_ = true; }
   bool get_flashback_read_tx_uncommitted() const { return flashback_read_tx_uncommitted_; }
   void set_flashback_read_tx_uncommitted(bool v) { flashback_read_tx_uncommitted_ = v; }
+  ObParallelDASOption get_parallel_das_dml_option() const { return parallel_das_dml_option_; }
+
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -245,6 +248,7 @@ struct ObGlobalHint {
                K_(ob_ddl_schema_versions),
                K_(osg_hint),
                K_(has_dbms_stats_hint),
+               K_(parallel_das_dml_option),
                K_(dynamic_sampling));
 
   int64_t frozen_version_;
@@ -275,6 +279,7 @@ struct ObGlobalHint {
   ObOptimizerStatisticsGatheringHint osg_hint_;
   bool has_dbms_stats_hint_;
   bool flashback_read_tx_uncommitted_;
+  ObParallelDASOption parallel_das_dml_option_;
   int64_t dynamic_sampling_;
 };
 

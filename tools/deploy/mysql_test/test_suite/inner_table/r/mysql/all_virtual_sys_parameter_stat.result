@@ -301,6 +301,7 @@ _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_oracle_priv_check
+_enable_parallel_das_dml
 _enable_parallel_minor_merge
 _enable_parallel_table_creation
 _enable_partition_level_retry

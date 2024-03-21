@@ -364,6 +364,8 @@ public:
   }
   inline int64_t get_plan_error_cnt() { return stat_.evolution_stat_.error_cnt_; }
   inline void update_plan_error_cnt() { ATOMIC_INC(&(stat_.evolution_stat_.error_cnt_)); }
+  int64_t get_das_dop() { return das_dop_; }
+  void set_das_dop(int64_t v) { das_dop_ = v; }
 
 public:
   int inc_concurrent_num();
@@ -671,6 +673,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  int64_t das_dop_;
   bool disable_auto_memory_mgr_;
 
 private:

@@ -406,7 +406,7 @@ int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stored row is null", K(ret));
     } else {
-      LOG_DEBUG("add dml_row pay_load here", KPC(stored_row));
+      LOG_DEBUG("succ add dml_row", KPC(stored_row));
     }
 
   }
@@ -423,7 +423,14 @@ int ObDASWriteBuffer::try_add_row(const DmlShadowRow &sr,
   int64_t row_size = lsr->row_size_;
   int64_t simulate_len = - EVENT_CALL(EventTable::EN_DAS_WRITE_ROW_LIST_LEN);
   int64_t final_row_list_len = simulate_len > 0 ? simulate_len : DAS_WRITE_ROW_LIST_LEN;
-  if (OB_UNLIKELY(row_size + get_mem_used() > memory_limit && get_mem_used() > 0)) {
+  int64_t final_mem_limit = memory_limit;
+  int64_t simulate_mem_limit = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_DAS_TASK_SIZE);
+  if (simulate_mem_limit != 0 && final_mem_limit > simulate_mem_limit) {
+    LOG_TRACE("simulate_mem_limit", K(simulate_mem_limit));
+    final_mem_limit = simulate_mem_limit;
+  }
+
+  if (OB_UNLIKELY(row_size + get_mem_used() > final_mem_limit && get_mem_used() > 0)) {
     //if the size of the first row exceeds memory_limit,
     //writing is also allowed,
     //ensuring that there is at least one row of data
@@ -434,7 +441,7 @@ int ObDASWriteBuffer::try_add_row(const DmlShadowRow &sr,
     //because it is too heavy for small dml queries
     ret = add_row_to_dlist(sr, row_added, stored_row);
   } else {
-    ret = add_row_to_store(sr, memory_limit, row_added, stored_row);
+    ret = add_row_to_store(sr, final_mem_limit, row_added, stored_row);
   }
   return ret;
 }

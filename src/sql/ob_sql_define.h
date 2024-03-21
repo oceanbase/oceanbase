@@ -430,6 +430,13 @@ enum class ObPDMLOption {
   MAX_VALUE
 };
 
+enum class ObParallelDASOption {
+  NOT_SPECIFIED = -1,
+  ENABLE,
+  DISABLE,
+  MAX_VALUE
+};
+
 enum OrderingFlag
 {
   NOT_MATCH = 0,

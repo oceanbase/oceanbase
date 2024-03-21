@@ -136,6 +136,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     is_enable_px_fast_reclaim_(false),
     use_rich_format_(false),
     subschema_ctx_(allocator_),
+    das_dop_(0),
     disable_auto_memory_mgr_(false),
     all_local_session_vars_(&allocator_),
     udf_has_dml_stmt_(false)
@@ -234,6 +235,7 @@ void ObPhysicalPlan::reset()
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
+  das_dop_ = 0;
   all_local_session_vars_.reset();
   sql_stat_record_value_.reset();
   use_rich_format_ = false;

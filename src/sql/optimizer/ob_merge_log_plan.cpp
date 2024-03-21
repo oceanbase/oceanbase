@@ -388,6 +388,9 @@ int ObMergeLogPlan::allocate_merge_as_top(ObLogicalOperator *&top,
     merge_op->set_child(ObLogicalOperator::first_child, top);
     merge_op->set_is_multi_part_dml(is_multi_part_dml);
     merge_op->set_table_partition_info(table_partition_info);
+    if (get_can_use_parallel_das_dml()) {
+      merge_op->set_das_dop(max_dml_parallel_);
+    }
     if (NULL != equal_pairs && OB_FAIL(merge_op->set_equal_pairs(*equal_pairs))) {
       LOG_WARN("failed to set equal pairs", K(ret));
     } else if (OB_FAIL(merge_op->compute_property())) {
@@ -428,6 +431,8 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
     LOG_WARN("failed to check stmt need multi partition dml", K(ret));
   } else if (is_multi_part_dml) {
     /*do nothing*/
+  } else if (use_parallel_das_dml_) {
+    is_multi_part_dml = true;
   } else if (OB_FAIL(check_merge_stmt_need_multi_partition_dml(is_multi_part_dml, is_one_part_table))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));
   } else if (is_multi_part_dml) {

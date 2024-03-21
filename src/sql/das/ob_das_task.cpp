@@ -380,11 +380,11 @@ int ObIDASTaskOp::state_advance()
   OB_ASSERT(cur_agg_list_ != nullptr);
   OB_ASSERT(task_status_ != ObDasTaskStatus::UNSTART);
   if (task_status_ == ObDasTaskStatus::FINISHED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_success_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_success_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else if (task_status_ == ObDasTaskStatus::FAILED) {
-    if (OB_FAIL(get_agg_tasks()->move_to_failed_tasks(this))) {
+    if (OB_FAIL(get_agg_task()->move_to_failed_tasks(this))) {
       LOG_WARN("failed to move task to success tasks", KR(ret));
     }
   } else {

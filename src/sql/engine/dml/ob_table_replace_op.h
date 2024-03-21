@@ -68,7 +68,8 @@ public:
       conflict_checker_(ctx.get_allocator(),
                         eval_ctx_,
                         MY_SPEC.conflict_checker_ctdef_),
-      replace_row_store_("ReplaceRow")
+      replace_row_store_("ReplaceRow"),
+      replace_rtctx_(eval_ctx_, ctx, *this)
   {}
   virtual ~ObTableReplaceOp() {}
 
@@ -82,11 +83,12 @@ public:
   int get_next_row_from_child();
 
   // 执行所有尝试插入的 das task， fetch冲突行的主表主键
-  int fetch_conflict_rowkey();
+  int fetch_conflict_rowkey(int64_t replace_row_cnt);
   int get_next_conflict_rowkey(DASTaskIter &task_iter);
 
   virtual void destroy()
   {
+    replace_rtctx_.cleanup();
     conflict_checker_.destroy();
     replace_rtdefs_.release_array();
     replace_row_store_.~ObChunkDatumStore();
@@ -112,10 +114,12 @@ protected:
   int do_insert(ObConflictRowMap *primary_map);
 
   // 提交所有的 insert 和delete das task;
-  int post_all_dml_das_task();
+  int post_all_dml_das_task(ObDMLRtCtx &dml_rtctx);
 
   // batch的执行插入 process_row and then write to das,
   int insert_row_to_das(bool need_do_trigger);
+
+  int final_insert_row_to_das();
 
   // batch的执行插入 process_row and then write to das,
   int delete_row_to_das(bool need_do_trigger);
@@ -135,6 +139,7 @@ protected:
                    const ObChunkDatumStore::StoredRow *replace_row,
                    const ObChunkDatumStore::StoredRow *delete_row);
   virtual int check_need_exec_single_row() override;
+  virtual ObDasParallelType check_das_parallel_type() override;
 private:
   int check_replace_ctdefs_valid() const;
 
@@ -150,12 +155,14 @@ private:
 
 protected:
   const static int64_t DEFAULT_REPLACE_BATCH_ROW_COUNT = 1000L;
+  const static int64_t OB_DEFAULT_REPLACE_MEMORY_LIMIT = 2 * 1024 * 1024L;
 
   int64_t insert_rows_;
   int64_t delete_rows_;
   ObConflictChecker conflict_checker_;
   common::ObArrayWrap<ObReplaceRtDef> replace_rtdefs_;
   ObChunkDatumStore replace_row_store_; //所有的replace的行的集合
+  ObDMLRtCtx replace_rtctx_;
 };
 
 class ObTableReplaceOpInput : public ObTableModifyOpInput

@@ -56,6 +56,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
+  das/ob_das_parallel_handler.cpp
   das/iter/ob_das_iter.cpp
   das/iter/ob_das_merge_iter.cpp
   das/iter/ob_das_lookup_iter.cpp

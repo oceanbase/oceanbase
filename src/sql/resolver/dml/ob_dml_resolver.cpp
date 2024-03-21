@@ -11203,6 +11203,14 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       global_hint.merge_parallel_dml_hint(ObPDMLOption::DISABLE);
       break;
     }
+    case T_PARALLEL_DAS_DML: {
+      global_hint.merge_parallel_das_dml_hint(ObParallelDASOption::ENABLE);
+      break;
+    }
+    case T_DISABLE_PARALLEL_DAS_DML: {
+      global_hint.merge_parallel_das_dml_hint(ObParallelDASOption::DISABLE);
+      break;
+    }
     case T_TRACE_LOG: {
       // make sure that the trace log starts
       // NOTE: no need to call SET_SAMPLE_FORCE_TRACE_LOG since we just need to make sure

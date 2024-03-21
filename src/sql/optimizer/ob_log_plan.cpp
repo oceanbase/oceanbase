@@ -11355,6 +11355,7 @@ bool ObLogPlan::need_consistent_read() const
 int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                               ObLogicalOperator &top,
                                               const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                              bool use_parallel_das,
                                               bool &is_multi_part_dml,
                                               bool &is_result_local)
 {
@@ -11366,6 +11367,9 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index dml info is empty", K(ret));
   } else if (stmt.has_instead_of_trigger()) {
+    is_multi_part_dml = true;
+    is_result_local = true;
+  } else if (use_parallel_das) {
     is_multi_part_dml = true;
     is_result_local = true;
   } else if (OB_FAIL(check_stmt_need_multi_partition_dml(stmt,
@@ -13536,6 +13540,7 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
   } else if (OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                     *top,
                                                     index_dml_infos,
+                                                    false,
                                                     is_multi_part_dml,
                                                     is_result_local))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));

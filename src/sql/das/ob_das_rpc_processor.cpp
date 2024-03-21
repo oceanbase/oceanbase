@@ -258,7 +258,7 @@ void ObRpcDasAsyncAccessCallBack::on_timeout()
   LOG_WARN("das async task timeout", KR(ret), K(get_task_ops()));
   result_.set_err_code(ret);
   result_.get_op_results().reuse();
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
 }
 
 void ObRpcDasAsyncAccessCallBack::on_invalid()
@@ -268,7 +268,7 @@ void ObRpcDasAsyncAccessCallBack::on_invalid()
   LOG_WARN("das async task invalid", K(get_task_ops()));
   result_.set_err_code(OB_INVALID_ERROR);
   result_.get_op_results().reuse();
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
 }
 
 void ObRpcDasAsyncAccessCallBack::set_args(const Request &arg)
@@ -286,7 +286,7 @@ int ObRpcDasAsyncAccessCallBack::process()
     result_.get_op_results().reuse();
     LOG_WARN("das async rpc execution failed", K(get_rcode()), K_(result));
   }
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
   return ret;
 }
 

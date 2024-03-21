@@ -189,6 +189,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     can_use_pdml_(false),
+    can_use_parallel_das_dml_(false),
     max_parallel_(ObGlobalHint::UNSET_PARALLEL),
     auto_dop_params_(),
     is_online_ddl_(false),
@@ -327,6 +328,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_auto_dop_params(const AutoDOPParams &auto_dop_params) {  auto_dop_params_ = auto_dop_params; }
   const AutoDOPParams &get_auto_dop_params() {  return auto_dop_params_; }
   void set_can_use_pdml(bool u) { can_use_pdml_ = u; }
+  void set_can_use_parallel_das_dml(bool v) { can_use_parallel_das_dml_ = v; }
+  bool get_can_use_parallel_das_dml() const { return can_use_parallel_das_dml_; }
   inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
   void set_ddl_sample_column_count(const int64_t count) { ddl_sample_column_count_ = count; }
@@ -629,6 +632,7 @@ private:
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;
   bool can_use_pdml_; // can use pdml after check parallel
+  bool can_use_parallel_das_dml_; // can use parallel das dml after check parallel
   int64_t max_parallel_;
   AutoDOPParams auto_dop_params_; // parameters to calc dop for Auto DOP
   bool is_online_ddl_;

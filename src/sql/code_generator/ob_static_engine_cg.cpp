@@ -2221,6 +2221,9 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.table_location_uncertain_ = op.is_table_location_uncertain();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
 
     spec.merge_ctdefs_.set_capacity(modified_index_ids.count());
     // TODO those 2 line must fixed after remove old engine
@@ -2341,6 +2344,9 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
+      spec.is_pdml_ = op.is_pdml();
+      spec.das_dop_ = op.get_das_dop();
+      spec.plan_->set_das_dop(op.get_das_dop());
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -2422,6 +2428,9 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.del_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 delete_table_list.count()))) {
       LOG_WARN("allocate delete ctdef array failed", K(ret));
@@ -2500,6 +2509,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     spec.plan_->need_drive_dml_query_ = true;
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     phy_plan_->set_ignore(op.is_ignore());
 
     // todo @wenber.wb delete it after support trigger
@@ -2597,6 +2609,9 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.upd_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 table_list.count()))) {
       LOG_WARN("allocate update ctdef array failed", K(ret), K(table_list));
@@ -2712,6 +2727,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     spec.plan_->need_drive_dml_query_ = true;
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     phy_plan_->set_ignore(op.is_ignore());
 
     ObLogPlan *log_plan = op.get_plan();

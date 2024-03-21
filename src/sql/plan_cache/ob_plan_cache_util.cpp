@@ -530,6 +530,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
+    enable_parallel_das_dml_ = tenant_config->_enable_parallel_das_dml;
   }
 
   return ret;
@@ -582,6 +583,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_var_assign_use_das_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_var_assign_use_das_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", enable_parallel_das_dml_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_parallel_das_dml_));
   } else {
     // do nothing
   }

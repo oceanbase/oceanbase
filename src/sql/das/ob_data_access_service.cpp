@@ -23,6 +23,10 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/ob_das_retry_ctrl.h"
 #include "storage/tx/ob_trans_service.h"
+#include "sql/das/ob_das_parallel_handler.h"
+#include "observer/omt/ob_multi_tenant.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
+
 namespace oceanbase
 {
 using namespace share;
@@ -85,7 +89,7 @@ int ObDataAccessService::init(rpc::frame::ObReqTransport *transport, const ObAdd
 }
 
 int ObDataAccessService::execute_das_task(
-    ObDASRef &das_ref, ObDasAggregatedTasks &task_ops, bool async) {
+    ObDASRef &das_ref, ObDasAggregatedTask &task_ops, bool async) {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(das_ref.is_execute_directly())) {
     common::ObSEArray<ObIDASTaskOp *, 2> task_wrapper;
@@ -148,7 +152,7 @@ int ObDataAccessService::get_das_task_id(int64_t &das_id)
 }
 
 void ObDataAccessService::calc_das_task_parallelism(const ObDASRef &das_ref,
-    const ObDasAggregatedTasks &task_ops, int &target_parallelism)
+    const ObDasAggregatedTask &task_ops, int &target_parallelism)
 {
   // const int divide_async_task_threshold = 1024;
   // if (task_ops.get_unstart_task_size() > divide_async_task_threshold) {
@@ -160,45 +164,39 @@ void ObDataAccessService::calc_das_task_parallelism(const ObDASRef &das_ref,
 }
 
 OB_NOINLINE int ObDataAccessService::execute_dist_das_task(
-    ObDASRef &das_ref, ObDasAggregatedTasks &task_ops, bool async) {
+    ObDASRef &das_ref, ObDasAggregatedTask &task_ops, bool async) {
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = das_ref.get_exec_ctx();
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
   ObDASTaskArg task_arg;
-  task_arg.set_timeout_ts(session->get_query_timeout_ts());
+  int64_t timeout_ts = session->get_query_timeout_ts();
+  task_arg.set_timeout_ts(timeout_ts);
   task_arg.set_ctrl_svr(ctrl_addr_);
   task_arg.get_runner_svr() = task_ops.server_;
   int target_parallelism = 0;
-  calc_das_task_parallelism(das_ref, task_ops, target_parallelism);
-  common::ObSEArray<common::ObSEArray<ObIDASTaskOp *, 2>, 2> task_groups;
-  if (OB_FAIL(task_ops.get_aggregated_tasks(task_groups, target_parallelism))) {
-    LOG_WARN("failed to get das task groups", K(ret));
-  }
-  OB_ASSERT(target_parallelism >= task_groups.count());
-  LOG_DEBUG("current dist das task group", K(ret), K(task_groups), K(task_ops));
-  for (int i = 0; OB_SUCC(ret) && i < task_groups.count(); i++) {
-    task_arg.get_task_ops() = task_groups.at(i);
-    if (OB_FAIL(task_arg.get_task_ops().get_copy_assign_ret())) {
-      LOG_WARN("failed to copy das task", K(ret));
-    } else if (task_arg.is_local_task()) {
-      if (OB_FAIL(do_local_das_task(das_ref, task_arg))) {
-        LOG_WARN("do local das task failed", K(ret), K(task_arg));
+  common::ObIArray<ObIDASTaskOp *> &task_list = task_arg.get_task_ops();
+  if (OB_FAIL(task_ops.get_aggregated_tasks(task_list))) {
+    LOG_WARN("fail to get agg tasks", K(ret));
+  } else if (task_list.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty task_list", K(ret));
+  } else if (task_arg.is_local_task()) {
+    if (OB_FAIL(do_local_das_task(task_list))) {
+      LOG_WARN("do local das task failed", K(ret), K(task_arg));
+    }
+  } else {
+    if (async) {
+      if (OB_FAIL(das_ref.get_das_ref_count_ctx().acquire_task_execution_resource(timeout_ts))) {
+        LOG_WARN("failed to acquire execution resource", K(ret));
+      } else if (OB_FAIL(do_async_remote_das_task(das_ref, task_ops, task_arg, THIS_WORKER.get_group_id()))) {
+        das_ref.get_das_ref_count_ctx().inc_concurrency_limit();
+        LOG_WARN("do remote das task failed", K(ret));
       }
-    } else if (OB_FAIL(das_ref.acquire_task_execution_resource())) {
-      LOG_WARN("failed to acquire execution resource", K(ret));
     } else {
-     if (async) {
-        if (OB_FAIL(do_async_remote_das_task(das_ref, task_ops, task_arg))) {
-          das_ref.inc_concurrency_limit();
-          LOG_WARN("do remote das task failed", K(ret));
-        }
-      } else {
-        if (OB_FAIL(do_sync_remote_das_task(das_ref, task_ops, task_arg))) {
-          LOG_WARN("do remote das task failed", K(ret));
-        }
+      if (OB_FAIL(do_sync_remote_das_task(das_ref, task_ops, task_arg))) {
+        LOG_WARN("do remote das task failed", K(ret));
       }
     }
-    task_arg.get_task_ops().reuse();
   }
   return ret;
 }
@@ -244,7 +242,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
 {
   int ret = task_op.errcode_;
   ObArenaAllocator tmp_alloc;
-  ObDasAggregatedTasks das_task_wrapper(tmp_alloc);
+  ObDasAggregatedTask das_task_wrapper(tmp_alloc);
   bool retry_continue = false;
   ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
   location_router.reset_cur_retry_cnt();
@@ -352,7 +350,7 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
   FLTSpanGuard(rescan_das_task);
 
   ObArenaAllocator tmp_alloc;
-  ObDasAggregatedTasks das_task_wrapper(tmp_alloc);
+  ObDasAggregatedTask das_task_wrapper(tmp_alloc);
   if (scan_op.is_local_task()) {
     if (OB_FAIL(scan_op.rescan())) {
       LOG_WARN("rescan das task failed", K(ret));
@@ -373,24 +371,21 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
   return ret;
 }
 
-int ObDataAccessService::do_local_das_task(ObDASRef &das_ref,
-    ObDASTaskArg &task_arg) {
-  UNUSED(das_ref);
+int ObDataAccessService::do_local_das_task(ObIArray<ObIDASTaskOp*> &task_list) {
   int ret = OB_SUCCESS;
   FLTSpanGuard(do_local_das_task);
 
-  const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops =  task_arg.get_task_ops();
-  LOG_DEBUG("begin to do local das task", K(task_arg));
-  for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
-    if (OB_FAIL(task_ops.at(i)->start_das_task())) {
+  LOG_DEBUG("begin to do local das task", K(task_list));
+  for (int64_t i = 0; OB_SUCC(ret) && i < task_list.count(); i++) {
+    if (OB_FAIL(task_list.at(i)->start_das_task())) {
       LOG_WARN("start local das task failed", K(ret));
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(task_ops.at(i)->state_advance())) {
+      if (OB_TMP_FAIL(task_list.at(i)->state_advance())) {
         LOG_WARN("failed to advance das task state.",K(ret));
       }
       break;
     } else {
-      if (OB_FAIL(task_ops.at(i)->state_advance())) {
+      if (OB_FAIL(task_list.at(i)->state_advance())) {
         LOG_WARN("failed to advance das task state.",K(ret));
       }
     }
@@ -398,11 +393,14 @@ int ObDataAccessService::do_local_das_task(ObDASRef &das_ref,
   return ret;
 }
 
-int ObDataAccessService::do_async_remote_das_task(
-    ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks,
-    ObDASTaskArg &task_arg) {
+int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
+                                                  ObDasAggregatedTask &aggregated_tasks,
+                                                  ObDASTaskArg &task_arg,
+                                                  int32_t group_id) {
   int ret = OB_SUCCESS;
   void *resp_buf = nullptr;
+  ObIDASTaskResult *op_result = nullptr;
+  ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
   FLTSpanGuard(do_async_remote_das_task);
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
@@ -421,9 +419,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObDASRemoteInfo remote_info;
   remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
-  remote_info.trans_desc_ = session->get_tx_desc();
   remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
-  remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
@@ -431,19 +427,32 @@ int ObDataAccessService::do_async_remote_das_task(
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
   }
-
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;
-  ObIDASTaskResult *op_result = nullptr;
-  ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
-  if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
+
+  if (das_ref.is_parallel_submit()) {
+    if (OB_ISNULL(das_ref.get_das_parallel_ctx().get_tx_desc_bak())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr of tx_desc", K(ret));
+    } else {
+      remote_info.trans_desc_ = das_ref.get_das_parallel_ctx().get_tx_desc_bak();
+    }
+  } else {
+    remote_info.trans_desc_ = session->get_tx_desc();
+  }
+  remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
     LOG_WARN("failed to allocate das async cb", K(ret));
   }
+
   // prepare op result in advance avoiding racing condition.
   for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
     if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_ops.at(i)->get_task_status())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("task status unexpected", KR(ret), K(task_ops.at(i)->get_task_status()), KPC(task_ops.at(i)));
+      LOG_WARN("task status unexpected", K(ret), K(task_ops.at(i)->get_task_status()), KPC(task_ops.at(i)));
     } else if (NULL != (op_result = task_ops.at(i)->get_op_result())) {
       if (OB_FAIL(op_result->reuse())) {
         LOG_WARN("reuse task result failed", K(ret));
@@ -469,7 +478,7 @@ int ObDataAccessService::do_async_remote_das_task(
   LOG_DEBUG("begin to do remote das task", K(task_arg));
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(collect_das_task_info(task_arg, remote_info))) {
+  } else if (OB_FAIL(collect_das_task_info(task_ops, remote_info))) {
     LOG_WARN("collect das task info failed", K(ret));
   } else if (OB_UNLIKELY(timeout <= 0)) {
     ret = OB_TIMEOUT;
@@ -478,8 +487,9 @@ int ObDataAccessService::do_async_remote_das_task(
                   .to(task_arg.get_runner_svr())
                   .by(tenant_id)
                   .timeout(timeout)
+                  .group_id(group_id)
                   .das_async_access(task_arg, das_async_cb))) {
-    LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg));
+    LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg), K(group_id));
     // RPC fail, add task's LSID to trans_result
     // indicate some transaction participant may touched
     for (int i = 0; i < task_ops.count(); i++) {
@@ -499,11 +509,12 @@ int ObDataAccessService::do_async_remote_das_task(
       }
     }
   }
+
   return ret;
 }
 
 int ObDataAccessService::do_sync_remote_das_task(
-    ObDASRef &das_ref, ObDasAggregatedTasks &aggregated_tasks,
+    ObDASRef &das_ref, ObDasAggregatedTask &aggregated_tasks,
     ObDASTaskArg &task_arg) {
   int ret = OB_SUCCESS;
   void *resp_buf = nullptr;
@@ -518,9 +529,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   ObDASRemoteInfo remote_info;
   remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
-  remote_info.trans_desc_ = session->get_tx_desc();
   remote_info.snapshot_ = *task_arg.get_task_op()->get_snapshot();
-  remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
@@ -528,8 +537,17 @@ int ObDataAccessService::do_sync_remote_das_task(
     remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
     remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
   }
-
-
+  if (das_ref.is_parallel_submit()) {
+    if (OB_ISNULL(das_ref.get_das_parallel_ctx().get_tx_desc_bak())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr of tx_desc", K(ret));
+    } else {
+      remote_info.trans_desc_ = das_ref.get_das_parallel_ctx().get_tx_desc_bak();
+    }
+  } else {
+    remote_info.trans_desc_ = session->get_tx_desc();
+  }
+  remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;
 
@@ -567,7 +585,7 @@ int ObDataAccessService::do_sync_remote_das_task(
     }
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(collect_das_task_info(task_arg, remote_info))) {
+    } else if (OB_FAIL(collect_das_task_info(task_ops, remote_info))) {
       LOG_WARN("collect das task info failed", K(ret));
     } else if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
@@ -597,7 +615,7 @@ int ObDataAccessService::do_sync_remote_das_task(
       LOG_WARN("failed to process task resp", K(ret), K(task_arg), K(task_resp));
     }
   }
-  das_ref.inc_concurrency_limit();
+
   return ret;
 }
 
@@ -703,10 +721,83 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   return ret;
 }
 
-int ObDataAccessService::collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemoteInfo &remote_info)
+int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task, int32_t group_id)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+  ObDASParallelTask *task = nullptr;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  DISABLE_SQL_MEMLEAK_GUARD;
+  if (NULL == omt) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected error, omt is null", KR(ret), KP(omt));
+  } else if (OB_ISNULL(task = ObDASParallelTaskFactory::alloc(das_ref.get_das_ref_count_ctx()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", K(ret));
+  } else if (OB_FAIL(task->init(&agg_task, group_id))) {
+    LOG_WARN("init parallel task failed", K(ret), K(agg_task));
+  } else if (OB_FAIL(omt->recv_request(MTL_ID(), *task))) {
+    LOG_WARN("fail to push parallel_das_task", K(ret), KPC(task));
+  } else {
+    LOG_TRACE("push parallel task succeed", K(agg_task));
+  }
+  if (OB_FAIL(ret)) {
+    ObDASParallelTaskFactory::free(task);
+    task = NULL;
+  }
+  return ret;
+}
+int ObDataAccessService::parallel_execute_das_task(common::ObIArray<ObIDASTaskOp *> &task_list)
+{
+  int ret = OB_SUCCESS;
+  if (task_list.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty task_list", K(ret));
+  } else if (OB_FAIL(do_local_das_task(task_list))) {
+    LOG_WARN("failed to do local das task", K(ret), K(task_list));
+  }
+  return ret;
+}
+int ObDataAccessService::parallel_submit_das_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
+  int64_t timeout_ts = session->get_query_timeout_ts();
+  int32_t group_id = THIS_WORKER.get_group_id();
+  int32_t das_group_id = group_id | das::OB_DAS_PARALLEL_POOL_MARK;
+  LOG_TRACE("print group_id", K(group_id), K(das::OB_DAS_PARALLEL_POOL_MARK), K(das_group_id));
+  if (agg_task.server_ == ctrl_addr_) {
+    // 并发提交 local das 任务
+    ObDASParallelTask *task = nullptr;
+    omt::ObMultiTenant *omt = GCTX.omt_;
+    if (OB_FAIL(das_ref.get_das_ref_count_ctx().acquire_task_execution_resource(timeout_ts))) {
+      LOG_WARN("fail to acquire resource", K(ret));
+    } else if (OB_FAIL(push_parallel_task(das_ref, agg_task, das_group_id))) {
+      // NOTICE: if error occur, must release the reference count
+      das_ref.get_das_ref_count_ctx().inc_concurrency_limit();
+      LOG_WARN("fail to push parallel task", K(ret));
+    }
+  } else {
+    ObDASTaskArg task_arg;
+    ObExecContext &exec_ctx = das_ref.get_exec_ctx();
+    ObSQLSessionInfo *session = exec_ctx.get_my_session();
+    task_arg.set_timeout_ts(session->get_query_timeout_ts());
+    task_arg.set_ctrl_svr(ctrl_addr_);
+    task_arg.get_runner_svr() = agg_task.server_;
+    if (OB_FAIL(agg_task.get_aggregated_tasks(task_arg.get_task_ops()))) {
+      LOG_WARN("failed to get das task groups", K(ret));
+    } else if (OB_FAIL(das_ref.get_das_ref_count_ctx().acquire_task_execution_resource(timeout_ts))) {
+      LOG_WARN("fail to acquire resource", K(ret));
+    } else if (OB_FAIL(do_async_remote_das_task(das_ref, agg_task, task_arg, das_group_id))) {
+      das_ref.get_das_ref_count_ctx().inc_concurrency_limit();
+      LOG_WARN("do remote das task failed", K(ret), K(task_arg));
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::collect_das_task_info(ObIArray<ObIDASTaskOp*> &task_ops, ObDASRemoteInfo &remote_info)
+{
+  int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
   for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
     task_op = task_ops.at(i);

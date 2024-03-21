@@ -265,6 +265,8 @@ public:
   void set_first_dml_op(bool is_first_dml_op)
   { is_first_dml_op_ = is_first_dml_op; }
   bool is_first_dml_op() const { return is_first_dml_op_; }
+  void set_das_dop(int64_t dop) { das_dop_ = dop; }
+  int64_t get_das_dop() { return das_dop_; }
   void set_index_maintenance(bool is_index_maintenance)
   { is_index_maintenance_ = is_index_maintenance; }
   bool is_index_maintenance() const { return is_index_maintenance_; }
@@ -422,6 +424,7 @@ protected:
   //
   bool table_location_uncertain_;
   bool is_pdml_update_split_; // 标记delete, insert op是否由update拆分而来
+  int64_t das_dop_; // zero marks not use parallel_das_dml
 private:
   // 如果是PDML，那么对应的DML算子（insert，update，delete）需要一个partition id expr
   ObRawExpr *pdml_partition_id_expr_;

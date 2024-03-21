@@ -69,7 +69,6 @@ int ObDASLockOp::open_op()
       LOG_WARN("lock row to partition storage failed", K(ret));
     }
   } else {
-    lock_rtdef_->affected_rows_ += affected_rows;
     affected_rows_ = affected_rows;
   }
   return ret;
@@ -78,6 +77,26 @@ int ObDASLockOp::open_op()
 int ObDASLockOp::release_op()
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObDASLockOp::record_task_result_to_rtdef()
+{
+  int ret = OB_SUCCESS;
+  lock_rtdef_->affected_rows_ += affected_rows_;
+  return ret;
+}
+
+int ObDASLockOp::assign_task_result(ObIDASTaskOp *other)
+{
+  int ret = OB_SUCCESS;
+  if (other->get_type() != get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), KPC(other));
+  } else {
+    ObDASLockOp *lock_op = static_cast<ObDASLockOp *>(other);
+    affected_rows_ = lock_op->get_affected_rows();
+  }
   return ret;
 }
 
@@ -90,7 +109,7 @@ int ObDASLockOp::decode_task_result(ObIDASTaskResult *task_result)
 #endif
   if (OB_SUCC(ret)) {
     ObDASLockResult *lock_result = static_cast<ObDASLockResult*>(task_result);
-    lock_rtdef_->affected_rows_ += lock_result->get_affected_rows();
+    affected_rows_ = lock_result->get_affected_rows();
   }
   return ret;
 }
