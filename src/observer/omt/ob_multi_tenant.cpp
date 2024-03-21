@@ -1810,6 +1810,12 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(GCTX.conn_res_mgr_)
+               && OB_FAIL(GCTX.conn_res_mgr_->erase_tenant_conn_res_map(tenant_id))) {
+      LOG_WARN("erase tenant conn res map failed", K(ret));
+    }
+  }
   return ret;
 }
 
