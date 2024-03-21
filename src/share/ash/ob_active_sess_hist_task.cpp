@@ -129,6 +129,7 @@ void ObActiveSessHistTask::runTimerTask()
         GET_OTHER_TSI_ADDR(serving_id, &omt::ObThWorker::serving_tenant_id_);
         ash_stat.program_[0] = '\0';
         ash_stat.module_[0] = '\0';
+        bool is_finish_push = false;
         // das remote execution is foreground session
         if (ash_stat.in_das_remote_exec_ == true) {
           GET_OTHER_TSI_ADDR(tname, &(ob_get_tname()[0]));
@@ -145,6 +146,7 @@ void ObActiveSessHistTask::runTimerTask()
           ash_stat.sample_time_ = sample_time_;
           ObActiveSessionStat::calc_db_time(ash_stat, sample_time_);
           ObActiveSessHistList::get_instance().add(ash_stat);
+          is_finish_push = true;
         }
 
         // iter over each active background thread
@@ -162,7 +164,7 @@ void ObActiveSessHistTask::runTimerTask()
             ash_stat.sample_time_ = sample_time_;
             ObActiveSessHistList::get_instance().add(ash_stat);
           }
-        } else if (ash_stat.is_bkgd_active_ && ash_stat.pcode_ != 0) {
+        } else if (ash_stat.is_bkgd_active_ && ash_stat.pcode_ != 0 && !is_finish_push) {
           // tenant worker thread scheduling without session --> rpc process
           GET_OTHER_TSI_ADDR(tname, &(ob_get_tname()[0]));
           snprintf(ash_stat.program_, ASH_PROGRAM_STR_LEN, "RPC PROCESS (%.*s)_%4d",
