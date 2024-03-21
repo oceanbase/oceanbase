@@ -1905,3 +1905,6 @@ DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512
         "For outrow-stored LOBs, if the length is less than or equal to that threshold, "
         "they can be admitted into the block cache to speed up the next query.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memleak_light_backtrace, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether allow memleak to get the backtrace of malloc by light_backtrace",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

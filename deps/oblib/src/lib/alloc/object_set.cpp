@@ -465,7 +465,7 @@ void ObjectSet::do_free_dirty_list()
   }
 }
 
-bool ObjectSet::check_has_unfree(char *first_label)
+bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
 {
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   bool has_unfree = false;
@@ -488,6 +488,10 @@ bool ObjectSet::check_has_unfree(char *first_label)
           if (OB_UNLIKELY(tmp_has_unfree)) {
             if ('\0' == first_label[0]) {
               STRCPY(first_label, obj->label_);
+            }
+            if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
+              int64_t *addrs = (int64_t*)&(obj->data_[obj->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE]);
+              IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, addrs, AOBJECT_BACKTRACE_COUNT);
             }
             if (!has_unfree) {
               has_unfree = true;
@@ -517,16 +521,17 @@ void ObjectSet::reset()
   const static int buf_len = 256;
   char buf[buf_len] = {'\0'};
   char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
-  bool has_unfree = check_has_unfree(first_label);
+  char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
+  bool has_unfree = check_has_unfree(first_label, first_bt);
   if (has_unfree) {
     if (context_check) {
       const StaticInfo &static_info = mem_context_->get_static_info();
       const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
       int64_t pos = snprintf(buf, buf_len,
-                             "context: %p, label: %s, static_id: 0x%lx, "
+                             "context: %p, label: %s, backtrace: %s, static_id: 0x%lx, "
                              "static_info:{filename: %s, line: %d, function: %s}, "
                              "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
-                             mem_context_, first_label,
+                             mem_context_, first_label, first_bt,
                              mem_context_->get_static_id(),
                              static_info.filename_, static_info.line_, static_info.function_,
                              dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);

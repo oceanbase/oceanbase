@@ -423,9 +423,6 @@ public:
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);
 
-  // not implemented rpc, helper function for rs rpc processor define.
-  int not_implement();
-
   int execute_bootstrap(const obrpc::ObBootstrapArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int check_sys_tenant_initial_master_key_valid();

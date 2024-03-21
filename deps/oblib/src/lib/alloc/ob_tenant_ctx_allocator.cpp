@@ -436,7 +436,8 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     is_errsim = true;
   }
 #endif
-
+  ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
+      && ObCtxIds::GLIBC != attr.ctx_id_);
   if (OB_UNLIKELY(is_errsim)) {
   } else {
     BASIC_TIME_GUARD(time_guard, "ObMalloc");

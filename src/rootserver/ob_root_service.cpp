@@ -5727,14 +5727,6 @@ int ObRootService::fetch_sys_tenant_ls_info()
   return ret;
 }
 
-int ObRootService::not_implement()
-{
-  int ret = OB_NOT_IMPLEMENT;
-  bt("not implement");
-  LOG_WARN("rpc not implemented", K(ret));
-  return ret;
-}
-
 ObRootService::ObRestartTask::ObRestartTask(ObRootService &root_service)
 :ObAsyncTimerTask(root_service.task_queue_),
     root_service_(root_service)
