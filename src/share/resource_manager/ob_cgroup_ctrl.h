@@ -143,6 +143,8 @@ public:
   void destroy() { /* 进程退出后tid会自动从cgroup tasks中删除 */ }
   bool is_valid() { return valid_; }
 
+  bool is_valid_group_name(common::ObString &group_name);
+
   // 删除租户cgroup规则
   int remove_cgroup(const uint64_t tenant_id, uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int remove_tenant_cgroup(const uint64_t tenant_id, const char *base_path = "");
