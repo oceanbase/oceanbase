@@ -93,7 +93,7 @@ public:
   {
   public:
     AsyncCB(int pcode)
-        : low_level_cb_(NULL), dst_(), timeout_(0), tenant_id_(0),
+        : low_level_cb_(NULL), gtid_(0), pkt_id_(0), dst_(), timeout_(0), tenant_id_(0),
           err_(0), pcode_(pcode), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB() {}
@@ -126,6 +126,8 @@ public:
     obrpc::ObRpcPacketCode get_pcode() const { return static_cast<obrpc::ObRpcPacketCode>(pcode_); }
 
     void* low_level_cb_;
+    uint64_t gtid_;
+    uint32_t pkt_id_;
   private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000; // 100ms
   protected:
