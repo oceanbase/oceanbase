@@ -181,7 +181,7 @@ int ObExprToOutfileRow::to_outfile_str(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           const ObObjMeta &obj_meta = expr.args_[i]->obj_meta_;
           ObObj obj;
           OZ(v.to_obj(obj, obj_meta, expr.args_[i]->obj_datum_map_));
-          if (!ob_is_text_tc(obj_meta.get_type())) {
+          if (!obj_meta.is_lob_storage()) {
             OZ(print_field(buf, buf_len, pos, obj, *out_info));
           } else { // text tc
             ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
