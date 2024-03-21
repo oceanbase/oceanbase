@@ -311,6 +311,7 @@ int ObExprSoundex::calc_text(const ObDatum &input_datum,
       ObDataBuffer buf_alloc(buf, buf_size);
       int64_t block_buf_len = is_oracle_mode
                               ? MIN_RESULT_LENGTH : MAX(MIN_RESULT_LENGTH, input_data.length());
+      pos = 0;
       if (need_charset_convert) {
         block_buf = static_cast<char *>(tmp_alloc.alloc(block_buf_len));
       } else {
