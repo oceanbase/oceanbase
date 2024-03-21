@@ -359,16 +359,14 @@ DEFINE_GET_SERIALIZE_SIZE(ObGCLSLog)
 
 int ObGCHandler::ObGCLSLogCb::on_success()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(handler_) || !scn_.is_valid()) {
-    CLOG_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "gc handler is NULL or scn is invalid", K(handler_), K(scn_));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_ISNULL(handler_)) {
+    tmp_ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "handler_ is nullptr, unexpected!!!", KP(handler_), K_(state), K(tmp_ret));
+  } else if (OB_SUCCESS != (tmp_ret = handler_->handle_on_success_cb(*this))) {
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to handle_on_success_cb", K(this), K(tmp_ret));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = handler_->handle_on_success_cb(*this))) {
-      CLOG_LOG(ERROR, "failed to handle_on_success_cb", K(this), K(tmp_ret));
-    } else {
-      ATOMIC_STORE(&state_, CbState::STATE_SUCCESS);
-    }
+    ATOMIC_STORE(&state_, CbState::STATE_SUCCESS);
   }
   return OB_SUCCESS;
 }
