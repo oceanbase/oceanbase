@@ -17,7 +17,7 @@ namespace oceanbase
 namespace common
 {
 ObCompressorPool::ObCompressorPool()
-    :allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "Compressor"), OB_MALLOC_BIG_BLOCK_SIZE),
+    :allocator_(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "Compressor")), OB_MALLOC_BIG_BLOCK_SIZE),
      none_compressor(),
      lz4_compressor(),
      lz4_compressor_1_9_1(),
