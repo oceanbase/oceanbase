@@ -64,24 +64,25 @@ public:
   inline void set_params(ParamStore *params) { params_ = params; }
   inline ParamStore *get_params() { return params_; }
   int add_param(const common::ObObjParam& param);
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return ddl_arg_; }
+
+  int resolve_inout_param(ParseNode &block_node, ObAnonymousBlockStmt &stmt);
   const ObBitSet<>& get_out_idx() const { return out_idx_; }
   ObBitSet<>& get_out_idx() { return out_idx_; }
 
   TO_STRING_KV(K_(stmt_type),
                K_(sql),
                K_(statement_id),
-               K_(is_prepare_protocol),
-               K_(out_idx));
+               K_(is_prepare_protocol));
 
 private:
   ParseNode *body_;
   ObString sql_;
   uint64_t statement_id_;
   bool is_prepare_protocol_;
-  ParamStore *params_;
+  ParamStore *params_;//for ps param
+  obrpc::ObDDLArg ddl_arg_; // 用于返回exec_tenant_id_
   ObBitSet<> out_idx_;
-
-private:
   DISALLOW_COPY_AND_ASSIGN(ObAnonymousBlockStmt);
 };
 

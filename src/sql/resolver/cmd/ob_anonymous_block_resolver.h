@@ -30,13 +30,18 @@ public:
   virtual ~ObAnonymousBlockResolver() {}
 
   virtual int resolve(const ParseNode &parse_tree);
-
 private:
-  int resolve_anonymous_block(ParseNode &block_node, ObAnonymousBlockStmt &stmt);
-  int prepare_question_mark_params();
-
+  int resolve_anonymous_block(
+    ParseNode &block_node, ObAnonymousBlockStmt &stmt, bool resolve_inout_param = false);
+  int add_param();
+  // types and constants
 private:
+  // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAnonymousBlockResolver);
+  // function members
+
+private:
+  // data members
 
 };
 

@@ -27,52 +27,80 @@ namespace sql
 int ObAnonymousBlockResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-
   ObAnonymousBlockStmt *stmt = NULL;
   ParseNode *block_node = NULL;
-  ParamStore *param_store = NULL;
-
-  CK (OB_NOT_NULL(session_info_));
-  CK (OB_NOT_NULL(params_.param_list_));
-  CK (OB_NOT_NULL(allocator_));
-
-  CK (OB_LIKELY(T_SP_ANONYMOUS_BLOCK == parse_tree.type_));
-  CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
-  CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_ || T_SP_LABELED_BLOCK == block_node->type_));
-
-  if (OB_SUCC(ret)
-      && (OB_ISNULL(stmt = create_stmt<ObAnonymousBlockStmt>())
-          || OB_ISNULL(param_store = reinterpret_cast<ParamStore*>(allocator_->alloc(sizeof(ParamStore)))))) {
+  void *params_buf = NULL;
+  if (OB_ISNULL(session_info_)
+      || OB_ISNULL(params_.param_list_)
+      || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Argument is NULL",
+             K(session_info_), K(params_.param_list_), K(allocator_), K(ret));
+  } else if (OB_ISNULL(stmt = create_stmt<ObAnonymousBlockStmt>())
+             || OB_ISNULL(params_buf = allocator_->alloc(sizeof(ParamStore)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("create index stmt failed", K(ret), KP(stmt), KP(param_store));
+    LOG_ERROR("create index stmt failed", K(ret));
+  } else{
+    ParamStore *param_store = new(params_buf)ParamStore( ObWrapperAllocator(*allocator_) );
+    stmt->set_params(param_store);
+    stmt_ = stmt;
   }
-
-  OX (new (param_store) ParamStore( ObWrapperAllocator(*allocator_) ));
-  OX (stmt->set_params(param_store));
-  OX (stmt_ = stmt);
-
-  if (OB_FAIL(ret)) {
-  } else if (params_.is_prepare_protocol_) {
-    stmt->set_prepare_protocol(true);
-    stmt->set_stmt_id(params_.statement_id_);
-    stmt->set_sql(params_.cur_sql_);
-    OZ (prepare_question_mark_params());
-    if (params_.is_prepare_stage_ || OB_ISNULL(session_info_->get_pl_context())) {
-      OZ (resolve_anonymous_block(*block_node, *stmt));
+  CK (OB_NOT_NULL(stmt));
+  if (OB_SUCC(ret)) {
+    if (params_.is_prepare_protocol_) {
+      stmt->set_prepare_protocol(true);
+      stmt->set_stmt_id(params_.statement_id_);
+      stmt->set_sql(params_.cur_sql_);
+      if ((params_.is_prepare_stage_
+            || params_.is_pre_execute_)
+          && OB_ISNULL(session_info_->get_pl_context())) {
+        CK (OB_LIKELY(T_SP_ANONYMOUS_BLOCK == parse_tree.type_));
+        CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
+        CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_
+                      || T_SP_LABELED_BLOCK == block_node->type_));
+        OZ (resolve_anonymous_block(*block_node, *stmt, true));
+        if (OB_SUCC(ret) && params_.is_pre_execute_) {
+          OZ (add_param());
+        }
+      } else {
+        if (params_.is_prepare_stage_) {
+          CK (OB_LIKELY(T_SP_ANONYMOUS_BLOCK == parse_tree.type_));
+          CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
+          CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_
+                        || T_SP_LABELED_BLOCK == block_node->type_));
+          OZ (resolve_anonymous_block(*block_node, *stmt, false));
+        }
+        OZ (add_param());
+      }
+    } else if (OB_UNLIKELY(T_SP_ANONYMOUS_BLOCK != parse_tree.type_
+                           || OB_ISNULL(block_node = parse_tree.children_[0]))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the children of parse tree is NULL", K(ret));
+    } else if (T_SP_BLOCK_CONTENT != block_node->type_
+               && T_SP_LABELED_BLOCK != block_node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid procedure name node", K(block_node->type_), K(ret));
+    } else {
+      CK (OB_LIKELY(T_SP_ANONYMOUS_BLOCK == parse_tree.type_));
+      CK (OB_NOT_NULL(block_node = parse_tree.children_[0]));
+      CK (OB_LIKELY(T_SP_BLOCK_CONTENT == block_node->type_
+                    || T_SP_LABELED_BLOCK == block_node->type_));
+      OX (stmt->set_prepare_protocol(false));
+      OX (stmt->set_body(block_node));
+      OZ (add_param());
     }
-  } else {
-    stmt->set_prepare_protocol(false);
-    stmt->set_body(block_node);
-    OZ (prepare_question_mark_params());
   }
   return ret;
 }
 
-int ObAnonymousBlockResolver::resolve_anonymous_block(ParseNode &block_node, ObAnonymousBlockStmt &stmt)
+int ObAnonymousBlockResolver::resolve_anonymous_block(
+  ParseNode &block_node, ObAnonymousBlockStmt &stmt, bool resolve_inout_param)
 {
   int ret = OB_SUCCESS;
-
   HEAP_VAR(pl::ObPLFunctionAST, func_ast, *(params_.allocator_)) {
+    ParamStore param_list( ObWrapperAllocator(*(params_.allocator_)) );
+    const ParamStore *p_param_list = (params_.param_list_ != NULL && params_.param_list_->count() > 0)
+        ? (params_.param_list_) : &param_list;
     pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     pl::ObPLResolver resolver(*(params_.allocator_),
                               *(params_.session_info_),
@@ -84,27 +112,35 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(ParseNode &block_node, ObA
                               true,
                               false,
                               false,
-                              stmt.get_params());
+                              p_param_list);
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
+      ObObjParam param = ObObjParam(ObObj(ObNullType));
+      const_cast<ObObjMeta&>(param.get_param_meta()).reset();
+      OZ (param_list.push_back(param));
+    }
     OZ (package_guard.init());
     OX (func_ast.set_db_name(params_.session_info_->get_database_name()));
-    OZ (pl::ObPLCompiler::init_anonymous_ast(func_ast,
-                                             *(params_.allocator_),
-                                             *(params_.session_info_),
-                                             *(params_.sql_proxy_),
-                                             *(params_.schema_checker_->get_schema_guard()),
-                                             package_guard,
-                                             stmt.get_params()));
+    OZ (pl::ObPLCompiler::init_anonymous_ast(
+          func_ast,
+          *(params_.allocator_),
+          *(params_.session_info_),
+          *(params_.sql_proxy_),
+          *(params_.schema_checker_->get_schema_guard()),
+          package_guard,
+          p_param_list));
     OZ (resolver.init(func_ast));
     OZ (resolver.resolve_root(&block_node, func_ast));
-
     for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
       OZ (stmt.add_global_dependency_table(func_ast.get_dependency_table().at(i)));
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_arg_count(); ++i) {
-      const pl::ObPLVar *symbol = func_ast.get_symbol_table().get_symbol(i);
+    const pl::ObPLSymbolTable &symbol_table = func_ast.get_symbol_table();
+    for (int64_t i = 0;
+        OB_SUCC(ret) && resolve_inout_param && i < func_ast.get_arg_count(); ++i) {
+      const pl::ObPLVar *symbol = symbol_table.get_symbol(i);
       CK (OB_NOT_NULL(symbol));
-      if (OB_SUCC(ret) && !symbol->is_readonly()) {
+      if (OB_FAIL(ret)) {
+      } else if (!symbol->is_readonly()) {
         OZ (stmt.get_out_idx().add_member(i));
       }
     }
@@ -112,20 +148,21 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(ParseNode &block_node, ObA
   return ret;
 }
 
-int ObAnonymousBlockResolver::prepare_question_mark_params()
+int ObAnonymousBlockResolver::add_param()
 {
   int ret = OB_SUCCESS;
   ObAnonymousBlockStmt *anonymous_stmt = NULL;
   if (OB_ISNULL(stmt_)
-      || OB_ISNULL(params_.param_list_)
-      || OB_ISNULL(anonymous_stmt = static_cast<ObAnonymousBlockStmt*>(stmt_))) {
+      || OB_ISNULL(params_.param_list_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parameter is NULL", KPC(stmt_), KPC(params_.param_list_), KPC(anonymous_stmt), K(ret));
+    LOG_WARN("parameter is NULL", K(stmt_), K(params_.param_list_), K(ret));
+  } else {
+    anonymous_stmt = static_cast<ObAnonymousBlockStmt*>(stmt_);
+  }
+  CK (OB_NOT_NULL(anonymous_stmt));
+  if (OB_FAIL(ret)) {
   } else if (params_.param_list_->count() > 0) {
-    if (params_.param_list_->count() != params_.query_ctx_->question_marks_count_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("params_list count not equal to question_marks_count", K(ret), KPC(params_.param_list_), K(params_.query_ctx_->question_marks_count_));
-    }
+    CK (params_.param_list_->count() == params_.query_ctx_->question_marks_count_);
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.param_list_->count(); ++i) {
       if (OB_FAIL(anonymous_stmt->add_param(params_.param_list_->at(i)))) {
         LOG_WARN("fail to push back param", K(i), K(ret));
@@ -140,6 +177,5 @@ int ObAnonymousBlockResolver::prepare_question_mark_params()
   }
   return ret;
 }
-
 }
 }
