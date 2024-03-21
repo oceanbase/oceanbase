@@ -9546,10 +9546,10 @@ int ObSPIService::spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t lin
   CK (OB_LIKELY(line > 0));
   CK (OB_LIKELY(level >= 0));
 
-  // TODO: GOTO/exception needs to check level
   if (OB_SUCC(ret)
         && OB_NOT_NULL(profiler = session->get_pl_profiler())
-        && OB_NOT_NULL(time_stack = curr_state->get_profiler_time_stack())) {
+        && OB_NOT_NULL(time_stack = curr_state->get_profiler_time_stack())
+        && time_stack->get_stack_count() > 0) {
     CK (OB_LIKELY(time_stack->get_last_level() != OB_INVALID_INDEX));
 
     while (OB_SUCC(ret) && time_stack->get_last_level() >= level) {
