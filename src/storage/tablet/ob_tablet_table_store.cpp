@@ -1074,19 +1074,14 @@ int ObTabletTableStore::get_ha_tables(ObTableStoreIterator &iter, bool &is_ready
 }
 
 int ObTabletTableStore::get_mini_minor_sstables(
-    const bool is_ha_data_status_complete,
     ObTableStoreIterator &iter) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("table store is not inited", K(ret));
-  } else if (is_ha_data_status_complete) {
-    if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
-      LOG_WARN("failed to get all minor tables", K(ret));
-    }
-  } else if (OB_FAIL(get_ha_mini_minor_sstables_(iter))) {
-    LOG_WARN("failed to get ha mini minor sstables", K(ret), K(minor_tables_));
+  } else if (OB_FAIL(get_mini_minor_sstables_(iter))) {
+    LOG_WARN("failed to get mini minor sstables", K(ret));
   }
   return ret;
 }
@@ -2377,21 +2372,6 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
   return ret;
 }
 
-int ObTabletTableStore::get_ha_mini_minor_sstables_(ObTableStoreIterator &iter) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
-    ObSSTable *table = minor_tables_[i];
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else if (OB_FAIL(iter.add_table(table))) {
-      LOG_WARN("failed to push table into minor sstables array", K(ret), KPC(table), K(minor_tables_));
-    }
-  }
-  return ret;
-}
-
 int ObTabletTableStore::build_ha_minor_tables_(
     common::ObArenaAllocator &allocator,
     const ObTablet &tablet,
@@ -2408,6 +2388,48 @@ int ObTabletTableStore::build_ha_minor_tables_(
     if (OB_FAIL(replace_ha_minor_sstables_(allocator, tablet, param, old_store, inc_base_snapshot_version))) {
       LOG_WARN("failed to replace ha minor tables", K(ret), K(param), K(old_store));
     }
+  }
+  return ret;
+}
+
+//TODO (muwei.ym) temporay fix in 430 for transfer
+int ObTabletTableStore::get_mini_minor_sstables_(ObTableStoreIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  SCN max_fill_tx_scn(SCN::min_scn());
+  SCN max_end_scn(SCN::min_scn());
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
+    ObSSTable *table = minor_tables_[i];
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
+    } else {
+      max_fill_tx_scn = SCN::max(max_fill_tx_scn, table->get_filled_tx_scn());
+      max_end_scn = SCN::max(max_end_scn, table->get_end_scn());
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (max_end_scn < max_fill_tx_scn) {
+      //do nothing
+      LOG_INFO("max end scn is smaller than max fill tx scn, cannot minor merge", K(max_end_scn), K(max_fill_tx_scn), K(minor_tables_));
+    } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
+      LOG_WARN("failed to get all minor tables", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::get_all_minor_sstables(
+    ObTableStoreIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table store is not inited", K(ret));
+  } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
+    LOG_WARN("failed to get all minor tables", K(ret));
   }
   return ret;
 }

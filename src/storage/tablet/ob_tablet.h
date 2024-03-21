@@ -493,6 +493,7 @@ public:
       ObTabletFullMemoryMdsData &mds_data);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
+  int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }

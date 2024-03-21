@@ -73,8 +73,7 @@ int ObGCUpperTransHelper::check_need_gc_or_update_upper_trans_version(
     ObSSTable *sstable = nullptr;
     int64_t new_upper_trans_version = INT64_MAX;
     ObTableStoreIterator iter(false/*is_reverse*/, true/*need_load_sstable*/);
-    if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(
-        true/*is_ha_data_status_complete*/, iter))) {
+    if (OB_FAIL(table_store_wrapper.get_member()->get_all_minor_sstables(iter))) {
       LOG_WARN("fail to get mini minor sstable", K(ret), K(table_store_wrapper));
     }
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next(table))) {
