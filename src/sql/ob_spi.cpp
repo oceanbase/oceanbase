@@ -989,9 +989,15 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
         }
-        param = *result;
-        param.set_is_ref_cursor_type(is_ref_cursor);
-        param.set_param_meta();
+        if (is_ref_cursor &&
+            param.get_ext() != 0 && result->is_null()) {
+          OZ (spi_add_ref_cursor_refcount(ctx, &param, -1));
+        }
+        if (OB_SUCC(ret)) {
+          param = *result;
+          param.set_is_ref_cursor_type(is_ref_cursor);
+          param.set_param_meta();
+        }
       } else if (!is_ref_cursor) {
         int64_t orig_udt_id = ctx->params_->at(result_idx).get_udt_id();
         ctx->params_->at(result_idx) = *result;
@@ -8337,7 +8343,10 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         } else {
           OZ (deep_copy_obj(*cast_ctx.allocator_v2_, calc_array->at(0), result));
         }
+        bool is_ref_cursor = false;
+        OX (is_ref_cursor = params->at(param_idx).is_ref_cursor_type());
         OX (params->at(param_idx) = result);
+        OX (params->at(param_idx).set_is_ref_cursor_type(is_ref_cursor));
         OX (params->at(param_idx).set_param_meta());
         OZ (spi_process_nocopy_params(ctx, param_idx));
         OX (accuracy.set_accuracy(result_types[0].accuracy_));

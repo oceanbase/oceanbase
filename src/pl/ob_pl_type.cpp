@@ -2113,6 +2113,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     OZ (prepare_spi_cursor(dest_cursor,
                             src_cursor->row_store_.get_tenant_id(),
                             src_cursor->row_store_.get_mem_limit(),
+                            false,
                             src_cursor->session_info_));
     CK (OB_NOT_NULL(dest_cursor));
     OZ (dest_cursor->row_desc_.assign(src_cursor->row_desc_));

@@ -430,7 +430,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             CK (OB_NOT_NULL(var = s.get_variable(idx)));
             if (OB_SUCC(ret)) {
               const ObPLDataType &into_type = var->get_type();
-              if (!into_type.is_collection_type() && !into_type.is_record_type() && !into_type.is_ref_cursor_type()) {
+              if (!into_type.is_collection_type() && !into_type.is_record_type()) {
                 result_idx = idx;
               }
             }
