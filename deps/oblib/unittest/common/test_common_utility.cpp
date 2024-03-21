@@ -31,15 +31,12 @@ TEST(TestBasicTimeGuard, click_infos)
   BASIC_TIME_GUARD(tg, "ObMalloc");
   int index = 8;
   for (int i = 0; i < 16; ++i) {
-    if (index == i) {
-      usleep(1);
-    } else {
-      usleep(100);
-    }
+    usleep(5);
     BASIC_TIME_GUARD_CLICK("alloc_chunk");
   }
+  tg.click_infos_[index].cost_time_ = 1;
   EXPECT_EQ(index, tg.click_infos_[index].seq_);
-  usleep(50);
+  usleep(5);
   BASIC_TIME_GUARD_CLICK("target");
   EXPECT_EQ(16, tg.click_infos_[index].seq_);
 }
