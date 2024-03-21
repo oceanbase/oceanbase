@@ -570,7 +570,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         } else {
           int64_t refresh_time = ObTimeUtility::current_time();
           if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-              ctx, tenant_id, res.schema_version_))) {
+              ctx, tenant_id, res.schema_version_, res.do_nothing_ /*skip_consensus*/))) {
             LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();
@@ -2182,7 +2182,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
           } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-                     ctx, tenant_id, res.task_id_))) {
+                     ctx, tenant_id, res.task_id_, false /*skip_consensus*/))) {
             LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();

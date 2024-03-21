@@ -496,7 +496,8 @@ int ObSchemaUtils::construct_inner_table_schemas(
 int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     const ObTimeoutCtx &ctx,
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const bool skip_consensus)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -526,7 +527,8 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
                 && consensus_schema_version >= schema_version) {
       break;
     } else if (refreshed_schema_version >= schema_version
-                && ObTimeUtility::current_time() - start_time >= consensus_timeout) {
+                && (skip_consensus
+                    || ObTimeUtility::current_time() - start_time >= consensus_timeout)) {
       break;
     } else {
       if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
