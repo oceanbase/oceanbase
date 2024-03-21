@@ -390,7 +390,8 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
                                                                *(schema_checker_->get_schema_guard()),
                                                                *(params_.sql_proxy_),
                                                                obj_access_idents,
-                                                               access_idxs))) {
+                                                               access_idxs,
+                                                               params_.package_guard_))) {
         // maybe dependent object not exist yet!
         LOG_WARN("failed to transform from iparam", K(ret));
         if (ObPLResolver::is_object_not_exist_error(ret)) {
@@ -464,7 +465,8 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
                                                       *(schema_checker_->get_schema_guard()),
                                                       *(params_.sql_proxy_),
                                                       obj_access_idents,
-                                                      access_idxs))) {
+                                                      access_idxs,
+                                                      params_.package_guard_))) {
         // maybe dependent object not exist yet!
         LOG_WARN("failed to transform from iparam", K(ret));
         if (ObPLResolver::is_object_not_exist_error(ret)) {

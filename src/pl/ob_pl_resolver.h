@@ -373,7 +373,8 @@ public:
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObMySQLProxy &sql_proxy,
                               ObIArray<ObObjAccessIdent> &obj_access_idents,
-                              ObIArray<ObObjAccessIdx>& access_idxs);
+                              ObIArray<ObObjAccessIdx>& access_idxs,
+                              ObPLPackageGuard *package_guard);
   static
   int resolve_cparam_list_simple(const ParseNode &node,
                                  ObRawExprFactory &expr_factory,
@@ -576,7 +577,7 @@ public:
   static int adjust_routine_param_type(ObPLDataType &type);
 
   int resolve_udf_info(
-    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func);
+    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func, const ObIRoutineInfo *routine_info = NULL);
 
   int construct_name(ObString &database_name, ObString &package_name, ObString &routine_name, ObSqlString &object_name);
   static int resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
@@ -601,6 +602,10 @@ public:
                           const ObString &udt_name,
                           ObPLCompileUnitAST &func,
                           ObPLDataType &pl_type);
+  int resolve_dblink_udf(sql::ObQualifiedName &q_name,
+                         ObRawExprFactory &expr_factory,
+                         ObRawExpr *&expr,
+                         ObPLCompileUnitAST &unit_ast);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);

@@ -238,7 +238,8 @@ int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
-                values_vector_.at(i)->has_flag(CNT_ONETIME)) &&
+                values_vector_.at(i)->has_flag(CNT_ONETIME) ||
+                values_vector_.at(i)->has_flag(CNT_PL_UDF)) &&
                OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
       LOG_WARN("failed to add expr to expr checker", K(ret));
     } else { /*do nothing*/ }

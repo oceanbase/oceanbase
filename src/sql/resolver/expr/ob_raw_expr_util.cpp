@@ -789,7 +789,9 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
                                             bool is_pkg_body_udf,
                                             bool is_pl_agg,
                                             int64_t type_id,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            uint64_t dblink_id,
+                                            const ObString &dblink_name)
 {
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
@@ -806,6 +808,8 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   OX (udf_raw_expr->set_pkg_body_udf(is_pkg_body_udf));
   OX (udf_raw_expr->set_type_id(type_id));
   OX (udf_raw_expr->set_is_aggregate_udf(is_pl_agg));
+  OX (udf_raw_expr->set_dblink_id(dblink_id));
+  OX (udf_raw_expr->set_dblink_name(dblink_name));
   return ret;
 }
 
@@ -814,7 +818,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             sql::ObSQLSessionInfo &session_info,
                                             common::ObIAllocator &allocator,
                                             common::ObMySQLProxy &sql_proxy,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            pl::ObPLDbLinkGuard &dblink_guard)
 {
   int ret = OB_SUCCESS;
 
@@ -855,7 +860,9 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   session_info,
                                                   allocator,
                                                   sql_proxy,
-                                                  ret_pl_type));
+                                                  ret_pl_type,
+                                                  NULL,
+                                                  &dblink_guard));
     } else {
       OX (ret_pl_type = ret_param->get_pl_data_type());
     }
@@ -901,7 +908,9 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                                   session_info,
                                                   allocator,
                                                   sql_proxy,
-                                                  param_pl_type));
+                                                  param_pl_type,
+                                                  NULL,
+                                                  &dblink_guard));
     } else {
       OX (param_pl_type = iparam->get_pl_data_type());
     }
@@ -1266,21 +1275,26 @@ int ObRawExprUtils::resolve_udf_info(common::ObIAllocator &allocator,
                                      ObUDFInfo &udf_info)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
-  pl::ObPLResolver pl_resolver(allocator,
-                               session_info,
-                               schema_guard,
-                               dummy_pkg_guard,
-                               *GCTX.sql_proxy_,
-                               expr_factory,
-                               NULL,
-                               false);
-  HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
-    ObSEArray<pl::ObObjAccessIdx, 1> access_idxs;
-    if (OB_FAIL(pl_resolver.init(func_ast))) {
-      LOG_WARN("pl resolver init failed", K(ret));
-    } else if (OB_FAIL(pl_resolver.resolve_udf_info(udf_info, access_idxs, func_ast))) {
-      LOG_WARN("failed to resolve udf info", K(ret));
+  pl::ObPLPackageGuard *package_guard = NULL;
+  CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
+  OZ (session_info.get_cur_exec_ctx()->get_package_guard(package_guard));
+  CK (OB_NOT_NULL(package_guard));
+  if (OB_SUCC(ret)) {
+    pl::ObPLResolver pl_resolver(allocator,
+                                session_info,
+                                schema_guard,
+                                *package_guard,
+                                *GCTX.sql_proxy_,
+                                expr_factory,
+                                NULL,
+                                false);
+    HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
+      ObSEArray<pl::ObObjAccessIdx, 1> access_idxs;
+      if (OB_FAIL(pl_resolver.init(func_ast))) {
+        LOG_WARN("pl resolver init failed", K(ret));
+      } else if (OB_FAIL(pl_resolver.resolve_udf_info(udf_info, access_idxs, func_ast))) {
+        LOG_WARN("failed to resolve udf info", K(ret));
+      }
     }
   }
   return ret;

@@ -203,7 +203,8 @@ public:
                           ObString &sql,
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                          const ObTimeZoneInfo *tz_info);
+                          const ObTimeZoneInfo *tz_info,
+                          ObObj *result);
   int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,

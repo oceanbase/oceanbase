@@ -309,6 +309,8 @@ int ObTransformDBlink::inner_reverse_link_table(ObDMLStmt *stmt, uint64_t target
     LOG_WARN("failed to reverse link table", K(ret));
   } else if (OB_FAIL(reverse_link_sequence(*stmt, target_dblink_id))) {
     LOG_WARN("failed to reverse link sequence", K(ret));
+  } else if (OB_FAIL(reverse_link_udf(*stmt, target_dblink_id))) {
+    LOG_WARN("failed to reverse link udf", K(ret), K(target_dblink_id));
   } else if (OB_FAIL(formalize_link_table(stmt))) {
     LOG_WARN("failed to formalize link table", K(ret));
   }
@@ -426,6 +428,32 @@ int ObTransformDBlink::reverse_link_sequence(ObDMLStmt &stmt, uint64_t target_db
   return ret;
 }
 
+int ObTransformDBlink::reverse_link_udf(ObDMLStmt &stmt, uint64_t target_dblink_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> udf_exprs;
+  if (OB_FAIL(stmt.get_udf_exprs(udf_exprs))) {
+    LOG_WARN("failed to get udf exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < udf_exprs.count(); ++i) {
+    ObRawExpr *expr = udf_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (expr->is_udf_expr()) {
+      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+      if (target_dblink_id != udf_expr->get_dblink_id()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("read local udf in dblink write not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "read local udf in dblink write not support");
+      } else {
+        udf_expr->set_dblink_id(OB_INVALID_ID);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformDBlink::reverse_link_table_for_temp_table(ObDMLStmt *root_stmt, uint64_t target_dblink_id)
 {
   int ret = OB_SUCCESS;
@@ -470,6 +498,8 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
       LOG_WARN("failed to reverse link table", K(ret));
     } else if (OB_FAIL(reverse_link_sequence(*stmt, is_reverse_link ? 0 : dblink_id))) {
       LOG_WARN("failed to reverse link sequence", K(ret));
+    } else if (OB_FAIL(reverse_link_udf(*stmt, is_reverse_link ? 0 : dblink_id))) {
+      LOG_WARN("failed to reverse link udf", K(ret), K(is_reverse_link), K(dblink_id));
     } else if (OB_FAIL(formalize_link_table(stmt))) {
       LOG_WARN("failed to formalize link table stmt", K(ret));
     } else if (lib::is_oracle_mode() &&
@@ -538,8 +568,7 @@ int ObTransformDBlink::check_link_expr_valid(ObRawExpr *expr, bool &is_valid)
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret));
-  } else if (expr->has_flag(CNT_PL_UDF) ||
-             expr->has_flag(CNT_SO_UDF) ||
+  } else if (expr->has_flag(CNT_SO_UDF) ||
              expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
     // special flag is invalid
   } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == expr->get_expr_type() ||
@@ -549,6 +578,24 @@ int ObTransformDBlink::check_link_expr_valid(ObRawExpr *expr, bool &is_valid)
     // special function is invalid
   } else if (expr->get_result_type().is_ext()) {
     // special type is invalid
+  } else if (expr->is_udf_expr()) {
+    ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
+    if (OB_ISNULL(udf_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("udf expr is NULL", K(ret));
+    } else if (OB_INVALID_ID == udf_expr->get_dblink_id()) {
+      // local udf need calc locally
+    } else {
+      ObRawExpr *param_expr = NULL;
+      bool has_ext_type = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !has_ext_type && i < udf_expr->get_param_count(); i++) {
+        param_expr = udf_expr->get_param_expr(i);
+        if (NULL != param_expr) {
+          has_ext_type = udf_expr->get_result_type().is_ext();
+        }
+      }
+      is_valid = !has_ext_type;
+    }
   } else {
     is_valid = true;
   }
@@ -639,6 +686,25 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
       } else if (T_FUN_SYS_SEQ_NEXTVAL == expr->get_expr_type()) {
         ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(expr);
         if (dblink_id != seq_expr->get_dblink_id()) {
+          all_table_from_one_dblink = false;
+        }
+      }
+    }
+  }
+  // check udf
+  if (OB_SUCC(ret) && all_table_from_one_dblink) {
+    ObSEArray<ObRawExpr*, 2> udf_exprs;
+    if (OB_FAIL(stmt->get_udf_exprs(udf_exprs))) {
+      LOG_WARN("failed to get udf exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && all_table_from_one_dblink && i < udf_exprs.count(); i++) {
+      ObRawExpr *expr = udf_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (expr->is_udf_expr()) {
+        ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+        if (dblink_id != udf_expr->get_dblink_id()) {
           all_table_from_one_dblink = false;
         }
       }

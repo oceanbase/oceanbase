@@ -1428,9 +1428,10 @@ int ObInnerSQLConnection::execute_proc(const uint64_t tenant_id,
                                       ObString &sql,
                                       const share::schema::ObRoutineInfo &routine_info,
                                       const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                                      const ObTimeZoneInfo *tz_info)
+                                      const ObTimeZoneInfo *tz_info,
+                                      ObObj *result)
 {
-  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info);
+  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info, result);
   int ret = OB_SUCCESS;
   return ret;
 }

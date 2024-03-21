@@ -4725,13 +4725,17 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
       // PL collection used in TABLE(), extract PL info from schema
       CK(OB_NOT_NULL(schema_checker_));
       if (OB_SUCC(ret)) {
-        ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
+        pl::ObPLPackageGuard *package_guard = NULL;
         const ObUserDefinedType *user_type = NULL;
         CK (OB_NOT_NULL(params_.schema_checker_));
+        CK (OB_NOT_NULL(session_info_));
+        CK (OB_NOT_NULL(session_info_->get_cur_exec_ctx()));
+        OZ (session_info_->get_cur_exec_ctx()->get_package_guard(package_guard));
+        CK (OB_NOT_NULL(package_guard));
         OZ (ObResolverUtils::get_user_type(
           params_.allocator_, params_.session_info_, params_.sql_proxy_,
           params_.schema_checker_->get_schema_guard(),
-          package_guard,
+          *package_guard,
           function_table_expr->get_udt_id(),
           user_type));
         if (OB_FAIL(ret)) {
@@ -4745,6 +4749,9 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
           LOG_WARN("ORA-22905: cannot access rows from a non-nested table item",
                    K(ret), K(function_table_expr->get_result_type()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "access rows from a non-nested table item");
+        } else if (is_dblink_type_id(user_type->get_user_type_id())) {
+          ret = OB_ERR_INVALID_DATATYPE;
+          LOG_WARN("user type can not be dblink type in table function", K(ret));
         } else if (OB_FAIL(add_udt_dependency(*user_type))) {
           LOG_WARN("failed to add udt dependency", K(ret), KPC(user_type));
         }
@@ -11371,6 +11378,10 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
                                               *expr,
                                               *stmt_->get_query_ctx()));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= is_valid_id(udf_expr->get_dblink_id()));
+      OX (stmt_->get_query_ctx()->has_dblink_udf_ |= is_valid_id(udf_expr->get_dblink_id()));
+      OX (stmt_->get_query_ctx()->set_has_dblink(
+              stmt_->get_query_ctx()->has_dblink() || is_valid_id(udf_expr->get_dblink_id())));
       OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
       if (OB_SUCC(ret) &&
           T_FIELD_LIST_SCOPE == current_scope_ &&
@@ -11448,6 +11459,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          columns,
                                                          real_exprs,
                                                          expr,
+                                                         params_.package_guard_,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/))) {

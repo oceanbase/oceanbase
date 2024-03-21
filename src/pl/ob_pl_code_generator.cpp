@@ -1504,7 +1504,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
         OZ (args.push_back(type_id));
         OZ (generator_.get_helper().get_int64(OB_INVALID_INDEX, var_idx));
         OZ (args.push_back(var_idx));
-        OZ (user_type->get_size(*s.get_namespace(), PL_TYPE_INIT_SIZE, init_size));
+        OZ (user_type->get_size(PL_TYPE_INIT_SIZE, init_size));
         OZ (generator_.get_helper().get_int32(init_size, init_value));
         OZ (args.push_back(init_value));
         OZ (generator_.get_helper().get_llvm_type(ObIntType, int_type));
@@ -1846,7 +1846,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
       CK (OB_NOT_NULL(user_type \
               = s.get_namespace()->get_type_table()->get_external_type(type_id))); \
     } \
-    OZ (user_type->get_size(*s.get_namespace(), PL_TYPE_ROW_SIZE, row_size)); \
+    OZ (user_type->get_size(PL_TYPE_ROW_SIZE, row_size)); \
     OZ (user_type->get_field_count(*s.get_namespace(), filed_cnt)); \
     if (OB_SUCC(ret) \
         && ObObjAccessIdx::is_package_variable(access_expr->get_access_idxs())) { \
@@ -2635,7 +2635,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               ObLLVMValue init_value;
               ObLLVMValue extend_value;
               OZ (generator_.get_helper().get_int8(pl_type->get_type(), var_type));
-              OZ (pl_type->get_size(*s.get_namespace(), PL_TYPE_INIT_SIZE, init_size));
+              OZ (pl_type->get_size(PL_TYPE_INIT_SIZE, init_size));
               OZ (generator_.get_helper().get_int32(init_size, init_value));
               OZ (generator_.get_helper().get_llvm_type(ObIntType, int_type));
               OZ (generator_.get_helper().create_ptr_to_int(ObString("cast_ptr_to_int64"),

@@ -9340,6 +9340,17 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
     OZ (resolve_columns(expr, columns, unit_ast));
   }
   OV (udf_info.count() <= 0, OB_ERR_UNEXPECTED, K(udf_info));
+  if (OB_SUCC(ret)
+      && NULL != expr
+      && (T_FUN_SYS_PL_SEQ_NEXT_VALUE == expr->get_expr_type()
+          || T_FUN_SYS_SEQ_NEXTVAL == expr->get_expr_type())) {
+    ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr *>(expr);
+    if (OB_INVALID_ID != seq_expr->get_dblink_id()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dblink sequence not support in PL", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink sequence in PL");
+    }
+  }
   if (OB_SUCC(ret) && op_exprs.count() > 0) {
     if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(expr_factory_,
                                         &resolve_ctx_.session_info_, op_exprs))) {
@@ -9526,7 +9537,7 @@ int ObPLResolver::formalize_expr(ObRawExpr &expr,
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(expr.get_udt_id(), user_type, NULL));
     CK (OB_NOT_NULL(user_type));
-    OZ (user_type->get_size(ns, PL_TYPE_INIT_SIZE, size));
+    OZ (user_type->get_size(PL_TYPE_INIT_SIZE, size));
     OX (const_cast<ObExprResType&>(expr.get_result_type()).set_extend_size(size));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
@@ -10196,11 +10207,12 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
   } else if (OB_ISNULL(params.secondary_namespace_)) {
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, *(params.allocator_)) {
       ObPLStmtBlock *null_block = NULL;
-      ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
+      ObPLPackageGuard dummy_pkg_guard(params.session_info_->get_effective_tenant_id());
+      ObPLPackageGuard *package_guard = (NULL != params.package_guard_ ? params.package_guard_ : &dummy_pkg_guard);
       ObPLResolver resolver(*(params.allocator_),
                             *(params.session_info_),
                             *(params.schema_checker_->get_schema_guard()),
-                            package_guard,
+                            *package_guard,
                             *(params.sql_proxy_),
                             *(params.expr_factory_),
                             NULL,/*parent ns*/
@@ -10208,7 +10220,9 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                             false, /*check mode*/
                             false, /*sql mode*/
                             params.param_list_);
-      OZ (package_guard.init());
+      if (NULL == params.package_guard_) {
+        OZ (package_guard->init());
+      }
       OZ (resolver.init(func_ast));
       // build first namespace
       OZ (resolver.make_block(func_ast, NULL, null_block));
@@ -10753,24 +10767,30 @@ int ObPLResolver::resolve_obj_access_node(const ParseNode &node,
                                           ObSchemaGetterGuard &schema_guard,
                                           ObMySQLProxy &sql_proxy,
                                           ObIArray<ObObjAccessIdent> &obj_access_idents,
-                                          ObIArray<ObObjAccessIdx>& access_idxs)
+                                          ObIArray<ObObjAccessIdx>& access_idxs,
+                                          ObPLPackageGuard *package_guard)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLPackageGuard package_guard(session_info.get_effective_tenant_id());
-  ObArenaAllocator allocator(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
-                             OB_MALLOC_NORMAL_BLOCK_SIZE,
-                             MTL_ID());
-  // fake resolve_ctx, we only use session_info, schema_guard
-  ObPLResolveCtx resolve_ctx(
-    allocator, session_info, schema_guard, package_guard, *(GCTX.sql_proxy_), false);
-  ObPLExternalNS external_ns(resolve_ctx, NULL);
-  CK (T_SP_OBJ_ACCESS_REF == node.type_);
-  OZ (package_guard.init());
-  OZ (ObPLResolver::resolve_obj_access_idents(node, expr_factory, obj_access_idents, session_info));
-  for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
-    OZ (ObPLResolver::resolve_access_ident(obj_access_idents.at(i),
-                                           external_ns,
-                                           access_idxs));
+  pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
+  if (NULL == package_guard) {
+    package_guard = &dummy_pkg_guard;
+    OZ (package_guard->init());
+  }
+  if (OB_SUCC(ret)) {
+    ObArenaAllocator allocator(ObModIds::OB_MODULE_PAGE_ALLOCATOR,
+                              OB_MALLOC_NORMAL_BLOCK_SIZE,
+                              MTL_ID());
+    // fake resolve_ctx, we only use session_info, schema_guard
+    ObPLResolveCtx resolve_ctx(
+      allocator, session_info, schema_guard, *package_guard, *(GCTX.sql_proxy_), false);
+    ObPLExternalNS external_ns(resolve_ctx, NULL);
+    CK (T_SP_OBJ_ACCESS_REF == node.type_);
+    OZ (ObPLResolver::resolve_obj_access_idents(node, expr_factory, obj_access_idents, session_info));
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
+      OZ (ObPLResolver::resolve_access_ident(obj_access_idents.at(i),
+                                            external_ns,
+                                            access_idxs));
+    }
   }
   if (OB_FAIL(ret)) {
     record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info);
@@ -11189,6 +11209,95 @@ int ObPLResolver::resolve_dblink_type(const ObString &dblink_name,
   return ret;
 }
 
+int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
+                                     ObRawExprFactory &expr_factory,
+                                     ObRawExpr *&expr,
+                                     ObPLCompileUnitAST &unit_ast)
+{
+  int ret = OB_SUCCESS;
+  ObString db_name, pkg_name, routine_name;
+  const ObIRoutineInfo *routine_info = NULL;
+  ObSEArray<ObRawExpr*, 4> expr_params;
+  int64_t cnt = q_name.access_idents_.count();
+  OV (OB_LIKELY(cnt >= 1 && cnt <= 3), OB_ERR_UNEXPECTED, K(cnt), K(q_name));
+  if (OB_SUCC(ret)) {
+    routine_name = q_name.access_idents_.at(cnt - 1).access_name_;
+    if (cnt >= 2) {
+      pkg_name = q_name.access_idents_.at(cnt - 2).access_name_;
+    }
+    if (3 == cnt) {
+      db_name = q_name.access_idents_.at(cnt - 3).access_name_;
+    }
+  }
+  OZ (ObRawExprUtils::rebuild_expr_params(q_name.access_idents_.at(cnt - 1).udf_info_, &expr_factory, expr_params));
+  OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx_,
+                                           q_name.dblink_name_,
+                                           db_name,
+                                           pkg_name,
+                                           routine_name,
+                                           expr_params,
+                                           routine_info));
+  CK (OB_NOT_NULL(routine_info));
+  if (OB_SUCC(ret)) {
+    ObUDFInfo &udf_info = q_name.access_idents_.at(cnt - 1).udf_info_;
+    const ObRoutineInfo *sch_routine_info = static_cast<const ObRoutineInfo *>(routine_info);
+    bool is_pkg_func = (OB_INVALID_ID != sch_routine_info->get_package_id());
+    uint64_t routine_id = is_pkg_func ? sch_routine_info->get_subprogram_id() : sch_routine_info->get_routine_id();
+    ObSchemaChecker schema_checker;
+    ObString dblink_name;
+    if (sch_routine_info->is_procedure()) {
+      ObSqlString object_name;
+      construct_name(db_name, pkg_name, routine_name, object_name);
+      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+      LOG_WARN("routine is a procedure", K(ret), K(object_name.string()));
+      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, object_name.string().length(), object_name.string().ptr());
+    } else if (is_valid_id(sch_routine_info->get_dblink_id())) {
+      const ObDbLinkSchema *dblink_schema = NULL;
+      OZ (resolve_ctx_.schema_guard_.get_dblink_schema(resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                       sch_routine_info->get_dblink_id(),
+                                                       dblink_schema));
+      CK (OB_NOT_NULL(dblink_schema));
+      OX (dblink_name = dblink_schema->get_dblink_name());
+    }
+    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
+    OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
+                                                sch_routine_info->is_dblink_routine() ?
+                                                    sch_routine_info->get_dblink_pkg_name() : pkg_name,
+                                                routine_id,
+                                                sch_routine_info->get_package_id(),
+                                                ObArray<int64_t>(),
+                                                common::OB_INVALID_VERSION,
+                                                common::OB_INVALID_VERSION,
+                                                false,
+                                                true,
+                                                false,
+                                                false,
+                                                common::OB_INVALID_ID,
+                                                udf_info,
+                                                sch_routine_info->get_dblink_id(),
+                                                dblink_name));
+    OZ (ObRawExprUtils::resolve_udf_param_types(sch_routine_info,
+                                                resolve_ctx_.schema_guard_,
+                                                resolve_ctx_.session_info_,
+                                                resolve_ctx_.allocator_,
+                                                resolve_ctx_.sql_proxy_,
+                                                udf_info,
+                                                resolve_ctx_.package_guard_.dblink_guard_), udf_info);
+    OZ (ObRawExprUtils::resolve_udf_param_exprs(sch_routine_info,
+                                                current_block_->get_namespace(),
+                                                schema_checker,
+                                                resolve_ctx_.session_info_,
+                                                resolve_ctx_.allocator_,
+                                                resolve_ctx_.is_prepare_protocol_,
+                                                expr_factory,
+                                                resolve_ctx_.sql_proxy_,
+                                                resolve_ctx_.extern_param_info_,
+                                                udf_info), udf_info);
+  // 需要做类似 ObPLResolver::resolve_udf_info 最后的 params_type 设置吗？
+  }
+  OX (unit_ast.set_can_cached(false));
+  return ret;
+}
 
 int ObPLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
                                                ObIArray<ObQualifiedName> &columns,
@@ -11416,7 +11525,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   }
   OZ (expr_factory_.create_raw_expr(T_FUN_PL_OBJECT_CONSTRUCT, object_expr));
   CK (OB_NOT_NULL(object_expr));
-  OZ (user_type->get_size(current_block_->get_namespace(), pl::PL_TYPE_ROW_SIZE, rowsize));
+  OZ (user_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize));
   OX (object_expr->set_rowsize(rowsize));
   OX (res_type.set_type(ObExtendType));
   OX (res_type.set_extend_type(PL_RECORD_TYPE));
@@ -11647,11 +11756,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   int ret = OB_SUCCESS;
 
   SET_LOG_CHECK_MODE();
-  if (!q_name.dblink_name_.empty()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dblink sequence and udf not support in PL", K(ret), K(q_name));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink sequence and udf in PL");
-  }
+
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
   if (OB_FAIL(ret)) {
   } else if (q_name.is_sys_func()) {
@@ -11689,18 +11794,22 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
     } else {
       if (OB_SUCC(ret)) {
         if (q_name.is_pl_udf()) {
-          ObSEArray<ObObjAccessIdx, 4> access_idxs;
-          OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast));
-          if (OB_FAIL(ret)) {
-          } else if (access_idxs.at(access_idxs.count() - 1).is_udf_type()) {
-            OX (expr = reinterpret_cast<ObRawExpr*>(access_idxs.at(access_idxs.count() - 1).get_sysfunc_));
+          if (q_name.dblink_name_.empty()) {
+            ObSEArray<ObObjAccessIdx, 4> access_idxs;
+            OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast));
+            if (OB_FAIL(ret)) {
+            } else if (access_idxs.at(access_idxs.count() - 1).is_udf_type()) {
+              OX (expr = reinterpret_cast<ObRawExpr*>(access_idxs.at(access_idxs.count() - 1).get_sysfunc_));
+            } else {
+              OZ (make_var_from_access(access_idxs,
+                                      expr_factory_,
+                                      &(resolve_ctx_.session_info_),
+                                      &(resolve_ctx_.schema_guard_),
+                                      current_block_->get_namespace(),
+                                      expr));
+            }
           } else {
-            OZ (make_var_from_access(access_idxs,
-                                     expr_factory_,
-                                     &(resolve_ctx_.session_info_),
-                                     &(resolve_ctx_.schema_guard_),
-                                     current_block_->get_namespace(),
-                                     expr));
+            OZ (resolve_dblink_udf(q_name, expr_factory_, expr, unit_ast));
           }
           CK (OB_NOT_NULL(expr));
         } else { // 如果是udf return access，需要当做var解析
@@ -11876,16 +11985,27 @@ int ObPLResolver::add_udt_self_argument(const ObIRoutineInfo *routine_info,
 #endif
 
 int ObPLResolver::resolve_udf_info(
-  ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func)
+  ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func,
+  const ObIRoutineInfo *routine_info)
 {
   int ret = OB_SUCCESS;
   ObString db_name = udf_info.udf_database_;
   ObString package_name = udf_info.udf_package_;
   ObString udf_name = udf_info.udf_name_;
   ObSchemaChecker schema_checker;
-  const ObIRoutineInfo *routine_info = NULL;
   ObProcType routine_type = STANDALONE_FUNCTION;
   ObSEArray<ObRawExpr*, 4> expr_params;
+  ObString dblink_name;
+
+#define GET_DBLINK_NAME(real_routine_info)  \
+  if (OB_SUCC(ret) && is_valid_id(real_routine_info->get_dblink_id())) {  \
+    const ObDbLinkSchema *dblink_schema = NULL; \
+    OZ (resolve_ctx_.schema_guard_.get_dblink_schema(resolve_ctx_.session_info_.get_effective_tenant_id(),  \
+                                                     real_routine_info->get_dblink_id(),  \
+                                                     dblink_schema));  \
+    CK (OB_NOT_NULL(dblink_schema));  \
+    OX (dblink_name = dblink_schema->get_dblink_name());  \
+  }
 
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   CK (OB_NOT_NULL(current_block_));
@@ -11895,13 +12015,15 @@ int ObPLResolver::resolve_udf_info(
   {
     ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_, resolve_ctx_.session_info_);;
     OZ (self.mock());
-    OZ (current_block_->get_namespace().resolve_routine(resolve_ctx_,
-                                                        udf_info.udf_database_,
-                                                        udf_info.udf_package_,
-                                                        udf_info.udf_name_,
-                                                        expr_params,
-                                                        routine_type,
-                                                        routine_info), K(udf_info));
+    if (OB_ISNULL(routine_info) || (OB_NOT_NULL(routine_info) && !is_valid_id(routine_info->get_dblink_id()))) {
+      OZ (current_block_->get_namespace().resolve_routine(resolve_ctx_,
+                                                          udf_info.udf_database_,
+                                                          udf_info.udf_package_,
+                                                          udf_info.udf_name_,
+                                                          expr_params,
+                                                          routine_type,
+                                                          routine_info), K(udf_info));
+    }
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
@@ -12019,6 +12141,7 @@ int ObPLResolver::resolve_udf_info(
                                                           package_routine_info->get_pkg_id(),
                                                           cur_pkg_version));
       }
+      GET_DBLINK_NAME(package_routine_info);
       OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                   package_name,
                                                   package_routine_info->get_id(),
@@ -12031,13 +12154,16 @@ int ObPLResolver::resolve_udf_info(
                                                   is_package_body_udf,
                                                   false,
                                                   common::OB_INVALID_ID,
-                                                  udf_info));
+                                                  udf_info,
+                                                  package_routine_info->get_dblink_id(),
+                                                  dblink_name));
       OZ (ObRawExprUtils::resolve_udf_param_types(package_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
                                                   resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
-                                                  udf_info), udf_info);
+                                                  udf_info,
+                                                  resolve_ctx_.package_guard_.dblink_guard_), udf_info);
       OZ (ObRawExprUtils::resolve_udf_param_exprs(package_routine_info,
                                                   current_block_->get_namespace(),
                                                   schema_checker,
@@ -12067,7 +12193,9 @@ int ObPLResolver::resolve_udf_info(
 
       OX (udf_info.is_udt_udf_ = schema_routine_info->is_udt_routine());
 
-      if (OB_SUCC(ret) && routine_id == schema_routine_info->get_subprogram_id()) {
+      if (OB_SUCC(ret)
+          && routine_id == schema_routine_info->get_subprogram_id()
+          && OB_INVALID_ID == schema_routine_info->get_dblink_id()) {
         if (!udf_info.is_udt_udf_) {
           OZ (resolve_ctx_.schema_guard_.get_package_info(
               schema_routine_info->get_tenant_id(), schema_routine_info->get_package_id(), package_info));
@@ -12094,8 +12222,10 @@ int ObPLResolver::resolve_udf_info(
         }
 #endif
       }
+      GET_DBLINK_NAME(schema_routine_info);
       OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
-                                                  package_name,
+                                                  schema_routine_info->is_dblink_routine() ?
+                                                    schema_routine_info->get_dblink_pkg_name() : package_name,
                                                   routine_id,
                                                   schema_routine_info->get_package_id(),
                                                   ObArray<int64_t>(),
@@ -12110,13 +12240,16 @@ int ObPLResolver::resolve_udf_info(
                                                   false, /*is_pkg_body_udf*/
                                                   schema_routine_info->is_aggregate(),
                                                   schema_routine_info->get_type_id(),
-                                                  udf_info));
+                                                  udf_info,
+                                                  schema_routine_info->get_dblink_id(),
+                                                  dblink_name));
       OZ (ObRawExprUtils::resolve_udf_param_types(schema_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
                                                   resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
-                                                  udf_info), udf_info);
+                                                  udf_info,
+                                                  resolve_ctx_.package_guard_.dblink_guard_), udf_info);
       OZ (ObRawExprUtils::resolve_udf_param_exprs(schema_routine_info,
                                                   current_block_->get_namespace(),
                                                   schema_checker,
@@ -12145,13 +12278,16 @@ int ObPLResolver::resolve_udf_info(
                                                     == current_block_->get_namespace().get_block_type(),
                                                   false,
                                                   common::OB_INVALID_ID,
-                                                  udf_info));
+                                                  udf_info,
+                                                  common::OB_INVALID_ID,
+                                                  ""));
       OZ (ObRawExprUtils::resolve_udf_param_types(sub_routine_info,
                                                   resolve_ctx_.schema_guard_,
                                                   resolve_ctx_.session_info_,
                                                   resolve_ctx_.allocator_,
                                                   resolve_ctx_.sql_proxy_,
-                                                  udf_info), udf_info);
+                                                  udf_info,
+                                                  resolve_ctx_.package_guard_.dblink_guard_), udf_info);
       OZ (ObRawExprUtils::resolve_udf_param_exprs(sub_routine_info,
                                                   current_block_->get_namespace(),
                                                   schema_checker,
@@ -13681,6 +13817,16 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
                                 routine_name, expr_params, routine_info));
         OX (func.set_can_cached(false));
       }
+      if (OB_SUCC(ret)
+          && NULL != routine_info
+          && NULL != routine_info->get_ret_info()
+          && OB_INVALID_ID != routine_info->get_dblink_id()) {
+        CK (access_ident.is_pl_udf());
+        CK (OB_NOT_NULL(access_ident.udf_info_.ref_expr_));
+        if (OB_SUCC(ret)) {
+          access_ident.udf_info_.ref_expr_->set_func_name(routine_info->get_routine_name());
+        }
+      }
     }
 
     if (OB_FAIL(ret)
@@ -13792,7 +13938,9 @@ int ObPLResolver::resolve_function(ObObjAccessIdent &access_ident,
                                                 resolve_ctx_.session_info_,
                                                 resolve_ctx_.allocator_,
                                                 resolve_ctx_.sql_proxy_,
-                                                return_type));
+                                                return_type,
+                                                NULL,
+                                                &resolve_ctx_.package_guard_.dblink_guard_));
   } else {
     OX (return_type = routine_info->get_ret_info()->get_pl_data_type());
   }
@@ -13803,7 +13951,7 @@ int ObPLResolver::resolve_function(ObObjAccessIdent &access_ident,
                                   access_ident.udf_info_.udf_database_,
                                   access_ident.udf_info_.udf_package_,
                                   access_ident.udf_info_.udf_name_));
-    OZ (resolve_udf_info(access_ident.udf_info_, access_idxs, func), K(access_ident));
+    OZ (resolve_udf_info(access_ident.udf_info_, access_idxs, func, routine_info), K(access_ident));
     if (OB_SUCC(ret)
         && access_ident.udf_info_.is_new_keyword_used_
         && !access_ident.udf_info_.is_udf_udt_cons()) {
@@ -15149,15 +15297,17 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
       LOG_WARN("init schemachecker failed.");
     } else {
       // check if sequence is created. will also check synonym
+      uint64_t dblink_id = OB_INVALID_ID;
       if (OB_FAIL(ob_sequence_ns_checker_.check_sequence_namespace(q_name,
                                                                   syn_checker,
                                                                   &resolve_ctx_.session_info_,
                                                                   &sc,
-                                                                  seq_id))) {
+                                                                  seq_id,
+                                                                  &dblink_id))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
       } else if(OB_FAIL(build_seq_value_expr(real_ref_expr, q_name, seq_id))) {
         LOG_WARN("failed to resolve seq.", K(ret));
-      } else {
+      } else if (OB_INVALID_ID == dblink_id) {
         int64_t schema_version = OB_INVALID_VERSION;
         ObSchemaObjVersion obj_version;
         const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
@@ -15170,6 +15320,11 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
         OX (obj_version.object_type_ = DEPENDENCY_SEQUENCE);
         OX (obj_version.version_ = schema_version);
         OZ (unit_ast.add_dependency_object(obj_version));
+      } else {
+        ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(real_ref_expr);
+        seq_expr->set_dblink_name(q_name.dblink_name_);
+        seq_expr->set_dblink_id(dblink_id);
+        unit_ast.set_can_cached(false);
       }
       if (OB_SUCC(ret)) {
         unit_ast.set_has_sequence();

@@ -331,6 +331,9 @@ public:
   inline bool has_link_table() const { return has_link_table_; }
   inline void set_has_link_sfd(bool value) { has_link_sfd_ = value; }
   inline bool has_link_sfd() const { return has_link_sfd_; }
+
+  inline void set_has_link_udf(bool value) { has_link_udf_ = value; }
+  inline bool has_link_udf() const { return has_link_udf_; }
   void set_batch_size(const int64_t v) { batch_size_ = v; }
   int64_t get_batch_size() const { return batch_size_; }
   bool is_vectorized() const { return batch_size_ > 0; }
@@ -656,6 +659,7 @@ public:
   bool use_temp_table_;
   bool has_link_table_;
   bool has_link_sfd_;
+  bool has_link_udf_;
   bool need_serial_exec_;//mark if need serial execute?
   bool temp_sql_can_prepare_;
   bool is_need_trans_;

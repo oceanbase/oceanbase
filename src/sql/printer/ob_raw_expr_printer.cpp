@@ -3245,7 +3245,13 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUN_UDF: {
+        ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+        CK (OB_NOT_NULL(udf_expr));
         PRINT_IDENT_WITH_QUOT(func_name);
+        if (OB_SUCC(ret) && udf_expr->is_dblink_sys_func()) {
+          CK (!udf_expr->get_dblink_name().empty());
+          DATA_PRINTF("@%.*s", LEN_AND_PTR(udf_expr->get_dblink_name()));
+        }
         OZ(inner_print_fun_params(*expr));
         break;
       }
@@ -3372,6 +3378,10 @@ do { \
       DATA_PRINTF(".");
     }
     PRINT_IDENT_WITH_QUOT(expr->get_func_name());
+    if (expr->is_dblink_sys_func()) {
+      CK (!expr->get_dblink_name().empty());
+      DATA_PRINTF("@%.*s", LEN_AND_PTR(expr->get_dblink_name()));
+    }
     DATA_PRINTF("(");
 
     ObIArray<ObExprResType> &params_type = expr->get_params_type();

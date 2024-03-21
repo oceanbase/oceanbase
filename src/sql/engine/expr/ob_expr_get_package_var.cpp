@@ -60,7 +60,9 @@ int ObExprGetPackageVar::calc(ObObj &result,
   } else if (OB_ISNULL(pl_engine = session_info->get_pl_engine())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pl engine is null", K(ret));
-  } else if (OB_ISNULL(package_guard = exec_ctx->get_package_guard())) {
+  } else if (OB_FAIL(exec_ctx->get_package_guard(package_guard))) {
+    LOG_WARN("get package guard failed", K(ret));
+  } else if (OB_ISNULL(package_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("package guard is null", K(ret));
   } else if (OB_NOT_NULL(exec_ctx->get_sql_ctx())

@@ -343,7 +343,9 @@ public:
   inline pl::ObPLCtx *get_pl_ctx() { return pl_ctx_; }
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   pl::ObPLPackageGuard* get_package_guard();
-
+  int get_package_guard(pl::ObPLPackageGuard *&package_guard);
+  inline pl::ObPLPackageGuard* get_original_package_guard() { return package_guard_; }
+  inline void set_package_guard(pl::ObPLPackageGuard* v) { package_guard_ = v; }
   int init_pl_ctx();
 
   ObPartIdRowMapManager& get_part_row_manager() { return part_row_map_manager_; }

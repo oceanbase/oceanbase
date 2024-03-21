@@ -826,7 +826,8 @@ public:
       int8_t has_pl_udf_ : 1; // used to mark sql contain pl udf
       int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
       int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
-      int8_t reserved_:5;
+      int8_t has_dblink_udf_ : 1; // udf is dblink udf
+      int8_t reserved_:4;
     };
   };
   bool has_dblink_;

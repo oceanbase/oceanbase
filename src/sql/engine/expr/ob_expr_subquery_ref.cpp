@@ -330,8 +330,7 @@ int ObExprSubQueryRef::expr_eval(
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
     CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
-    OZ (pl_type.get_size(pl::ObPLUDTNS(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_),
-                         pl::PL_TYPE_INIT_SIZE, param_size));
+    OZ (pl_type.get_size(pl::PL_TYPE_INIT_SIZE, param_size));
     CK (OB_NOT_NULL(data = static_cast<char *>(
         ctx.exec_ctx_.get_allocator().alloc(param_size))));
     CK (OB_NOT_NULL(obj = static_cast<ObObj *>(

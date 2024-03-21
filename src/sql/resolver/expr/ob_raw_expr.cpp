@@ -4203,8 +4203,22 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
       LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s(", get_func_name().length(), get_func_name().ptr()))) {
+    } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      if (is_valid_id(get_dblink_id())) {
+        if (get_dblink_name().empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dblink name is empty", K(ret), KPC(this));
+        } else if (OB_FAIL(BUF_PRINTF("@%.*s", get_dblink_name().length(), get_dblink_name().ptr()))) {
+          LOG_WARN("failed to print dblink name", K(ret), K(get_dblink_name()));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (T_FUN_COLUMN_CONV == get_expr_type()) {
       if (OB_FAIL(get_column_conv_name(buf, buf_len, pos, type))) {
         LOG_WARN("fail to get_column_conv_name", K(ret));

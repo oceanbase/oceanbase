@@ -762,6 +762,9 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         if (NULL != out_ctx) {
           exec_ctx.set_sql_ctx(out_ctx->get_sql_ctx());
+          if (NULL != out_ctx->get_original_package_guard()) {
+            exec_ctx.set_package_guard(out_ctx->get_original_package_guard());
+          }
         }
         void *frame_buf = NULL;
         ObPreCalcExprFrameInfo *pre_calc_frame = NULL;
@@ -800,6 +803,10 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
             // do nothing
           }
         }
+      }
+      if (NULL != out_ctx &&  NULL != out_ctx->get_original_package_guard()) {
+        // avoid out_ctx.package_guard_ be freed
+        exec_ctx.set_package_guard(NULL);
       }
     }
   }

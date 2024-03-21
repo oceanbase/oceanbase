@@ -84,6 +84,8 @@ private:
 
   int reverse_link_sequence(ObDMLStmt &stmt, uint64_t target_dblink_id);
 
+  int reverse_link_udf(ObDMLStmt &stmt, uint64_t target_dblink_id);
+
   int reverse_link_table_for_temp_table(ObDMLStmt *root_stmt, uint64_t target_dblink_id);
 
   int pack_link_table(ObDMLStmt *stmt, bool &trans_happened);

@@ -1323,7 +1323,6 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
     resolve_ctx.params_.secondary_namespace_ = params.secondary_namespace_;
     resolve_ctx.params_.param_list_ = params.param_list_;
     resolve_ctx.params_.is_execute_call_stmt_ = params.is_execute_call_stmt_;
-    OZ (package_guard.init());
     if (dblink_name.empty()) {
       OZ (get_routine(resolve_ctx,
                       tenant_id,
@@ -3012,6 +3011,7 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
                                                            columns,
                                                            real_exprs,
                                                            real_ref_expr,
+                                                           resolve_params.package_guard_,
                                                            resolve_params.is_prepare_protocol_,
                                                            false, /*is_check_mode*/
                                                            true /*is_sql_scope*/))) {
@@ -6979,52 +6979,59 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              ObIArray<ObQualifiedName> &columns,
                                              ObIArray<ObRawExpr*> &real_exprs,
                                              ObRawExpr *&expr,
+                                             pl::ObPLPackageGuard *package_guard,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
                                              bool is_sql_scope)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLPackageGuard dummy_pkg_guard(session_info.get_effective_tenant_id());
-  pl::ObPLResolver pl_resolver(allocator,
-                               session_info,
-                               schema_guard,
-                               NULL == ns ? dummy_pkg_guard : ns->get_external_ns()->get_resolve_ctx().package_guard_,
-                               NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
-                               expr_factory,
-                               NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
-                               is_prepare_protocol,
-                               is_check_mode,
-                               is_sql_scope,
-                               NULL/*param store*/,
-                               extern_param_info);
-  HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
-    if (OB_FAIL(pl_resolver.init(func_ast))) {
-      LOG_WARN("pl resolver init failed", K(ret));
-    } else if (NULL != ns) {
-      pl_resolver.get_current_namespace() = *ns;
-    } else { /*do nothing*/ }
+  if (NULL == package_guard) {
+    CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
+    OZ (session_info.get_cur_exec_ctx()->get_package_guard(package_guard));
+    CK (OB_NOT_NULL(package_guard));
+  }
+  if (OB_SUCC(ret)) {
+    pl::ObPLResolver pl_resolver(allocator,
+                                session_info,
+                                schema_guard,
+                                *package_guard,
+                                NULL == sql_proxy ? (NULL == ns ? *GCTX.sql_proxy_ : ns->get_external_ns()->get_resolve_ctx().sql_proxy_) : *sql_proxy,
+                                expr_factory,
+                                NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
+                                is_prepare_protocol,
+                                is_check_mode,
+                                is_sql_scope,
+                                NULL/*param store*/,
+                                extern_param_info);
+    HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
+      if (OB_FAIL(pl_resolver.init(func_ast))) {
+        LOG_WARN("pl resolver init failed", K(ret));
+      } else if (NULL != ns) {
+        pl_resolver.get_current_namespace() = *ns;
+      } else { /*do nothing*/ }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {
-        if (is_check_mode) {
-          LOG_INFO("failed to resolve var", K(q_name), K(ret));
-        } else {
-          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
-        }
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Invalid expr", K(expr), K(ret));
-      } else if (!expr->is_const_raw_expr()
-                  && !expr->is_obj_access_expr()
-                  && !expr->is_sys_func_expr()
-                  && !expr->is_udf_expr()
-                  && T_FUN_PL_GET_CURSOR_ATTR != expr->get_expr_type()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr type is invalid", K(expr->get_expr_type()));
-      } else if (OB_NOT_NULL(ns) && OB_NOT_NULL(ns->get_external_ns())) {
-        ObPLDependencyTable &src_dep_tbl = func_ast.get_dependency_table();
-        for (int64_t i = 0; OB_SUCC(ret) && i < src_dep_tbl.count(); ++i) {
-          OZ (ns->get_external_ns()->add_dependency_object(src_dep_tbl.at(i)));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {
+          if (is_check_mode) {
+            LOG_INFO("failed to resolve var", K(q_name), K(ret));
+          } else {
+            LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
+          }
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Invalid expr", K(expr), K(ret));
+        } else if (!expr->is_const_raw_expr()
+                    && !expr->is_obj_access_expr()
+                    && !expr->is_sys_func_expr()
+                    && !expr->is_udf_expr()
+                    && T_FUN_PL_GET_CURSOR_ATTR != expr->get_expr_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr type is invalid", K(expr->get_expr_type()));
+        } else if (OB_NOT_NULL(ns) && OB_NOT_NULL(ns->get_external_ns())) {
+          ObPLDependencyTable &src_dep_tbl = func_ast.get_dependency_table();
+          for (int64_t i = 0; OB_SUCC(ret) && i < src_dep_tbl.count(); ++i) {
+            OZ (ns->get_external_ns()->add_dependency_object(src_dep_tbl.at(i)));
+          }
         }
       }
     }
