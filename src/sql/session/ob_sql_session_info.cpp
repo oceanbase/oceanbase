@@ -510,6 +510,18 @@ int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
   return ret;
 }
 
+int ObSQLSessionInfo::is_preserve_order_for_pagination_enabled(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_preserve_order_for_pagination;
+  }
+  return ret;
+}
+
 bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
 {
   bool bret = false;

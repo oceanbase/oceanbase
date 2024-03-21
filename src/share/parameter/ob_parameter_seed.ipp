@@ -1863,6 +1863,10 @@ DEF_BOOL(enable_rpc_authentication_bypass, OB_CLUSTER_PARAMETER, "True",
 DEF_INT(_checkpoint_diagnose_preservation_count, OB_TENANT_PARAMETER, "100", "[0,800]",
         "the count of checkpoint diagnose info preservation",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
+        "enable preserver order for limit",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
