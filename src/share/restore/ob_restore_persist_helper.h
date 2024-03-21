@@ -420,7 +420,7 @@ public:
   //__all_restore_process
   int get_restore_process(
       common::ObISQLClient &proxy,
-      const ObRestoreJobPersistKey &ls_key,
+      const ObRestoreJobPersistKey &key,
       ObRestoreProgressPersistInfo &persist_info) const;
 
   int update_restore_process(

@@ -1370,7 +1370,7 @@ int ObRestoreScheduler::restore_wait_to_consistent_scn(const share::ObPhysicalRe
     } else if (FALSE_IT(DEBUG_SYNC(AFTER_WAIT_RESTORE_TO_CONSISTENT_SCN))) {
     } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("fail to start trans", K(ret));
-    } else if (OB_FAIL(stat_restore_progress_(trans, job_info, false/*is_restore_finish*/))) {
+    } else if (OB_FAIL(stat_restore_progress_(trans, job_info, true/*is_restore_stat_start*/, false/*is_restore_finish*/))) {
       LOG_WARN("fail to stat restore progress", K(ret));
     } else if (OB_FAIL(set_restoring_start_ts_(trans, job_info))) {
       LOG_WARN("fail to set restoring start ts", K(ret));
@@ -1435,7 +1435,7 @@ int ObRestoreScheduler::restore_wait_ls_finish(const share::ObPhysicalRestoreJob
                KPC(tenant_schema));
   } else if (OB_FAIL(check_all_ls_restore_finish_(tenant_id, tenant_restore_status))) {
     LOG_WARN("failed to check all ls restore finish", KR(ret), K(job_info));
-  } else if (OB_FAIL(stat_restore_progress_(*sql_proxy_, job_info, is_tenant_restore_success(tenant_restore_status)))) {
+  } else if (OB_FAIL(stat_restore_progress_(*sql_proxy_, job_info, false/*is_restore_stat_start*/, is_tenant_restore_success(tenant_restore_status)))) {
     LOG_WARN("fail to stat restore progress", K(ret));
   } else if (is_tenant_restore_finish(tenant_restore_status)) {
     LOG_INFO("[RESTORE] restore wait all ls finish done", K(tenant_id), K(tenant_restore_status));
@@ -1704,6 +1704,7 @@ int ObRestoreScheduler::update_restore_concurrency_(const common::ObString &tena
 int ObRestoreScheduler::stat_restore_progress_(
     common::ObISQLClient &proxy,
     const share::ObPhysicalRestoreJob &job_info,
+    const bool is_restore_stat_start,
     const bool is_restore_finish)
 {
   int ret = OB_SUCCESS;
@@ -1712,6 +1713,7 @@ int ObRestoreScheduler::stat_restore_progress_(
   int64_t total_tablet_cnt = 0;
   int64_t finished_tablet_cnt = 0;
   ObRestoreJobPersistKey job_key;
+  ObRestoreProgressPersistInfo restore_progress;
   job_key.tenant_id_ = tenant_id_;
   job_key.job_id_ = job_info.get_job_id();
 
@@ -1719,6 +1721,8 @@ int ObRestoreScheduler::stat_restore_progress_(
     LOG_WARN("fail to init restore table helper", K(ret), K_(tenant_id));
   } else if (OB_FAIL(helper.get_all_ls_restore_progress(proxy, progress_array))) {
     LOG_WARN("fail to get all ls restore progress", K(ret));
+  } else if (OB_FAIL(helper.get_restore_process(proxy, job_key, restore_progress))) {
+    LOG_WARN("failed to get restore progress", K(ret), K(job_key));
   }
 
   for(int64_t i = 0; OB_SUCC(ret) && i < progress_array.count();) {
@@ -1788,9 +1792,19 @@ int ObRestoreScheduler::stat_restore_progress_(
     }
   }
 
-  if (is_restore_finish) {
+  if (is_restore_stat_start) {
+    finished_tablet_cnt = 0;
+  } else if (is_restore_finish) {
+    total_tablet_cnt = restore_progress.tablet_count_;
     // correct result, force finished_tablet_cnt equal to total_tablet_cnt.
     finished_tablet_cnt = total_tablet_cnt;
+  } else {
+    total_tablet_cnt = restore_progress.tablet_count_;
+    if (finished_tablet_cnt >= total_tablet_cnt) {
+      LOG_INFO("finished_tablet_cnt is bigger than total_tablet_cnt.", K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
+      // If something wrong with the restore stat, let it keep to 99%.
+      finished_tablet_cnt = total_tablet_cnt - 1;
+    }
   }
   if (FAILEDx(helper.update_restore_process(proxy, job_key, total_tablet_cnt, finished_tablet_cnt))) {
     LOG_WARN("fail to update restore progress", K(ret), K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
