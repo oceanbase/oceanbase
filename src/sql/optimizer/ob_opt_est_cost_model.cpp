@@ -770,25 +770,7 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
       } else {
         num_rows_per_group = rows / num_distinct_rows;
       }
-      if (topn_count >= 0 && num_rows_per_group > 0) {
-        // topn prefix sort
-        double remaining_count = topn_count;
-        while (remaining_count > 0 && num_rows_per_group > 0) {
-          ObSortCostInfo cost_info_per_group(num_rows_per_group,
-                                             width,
-                                             prefix_pos,
-                                             ordering_per_group,
-                                             false);
-          cost_info_per_group.topn_ = remaining_count;
-          if (OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
-            LOG_WARN("failed to cost sort", K(ret));
-          } else {
-            cost += cost_per_group;
-            remaining_count -= num_rows_per_group;
-          }
-        }
-      } else {
-        // normal prefix sort
+      if (OB_SUCC(ret)) {
         ObSortCostInfo cost_info_per_group(num_rows_per_group,
                                            width,
                                            prefix_pos,
@@ -798,7 +780,12 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
                                            cost_info.sel_ctx_);
         if (OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
           LOG_WARN("failed to calc cost", K(ret));
+        } else if (topn_count >= 0 && num_rows_per_group > 0) {
+          // topn prefix sort
+          cost = cost_per_group * (topn_count / num_rows_per_group);
+          LOG_TRACE("OPT: [COST PREFIX TOPN SORT]", K(cost), K(cost_per_group), K(topn_count), K(num_rows_per_group));
         } else {
+          // normal prefix sort
           cost = cost_per_group * num_distinct_rows;
           LOG_TRACE("OPT: [COST PREFIX SORT]", K(cost), K(cost_per_group), K(num_distinct_rows));
         }
