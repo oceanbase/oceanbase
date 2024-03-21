@@ -3662,8 +3662,7 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
     LOG_INFO("paused, cannot update trans version now", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(
-      true/*is_ha_data_status_complete*/, iter))) {
+  } else if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(iter))) {
     LOG_WARN("fail to get mini minor sstable", K(ret), K(table_store_wrapper));
   } else {
     ObITable *table = nullptr;
@@ -5424,8 +5423,7 @@ int ObTablet::get_mini_minor_sstables(ObTableStoreIterator &table_store_iter) co
     LOG_WARN("not inited", K(ret));
   } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(
-      tablet_meta_.ha_status_.is_data_status_complete(), table_store_iter))) {
+  } else if (OB_FAIL(table_store_wrapper.get_member()->get_mini_minor_sstables(table_store_iter))) {
     LOG_WARN("fail to get ddl sstable handles", K(ret));
   } else if (!table_store_addr_.is_memory_object()
       && OB_FAIL(table_store_iter.set_handle(table_store_wrapper.get_meta_handle()))) {
@@ -7509,5 +7507,24 @@ int ObTablet::check_ready_for_read_if_need(const ObTablet &old_tablet)
   }
   return ret;
 }
+
+int ObTablet::get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FAIL(table_store_wrapper.get_member()->get_all_minor_sstables(table_store_iter))) {
+    LOG_WARN("fail to get ddl sstable handles", K(ret));
+  } else if (!table_store_addr_.is_memory_object()
+      && OB_FAIL(table_store_iter.set_handle(table_store_wrapper.get_meta_handle()))) {
+    LOG_WARN("fail to set storage meta handle", K(ret), K_(table_store_addr), K(table_store_wrapper));
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

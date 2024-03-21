@@ -739,7 +739,7 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(param), K(tablet_handle));
-  } else if (OB_FAIL(tablet->get_mini_minor_sstables(minor_table_iter))) {
+  } else if (OB_FAIL(tablet->get_all_minor_sstables(minor_table_iter))) {
     LOG_WARN("failed to get tables handle array", K(ret), K(param));
   } else if (0 == minor_table_iter.count()) {
     need_copy = true;
