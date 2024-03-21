@@ -1841,6 +1841,7 @@ DEFINE_ERROR(OB_TABLE_LOCK_IS_SPLITTING, -6327, -1, "HY000", "table lock is bein
 DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_FAIL, -6328, -1, "HY000", "table lock splitting failed")
 DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need retry under sequence number reorder")
 DEFINE_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, -6330, -1, "HY000", "user data disk is almost full")
+DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
