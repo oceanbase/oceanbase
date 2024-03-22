@@ -269,6 +269,7 @@ void ObPxPool::set_px_thread_name()
 void ObPxPool::run(int64_t idx)
 {
   ATOMIC_INC(&active_threads_);
+  ObBKGDSessInActiveGuard inactive_guard;
   set_thread_idx(idx);
   // Create worker for current thread.
   ObPxWorker worker;

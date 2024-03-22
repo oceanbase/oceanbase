@@ -231,6 +231,7 @@ void ObLogCompressor::log_compress_loop_()
       {
         common::ObThreadCondGuard guard(log_compress_cond_);
         while (!stopped_ && !is_enable_compress() && max_disk_size_ <= 0 && OB_LOGGER.get_max_file_index() <= 0) {
+          ObBKGDSessInActiveGuard inactive_guard;
           log_compress_cond_.wait_us(loop_interval_);
         }
       }
