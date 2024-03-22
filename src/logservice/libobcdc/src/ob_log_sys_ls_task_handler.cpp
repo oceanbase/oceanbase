@@ -131,6 +131,7 @@ ObLogSysLsTaskHandler::ObLogSysLsTaskHandler() :
     handle_pid_(0),
     stop_flag_(true),
     sys_ls_fetch_queue_(),
+    ddl_part_trans_count_(0),
     wait_formatted_cond_()
 {}
 
@@ -181,6 +182,7 @@ void ObLogSysLsTaskHandler::destroy()
   err_handler_ = NULL;
   schema_getter_ = NULL;
   handle_pid_ = 0;
+  ddl_part_trans_count_ = 0;
   stop_flag_ = true;
 }
 
@@ -233,10 +235,14 @@ void ObLogSysLsTaskHandler::stop()
 int ObLogSysLsTaskHandler::push(PartTransTask *task, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  bool is_ddl_trans = false;
 
   if (OB_ISNULL(ddl_parser_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid DDL parser", KR(ret), K(ddl_parser_));
+  } else if (OB_ISNULL(task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret));
   } else if (OB_UNLIKELY(! task->is_ddl_trans()
       && ! task->is_ls_op_trans()
       && ! task->is_sys_ls_heartbeat()
@@ -246,7 +252,7 @@ int ObLogSysLsTaskHandler::push(PartTransTask *task, const int64_t timeout)
   }
   // DDL task have to push to the DDL parser first, because the task will retry after the task push DDL parser times out.
   // that is, the same task may be pushed multiple times.To avoid the same task being added to the queue more than once, the DDL parser is pushed first
-  else if (task->is_ddl_trans() && OB_FAIL(ddl_parser_->push(*task, timeout))) {
+  else if ((is_ddl_trans = task->is_ddl_trans()) && OB_FAIL(ddl_parser_->push(*task, timeout))) {
     if (OB_IN_STOP_STATE != ret && OB_TIMEOUT != ret) {
       LOG_ERROR("push task into DDL parser fail", KR(ret), K(task));
     }
@@ -254,7 +260,8 @@ int ObLogSysLsTaskHandler::push(PartTransTask *task, const int64_t timeout)
   // Add the task to the Fetch queue without timeout failure, ensuring that it will only be pushed once in the Parser
   else if (OB_FAIL(sys_ls_fetch_queue_.push(task))) {
     LOG_ERROR("push task into fetch queue fail", KR(ret), KPC(task));
-  } else {
+  } else if (is_ddl_trans) {
+    inc_ddl_part_trans_count_();
     // success
   }
 
@@ -292,9 +299,10 @@ int ObLogSysLsTaskHandler::get_progress(
   return ret;
 }
 
-int64_t ObLogSysLsTaskHandler::get_part_trans_task_count() const
+void ObLogSysLsTaskHandler::get_task_count(int64_t &total_part_trans_count, int64_t &ddl_part_trans_count) const
 {
-  return sys_ls_fetch_queue_.size();
+  total_part_trans_count = sys_ls_fetch_queue_.size();
+  ddl_part_trans_count = ATOMIC_LOAD(&ddl_part_trans_count_);
 }
 
 void ObLogSysLsTaskHandler::configure(const ObLogConfig &config)
@@ -369,9 +377,10 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
         K(ddl_tenant_id), K(is_tenant_served));
   } else {
     const bool is_using_online_schema = is_online_refresh_mode(TCTX.refresh_mode_);
+    const bool is_ddl_trans = task.is_ddl_trans();
     // The following handles DDL transaction tasks and DDL heartbeat tasks
     // NOTICE: handle_ddl_trans before sequencer when using online_schmea, otherwise(using data_dict) handle_ddl_trans in sequencer.
-    if (task.is_ddl_trans() && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant, stop_flag_))) {
+    if (is_ddl_trans && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant, stop_flag_))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("ddl_processor_ handle_ddl_trans fail", KR(ret), K(task), K(ddl_tenant_id), K(tenant),
             K(is_tenant_served));
@@ -382,6 +391,8 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("update_sys_ls_info_ fail", KR(ret), K(task), KPC(tenant));
       }
+    } else if (is_ddl_trans) {
+      dec_ddl_part_trans_count_();
     }
   }
 
