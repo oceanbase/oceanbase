@@ -102,6 +102,9 @@ int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &table
       LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
       LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id), K(table_schema));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
     } else if (!table_schema->is_partitioned_table()) {
       tablet_id = table_schema->get_tablet_id();
     } else {
