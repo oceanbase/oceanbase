@@ -84,6 +84,24 @@ private:
   ObLogMinerOpCond op_cond_;
 };
 
+class TransBRFilterPlugin: public IBRFilterPlugin
+{
+public:
+  virtual int filter(ObLogMinerBR &br, bool &need_filter) override;
+  TO_STRING_KV(K_(trans_id_cond));
+public:
+  TransBRFilterPlugin();
+  ~TransBRFilterPlugin() { destroy(); }
+  int init(const char *trans_id_cond);
+  void destroy();
+
+private:
+  bool need_process_(const RecordType type);
+  
+private:
+  const char *trans_id_cond_;
+};
+
 class ILogMinerBRFilter {
 public:
   virtual int start() = 0;
@@ -116,6 +134,7 @@ public:
   ObLogMinerBRFilter();
   ~ObLogMinerBRFilter();
   int init(const char *table_cond,
+      const char *trans_id_cond,
       const char *op_cond,
       ILogMinerDataManager *data_manager,
       ILogMinerResourceCollector *resource_collector,
@@ -127,6 +146,7 @@ private:
 
 private:
   bool is_inited_;
+  const char *trans_id_cond_;
   ObArenaAllocator plugin_allocator;
   common::ObSEArray<IBRFilterPlugin *, 4> filter_pipeline_;
   ILogMinerDataManager *data_manager_;

@@ -121,7 +121,7 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   destroy_miner_br(br);
   br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table2", 8, "col2", "val3", "val3",
-      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING), 
       "col1", nullptr, "val1", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
@@ -392,7 +392,7 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
 
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert"));
 
-  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
@@ -502,6 +502,131 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
   destroy_miner_br(br);
 
   op_filter.destroy();
+}
+
+TEST(ob_log_miner_br_filter, TransBRFilterPlugin)
+{
+  TransBRFilterPlugin trans_filter;
+  ObArenaAllocator arena_alloc("TransFilterTest");
+  const int64_t buf_cnt = 10;
+  ObLogMinerBR *br = nullptr;
+  bool need_filter = false;
+  binlogBuf *new_buf = static_cast<binlogBuf*>(arena_alloc.alloc(sizeof(binlogBuf) * buf_cnt));
+  binlogBuf *old_buf = static_cast<binlogBuf*>(arena_alloc.alloc(sizeof(binlogBuf) * buf_cnt));
+  for (int i = 0; i < 10; i++) {
+    new_buf[i].buf = static_cast<char*>(arena_alloc.alloc(1024));
+    new_buf[i].buf_size = 1024;
+    new_buf[i].buf_used_size = 0;
+    old_buf[i].buf = static_cast<char*>(arena_alloc.alloc(1024));
+    old_buf[i].buf_size = 1024;
+    old_buf[i].buf_used_size = 0;
+  }
+  EXPECT_EQ(OB_INVALID_ARGUMENT, trans_filter.init("aaa"));
+  trans_filter.destroy();
+  EXPECT_EQ(OB_SUCCESS, trans_filter.init("123"));
+  trans_filter.destroy();
+  EXPECT_EQ(OB_SUCCESS, trans_filter.init(nullptr));
+  trans_filter.destroy();
+
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, ECOMMIT, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  trans_filter.destroy();
+
+  EXPECT_EQ(OB_SUCCESS, trans_filter.init("123"));
+
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, ECOMMIT, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(false, need_filter);
+  destroy_miner_br(br);
+
+  trans_filter.destroy();
+
+  EXPECT_EQ(OB_SUCCESS, trans_filter.init("456"));
+
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(true, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(true, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(true, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(true, need_filter);
+  destroy_miner_br(br);
+
+  br = build_logminer_br(new_buf, old_buf, ECOMMIT, lib::Worker::CompatMode::MYSQL, 
+      "tenant1.db1", "table1", 123, 0);
+  EXPECT_EQ(OB_SUCCESS, trans_filter.filter(*br, need_filter));
+  EXPECT_EQ(true, need_filter);
+  destroy_miner_br(br);
+
+  trans_filter.destroy();
 }
 
 }
