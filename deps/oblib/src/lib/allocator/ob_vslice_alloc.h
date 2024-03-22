@@ -228,15 +228,21 @@ public:
   void purge_extra_cached_block(int keep) {
     for(int i = MAX_ARENA_NUM - 1; i >= keep; i--) {
       Arena& arena = arena_[i];
+      arena.ref(1);
       Block* old_blk = arena.clear();
       if (NULL != old_blk) {
         int64_t old_pos = INT64_MAX;
         if (old_blk->freeze(old_pos)) {
+          arena.ref(-1);
           arena.sync();
           if (old_blk->retire(old_pos)) {
             destroy_block(old_blk);
           }
+        } else {
+          arena.ref(-1);
         }
+      } else {
+        arena.ref(-1);
       }
     }
   }

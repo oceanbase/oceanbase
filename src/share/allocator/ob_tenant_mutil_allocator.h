@@ -140,7 +140,6 @@ public:
   void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr);
   palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr);
-
 private:
   uint64_t tenant_id_ CACHE_ALIGNED;
   int64_t total_limit_;
