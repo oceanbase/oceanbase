@@ -273,7 +273,7 @@ int ObLogRestoreProxyUtil::init_with_service_attr(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("service attr or tenant id is invalid", KR(ret), KPC(service_attr), K(tenant_id));
   } else {
-    const char *db_name = service_attr->user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? "OCEANBASE" : "SYS";
+    const char *db_name = service_attr->user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME;
     ObSqlString user;
     char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
     if (OB_FAIL(service_attr->get_password(passwd, sizeof(passwd)))) {
