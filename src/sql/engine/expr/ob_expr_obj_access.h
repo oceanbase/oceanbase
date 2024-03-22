@@ -39,7 +39,7 @@ public:
 
   int calc_result(common::ObObj &result, common::ObIAllocator &alloc,
                   const common::ObObj *objs_stack, int64_t param_num,
-                  const ParamStore &param_store) const;
+                  const ParamStore &param_store, ObEvalCtx *ctx = nullptr) const;
 
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;

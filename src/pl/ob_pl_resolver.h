@@ -755,9 +755,13 @@ private:
   int resolve_udf_without_brackets(sql::ObQualifiedName &q_name, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr);
   int make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&expr);
   int add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                            ObObjAccessIdent &access_ident,
+                            ObIArray<ObObjAccessIdx> &access_idxs,
+                            ObPLCompileUnitAST &func);
+  int add_udt_self_argument(const ObIRoutineInfo *routine_info,
                             ObIArray<ObRawExpr*> &expr_params,
                             ObIArray<ObObjAccessIdx> &access_idxs,
-                            ObUDFInfo &udf_info,
+                            ObUDFInfo *udf_info,
                             ObPLCompileUnitAST &func);
   int resolve_qualified_identifier(sql::ObQualifiedName &q_name,
                                            ObIArray<sql::ObQualifiedName> &columns,

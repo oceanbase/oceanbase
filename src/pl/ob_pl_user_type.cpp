@@ -3357,12 +3357,12 @@ int ObPLComposite::copy_element(const ObObj &src,
         OZ (ObUserDefinedType::destruct_obj(dest, session));
         OZ (ObUserDefinedType::alloc_for_second_level_composite(dest, allocator));
         OZ (ObPLComposite::deep_copy(*dest_composite,
-                                   src_composite,
-                                   allocator,
-                                   ns,
-                                   session,
-                                   need_new_allocator,
-                                   ignore_del_element));
+                                     src_composite,
+                                     allocator,
+                                     ns,
+                                     session,
+                                     need_new_allocator,
+                                     ignore_del_element));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                             extend_type,
                             src.get_val_len()));
