@@ -5178,10 +5178,10 @@ int ObPLResolver::resolve_normal_bound_clause(const ObStmtNodeTree &bound_node,
   OZ (resolve_expr(
     lower_node, static_cast<ObPLCompileUnitAST&>(func), lower_expr,
     combine_line_and_col(lower_node->stmt_loc_), true, expected_type));
+  OX (stmt->set_lower(func.get_expr_count() - 1));
   OZ (resolve_expr(
     upper_node, static_cast<ObPLCompileUnitAST&>(func), upper_expr,
     combine_line_and_col(upper_node->stmt_loc_), true, expected_type));
-  OX (stmt->set_lower(func.get_expr_count() - 2));
   OX (stmt->set_upper(func.get_expr_count() - 1));
   OX (stmt->set_bound_type(ObPLForLoopStmt::BoundType::NORMAL));
   return ret;
