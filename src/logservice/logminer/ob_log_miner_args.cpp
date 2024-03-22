@@ -32,35 +32,35 @@ namespace oblogminer
 void ObLogMinerCmdArgs::print_usage(const char *prog_name)
 {
   fprintf(stderr,
-  "Oceanbase LogMiner is a tool that converts CLOG in Oceanbase to a format that is readable by humans.\n"
+  "OceanBase LogMiner(ObLogMiner) is a tool that converts CLOG in OceanBase to\n"
+  "a human-readable format.\n"
   "The following are examples demonstrating how to use:\n"
-  "%s -c \"ip:port\" -u \"user@tenant\" -p \"password\" -s \"2023-01-01 10:00:00\" -o \"file:///data/output/\"\n"
-  "%s -a \"file:///data/archive/\" -s \"2023-01-01 10:00:00\" -O \"insert\" -o \"file:///data/output/\"\n"
+  "%s -c \"ip:port\" -u \"user@tenant\" -p \"***\" -s \"2023-01-01 10:00:00\" -o \"file:///data/output/\"\n"
+  "%s -a \"file:///data/archive/\" -s \"2023-01-01 10:00:00\" -o \"file:///data/output/\"\n"
   "Options are list below:\n"
-  "   -m, --mode                      Specifies the working mode of LogMiner, which currently only supports\n"
-  "                                   \"analysis\" mode. The default is analysis mode.\n"
-  "   -c, --cluster-addr              A list of IP addresses and ports separated by Vertical bar '|'\n"
-  "                                   (e.g., ip1:port1|ip2:port2|ip3:port3), where\n"
-  "                                   the IP is the observer's IP and the port is the observer's SQL port.\n"
-  "   -u, --user-name                 The tenant's username, including the tenant (e.g., root@sys).\n"
-  "   -p, --password                  The password corresponding to the tenant user.\n"
-  "   -a, --archive-dest              The destination for the tenant's archive log.\n"
-  "   -l, --table-list                Specifies the table lists for analysis, referring to the tb_white_list in OBCDC.\n"
-  "   -C, --column-cond               Specifies the column filtering condition for analysis in JSON format.\n"
-  "   -s, --start-time                Specifies the start time in microsecond timestamp or datetime format.\n"
-  "                                   LogMiner will analyze logs no older than this start-time.\n"
-  "   -e, --end-time                  Specifies the end time in microsecond timestamp or datetime format.\n"
-  "                                   LogMiner will analyze logs no newer than this end-time.\n"
-  "   -O, --operations                Specifies the types of operations to output, including insert, update, and delete.\n"
-  "                                   These can be combined using '|', like insert|delete. The default is insert|update|delete.\n"
-  "   -o, --output                    The destination for the analysis results. The format is the same as the\n"
-  "                                   archive destination (e.g., file:///data/xxx/xxx or oss:///xxx.xxx.xx/xxx).\n"
-  "   -h, --help                      Displays the help message.\n"
-  "   -v, --verbose                   Determines whether to output detailed logs to the command line.\n"
-  "   -z, --timezone                  Specifies the timezone, default is +8:00.\n"
-  "   -f, --record_format             Specifies the record format, default is CSV format. Options include: CSV, REDO_ONLY, UNDO_ONLY\n"
-  "   -T, --trans_id                  Specifies the trans_id for filtering condition\n"
-  "   -L  --log_level                 The log level of LogMiner, default is ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN.\n"
+  "   -m, --mode             Specifies the working mode of ObLogMiner, which currently\n"
+  "                          only supports \"analysis\" mode. The default is \"analysis\".\n"
+  "   -c, --cluster-addr     A list of IPs and ports separated by '|' (e.g., ip1:port1|ip2:port2),\n"
+  "                          where the IP is the observer's IP and the port is the observer's SQL port.\n"
+  "   -u, --user-name        The tenant's username, including the tenant name(e.g., user@tenant).\n"
+  "   -p, --password         The password corresponding to the user-name.\n"
+  "   -a, --archive-dest     The location for the tenant's archive log(e.g., file:///data/xxx/xx).\n"
+  "   -l, --table-list       Specifies the table list for analysis, corresponding to\n"
+  "                          the `tb_white_list` parameter in OBCDC.\n"
+  "   -C, --column-cond      Specifies the column filter for analysis.\n"
+  "   -s, --start-time       Specifies the start time in microsecond timestamp or datetime format.\n"
+  "   -e, --end-time         Specifies the end time in microsecond timestamp or datetime format.\n"
+  "   -O, --operations       Specifies the type of operations, options including insert,\n"
+  "                          update, and delete. Operations can be combined using '|'.\n"
+  "                          The default is \"insert|update|delete\".\n"
+  "   -o, --output           The location for the analysis results.\n"
+  "   -h, --help             Displays the help message.\n"
+  "   -v, --verbose          Determines whether to output detailed logs to the command line.\n"
+  "   -z, --timezone         Specifies the timezone, default is \"+8:00\".\n"
+  "   -f, --record_format    Specifies the record format, default is \"CSV\".\n"
+  "                          Options including CSV, REDO_ONLY, UNDO_ONLY, JSON.\n"
+  "   -T, --trans_id         Specifies the trans_id for filtering condition, default not to filter.\n"
+  "   -L  --log_level        Specifies the log level, default is \"ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN\".\n"
   "\n",
   prog_name, prog_name
   );
@@ -441,23 +441,120 @@ int AnalyzerArgs::validate() const
   bool is_archive_avail = (archive_dest_ != nullptr);
   if ((is_archive_avail && is_server_arg_set) || (!is_archive_avail && !is_server_avail)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("(cluster_addr, user_name, password) and (archive_dest) are both specified or empty",
-        K(is_server_avail), K(is_archive_avail));
-    LOGMINER_STDOUT("(cluster_addr, user_name, password) and (archive_dest) are both specified or empty\n");
+    LOG_ERROR("(cluster_addr, user_name, password) and (archive_dest) are both"
+        " specified or not completely specified", K(is_server_avail), K(is_archive_avail));
+    LOGMINER_STDOUT("(cluster_addr, user_name, password) and (archive_dest) are both"
+        " specified or not completely specified\n");
   } else if (OB_INVALID_TIMESTAMP == start_time_us_ ||
              OB_INVALID_TIMESTAMP == end_time_us_ ||
              start_time_us_ >= end_time_us_) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("start_time or end_time is not valid or start_time exceeds end_time", K(start_time_us_), K(end_time_us_));
+    LOG_ERROR("start_time or end_time is not valid or start_time exceeds end_time",
+        K(start_time_us_), K(end_time_us_));
     LOGMINER_STDOUT("start_time or end_time is not valid or start_time exceeds end_time\n");
   } else if (nullptr == output_dst_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("output_dst is null which is not expected", KPC(this));
     LOGMINER_STDOUT("output_dst should be specified\n");
   } else {
-    // succ
+    const char *user_name_delim = "@#";
+    char *user_name_buf = nullptr;
+    char *strtok_ptr = nullptr;
+    char *user = nullptr;
+    char *tenant = nullptr;
+    int user_name_size = 0;
+    if (is_server_avail) {
+      // only support user tenant
+      user_name_size = strlen(user_name_) + 1;
+      if (OB_ISNULL(user_name_buf = reinterpret_cast<char*>(ob_malloc(user_name_size, "LogMnrUsrBuf")))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("err alloc string buffer", K(ret), K(user_name_size));
+      } else {
+        MEMCPY(user_name_buf, user_name_, user_name_size-1);
+        user_name_buf[user_name_size-1] = '\0';
+      }
+      user = STRTOK_R(user_name_buf, user_name_delim, &strtok_ptr);
+      tenant = STRTOK_R(nullptr, user_name_delim, &strtok_ptr);
+      if (nullptr == tenant || 0 == strcmp(tenant, OB_SYS_TENANT_NAME)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("oblogminer only support user tenant(e.g., user@tenant).", K(tenant));
+        LOGMINER_STDOUT("oblogminer only support user tenant(e.g., user@tenant).\n");
+      }
+      // check password not empty
+      if (OB_SUCC(ret)) {
+        if (0 == strcmp(password_, "")) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_ERROR("password should not be empty string", KCSTRING(password_));
+          LOGMINER_STDOUT("password should not be empty string\n");
+        }
+      }
+    }
+    if (OB_SUCC(ret) && nullptr != tenant) {
+      bool validate = true;
+      if (OB_FAIL(validate_table_list_(tenant, validate))) {
+        LOG_ERROR("validate table list failed", K(ret), KCSTRING(tenant), KCSTRING(table_list_));
+      } else {
+        if (!validate) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_ERROR("tenant in table_list must match the tenant specified in user-name", KCSTRING(tenant));
+          LOGMINER_STDOUT("tenant in table_list must match the tenant specified in user-name\n");
+        }
+      }
+    }
+    if (OB_NOT_NULL(user_name_buf)) {
+      ob_free(user_name_buf);
+    }
   }
 
+  return ret;
+}
+
+// check tenant name in table_list
+int AnalyzerArgs::validate_table_list_(const char *tenant_name, bool &validate) const
+{
+  int ret = OB_SUCCESS;
+  const char pattern_delimiter = '|';
+  const char name_delimiter = '.';
+  bool done = false;
+  int buffer_size = strlen(table_list_) + 1;
+  char *buffer = nullptr;
+  ObString remain;
+  ObString cur_pattern;
+  ObString tenant_pattern;
+  if (OB_ISNULL(buffer = reinterpret_cast<char*>(ob_malloc(buffer_size, "LogMnrTableList")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("err alloc string buffer", K(ret), K(buffer_size));
+  } else {
+    MEMCPY(buffer, table_list_, buffer_size-1);
+    buffer[buffer_size-1] = '\0';
+    remain.assign_ptr(buffer, buffer_size);
+  }
+  while (OB_SUCCESS == ret && !done) {
+    // Split Pattern & get current pattern.
+    cur_pattern = remain.split_on(pattern_delimiter);
+    if (cur_pattern.empty()) {
+      cur_pattern = remain;
+      done = true;
+    }
+    if (OB_SUCC(ret)) {
+      tenant_pattern = cur_pattern.split_on(name_delimiter);
+      if (tenant_pattern.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid argment", K(ret), K(cur_pattern));
+      }
+      if (OB_SUCC(ret)) {
+        if (0 != tenant_pattern.compare(tenant_name) && 0 != tenant_pattern.compare("*")) {
+          validate = false;
+          LOG_INFO("tenant in table_list must match the tenant specified in user-name",
+              KCSTRING(tenant_name), K(tenant_pattern));
+          break;
+        }
+      }
+    }
+  } // while
+  if (OB_NOT_NULL(buffer)) {
+    ob_free(buffer);
+  }
   return ret;
 }
 
@@ -483,12 +580,12 @@ int AnalyzerArgs::serialize(char *buf, const int64_t buf_len, int64_t &pos) cons
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", COLUMN_COND_KEY,
       empty_str_wrapper(column_cond_)))) {
     LOG_ERROR("failed to print column cond", KCSTRING(column_cond_), K(buf_len), K(pos));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", OPERATIONS_KEY,
-      empty_str_wrapper(operations_)))) {
-    LOG_ERROR("failed to print operations", KCSTRING(operations_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", TRANS_ID_KEY,
       empty_str_wrapper(trans_id_)))) {
     LOG_ERROR("failed to print trans_id", KCSTRING(trans_id_), K(buf_len), K(pos));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", OPERATIONS_KEY,
+      empty_str_wrapper(operations_)))) {
+    LOG_ERROR("failed to print operations", KCSTRING(operations_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", OUTPUT_DST_KEY,
       empty_str_wrapper(output_dst_)))) {
     LOG_ERROR("failed to print output_dst", K(buf_len), K(pos));

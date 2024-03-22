@@ -133,6 +133,8 @@ public:
   RecordFileFormat record_format_;
   char *trans_id_;
 private:
+  int validate_table_list_(const char *tenant_name, bool &validate) const;
+private:
   ObArenaAllocator alloc_;
 };
 

@@ -38,7 +38,6 @@ public:
   ObLogMinerBR():
       ObLogMinerRecyclableTask(TaskType::BINLOG_RECORD),
       is_filtered_(false),
-      is_end_(false),  // mark it to end when reach the end record
       compat_mode_(lib::Worker::CompatMode::INVALID),
       seq_no_(0),
       tenant_id_(OB_INVALID_TENANT_ID),
@@ -119,7 +118,6 @@ public:
 
   TO_STRING_KV(
     K(is_filtered_),
-    K(is_end_),
     K(compat_mode_),
     K(seq_no_),
     K(tenant_id_),
@@ -127,7 +125,7 @@ public:
     K(record_type_),
     K(trans_id_)
   );
-
+ 
 private:
   bool is_filtered_;
   bool is_end_;

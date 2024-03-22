@@ -255,7 +255,7 @@ bool ObLogMinerDataManager::reach_end_progress(const int64_t progress) const
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "get invalid progress when judging reach end progress",
         K(progress), K(end_progress_));
   } else if (is_analysis_mode(mode_)) {
-    if (end_commit_scn_ != 0 && output_progress_ > end_commit_scn_) {
+     if (end_commit_scn_ != 0 && output_progress_ > end_commit_scn_) {
       bret = true;
     } else {
       bret = progress > end_progress_;

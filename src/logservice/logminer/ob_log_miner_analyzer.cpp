@@ -70,8 +70,8 @@ int ObLogMinerAnalyzer::init(const AnalyzerArgs &args, ILogMinerFileManager *fil
     } else if (OB_FAIL(init_component<ObLogMinerBRConverter>(data_converter_,
         data_manager_, writer_, resource_collector_, this))) {
       LOG_ERROR("failed to init ObLogMinerBRConverter", K(args));
-    } else if (OB_FAIL(init_component<ObLogMinerBRFilter>(data_filter_,
-        args.column_cond_, args.trans_id_, args.operations_, data_manager_, resource_collector_, data_converter_, this))) {
+    } else if (OB_FAIL(init_component<ObLogMinerBRFilter>(data_filter_, args.column_cond_,
+        args.trans_id_, args.operations_, data_manager_, resource_collector_, data_converter_, this))) {
       LOG_ERROR("failed to init ObLogMinerBRFilter", K(args));
     } else if (OB_FAIL(init_component<ObLogMinerBRProducer>(producer_, args, data_filter_, data_manager_, this))) {
       LOG_ERROR("failed to init ObLogMinerBRProducer", K(args));
