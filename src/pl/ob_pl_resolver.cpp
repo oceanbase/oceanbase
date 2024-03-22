@@ -16819,7 +16819,13 @@ int ObPLResolver::resolve_routine_def(const ObStmtNodeTree *parse_tree,
           routine_ast->get_name().length(), routine_ast->get_name().ptr());
     }
     if (OB_SUCC(ret)) {
-      OZ (routine_info->add_compile_flag(unit_ast.get_compile_flag()));
+      ObPLCompileFlag flag = unit_ast.get_compile_flag();
+      OZ (flag.del_compile_flag(ObPLCompileFlag::UDT_STATIC));
+      OZ (flag.del_compile_flag(ObPLCompileFlag::UDT_FINAL));
+      OZ (flag.del_compile_flag(ObPLCompileFlag::UDT_MAP));
+      OZ (flag.del_compile_flag(ObPLCompileFlag::UDT_ORDER));
+      OZ (flag.del_compile_flag(ObPLCompileFlag::UDT_CONS));
+      OZ (routine_info->add_compile_flag(flag));
     }
     OZ (routine_table.make_routine_ast(resolve_ctx_.allocator_,
                                        unit_ast.get_db_name(),
