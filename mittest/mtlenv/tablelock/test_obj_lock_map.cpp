@@ -107,7 +107,7 @@ TEST_F(TestObjLockMap, lock)
   int64_t expired_time = 0;
   ObOBJLock *obj_lock = NULL;
   ObTxIDSet conflict_tx_set;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObLockParam param;
 
   MyTxCtx default_ctx;
@@ -122,7 +122,7 @@ TEST_F(TestObjLockMap, lock)
   ret = lock_map_.lock(param,
                        store_ctx,
                        DEFAULT_IN_TRANS_LOCK_OP,
-                       lock_mode_in_same_trans,
+                       lock_mode_cnt_in_same_trans,
                        conflict_tx_set);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
@@ -137,7 +137,7 @@ TEST_F(TestObjLockMap, lock)
   ret = lock_map_.lock(param,
                        store_ctx,
                        DEFAULT_IN_TRANS_LOCK_OP,
-                       lock_mode_in_same_trans,
+                       lock_mode_cnt_in_same_trans,
                        conflict_tx_set);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(obj_lock->row_exclusive_, 2);
@@ -149,7 +149,7 @@ TEST_F(TestObjLockMap, lock)
   ret = lock_map_.lock(param,
                        store_ctx,
                        DEFAULT_IN_TRANS_LOCK_OP,
-                       lock_mode_in_same_trans,
+                       lock_mode_cnt_in_same_trans,
                        conflict_tx_set);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(obj_lock->row_exclusive_, 3);
@@ -180,7 +180,7 @@ TEST_F(TestObjLockMap, unlock)
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
   ObTxIDSet conflict_tx_set;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObLockParam param;
 
   MyTxCtx default_ctx;
@@ -201,7 +201,7 @@ TEST_F(TestObjLockMap, unlock)
   ret = lock_map_.lock(param,
                        store_ctx,
                        DEFAULT_OUT_TRANS_LOCK_OP,
-                       lock_mode_in_same_trans,
+                       lock_mode_cnt_in_same_trans,
                        conflict_tx_set);
   ASSERT_EQ(OB_SUCCESS, ret);
   min_commited_scn = lock_map_.get_min_ddl_committed_scn(flushed_scn);

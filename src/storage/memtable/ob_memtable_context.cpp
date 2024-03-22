@@ -1051,7 +1051,7 @@ int ObMemtableCtx::check_lock_exist(const ObLockID &lock_id,
                                     const ObTableLockMode mode,
                                     const ObTableLockOpType op_type,
                                     bool &is_exist,
-                                    ObTableLockMode &lock_mode_in_same_trans) const
+                                    uint64_t lock_mode_cnt_in_same_trans[]) const
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -1060,7 +1060,7 @@ int ObMemtableCtx::check_lock_exist(const ObLockID &lock_id,
                                              mode,
                                              op_type,
                                              is_exist,
-                                             lock_mode_in_same_trans))) {
+                                             lock_mode_cnt_in_same_trans))) {
     TRANS_LOG(WARN, "check lock exist failed. ", K(ret), K(lock_id),
               K(owner_id), K(mode), K(*this));
   }

@@ -113,7 +113,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
   LOG_INFO("TestMemCtxTableLock::add_lock_record");
   int ret = OB_SUCCESS;
   bool lock_exist = false;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
   // 1. IN TRANS LOCK
   // 1.1 add lock record
@@ -128,7 +128,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   // 2. OUT TRANS LOCK
@@ -144,7 +144,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   // 3. REMOVE CHECK
@@ -156,7 +156,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 3.2 out trans lock remove test
@@ -167,7 +167,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 
@@ -182,7 +182,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   // 4.2 remove lock record
@@ -193,7 +193,7 @@ TEST_F(TestMemCtxTableLock, add_lock_record)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 }
@@ -203,7 +203,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
   LOG_INFO("TestMemCtxTableLock::clear_table_lock");
   int ret = OB_SUCCESS;
   bool lock_exist = false;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
   bool is_committed = false;
   share::SCN commit_version;
@@ -229,7 +229,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 2.2 out trans lock record
@@ -244,7 +244,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 2.3 out trans unlock record
@@ -259,7 +259,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
                                   DEFAULT_OUT_TRANS_UNLOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_UNLOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 
@@ -275,7 +275,7 @@ TEST_F(TestMemCtxTableLock, clear_table_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 }
@@ -286,7 +286,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   int ret = OB_SUCCESS;
   bool lock_exist = false;
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   // 1.1 add lock record
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.1");
   ObTableLockOp lock_op1 = DEFAULT_IN_TRANS_LOCK_OP;
@@ -306,7 +306,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
@@ -314,7 +314,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   // 1.3 rollback
@@ -327,7 +327,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
   ret = mem_ctx_.check_lock_exist(DEFAULT_OUT_TRANS_LOCK_OP.lock_id_,
@@ -335,7 +335,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 1.4 rollback again
@@ -348,7 +348,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 }
@@ -356,7 +356,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
 TEST_F(TestMemCtxTableLock, check_lock_need_replay)
 {
   LOG_INFO("TestMemCtxTableLock::check_lock_need_replay");
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   int ret = OB_SUCCESS;
   bool lock_exist = false;
   share::SCN scn;
@@ -407,7 +407,7 @@ TEST_F(TestMemCtxTableLock, check_lock_need_replay)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 }
