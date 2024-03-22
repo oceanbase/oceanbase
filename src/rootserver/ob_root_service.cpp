@@ -6634,8 +6634,9 @@ int ObRootService::create_udt_common(const ObCreateUDTArg &arg,
         }
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
         if (!exist && exist_valid_udt) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("valid udt found during resolving can not be found again",
+          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+          LOG_WARN("valid udt at resolve stage can not be found any more at rootservice stage, "
+                   "could be dropped by another parallel ddl",
                    K(ret), K(database_name), K(udt_info.get_type_name()));
         } else if (exist && exist_valid_udt && !is_or_replace) {
           ret = OB_ERR_SP_ALREADY_EXISTS;
