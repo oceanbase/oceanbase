@@ -100,14 +100,19 @@ ObPLogFDType get_fd_type(const char *mod_name)
 ObPLogFDType get_fd_type(const char *mod_name, int32_t level, const char *dba_event)
 {
   ObPLogFDType type = FD_SVR_FILE;
-  if (level >= OB_LOG_LEVEL_DBA_ERROR && level <= OB_LOG_LEVEL_DBA_INFO) {
+  if (level == OB_LOG_LEVEL_DBA_ERROR || level == OB_LOG_LEVEL_DBA_WARN) {
+    // DBA_ERROR, DBA_WARN: print into alert.log or observer.log
     if (OB_NOT_NULL(dba_event)) {
       type = FD_ALERT_FILE;
     } else {
       // consistent with old DBA log behavior.
       type = FD_SVR_FILE;
     }
+  } else if (level == OB_LOG_LEVEL_DBA_INFO && OB_NOT_NULL(dba_event)) {
+    // DBA_INFO: print into alert.log or other log(observer.log, rootservice.log, election.log)
+    type = FD_ALERT_FILE;
   } else {
+    // INFO, EDIAG, WDIAG, TRACE, DEBUG: print into observer.log, rootservice.log, election.log, trace.log
     type = get_fd_type(mod_name);
   }
   return type;
@@ -487,7 +492,7 @@ void ObLogger::print_trace_buffer(const char* mod_name,
 
 
 
-const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
+const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 
 ObLogger::ObLogger()
   : ObBaseLogWriter(), log_file_(), max_file_size_(DEFAULT_MAX_FILE_SIZE), max_file_index_(0),
@@ -1127,11 +1132,7 @@ int ObLogger::parse_check_alert(const char *str, const int32_t str_length)
       int8_t level_int = 0;
       if (OB_FAIL(level_str2int(buffer, level_int))) {
         OB_LOG(WARN, "failed to get level_int", KCSTRING(buffer), K(str_length), K(ret));
-      } else if (level_int >= OB_LOG_LEVEL_DBA_ERROR && level_int <= OB_LOG_LEVEL_INFO) {
-        // becase string of DBA_INFO and string of INFO are both 'INFO'
-        if (OB_LOG_LEVEL_INFO == level_int) {
-          level_int = OB_LOG_LEVEL_DBA_INFO;
-        }
+      } else if (level_int >= OB_LOG_LEVEL_DBA_ERROR && level_int <= OB_LOG_LEVEL_DBA_INFO) {
         alert_log_level_ = level_int;
       } else {
         ret = OB_INVALID_ARGUMENT;
