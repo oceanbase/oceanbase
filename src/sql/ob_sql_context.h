@@ -699,11 +699,10 @@ public:
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
-      udf_has_select_stmt_(false),
       has_dblink_udf_(false),
-      has_pl_udf_(false),
       optimizer_features_enable_version_(0),
-      injected_random_status_(false)
+      injected_random_status_(false),
+      udf_flag_(0)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -747,11 +746,10 @@ public:
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
-    udf_has_select_stmt_ = false;
     has_dblink_udf_ = false;
-    has_pl_udf_ = false;
     optimizer_features_enable_version_ = 0;
     injected_random_status_ = false;
+    udf_flag_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -839,12 +837,19 @@ public:
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
-  bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
   bool has_dblink_udf_;
-  bool has_pl_udf_; // //used to mark sql contain pl udf
   uint64_t optimizer_features_enable_version_;
   bool injected_random_status_;
   ObRandom rand_gen_;
+  union {
+    int8_t udf_flag_;
+    struct {
+      int8_t has_pl_udf_ : 1; // used to mark sql contain pl udf
+      int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
+      int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
+      int8_t reserved_:5;
+    };
+  };
 };
 } /* ns sql*/
 } /* ns oceanbase */
