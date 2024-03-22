@@ -388,6 +388,27 @@ int ObMicroBlockReader::init(
   return ret;
 }
 
+int ObMicroBlockReader::compare_rowkey(
+    const ObDatumRowkey &rowkey,
+    const int64_t idx,
+    int32_t &compare_result)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_UNLIKELY(!rowkey.is_valid() || idx < 0 || idx >= row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(rowkey), K(idx), K_(row_count));
+  } else if (OB_FAIL(flat_row_reader_.compare_meta_rowkey(rowkey,
+                                                          *datum_utils_,
+                                                          data_begin_ + index_data_[idx],
+                                                          index_data_[idx + 1] - index_data_[idx],
+                                                          compare_result))) {
+    LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), K_(row_count), K(idx));
+  }
+  return ret;
+}
 
 int ObMicroBlockReader::find_bound(
     const ObDatumRowkey &key,
@@ -400,10 +421,10 @@ int ObMicroBlockReader::find_bound(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init");
-  } else if (OB_UNLIKELY(!key.is_valid() || begin_idx < 0 || nullptr == datum_utils_)) {
+  } else if (OB_UNLIKELY(!key.is_valid() || begin_idx < 0 || nullptr == datum_utils_ || begin_idx >= row_count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), K(begin_idx), K(row_count_),
-             KP_(data_begin), KP_(index_data), KP_(datum_utils));
+    LOG_WARN("invalid argument", K(ret), K(key), K(begin_idx), K(row_count_), KP_(data_begin),
+             KP_(index_data), KP_(datum_utils));
   } else if (OB_FAIL(ObIMicroBlockFlatReader::find_bound_(
           key,
           lower_bound,
@@ -413,6 +434,37 @@ int ObMicroBlockReader::find_bound(
           row_idx,
           equal))) {
     LOG_WARN("failed to find bound", K(ret), K(lower_bound), K(begin_idx), K_(row_count), KPC_(datum_utils));
+  }
+  return ret;
+}
+
+int ObMicroBlockReader::find_bound_through_linear_search(
+    const ObDatumRowkey &rowkey,
+    const int64_t begin_idx,
+    int64_t &row_idx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_UNLIKELY(!rowkey.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(rowkey));
+  } else {
+    int32_t cmp_result = 0;
+    int64_t idx = begin_idx + 1;
+    for (; OB_SUCC(ret) && idx < row_count_; ++idx) {
+      if (OB_FAIL(flat_row_reader_.compare_meta_rowkey(rowkey,
+                                                       *datum_utils_,
+                                                       data_begin_ + index_data_[idx],
+                                                       index_data_[idx + 1] - index_data_[idx],
+                                                       cmp_result))) {
+        LOG_WARN("Failed to compare meta rowkey", K(ret), K(rowkey), K(idx));
+      } else if (cmp_result != 0) {
+        break;
+      }
+    }
+    row_idx = idx - 1;
   }
   return ret;
 }
@@ -501,7 +553,7 @@ int ObMicroBlockReader::get_multi_version_info(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(nullptr == header_ ||
-                         row_idx < 0 || row_idx > row_count_ ||
+                         row_idx < 0 || row_idx >= row_count_ ||
                          0 > schema_rowkey_cnt ||
                          header_->column_count_ < schema_rowkey_cnt + 2)) {
     ret = OB_INVALID_ARGUMENT;

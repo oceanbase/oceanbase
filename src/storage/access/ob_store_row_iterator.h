@@ -52,6 +52,8 @@ public:
     IteratorScan = 3,
     IteratorMultiScan = 4,
     IteratorRowLockCheck = 5,
+    IteratorRowLockAndDuplicationCheck = 6,
+    IteratorMultiRowLockCheck = 7,
     IteratorInvalidType
   };
   ObStoreRowIterator() :

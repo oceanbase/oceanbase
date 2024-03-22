@@ -232,7 +232,7 @@ private:
   int generate_batch_tablet_task(ObIArray<share::ObTabletTablePair>& tablet_pairs,
                                  hash::ObHashMap<uint64_t, table::ObTTLTaskParam> &param_map);
   int generate_one_tablet_task(table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam& para);
-  int get_ttl_para_from_schema(const schema::ObTableSchema *table_schema, table::ObTTLTaskParam& param);
+  int get_ttl_para_from_schema(const share::schema::ObTableSchema *table_schema, table::ObTTLTaskParam& param);
   void mark_tenant_need_check();
   virtual int generate_ttl_dag(table::ObTTLTaskInfo& task_info, table::ObTTLTaskParam& para);
   static int construct_task_record_filter(const uint64_t& task_id,

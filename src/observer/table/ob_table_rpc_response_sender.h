@@ -28,7 +28,7 @@ template <class T>
 class ObTableRpcResponseSender
 {
 public:
-  ObTableRpcResponseSender(rpc::ObRequest *req, T &result, const int exec_ret_code = common::OB_SUCCESS)
+  ObTableRpcResponseSender(rpc::ObRequest *req, T *result, const int exec_ret_code = common::OB_SUCCESS)
       :req_(req),
        result_(result),
        exec_ret_code_(exec_ret_code),
@@ -40,9 +40,27 @@ public:
       pcode_ = rpc_pkt->get_pcode();
     }
   }
+  ObTableRpcResponseSender()
+      : req_(nullptr),
+        result_(nullptr),
+        exec_ret_code_(common::OB_SUCCESS),
+        pcode_(ObRpcPacketCode::OB_INVALID_RPC_CODE),
+        using_buffer_(nullptr)
+  {
+  }
   virtual ~ObTableRpcResponseSender() = default;
   int response(const int cb_param);
   OB_INLINE void set_pcode(ObRpcPacketCode pcode) { pcode_ = pcode; }
+  OB_INLINE void set_req(rpc::ObRequest *req)
+  {
+    req_ = req;
+    if (OB_NOT_NULL(req_)) {
+      const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
+      pcode_ = rpc_pkt->get_pcode();
+    }
+  }
+  OB_INLINE const rpc::ObRequest* get_req() const { return req_; }
+  OB_INLINE void set_result(T *result) { result_ = result; }
 private:
   int serialize();
   int do_response(ObRpcPacket *response_pkt, bool require_rerouting);
@@ -51,7 +69,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRpcResponseSender);
 private:
   rpc::ObRequest *req_;
-  T &result_;
+  T *result_;
   const int exec_ret_code_; // processor执行的返回码
   ObRpcPacketCode pcode_;
   common::ObDataBuffer *using_buffer_;
@@ -76,9 +94,12 @@ int ObTableRpcResponseSender<T>::serialize()
   if (OB_ISNULL(using_buffer_)) {
     ret = common::OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "using_buffer_ should not be NULL", K(ret));
+  } else if (OB_ISNULL(result_)) {
+    ret = common::OB_ERR_UNEXPECTED;
+    RPC_OBRPC_LOG(ERROR, "result_ should not be NULL", K(ret));
   } else if (OB_FAIL(common::serialization::encode(
         using_buffer_->get_data(), using_buffer_->get_capacity(),
-        using_buffer_->get_position(), result_))) {
+        using_buffer_->get_position(), *result_))) {
     RPC_OBRPC_LOG(WARN, "encode data error", K(ret));
   } else {
     //do nothing
@@ -145,8 +166,10 @@ int ObTableRpcResponseSender<T>::response(const int cb_param)
   int retcode = (cb_param == OB_SUCCESS ? exec_ret_code_ : cb_param);
   if (OB_ISNULL(req_)) {
     ret = common::OB_INVALID_ARGUMENT;
-    RPC_OBRPC_LOG(WARN, "invalid req, maybe stream rpc timeout", K(ret), K(retcode),
-                  KP_(req));
+    RPC_OBRPC_LOG(WARN, "invalid req, maybe stream rpc timeout", K(ret), K(retcode), KP_(req));
+  } else if (OB_ISNULL(result_)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    RPC_OBRPC_LOG(WARN, "result_ is null", K(ret));
   } else {
     obrpc::ObRpcResultCode rcode;
     rcode.rcode_ = retcode;
@@ -174,7 +197,7 @@ int ObTableRpcResponseSender<T>::response(const int cb_param)
     common::ObDataBuffer data_buf;
     uint32_t rpc_header_size = static_cast<uint32_t>(obrpc::ObRpcPacket::get_header_size());
     uint32_t ez_rpc_header_size = OB_NET_HEADER_LENGTH + rpc_header_size;
-    int64_t content_size = common::serialization::encoded_length(result_) +
+    int64_t content_size = common::serialization::encoded_length(*result_) +
         common::serialization::encoded_length(rcode);
 
     char *pkt_buf = NULL;

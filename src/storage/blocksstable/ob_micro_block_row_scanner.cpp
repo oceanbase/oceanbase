@@ -167,7 +167,7 @@ int ObIMicroBlockRowScanner::open(
     const bool is_right_border)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_ || nullptr == range_)) {
+  if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KP_(range), K_(is_inited));
   } else if (OB_UNLIKELY(!macro_id.is_valid() || !block_data.is_valid())) {

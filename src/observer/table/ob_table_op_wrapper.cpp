@@ -25,7 +25,6 @@ namespace oceanbase
 {
 namespace table
 {
-// 根据执行计划驱动executor执行
 int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
                                            ObTableApiSpec *spec,
                                            ObTableOperationResult &op_result)
@@ -128,10 +127,10 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
       ObTableAssignment &assign = assigns.at(i);
       uint64_t project_idx = OB_INVALID_ID;
-      if (OB_ISNULL(assign.column_item_)) {
+      if (OB_ISNULL(assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("assign column item is nullptr", K(ret), K(assign));
-      } else if (FALSE_IT(project_idx = assign.column_item_->col_idx_)) {
+      } else if (FALSE_IT(project_idx = assign.column_info_->col_idx_)) {
       } else if (use_insert_expr && ins_exprs->count() <= project_idx) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected insert index", K(ret), K(ins_exprs), K(assign));
@@ -142,6 +141,7 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         ObObj &obj = obj_array[i];
         ObExpr *rt_expr = use_insert_expr ? ins_exprs->at(project_idx) : upd_exprs->at(project_idx);
         ObDatum *datum = nullptr;
+        ObObj pro_obj;
         if (OB_FAIL(rt_expr->eval(executor.get_eval_ctx(), datum))) {
           LOG_WARN("fail to eval datum", K(ret), K(*rt_expr));
         } else if (OB_FAIL(datum->to_obj(obj, rt_expr->obj_meta_))) {
@@ -149,8 +149,10 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         } else if (is_lob_storage(obj.get_type())
             && OB_FAIL(ObTableCtx::read_real_lob(allocator, obj))) {
           LOG_WARN("fail to read lob", K(ret), K(obj));
-        } else if (OB_FAIL(result_entity->set_property(assign.column_item_->column_name_, obj))) {
-          LOG_WARN("fail to set property", K(ret), K(assign), K(obj));
+        } else if (OB_FAIL(ob_write_obj(allocator, obj, pro_obj))) {
+          LOG_WARN("fail to write obj", K(ret), K(obj));
+        } else if (OB_FAIL(result_entity->set_property(assign.column_info_->column_name_, pro_obj))) {
+          LOG_WARN("fail to set property", K(ret), K(assign), K(pro_obj));
         }
       }
     }
@@ -165,12 +167,11 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
   return ret;
 }
 
-// get操作单独处理
 int ObTableOpWrapper::process_get(ObTableCtx &tb_ctx, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObTableApiSpec *spec = nullptr;
-  observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+  observer::ObReqTimeGuard req_timeinfo_guard; // if refer to cache must use ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
   if (OB_FAIL(get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create scan spec", K(ret));
@@ -189,23 +190,28 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
   ObTableApiScanRowIterator row_iter;
   // fill key range
   const ObITableEntity *entity = tb_ctx.get_entity();
-  ObRowkey rowkey = entity->get_rowkey();
-  ObNewRange range;
-  tb_ctx.get_key_ranges().reset();
-  if (OB_FAIL(range.build_range(tb_ctx.get_ref_table_id(), rowkey))) {
-    LOG_WARN("fail to build key range", K(ret), K(rowkey));
-  } else if (OB_FAIL(tb_ctx.get_key_ranges().push_back(range))) {
-    LOG_WARN("fail to push back key range", K(ret), K(range));
+  if (OB_ISNULL(entity)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to entity is null", K(ret), K(tb_ctx));
   } else if (OB_ISNULL(spec)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to spec is NULL", K(ret));
-  } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
-    LOG_WARN("fail to create scan executor", K(ret));
-  } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor*>(executor)))) {
-    LOG_WARN("fail to open scan row iterator", K(ret));
-  } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx.get_allocator()))) {
-    if (ret != OB_ITER_END) {
-      LOG_WARN("fail to get next row", K(ret));
+  } else {
+    ObRowkey rowkey = entity->get_rowkey();
+    ObNewRange range;
+    tb_ctx.get_key_ranges().reset();
+    if (OB_FAIL(range.build_range(tb_ctx.get_ref_table_id(), rowkey))) {
+      LOG_WARN("fail to build key range", K(ret), K(rowkey));
+    } else if (OB_FAIL(tb_ctx.get_key_ranges().push_back(range))) {
+      LOG_WARN("fail to push back key range", K(ret), K(range));
+    } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
+      LOG_WARN("fail to create scan executor", K(ret));
+    } else if (OB_FAIL(row_iter.open(static_cast<ObTableApiScanExecutor *>(executor)))) {
+      LOG_WARN("fail to open scan row iterator", K(ret));
+    } else if (OB_FAIL(row_iter.get_next_row(row, tb_ctx.get_allocator()))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to get next row", K(ret));
+      }
     }
   }
 
@@ -293,7 +299,7 @@ int ObTableOpWrapper::process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationR
 
 int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
                                               ObNewRow *row,
-                                              const ObTableSchema *table_schema,
+                                              ObKvSchemaCacheGuard &schema_cache_guard,
                                               const ObIArray<ObString> &cnames,
                                               ObITableEntity *entity)
 {
@@ -303,7 +309,8 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   ObSEArray<ObString, 32> all_columns;
   const ObIArray<ObString>* arr_col = &cnames;
   if (N == 0) {
-    if (OB_FAIL(expand_all_columns(table_schema, all_columns))) {
+    const ObIArray<ObTableColumnInfo *>&column_info_array = schema_cache_guard.get_column_info_array();
+    if (OB_FAIL(expand_all_columns(column_info_array, all_columns))) {
       LOG_WARN("fail to expand all column to cnames", K(ret));
     } else {
       N = all_columns.count();
@@ -312,13 +319,13 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     const ObString &name = arr_col->at(i);
-    if (OB_ISNULL(column_schema = table_schema->get_column_schema(name))) {
+    int64_t column_idx = -1;
+    if (OB_FAIL(schema_cache_guard.get_column_info_idx(name, column_idx))) {
       ret = OB_ERR_BAD_FIELD_ERROR;
-      const ObString &table = table_schema->get_table_name_str();
+      const ObString &table = schema_cache_guard.get_table_name_str();
       LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, name.length(), name.ptr(), table.length(), table.ptr());
       LOG_WARN("column not exist", K(ret), K(name));
     } else {
-      int64_t column_idx = table_schema->get_column_idx(column_schema->get_column_id());
       ObObj &cell = row->get_cell(column_idx);
       if (is_lob_storage(cell.get_type()) && OB_FAIL(ObTableCtx::read_real_lob(allocator, cell))) {
         LOG_WARN("fail to read lob", K(ret));
@@ -330,19 +337,17 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   return ret;
 }
 
-int ObTableApiUtil::expand_all_columns(const ObTableSchema *table_schema,
+int ObTableApiUtil::expand_all_columns(const ObIArray<ObTableColumnInfo *>& col_info_array,
                                        ObIArray<ObString> &cnames)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = NULL;
-  ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-  ObTableSchema::const_column_iterator end = table_schema->column_end();
-  for (; OB_SUCC(ret) && iter != end; iter++) {
-    column_schema = *iter;
-    if (OB_ISNULL(column_schema)) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_info_array.count(); i++) {
+    ObTableColumnInfo *col_info = col_info_array.at(i);
+    if (OB_ISNULL(col_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column schema is NULL", K(ret));
-    } else if (OB_FAIL(cnames.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("column info is NULL", K(ret), K(i));
+    } else if (OB_FAIL(cnames.push_back(col_info->column_name_))) {
       LOG_WARN("fail to push back column name", K(ret));
     }
   }
@@ -364,17 +369,17 @@ int ObHTableDeleteExecutor::open()
 int ObHTableDeleteExecutor::get_next_row()
 {
   int ret = OB_SUCCESS;
-  const ObTableBatchOperation *batch_op = tb_ctx_.get_batch_operation();
+  const ObIArray<ObTableOperation> *ops = tb_ctx_.get_batch_operation();
   ObTableQuery query;
-  if (OB_ISNULL(batch_op)) {
+  if (OB_ISNULL(ops)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch operation is null", K(ret));
   } else if (OB_FAIL(build_range(query))) {
     LOG_WARN("fail to build query range", K(ret));
   } else {
     ObHTableFilter &filter = query.htable_filter();
-    for (int64_t i = 0; OB_SUCC(ret) && i < batch_op->count(); i++) {
-      const ObTableOperation &op = batch_op->at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < ops->count(); i++) {
+      const ObTableOperation &op = ops->at(i);
       if (OB_FAIL(generate_filter(op.entity(), filter))) {
         LOG_WARN("fail to generate htable filter", K(ret), K(op.entity()));
       } else if (OB_FAIL(query_and_delete(query))) {
@@ -401,7 +406,7 @@ int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<common::ObNewRange> &key_ranges = tb_ctx_.get_key_ranges();
-  const ObTableBatchOperation *batch_op = tb_ctx_.get_batch_operation();
+  const common::ObIArray<table::ObTableOperation> *batch_op = tb_ctx_.get_batch_operation();
   const ObTableOperation &del_op = batch_op->at(0);
   const ObITableEntity &entity = del_op.entity();
   ObHTableCellEntity3 htable_cell(&entity);

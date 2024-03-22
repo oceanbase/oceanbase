@@ -71,6 +71,8 @@ int ObTableApiInsertExecutor::inner_open_with_das()
       LOG_WARN("ins_ctdef is NULL", K(ret), K(i));
     } else if (OB_FAIL(generate_ins_rtdef(*ins_ctdef, ins_rtdef))) {
       LOG_WARN("fail to generate insert rt_defs", K(ret), K(i));
+    } else {
+      ins_rtdef.das_rtdef_.use_put_ = tb_ctx_.is_client_use_put();
     }
   }
   return ret;
@@ -132,6 +134,8 @@ int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *enti
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
+  } else if (tb_ctx_.is_htable() && OB_FAIL(modify_htable_timestamp(entity))) {
+    LOG_WARN("fail to modify htable timestamp", K(ret));
   } else if (ins_spec_.get_ctdefs().count() < 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ins ctdef count is less than 1", K(ret));
@@ -150,13 +154,27 @@ int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *enti
 int ObTableApiInsertExecutor::get_next_row_from_child()
 {
   int ret = OB_SUCCESS;
-  const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
+  const ObIArray<ObTableOperation> *ops = tb_ctx_.get_batch_operation();
+  bool is_batch = (OB_NOT_NULL(ops) && !tb_ctx_.is_htable()) || (OB_NOT_NULL(ops) && tb_ctx_.is_client_use_put());
 
-  if (cur_idx_ >= 1) {
-    ret = OB_ITER_END;
-  } else if (OB_FAIL(process_single_operation(entity))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to process single insert operation", K(ret));
+  // single operation
+  if (!is_batch) {
+    const ObTableEntity *entity = static_cast<const ObTableEntity *>(tb_ctx_.get_entity());
+    if (cur_idx_ >= 1) {
+      ret = OB_ITER_END;
+    } else if (OB_FAIL(process_single_operation(entity))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to process single insert operation", K(ret));
+      }
+    }
+  } else { // batch operation
+    if (cur_idx_ >= ops->count()) {
+      ret = OB_ITER_END;
+    } else {
+      const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
+      if (OB_FAIL(process_single_operation(entity))) {
+        LOG_WARN("fail to process single insert operation", K(ret));
+      }
     }
   }
 

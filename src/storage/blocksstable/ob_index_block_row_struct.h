@@ -368,6 +368,7 @@ public:
   union {
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
+    const ObRowsInfo *rows_info_;
     const void *query_range_;
   };
   union {
@@ -384,6 +385,8 @@ public:
   int64_t range_idx_;
   MacroBlockId parent_macro_id_;
   int64_t nested_offset_;
+  int64_t rowkey_begin_idx_;
+  int64_t rowkey_end_idx_;
 };
 
 

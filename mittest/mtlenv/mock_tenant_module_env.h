@@ -87,6 +87,7 @@
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "observer/table/group/ob_table_tenant_group.h"
 
 namespace oceanbase
 {

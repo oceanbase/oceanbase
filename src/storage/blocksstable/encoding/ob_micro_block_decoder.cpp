@@ -1880,10 +1880,10 @@ int ObMicroBlockDecoder::get_multi_version_info(
     const int64_t row_idx,
     const int64_t schema_rowkey_cnt,
     const ObRowHeader *&row_header,
-    int64_t &version,
+    int64_t &trans_version,
     int64_t &sql_sequence)
 {
-  UNUSEDx(row_idx, schema_rowkey_cnt, row_header, version, sql_sequence);
+  UNUSEDx(row_idx, schema_rowkey_cnt, row_header, trans_version, sql_sequence);
   return OB_NOT_SUPPORTED;
 }
 

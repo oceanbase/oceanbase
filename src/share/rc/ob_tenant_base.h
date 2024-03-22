@@ -114,6 +114,7 @@ namespace table
   class ObTTLService;
   class ObHTableLockMgr;
   class ObTableApiSessPoolMgr;
+  class ObTableGroupCommitMgr;
 }
 namespace logservice
 {
@@ -328,7 +329,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableApiSessPoolMgr*,                \
       storage::checkpoint::ObCheckpointDiagnoseMgr*,\
       storage::ObStorageHADiagMgr*,                 \
-      share::ObIndexUsageInfoMgr*                   \
+      share::ObIndexUsageInfoMgr*,                  \
+      table::ObTableGroupCommitMgr*                 \
   )
 
 

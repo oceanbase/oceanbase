@@ -262,6 +262,7 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
   table/ob_table_util.cpp
+  table/ob_table_object.cpp
   scheduler/ob_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp

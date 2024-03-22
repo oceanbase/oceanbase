@@ -16,6 +16,7 @@
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx_table/ob_tx_table_guards.h"
+#include "storage/access/ob_rows_info.h"
 
 namespace oceanbase {
 using namespace common;
@@ -104,6 +105,7 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
     if (OB_SUCC(ret)) {
       share::SCN snapshot_version = ctx->mvcc_acc_ctx_.get_snapshot_version();
       stores = &iter_tables;
+      ObRowState row_state;
       for (int64_t i = stores->count() - 1; OB_SUCC(ret) && i >= 0; i--) {
         lock_state.reset();
         if (NULL == stores->at(i)) {
@@ -116,7 +118,7 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
           }
         } else if (stores->at(i)->is_sstable()) {
           blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable *>(stores->at(i));
-          if (OB_FAIL(sstable->check_row_locked(param, context, rowkey, lock_state))) {
+          if (OB_FAIL(sstable->check_row_locked(param, rowkey, context, lock_state, row_state, false))) {
             TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
           }
           TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable));

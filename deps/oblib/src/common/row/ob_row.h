@@ -283,6 +283,39 @@ int ob_create_row(AllocatorT &allocator, int64_t col_count, ObNewRow &row)
   return ret;
 }
 
+template<typename AllocatorT>
+int ob_create_rows(AllocatorT &allocator, int64_t row_count, int64_t col_count, ObNewRow *&rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(col_count <= 0 || row_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "col count or row count is invalid", K(ret), K(col_count), K(row_count));
+  } else {
+    void *rows_buf = nullptr;
+    const size_t row_size = sizeof(ObNewRow);
+    const size_t col_size = col_count * sizeof(ObObj);
+    const int64_t rows_buf_len = (row_size + col_size) * row_count;
+    if (OB_ISNULL(rows_buf = allocator.alloc(rows_buf_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "Failed to allocate row buffer", K(ret), K(rows_buf_len));
+    } else {
+      char *row_buf = static_cast<char*>(rows_buf);
+      char *col_buf = row_buf + row_size * row_count;
+      for (int64_t i = 0; i < row_count; ++i) {
+        ObNewRow *row = new(row_buf) ObNewRow();
+        row->cells_ = new(col_buf) ObObj[col_count];
+        row->count_ = col_count;
+        row->projector_ = nullptr;
+        row->projector_size_ = 0;
+        row_buf = row_buf + row_size;
+        col_buf = col_buf + col_size;
+      }
+      rows = reinterpret_cast<ObNewRow *>(rows_buf);
+    }
+  }
+  return ret;
+}
+
 } // end namespace common
 } // end namespace oceanbase
 

@@ -31,7 +31,7 @@ using namespace oceanbase::sql;
 
 ObTableQueryP::ObTableQueryP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      allocator_("TbQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tb_ctx_(allocator_),
       result_row_count_(0)
 {
@@ -87,12 +87,7 @@ void ObTableQueryP::reset_ctx()
   need_retry_in_queue_ = false;
   result_row_count_ = 0;
   ObTableApiProcessorBase::reset_ctx();
-}
-
-ObTableAPITransCb *ObTableQueryP::new_callback(rpc::ObRequest *req)
-{
-  UNUSED(req);
-  return nullptr;
+  tb_ctx_.reset();
 }
 
 int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
@@ -129,12 +124,16 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   tb_ctx_.set_scan(true);
   tb_ctx_.set_entity_type(arg_.entity_type_);
+  tb_ctx_.set_schema_cache_guard(&schema_cache_guard_);
+  tb_ctx_.set_schema_guard(&schema_guard_);
+  tb_ctx_.set_simple_table_schema(simple_table_schema_);
+  tb_ctx_.set_sess_guard(&sess_guard_);
+  tb_ctx_.set_is_tablegroup_req(is_tablegroup_req_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
                                          arg_.tablet_id_,
-                                         arg_.table_name_,
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read, arg_.table_id_))) {
@@ -186,7 +185,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     while (OB_SUCC(ret)) {
       ++result_count;
       // the last result_ does not need flush, it will be send automatically
-      if (ObTimeUtility::current_time() > timeout_ts) {
+      if (ObTimeUtility::fast_current_time() > timeout_ts) {
         ret = OB_TRANS_TIMEOUT;
         LOG_WARN("exceed operatiton timeout", K(ret));
       } else if (OB_FAIL(result_iter->get_next_result(one_result))) {
@@ -256,6 +255,12 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   return ret;
 }
 
+int ObTableQueryP::before_process()
+{
+  is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  return ParentType::before_process();
+}
+
 int ObTableQueryP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -264,21 +269,29 @@ int ObTableQueryP::try_process()
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
 
-  if (OB_FAIL(init_tb_ctx(cache_guard))) {
+  if (FALSE_IT(is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_))) {
+  } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+    LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
+  } else if (is_tablegroup_req_ && OB_NOT_NULL(simple_table_schema_) && arg_.table_id_ != simple_table_schema_->get_table_id()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table id not correct in table group", K(ret));
+  } else if (OB_FAIL(init_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init table ctx", K(ret));
   } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
   } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+    // Tips: when table_name is tablegroup name
+    // Since we only have one table in a tablegroup now
+    // tableId and tabletId are correct, which are calculated by the client
   } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
-  } else if (OB_FAIL(start_trans(true, /* is_readonly */
-                                 sql::stmt::T_SELECT,
+  } else if (OB_FAIL(start_trans(true,
                                  arg_.consistency_level_,
                                  tb_ctx_.get_ls_id(),
                                  tb_ctx_.get_timeout_ts(),
                                  tb_ctx_.need_dist_das()))) {
-    LOG_WARN("fail to start readonly transaction", K(ret));
+    LOG_WARN("fail to start transaction", K(ret), K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(query_and_result(static_cast<ObTableApiScanExecutor*>(executor)))) {
@@ -292,7 +305,7 @@ int ObTableQueryP::try_process()
 
   int tmp_ret = ret;
   bool need_rollback_trans = (OB_SUCCESS != ret);
-  if (OB_FAIL(end_trans(need_rollback_trans, req_, tb_ctx_.get_timeout_ts()))) {
+  if (OB_FAIL(end_trans(need_rollback_trans, req_, nullptr/* ObTableCreateCbFunctor */))) {
     LOG_WARN("fail to end trans", K(ret), K(need_rollback_trans));
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;

@@ -171,7 +171,6 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
 
       // tx gc, interval = 15s
       if (can_tx_gc) {
-        (void)cur_ls_ptr->update_calc_upper_info();
         // TODO shanyan.g close ctx gc temporarily because of logical bug
         //
 
@@ -180,6 +179,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
         if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
           TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
           max_decided_scn.set_invalid();
+        } else {
+          (void)cur_ls_ptr->update_min_start_scn_info(max_decided_scn);
         }
         min_start_scn = max_decided_scn;
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);

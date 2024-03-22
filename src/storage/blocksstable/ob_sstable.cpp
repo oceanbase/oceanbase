@@ -401,6 +401,9 @@ int ObSSTable::exist(
       || !context.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(rowkey), K(param), K(context));
+  } else if (meta_->is_empty()) {
+    is_exist = false;
+    has_found = false;
   } else {
     const ObDatumRow *store_row = nullptr;
     ObStoreRowIterator *iter = nullptr;
@@ -483,7 +486,15 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
     ObStoreRowIterator *iter = nullptr;
     const ObDatumRow *store_row = nullptr;
 
-    if (OB_FAIL(build_multi_exist_iterator(rows_info, iter))) {
+    common::ObSEArray<ObDatumRowkey, 4> rowkeys;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.get_rowkey_cnt(); ++i) {
+      if (OB_FAIL(rowkeys.push_back(rows_info.get_rowkey(i)))) {
+        LOG_WARN("Failed to push back rowkey", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_multi_exist_iterator(rowkeys, rows_info, iter))) {
       LOG_WARN("Fail to build multi exist iterator", K(ret));
     }
 
@@ -504,13 +515,11 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
       } else if (store_row->row_flag_.is_not_exist()) {
         // Skip
       } else if (store_row->row_flag_.is_delete()) {
-        if (OB_FAIL(rows_info.clear_found_rowkey(i))) {
-          LOG_WARN("Failed to clear rowkey in rowsinfo", K(ret), K(i), K(rows_info));
-        }
+        rows_info.set_row_exist_checked(i);
       } else {
         is_exist = true;
         all_rows_found = true;
-        rows_info.get_duplicate_rowkey() = rows_info.rowkeys_.at(i);
+        rows_info.set_conflict_rowkey(i);
       }
       if (OB_SUCC(ret) && !is_exist) {
         all_rows_found = rows_info.all_rows_found();
@@ -675,31 +684,94 @@ int ObSSTable::bf_may_contain_rowkey(const ObDatumRowkey &rowkey, bool &contain)
   return ret;
 }
 
+int ObSSTable::check_rows_locked(
+    const bool check_exist,
+    storage::ObTableAccessContext &context,
+    share::SCN &max_trans_version,
+    ObRowsInfo &rows_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDatumRowkey *sstable_endkey = nullptr;
+  ObSSTableRowLockMultiChecker *multi_checker = nullptr;
+  bool may_exist = true;
+  const share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
+  if (OB_UNLIKELY(rows_info.all_rows_found())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected state", K(ret), K(rows_info));
+  } else if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
+  } else if (meta_->is_empty() || (is_major_sstable() && !check_exist)) {
+  } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
+    if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
+      if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
+        LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
+      }
+    }
+  } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
+    LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
+  } else if (OB_ISNULL(sstable_endkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Null pointer to sstable endkey", K(ret), KP_(meta));
+  } else if (OB_FAIL(rows_info.check_min_rowkey_boundary(*sstable_endkey, may_exist))) {
+    LOG_WARN("Failed to check min rowkey boundary", K(ret), KPC(sstable_endkey), K(rows_info));
+  } else if (may_exist) {
+    // TODO(hanling): Do we need to optimize for the mini/minor sstable which does not have uncommitted row?
+    if (is_major_sstable()) {
+      rows_info.set_all_rows_lock_checked(check_exist);
+    }
+    if (OB_FAIL(rows_info.refine_rowkeys())) {
+      LOG_WARN("Failed to refine rowkeys", K(ret), K(rows_info));
+    } else if (rows_info.all_rows_found()) {
+    } else if (OB_FAIL(build_multi_row_lock_checker(rows_info, multi_checker))) {
+      LOG_WARN("Failed to build multi row lock checker", K(ret), K(rows_info));
+    } else {
+      if (OB_FAIL(multi_checker->check_row_locked(check_exist, snapshot_version))) {
+        LOG_WARN("Failed to check row lock", K(ret), K(rows_info));
+      }
+    }
+    destroy_multi_row_lock_checker(rows_info, multi_checker);
+  }
+  return ret;
+}
 
 int ObSSTable::check_row_locked(
     const ObTableIterParam &param,
-    ObTableAccessContext &context,
     const blocksstable::ObDatumRowkey &rowkey,
-    ObStoreRowLockState &lock_state)
+    ObTableAccessContext &context,
+    ObStoreRowLockState &lock_state,
+    ObRowState &row_state,
+    bool check_exist)
 {
   int ret = OB_SUCCESS;
-  void *buf = NULL;
-  ObSSTableRowLockChecker *row_checker = NULL;
+  void *buf = nullptr;
+  ObSSTableRowLockChecker *row_checker = nullptr;
+  const ObDatumRowkey *sstable_endkey = nullptr;
+  const blocksstable::ObStorageDatumUtils &datum_utils = param.get_read_info()->get_datum_utils();
+  int cmp_ret = 0;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
   lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
-
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
-  } else if (!is_multi_version_minor_sstable()) {
+  } else if (is_empty()) {
+  } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
+    LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
+  } else if (OB_ISNULL(sstable_endkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Nullptr sstable endkey", K(ret), KP_(meta));
+  } else if (OB_FAIL(rowkey.compare(*sstable_endkey, datum_utils, cmp_ret))) {
+    LOG_WARN("Failed to compare rowkey with max rowkey", K(ret), KPC(sstable_endkey), K(rowkey));
+  } else if (cmp_ret > 0) {
+  } else if (!check_exist && !is_multi_version_minor_sstable()) {
     // return false if not multi version minor sstable
-  } else if (get_upper_trans_version() <= context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()) {
+  } else if (!check_exist && get_upper_trans_version() <= context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()) {
     // there is no lock at this sstable
-    if (!is_empty()) {
+    if (row_state.max_trans_version_.get_val_for_tx() < get_upper_trans_version()) {
       // skip reference upper_trans_version of empty_sstable, which may greater than real
       // committed transaction's version
-      if (OB_FAIL(lock_state.trans_version_.convert_for_tx(get_upper_trans_version()))) {
+      if (OB_FAIL(row_state.max_trans_version_.convert_for_tx(get_upper_trans_version()))) {
         LOG_WARN("Fail to convert_for_tx", K(get_upper_trans_version()), K_(meta), K(ret));
       }
     }
@@ -708,16 +780,15 @@ int ObSSTable::check_row_locked(
     LOG_WARN("Fail to allocate memory", K(ret));
   } else {
     row_checker = new (buf) ObSSTableRowLockChecker();
-
+    row_checker->set_iter_type(check_exist);
+    share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
     if (OB_FAIL(row_checker->init(param, context, this, &rowkey))) {
       LOG_WARN("failed to open row locker", K(ret), K(param), K(context), K(rowkey));
-    } else if (OB_FAIL(row_checker->check_row_locked(lock_state))) {
+    } else if (OB_FAIL(row_checker->check_row_locked(check_exist, snapshot_version, lock_state, row_state))) {
       LOG_WARN("failed to check row lock checker");
     }
-
     row_checker->~ObSSTableRowLockChecker();
   }
-
   return ret;
 }
 
@@ -1442,20 +1513,20 @@ int ObSSTable::build_exist_iterator(
   return ret;
 }
 
-int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter)
+int ObSSTable::build_multi_exist_iterator(const common::ObIArray<ObDatumRowkey> &rowkeys, ObRowsInfo &rows_info, ObStoreRowIterator *&iter)
 {
   int ret = OB_SUCCESS;
   if (contain_uncommitted_row()) {
     if (OB_FAIL(multi_get(
                 rows_info.exist_helper_.table_iter_param_,
                 rows_info.exist_helper_.table_access_context_,
-                rows_info.rowkeys_,
+                rowkeys,
                 iter))) {
-      LOG_WARN("Fail to multi get row", K(ret), K(rows_info.rowkeys_));
+      LOG_WARN("Fail to multi get row", K(ret), K(rowkeys));
     }
   } else {
     void *buf = nullptr;
-    ObSSTableRowMultiExister*multi_exister = NULL;
+    ObSSTableRowMultiExister *multi_exister = NULL;
     if (NULL == (buf = rows_info.exist_helper_.table_access_context_.allocator_->alloc(sizeof(ObSSTableRowMultiExister)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory, ", K(ret));
@@ -1463,7 +1534,7 @@ int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowItera
       multi_exister = new (buf) ObSSTableRowMultiExister();
       if (OB_FAIL(multi_exister->init(rows_info.exist_helper_.table_iter_param_,
                                       rows_info.exist_helper_.table_access_context_,
-                                      this, &rows_info.rowkeys_))) {
+                                      this, &rowkeys))) {
         LOG_WARN("Failed to init sstable row exister", K(ret), K(rows_info));
       } else {
         iter = multi_exister;
@@ -1471,6 +1542,40 @@ int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowItera
     }
   }
   return ret;
+}
+
+int ObSSTable::build_multi_row_lock_checker(
+    ObRowsInfo &rows_info,
+    ObSSTableRowLockMultiChecker *&iter)
+{
+  int ret = OB_SUCCESS;
+  ObStoreRowIterator *tmp_iter = nullptr;
+  ObTableAccessContext &context = rows_info.exist_helper_.table_access_context_;
+  iter = nullptr;
+  ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowLockMultiChecker, tmp_iter);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tmp_iter->init(rows_info.exist_helper_.table_iter_param_, context, this, &rows_info))) {
+      LOG_WARN("Failed to init row lock multi checker", K(ret), K(rows_info));
+    } else {
+      iter = static_cast<ObSSTableRowLockMultiChecker *>(tmp_iter);
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(tmp_iter)) {
+    tmp_iter->~ObStoreRowIterator();
+    FREE_TABLE_STORE_ROW_IETRATOR(context, tmp_iter);
+  }
+  return ret;
+}
+
+void ObSSTable::destroy_multi_row_lock_checker(
+    ObRowsInfo &rows_info,
+    ObSSTableRowLockMultiChecker *iter)
+{
+  if (OB_NOT_NULL(iter)) {
+    iter->~ObSSTableRowLockMultiChecker();
+    rows_info.exist_helper_.table_access_context_.allocator_->free(iter);
+    rows_info.reuse_scan_mem_allocator();
+  }
 }
 
 int ObSSTable::get_last_rowkey(const ObDatumRowkey *&sstable_endkey)

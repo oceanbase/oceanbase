@@ -2863,6 +2863,61 @@ int ObTablet::update_row(
   return ret;
 }
 
+int ObTablet::insert_rows(
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    ObStoreRow *rows,
+    ObRowsInfo &rows_info,
+    const bool check_exist,
+    const ObColDescIArray &col_descs,
+    const int64_t row_count,
+    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
+{
+  int ret = OB_SUCCESS;
+  {
+    ObStorageTableGuard guard(this, store_ctx, true);
+    ObMemtable *write_memtable = nullptr;
+    const transaction::ObSerializeEncryptMeta *encrypt_meta = nullptr;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("Not inited", K(ret), K_(is_inited));
+    } else if (OB_UNLIKELY(!store_ctx.is_valid()
+               || col_descs.count() <= 0
+               || !relative_table.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid argument", K(ret), K(store_ctx), K(relative_table), K(col_descs));
+    } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
+    } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
+      LOG_WARN("Failed to protect table", K(ret));
+    } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
+      LOG_WARN("Failed to prepare write memtable", K(ret), K(relative_table));
+#ifdef OB_BUILD_TDE_SECURITY
+    // XXX we do not turn on clog encryption now
+    } else if (false && NULL != encrypt_meta_arr && !encrypt_meta_arr->empty() &&
+        FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
+#endif
+    } else {
+      ObArenaAllocator allocator("insert_acc_ctx");
+      ObTableIterParam param;
+      ObTableAccessContext context;
+      if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
+        LOG_WARN("Failed to prepare param ctx", K(ret));
+      } else if (OB_FAIL(write_memtable->multi_set(param, context, col_descs, rows, row_count, check_exist, encrypt_meta, rows_info))) {
+        LOG_WARN("Failed to multi-set memtable", K(ret), K(row_count));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(store_ctx.mvcc_acc_ctx_.tx_ctx_->submit_redo_log(false))) {
+      TRANS_LOG(WARN, "Failed to submit log if necessary", K(tmp_ret), K(store_ctx), K(relative_table));
+    }
+  }
+  return ret;
+}
+
 int ObTablet::insert_row_without_rowkey_check(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
@@ -2970,7 +3025,10 @@ int ObTablet::do_rowkey_exists(
   return ret;
 }
 
-int ObTablet::do_rowkeys_exist(ObTableStoreIterator &tables_iter, ObRowsInfo &rows_info, bool &exists)
+int ObTablet::do_rowkeys_exist(
+    ObTableStoreIterator &tables_iter,
+    ObRowsInfo &rows_info,
+    bool &exists)
 {
   int ret = OB_SUCCESS;
 
@@ -2991,7 +3049,7 @@ int ObTablet::do_rowkeys_exist(ObTableStoreIterator &tables_iter, ObRowsInfo &ro
     } else if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the table is nullptr", K(ret));
-    } else if (OB_FAIL(table->exist(rows_info, exists, all_rows_found))) {
+    } else if (table->is_memtable() && OB_FAIL(table->exist(rows_info, exists, all_rows_found))) {
       LOG_WARN("fail to check the existence of rows", K(ret), K(rows_info), K(exists));
     } else {
       ++check_table_cnt;

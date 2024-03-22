@@ -541,10 +541,10 @@ private:
       int64_t &afct_num,
       int64_t &dup_num);
   static int insert_tablet_rows(
+      const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       ObStoreRow *rows,
-      const int64_t row_count,
       ObRowsInfo &rows_info);
   static int insert_lob_col(
       ObDMLRunningCtx &run_ctx,

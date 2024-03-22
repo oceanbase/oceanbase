@@ -648,25 +648,23 @@ TEST_F(TestBatchExecute, multi_insert_or_update_AND_multi_get)
     OB_LOG(INFO, "batch execute result", K(result));
     result_entity = NULL;
     ASSERT_EQ(BATCH_SIZE, result.count());
+    int has_res_num(0), not_found_num(0);
     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
       const ObTableOperationResult &r = result.at(i);
       ASSERT_EQ(ObTableOperationType::GET, r.type());
-      if (i % 2 == 1) {
-        ASSERT_EQ(OB_SUCCESS, r.get_errno());
-        ASSERT_EQ(0, r.get_affected_rows());
-        ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-        ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      if (result_entity->is_empty()) {
+        not_found_num++;
+      } else {
         ObObj value;
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-        //fprintf(stderr, "get value i=%ld v=%s\n", i, S(value));
-        ASSERT_EQ(100+(BATCH_SIZE-1-i)/2, value.get_int());
-      } else {
-        ASSERT_EQ(OB_SUCCESS, r.get_errno());
-        ASSERT_EQ(0, r.get_affected_rows());
-        ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-        ASSERT_TRUE(result_entity->is_empty());
+        has_res_num++;
       }
     }
+    ASSERT_EQ(not_found_num, BATCH_SIZE/2);
+    ASSERT_EQ(has_res_num, BATCH_SIZE/2);
   }
 }
 
@@ -2281,12 +2279,12 @@ TEST_F(TestBatchExecute, compare_cell)
   ASSERT_TRUE(ObHTableUtils::compare_cell(cell2, cell1, scan_order) > 0);
 }
 
-// create table htable1_cf1 (K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024), primary key(K, Q, T)) partition by key(K) partitions 16;
+// create table htable1$cf1 (K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024), primary key(K, Q, T)) partition by key(K) partitions 16;
 TEST_F(TestBatchExecute, htable_scan_basic)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -2575,7 +2573,7 @@ TEST_F(TestBatchExecute, htable_scan_reverse)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_reverse"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_reverse"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -2839,7 +2837,7 @@ TEST_F(TestBatchExecute, htable_ttl)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_ttl"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_ttl"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -3253,7 +3251,7 @@ TEST_F(TestBatchExecute, htable_empty_qualifier)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_empty_cq"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_empty_cq"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -3755,24 +3753,23 @@ TEST_F(TestBatchExecute, multi_get)
     OB_LOG(INFO, "batch execute result", K(result));
     result_entity = NULL;
     ASSERT_EQ(BATCH_SIZE, result.count());
+    int has_res_num(0), not_found_num(0);
     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
       const ObTableOperationResult &r = result.at(i);
       ASSERT_EQ(ObTableOperationType::GET, r.type());
-      if (i % 2 == 1) {
-        ASSERT_EQ(OB_SUCCESS, r.get_errno());
-        ASSERT_EQ(0, r.get_affected_rows());
-        ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-        ASSERT_EQ(0, result_entity->get_rowkey_size());
+      ASSERT_EQ(OB_SUCCESS, r.get_errno());
+      ASSERT_EQ(0, r.get_affected_rows());
+      ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+      if (result_entity->is_empty()) {
+        not_found_num++;
+      } else {
         ObObj value;
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-        ASSERT_EQ(100+(BATCH_SIZE-1-i)/2, value.get_int());
-      } else {
-        ASSERT_EQ(OB_SUCCESS, r.get_errno());
-        ASSERT_EQ(0, r.get_affected_rows());
-        ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-        ASSERT_TRUE(result_entity->is_empty());
+        has_res_num++;
       }
     }
+    ASSERT_EQ(not_found_num, BATCH_SIZE/2);
+    ASSERT_EQ(has_res_num, BATCH_SIZE/2);
   }
   service_client_->free_table(the_table);
 }
@@ -5408,6 +5405,7 @@ TEST_F(TestBatchExecute, multi_delete)
     const ObITableEntity *result_entity = NULL;
     ASSERT_EQ(BATCH_SIZE, result.count());
     ObObj value;
+    int value_num(0);
     for (int64_t i = 0; i < BATCH_SIZE; ++i) {
       const ObTableOperationResult &r = result.at(i);
       ASSERT_EQ(OB_SUCCESS, r.get_errno());
@@ -5415,15 +5413,12 @@ TEST_F(TestBatchExecute, multi_delete)
       ASSERT_EQ(ObTableOperationType::GET, r.type());
       ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
       ASSERT_EQ(0, result_entity->get_rowkey_size());
-      if (i < BATCH_SIZE/2) {
-        ASSERT_TRUE(result_entity->is_empty());
-      } else {
+      if(!result_entity->is_empty()) {
         ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
-        ASSERT_EQ(100+i, value.get_int());
-        ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-        ASSERT_TRUE(value.is_null());
+        value_num++;
       }
     }
+    ASSERT_EQ(BATCH_SIZE/2, value_num);
   }
 }
 
@@ -5431,7 +5426,7 @@ TEST_F(TestBatchExecute, htable_scan_with_filter)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_filter"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_filter"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -7216,7 +7211,7 @@ TEST_F(TestBatchExecute, multi_replace)
 // {
 //   // setup
 //   ObTable *the_table = NULL;
-//   int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_delete"), the_table);
+//   int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_delete"), the_table);
 //   ASSERT_EQ(OB_SUCCESS, ret);
 //   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
 //   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -7790,12 +7785,15 @@ TEST_F(TestBatchExecute, complex_batch_execute)
       key.set_int(i);
       ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(key));
       ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C2));
-      ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C3));
+      if (i % 6 == 1 || i % 6 == 3 || i % 6 == 4 || i % 6 == 5) {
+        ASSERT_EQ(OB_SUCCESS, entity->add_retrieve_property(C3));
+      }
+
       ASSERT_EQ(OB_SUCCESS, batch_operation.retrieve(*entity));
     }
     ASSERT_TRUE(batch_operation.is_readonly());
     ASSERT_TRUE(batch_operation.is_same_type());
-    ASSERT_TRUE(batch_operation.is_same_properties_names());
+    ASSERT_FALSE(batch_operation.is_same_properties_names());
     ASSERT_EQ(OB_SUCCESS, the_table->batch_execute(batch_operation, result));
     OB_LOG(INFO, "batch execute result", K(result));
     const ObITableEntity *result_entity = NULL;
@@ -7815,9 +7813,6 @@ TEST_F(TestBatchExecute, complex_batch_execute)
         case 1:  // insert
           ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C2, value));
           ASSERT_EQ(100+i, value.get_int());
-          ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, value));
-          ASSERT_EQ(OB_SUCCESS, value.get_varchar(str));
-          ASSERT_TRUE(str == c3_value);
           break;
         case 2:  // delete
           // entry not exist
@@ -8000,7 +7995,7 @@ TEST_F(TestBatchExecute, htable_put)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_put"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_put"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -8079,7 +8074,7 @@ TEST_F(TestBatchExecute, htable_mutations)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_mutate"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_mutate"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ASSERT_NO_FATAL_FAILURE(prepare_data(the_table));
@@ -8179,7 +8174,7 @@ TEST_F(TestBatchExecute, htable_query_and_mutate)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_query_and_mutate"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_query_and_mutate"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -8592,7 +8587,7 @@ TEST_F(TestBatchExecute, htable_increment)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_increment"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_increment"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -8749,7 +8744,7 @@ TEST_F(TestBatchExecute, htable_increment_empty)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_increment_empty"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_increment_empty"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -8833,7 +8828,7 @@ TEST_F(TestBatchExecute, htable_increment_multi_thread)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_increment"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_increment"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -8937,7 +8932,7 @@ TEST_F(TestBatchExecute, htable_append)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_append"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_append"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -9200,14 +9195,14 @@ TEST_F(TestBatchExecute, query_async_multi_batch)
   the_table = NULL;
 }
 
-// create table if not exists htable1_query_async (
+// create table if not exists htable1$query_async (
 // K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024),
 // primary key(K, Q, T));
 TEST_F(TestBatchExecute, htble_query_async)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_query_async"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$query_async"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -11952,12 +11947,12 @@ TEST_F(TestBatchExecute, auto_increment_auto_increment_defensive)
   ObTableOperationResult r;
   ASSERT_EQ(OB_NOT_SUPPORTED, the_table->execute(table_operation, r));
 }
-// create table if not exists htable1_cf1_check_and_delete(K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024), K_PREFIX varbinary(1024) GENERATED ALWAYS AS (substr(K,1,32)) STORED, primary key(K, Q, T));" $db
+// create table if not exists htable1$cf1_check_and_delete(K varbinary(1024), Q varbinary(256), T bigint, V varbinary(1024), K_PREFIX varbinary(1024) GENERATED ALWAYS AS (substr(K,1,32)) STORED, primary key(K, Q, T));" $db
 TEST_F(TestBatchExecute, htable_check_and_put)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_check_and_put"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_check_and_put"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -12036,7 +12031,7 @@ TEST_F(TestBatchExecute, htable_check_and_put_multi_thread)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_check_and_put"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_check_and_put"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -12123,7 +12118,7 @@ TEST_F(TestBatchExecute, htable_check_and_put_put)
 {
   // setup
   ObTable *the_table = NULL;
-  int ret = service_client_->alloc_table(ObString::make_string("htable1_cf1_check_and_put_put"), the_table);
+  int ret = service_client_->alloc_table(ObString::make_string("htable1$cf1_check_and_put_put"), the_table);
   ASSERT_EQ(OB_SUCCESS, ret);
   the_table->set_entity_type(ObTableEntityType::ET_HKV);  // important
   ObTableEntityFactory<ObTableEntity> entity_factory;

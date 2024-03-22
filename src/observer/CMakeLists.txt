@@ -155,6 +155,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_executor_factory.cpp
   table/ob_table_cg_service.cpp
   table/ob_table_cache.cpp
+  table/ob_table_schema_cache.cpp
   table/ob_table_session_pool.cpp
   table/ob_table_op_wrapper.cpp
   table/ob_table_query_common.cpp
@@ -167,6 +168,14 @@ ob_set_subtarget(ob_server table
   table/ttl/ob_table_ttl_executor.cpp
   table/ob_table_move_response.cpp
   table/ob_table_connection_mgr.cpp
+  table/ob_table_batch_service.cpp
+  table/ob_table_trans_utils.cpp
+  table/group/ob_table_group_common.cpp
+  table/group/ob_table_tenant_group.cpp
+  table/group/ob_table_group_service.cpp
+  table/group/ob_table_group_execute.cpp
+  table/ob_table_ls_execute_processor.cpp
+  table/ob_table_query_and_mutate_helper.cpp
 )
 
 ob_set_subtarget(ob_server table_load

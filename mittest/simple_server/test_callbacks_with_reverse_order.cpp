@@ -39,10 +39,10 @@ namespace storage
 {
 
 int ObLSTabletService::insert_tablet_rows(
+    const int64_t row_count,
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
     ObStoreRow *rows,
-    const int64_t row_count,
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;

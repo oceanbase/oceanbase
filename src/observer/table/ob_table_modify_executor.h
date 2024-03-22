@@ -120,6 +120,7 @@ protected:
                                const sql::ObConflictChecker &conflict_checker);
   // for htable
   int modify_htable_timestamp();
+  int modify_htable_timestamp(const ObITableEntity *entity);
   int fetch_conflict_rowkey(sql::ObConflictChecker &conflict_checker);
   int check_whether_row_change(const ObChunkDatumStore::StoredRow &upd_old_row,
                                const ObChunkDatumStore::StoredRow &upd_new_row,
