@@ -41,7 +41,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
-
+#include "sql/dblink/ob_tm_service.h"
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
 #else
@@ -824,6 +824,13 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
     LOG_WARN("current stmt is not allowed executed on txn tmp node", K(ret), \
              K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
+
+#define CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
+  if (OB_SUCC(ret) && (sp_name == DBLINK_DEFAULT_SAVEPOINT || sp_name == PL_DBLINK_DEFAULT_SAVEPOINT)) { \
+    ret = OB_ERR_INVALID_CHARACTER_STRING;                              \
+    LOG_WARN("this savepoint name is not allowed", K(ret), K(sp_name));             \
+  }
+
 int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
                                         const ObString &sp_name,
                                         const bool user_create)
@@ -836,6 +843,25 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   CHECK_TXN_FREE_ROUTE_ALLOWED();
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
+  // for dblink trans
+  // create savepoint before start stmt to avoid start stmt repeatly
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        // only check savepoint name in dblink trans
+        CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name);
+        OZ (ObTMService::tm_create_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session), user_create), sp_name);
@@ -964,6 +990,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
@@ -974,6 +1001,24 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  // for dblink trans
+  // rollback dblink remote savepoint after rollback savepoint in tx_desc
+  // to ensure savepoint 'first create last rollback'
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        OZ (ObTMService::tm_rollback_to_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   return ret;
 }
 

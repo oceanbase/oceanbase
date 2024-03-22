@@ -246,6 +246,7 @@ public:
                                const common::ObAddr &addr,
                                const int64_t max_stale_time_us,
                                bool &can_read);
+  static uint32_t get_real_session_id(ObSQLSessionInfo &session);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransControl);
   static int get_trans_expire_ts(const ObSQLSessionInfo &session,
@@ -257,7 +258,6 @@ private:
   static int start_hook_if_need_(ObSQLSessionInfo &session,
                                  transaction::ObTransService *txs,
                                  bool &start_hook);
-  static uint32_t get_real_session_id(ObSQLSessionInfo &session);
   static int get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid, bool &is_single_tablet);
   static bool has_same_lsid(const ObDASCtx &das_ctx,
                             const transaction::ObTxReadSnapshot &snapshot,

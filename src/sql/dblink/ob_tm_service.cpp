@@ -65,6 +65,8 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
       // unexpected
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected trans descriptor", K(ret));
+    } else if (OB_FAIL(MTL(ObTransService*)->tx_sanity_check(*tx_desc))) {
+      LOG_WARN("fail to sanity check tx", K(ret), KPC(tx_desc));
     } else if (tx_desc->is_tx_timeout()) {
       ret = OB_TRANS_TIMEOUT;
       LOG_WARN("dblink trans is timeout", K(ret), K(tx_desc));
@@ -126,6 +128,14 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
         my_session->associate_xa(xid);
       }
     }
+    if (OB_SUCCESS == ret) {
+      if (need_start || need_promote) {
+        if (OB_FAIL(xa_service->update_savepoint_with_sessid(tx_desc,
+                ObSqlTransControl::get_real_session_id(*my_session)))) {
+          LOG_WARN("update savepoint with session id failed", K(ret), K(xid));
+        }
+      }
+    }
   }
 
   // step 3, xa start for dblink connection
@@ -138,6 +148,16 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
     tx_id = tx_desc->tid();
   }
   my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
+  // for statistics
+  if (need_start || need_promote) {
+    DBLINK_STAT_ADD_TRANS_COUNT();
+    if (need_promote) {
+      DBLINK_STAT_ADD_TRANS_PROMOTION_COUNT();
+    }
+    if (OB_SUCCESS != ret) {
+      DBLINK_STAT_ADD_TRANS_FAIL_COUNT();
+    }
+  }
   LOG_INFO("tm rm start", K(ret), K(tx_id), K(remote_xid), K(need_start), K(need_promote));
 
   // if fail, the trans should be rolled back by client
@@ -159,6 +179,8 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
   ObTxDesc *&tx_desc = my_session->get_tx_desc();
   ObXAService *xa_service = MTL(ObXAService*);
+  const int64_t start_ts = ObTimeUtility::current_time();
+
   if (NULL == xa_service || NULL == my_session || NULL == tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session), KP(tx_desc));
@@ -181,7 +203,14 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     my_session->reset_tx_variable();
     my_session->disassociate_xa();
   }
-  LOG_INFO("tm commit for dblink trans", K(tx_id));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  DBLINK_STAT_ADD_TRANS_COMMIT_COUNT();
+  DBLINK_STAT_ADD_TRANS_COMMIT_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    DBLINK_STAT_ADD_TRANS_COMMIT_FAIL_COUNT();
+  }
+  LOG_INFO("tm commit for dblink trans", K(tx_id), K(used_time_us));
   return ret;
 }
 
@@ -197,6 +226,8 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
   ObTxDesc *&tx_desc = my_session->get_tx_desc();
   ObXAService *xa_service = MTL(ObXAService*);
+  const int64_t start_ts = ObTimeUtility::current_time();
+
   if (NULL == xa_service || NULL == my_session || NULL == tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session), KP(tx_desc));
@@ -216,7 +247,69 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
     my_session->reset_tx_variable();
     my_session->disassociate_xa();
   }
-  LOG_INFO("tm rollback for dblink trans", K(tx_id));
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  DBLINK_STAT_ADD_TRANS_ROLLBACK_COUNT();
+  DBLINK_STAT_ADD_TRANS_ROLLBACK_USED_TIME(used_time_us);
+  if (OB_FAIL(ret)) {
+    DBLINK_STAT_ADD_TRANS_ROLLBACK_FAIL_COUNT();
+  }
+  LOG_INFO("tm rollback for dblink trans", K(tx_id), K(used_time_us));
+  return ret;
+}
+
+int ObTMService::tm_create_savepoint(ObExecContext &exec_ctx, const ObString &sp_name)
+{
+  int ret = OB_SUCCESS;
+  ObXAService *xa_service = MTL(ObXAService*);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
+
+  if (OB_ISNULL(xa_service) || OB_ISNULL(my_session)) {
+    ret =  OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(sp_name), KP(xa_service));
+  } else if (my_session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(xa_service), KP(tx_desc));
+    } else if (OB_FAIL(MTL(ObTransService*)->tx_sanity_check(*tx_desc))) {
+      LOG_WARN("fail to sanity check tx when create savepoint",
+               K(ret), K(sp_name), KP(xa_service), KPC(tx_desc));
+    } else {
+      if (OB_FAIL(xa_service->create_savepoint_for_dblink_trans(tx_desc, sp_name))) {
+        LOG_WARN("fail to create savepoint for dblink",
+                  KPC(tx_desc), K(sp_name), KP(xa_service));
+      }
+    }
+  }
+  LOG_INFO("tm create savepoint for dblink trans",
+           K(ret), KP(xa_service), KP(my_session));
+  return ret;
+}
+
+int ObTMService::tm_rollback_to_savepoint(ObExecContext &exec_ctx, const ObString &sp_name)
+{
+  int ret = OB_SUCCESS;
+  ObXAService *xa_service = MTL(ObXAService*);
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
+
+  if (OB_ISNULL(my_session) || OB_ISNULL(xa_service)) {
+    ret =  OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(sp_name), KP(xa_service));
+  } else if (my_session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(xa_service), KP(tx_desc));
+    } else {
+      if (OB_FAIL(xa_service->rollback_savepoint_for_dblink_trans(tx_desc, sp_name))) {
+        LOG_WARN("fail to rollback savepoint for dblink",
+                  KPC(tx_desc), K(sp_name), KP(xa_service));
+      }
+    }
+  }
+  LOG_INFO("tm rollback savepoint for dblink trans",
+           K(ret), KP(xa_service), KP(my_session));
   return ret;
 }
 
@@ -247,6 +340,7 @@ int ObTMService::recover_tx_for_callback(const ObTransID &tx_id,
       my_session->associate_xa(tx_desc->get_xid());
     }
   }
+  DBLINK_STAT_ADD_TRANS_CALLBACK_COUNT();
   LOG_INFO("recover tx for dblink callback", K(ret), K(tx_id));
   return ret;
 }
