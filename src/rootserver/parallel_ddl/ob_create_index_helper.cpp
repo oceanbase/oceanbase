@@ -379,8 +379,8 @@ int ObCreateIndexHelper::generate_index_schema_()
     LOG_WARN("fail alloc memory", KR(ret), KP(new_arg_ptr));
   } else if (FALSE_IT(new_arg_ = new (new_arg_ptr)obrpc::ObCreateIndexArg)) {
   } else if (OB_ISNULL(new_arg_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("new_arg_ is null, maybe not init", KR(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_arg_ is null", KR(ret));
   } else if (OB_FAIL(new_arg_->assign(arg_))) {
     LOG_WARN("fail to assign arg", KR(ret));
   } else if (OB_UNLIKELY(!new_arg_->is_valid())) {

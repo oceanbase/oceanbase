@@ -947,7 +947,10 @@ int ObDDLHelper::check_table_udt_exist_(const ObTableSchema &table_schema)
         const uint64_t udt_id = col->get_sub_data_type();
         const ObUDTTypeInfo *udt_info = NULL;
         const ObUDTTypeInfo *local_udt_info = nullptr;
-        if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
+        if (OB_UNLIKELY(0 == udt_id)) {
+          ret = OB_ERR_INVALID_DATATYPE;
+          LOG_WARN("invalid column udt id", KR(ret), K(udt_id));
+        } else if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
           // can't add object lock across tenant, assumed that sys inner udt won't be changed.
           if (OB_FAIL(guard.get_udt_info(OB_SYS_TENANT_ID, udt_id, udt_info))) {
             LOG_WARN("fail to get udt info", KR(ret), K(udt_id));
@@ -970,4 +973,38 @@ int ObDDLHelper::check_table_udt_exist_(const ObTableSchema &table_schema)
     } // end for
   }
   return ret;
+}
+
+ObSchemaType ObDDLHelper::transfer_obj_type_to_schema_type_for_dep_(const ObObjectType obj_type)
+{
+  ObSchemaType ret_type = OB_MAX_SCHEMA;
+  switch(obj_type) {
+    case ObObjectType::TABLE:
+      ret_type = TABLE_SCHEMA;
+      break;
+    case ObObjectType::VIEW:
+      ret_type = VIEW_SCHEMA;
+      break;
+    case ObObjectType::PROCEDURE:
+    case ObObjectType::FUNCTION:
+      ret_type = ROUTINE_SCHEMA;
+      break;
+    case ObObjectType::PACKAGE:
+    case ObObjectType::PACKAGE_BODY:
+      ret_type = PACKAGE_SCHEMA;
+      break;
+    case ObObjectType::SEQUENCE:
+      ret_type = SEQUENCE_SCHEMA;
+      break;
+    case ObObjectType::TYPE:
+    case ObObjectType::TYPE_BODY:
+      ret_type = UDT_SCHEMA;
+      break;
+    case ObObjectType::SYNONYM:
+      ret_type = SYNONYM_SCHEMA;
+      break;
+    default:
+      break;
+  }
+  return ret_type;
 }
