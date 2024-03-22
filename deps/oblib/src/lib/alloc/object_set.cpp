@@ -490,8 +490,10 @@ bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
               STRCPY(first_label, obj->label_);
             }
             if (obj->on_malloc_sample_ && '\0' == first_bt[0]) {
-              int64_t *addrs = (int64_t*)&(obj->data_[obj->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE]);
-              IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, addrs, AOBJECT_BACKTRACE_COUNT);
+              void *addrs[AOBJECT_BACKTRACE_COUNT];
+              int64_t offset = obj->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE;
+              MEMCPY((char*)addrs, &obj->data_[offset], AOBJECT_BACKTRACE_SIZE);
+              IGNORE_RETURN parray(first_bt, MAX_BACKTRACE_LENGTH, (int64_t*)addrs, AOBJECT_BACKTRACE_COUNT);
             }
             if (!has_unfree) {
               has_unfree = true;
