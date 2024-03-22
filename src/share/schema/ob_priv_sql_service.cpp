@@ -1232,11 +1232,8 @@ int ObPrivSqlService::grant_revoke_role(
         } else if (NULL == role) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("role is null", K(ret), K(role_id));
-        } else {
-          const ObUserInfo role_info_tmp = *role;
-          if (OB_FAIL(role_infos.push_back(role_info_tmp))) {
-            LOG_WARN("fail to push back", K(ret), K(role_info_tmp));
-          }
+        } else if (OB_FAIL(role_infos.push_back(*role))) {
+          LOG_WARN("fail to push back", K(ret));
         }
       }
     }
@@ -1328,6 +1325,112 @@ int ObPrivSqlService::grant_sys_priv_to_ur(
 
   return ret;
 }
+
+int ObPrivSqlService::grant_proxy(const uint64_t tenant_id,
+                                  const uint64_t client_user_id,
+                                  const uint64_t proxy_user_id,
+                                  const uint64_t flags,
+                                  const int64_t new_schema_version,
+                                  ObISQLClient &sql_client,
+                                  const bool is_grant)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  int64_t affected_rows = 0;
+  const bool is_deleted = is_grant ? false : true;
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  ObDMLSqlSplicer dml;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter user grant connect through is not supported when data version is below 4.2.3");
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
+      || OB_FAIL(dml.add_pk_column("client_user_id", client_user_id))
+      || OB_FAIL(dml.add_pk_column("proxy_user_id", proxy_user_id))
+      || OB_FAIL(dml.add_column("flags", flags))
+      || OB_FAIL(dml.add_column("credential_type", 0))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (is_grant) {
+    if (OB_FAIL(exec.exec_replace(OB_ALL_USER_PROXY_INFO_TNAME, dml, affected_rows))) {
+      LOG_WARN("exec replace failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(exec.exec_delete(OB_ALL_USER_PROXY_INFO_TNAME, dml, affected_rows))) {
+      LOG_WARN("exec delete failed", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+            || OB_FAIL(dml.add_column("is_deleted", is_deleted))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_insert(OB_ALL_USER_PROXY_INFO_HISTORY_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec_replace failed", K(ret));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+  }
+  return ret;
+}
+
+int ObPrivSqlService::grant_proxy_role(const uint64_t tenant_id,
+                                  const uint64_t client_user_id,
+                                  const uint64_t proxy_user_id,
+                                  const uint64_t role_id,
+                                  const int64_t new_schema_version,
+                                  ObISQLClient &sql_client,
+                                  const bool is_grant)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  int64_t affected_rows = 0;
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  ObDMLSqlSplicer dml;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter user grant connect through is not supported when data version is below 4.2.3");
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
+      || OB_FAIL(dml.add_pk_column("client_user_id", client_user_id))
+      || OB_FAIL(dml.add_pk_column("proxy_user_id", proxy_user_id))
+      || OB_FAIL(dml.add_pk_column("role_id", role_id))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (is_grant) {
+    if (OB_FAIL(exec.exec_replace(OB_ALL_USER_PROXY_ROLE_INFO_TNAME, dml, affected_rows))) {
+      LOG_WARN("exec replace failed", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+    }
+  } else {
+    if (OB_FAIL(exec.exec_delete(OB_ALL_USER_PROXY_ROLE_INFO_TNAME, dml, affected_rows))) {
+      LOG_WARN("exec delete failed", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+            || OB_FAIL(dml.add_column("is_deleted", !is_grant))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_insert(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec_replace failed", K(ret));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+  }
+  return ret;
+}
+
 
 } //end of schema
 } //end of share

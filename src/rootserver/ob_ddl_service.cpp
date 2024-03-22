@@ -5277,34 +5277,6 @@ int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schem
   return ret;
 }
 
-int ObDDLService::check_parallel_ddl_conflict(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const obrpc::ObDDLArg &arg)
-{
-  int ret = OB_SUCCESS;
-  int64_t schema_version = OB_INVALID_VERSION;
-
-  if (arg.is_need_check_based_schema_objects()) {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.based_schema_object_infos_.count()); ++i) {
-      const ObBasedSchemaObjectInfo &info = arg.based_schema_object_infos_.at(i);
-      if (OB_FAIL(schema_guard.get_schema_version(
-          info.schema_type_,
-          info.schema_tenant_id_ == OB_INVALID_TENANT_ID ? arg.exec_tenant_id_: info.schema_tenant_id_,
-          info.schema_id_,
-          schema_version))) {
-        LOG_WARN("failed to get_schema_version", K(ret), K(arg.exec_tenant_id_), K(info));
-      } else if (OB_INVALID_VERSION == schema_version) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is OB_INVALID_VERSION", K(ret), K(info));
-      } else if (schema_version != info.schema_version_) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is not equal to info.schema_version_", K(ret), K(schema_version), K(info));
-      }
-    }
-  }
-
-  return ret;
-}
 int ObDDLService::lock_tables_in_recyclebin(const ObDatabaseSchema &database_schema,
                                             ObMySQLTransaction &trans)
 {
@@ -19364,6 +19336,34 @@ int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &a
   return ret;
 }
 
+int ObDDLService::check_parallel_ddl_conflict(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const obrpc::ObDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t schema_version = OB_INVALID_VERSION;
+
+  if (arg.is_need_check_based_schema_objects()) {
+    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.based_schema_object_infos_.count()); ++i) {
+      const ObBasedSchemaObjectInfo &info = arg.based_schema_object_infos_.at(i);
+      if (OB_FAIL(schema_guard.get_schema_version(
+          info.schema_type_,
+          info.schema_tenant_id_ == OB_INVALID_TENANT_ID ? arg.exec_tenant_id_: info.schema_tenant_id_,
+          info.schema_id_,
+          schema_version))) {
+        LOG_WARN("failed to get_schema_version", K(ret), K(arg.exec_tenant_id_), K(info));
+      } else if (OB_INVALID_VERSION == schema_version) {
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("schema_version is OB_INVALID_VERSION", K(ret), K(info));
+      } else if (schema_version != info.schema_version_) {
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("schema_version is not equal to info.schema_version_", K(ret), K(schema_version), K(info));
+      }
+    }
+  }
+
+  return ret;
+}
 int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
                                      obrpc::ObDDLRes &ddl_res,
                                      const SCN &frozen_version)
@@ -29679,9 +29679,11 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
     if (OB_SUCC(ret) && role_ids.count() > 0) {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       ObDDLSQLTransaction trans(schema_service_);
-      ObUserInfo user = *user_info;
+      ObUserInfo user;
       int64_t refreshed_schema_version = 0;
-      if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      if (OB_FAIL(user.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -30306,13 +30308,14 @@ int ObDDLService::alter_user_profile(const ObAlterUserProfileArg &arg)
   }
 
   if (OB_SUCC(ret) && OB_INVALID_ID == arg.default_role_flag_) {
-    ObUserInfo user_info = *user;
-    user_info.set_profile_id(profile_id);
-
+    ObUserInfo user_info;
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    if (OB_FAIL(user_info.assign(*user))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FALSE_IT(user_info.set_profile_id(profile_id))) {
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
@@ -36789,6 +36792,97 @@ int ObDDLService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
         LOG_WARN("publish schema failed", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::alter_user_proxy(const ObAlterUserProxyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", K(ret));
+  } else if (OB_ISNULL(schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+    LOG_WARN("check parallel ddl conflict failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    }
+    if (OB_SUCC(ret)) {
+      ObArray<ObUserInfo> users_to_update;
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.role_ids_.count(); i++) {
+        const ObUserInfo *role_user = NULL;
+        if (OB_FAIL(schema_guard.get_user_info(tenant_id, arg.role_ids_.at(i), role_user))) {
+          LOG_WARN("get user info failed", K(arg.role_ids_.at(i)), K(ret));
+        } else if (OB_ISNULL(role_user)) {
+          ret = OB_ROLE_NOT_EXIST;
+          LOG_WARN("role not existed", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.client_user_ids_.count(); i++) {
+        const ObUserInfo *client_user_info = NULL;
+        if (OB_FAIL(schema_guard.get_user_info(tenant_id, arg.client_user_ids_.at(i), client_user_info))) {
+          LOG_WARN("get user failed", K(ret));
+        } else if (OB_ISNULL(client_user_info)) {
+          ret = OB_ERR_USER_NOT_EXIST;
+          LOG_WARN("user not existed", K(ret));
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < arg.proxy_user_ids_.count(); j++) {
+          const ObUserInfo *proxy_user_info = NULL;
+          if (OB_FAIL(schema_guard.get_user_info(tenant_id, arg.proxy_user_ids_.at(j), proxy_user_info))) {
+            LOG_WARN("get user failed", K(ret));
+          } else if (OB_ISNULL(proxy_user_info)) {
+            ret = OB_ERR_USER_NOT_EXIST;
+            LOG_WARN("user not existed", K(ret));
+          } else if (OB_FAIL(ddl_operator.alter_user_proxy(client_user_info, proxy_user_info,
+                                              arg.flags_, arg.is_grant_, arg.role_ids_, users_to_update, trans))) {
+            LOG_WARN("alter user proxy failed", K(client_user_info), K(proxy_user_info), K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (users_to_update.empty()) {
+          //do nothing
+        } else if (OB_FAIL(schema_service_->get_schema_service()->get_user_sql_service().update_user_proxy_info(
+                                                                                                arg.tenant_id_,
+                                                                                                users_to_update,
+                                                                                                &arg.ddl_stmt_str_,
+                                                                                                trans))) {
+          LOG_WARN("Failed to grant or revoke user", K(users_to_update), K(ret));
+        }
+      }
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+
   }
   return ret;
 }

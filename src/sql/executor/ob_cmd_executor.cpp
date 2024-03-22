@@ -65,6 +65,7 @@
 #include "sql/resolver/dcl/ob_create_role_stmt.h"
 #include "sql/resolver/dcl/ob_drop_role_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/resolver/tcl/ob_start_trans_stmt.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
@@ -460,6 +461,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_ALTER_USER_PROFILE:
       case stmt::T_ALTER_USER: {
         DEFINE_EXECUTE_CMD(ObAlterUserProfileStmt, ObAlterUserProfileExecutor);
+        break;
+      }
+      case stmt::T_ALTER_USER_PROXY: {
+        DEFINE_EXECUTE_CMD(ObAlterUserProxyStmt, ObAlterUserProxyExecutor);
         break;
       }
       case stmt::T_ALTER_USER_PRIMARY_ZONE: {

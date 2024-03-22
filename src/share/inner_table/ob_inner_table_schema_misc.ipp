@@ -1879,6 +1879,10 @@ case OB_ALL_VIRTUAL_TYPE_ATTR_HISTORY_TID:
 case OB_ALL_VIRTUAL_TYPE_HISTORY_TID:
 case OB_ALL_VIRTUAL_USER_TID:
 case OB_ALL_VIRTUAL_USER_HISTORY_TID:
+case OB_ALL_VIRTUAL_USER_PROXY_INFO_TID:
+case OB_ALL_VIRTUAL_USER_PROXY_INFO_HISTORY_TID:
+case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_TID:
+case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID:
 
 #endif
 
@@ -4269,6 +4273,68 @@ case OB_ALL_VIRTUAL_USER_HISTORY_TID:
       }
       break;
     }
+
+    case OB_ALL_VIRTUAL_USER_PROXY_INFO_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_USER_PROXY_INFO_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_USER_PROXY_INFO_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_USER_PROXY_INFO_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
+
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
+    case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_USER_PROXY_ROLE_INFO_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
   END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #endif // ITERATE_VIRTUAL_TABLE_CREATE_ITER
@@ -4624,6 +4690,9 @@ case OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID:
 case OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID:
 case OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID:
 case OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID:
+case OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID:
+case OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID:
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID:
 
 #endif
 
@@ -4644,6 +4713,7 @@ case OB_ALL_CONTEXT_TID:
 case OB_ALL_TABLE_PRIVILEGE_TID:
 case OB_ALL_DDL_CHECKSUM_TID:
 case OB_ALL_RLS_POLICY_TID:
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID:
 case OB_ALL_TENANT_OBJAUTH_TID:
 case OB_ALL_PACKAGE_TID:
 case OB_ALL_ROOTSERVICE_EVENT_HISTORY_TID:
@@ -4656,6 +4726,7 @@ case OB_ALL_ROUTINE_PARAM_TID:
 case OB_ALL_DATABASE_PRIVILEGE_TID:
 case OB_ALL_TENANT_OLS_LABEL_TID:
 case OB_ALL_TENANT_KEYSTORE_TID:
+case OB_ALL_USER_PROXY_INFO_TID:
 case OB_ALL_COLUMN_TID:
 case OB_ALL_KV_TTL_TASK_TID:
 case OB_ALL_RLS_CONTEXT_TID:
@@ -4686,6 +4757,7 @@ case OB_ALL_TRANSFER_PARTITION_TASK_TID:
 case OB_ALL_SUB_PART_TID:
 case OB_ALL_ROUTINE_TID:
 case OB_ALL_TENANT_DIRECTORY_TID:
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID:
 case OB_ALL_DDL_ERROR_MESSAGE_TID:
 case OB_ALL_TENANT_TRIGGER_HISTORY_TID:
 case OB_ALL_CONSTRAINT_TID:
@@ -4806,6 +4878,12 @@ case OB_ALL_RLS_POLICY_TID: {
   }
   break;
 }
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
 case OB_ALL_TENANT_OBJAUTH_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_OBJAUTH_IDX_OBJAUTH_GRANTOR_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
@@ -4901,6 +4979,12 @@ case OB_ALL_TENANT_OLS_LABEL_TID: {
 }
 case OB_ALL_TENANT_KEYSTORE_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_KEYSTORE_IDX_KEYSTORE_MASTER_KEY_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5111,6 +5195,12 @@ case OB_ALL_ROUTINE_TID: {
 }
 case OB_ALL_TENANT_DIRECTORY_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_DIRECTORY_IDX_DIRECTORY_NAME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5382,6 +5472,15 @@ case OB_ALL_RLS_POLICY_TID: {
   }
   break;
 }
+case OB_ALL_USER_PROXY_INFO_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_history_idx_user_proxy_info_proxy_user_id_history_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
 case OB_ALL_TENANT_OBJAUTH_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_objauth_idx_objauth_grantor_schema(index_schema))) {
@@ -5538,6 +5637,15 @@ case OB_ALL_TENANT_OLS_LABEL_TID: {
 case OB_ALL_TENANT_KEYSTORE_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_keystore_idx_keystore_master_key_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_INFO_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_info_idx_user_proxy_info_proxy_user_id_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -5868,6 +5976,15 @@ case OB_ALL_ROUTINE_TID: {
 case OB_ALL_TENANT_DIRECTORY_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_tenant_directory_idx_directory_name_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_user_proxy_role_info_history_idx_user_proxy_role_info_proxy_user_id_history_schema(index_schema))) {
     LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
@@ -6244,6 +6361,12 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
 #endif

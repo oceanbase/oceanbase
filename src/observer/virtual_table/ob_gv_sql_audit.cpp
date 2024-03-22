@@ -567,7 +567,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
   ObObj *cells = cur_row_.cells_;
   const bool is_perf_event_closed = record.data_.is_perf_event_closed_;
 
-  if (OB_ISNULL(cells)) {
+  if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cells));
   } else {
@@ -1099,7 +1099,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           }
         } break;
         case PROXY_USER_NAME: {
-          cells[cell_idx].set_null();
+          int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
         } break;
         //format_sql_id
         case FORMAT_SQL_ID: {

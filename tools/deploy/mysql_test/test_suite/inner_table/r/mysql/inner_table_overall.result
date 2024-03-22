@@ -276,6 +276,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 505	__all_column_privilege	0	201001	1
 506	__all_column_privilege_history	0	201001	1
 508	__all_ls_replica_task_history	0	201001	1
+512	__all_user_proxy_info	0	201001	1
+513	__all_user_proxy_info_history	0	201001	1
+514	__all_user_proxy_role_info	0	201001	1
+515	__all_user_proxy_role_info_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -703,6 +707,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12468	__all_virtual_session_ps_info	2	201001	1
 12469	__all_virtual_tracepoint_info	2	201001	1
 12473	__all_virtual_compatibility_control	2	201001	1
+12474	__all_virtual_user_proxy_info	2	201001	1
+12475	__all_virtual_user_proxy_info_history	2	201001	1
+12476	__all_virtual_user_proxy_role_info	2	201001	1
+12477	__all_virtual_user_proxy_role_info_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

@@ -1386,6 +1386,54 @@ int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
   return ret;
 }
 
+int ObSQLUtils::get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
+                                            const ObIArray<uint64_t> &role_id_option_array,
+                                            const ObProxyInfo &proxied_info,
+                                            ObIArray<uint64_t> &new_role_id_array,
+                                            ObIArray<uint64_t> &new_role_id_option_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(role_id_array.count() != role_id_option_array.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (proxied_info.proxy_flags_ == PROXY_USER_NO_ROLES_BE_ACTIVATED) {
+    new_role_id_array.reuse();
+    new_role_id_option_array.reuse();
+  } else if (proxied_info.proxy_flags_ == PROXY_USER_ACTIVATE_ALL_ROLES)  {
+    OZ (new_role_id_array.assign(role_id_array));
+    OZ (new_role_id_option_array.assign(role_id_option_array));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < role_id_array.count(); i++) {
+      bool found = false;
+      for (int j = 0; OB_SUCC(ret) && !found && j < proxied_info.role_id_cnt_; j++) {
+        uint64_t role_id = proxied_info.get_role_id_by_idx(j);
+        if (role_id == OB_INVALID_ID) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (role_id_array.at(i) == role_id) {
+          found = true;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (proxied_info.proxy_flags_ == PROXY_USER_MAY_ACTIVATE_ROLE) {
+        if (found) {
+          OZ (new_role_id_array.push_back(role_id_array.at(i)));
+          OZ (new_role_id_option_array.push_back(role_id_option_array.at(i)));
+        }
+      } else if (proxied_info.proxy_flags_ == PROXY_USER_ROLE_CAN_NOT_BE_ACTIVATED) {
+        if (!found) {
+          OZ (new_role_id_array.push_back(role_id_array.at(i)));
+          OZ (new_role_id_option_array.push_back(role_id_option_array.at(i)));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObSQLUtils::check_mysql50_prefix(ObString &db_name)
 {
   bool ret = false;

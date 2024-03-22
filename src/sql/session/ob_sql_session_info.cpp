@@ -1937,6 +1937,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   // sql audit don't distinguish between two tenant IDs
   audit_record_.tenant_id_ = get_effective_tenant_id();
   audit_record_.user_id_ = get_user_id();
+  audit_record_.proxy_user_id_ = get_proxy_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
   if (EXECUTE_INNER == mode
       || EXECUTE_LOCAL == mode
@@ -1956,6 +1957,10 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     audit_record_.db_name_ = const_cast<char *>(get_database_name().ptr());
     audit_record_.db_name_len_ = min(get_database_name().length(),
                                      OB_MAX_DATABASE_NAME_LENGTH);
+
+    audit_record_.proxy_user_name_ = const_cast<char *>(get_proxy_user_name().ptr());
+    audit_record_.proxy_user_name_len_ = min(get_proxy_user_name().length(),
+                                       OB_MAX_USER_NAME_LENGTH);
 
     if (EXECUTE_PS_EXECUTE == mode
         || EXECUTE_PS_SEND_PIECE == mode

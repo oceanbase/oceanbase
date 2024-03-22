@@ -73,6 +73,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       proxy_sessid_(VALID_PROXY_SESSID),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
+      proxy_user_id_(OB_INVALID_ID),
       tx_desc_(NULL),
       tx_result_(),
       reserved_read_snapshot_version_(),
@@ -454,6 +455,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     sys_var_fac_.destroy();
   }
   client_identifier_.reset();
+  proxy_user_id_ = OB_INVALID_ID;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -648,10 +650,37 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
       LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
     } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.host_name_))) {
       LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
-    } else if (OB_FAIL(name_pool_.write_string(tmp_string, &thread_data_.user_at_host_name_))) {
-      LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
     } else {
       user_id_ = user_id;
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_proxy_user(const ObString &user_name, const ObString &host_name, const uint64_t user_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(user_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)
+      || OB_UNLIKELY(host_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name length invalid_", K(user_name), K(host_name), K(ret));
+  } else if (user_id == OB_INVALID_ID) {
+    proxy_user_id_ = user_id;
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.proxy_user_name_.reset();
+    thread_data_.proxy_host_name_.reset();
+  } else {
+    char tmp_buf[common::OB_MAX_USER_NAME_LENGTH_STORE + common::OB_MAX_USER_NAME_LENGTH_STORE + 2] = {};
+    snprintf(tmp_buf, sizeof(tmp_buf), "%.*s@%.*s", user_name.length(), user_name.ptr(),
+                                                    host_name.length(), host_name.ptr());
+    ObString tmp_string(tmp_buf);
+    LockGuard lock_guard(thread_data_mutex_);
+    if (OB_FAIL(name_pool_.write_string(user_name, &thread_data_.proxy_user_name_))) {
+      LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.proxy_host_name_))) {
+      LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
+    } else {
+      proxy_user_id_ = user_id;
     }
   }
   return ret;
@@ -4459,6 +4488,12 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               use_rich_vector_format_);
   }();
   OB_UNIS_ENCODE(ObString(sql_id_));
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+  }
   return ret;
 }
 
@@ -4721,6 +4756,21 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(sql_id);
   if (OB_SUCC(ret)) {
     set_cur_sql_id(sql_id.ptr());
+    LST_DO_CODE(OB_UNIS_DECODE,
+                proxy_user_id_,
+                thread_data_.proxy_user_name_,
+                thread_data_.proxy_host_name_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
+        LOG_WARN("fail to write app_trace_id to string_buf_", K(app_trace_id_), K(ret));
+      } else if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_user_name_,
+                                                &thread_data_.proxy_user_name_))) {
+        LOG_WARN("fail to write username to string_buf_", K(thread_data_.proxy_user_name_), K(ret));
+      } else if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_host_name_,
+                                                &thread_data_.proxy_host_name_))) {
+        LOG_WARN("fail to write userhost to string_buf_", K(thread_data_.proxy_host_name_), K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -4998,6 +5048,10 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               is_client_sessid_support_,
               use_rich_vector_format_);
   OB_UNIS_ADD_LEN(ObString(sql_id_));
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              proxy_user_id_,
+              thread_data_.proxy_user_name_,
+              thread_data_.proxy_host_name_);
   return len;
 }
 

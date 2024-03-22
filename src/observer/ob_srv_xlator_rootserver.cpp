@@ -291,5 +291,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
 #endif
+    RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
 }

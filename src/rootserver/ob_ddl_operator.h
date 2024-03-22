@@ -1021,6 +1021,13 @@ public:
                         const share::schema::ObTableSchema *table);
   int try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *synonym_info,
                                    common::ObMySQLTransaction &trans);
+  int alter_user_proxy(const ObUserInfo* client_user_info,
+                        const ObUserInfo* proxy_user_info,
+                        const uint64_t flags,
+                        const bool is_grant,
+                        const ObIArray<uint64_t> &role_ids,
+                        ObIArray<ObUserInfo> &users_to_update,
+                        ObMySQLTransaction &trans);
 private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,

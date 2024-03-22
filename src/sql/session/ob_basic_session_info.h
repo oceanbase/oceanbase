@@ -531,6 +531,7 @@ public:
   bool is_query_killed() const;
   bool is_valid() const { return is_valid_; };
   uint64_t get_user_id() const { return user_id_; }
+  uint64_t get_proxy_user_id() const { return proxy_user_id_; }
   bool is_auditor_user() const { return is_ora_auditor_user(user_id_); };
   bool is_lbacsys_user() const { return is_ora_lbacsys_user(user_id_); };
   bool is_oracle_sys_user() const { return is_ora_sys_user(user_id_); };
@@ -712,9 +713,13 @@ public:
 
   /// @{ thread_data_ related: }
   int set_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
+  int set_proxy_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
+  inline void set_proxy_user_id(const uint64_t proxy_user_id) { proxy_user_id_ = proxy_user_id; }
   int set_real_client_ip(const common::ObString &client_ip);
   const common::ObString &get_user_name() const { return thread_data_.user_name_;}
   const common::ObString &get_host_name() const { return thread_data_.host_name_;}
+  const common::ObString &get_proxy_user_name() const { return thread_data_.proxy_user_name_;}
+  const common::ObString &get_proxy_host_name() const { return thread_data_.proxy_host_name_;}
   const common::ObString &get_client_ip() const { return thread_data_.client_ip_;}
   const common::ObString &get_user_at_host() const { return thread_data_.user_at_host_name_;}
   const common::ObString &get_user_at_client_ip() const { return thread_data_.user_at_client_ip_;}
@@ -1447,7 +1452,9 @@ protected:
                          interactive_timeout_(0),
                          max_packet_size_(MultiThreadData::DEFAULT_MAX_PACKET_SIZE),
                          is_shadow_(false),
-                         is_in_retry_(SESS_NOT_IN_RETRY)
+                         is_in_retry_(SESS_NOT_IN_RETRY),
+                         proxy_user_name_(),
+                         proxy_host_name_()
     {
       CHAR_CARRAY_INIT(database_name_);
     }
@@ -1484,6 +1491,8 @@ protected:
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
       is_shadow_ = false;
       is_in_retry_ = SESS_NOT_IN_RETRY;
+      proxy_user_name_.reset();
+      proxy_host_name_.reset();
     }
     ~MultiThreadData ()
     {
@@ -1517,6 +1526,8 @@ protected:
     int64_t max_packet_size_;
     bool is_shadow_;
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
+    common::ObString proxy_user_name_;
+    common::ObString proxy_host_name_;
   };
 
 public:
@@ -2075,6 +2086,8 @@ private:
   uint64_t proxy_sessid_;
   int64_t global_vars_version_; // used for obproxy synchronize variables
   int64_t sys_var_base_version_;
+
+  uint64_t proxy_user_id_;              // current user id
   /*******************************************
    * transaction ctrl relative for session
    *******************************************/

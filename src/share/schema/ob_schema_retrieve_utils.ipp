@@ -1712,6 +1712,14 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & 8) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
     user_info.set_priv((priv_others & 16) != 0 ? OB_PRIV_SHUTDOWN : 0);
     user_info.set_priv((priv_others & 32) != 0 ? OB_PRIV_RELOAD : 0);
+
+    if (OB_SUCC(ret)) {
+      int64_t default_flags = 0;
+      //In user schema def, flag is a int column.
+      //int is int64_t, not uint64_t. So only 63 bit can be used.
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, flags, user_info, int64_t,
+                                              true/* skip null error*/, ignore_column_error, default_flags);
+    }
   }
   return ret;
 }
@@ -1791,6 +1799,145 @@ int ObSchemaRetrieveUtils::retrieve_role_grantee_map_schema(
     // iterate next <key_id, value_id>
     prev_key_id = is_fetch_role ? grantee_id : role_id;
     prev_value_id = is_fetch_role ? role_id : grantee_id;
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get role grantee map. iter quit. ", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::retrieve_proxy_info_schema(
+    const uint64_t tenant_id,
+    T &result,
+    const bool is_fetch_proxy,
+    ObArray<ObUserInfo> &user_array)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t prev_key_id = common::OB_INVALID_ID;
+  uint64_t prev_value_id = common::OB_INVALID_ID;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    allocator.reset();
+    uint64_t proxy_user_id = common::OB_INVALID_ID;
+    uint64_t client_user_id = common::OB_INVALID_ID;
+    bool is_deleted = false;
+    uint64_t flags = 0;
+    uint64_t credential_type = 0;
+    EXTRACT_INT_FIELD_MYSQL(result, "proxy_user_id", proxy_user_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "client_user_id", client_user_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+    ObUserInfo *user_info = NULL;
+    if (OB_FAIL(ret)) {
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(INFO, "proxy is deleted", K(proxy_user_id), K(client_user_id));
+    } else if (prev_key_id == (is_fetch_proxy ? proxy_user_id : client_user_id)
+            && prev_value_id == (is_fetch_proxy ? client_user_id : proxy_user_id)) {
+      ret = common::OB_SUCCESS;
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(result, "flags", flags, uint64_t);
+      EXTRACT_INT_FIELD_MYSQL(result, "credential_type", credential_type, uint64_t);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::find_user_info(is_fetch_proxy ? proxy_user_id : client_user_id,
+            user_array, user_info))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to find user info", K(ret), K(client_user_id), K(proxy_user_id));
+      } else if (NULL == user_info) {
+        SHARE_SCHEMA_LOG(INFO, "user info is null", K(ret), K(is_fetch_proxy), K(proxy_user_id), K(client_user_id));
+      } else {
+        ObProxyInfo proxy_info(&allocator);
+        proxy_info.user_id_ = is_fetch_proxy ? client_user_id : proxy_user_id;
+        proxy_info.proxy_flags_ = flags;
+        proxy_info.credential_type_ = credential_type;
+        if (is_fetch_proxy) {
+          OZ (user_info->add_proxy_user_info(proxy_info));
+        } else {
+          OZ (user_info->add_proxied_user_info(proxy_info));
+        }
+      }
+    }
+    // iterate next <key_id, value_id>
+    prev_key_id = is_fetch_proxy ? proxy_user_id : client_user_id;
+    prev_value_id = is_fetch_proxy ? client_user_id : proxy_user_id;
+  }
+  if (ret != common::OB_ITER_END) {
+    SHARE_SCHEMA_LOG(WARN, "fail to get role grantee map. iter quit. ", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::retrieve_proxy_role_info_schema(
+    const uint64_t tenant_id,
+    T &result,
+    const bool is_fetch_proxy,
+    ObArray<ObUserInfo> &user_array)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t prev_key_id = common::OB_INVALID_ID;
+  uint64_t prev_value_id = common::OB_INVALID_ID;
+  uint64_t prev_role_id = common::OB_INVALID_ID;
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
+    uint64_t client_user_id = common::OB_INVALID_ID;
+    uint64_t proxy_user_id = common::OB_INVALID_ID;
+    uint64_t role_id = common::OB_INVALID_ID;
+    bool is_deleted = false;
+    uint64_t flags = 0;
+    EXTRACT_INT_FIELD_MYSQL(result, "proxy_user_id", proxy_user_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "client_user_id", client_user_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "role_id", role_id, uint64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+    ObUserInfo *user_info = NULL;
+    if (OB_FAIL(ret)) {
+    } else if (is_deleted) {
+      SHARE_SCHEMA_LOG(INFO, "proxy is deleted", K(proxy_user_id), K(client_user_id), K(role_id));
+    } else if (prev_key_id == (is_fetch_proxy ? proxy_user_id : client_user_id)
+            && prev_value_id == (is_fetch_proxy ? client_user_id : proxy_user_id)
+            && prev_role_id == role_id) {
+      ret = common::OB_SUCCESS;
+    } else {
+      if (OB_FAIL(ObSchemaRetrieveUtils::find_user_info(is_fetch_proxy ? proxy_user_id : client_user_id,
+            user_array, user_info))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to find user info", K(ret), K(client_user_id), K(proxy_user_id));
+      } else if (NULL == user_info) {
+        SHARE_SCHEMA_LOG(INFO, "user info is null", K(ret), K(is_fetch_proxy), K(proxy_user_id), K(client_user_id));
+      } else {
+        if (is_fetch_proxy) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < user_info->get_proxy_user_info_cnt(); i++) {
+            ObProxyInfo *proxy_info = user_info->get_proxy_user_info_by_idx_for_update(i);
+            if (OB_ISNULL(proxy_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (proxy_info->user_id_ == client_user_id) {
+              if (OB_FAIL(proxy_info->add_role_id(role_id))) {
+                LOG_WARN("add role id failed", K(ret));
+              }
+            }
+          }
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < user_info->get_proxied_user_info_cnt(); i++) {
+            ObProxyInfo *proxied_info = user_info->get_proxied_user_info_by_idx_for_update(i);
+            if (OB_ISNULL(proxied_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (proxied_info->user_id_ == proxy_user_id) {
+              if (OB_FAIL(proxied_info->add_role_id(role_id))) {
+                LOG_WARN("add role id failed", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+    // iterate next <key_id, value_id>
+    prev_key_id = is_fetch_proxy ? proxy_user_id : client_user_id;
+    prev_value_id = is_fetch_proxy ? client_user_id : proxy_user_id;
+    prev_role_id = role_id;
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get role grantee map. iter quit. ", K(ret));

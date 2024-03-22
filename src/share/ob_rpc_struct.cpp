@@ -4729,6 +4729,42 @@ OB_SERIALIZE_MEMBER((ObAlterUserProfileArg, ObDDLArg),
                     role_id_array_,
                     user_ids_);
 
+bool ObAlterUserProxyArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && !client_user_ids_.empty()
+         && !proxy_user_ids_.empty()
+         && flags_ != 0;
+}
+
+int ObAlterUserProxyArg::assign(const ObAlterUserProxyArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  credential_type_ = other.credential_type_;
+  is_grant_ = other.is_grant_;
+  flags_ = other.flags_;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(client_user_ids_.assign(other.client_user_ids_))) {
+    LOG_WARN("fail to assign role_id_array", KR(ret));
+  } else if (OB_FAIL(proxy_user_ids_.assign(other.proxy_user_ids_))) {
+    LOG_WARN("fail to assign role_id_array", KR(ret));
+  } else if (OB_FAIL(role_ids_.assign(other.role_ids_))) {
+    LOG_WARN("fail to assign role_id_array", KR(ret));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObAlterUserProxyArg, ObDDLArg),
+                    tenant_id_,
+                    client_user_ids_,
+                    proxy_user_ids_,
+                    credential_type_,
+                    flags_,
+                    is_grant_,
+                    role_ids_);
+
 bool ObGrantArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_
@@ -7855,6 +7891,17 @@ int ObPhysicalRestoreResult::assign(const ObPhysicalRestoreResult &other)
   tenant_id_ = other.tenant_id_;
   trace_id_ = other.trace_id_;
   addr_ = other.addr_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObAlterUserProxyRes, ret_);
+int ObAlterUserProxyRes::assign(const ObAlterUserProxyRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    ret_ = other.ret_;
+  }
   return ret;
 }
 

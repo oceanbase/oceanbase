@@ -586,7 +586,7 @@ int set_privs_by_table_item_recursively(
         bool need_check = true;
         if (is_sys_view(table_item->ref_id_)) {
           /* oracle的字典视图(dba_*)需要做检查，其他系统视图(all_*, user_*, 性能视图(v$)不做权限检查 */
-          need_check = table_item->is_oracle_dba_sys_view();
+          need_check = table_item->is_oracle_dba_sys_view() || (OB_PROXY_USERS_TID == table_item->ref_id_);
         } else {
           need_check = true;
         }
@@ -1957,6 +1957,7 @@ int get_create_user_privs(
     switch (stmt_type) {//TODO deleted switch
       case stmt::T_LOCK_USER :
       case stmt::T_ALTER_USER_PROFILE :
+      case stmt::T_ALTER_USER_PROXY :
       case stmt::T_ALTER_USER_PRIMARY_ZONE:
       case stmt::T_ALTER_USER:
       case stmt::T_SET_PASSWORD :

@@ -163,6 +163,22 @@ public:
       const int64_t new_schema_version,
       ObISQLClient &sql_client);
 
+  virtual int grant_proxy(const uint64_t tenant_id,
+                  const uint64_t client_user_id,
+                  const uint64_t proxy_user_id,
+                  const uint64_t flags,
+                  const int64_t new_schema_version,
+                  ObISQLClient &sql_client,
+                  const bool is_grant);
+
+  virtual int grant_proxy_role(const uint64_t tenant_id,
+                      const uint64_t client_user_id,
+                      const uint64_t proxy_user_id,
+                      const uint64_t role_id,
+                      const int64_t new_schema_version,
+                      ObISQLClient &sql_client,
+                      const bool is_grant);
+
 private:
   int log_obj_priv_operation(
       const ObObjPrivSortKey &obj_priv_key,

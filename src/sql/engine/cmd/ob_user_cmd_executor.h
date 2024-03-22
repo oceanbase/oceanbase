@@ -115,6 +115,18 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserProfileExecutor);
 };
 
+class ObAlterUserProxyStmt;
+class ObAlterUserProxyExecutor
+{
+private:
+public:
+  ObAlterUserProxyExecutor() {}
+  virtual ~ObAlterUserProxyExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterUserProxyStmt &stmt);
+
+  DISALLOW_COPY_AND_ASSIGN(ObAlterUserProxyExecutor);
+};
+
 class ObRenameUserStmt;
 class ObRenameUserExecutor
 {

@@ -5946,6 +5946,27 @@ int ObRootService::alter_user_profile(const ObAlterUserProfileArg &arg)
   return ret;
 }
 
+int ObRootService::alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter user grant connect through is not supported when data version is below 4.2.3");
+  } else if (OB_FAIL(ddl_service_.alter_user_proxy(arg))){
+    LOG_WARN("alter user failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::create_directory(const obrpc::ObCreateDirectoryArg &arg)
 {
   int ret = OB_SUCCESS;

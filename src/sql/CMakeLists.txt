@@ -1041,6 +1041,8 @@ ob_set_subtarget(ob_sql resolver_dcl
   resolver/dcl/ob_alter_user_primary_zone_stmt.cpp
   resolver/dcl/ob_alter_user_profile_resolver.cpp
   resolver/dcl/ob_alter_user_profile_stmt.cpp
+  resolver/dcl/ob_alter_user_proxy_resolver.cpp
+  resolver/dcl/ob_alter_user_proxy_stmt.cpp
   resolver/dcl/ob_create_role_resolver.cpp
   resolver/dcl/ob_create_role_stmt.cpp
   resolver/dcl/ob_create_user_resolver.cpp

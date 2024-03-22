@@ -331,6 +331,12 @@
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
 # 508: __all_ls_replica_task_history
+# 512: __all_user_proxy_info
+# 513: __all_user_proxy_info_history
+# 513: __all_user_proxy_info  # BASE_TABLE_NAME
+# 514: __all_user_proxy_role_info
+# 515: __all_user_proxy_role_info_history
+# 515: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1047,6 +1053,16 @@
 # 12468: __all_virtual_session_ps_info
 # 12469: __all_virtual_tracepoint_info
 # 12473: __all_virtual_compatibility_control
+# 12474: __all_virtual_user_proxy_info
+# 12474: __all_user_proxy_info  # BASE_TABLE_NAME
+# 12475: __all_virtual_user_proxy_info_history
+# 12475: __all_user_proxy_info  # BASE_TABLE_NAME
+# 12475: __all_user_proxy_info_history  # BASE_TABLE_NAME1
+# 12476: __all_virtual_user_proxy_role_info
+# 12476: __all_user_proxy_role_info  # BASE_TABLE_NAME
+# 12477: __all_virtual_user_proxy_role_info_history
+# 12477: __all_user_proxy_role_info  # BASE_TABLE_NAME
+# 12477: __all_user_proxy_role_info_history  # BASE_TABLE_NAME1
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1639,6 +1655,10 @@
 # 15444: __all_virtual_session_ps_info  # BASE_TABLE_NAME
 # 15445: ALL_VIRTUAL_TRACEPOINT_INFO
 # 15445: __all_virtual_tracepoint_info  # BASE_TABLE_NAME
+# 15446: ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT
+# 15446: __all_user_proxy_info  # BASE_TABLE_NAME
+# 15447: ALL_VIRTUAL_USER_PROXY_ROLE_INFO_REAL_AGENT
+# 15447: __all_user_proxy_role_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2312,6 +2332,7 @@
 # 25277: DBA_WR_SQLTEXT
 # 25278: USER_USERS
 # 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
+# 25301: PROXY_USERS
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE
@@ -2875,6 +2896,17 @@
 # 101100: __idx_505_idx_column_privilege_name
 # 101100: idx_column_privilege_name  # INDEX_NAME
 # 101100: __all_column_privilege  # DATA_BASE_TABLE_NAME
+# 101101: __idx_512_idx_user_proxy_info_proxy_user_id
+# 101101: idx_user_proxy_info_proxy_user_id  # INDEX_NAME
+# 101101: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 101102: __idx_513_idx_user_proxy_info_proxy_user_id_history
+# 101102: idx_user_proxy_info_proxy_user_id_history  # INDEX_NAME
+# 101102: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 101102: __all_user_proxy_info_history  # DATA_BASE_TABLE_NAME1
+# 101103: __idx_515_idx_user_proxy_role_info_proxy_user_id_history
+# 101103: idx_user_proxy_role_info_proxy_user_id_history  # INDEX_NAME
+# 101103: __all_user_proxy_role_info  # DATA_BASE_TABLE_NAME
+# 101103: __all_user_proxy_role_info_history  # DATA_BASE_TABLE_NAME1
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME
@@ -3163,3 +3195,7 @@
 # 15416: idx_dbms_lock_allocated_expiration_real_agent  # INDEX_NAME
 # 15416: __all_dbms_lock_allocated  # DATA_BASE_TABLE_NAME
 # 15416: ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15448: __idx_15446_idx_user_proxy_info_proxy_user_id_real_agent
+# 15448: idx_user_proxy_info_proxy_user_id_real_agent  # INDEX_NAME
+# 15448: __all_user_proxy_info  # DATA_BASE_TABLE_NAME
+# 15448: ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT  # DATA_BASE_TABLE_NAME1

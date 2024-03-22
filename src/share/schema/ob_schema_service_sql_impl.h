@@ -537,6 +537,26 @@ public:
       const uint64_t *user_keys /* = NULL */,
       const int64_t users_size /* = 0 */);
 
+ int fetch_proxy_user_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys /* = NULL */,
+    const int64_t users_size /* = 0 */);
+
+ int fetch_proxy_role_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys /* = NULL */,
+    const int64_t users_size /* = 0 */);
+
   virtual int get_core_version(common::ObISQLClient &sql_client,
                                const ObRefreshSchemaStatus &schema_status,
                                int64_t &core_schema_version);

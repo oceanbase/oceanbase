@@ -707,6 +707,11 @@ public:
                               const bool check_for_path_char, const int64_t max_ident_len);
 
   static int compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id);
+  static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
+                                            const ObIArray<uint64_t> &role_id_option_array,
+                                            const ObProxyInfo &proxied_info,
+                                            ObIArray<uint64_t> &new_role_id_array,
+                                            ObIArray<uint64_t> &new_role_id_option_array);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   struct SessionInfoCtx

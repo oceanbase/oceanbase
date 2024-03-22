@@ -547,6 +547,7 @@ public:
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
   int revoke_syspriv(const obrpc::ObRevokeSysPrivArg &arg);
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res);
   int alter_role(const obrpc::ObAlterRoleArg &arg);
   //----End of functions for managing privileges----
 

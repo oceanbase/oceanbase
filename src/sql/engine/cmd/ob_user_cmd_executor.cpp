@@ -23,6 +23,7 @@
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"
 #include "sql/resolver/dcl/ob_rename_user_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -630,6 +631,28 @@ int ObAlterUserProfileExecutor::execute(ObExecContext &ctx, ObAlterUserProfileSt
     LOG_WARN("get common rpc proxy failed", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->alter_user_profile(stmt.get_ddl_arg()))) {
     LOG_WARN("alter user profile failed", K(stmt.get_ddl_arg()), K(ret));
+  }
+  return ret;
+}
+
+int ObAlterUserProxyExecutor::execute(ObExecContext &ctx, ObAlterUserProxyStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  obrpc::ObAlterUserProxyRes res;
+  if (OB_ISNULL(stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_FALSE_IT(stmt.get_ddl_arg().ddl_stmt_str_ = stmt.get_query_ctx()->get_sql_stmt())) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_FAIL(common_rpc_proxy->alter_user_proxy(stmt.get_ddl_arg(), res))) {
+    LOG_WARN("alter user proxy failed", K(stmt.get_ddl_arg()), K(ret));
   }
   return ret;
 }

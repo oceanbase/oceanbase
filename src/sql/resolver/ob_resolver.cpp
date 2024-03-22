@@ -87,6 +87,7 @@
 #include "sql/resolver/dcl/ob_create_role_resolver.h"
 #include "sql/resolver/dcl/ob_drop_role_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_resolver.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_resolver.h"
 #include "sql/resolver/tcl/ob_start_trans_resolver.h"
 #include "sql/resolver/tcl/ob_end_trans_resolver.h"
@@ -760,6 +761,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_ALTER_USER_DEFAULT_ROLE:
       case T_SET_ROLE: {
         REGISTER_STMT_RESOLVER(AlterUserProfile);
+        break;
+      }
+      case T_ALTER_USER_PROXY: {
+        REGISTER_STMT_RESOLVER(AlterUserProxy);
         break;
       }
       case T_ALTER_USER_PRIMARY_ZONE: {
