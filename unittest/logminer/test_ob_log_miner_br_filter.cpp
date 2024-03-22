@@ -389,7 +389,6 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
   EXPECT_EQ(OB_ERR_UNEXPECTED, op_filter.init(nullptr));
   op_filter.destroy();
 
-
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert"));
 
   br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 

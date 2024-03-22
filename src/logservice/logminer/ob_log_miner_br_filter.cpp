@@ -255,7 +255,7 @@ TransBRFilterPlugin::TransBRFilterPlugin():
 int TransBRFilterPlugin::init(const char *trans_id_cond)
 {
   int ret = OB_SUCCESS;
-  if (!OB_ISNULL(trans_id_cond)) {
+  if (OB_NOT_NULL(trans_id_cond)) {
     if (!is_number(trans_id_cond)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("TransBRFilterPlugin init fail", K(trans_id_cond));
