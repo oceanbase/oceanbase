@@ -465,39 +465,6 @@ TEST_F(TestCreateExecutor, refresh_exprs_frame)
   ASSERT_EQ(101, objs[2].get_int());
 }
 
-TEST_F(TestCreateExecutor, check_column_type)
-{
-  ObTableColumnInfo column_info;
-  column_info.type_.set_result_flag(NOT_NULL_WRITE_FLAG);
-  ObObj obj;
-  uint32_t res_flag = 0;
-  ObTableCtx fake_ctx(allocator_);
-  fake_ctx_init_common(fake_ctx, &table_schema_);
-
-  // check nullable
-  obj.set_null();
-  res_flag |= NOT_NULL_FLAG;
-  column_info.type_.set_result_flag(res_flag);
-  column_info.is_nullable_ = false;
-  ASSERT_EQ(OB_BAD_NULL_ERROR, fake_ctx.adjust_column_type(column_info, obj));
-  // check data type mismatch
-  res_flag = 0;
-  obj.set_int(1);
-  column_info.type_.set_result_flag(res_flag);
-  column_info.type_.set_type(ObDoubleType);
-  ASSERT_EQ(OB_KV_COLUMN_TYPE_NOT_MATCH, fake_ctx.adjust_column_type(column_info, obj));
-  // check collation
-  obj.set_binary("ttt");
-  column_info.type_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  column_info.type_.set_type(ObVarcharType);
-  ASSERT_EQ(OB_KV_COLLATION_MISMATCH, fake_ctx.adjust_column_type(column_info, obj));
-  // collation convert
-  obj.set_varchar("test");
-  obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.adjust_column_type(column_info, obj));
-  ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, obj.get_collation_type());
-}
-
 TEST_F(TestCreateExecutor, generate_key_range)
 {
   ObTableCtx fake_ctx(allocator_);

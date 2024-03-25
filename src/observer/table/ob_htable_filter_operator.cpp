@@ -622,6 +622,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       max_result_size_(query.get_max_result_size()),
       batch_size_(query.get_batch()),
       time_to_live_(0),
+      max_version_(0),
       curr_cell_(),
       allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       column_tracker_(NULL),
