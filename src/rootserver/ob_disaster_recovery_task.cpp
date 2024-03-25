@@ -407,7 +407,10 @@ int ObDRTask::fill_dml_splicer_for_new_column(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("manual operation is not suppported when tenant's data version is below 4.2.3.0", KR(ret), K(tenant_data_version));
   } else if (tenant_data_version >= DATA_VERSION_4_2_3_0) {
-    if (OB_FAIL(dml_splicer.add_column("is_manual", is_manual_task()))) {
+    if (!is_manual_task() && data_src.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task invoke and data_source is not match", KR(ret), K(is_manual_task()), K(data_src));
+    } else if (OB_FAIL(dml_splicer.add_column("is_manual", is_manual_task()))) {
       LOG_WARN("add column failed", KR(ret), K(is_manual_task()));
     } else if (ObDRTaskType::LS_ADD_REPLICA == get_disaster_recovery_task_type()
             || ObDRTaskType::LS_MIGRATE_REPLICA == get_disaster_recovery_task_type()) {
@@ -667,9 +670,10 @@ int ObMigrateLSReplicaTask::execute(
           get_ls_id(),
           get_src_member(),
           get_dst_replica().get_member(),
-          get_data_src_member(),
+          ObReplicaMember(),
           get_paxos_replica_number(),
-          false/*skip_change_member_list(not used)*/))) {
+          false/*skip_change_member_list(not used)*/,
+          get_data_src_member()))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
         .by(get_tenant_id()).ls_migrate_replica(arg))) {
@@ -950,6 +954,9 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
+  int64_t data_source_port = 0;
+  common::ObString data_source_ip;
+  bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -969,6 +976,12 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_replica_svr_port", dest_port);
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_port", data_source_port,
+    int64_t, true/*skip null error*/, true/*skip column error*/, 0);
+  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_ip", data_source_ip,
+    true/*skip null error*/, true/*skip column error*/, "0.0.0.0");
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
+
   //STEP2_0: make necessary members to build a task
   ObDRTaskKey task_key;
   common::ObAddr src_server;
@@ -979,6 +992,7 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
   ObSqlString task_id_sqlstring_format;
+  common::ObAddr data_source;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
@@ -1000,6 +1014,9 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   } else if (false == dest_server.set_ip_addr(dest_ip, static_cast<uint32_t>(dest_port))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
+  } else if (false == data_source.set_ip_addr(data_source_ip, static_cast<uint32_t>(data_source_port))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid server address", K(data_source_ip), K(data_source_port));
   } else if (OB_FAIL(dst_replica.assign(
                   0/*unit id*/,
                   0/*unit group id*/,
@@ -1027,12 +1044,12 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
                     generate_time_us,               //(in used)
                     GCONF.cluster_id,               //(not used)cluster_id
                     transmit_data_size,             //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
+                    is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     priority_to_set,                //(not used)
                     comment_to_set.ptr(),           //comment
                     dst_replica,                    //(in used)dest_server
                     ObReplicaMember(src_server, 0), //(in used)src_server
-                    ObReplicaMember(src_server, 0), //(not used)data_src_member
+                    ObReplicaMember(data_source, 0), //(not used)data_src_member
                     src_paxos_replica_number))) {                 //(not used)
     LOG_WARN("fail to build a ObMigrateLSReplicaTask", KR(ret));
   } else {
@@ -1152,10 +1169,11 @@ int ObAddLSReplicaTask::execute(
           get_tenant_id(),
           get_ls_id(),
           get_dst_replica().get_member(),
-          get_data_src_member(),
+          ObReplicaMember(),
           get_orig_paxos_replica_number(),
           get_paxos_replica_number(),
-          false/*skip_change_member_list(not used)*/))) {
+          false/*skip_change_member_list(not used)*/,
+          get_data_src_member()))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
         .by(get_tenant_id()).ls_add_replica(arg))) {
@@ -1442,6 +1460,9 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
+  int64_t data_source_port = 0;
+  common::ObString data_source_ip;
+  bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -1462,6 +1483,12 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_port", data_source_port,
+    int64_t, true/*skip null error*/, true/*skip column error*/, 0);
+  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_ip", data_source_ip,
+    true/*skip null error*/, true/*skip column error*/, "0.0.0.0");
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
+
   //STEP2_0: make necessary members to build a task
   ObDRTaskKey task_key;
   common::ObAddr src_server;
@@ -1472,6 +1499,7 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
   ObSqlString task_id_sqlstring_format;
+  common::ObAddr data_source;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
@@ -1493,6 +1521,9 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   } else if (false == dest_server.set_ip_addr(dest_ip, static_cast<uint32_t>(dest_port))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
+  } else if (false == data_source.set_ip_addr(data_source_ip, static_cast<uint32_t>(data_source_port))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid server address", K(data_source_ip), K(data_source_port));
   } else if (OB_FAIL(dst_replica.assign(
                   0/*unit id*/,
                   0/*unit group id*/,
@@ -1520,11 +1551,11 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
                     generate_time_us,
                     GCONF.cluster_id,               //(not used)cluster_id
                     transmit_data_size,             //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
+                    is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     priority_to_set,                //(not used)
                     comment_to_set.ptr(),           //comments
                     dst_replica,                    //(in used)dest_server
-                    ObReplicaMember(src_server, 0), //(in used)src_server
+                    ObReplicaMember(data_source, 0), //(in used)src_server
                     src_paxos_replica_number,                     //(in used)
                     dest_paxos_replica_number))) {                //(in used)
     LOG_WARN("fail to build a ObAddLSReplicaTask", KR(ret));
@@ -1658,7 +1689,7 @@ int ObLSTypeTransformTask::execute(
           get_ls_id(),
           get_src_member(),
           get_dst_replica().get_member(),
-          get_data_src_member(),
+          ObReplicaMember(),
           get_orig_paxos_replica_number(),
           get_paxos_replica_number(),
           false/*skip_change_member_list(not used)*/))) {
@@ -1934,6 +1965,7 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
+  bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -1956,6 +1988,7 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "source_replica_type", src_type);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_type", dest_type);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
   //STEP2_0: make necessary members to build a task
   ObDRTaskKey task_key;
   common::ObAddr src_server;
@@ -2034,12 +2067,12 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
                     generate_time_us,
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
+                    is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dst_replica,                 //(in used)dest_server
                     src_member,                  //(in used)src_server
-                    src_member,                  //(not used)data_src_server
+                    ObReplicaMember(),           //(not used)data_src_server
                     src_paxos_replica_number,                  //(in used)
                     dest_paxos_replica_number))) {             //(in used)
       LOG_WARN("fail to build a ObLSTypeTransformTask", KR(ret), K(task_key), K(tenant_id), K(ls_id),
@@ -2365,6 +2398,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   int64_t generate_time_us = 0;
   common::ObString comment;
   ObReplicaType replica_type = REPLICA_TYPE_MAX;
+  bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -2386,6 +2420,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
   //STEP2_0: make necessary members to build a task
   ObDRTaskKey task_key;
   common::ObAddr dest_server;
@@ -2444,7 +2479,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
                     generate_time_us,
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
+                    is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dest_server,                 //(in used)leader
@@ -2745,6 +2780,7 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
+  bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -2763,6 +2799,7 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
   //STEP2_0: make necessary members to build a task
   ObDRTaskKey task_key;
   common::ObAddr dest_server;
@@ -2810,7 +2847,7 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
                     generate_time_us,
                     GCONF.cluster_id,            //(not used)cluster_id
                     transmit_data_size,          //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
+                    is_manual ? obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL : obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dest_server,                 //(in used)leader
