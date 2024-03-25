@@ -642,7 +642,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
     if (lib::is_oracle_mode()) {
-      if (!in_nested_sql_ctrl()) {
+      OZ (ObPLContext::debug_start(&session_info));
+      if (OB_SUCC(ret) && !in_nested_sql_ctrl()) {
         /*!
          * 如果已经开始了STMT, 说明在嵌套语句中, 此时不需要设置SAVEPOINT,
          * 因为目前嵌套语句的实现保证了不需要再嵌套语句内部回滚PL的执行;
@@ -658,8 +659,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
           LOG_DEBUG("create pl implicit savepoint for oracle", K(ret), K(PL_IMPLICIT_SAVEPOINT));
         }
       }
-      if (session_info.get_local_autocommit()) {
-        OX (reset_autocommit_ = true);
+      if (OB_SUCC(ret) && session_info.get_local_autocommit()) {
+        reset_autocommit_ = true;
         OZ (session_info.set_autocommit(false));
       }
     } else { // MySQL Mode
@@ -689,8 +690,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
     OX (session_info.set_pl_stack_ctx(this));
     OX (session_info.set_pl_can_retry(true));
-
-    OZ (ObPLContext::debug_start(&session_info));
   } else if (is_function_or_trigger && lib::is_mysql_mode()) {
     //mysql模式, 内层function或者trigger不需要创建隐式savepoint, 只需要重置ac
     //如果是procedure调udf场景:
