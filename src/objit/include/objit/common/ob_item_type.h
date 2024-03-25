@@ -2441,6 +2441,7 @@ typedef enum ObItemType
   T_INTO_FILE_LIST,
   T_SINGLE_OPT,
   T_MAX_FILE_SIZE,
+  T_SHOW_CREATE_USER,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
