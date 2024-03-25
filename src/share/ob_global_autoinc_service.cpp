@@ -689,8 +689,11 @@ int ObGlobalAutoIncService::wait_all_requests_to_finish()
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < MUTEX_NUM; i++) {
     // wait for all working threads to finish
-    ret = op_mutex_[i].lock(BROADCAST_OP_TIMEOUT);
-    op_mutex_[i].unlock();
+    if (OB_FAIL(op_mutex_[i].lock(BROADCAST_OP_TIMEOUT))) {
+      LOG_WARN("fail to lock mutex", K(ret), K(i));
+    } else {
+      op_mutex_[i].unlock();
+    }
   }
   return ret;
 }
