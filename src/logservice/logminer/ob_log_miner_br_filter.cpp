@@ -276,6 +276,7 @@ bool TransBRFilterPlugin::need_process_(const RecordType type)
     case EDELETE:
     case EBEGIN:
     case ECOMMIT:
+    case EDDL:
       bret = true;
       break;
     default:
