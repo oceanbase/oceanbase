@@ -15,6 +15,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/ob_device_manager.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -565,6 +566,7 @@ int ObSelectIntoOp::into_varlist()
   const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
                                            MY_SPEC.output_ : MY_SPEC.select_exprs_;
   const ObIArray<ObString> &user_vars = MY_SPEC.user_vars_;
+  ObArenaAllocator lob_tmp_allocator("LobTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (select_exprs.count() != user_vars.count()) {
     ret = OB_ERR_COLUMN_SIZE;
     LOG_WARN("user vars count should be equal to select exprs count" , K(ret),
@@ -578,6 +580,11 @@ int ObSelectIntoOp::into_varlist()
         LOG_WARN("eval expr failed", K(ret));
       } else if (OB_FAIL(datum->to_obj(obj, select_exprs.at(i)->obj_meta_))) {
         LOG_WARN("convert datum to obj failed", K(ret), KPC(select_exprs.at(i)));
+      } else if (obj.is_lob_storage()
+          // outrow lob can not be assigned to user var, so convert outrow to inrow lob
+          // user var has independent memory, so using temporary memory here is fine
+          && OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(obj, obj, nullptr, &lob_tmp_allocator, true/*allow_persist_inrow*/))) {
+        LOG_WARN("convert outrow to inrow lob failed", K(ret), K(obj));
       } else if (OB_FAIL(ObVariableSetExecutor::set_user_variable(obj, var_name,
                   ctx_.get_my_session()))) {
         LOG_WARN("set user variable failed", K(ret));

@@ -27,6 +27,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_allocator.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -8362,6 +8363,14 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       //通过系统函数访问的基础变量(user var/sys var) 或 访问的package/subprogram 变量
       ObObjParam value;
       OX (value = calc_array->at(0));
+
+      // outrow lob can not be assigned to user var, so convert outrow to inrow lob
+      if (OB_SUCC(ret) && value.is_lob_storage()) {
+        if (OB_FAIL(ObTextStringIter::convert_outrow_lob_to_inrow_templob(value, value, nullptr, cast_ctx.allocator_v2_, true/*allow_persist_inrow*/))) {
+          LOG_WARN("convert outrow to inrow lob fail", K(ret), K(value));
+        }
+      }
+
       CK (!value.is_pl_extend());
       OX (value.set_param_meta());
       OZ (spi_set_variable(ctx, static_cast<const ObSqlExpression*>(result_expr), &value, false, true));
