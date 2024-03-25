@@ -103,7 +103,6 @@ public:
   //for vectorized end
   bool is_onetime_plan() const { return onetime_plan_; }
 
-  void set_new_batch(bool new_batch) { is_new_batch_ = new_batch;};
   TO_STRING_KV(K(onetime_plan_), K(init_plan_), K(inited_));
 
   //a row cache for hash optimizer to use
@@ -116,8 +115,6 @@ private:
 
   // for das batch spf
   int alloc_das_batch_store();
-  int save_das_batch_store();
-  int resume_das_batch_store();
   // for das batch spf end
   ObOperator &op_;
   bool onetime_plan_;
@@ -142,9 +139,6 @@ private:
   bool iter_end_;
   // for vectorized end
 
-  // for das batch spf
-  bool is_new_batch_;
-  uint64_t current_group_;
   common::ObArrayWrap<ObObjParam> das_batch_params_recovery_;
   // for das batch spf end
 };

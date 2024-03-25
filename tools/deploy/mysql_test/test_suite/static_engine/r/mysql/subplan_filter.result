@@ -1837,7 +1837,7 @@ Outputs & filters:
   1 - output([INTERNAL_FUNCTION(t1.c1, subquery(1))]), filter(nil), rowset=256
       dop=1
   2 - output([t1.c1], [subquery(1)]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+      exec_params_([t1.c1(:0)], [t1.c3(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
   3 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
@@ -1845,7 +1845,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([t2.c1]), filter([t2.c2 > cast(:1, DECIMAL(11, 0))]), rowset=256
-      access([t2.c1], [t2.c2]), partitions(p0)
+      access([GROUP_ID], [t2.c1], [t2.c2]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 >= :0])

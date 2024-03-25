@@ -73,7 +73,7 @@ public:
       same_tablet_addr_(),
       real_das_dop_(0),
       group_params_(nullptr),
-      jump_read_group_id_(-1),
+      skip_scan_group_id_(-1),
       group_rescan_cnt_(-1),
       flags_(0)
   {
@@ -187,7 +187,7 @@ private:
   int64_t real_das_dop_; // das并发写真实可用的并行度
   const GroupParamArray *group_params_;
 public:
-  int64_t jump_read_group_id_;
+  int64_t skip_scan_group_id_;
   int64_t group_rescan_cnt_;
   union {
     uint64_t flags_;
@@ -209,7 +209,7 @@ public:
                         )
   : ctx_(ctx)
   {
-    current_group_ = ctx.jump_read_group_id_;
+    current_group_ = ctx.skip_scan_group_id_;
     group_rescan_cnt_ = ctx.group_rescan_cnt_;
     group_params_ = ctx.get_group_params();
   }
@@ -218,13 +218,13 @@ public:
                                 int64_t group_rescan_cnt,
                                 const GroupParamArray *group_params)
   {
-    ctx_.jump_read_group_id_ = current_group;
+    ctx_.skip_scan_group_id_ = current_group;
     ctx_.group_rescan_cnt_ = group_rescan_cnt;
     ctx_.set_group_params(group_params);
   }
 
   ~GroupParamBackupGuard() {
-    ctx_.jump_read_group_id_ = current_group_;
+    ctx_.skip_scan_group_id_ = current_group_;
     ctx_.group_rescan_cnt_ = group_rescan_cnt_;
     ctx_.set_group_params(group_params_);
   }

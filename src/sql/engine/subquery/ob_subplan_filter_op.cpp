@@ -59,8 +59,6 @@ ObSubQueryIterator::ObSubQueryIterator(ObOperator &op)
     batch_size_(0),
     batch_row_pos_(0),
     iter_end_(false),
-    is_new_batch_(false),
-    current_group_(0),
     das_batch_params_recovery_()
 {
 }
@@ -108,20 +106,6 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
       if (OB_FAIL(alloc_das_batch_store())) {
         LOG_WARN("Alloc DAS batch parameter store fail.", K(ret));
       } else {
-        //We use GroupParamBackupGuard to save and resume data in param store.
-        //1.For SPF operator, we have multiple right child, every time rescan we
-        //need switch the param in param store, But all of param store index in
-        //the same array, So we switch all of the param store, but resume them
-        //after we rescan.
-        //2.For SPF operator, we nedd to support jump read. Difference child params
-        //may in the difference group id, current child rescan should not influence
-        //other child's param store stage.
-        //3.For nesting SPF with other SPF, parent and child SPF may in difference
-        //stage rescan or get_next_row, the expr may reuse, So child SPF rescan
-        //should not change the param store stage.
-        //So we implement the GroupParamBackupGuard to make Paramstore like a stack,
-        //protect every time change the Paramstore will be resume.
-        bool new_group = is_new_batch_;
         uint64_t parent_spf_group = 0;
         int64_t parent_group_rescan_cnt = 0;
         const GroupParamArray *group_params = nullptr;
@@ -129,56 +113,10 @@ int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
           parent_->get_current_group(parent_spf_group);
           parent_->get_current_batch_cnt(parent_group_rescan_cnt);
           group_params = parent_->get_rescan_params_info();
-        }
-
-        if (OB_SUCC(ret) && is_new_batch_) {
           GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
           guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
-          if (OB_SUCC(ret) && OB_FAIL(op_.rescan())) {
-            if(OB_ITER_END == ret) {
-              ret = OB_ERR_UNEXPECTED;
-            }
+          if (OB_FAIL(op_.rescan())) {
             LOG_WARN("failed to do rescan", K(ret));
-          }
-          current_group_ = 0;
-          is_new_batch_ = 0;
-        }
-        if (OB_SUCC(ret) && current_group_ < parent_spf_group) {
-          if (new_group) {
-            /**
-             * Since the initialization of the lookup Iterator is done within index_lookup.get_next_row(),
-             * when SPF enters skip scan,
-             * we need to mark the jump_read_group_id for each scan Iterator
-             * and determine the number of rows to skip based on the current group_id.
-             * The issue with the lookup process here is that when SPF performs multiple skip scans,
-             * the lookup process may not be executed at all,
-             * resulting in uninitialized lookup Iterators.
-             * As a result, when subsequent skip reads occur,
-             * the lookup Iterator will not be set with the correct jum_read_group_id.
-             * Therefore, it is necessary to ensure that get_next_row() is called at least once to
-             * initialize the lookup Iterator on the right branch.
-             **/
-            GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
-            guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
-            if (OB_FAIL(op_.get_next_row())) {
-              if (OB_ITER_END == ret) {
-                //ignore OB_ITER_END
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("get next row from child failed", K(ret));
-              }
-            }
-          }
-          if (OB_SUCC(ret)) {
-            GroupParamBackupGuard guard(op_.get_exec_ctx().get_das_ctx());
-            guard.bind_batch_rescan_params(parent_spf_group, parent_group_rescan_cnt, group_params);
-            if (OB_FAIL(op_.rescan())) {
-              if(OB_ITER_END == ret) {
-                ret = OB_ERR_UNEXPECTED;
-              }
-              LOG_WARN("Das jump read rescan fail.", K(ret));
-            }
-            current_group_ = parent_spf_group;
           }
         }
       }
@@ -210,8 +148,6 @@ void ObSubQueryIterator::reuse()
   batch_size_ = 0;
   batch_row_pos_ = 0;
   iter_end_ = false;
-  is_new_batch_ = false;
-  current_group_ = 0;
   das_batch_params_recovery_.reset();
 }
 
@@ -644,8 +580,7 @@ int ObSubPlanFilterOp::inner_open()
             MY_SPEC.enable_px_batch_rescans_.at(i)) {
           enable_left_px_batch_ = true;
         }
-        if (!MY_SPEC.exec_param_idxs_inited_ || MY_SPEC.enable_das_group_rescan_) {
-          // spf group rescan can't use hash-map optimize, it will induces skip-scan, which will induces correctness problem
+        if (!MY_SPEC.exec_param_idxs_inited_) {
           //unittest or old version, do not init hashmap
         } else if (OB_FAIL(iter->init_mem_entity())) {
           LOG_WARN("failed to init mem_entity", K(ret));
@@ -832,13 +767,7 @@ int ObSubPlanFilterOp::handle_next_row()
         OZ(left_rows_.finish_add_row(false));
         OZ(left_rows_.begin(left_rows_iter_));
         if (MY_SPEC.enable_das_group_rescan_) {
-          //Lazy batch rescan right iterator.
-          //Just set the flag, do the rescan when call the iter->rewind().
-          for(int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
-            Iterator *&iter = subplan_iters_.at(i - 1);
-            iter->set_new_batch(true);
-            group_rescan_cnt_++;
-          }
+          group_rescan_cnt_++;
         }
       }
     }
@@ -1073,13 +1002,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
       }
 
       if (OB_SUCC(ret)) {
-        //Lazy batch rescan right iterator.
-        //Just set the flag, do the rescan when call the iter->rewind().
-        for(int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
-          Iterator *&iter = subplan_iters_.at(i - 1);
-          iter->set_new_batch(true);
-          group_rescan_cnt_++;
-        }
+        group_rescan_cnt_++;
       }
     }
   }
@@ -1520,28 +1443,6 @@ int ObSubPlanFilterOp::fill_cur_row_das_batch_param(ObEvalCtx& eval_ctx, uint64_
         dst->set_evaluated_projected(eval_ctx);
       }
     }
-  }
-  return ret;
-}
-
-int ObSubPlanFilterOp::bind_das_batch_params_to_store() const
-{
-  int ret = OB_SUCCESS;
-  int64_t param_cnt = MY_SPEC.rescan_params_.count();
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  ParamStore &param_store = plan_ctx->get_param_store_for_update();
-  if (OB_UNLIKELY(param_cnt != das_batch_params_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("das params count is invalid", KR(ret), K(param_cnt), K(das_batch_params_.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
-    const ObDynamicParamSetter &rescan_param = MY_SPEC.rescan_params_.at(i);
-    int64_t param_idx = rescan_param.param_idx_;
-    int64_t array_obj_addr = reinterpret_cast<int64_t>(&das_batch_params_.at(i));
-    param_store.at(param_idx).set_extend(array_obj_addr, T_EXT_SQL_ARRAY);
-  }
-  if (OB_SUCC(ret)) {
-    LOG_DEBUG("bind das param to store", K(das_batch_params_), K(plan_ctx->get_param_store()));
   }
   return ret;
 }
