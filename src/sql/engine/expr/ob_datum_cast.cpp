@@ -9904,11 +9904,16 @@ int number_range_check_v2(const ObCastMode &cast_mode,
         LOG_WARN("out_val.from failed", K(ret), K(in_val));
       } else if (OB_FAIL(out_val.round(scale))) {
         LOG_WARN("out_val.round failed", K(ret), K(scale));
-      } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-        in_val.compare(out_val) != 0) {
-        ret = OB_OPERATE_OVERFLOW;
-        LOG_WARN("input value is out of range.", K(scale), K(in_val));
-      } else {
+      } else if (!in_val.is_equal(out_val)) {
+        if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+        } else if (lib::is_mysql_mode()) {
+          // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+          warning = OB_ERR_DATA_TOO_LONG;
+        }
+      }
+      if (OB_SUCC(ret)) {
         res_datum.set_number(out_val);
         is_finish = true;
       }

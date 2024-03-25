@@ -61,6 +61,9 @@ insert into t1 values(1, 1,
     '0001-01-01 00:00:00', '0001-01-01 00:00:00',
     '0001-01-01 00:00:00', '0001-01-01 00:00:00',
     '1', '1.0');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
 
 insert into t1 values(11, 11,
     11, 11,
