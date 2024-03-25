@@ -40,6 +40,9 @@ namespace oceanbase
 {
 namespace storage
 {
+
+ERRSIM_POINT_DEF(EN_CREATE_TABLET_FAILED);
+
 int ObTabletCreateMdsHelper::on_commit_for_old_mds(
     const char* buf,
     const int64_t len,
@@ -346,6 +349,15 @@ int ObTabletCreateMdsHelper::create_tablets(
       }
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_CREATE_TABLET_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("inject EN_CREATE_TABLET_FAILED", K(ret));
+    }
+  }
+#endif
 
   return ret;
 }
@@ -919,6 +931,7 @@ int ObTabletCreateMdsHelper::rollback_remove_tablets(
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  const share::SCN transfer_start_scn(share::SCN::min_scn());
 
   if (CLICK_FAIL(get_ls(ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
@@ -929,7 +942,7 @@ int ObTabletCreateMdsHelper::rollback_remove_tablets(
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
       MDS_TG(10_ms);
       const common::ObTabletID &tablet_id = tablet_id_array.at(i);
-      if (CLICK_FAIL(ls->get_tablet_svr()->rollback_remove_tablet(ls_id, tablet_id))) {
+      if (CLICK_FAIL(ls->get_tablet_svr()->rollback_remove_tablet(ls_id, tablet_id, transfer_start_scn))) {
         LOG_WARN("failed to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
       }
     }
