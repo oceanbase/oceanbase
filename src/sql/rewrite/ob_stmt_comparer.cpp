@@ -226,6 +226,8 @@ int ObStmtComparer::is_same_from(
   } else if (OB_ISNULL(second_table = second->get_table_item_by_id(second_from.table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("second table item is null", K(ret), K(second));
+  } else if (first_table->for_update_ || second_table->for_update_) {
+    is_same = false;
   } else if (OB_FAIL(ObTransformUtils::is_semi_join_right_table(*first, first_table->table_id_, is_semi_table))) {
     LOG_WARN("failed to check is semi join right table", K(ret));
   } else if (is_semi_table) {
