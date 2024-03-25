@@ -152,6 +152,7 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_column("failures", job_info.failures_));
   OZ (dml.add_column("flag", job_info.flag_));
   OZ (dml.add_column("total", job_info.total_));
+  OZ (dml.get_extra_condition().assign_fmt("state!='BROKEN'"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   return ret;
 }
