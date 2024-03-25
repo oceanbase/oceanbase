@@ -31,6 +31,23 @@ using namespace obrpc;
 using namespace share::schema;
 using namespace sql;
 namespace share {
+void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
+{
+  if (column.is_generated_column() && !column.is_fulltext_column()) {
+    if (column.is_virtual_generated_column()) {
+      column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    }
+    if (column.is_stored_generated_column()) {
+      column.del_column_flag(STORED_GENERATED_COLUMN_FLAG);
+    }
+    ObObj obj;
+    obj.set_null();
+    column.set_cur_default_value(obj);
+    column.set_orig_default_value(obj);
+  }
+  return;
+}
+
 int ObIndexBuilderUtil::add_column(const ObColumnSchemaV2* data_column, const bool is_index, const bool is_rowkey,
     const ObOrderType order_type, ObRowDesc& row_desc, ObTableSchema& table_schema, const bool is_hidden /* = false */)
 {
@@ -69,18 +86,7 @@ int ObIndexBuilderUtil::add_column(const ObColumnSchemaV2* data_column, const bo
     // partition location lookup (refer columns not exist in index table).
     // Fulltext column's default value is needed, because we need to set GENERATED_CTXCAT_CASCADE_FLAG
     // flag by parsing the default value.
-    if (column.is_generated_column() && !column.is_fulltext_column()) {
-      if (column.is_virtual_generated_column()) {
-        column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
-      }
-      if (column.is_stored_generated_column()) {
-        column.del_column_flag(STORED_GENERATED_COLUMN_FLAG);
-      }
-      ObObj obj;
-      obj.set_null();
-      column.set_cur_default_value(obj);
-      column.set_orig_default_value(obj);
-    }
+    del_column_flags_and_default_value(column);
 
     if (is_rowkey) {
       column.set_rowkey_position(row_desc.get_column_num());

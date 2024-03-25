@@ -50,6 +50,7 @@ public:
   static int add_column(const share::schema::ObColumnSchemaV2* data_column, const bool is_index, const bool is_rowkey,
       const common::ObOrderType order_type, common::ObRowDesc& row_desc, share::schema::ObTableSchema& table_schema,
       const bool is_hidden = false);
+  static void del_column_flags_and_default_value(share::schema::ObColumnSchemaV2 &column);
 
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;

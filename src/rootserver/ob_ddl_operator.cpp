@@ -37,6 +37,7 @@
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_index_builder_util.h"
 #include "share/ob_partition_modify.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
@@ -1400,6 +1401,7 @@ int ObDDLOperator::alter_table_update_aux_column(ObSchemaService& schema_service
           new_aux_column_schema.set_rowkey_position(origin_column_schema->get_rowkey_position());
           new_aux_column_schema.set_index_position(origin_column_schema->get_index_position());
           new_aux_column_schema.set_tbl_part_key_pos(origin_column_schema->get_tbl_part_key_pos());
+          ObIndexBuilderUtil::del_column_flags_and_default_value(new_aux_column_schema);
           // will only update some attribute, not include rowkey postion or aux position
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
