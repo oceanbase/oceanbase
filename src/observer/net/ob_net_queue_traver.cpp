@@ -205,16 +205,17 @@ int ObNetTraverProcessAutoDiag::get_trav_req_info(ObRequest *cur, ObNetQueueTraR
   } else {
     tmp_info.type_ = cur->get_type();
     tmp_info.enqueue_timestamp_ = cur->get_enqueue_timestamp();
-    tmp_info.trace_id_ = cur->get_trace_id();
     tmp_info.retry_times_ = cur->get_retry_times();
     tmp_info.group_id_ = group_id;
     if (ObRequest::OB_RPC == cur->get_type()) {
       const obrpc::ObRpcPacket &pkt = static_cast<const obrpc::ObRpcPacket &>(cur->get_packet());
+      tmp_info.trace_id_.set(pkt.get_trace_id());
       tmp_info.tenant_id_ = pkt.get_tenant_id();
       tmp_info.pcode_ = static_cast<int32_t>(pkt.get_pcode());
       tmp_info.req_level_ = min(pkt.get_request_level(), omt::MAX_REQUEST_LEVEL - 1);
       tmp_info.priority_ = pkt.get_priority();
     } else if (ObRequest::OB_MYSQL == cur->get_type()) {
+      tmp_info.trace_id_ = cur->get_trace_id();
       void *sess = SQL_REQ_OP.get_sql_session(cur);
       oceanbase::observer::ObSMConnection *conn = nullptr;
       const obmysql::ObMySQLRawPacket &pkt =
