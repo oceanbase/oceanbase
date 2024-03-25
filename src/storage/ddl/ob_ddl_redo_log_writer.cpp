@@ -1225,6 +1225,8 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
     LOG_WARN("fail to wait io finish", K(ret));
   } else if (OB_FAIL(ddl_redo_handle_.cb_->get_ret_code())) {
     LOG_WARN("ddl redo callback executed failed", K(ret));
+  } else {
+    DEBUG_SYNC(AFTER_MACRO_BLOCK_WRITER_DDL_CALLBACK_WAIT);
   }
   ddl_redo_handle_.reset();
   return ret;
