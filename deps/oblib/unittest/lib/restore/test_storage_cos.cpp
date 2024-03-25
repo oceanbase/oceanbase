@@ -311,8 +311,15 @@ TEST_F(TestStorageCos, test_basic_rw)
       ASSERT_EQ('A', read_buf[0]);
       ASSERT_EQ('F', read_buf[5]);
       ASSERT_EQ(6, read_size);
-      ASSERT_EQ(OB_SUCCESS, reader.close());
 
+      // offset == file_length_
+      ASSERT_EQ(OB_SUCCESS, reader.pread(read_buf, 10, strlen(write_content), read_size));
+      ASSERT_EQ(0, read_size);
+      // offset > file_length_
+      // ObStorageReader::pread will return OB_INVALID_ARGUMENT if offset > file_length_
+      ASSERT_EQ(OB_INVALID_ARGUMENT, reader.pread(read_buf, 10, strlen(write_content) + 1, read_size));
+
+      ASSERT_EQ(OB_SUCCESS, reader.close());
       ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
     }
 

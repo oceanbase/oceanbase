@@ -698,6 +698,12 @@ int ObStorageCosReader::pread(
   } else if (NULL == buf || buf_size <= 0 || offset < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_size), K(offset));
+  } else if (file_length_ == offset) {
+    read_size = 0;
+  } else if (file_length_ < offset) {
+    ret = OB_FILE_LENGTH_INVALID;
+    OB_LOG(WARN, "File lenth is invilid", K(ret), K_(file_length), K(offset),
+        K(handle_.get_bucket_name()), K(handle_.get_object_name()));
   } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
         handle_.get_bucket_name().ptr(), handle_.get_bucket_name().length());
