@@ -58,6 +58,9 @@ bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 
+// [Extensions]
+//   load_data_* : sql/engine/cmd/ob_load_data_storage_info.h
+
 class ObObjectStorageInfo
 {
   OB_UNIS_VERSION(1);
@@ -65,17 +68,17 @@ public:
   ObObjectStorageInfo();
   virtual ~ObObjectStorageInfo();
 
-  int set(const common::ObStorageType device_type, const char *storage_info);
-  int set(const char *uri, const char *storage_info);
+  virtual int set(const common::ObStorageType device_type, const char *storage_info);
+  virtual int set(const char *uri, const char *storage_info);
   virtual int assign(const ObObjectStorageInfo &storage_info);
   ObStorageType get_type() const;
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
-  int get_storage_info_str(char *storage_info, const int64_t info_len) const;
+  virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
 
-  bool is_valid() const;
-  void reset();
+  virtual bool is_valid() const;
+  virtual void reset();
   int64_t hash() const;
   bool operator ==(const ObObjectStorageInfo &storage_info) const;
   bool operator !=(const ObObjectStorageInfo &storage_info) const;

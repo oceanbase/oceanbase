@@ -156,7 +156,7 @@ public:
                K_(online_opt_stat_gather), K_(dest_table_id), K_(task_id), K_(schema_version),
                K_(snapshot_version), K_(data_version), K_(partition_id_array),
                K_(target_partition_id_array), K_(avail_memory), K_(write_session_count),
-               K_(exe_mode), K_(cluster_version));
+               K_(exe_mode), K_(cluster_version), K_(compressor_type));
 
 public:
   uint64_t table_id_;
@@ -180,6 +180,7 @@ public:
   int32_t write_session_count_;
   ObTableLoadExeMode exe_mode_;
   uint64_t cluster_version_;
+  ObCompressorType compressor_type_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final

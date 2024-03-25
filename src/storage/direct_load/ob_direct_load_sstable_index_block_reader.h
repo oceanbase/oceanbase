@@ -21,10 +21,12 @@ namespace storage
 
 class ObDirectLoadSSTableIndexBlockReader
   : public ObDirectLoadDataBlockReader<ObDirectLoadSSTableIndexBlock::Header,
-                                       ObDirectLoadSSTableIndexBlock::Entry>
+                                       ObDirectLoadSSTableIndexBlock::Entry,
+                                       true/*align*/>
 {
   typedef ObDirectLoadDataBlockReader<ObDirectLoadSSTableIndexBlock::Header,
-                                      ObDirectLoadSSTableIndexBlock::Entry>
+                                      ObDirectLoadSSTableIndexBlock::Entry,
+                                      true>
     ParentType;
 public:
   ObDirectLoadSSTableIndexBlockReader();

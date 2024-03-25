@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "lib/ob_define.h"
+#include "share/io/ob_io_define.h"
 #include "observer/omt/ob_tenant.h"
 #include "common/object/ob_object.h"
 #include "observer/table_load/ob_table_load_struct.h"
@@ -102,10 +104,8 @@ private:
 public:
   int finish_trans_peers(ObTableLoadCoordinatorTrans *trans);
 private:
-  int add_check_peers_trans_commit_task(ObTableLoadCoordinatorTrans *trans);
   int check_peers_trans_commit(ObTableLoadCoordinatorTrans *trans, bool &is_commit);
-  class CheckPeersTransCommitTaskProcessor;
-  class CheckPeersTransCommitTaskCallback;
+  int check_trans_commit(ObTableLoadCoordinatorTrans *trans);
 
 // write interface
 public:

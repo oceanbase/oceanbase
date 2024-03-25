@@ -72,6 +72,8 @@ private:
   int create_table_ctx();
   int do_begin();
   int check_need_online_gather(const uint64_t tenant_id, bool &online_opt_stat_gather);
+  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
+                          ObCompressorType &compressor_type);
 private:
   ObTableLoadClientTask *client_task_;
   ObTableLoadTableCtx *table_ctx_;

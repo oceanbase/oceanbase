@@ -69,7 +69,8 @@ ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()
     avail_memory_(0),
     write_session_count_(0),
     exe_mode_(ObTableLoadExeMode::MAX_TYPE),
-    cluster_version_(0)
+    cluster_version_(0),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -113,6 +114,8 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_ENCODE(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              compressor_type_);
   return ret;
 }
 
@@ -144,6 +147,8 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_DECODE(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_DECODE,
+              compressor_type_);
   return ret;
 }
 
@@ -177,6 +182,8 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_ADD_LEN(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              compressor_type_);
   return len;
 }
 

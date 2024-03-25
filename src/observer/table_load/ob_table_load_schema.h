@@ -44,6 +44,9 @@ public:
   static int get_column_idxs(const share::schema::ObTableSchema *table_schema,
                              common::ObIArray<int64_t> &column_idxs);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
+  static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
+                                       ObCompressorType &compressor_type);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

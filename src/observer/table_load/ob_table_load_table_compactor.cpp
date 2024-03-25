@@ -21,6 +21,7 @@
 #include "observer/table_load/ob_table_load_mem_compactor.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "observer/table_load/ob_table_load_multiple_heap_table_compactor.h"
+#include "observer/table_load/ob_table_load_parallel_merge_table_compactor.h"
 
 namespace oceanbase
 {
@@ -149,7 +150,8 @@ ObTableLoadTableCompactor *ObTableLoadTableCompactCtx::new_compactor()
       ret = OB_NEWx(ObTableLoadMemCompactor, (&allocator_));
     }
   } else {
-    ret = OB_NEWx(ObTableLoadGeneralTableCompactor, (&allocator_));
+    // 有主键表不排序
+    ret = OB_NEWx(ObTableLoadParallelMergeTableCompactor, (&allocator_));
   }
   return ret;
 }

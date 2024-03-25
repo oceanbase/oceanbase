@@ -37,6 +37,8 @@ public:
   int commit(table::ObTableLoadResultInfo &result_info);
   int px_commit_data();
   int px_commit_ddl();
+  int check_status();
+  ObTableLoadTableCtx *get_table_ctx() { return table_ctx_; }
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   void update_job_stat_parsed_rows(int64_t parsed_rows)
   {
@@ -50,9 +52,8 @@ private:
   int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
   int begin();
   int start_trans();
-  int check_trans_committed();
   int check_merged();
-private:
+public:
   struct TransCtx
   {
   public:
@@ -65,14 +66,18 @@ private:
     table::ObTableLoadTransId trans_id_;
     table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
   };
-public:
-  ObTableLoadTableCtx *table_ctx_;
+  int start_trans(TransCtx &trans_ctx, int64_t segment_id, ObIAllocator &allocator);
+  int commit_trans(TransCtx &trans_ctx);
+  int write_trans(TransCtx &trans_ctx, int32_t session_id,
+                  const table::ObTableLoadObjRowArray &obj_rows);
 private:
-  static const int64_t DEFAULT_SEGMENT_ID = 1;
+  int check_trans_committed(TransCtx &trans_ctx);
+
+private:
   ObTableLoadExecCtx *execute_ctx_;
   common::ObIAllocator *allocator_;
+  ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
-  TransCtx trans_ctx_;
   bool is_committed_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadInstance);

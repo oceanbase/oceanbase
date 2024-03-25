@@ -182,6 +182,7 @@ int ObTableLoadMerger::handle_table_compact_success()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_stop_)) {
   } else {
+    LOG_INFO("table compact success");
     if (OB_FAIL(build_merge_ctx())) {
       LOG_WARN("fail to build merge ctx", KR(ret));
     } else if (OB_FAIL(start_merge())) {
