@@ -213,6 +213,7 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOGeometryType,           //ObGeometryType = 48,
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
   ObONumberType,             //ObDecimalIntType = 50,
+  // ! occupy for ob_gis_42x: ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
   ObONotSupport              //ObMaxType,
 };
 
