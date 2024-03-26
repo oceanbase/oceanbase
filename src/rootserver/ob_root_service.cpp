@@ -880,7 +880,7 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(root_inspection_.init(*schema_service_, zone_manager_, sql_proxy_, &common_proxy_))) {
     FLOG_WARN("init root inspection failed", KR(ret));
   } else if (OB_FAIL(upgrade_executor_.init(*schema_service_,
-             root_inspection_, sql_proxy_, rpc_proxy_, common_proxy_))) {
+             root_inspection_, sql_proxy_, oracle_sql_proxy_, rpc_proxy_, common_proxy_))) {
     FLOG_WARN("init upgrade_executor failed", KR(ret));
   } else if (OB_FAIL(upgrade_storage_format_executor_.init(*this, ddl_service_))) {
     FLOG_WARN("init upgrade storage format executor failed", KR(ret));

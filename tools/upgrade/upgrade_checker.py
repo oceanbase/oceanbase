@@ -677,6 +677,39 @@ def check_variable_binlog_row_image(query_cur):
         fail_list.append('Sys Variable binlog_row_image is set to MINIMAL, please check'.format(results[0][0]))
     logging.info('check variable binlog_row_image success')
 
+# 20. check oracle tenant's standby_replication privs
+def check_oracle_standby_replication_exist(query_cur):
+  check_success = True
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    check_success = False
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    check_success = False
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
+    if len(results) > 0 :
+      tenant_ids = results
+      if (min_cluster_version < get_version("4.2.2.0") or (get_version("4.3.0.0") <= min_cluster_version < get_version("4.3.1.0"))):
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=1 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication already exists, please check'.format(tenant_id[0]))
+      else :
+        for tenant_id in tenant_ids:
+          sql = """select count(1)=0 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+          (desc, results) = query_cur.exec_query(sql)
+          if results[0][0] == 1 :
+            check_success = False
+            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
+  if check_success:
+    logging.info('check oracle standby_replication privs success')
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -725,6 +758,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_table_compress_func(query_cur)
       check_table_api_transport_compress_func(query_cur)
       check_variable_binlog_row_image(query_cur)
+      check_oracle_standby_replication_exist(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)

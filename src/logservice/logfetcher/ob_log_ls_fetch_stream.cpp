@@ -1477,19 +1477,19 @@ KickOutReason FetchStream::get_feedback_reason_(const Feedback &feedback) const
   // Get KickOutReason based on feedback
   KickOutReason reason = NONE;
   switch (feedback) {
-    case ObCdcLSFetchLogResp::LAGGED_FOLLOWER:
+    case FeedbackType::LAGGED_FOLLOWER:
       reason = LAGGED_FOLLOWER;
       break;
 
-    case ObCdcLSFetchLogResp::LOG_NOT_IN_THIS_SERVER:
+    case FeedbackType::LOG_NOT_IN_THIS_SERVER:
       reason = LOG_NOT_IN_THIS_SERVER;
       break;
 
-    case ObCdcLSFetchLogResp::LS_OFFLINED:
+    case FeedbackType::LS_OFFLINED:
       reason = LS_OFFLINED;
       break;
 
-    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+    case FeedbackType::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
       reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 

@@ -53,6 +53,16 @@ protected:
   int process();
 };
 
+class ObCdcFetchRawLogP : public
+  obrpc::ObRpcProcessor<obrpc::ObCdcProxy::ObRpc<obrpc::OB_CDC_FETCH_RAW_LOG> >
+{
+public:
+  ObCdcFetchRawLogP() {}
+  ~ObCdcFetchRawLogP() {}
+protected:
+  int process();
+};
+
 } // namespace obrpc
 } // namespace oceanbase
 

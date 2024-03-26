@@ -720,8 +720,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
   bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
   const char *rs_list = TCONF.rootserver_list.str();
-  const char *tb_white_list = TCONF.tb_white_list.str();
-  const char *tb_black_list = TCONF.tb_black_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
   int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
@@ -745,6 +743,13 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   drc_message_factory_binlog_record_type_.assign(drc_message_factory_binlog_record_type_str,
       strlen(drc_message_factory_binlog_record_type_str));
+
+  const bool enable_white_black_list = (1 == TCONF.enable_white_black_list);
+
+  const char *tb_white_list = TCONF.get_tb_white_list_buf() != NULL ?  TCONF.get_tb_white_list_buf()
+      : TCONF.tb_white_list.str();
+  const char *tb_black_list = TCONF.get_tb_black_list_buf() != NULL ?  TCONF.get_tb_black_list_buf()
+      : TCONF.tb_black_list.str();
 
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
@@ -866,7 +871,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       CDC_CFG_MGR.get_resource_collector_queue_length(),
       br_pool_, trans_ctx_mgr_, meta_manager_, store_service_, err_handler);
 
-  INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
+  INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive,
+      enable_white_black_list, refresh_mode_);
 
   if (OB_SUCC(ret)) {
     if (is_tenant_sync_mode()) {

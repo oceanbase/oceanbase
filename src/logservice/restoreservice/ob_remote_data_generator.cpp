@@ -661,7 +661,6 @@ int RawPathDataGenerator::fetch_log_from_dest_()
 // 为加速定位起点文件，依赖LSN -> file_id 规则
 int RawPathDataGenerator::cal_lsn_to_file_id_(const LSN &lsn)
 {
-  //TODO get_archive_file_size from restore config
   file_id_ = cal_archive_file_id(lsn, palf::PALF_BLOCK_SIZE);
   return OB_SUCCESS;
 }

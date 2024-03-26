@@ -168,7 +168,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, split_brain)
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_C_idx]->get_palf_env()->remove_palf_handle_impl(id));
     // step 5
     const int64_t node_id = follower_B_idx * 2 + get_node_idx_base();
-    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_init(get_test_name(), follower_b_addr, node_id, false));
+    EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_init(get_test_name(), follower_b_addr, node_id, NULL, false));
     EXPECT_EQ(OB_SUCCESS, get_cluster()[follower_B_idx]->simple_start(false));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     PalfBaseInfo palf_base_info;
@@ -681,8 +681,6 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   std::vector<PalfHandleImplGuard*> palf_list;
   std::vector<ObRegion> region_list;
   common::ObRegion default_region(DEFAULT_REGION_NAME);
-  LogMemberRegionMap region_map;
-  EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
   region_list.push_back(ObRegion("BEIJING"));
   region_list.push_back(ObRegion("SHANGHAI"));
   region_list.push_back(ObRegion("TIANJIN"));
@@ -707,46 +705,33 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
   }
   // check children_cnt
-  while (false == check_children_valid(palf_list, all_learner))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_children_valid 1");
-  }
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
   // change region of one follower
   bool has_change_region = false;
   int64_t diff_region_follower_idx = -1;
   int64_t another_follower_idx = -1;
   for (int i = 0; i < ObSimpleLogClusterTestBase::member_cnt_; i++) {
-    const bool not_leader = palf_list[i]->palf_handle_impl_->self_ != leader.palf_handle_impl_->self_;
+    const common::ObAddr addr = palf_list[i]->palf_handle_impl_->self_;
+    const bool not_leader = (addr != leader.palf_handle_impl_->self_);
     if (!has_change_region && not_leader) {
-      EXPECT_EQ(OB_SUCCESS, palf_list[i]->palf_handle_impl_->set_region(region_list[0]));
-      region_map.insert(palf_list[i]->palf_handle_impl_->self_, region_list[0]);
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, region_list[0]);
       has_change_region = true;
       diff_region_follower_idx = i;
     } else {
       if (not_leader) {
         another_follower_idx = i;
       }
-      region_map.insert(palf_list[0]->palf_handle_impl_->self_, default_region);
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, default_region);
     }
   }
-  // notify leader region of follower i has changed
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
+  for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
   // check children_cnt again
-  while (false == check_children_valid(palf_list, all_learner))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_children_valid 2");
-  }
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
   // after setting region of a follower, parents of all learners should be another follower
   EXPECT_GE(another_follower_idx, 0);
   EXPECT_LE(another_follower_idx, 2);
   ObAddr curr_parent = palf_list[another_follower_idx]->palf_handle_impl_->self_;
-  while (false == check_parent(palf_list, all_learner, curr_parent))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_parent 1");
-  }
+  EXPECT_UNTIL_EQ(true, check_parent(palf_list, all_learner, curr_parent));
   // continue submitting log
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
   PALF_LOG(INFO, "all_learner", K(all_learner));
@@ -757,11 +742,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(curr_parent, 1), 2, CONFIG_CHANGE_TIMEOUT));
   // after switch follower 1 to learner, a learner will be registered to leader, and other learners will
   // be registerd to this learner
-  while (false == check_children_valid(palf_list, all_learner))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_children_valid 3");
-  }
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
   // check learner topology
   ObAddr leaderschild;
   PalfHandleImplGuard leaderschild_handle;
@@ -780,37 +761,21 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
     PalfHandleImplGuard tmp_handle;
     common::ObMember learner;
     EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(i, learner));
-    EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(palf_list, learner.get_server(), tmp_handle));
-    EXPECT_EQ(OB_SUCCESS, tmp_handle.palf_handle_impl_->set_region(region_list[i-2]));
+    get_cluster()[0]->get_locality_manager()->set_server_region(learner.get_server(), region_list[i-2]);
   }
+  for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
   sleep(1);
   // check children_cnt
-  while (false == check_children_valid(palf_list, all_learner))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_children_valid 4");
-  }
-  while (false == check_parent(palf_list, all_learner, leader.palf_handle_impl_->self_))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_parent 2");
-  }
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
+  EXPECT_UNTIL_EQ(true, check_parent(palf_list, all_learner, leader.palf_handle_impl_->self_));
 
   // switch leader, after switching leader, the parent of all learners is the new leader
   const int64_t new_leader_idx = diff_region_follower_idx;
   PalfHandleImplGuard new_leader;
   EXPECT_EQ(OB_SUCCESS, switch_leader(id, 0, new_leader));
 
-  while (false == check_children_valid(palf_list, all_learner))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_children_valid 5");
-  }
-  while (false == check_parent(palf_list, all_learner, new_leader.palf_handle_impl_->self_))
-  {
-    sleep(1);
-    PALF_LOG(INFO, "check_parent 3");
-  }
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
+  EXPECT_UNTIL_EQ(true, check_parent(palf_list, all_learner, new_leader.palf_handle_impl_->self_));
 
   revert_cluster_palf_handle_guard(palf_list);
   PALF_LOG(INFO, "end test learner", K(id));
@@ -1037,17 +1002,18 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner_loop)
   }
 
   // set region, version 42x
-  // for (int i = 0; i < ObSimpleLogClusterTestBase::node_cnt_; i++) {
-  //   const common::ObAddr addr = palf_list[i]->palf_handle_impl_->self_;
-  //   if (leader.palf_handle_impl_->config_mgr_.alive_paxos_memberlist_.contains(addr)) {
-  //     get_cluster()[0]->get_locality_manager()->set_server_region(addr, beijing_region);
-  //   } else {
-  //     get_cluster()[0]->get_locality_manager()->set_server_region(addr, shanghai_region);
-  //   }
-  // }
-  // for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
+  for (int i = 0; i < ObSimpleLogClusterTestBase::node_cnt_; i++) {
+    const common::ObAddr addr = palf_list[i]->palf_handle_impl_->self_;
+    if (leader.palf_handle_impl_->config_mgr_.alive_paxos_memberlist_.contains(addr)) {
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, beijing_region);
+    } else {
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, shanghai_region);
+    }
+  }
+  for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
 
   // set region, version 421, master
+  /*
   LogMemberRegionMap region_map;
   EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
   for (int i = 0; i < ObSimpleLogClusterTestBase::member_cnt_; i++) {
@@ -1060,8 +1026,9 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner_loop)
       region_map.insert(addr, shanghai_region);
     }
   }
+  */
   // notify leader region of follower i has changed
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
+  // EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
 
   // check topo
   EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
@@ -1115,8 +1082,8 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner_loop)
   for (auto palf_handle: palf_list) {
     const common::ObAddr addr = palf_handle->palf_handle_impl_->self_;
     if (true == all_learner.contains(addr) && addr != any_child) {
-      palf_handle->palf_handle_impl_->config_mgr_.retire_parent_();
-      palf_handle->palf_handle_impl_->config_mgr_.register_parent_();
+      palf_handle->palf_handle_impl_->config_mgr_.retire_parent_(LogConfigMgr::RetireParentReason::SELF_REGION_CHANGED);
+      palf_handle->palf_handle_impl_->config_mgr_.register_parent_(LogConfigMgr::RegisterParentReason::FIRST_REGISTER);
     }
   }
 

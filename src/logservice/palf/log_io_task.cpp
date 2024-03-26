@@ -452,6 +452,8 @@ void LogIOTruncatePrefixBlocksTask::free_this_(IPalfEnvImpl *palf_env_impl)
   palf_env_impl->get_log_allocator()->free_log_io_truncate_prefix_blocks_task(this);
 }
 
+int64_t BatchLogIOFlushLogTask::SINGLE_TASK_MAX_SIZE = MAX_LOG_BUFFER_SIZE;
+
 BatchLogIOFlushLogTask::BatchLogIOFlushLogTask()
     : io_task_array_(),
       log_write_buf_array_(),
@@ -459,6 +461,7 @@ BatchLogIOFlushLogTask::BatchLogIOFlushLogTask()
       lsn_array_(),
       palf_id_(INVALID_PALF_ID),
       accum_in_queue_time_(0),
+      accum_size_(0),
       is_inited_(false)
 {}
 
@@ -486,6 +489,7 @@ int BatchLogIOFlushLogTask::init(const int64_t batch_depth, ObIAllocator *alloca
   } else if (OB_FAIL(lsn_array_.init(batch_depth))) {
     PALF_LOG(ERROR, "lsn_array_ init failed", K(ret));
   } else {
+    accum_size_ = 0;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -501,6 +505,7 @@ void BatchLogIOFlushLogTask::reuse()
   scn_array_.clear();
   lsn_array_.clear();
   palf_id_ = INVALID_PALF_ID;
+  accum_size_ = 0;
 }
 
 void BatchLogIOFlushLogTask::destroy()
@@ -517,16 +522,20 @@ int BatchLogIOFlushLogTask::push_back(LogIOFlushLogTask *task)
 {
   int ret = OB_SUCCESS;
   const int64_t palf_id = task->get_palf_id();
+  const int64_t task_size = task->get_io_size_();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret), KPC(this));
   } else if (palf_id_ != INVALID_PALF_ID && palf_id != palf_id_) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "only same palf id can be batched", K(ret), KPC(task), K(palf_id));
+  } else if (accum_size_ > SINGLE_TASK_MAX_SIZE) {
+    ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(io_task_array_.push_back(task))) {
     PALF_LOG(WARN, "push failed", K(ret));
   } else {
     palf_id_ = palf_id;
+    accum_size_ += task_size;
     PALF_LOG(TRACE, "push_back success", K(palf_id_), KPC(this));
   }
   return ret;

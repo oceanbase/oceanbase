@@ -412,6 +412,8 @@ int ObLogPartTransParser::parse_mutator_row_(
           || is_all_ddl_operation_lob_aux_tablet(part_trans_task.get_ls_id(), tablet_id))) {
     need_filter = true;
     filter_reason = "NON_DDL_RELATED_TABLE";
+  } else if (part_trans_task.is_ddl_trans()) {
+    // do nothing, ddl trans should not be filtered
   } else if (OB_FAIL(part_mgr.is_exist_table_id_cache(table_info.get_table_id(), is_in_table_id_cache))) {
     LOG_ERROR("check is_exist_table_id_cache failed", KR(ret),
         "tls_id", part_trans_task.get_tls_id(),

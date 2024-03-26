@@ -63,6 +63,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
 {
@@ -78,19 +79,20 @@ TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE + 2);
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 8*31+1, id, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 8*31+1, id, log_entry_size));
   LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
   while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
     usleep(500);
   }
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, MAX_LOG_BODY_SIZE));
-  while (LSN(6*PALF_BLOCK_SIZE + 20 * MAX_LOG_BODY_SIZE) > log_storage->log_tail_) {
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, log_entry_size));
+  while (LSN(6*PALF_BLOCK_SIZE + 20 * log_entry_size) > log_storage->log_tail_) {
     usleep(500);
   }
   LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
   PALF_LOG(INFO, "out of disk max_lsn", K(max_lsn));
   usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*10000);
+  sleep(2);
   EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
   // shrinking 后继续停写
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
@@ -113,7 +115,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
 
   // 提交1G的日志
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 500, id, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 500, id, log_entry_size));
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
 
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 20));
@@ -234,7 +236,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)
                 palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_);
     }
     // 产生10个文件的数据
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10*32, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10*32, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     // 最小的log_disk_size要求是存在8个日志文件
     EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 8));
@@ -349,7 +351,7 @@ TEST_F(TestObSimpleLogDiskMgr, overshelling)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     // 生成10个文件
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10*32, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10*32, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 10));
     // 缩容一定不会成功，租户日志盘规格依旧为上限值
@@ -431,6 +433,42 @@ TEST_F(TestObSimpleLogDiskMgr, hidden_sys)
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
   EXPECT_NE(0, total_used_size);
+}
+
+TEST_F(TestObSimpleLogDiskMgr, test_big_log)
+{
+  update_server_log_disk(10*1024*1024*1024ul);
+  update_disk_options(10*1024*1024*1024ul/palf::PALF_PHY_BLOCK_SIZE);
+  SET_CASE_LOG_FILE(TEST_NAME, "test_big_log");
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int server_idx = 0;
+  PalfEnv *palf_env = NULL;
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  share::SCN create_scn = share::SCN::base_scn();
+  EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
+  update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
+  // write big log
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 11, id, MAX_LOG_BODY_SIZE));
+  LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+  while(LSN(10*MAX_LOG_BODY_SIZE) > log_storage->log_tail_) {
+    usleep(500);
+  }
+  LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  wait_lsn_until_flushed(max_lsn, leader);
+  PALF_LOG(INFO, "test_big_log max_lsn after writing big log", K(max_lsn));
+
+  // write small log
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 11, id, log_entry_size));
+  while(LSN(10*log_entry_size) > log_storage->log_tail_) {
+    usleep(500);
+  }
+
+  max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  wait_lsn_until_flushed(max_lsn, leader);
+  PALF_LOG(INFO, "test_big_log max_lsn after writing small log", K(max_lsn));
+  EXPECT_EQ(OB_ITER_END, read_log(leader));
 }
 
 } // namespace unittest

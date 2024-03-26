@@ -607,6 +607,14 @@ bool is_lob_type(const int ctype)
   return bool_ret;
 }
 
+bool is_string_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_VAR_STRING ||
+          ctype == oceanbase::obmysql::MYSQL_TYPE_STRING ||
+          ctype == oceanbase::obmysql::MYSQL_TYPE_OB_NCHAR ||
+          ctype == oceanbase::obmysql::MYSQL_TYPE_OB_NVARCHAR2);
+}
+
 bool is_json_type(const int ctype)
 {
   return (oceanbase::obmysql::MYSQL_TYPE_JSON == ctype);

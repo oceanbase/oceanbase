@@ -7398,6 +7398,7 @@ restore_err_context_info	varchar(1024)	NO		NULL
 enable_sync	tinyint(4)	NO		NULL	
 enable_vote	tinyint(4)	NO		NULL	
 arb_srv_info	varchar(1024)	NO		NULL	
+parent	varchar(1024)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ha_diagnose;
 IF(count(*) >= 0, 1, 0)
 1

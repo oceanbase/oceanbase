@@ -12741,7 +12741,8 @@ def_table_schema(
     ('restore_err_context_info', 'varchar:1024'),
     ('enable_sync', 'bool'),
     ('enable_vote', 'bool'),
-    ('arb_srv_info', 'varchar:1024')
+    ('arb_srv_info', 'varchar:1024'),
+    ('parent', 'varchar:1024')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

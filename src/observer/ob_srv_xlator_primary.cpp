@@ -229,6 +229,7 @@ void oceanbase::observer::init_srv_xlator_for_cdc(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObCdcLSReqStartLSNByTsP);
   RPC_PROCESSOR(ObCdcLSFetchLogP);
   RPC_PROCESSOR(ObCdcLSFetchMissingLogP);
+  RPC_PROCESSOR(ObCdcFetchRawLogP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_executor(ObSrvRpcXlator *xlator) {
