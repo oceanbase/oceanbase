@@ -4293,6 +4293,21 @@ void ObPLCompileUnit::dump_deleted_log_info(const bool is_debug_log /* = true */
   }
 }
 
+ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
+                                 lib::MemoryContext &mem_context)
+    : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
+      type_table_(), helper_(allocator_), di_helper_(allocator_),
+      can_cached_(true),
+      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
+{
+#ifndef USE_MCJIT
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(helper_.init())) {
+    LOG_WARN("failed to init llvm helper", K(ret), K(helper_.get_jc()));
+  }
+#endif // USE_MCJIT
+}
+
 ObPLFunction::~ObPLFunction()
 {
   int ret = OB_SUCCESS;

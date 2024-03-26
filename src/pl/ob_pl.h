@@ -229,19 +229,7 @@ class ObPLCompileUnit : public ObPLCacheObject
 {
   friend class ::test::MockCacheObjectFactory;
 public:
-  ObPLCompileUnit(sql::ObLibCacheNameSpace ns, lib::MemoryContext &mem_context)
-  : ObPLCacheObject(ns, mem_context),
-    routine_table_(allocator_),
-    type_table_(),
-    helper_(allocator_),
-    di_helper_(allocator_),
-    can_cached_(true),
-    profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
-  {
-#ifndef USE_MCJIT
-    helper_.init();
-#endif
-  }
+  ObPLCompileUnit(sql::ObLibCacheNameSpace ns, lib::MemoryContext &mem_context);
   virtual ~ObPLCompileUnit();
 
   inline bool get_can_cached() { return can_cached_; }
