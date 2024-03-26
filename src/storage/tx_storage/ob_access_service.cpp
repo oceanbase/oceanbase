@@ -732,12 +732,6 @@ int ObAccessService::delete_rows(
                                       column_ids,
                                       row_iter,
                                       affected_rows);
-    if (OB_SUCC(ret)) {
-      int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
-                                              tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_DELETE_STAT,
-                                              affected_rows);
-    }
   }
   return ret;
 }
@@ -792,12 +786,6 @@ int ObAccessService::put_rows(
                                    column_ids,
                                    row_iter,
                                    affected_rows);
-    if (OB_SUCC(ret)) {
-      int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
-                                              tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_INSERT_STAT,
-                                              affected_rows);
-    }
   }
   return ret;
 }
@@ -853,12 +841,6 @@ int ObAccessService::insert_rows(
                                       column_ids,
                                       row_iter,
                                       affected_rows);
-    if (OB_SUCC(ret) && !dml_param.is_direct_insert()) {
-      int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
-                                              tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_INSERT_STAT,
-                                              affected_rows);
-    }
   }
   return ret;
 }
@@ -921,12 +903,6 @@ int ObAccessService::insert_row(
                                      flag,
                                      affected_rows,
                                      duplicated_rows);
-    if (OB_SUCC(ret)) {
-      int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
-                                              tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_INSERT_STAT,
-                                              affected_rows);
-    }
   }
   return ret;
 }
@@ -994,12 +970,6 @@ int ObAccessService::update_rows(
                                       updated_column_ids,
                                       row_iter,
                                       affected_rows);
-    if (OB_SUCC(ret)) {
-      int tmp_ret = audit_tablet_opt_dml_stat(dml_param,
-                                              tablet_id,
-                                              ObOptDmlStatType::TABLET_OPT_UPDATE_STAT,
-                                              affected_rows);
-    }
   }
   return ret;
 }
@@ -1335,43 +1305,5 @@ int ObAccessService::ObStoreCtxGuard::init(const share::ObLSID &ls_id)
   return ret;
 }
 
-int ObAccessService::audit_tablet_opt_dml_stat(
-    const ObDMLBaseParam &dml_param,
-    const common::ObTabletID &tablet_id,
-    const ObOptDmlStatType dml_stat_type,
-    const int64_t affected_rows)
-{
-  int ret = OB_SUCCESS;
-  //static __thread int64_t last_access_ts = 0;
-  //if (!GCONF.enable_defensive_check() && ObClockGenerator::getClock() - last_access_ts < 1000000) {
-    // do nothing
-  if (OB_ISNULL(dml_param.table_param_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(dml_param.table_param_));
-  } else if (dml_stat_type == ObOptDmlStatType::TABLET_OPT_INSERT_STAT ||
-             dml_stat_type == ObOptDmlStatType::TABLET_OPT_UPDATE_STAT ||
-             dml_stat_type == ObOptDmlStatType::TABLET_OPT_DELETE_STAT) {
-    ObOptDmlStat dml_stat;
-    dml_stat.tenant_id_ = tenant_id_;
-    dml_stat.table_id_ = dml_param.table_param_->get_data_table().get_table_id();
-    dml_stat.tablet_id_ = tablet_id.id();
-    if (dml_stat_type == ObOptDmlStatType::TABLET_OPT_INSERT_STAT) {
-      dml_stat.insert_row_count_ = affected_rows;
-    } else if (dml_stat_type == ObOptDmlStatType::TABLET_OPT_UPDATE_STAT) {
-      dml_stat.update_row_count_ = affected_rows;
-    } else {
-      dml_stat.delete_row_count_ = affected_rows;
-    }
-    if (MTL(ObOptStatMonitorManager*) != NULL) {
-      if (OB_FAIL(MTL(ObOptStatMonitorManager*)->update_local_cache(dml_stat))) {
-        LOG_WARN("failed to update local cache", K(ret));
-      } else {
-        LOG_TRACE("succeed to update dml stat local cache", K(dml_stat));
-      }
-    }
-    //last_access_ts = ObClockGenerator::getClock();
-  }
-  return ret;
-}
 }
 }

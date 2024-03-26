@@ -20,6 +20,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/worker.h"
 #include "share/rc/ob_context.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
@@ -109,6 +110,8 @@ ObMemtable::ObMemtable()
       local_allocator_(*this),
       query_engine_(local_allocator_),
       mvcc_engine_(),
+      mt_stat_(),
+      reported_dml_stat_(),
       max_schema_version_(0),
       max_data_schema_version_(0),
       pending_cb_cnt_(0),
@@ -140,7 +143,6 @@ ObMemtable::ObMemtable()
       encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
       max_column_cnt_(0)
 {
-  mt_stat_.reset();
   migration_clog_checkpoint_scn_.set_min();
 }
 
@@ -262,6 +264,7 @@ void ObMemtable::destroy()
   max_data_schema_version_ = 0;
   max_column_cnt_ = 0;
   mt_stat_.reset();
+  reported_dml_stat_.reset();
   state_ = ObMemtableState::INVALID;
   freeze_state_ = ObMemtableFreezeState::INVALID;
   unsubmitted_cnt_ = 0;
@@ -368,6 +371,12 @@ int ObMemtable::multi_set(
     }
     guard.set_memtable(this);
   }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+      TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+    }
+  }
   return ret;
 }
 
@@ -447,6 +456,14 @@ int ObMemtable::set(
     ret = set_(param, columns, row, NULL, NULL, context);
     guard.set_memtable(this);
   }
+
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+      TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+    }
+  }
+
   return ret;
 }
 
@@ -490,6 +507,14 @@ int ObMemtable::set(
     ret = set_(param, columns, new_row, &old_row, &update_idx, context);
     guard.set_memtable(this);
   }
+
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+      TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+    }
+  }
+
   return ret;
 }
 
@@ -2010,6 +2035,11 @@ bool ObMemtable::ready_for_flush()
   bool bool_ret = ready_for_flush_();
 
   if (bool_ret) {
+    int tmp_ret = OB_SUCCESS;
+    // dml stat is periodically reported, so need to report residual stat when freeze finished
+    if (OB_TMP_FAIL(report_residual_dml_stat_())) {
+      TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+    }
     local_allocator_.set_frozen();
   }
 
@@ -3308,6 +3338,67 @@ storage::ObTabletMemtableMgr *ObMemtable::get_memtable_mgr_()
 {
   return static_cast<ObTabletMemtableMgr *>(memtable_mgr_handle_.get_memtable_mgr());
 }
+
+int ObMemtable::try_report_dml_stat_(const int64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t current_ts = common::ObClockGenerator::getClock();
+  reported_dml_stat_.table_id_ = table_id;  // record the table id for reporting residual dml stat
+  if (current_ts - reported_dml_stat_.last_report_time_ > ObReportedDmlStat::REPORT_INTERVAL) {
+    if (ATOMIC_BCAS(&reported_dml_stat_.is_reporting_, false, true)) {
+      // double check
+      if (current_ts - reported_dml_stat_.last_report_time_ > ObReportedDmlStat::REPORT_INTERVAL) {
+        ObOptDmlStat dml_stat;
+        dml_stat.tenant_id_ = MTL_ID();
+        dml_stat.table_id_ = table_id;
+        dml_stat.tablet_id_ = get_tablet_id().id();
+        const int64_t current_insert_row_cnt = mt_stat_.insert_row_count_;
+        const int64_t current_update_row_cnt = mt_stat_.update_row_count_;
+        const int64_t current_delete_row_cnt = mt_stat_.delete_row_count_;
+        dml_stat.insert_row_count_ = current_insert_row_cnt - reported_dml_stat_.insert_row_count_;
+        dml_stat.update_row_count_ = current_update_row_cnt - reported_dml_stat_.update_row_count_;
+        dml_stat.delete_row_count_ = current_delete_row_cnt - reported_dml_stat_.delete_row_count_;
+        if (OB_FAIL(MTL(ObOptStatMonitorManager*)->update_local_cache(dml_stat))) {
+          TRANS_LOG(WARN, "failed to update local cache", K(ret), K(dml_stat));
+        } else {
+          reported_dml_stat_.insert_row_count_ = current_insert_row_cnt;
+          reported_dml_stat_.update_row_count_ = current_update_row_cnt;
+          reported_dml_stat_.delete_row_count_ = current_delete_row_cnt;
+          reported_dml_stat_.last_report_time_ = current_ts;
+        }
+      }
+      ATOMIC_STORE(&reported_dml_stat_.is_reporting_, false);
+    }
+  }
+  return ret;
+}
+
+int ObMemtable::report_residual_dml_stat_()
+{
+  int ret = OB_SUCCESS;
+  if (reported_dml_stat_.table_id_ != OB_INVALID_ID) {
+    if (mt_stat_.insert_row_count_ > reported_dml_stat_.insert_row_count_ ||
+        mt_stat_.update_row_count_ > reported_dml_stat_.update_row_count_ ||
+        mt_stat_.delete_row_count_ > reported_dml_stat_.delete_row_count_) {
+      ObOptDmlStat dml_stat;
+      dml_stat.tenant_id_ = MTL_ID();
+      dml_stat.table_id_ = reported_dml_stat_.table_id_;
+      dml_stat.tablet_id_ = get_tablet_id().id();
+      dml_stat.insert_row_count_ = mt_stat_.insert_row_count_ - reported_dml_stat_.insert_row_count_;
+      dml_stat.update_row_count_ = mt_stat_.update_row_count_ - reported_dml_stat_.update_row_count_;
+      dml_stat.delete_row_count_ = mt_stat_.delete_row_count_ - reported_dml_stat_.delete_row_count_;
+      if (OB_FAIL(MTL(ObOptStatMonitorManager*)->update_local_cache(dml_stat))) {
+        TRANS_LOG(WARN, "failed to update local cache", K(ret), K(dml_stat), K(reported_dml_stat_));
+      } else {
+        reported_dml_stat_.insert_row_count_ = mt_stat_.insert_row_count_;
+        reported_dml_stat_.update_row_count_ =  mt_stat_.update_row_count_;
+        reported_dml_stat_.delete_row_count_ = mt_stat_.delete_row_count_;
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // namespace memtable
 } // namespace ocenabase

@@ -74,6 +74,33 @@ struct ObMvccRowAndWriteResult
   ObMvccWriteResult write_result_;
   TO_STRING_KV(K_(write_result), KP_(mvcc_row));
 };
+// report the dml stat to ObOptStatMonitorManager
+struct ObReportedDmlStat
+{
+  static constexpr int64_t REPORT_INTERVAL = 1_s;
+  ObReportedDmlStat() { reset(); }
+  ~ObReportedDmlStat() = default;
+  void reset() {
+    last_report_time_ = 0;
+    insert_row_count_ = 0;
+    update_row_count_ = 0;
+    delete_row_count_ = 0;
+    table_id_ = OB_INVALID_ID;
+    is_reporting_ = false;
+  }
+
+  int64_t last_report_time_;
+  int64_t insert_row_count_;
+  int64_t update_row_count_;
+  int64_t delete_row_count_;
+  // record the table_id for report the residual dml stat when memtable freeze,
+  // in which case the table_id can't be acquired
+  int64_t table_id_;
+  bool is_reporting_;
+
+  TO_STRING_KV(K_(last_report_time), K_(insert_row_count),
+      K_(update_row_count), K_(delete_row_count), K_(table_id), K_(is_reporting));
+};
 
 class ObMTKVBuilder
 {
@@ -708,6 +735,8 @@ private:
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+  int try_report_dml_stat_(const int64_t table_id);
+  int report_residual_dml_stat_();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
@@ -721,6 +750,7 @@ private:
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;
   mutable ObMtStat mt_stat_;
+  mutable ObReportedDmlStat reported_dml_stat_;
   int64_t max_schema_version_;  // to record the max schema version of memtable & schema_change_clog
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log
