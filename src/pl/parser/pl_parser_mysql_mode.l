@@ -96,6 +96,14 @@ SET                           { return SET; }
 TABLE                         { return TABLE; }
 UPDATE                        { return UPDATE; }
 JSON                          { return JSON; }
+GEOMETRY                      { return GEOMETRY; }
+POINT                         { return POINT; }
+LINESTRING                    { return LINESTRING; }
+POLYGON                       { return POLYGON; }
+MULTIPOINT                    { return MULTIPOINT; }
+MULTILINESTRING               { return MULTILINESTRING; }
+MULTIPOLYGON                  { return MULTIPOLYGON; }
+geometry_collection           { return geometry_collection; }
 REPLACE                       { return REPLACE; }
 TRIGGER {
   ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
