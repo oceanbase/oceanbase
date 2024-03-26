@@ -340,8 +340,8 @@ public:
 
   int add_task_op(ObIDASTaskOp *task_op);
   ObIDASTaskOp *get_task_op();
-  const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return task_ops_; };
-  common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() { return task_ops_; };
+  const common::ObIArray<ObIDASTaskOp*> &get_task_ops() const { return task_ops_; };
+  common::ObIArray<ObIDASTaskOp*> &get_task_ops() { return task_ops_; };
   void set_remote_info(ObDASRemoteInfo *remote_info) { remote_info_ = remote_info; }
   ObDASRemoteInfo *get_remote_info() { return remote_info_; }
   common::ObAddr &get_runner_svr() { return runner_svr_; }
@@ -369,8 +369,8 @@ class ObDASTaskResp
 public:
   ObDASTaskResp();
   int add_op_result(ObIDASTaskResult *op_result);
-  const common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() const { return op_results_; };
-  common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return op_results_; };
+  const common::ObIArray<ObIDASTaskResult*> &get_op_results() const { return op_results_; };
+  common::ObIArray<ObIDASTaskResult*> &get_op_results() { return op_results_; };
   void set_err_code(int err_code) { rcode_.rcode_ = err_code; }
   int get_err_code() const { return rcode_.rcode_; }
   const obrpc::ObRpcResultCode &get_rcode() const { return rcode_; }

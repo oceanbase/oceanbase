@@ -93,24 +93,22 @@ class ObDASAsyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_ASYNC_ACCE
 class ObDasAsyncRpcCallBackContext
 {
 public:
-  ObDasAsyncRpcCallBackContext(DASRefCountContext &ref_count_ctx,
-                               const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
-                               int64_t timeout_ts)
+  ObDasAsyncRpcCallBackContext(DASRefCountContext &ref_count_ctx, int64_t timeout_ts)
       : ref_count_ctx_(ref_count_ctx),
-        task_ops_(task_ops),
+        task_ops_(),
         alloc_(),
         timeout_ts_(timeout_ts)
   {
   }
   ~ObDasAsyncRpcCallBackContext() = default;
-  int init(const ObMemAttr &attr);
-  const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return task_ops_; };
+  int init(const ObMemAttr &attr, const common::ObIArray<ObIDASTaskOp*> &task_ops);
+  const common::ObIArray<ObIDASTaskOp*> &get_task_ops() const { return task_ops_; };
   common::ObArenaAllocator &get_alloc() { return alloc_; };
   int64_t get_timeout_ts() const { return timeout_ts_; }
   DASRefCountContext &get_ref_count_ctx() { return ref_count_ctx_; }
 private:
   DASRefCountContext &ref_count_ctx_;
-  const common::ObSEArray<ObIDASTaskOp*, 2> task_ops_;
+  common::ObSEArray<ObIDASTaskOp*, 2> task_ops_;
   common::ObArenaAllocator alloc_;  // used for async rpc result allocation.
   int64_t timeout_ts_;
 };
@@ -132,10 +130,10 @@ public:
   oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
       const oceanbase::rpc::frame::SPAlloc &alloc) const;
   virtual int process();
-  const common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() const { return result_.get_op_results(); };
-  common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return result_.get_op_results(); };
+  const common::ObIArray<ObIDASTaskResult*> &get_op_results() const { return result_.get_op_results(); };
+  common::ObIArray<ObIDASTaskResult*> &get_op_results() { return result_.get_op_results(); };
   const sql::ObDASTaskResp &get_task_resp() const { return result_; };
-  const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return context_->get_task_ops(); };
+  const common::ObIArray<ObIDASTaskOp*> &get_task_ops() const { return context_->get_task_ops(); };
   common::ObIAllocator &get_result_alloc() { return context_->get_alloc(); }
   ObDasAsyncRpcCallBackContext *get_async_cb_context() { return context_; };
 private:

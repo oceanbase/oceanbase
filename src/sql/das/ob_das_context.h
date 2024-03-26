@@ -57,6 +57,7 @@ typedef common::ObArrayWrap<GroupRescanParam> GroupParamArray;
 class ObDASCtx
 {
   friend class DASGroupScanMarkGuard;
+  friend class GroupParamBackupGuard;
   OB_UNIS_VERSION(1);
 public:
   ObDASCtx(common::ObIAllocator &allocator)
@@ -133,8 +134,9 @@ public:
   int build_related_tablet_loc(ObDASTabletLoc &tablet_loc);
   int build_related_table_loc(ObDASTableLoc &table_loc);
   int rebuild_tablet_loc_reference();
-  void set_group_params(const GroupParamArray* group_params) { group_params_ = group_params; }
   const GroupParamArray* get_group_params() { return group_params_; }
+  int64_t get_skip_scan_group_id() const { return skip_scan_group_id_; }
+  int64_t get_group_rescan_cnt() const { return group_rescan_cnt_; }
   void clear_all_location_info()
   {
     table_locs_.clear();
@@ -185,10 +187,10 @@ private:
   DASDelCtxList del_ctx_list_;
   ObAddr same_tablet_addr_;
   int64_t real_das_dop_; // das并发写真实可用的并行度
-  const GroupParamArray *group_params_;
+  const GroupParamArray *group_params_; //only allowed to be modified by GroupParamBackupGuard
+  int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
+  int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
 public:
-  int64_t skip_scan_group_id_;
-  int64_t group_rescan_cnt_;
   union {
     uint64_t flags_;
     struct {
@@ -205,8 +207,7 @@ public:
 class GroupParamBackupGuard
 {
 public:
-  GroupParamBackupGuard(ObDASCtx &ctx
-                        )
+  GroupParamBackupGuard(ObDASCtx &ctx)
   : ctx_(ctx)
   {
     current_group_ = ctx.skip_scan_group_id_;
@@ -220,13 +221,13 @@ public:
   {
     ctx_.skip_scan_group_id_ = current_group;
     ctx_.group_rescan_cnt_ = group_rescan_cnt;
-    ctx_.set_group_params(group_params);
+    ctx_.group_params_ = group_params;
   }
 
   ~GroupParamBackupGuard() {
     ctx_.skip_scan_group_id_ = current_group_;
     ctx_.group_rescan_cnt_ = group_rescan_cnt_;
-    ctx_.set_group_params(group_params_);
+    ctx_.group_params_ = group_params_;
   }
 
 private:

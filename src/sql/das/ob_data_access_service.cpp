@@ -174,7 +174,7 @@ OB_NOINLINE int ObDataAccessService::execute_dist_das_task(
   task_arg.set_ctrl_svr(ctrl_addr_);
   task_arg.get_runner_svr() = task_ops.server_;
   int target_parallelism = 0;
-  common::ObIArray<ObIDASTaskOp *> &task_list = task_arg.get_task_ops();
+  ObIArray<ObIDASTaskOp *> &task_list = task_arg.get_task_ops();
   if (OB_FAIL(task_ops.get_aggregated_tasks(task_list))) {
     LOG_WARN("fail to get agg tasks", K(ret));
   } else if (task_list.empty()) {
@@ -415,7 +415,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
     timeout_ts = current_ts + timeout;
   }
   uint64_t tenant_id = session->get_rpc_tenant_id();
-  common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+  ObIArray<ObIDASTaskOp*> &task_ops = task_arg.get_task_ops();
   ObDASRemoteInfo remote_info;
   remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
   remote_info.frame_info_ = das_ref.get_expr_frame_info();
@@ -523,7 +523,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObClockGenerator::getClock();
   uint64_t tenant_id = session->get_rpc_tenant_id();
-  common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+  ObIArray<ObIDASTaskOp*> &task_ops = task_arg.get_task_ops();
   ObIDASTaskResult *op_result = nullptr;
   ObDASExtraData *extra_result = nullptr;
   ObDASRemoteInfo remote_info;
@@ -619,7 +619,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   return ret;
 }
 
-int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskResp &task_resp, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops)
+int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskResp &task_resp, const ObIArray<ObIDASTaskOp*> &task_ops)
 {
   int ret = OB_SUCCESS;
   int save_ret = OB_SUCCESS;
@@ -627,7 +627,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   ObIDASTaskOp *task_op = nullptr;
   ObIDASTaskResult *op_result = nullptr;
   ObDASExtraData *extra_result = nullptr;
-  const common::ObSEArray<ObIDASTaskResult*, 2> &op_results = task_resp.get_op_results();
+  const ObIArray<ObIDASTaskResult*> &op_results = task_resp.get_op_results();
   ObDASLocationRouter &loc_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
   ObDASUtils::log_user_error_and_warn(task_resp.get_rcode());
   for (int i = 0; i < op_results.count() - 1; i++) {
@@ -746,6 +746,7 @@ int ObDataAccessService::push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTa
   }
   return ret;
 }
+
 int ObDataAccessService::parallel_execute_das_task(common::ObIArray<ObIDASTaskOp *> &task_list)
 {
   int ret = OB_SUCCESS;
@@ -757,6 +758,7 @@ int ObDataAccessService::parallel_execute_das_task(common::ObIArray<ObIDASTaskOp
   }
   return ret;
 }
+
 int ObDataAccessService::parallel_submit_das_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task)
 {
   int ret = OB_SUCCESS;

@@ -424,7 +424,7 @@ int ObDASRef::execute_all_task(DasAggregatedTaskList &agg_task_list)
         // 还有任务没执行完毕
         if (aggregated_task->has_failed_tasks()) {
           // retry all failed tasks.
-          common::ObSEArray<ObIDASTaskOp *, 2> failed_tasks;
+          ObSEArray<ObIDASTaskOp *, 2> failed_tasks;
           int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(aggregated_task->get_failed_tasks(failed_tasks))) {
             LOG_WARN("failed to get failed tasks", K(ret));
@@ -492,7 +492,7 @@ int ObDASRef::wait_all_tasks()
 }
 
 int ObDASRef::allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb,
-                                    const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                                    const ObIArray<ObIDASTaskOp*> &task_ops,
                                     int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -532,8 +532,8 @@ int ObDASRef::process_remote_task_resp()
   int ret = OB_SUCCESS;
   int save_ret = OB_SUCCESS;
   DLIST_FOREACH_X(curr, async_cb_list_.get_obj_list(), OB_SUCC(ret)) {
-    const sql::ObDASTaskResp &task_resp = curr->get_obj()->get_task_resp();
-    const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = curr->get_obj()->get_task_ops();
+    const ObDASTaskResp &task_resp = curr->get_obj()->get_task_resp();
+    const ObIArray<ObIDASTaskOp*> &task_ops = curr->get_obj()->get_task_ops();
     if (OB_UNLIKELY(OB_SUCCESS != task_resp.get_err_code())) {
       LOG_WARN("das async execution failed", K(task_resp));
       for (int i = 0; i < task_ops.count(); i++) {
@@ -865,7 +865,7 @@ int ObDasAggregatedTask::move_to_failed_tasks(ObIDASTaskOp *das_task)
   return ret;
 }
 
-int ObDasAggregatedTask::get_failed_tasks(common::ObSEArray<ObIDASTaskOp *, 2> &tasks)
+int ObDasAggregatedTask::get_failed_tasks(common::ObIArray<ObIDASTaskOp*> &tasks)
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *cur_task = nullptr;

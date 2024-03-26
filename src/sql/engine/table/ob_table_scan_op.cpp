@@ -1406,8 +1406,8 @@ int ObTableScanOp::do_init_before_get_row()
       } else {
         if (in_batch_rescan_subplan()) {
           // if the ancestor operator of TSC support batch rescan, update the group_id and batch rescan_cnt after perform a real-rescan
-          group_rescan_cnt_ = ctx_.get_das_ctx().group_rescan_cnt_;
-          group_id_ = ctx_.get_das_ctx().skip_scan_group_id_;
+          group_rescan_cnt_ = ctx_.get_das_ctx().get_group_rescan_cnt();
+          group_id_ = ctx_.get_das_ctx().get_skip_scan_group_id();
         }
       }
       output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE);
@@ -1535,16 +1535,16 @@ int ObTableScanOp::inner_rescan_for_tsc()
   } else if (OB_FAIL(check_need_real_rescan(need_real_rescan))) {
     LOG_WARN("failed to check if tsc need real rescan", K(ret));
   } else if (!need_real_rescan) {
-    LOG_TRACE("[group rescan] need switch iter", K(group_rescan_cnt_), K(ctx_.get_das_ctx().group_rescan_cnt_),
-              K(group_id_), K(ctx_.get_das_ctx().skip_scan_group_id_), K(spec_.id_));
-    if (OB_FAIL(set_batch_iter(ctx_.get_das_ctx().skip_scan_group_id_))) {
-      LOG_WARN("failed to switch batch iter", K(ret), K(ctx_.get_das_ctx().skip_scan_group_id_));
+    LOG_TRACE("[group rescan] need switch iter", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()),
+              K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()), K(spec_.id_));
+    if (OB_FAIL(set_batch_iter(ctx_.get_das_ctx().get_skip_scan_group_id()))) {
+      LOG_WARN("failed to switch batch iter", K(ret), K(ctx_.get_das_ctx().get_skip_scan_group_id()));
     }
-    group_id_ = ctx_.get_das_ctx().skip_scan_group_id_;
+    group_id_ = ctx_.get_das_ctx().get_skip_scan_group_id();
   } else {
     reset_iter_tree_for_rescan();
-    LOG_TRACE("[group rescan] need perform real rescan", K(group_rescan_cnt_), K(ctx_.get_das_ctx().group_rescan_cnt_),
-              K(group_id_), K(ctx_.get_das_ctx().skip_scan_group_id_), K(spec_.id_));
+    LOG_TRACE("[group rescan] need perform real rescan", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()),
+              K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()), K(spec_.id_));
     if (is_virtual_table(MY_SPEC.ref_table_id_)
         || (OB_NOT_NULL(scan_iter_) && !scan_iter_->is_all_local_task())
         || (MY_SPEC.use_dist_das_ && nullptr != MY_CTDEF.das_dppr_tbl_)) {
@@ -1631,8 +1631,8 @@ int ObTableScanOp::local_iter_rescan()
   if (OB_SUCC(ret)) {
     if (in_batch_rescan_subplan()) {
       // if the ancestor operator of TSC support batch rescan, update the group_id and batch rescan_cnt after perform a real-rescan
-      group_rescan_cnt_ = ctx_.get_das_ctx().group_rescan_cnt_;
-      group_id_ = ctx_.get_das_ctx().skip_scan_group_id_;
+      group_rescan_cnt_ = ctx_.get_das_ctx().get_group_rescan_cnt();
+      group_id_ = ctx_.get_das_ctx().get_skip_scan_group_id();
     }
     output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE);
   }
@@ -1687,23 +1687,23 @@ int ObTableScanOp::check_need_real_rescan(bool &bret)
     bret = true;
   } else {
     // the above operator of tsc support batch group rescan
-    if (group_rescan_cnt_ < ctx_.get_das_ctx().group_rescan_cnt_) {
+    if (group_rescan_cnt_ < ctx_.get_das_ctx().get_group_rescan_cnt()) {
       // need perform batch rescan, the output of tsc is changed to fold_iter_
-      if (ctx_.get_das_ctx().skip_scan_group_id_ > 0) {
+      if (ctx_.get_das_ctx().get_skip_scan_group_id() > 0) {
         output_ = iter_tree_;
         LOG_TRACE("[group rescan] skip read is found");
       } else {
         output_ = fold_iter_;
       }
       bret = true;
-    } else if (group_rescan_cnt_ == ctx_.get_das_ctx().group_rescan_cnt_) {
-      if (group_id_ < ctx_.get_das_ctx().skip_scan_group_id_) {
+    } else if (group_rescan_cnt_ == ctx_.get_das_ctx().get_group_rescan_cnt()) {
+      if (group_id_ < ctx_.get_das_ctx().get_skip_scan_group_id()) {
         if (output_ == fold_iter_) {
           bret = false;
         } else {
           bret = true;
         }
-      } else if (group_id_ == ctx_.get_das_ctx().skip_scan_group_id_) {
+      } else if (group_id_ == ctx_.get_das_ctx().get_skip_scan_group_id()) {
         // the sql paln like this:
         //           spf
         //         /    \
@@ -1718,23 +1718,23 @@ int ObTableScanOp::check_need_real_rescan(bool &bret)
         if (enable_group_rescan_test_mode) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the group id of tsc exceeds the group id of above operator",
-                    K(ret), K(group_rescan_cnt_), K(group_id_), K(ctx_.get_das_ctx().skip_scan_group_id_));
+                    K(ret), K(group_rescan_cnt_), K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()));
         } else {
           bret = true;
           output_ = iter_tree_;
-          LOG_TRACE("[group rescan] found unexpected group id", K(group_rescan_cnt_), K(group_id_), K(ctx_.get_das_ctx().skip_scan_group_id_));
+          LOG_TRACE("[group rescan] found unexpected group id", K(group_rescan_cnt_), K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()));
         }
       }
     } else {
       if (enable_group_rescan_test_mode) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the batch rescan count of tsc exceeds the batch count of above operator",
-                  K(ret), K(group_rescan_cnt_), K(ctx_.get_das_ctx().group_rescan_cnt_));
+                  K(ret), K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()));
 
       } else {
         bret = true;
         output_ = iter_tree_;
-        LOG_TRACE("[group rescan] found unexpected group rescan cnt", K(group_rescan_cnt_), K(ctx_.get_das_ctx().group_rescan_cnt_));
+        LOG_TRACE("[group rescan] found unexpected group rescan cnt", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()));
       }
     }
   }

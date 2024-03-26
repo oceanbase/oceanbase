@@ -53,7 +53,7 @@ public:
                         const ObDASTaskResp &task_resp,
                         const ObIDASTaskOp *task_op,
                         ObDASExtraData *&extra_result);
-  int process_task_resp(ObDASRef &das_ref, const ObDASTaskResp &task_resp, const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops);
+  int process_task_resp(ObDASRef &das_ref, const ObDASTaskResp &task_resp, const common::ObIArray<ObIDASTaskOp*> &task_ops);
   int parallel_execute_das_task(common::ObIArray<ObIDASTaskOp *> &task_list);
   int parallel_submit_das_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task);
   int push_parallel_task(ObDASRef &das_ref, ObDasAggregatedTask &agg_task, int32_t group_id);

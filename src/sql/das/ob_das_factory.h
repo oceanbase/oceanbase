@@ -38,7 +38,7 @@ public:
   int create_das_extra_data(ObDASExtraData *&extra_result);
   int create_das_ctdef(ObDASOpType op_type, ObDASBaseCtDef *&ctdef);
   int create_das_rtdef(ObDASOpType op_type, ObDASBaseRtDef *&rtdef);
-  int create_das_async_cb(const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops,
+  int create_das_async_cb(const common::ObIArray<ObIDASTaskOp *> &task_ops,
                           const ObMemAttr &attr,
                           ObDASRef &das_ref,
                           ObRpcDasAsyncAccessCallBack *&async_cb,

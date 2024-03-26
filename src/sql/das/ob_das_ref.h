@@ -155,7 +155,7 @@ struct ObDasAggregatedTask
    * @param tasks: task array to output aggregated tasks.
   */
   int get_aggregated_tasks(common::ObIArray<ObIDASTaskOp *> &tasks);
-  int get_failed_tasks(common::ObSEArray<ObIDASTaskOp *, 2> &tasks);
+  int get_failed_tasks(common::ObIArray<ObIDASTaskOp *> &tasks);
   bool has_failed_tasks() const { return failed_tasks_.get_size() > 0; }
   bool has_unstart_tasks() const;
   bool has_not_execute_task() const
@@ -276,7 +276,7 @@ public:
   void set_lookup_iter(DASOpResultIter *lookup_iter) { wild_datum_info_.lookup_iter_ = lookup_iter; }
   int wait_all_tasks();
   int allocate_async_das_cb(ObRpcDasAsyncAccessCallBack *&async_cb,
-                            const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops,
+                            const common::ObIArray<ObIDASTaskOp*> &task_ops,
                             int64_t timeout_ts);
   void remove_async_das_cb(ObRpcDasAsyncAccessCallBack *das_async_cb);
   DASRefCountContext &get_das_ref_count_ctx() { return das_ref_count_ctx_; }

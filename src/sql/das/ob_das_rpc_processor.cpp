@@ -95,8 +95,8 @@ int ObDASBaseAccessP<pcode>::process()
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASTaskResp &task_resp = RpcProcessor::result_;
   SQL_INFO_GUARD(ObString("DAS REMOTE PROCESS"), task.get_remote_info()->sql_id_);
-  const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task.get_task_ops();
-  common::ObSEArray<ObIDASTaskResult*, 2> &task_results = task_resp.get_op_results();
+  const ObIArray<ObIDASTaskOp*> &task_ops = task.get_task_ops();
+  ObIArray<ObIDASTaskResult*> &task_results = task_resp.get_op_results();
   ObDASTaskFactory *das_factory = ObDASBaseAccessP<pcode>::get_das_factory();
   ObIDASTaskResult *op_result = nullptr;
   ObIDASTaskOp *task_op = nullptr;
@@ -297,10 +297,10 @@ oceanbase::rpc::frame::ObReqTransport::AsyncCB *ObRpcDasAsyncAccessCallBack::clo
       static_cast<const rpc::frame::ObReqTransport::AsyncCB * const>(this));
 }
 
-int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr)
+int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr, const ObIArray<ObIDASTaskOp*> &task_ops)
 {
   alloc_.set_attr(attr);
-  return task_ops_.get_copy_assign_ret();
+  return task_ops_.assign(task_ops);
 };
 
 int ObDASSyncFetchP::process()
