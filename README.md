@@ -30,7 +30,7 @@
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
-        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
 </p>
 
@@ -105,12 +105,11 @@ See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-
 You can deploy and manage OceanBase Database instance in kubernetes cluster with [ob-operator](https://github.com/oceanbase/ob-operator) quickly. Refer to the document [Quick Start for ob-operator](https://oceanbase.github.io/ob-operator) to see details.
 
 ## 👨‍💻 Start developing
-
-See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
+See [OceanBase Developer Document](https://oceanbase.github.io/oceanbase/build-and-run.html) to learn how to compile and deploy a manually compiled observer.
 
 # Roadmap
 
-For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364). See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects) for more details.
+For future plans, see [Product Iteration Progress](https://github.com/oceanbase/oceanbase/issues/1839). See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects/4) for more details.
 
 # Case study
 
@@ -124,7 +123,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # Contributing
 
-Contributions are highly appreciated. Read the [development guide](docs/README.md) to get started.
+Contributions are highly appreciated. Read the [development guide](https://oceanbase.github.io/oceanbase) to get started.
 
 # License
 

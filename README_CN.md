@@ -29,7 +29,7 @@
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
-        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
 </p>
 
@@ -105,11 +105,11 @@ obd demo
 
 ## 👨‍💻 使用源码编译部署
 
-参考 [OceanBase 开发者文档](https://github.com/oceanbase/oceanbase/wiki/Compile)了解如何编译和部署手动编译的observer。
+参考 [OceanBase 开发者文档](https://oceanbase.github.io/oceanbase/build-and-run.html)了解如何编译和部署手动编译的observer。
 
 # Roadmap
 
-请参考 [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364) 了解OceanBase规划。 更多详细信息请参考 [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects)。
+请参考 [产品迭代进展](https://github.com/oceanbase/oceanbase/issues/1839) 了解OceanBase规划。 更多详细信息请参考 [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects/4)。
 
 # 案例
 
@@ -123,7 +123,7 @@ OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服�
 
 # 社区贡献
 
-非常欢迎社区贡献。请阅读[开发指南](docs/README.md)。
+非常欢迎社区贡献。请阅读[开发指南](https://oceanbase.github.io/oceanbase)。
 
 # License
 
