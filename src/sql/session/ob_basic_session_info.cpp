@@ -155,7 +155,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       process_query_time_(0),
       last_update_tz_time_(0),
       is_client_sessid_support_(false),
-      use_rich_vector_format_(false)
+      use_rich_vector_format_(false),
+      is_real_inner_session_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -456,6 +457,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   }
   client_identifier_.reset();
   proxy_user_id_ = OB_INVALID_ID;
+  is_real_inner_session_ = false;
 }
 
 int ObBasicSessionInfo::reset_timezone()

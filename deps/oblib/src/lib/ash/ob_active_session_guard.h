@@ -191,7 +191,6 @@ public:
         di_(nullptr),
         is_bkgd_active_(true),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
-        is_remote_inner_sql_(false),
         pcode_(0),
         bkgd_elapse_time_(0),
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
@@ -251,6 +250,11 @@ public:
   static void calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time);
   // timestamp for last ash sample taken place. could be optimized to rdtsc()
   // FIXME:but should check rdtsc_is_supported on bootstrap.
+  void set_ash_waiting(const int64_t event_no,
+                       const int64_t p1 = 0 ,
+                       const int64_t p2 = 0,
+                       const int64_t p3 = 0);
+  void finish_ash_waiting();
   int64_t last_ts_;
   int64_t wait_event_begin_ts_;
   uint64_t total_idle_wait_time_; // idle wait time in total
@@ -263,7 +267,6 @@ public:
   bool is_bkgd_active_; // Identifies whether the status of the background session is active.
                         // Inactive background thread session will not be collected in ASH.
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
-  bool is_remote_inner_sql_;
   int pcode_;
   int64_t bkgd_elapse_time_; // for backgorund elapse time.
   ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
@@ -271,7 +274,7 @@ public:
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
-      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(is_remote_inner_sql), K_(pcode),
+      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(pcode),
       K_(bkgd_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer));
 
 private:

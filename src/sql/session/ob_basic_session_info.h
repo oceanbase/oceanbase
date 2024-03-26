@@ -1343,6 +1343,8 @@ public:
   int get_compatibility_version(uint64_t &compat_version) const;
   int get_security_version(uint64_t &security_version) const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
+  bool is_real_inner_session() const { return is_real_inner_session_; }
+  void set_real_inner_session(bool value) { is_real_inner_session_ = value; }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -2298,6 +2300,10 @@ private:
   bool is_client_sessid_support_; //client session id support flag
   bool use_rich_vector_format_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];
+  bool is_real_inner_session_;
+  // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
+  // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
+  // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
 };
 
 

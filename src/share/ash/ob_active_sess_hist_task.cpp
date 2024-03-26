@@ -213,29 +213,21 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
       stat.action_[0] = '\0';
       stat.client_id_[0] = '\0';
       // fill program
-      if (sess_info->get_user_at_client_ip().empty()) {
-        if (stat.is_remote_inner_sql_) {
-          snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "INNER SQL REMOTE EXEC (%.*s)",
-                              OB_THREAD_NAME_BUF_LEN,
-                              sess_info->get_thread_name());
+      if (!sess_info->get_user_at_client_ip().empty()) {
+        if (sess_info->is_remote_session()) {
+          snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "REMOTE SQL CMD %s EXEC %.*s (%.*s)", sess_info->get_mysql_cmd_str(),
+              sess_info->get_user_at_client_ip().length(), sess_info->get_user_at_client_ip().ptr(),
+              OB_THREAD_NAME_BUF_LEN, sess_info->get_thread_name());
         } else {
-          snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "LOCAL INNER SQL EXEC (%.*s)",
-                              OB_THREAD_NAME_BUF_LEN,
-                              sess_info->get_thread_name());
+          snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "SQL CMD %s EXEC %.*s (%.*s)", sess_info->get_mysql_cmd_str(),
+              sess_info->get_user_at_client_ip().length(), sess_info->get_user_at_client_ip().ptr(),
+              OB_THREAD_NAME_BUF_LEN, sess_info->get_thread_name());
         }
-        stat.session_type_ = true;  // BACKGROUND
-      } else if (sess_info->is_remote_session()) {
-        snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "REMOTE SQL CMD %s EXEC %.*s (%.*s)", sess_info->get_mysql_cmd_str(),
-            sess_info->get_user_at_client_ip().length(), sess_info->get_user_at_client_ip().ptr(),
-            OB_THREAD_NAME_BUF_LEN, sess_info->get_thread_name());
-      } else {
-        snprintf(stat.program_, ASH_PROGRAM_STR_LEN, "SQL CMD %s EXEC %.*s (%.*s)", sess_info->get_mysql_cmd_str(),
-            sess_info->get_user_at_client_ip().length(), sess_info->get_user_at_client_ip().ptr(),
-            OB_THREAD_NAME_BUF_LEN, sess_info->get_thread_name());
       }
+
       // fill module
-      if (sess_info->is_inner()) {
-        snprintf(stat.module_, ASH_MODULE_STR_LEN, "INNER SQL EXEC (%.*s)", ASH_MODULE_STR_LEN - 18/*INNER SQL EXEC ()*/,
+      if (sess_info->is_real_inner_session()) {
+        snprintf(stat.module_, ASH_MODULE_STR_LEN, "LOCAL INNER SQL EXEC (%.*s)", ASH_MODULE_STR_LEN - 18/*INNER SQL EXEC ()*/,
             inner_sql_wait_to_string(stat.prev_inner_sql_wait_type_id_));
       } else {
         if (!sess_info->get_module_name().empty()) {

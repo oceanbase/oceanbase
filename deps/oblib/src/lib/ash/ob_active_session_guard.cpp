@@ -111,26 +111,42 @@ void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &a
     fixup_ash_buffer_ = ash_buffer;
   }
 }
-
 void ObActiveSessionStat::set_async_committing()
 {
   in_committing_ = true;
-  int ret = OB_SUCCESS;
-  wait_event_begin_ts_ = ObTimeUtility::current_time();
-  event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
+  set_ash_waiting(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
 }
 
 void ObActiveSessionStat::finish_async_commiting() {
   in_committing_ = false;
+  finish_ash_waiting();
+}
+
+void ObActiveSessionStat::set_ash_waiting(
+  const int64_t event_no,
+  const int64_t p1 /* = 0 */,
+  const int64_t p2 /* = 0 */,
+  const int64_t p3 /* = 0 */)
+{
+  int ret = OB_SUCCESS;
+  wait_event_begin_ts_ = ObTimeUtility::current_time();
+  set_event(event_no, p1, p2, p3);
+}
+
+void ObActiveSessionStat::finish_ash_waiting() {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
-    // if happened. caller of set_async_committing should check and revert the wait event.
+    // if happened. caller of set_ash_waiting should check and revert the wait event.
   } else {
-    event_no_ = 0;
+    reset_event();
     const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
     wait_event_begin_ts_ = 0;
     if (OB_LIKELY(cur_wait_time > 0)) {
-      total_non_idle_wait_time_ += cur_wait_time;
+      if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
+        total_non_idle_wait_time_ += cur_wait_time;
+      } else {
+        total_idle_wait_time_ += cur_wait_time;
+      }
     }
   }
 }

@@ -448,6 +448,7 @@ private:
   bool prev_is_bkgd_active_;
   ObWaitEventDesc *prev_max_wait_;
   ObWaitEventStat *prev_total_wait_;
+  bool has_finish_switch_di_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase
