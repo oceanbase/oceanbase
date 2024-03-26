@@ -361,7 +361,7 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
   } else if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create insert spec", K(ret));
-  } else if (ctx.is_atomic_) {
+  } else if (ctx.is_atomic_ && !tb_ctx.is_ttl_table()) {
     if (OB_FAIL(multi_op_in_executor(ctx, *spec))) {
       LOG_WARN("fail to do multi operarion in executor", K(ret));
     }
