@@ -1373,6 +1373,8 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       LOG_WARN("invalid arguments", K(ret));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
       LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(context_->check_already_committed(param_->dest_ls_id_, param_->dest_tablet_id_, ddl_committed))) {
+      LOG_WARN("check tablet already committed failed", K(ret));
     } else {
       const ObTableSchema *hidden_table_schema = nullptr;
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
@@ -1470,8 +1472,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("fail to yield dag", KR(ret));
       } else if (OB_FAIL(DDL_SIM(param_->dest_tenant_id_, param_->task_id_, DDL_INSERT_SSTABLE_GET_NEXT_ROW_FAILED))) {
         LOG_WARN("ddl sim failure", K(ret), KPC(param_));
-      } else if ((0 == (context_->row_inserted_ % 100000)) && OB_FAIL(context_->check_already_committed(param_->dest_ls_id_, param_->dest_tablet_id_, ddl_committed))) {
-        LOG_WARN("check tablet already committed failed", K(ret));
       } else if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row", K(ret));

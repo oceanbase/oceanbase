@@ -133,7 +133,8 @@ public:
                         ObString &sql,
                         const share::schema::ObRoutineInfo &routine_info,
                         const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                        const ObTimeZoneInfo *tz_info) = 0;
+                        const ObTimeZoneInfo *tz_info,
+                        ObObj *result) = 0;
   virtual int prepare(const char *sql) {
     UNUSED(sql);
     return OB_NOT_SUPPORTED;

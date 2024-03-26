@@ -1041,18 +1041,21 @@ public:
   ObCreateTableRes() :
       table_id_(OB_INVALID_ID),
       schema_version_(OB_INVALID_VERSION),
-      task_id_(0)
+      task_id_(0),
+      do_nothing_(false)
   {}
   int assign(const ObCreateTableRes &other) {
     table_id_ = other.table_id_;
     schema_version_ = other.schema_version_;
     task_id_ = other.task_id_;
+    do_nothing_ = other.do_nothing_;
     return common::OB_SUCCESS;
   }
-  TO_STRING_KV(K_(table_id), K_(schema_version), K_(task_id));
+  TO_STRING_KV(K_(table_id), K_(schema_version), K_(task_id), K_(do_nothing));
   uint64_t table_id_;
   int64_t schema_version_;
   int64_t task_id_;
+  bool do_nothing_;
 };
 
 struct ObCreateTableLikeArg : public ObDDLArg
@@ -4121,7 +4124,8 @@ public:
       data_source_(),
       paxos_replica_number_(0),
       skip_change_member_list_(),
-      force_use_data_source_(false) {}
+      force_use_data_source_(false),
+      force_data_source_() {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -4143,7 +4147,8 @@ public:
                K_(data_source),
                K_(paxos_replica_number),
                K_(skip_change_member_list),
-               K_(force_use_data_source));
+               K_(force_use_data_source),
+               K_(force_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4164,6 +4169,8 @@ public:
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
   bool force_use_data_source_;
+  // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  common::ObReplicaMember force_data_source_;
 };
 
 struct ObLSAddReplicaArg
@@ -4180,7 +4187,8 @@ public:
       orig_paxos_replica_number_(0),
       new_paxos_replica_number_(0),
       skip_change_member_list_(false),
-      force_use_data_source_(false) {}
+      force_use_data_source_(false),
+      force_data_source_() {}
 public:
   int assign(const ObLSAddReplicaArg &that);
 
@@ -4202,7 +4210,8 @@ public:
                K_(orig_paxos_replica_number),
                K_(new_paxos_replica_number),
                K_(skip_change_member_list),
-               K_(force_use_data_source));
+               K_(force_use_data_source),
+               K_(force_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4223,6 +4232,8 @@ public:
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
   bool force_use_data_source_;
+  // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  common::ObReplicaMember force_data_source_;
 };
 
 struct ObLSChangeReplicaArg

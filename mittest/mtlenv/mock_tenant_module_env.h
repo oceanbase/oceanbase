@@ -263,6 +263,12 @@ public:
     UNUSED(tenant_id);
     return OB_SUCCESS;
   }
+  virtual int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id)
+  {
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    return OB_SUCCESS;
+  }
 private:
   MockObGtsSource &source_;
 };

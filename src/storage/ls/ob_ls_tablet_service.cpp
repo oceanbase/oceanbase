@@ -2252,18 +2252,24 @@ int ObLSTabletService::create_empty_shell_tablet(
 
 int ObLSTabletService::rollback_remove_tablet(
     const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id)
+    const common::ObTabletID &tablet_id,
+    const share::SCN &transfer_start_scn)
 {
   int ret = OB_SUCCESS;
+  bool is_same = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls tablet service do not init", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !transfer_start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id));
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(transfer_start_scn));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-    if (OB_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
+    if (OB_FAIL(check_rollback_tablet_is_same_(ls_id, tablet_id, transfer_start_scn, is_same))) {
+      LOG_WARN("failed to check rollback tablet is same", K(ret), K(ls_id), K(tablet_id), K(transfer_start_scn));
+    } else if (!is_same) {
+      //do nothing
+    } else if (OB_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
       LOG_WARN("fail to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
     }
   }
@@ -2798,6 +2804,26 @@ int ObLSTabletService::direct_insert_rows(
   return ret;
 }
 
+int ObLSTabletService::mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows)
+{
+  int ret = OB_SUCCESS;
+  ObValueRowIterator *dup_iter = NULL;
+
+  if (OB_ISNULL(dup_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
+  } else {
+    duplicated_rows = dup_iter;
+    if (OB_FAIL(dup_iter->init(true))) {
+      LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
+      ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+      duplicated_rows = nullptr;
+    }
+  }
+
+  return ret;
+}
+
 int ObLSTabletService::insert_row(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
@@ -2845,11 +2871,34 @@ int ObLSTabletService::insert_row(
                                     duplicated_column_ids,
                                     tbl_row.row_val_,
                                     duplicated_rows))) {
-      LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+        LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
       } else if (nullptr == duplicated_rows) {
         if (OB_FAIL(insert_row_to_tablet(tablet_handle, run_ctx, tbl_row))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
             LOG_WARN("failed to write row", K(ret));
+          }
+
+          if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+            int tmp_ret = OB_SUCCESS;
+            // For primary key conflicts caused by concurrent insertions within
+            // a statement, we need to return the corresponding duplicated_rows.
+            // However, under circumstances where an exception may unexpectedly
+            // prevent us from reading the conflicting rows within statements,
+            // at such times, it becomes necessary for us to mock the rows.
+            if (OB_TMP_FAIL(get_conflict_rows(tablet_handle,
+                                              run_ctx,
+                                              flag,
+                                              duplicated_column_ids,
+                                              tbl_row.row_val_,
+                                              duplicated_rows))) {
+              LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+              ret = tmp_ret;
+            } else if (nullptr == duplicated_rows) {
+              if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
+                LOG_WARN("failed to mock duplicated row(s)", K(ret), K(duplicated_column_ids), K(row));
+                ret = tmp_ret;
+              }
+            }
           }
         } else {
           LOG_DEBUG("succeeded to insert row", K(ret), K(row));
@@ -6684,6 +6733,34 @@ int ObLSTabletService::offline_gc_tablet_for_create_or_transfer_in_abort_()
         LOG_INFO("gc tablet finish", K(ret), K(ls_id), K(tablet_id));
       }
     }
+  }
+  return ret;
+}
+
+int ObLSTabletService::check_rollback_tablet_is_same_(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const share::SCN &transfer_start_scn,
+    bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  is_same = true;
+
+  if (OB_FAIL(direct_get_tablet(tablet_id, tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      is_same = true;
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(ls_id), K(tablet_id));
+  } else if (transfer_start_scn != tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
+    is_same = false;
+    LOG_ERROR("rollback tablet is not same, cannot rollback", K(ls_id), K(tablet_id), K(transfer_start_scn), KPC(tablet));
+  } else {
+    is_same = true;
   }
   return ret;
 }

@@ -1923,7 +1923,7 @@ bool ObCreateTableArg::is_allow_when_upgrade() const
   return bret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_, task_id_);
+OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_, task_id_, do_nothing_);
 
 bool ObCreateTableLikeArg::is_valid() const
 {
@@ -3724,7 +3724,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     data_source_,
                     paxos_replica_number_,
                     skip_change_member_list_,
-                    force_use_data_source_);
+                    force_use_data_source_,
+                    force_data_source_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3739,6 +3740,7 @@ int ObLSMigrateReplicaArg::assign(
   paxos_replica_number_ = that.paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
   force_use_data_source_ = that.force_use_data_source_;
+  force_data_source_ = that.force_data_source_;
   return ret;
 }
 
@@ -3773,7 +3775,8 @@ OB_SERIALIZE_MEMBER(ObLSAddReplicaArg,
                     orig_paxos_replica_number_,
                     new_paxos_replica_number_,
                     skip_change_member_list_,
-                    force_use_data_source_);
+                    force_use_data_source_,
+                    force_data_source_);
 
 int ObLSAddReplicaArg::assign(
     const ObLSAddReplicaArg &that)
@@ -3788,6 +3791,7 @@ int ObLSAddReplicaArg::assign(
   new_paxos_replica_number_ = that.new_paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
   force_use_data_source_ = that.force_use_data_source_;
+  force_data_source_ = that.force_data_source_;
   return ret;
 }
 

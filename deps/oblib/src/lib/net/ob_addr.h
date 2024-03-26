@@ -74,10 +74,12 @@ public:
 
   explicit ObAddr(const easy_addr_t& addr);
 
-  explicit ObAddr(const sockaddr &addr);
+  void from_sockaddr(struct sockaddr_storage *sock_addr);
+  struct sockaddr_storage *to_sockaddr(struct sockaddr_storage *sock_addr) const;
 
   void reset()
   {
+    reset_v4_extraneous();
     port_ = 0;
     //memset(&ip_, 0, sizeof (ip_));
   }
@@ -129,8 +131,16 @@ private:
   friend class oceanbase::obrpc::ObBatchP;
   int64_t get_ipv4_server_id() const;
   void set_ipv4_server_id(const int64_t ipv4_server_id);
+  int compare_refactored(const ObAddr &rv) const;
 
 private:
+  void reset_v4_extraneous()
+  {
+    uint32_t *p = &ip_.v4_;
+    *++p = 0;
+    *++p = 0;
+    *++p = 0;
+  }
   int convert_ipv4_addr(const char *ip);
   int convert_ipv6_addr(const char *ip);
   bool set_ipv4_addr(const char *ip, const int32_t port);
@@ -212,9 +222,31 @@ inline bool ObAddr::operator !=(const ObAddr &rv) const
 
 inline bool ObAddr::operator ==(const ObAddr &rv) const
 {
-  return version_ == rv.version_ && port_ == rv.port_ && (0 == memcmp(&ip_, &rv.ip_, sizeof(ip_)));
+  return 0 == compare_refactored(rv);
 }
 
+inline int ObAddr::compare_refactored(const ObAddr &rv) const
+{
+  int64_t ipcmp = 0;
+  if (this == &rv) {
+    ipcmp = 0;
+  } else if (version_ != rv.version_) {
+    ipcmp = version_ - rv.version_;
+  } else if (IPV4 == version_) {
+    ipcmp = static_cast<int64_t>(ip_.v4_) - static_cast<int64_t>(rv.ip_.v4_);
+  } else if (IPV6 == version_) {
+    int pos = 0;
+    for (; 0 == ipcmp && pos < IPV6_LEN; pos++) {
+      ipcmp = ip_.v6_[pos] - rv.ip_.v6_[pos];
+    }
+  }
+  if (0 == ipcmp) {
+    ipcmp = port_ - rv.port_;
+  }
+  return 0 == ipcmp ? 0 : (ipcmp > 0 ? 1 : -1);;
+}
+
+// forward compatible
 inline int ObAddr::compare(const ObAddr &rv) const
 {
   int compare_ret = 0;

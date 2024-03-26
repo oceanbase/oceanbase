@@ -37,7 +37,9 @@
 
 extern "C" {
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
-		                     int __maxevents, int __timeout);
+		         int __maxevents, int __timeout);
+extern int sockaddr_compare_c(struct sockaddr_storage *left, struct sockaddr_storage *right);
+extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
 };
 
 using namespace oceanbase::common;
@@ -368,22 +370,20 @@ client* create_client(DestKeepAliveState *rs)
   if (OB_SUCC(ret)) {
     c->status_ = CONNECTING;
     update_write_ts(rs);
-    if (AF_INET == addr.ss_family) {
-      struct sockaddr_in self_addr;
-      socklen_t len = sizeof(self_addr);
-      if (0 == getsockname(c->fd_, (struct sockaddr *)&self_addr, &len)) {
-        struct sockaddr_in *dst_addr = (struct sockaddr_in *)(&addr);
-        if (self_addr.sin_port == dst_addr->sin_port && self_addr.sin_addr.s_addr == dst_addr->sin_addr.s_addr) {
-          char str[INET_ADDRSTRLEN];
-          ret = OB_IO_ERROR;
-          _LOG_WARN("connection to %s failed, self connect self", inet_ntop(AF_INET, (const void*)(&addr), str, sizeof(str)));
-        } else {
-          _LOG_DEBUG("connection local_port: %d, fd: %d", ntohs(self_addr.sin_port), c->fd_);
-        }
-      } else {
+    struct sockaddr_storage self_addr;
+    socklen_t len = sizeof(self_addr);
+    if (0 == getsockname(c->fd_, (struct sockaddr *)&self_addr, &len)) {
+      char str[128];
+      const char *addr_str = sockaddr_to_str_c(&self_addr, str, sizeof(str));
+      if (0 == sockaddr_compare_c(&self_addr, &addr)) {
         ret = OB_IO_ERROR;
-        _LOG_WARN("getsockname failed: fd:%d, errno:%d", c->fd_, errno);
+        _LOG_WARN("connection to %s failed, self connect self", addr_str);
+      } else {
+        _LOG_DEBUG("connection local_addr: %s, fd: %d", addr_str, c->fd_);
       }
+    } else {
+      ret = OB_IO_ERROR;
+      _LOG_WARN("getsockname failed: fd:%d, errno:%d", c->fd_, errno);
     }
   }
 

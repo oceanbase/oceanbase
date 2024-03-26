@@ -738,14 +738,15 @@ int ObDbLinkProxy::dblink_execute_proc(const uint64_t tenant_id,
                                        ObString &sql,
                                        const share::schema::ObRoutineInfo &routine_info,
                                        const common::ObIArray<const pl::ObUserDefinedType *> &udts,
-                                       const ObTimeZoneInfo *tz_info)
+                                       const ObTimeZoneInfo *tz_info,
+                                       ObObj *result)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_proc(tenant_id, allocator, params, sql,
-                                               routine_info, udts, tz_info))) {
+                                               routine_info, udts, tz_info, result))) {
     LOG_WARN("call procedure to dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
     LOG_DEBUG("succ to call procedure by dblink", K(sql));

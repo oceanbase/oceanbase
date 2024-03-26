@@ -1806,6 +1806,156 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
   return ret;
 }
 
+int ObDDLUtil::check_table_compaction_checksum_error(
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(check_table_column_checksum_error(tenant_id, table_id))) {
+    LOG_WARN("check_table_column_checksum_error fail", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(check_tablet_checksum_error(tenant_id, table_id))) {
+    LOG_WARN("check_tablet_checksum_error fail", KR(ret), K(tenant_id), K(table_id));
+  }
+  return ret;
+}
+
+int ObDDLUtil::check_table_column_checksum_error(
+      const uint64_t tenant_id,
+      const int64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    ObSqlString query_string;
+    sqlclient::ObMySQLResult *result = nullptr;
+    ObTimeoutCtx timeout_ctx;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if OB_FAIL(ret) {
+        LOG_WARN("fail to create object ObMySQLProxy::MySQLResult", KR(ret), K(tenant_id), K(table_id));
+      } else if (OB_FAIL(query_string.append_fmt("SELECT data_table_id FROM %s WHERE tenant_id = %lu AND data_table_id = %lu LIMIT 1",
+          OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TNAME, tenant_id, table_id))) {
+        LOG_WARN("assign sql string failed", KR(ret), K(query_string));
+      } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid arg", K(ret), K(tenant_id), KP(GCTX.sql_proxy_));
+      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+        LOG_WARN("failed to set timeout ctx", K(ret), K(timeout_ctx));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(query_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next()) && ret != OB_ITER_END ) {
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_NOT_SUPPORTED; // we expect the sql to return an empty result
+        LOG_WARN("table index checksum error", K(ret), K(tenant_id), K(table_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Redefinition on compaction checksum error table is");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::check_tablet_checksum_error(
+      const uint64_t tenant_id,
+      const int64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    ObArray<ObTabletID> tablet_ids;
+    if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, tablet_ids))) {
+      LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(tablet_ids));
+    } else {
+      int64_t start_idx = 0;
+      int64_t end_idx = min(ObDDLUtil::MAX_BATCH_COUNT, tablet_ids.count());
+      while (OB_SUCC(ret) && start_idx < tablet_ids.count()) {
+        if (OB_FAIL(batch_check_tablet_checksum(tenant_id, start_idx, end_idx, tablet_ids))) {
+          LOG_WARN("fail to batch get teablet_ids", K(ret), K(tenant_id), K(table_id));
+        } else {
+          start_idx = end_idx;
+          end_idx = min(start_idx + ObDDLUtil::MAX_BATCH_COUNT, tablet_ids.count());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::batch_check_tablet_checksum(
+    const uint64_t tenant_id,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    const ObArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || start_idx < 0 || end_idx > tablet_ids.count()
+      || start_idx >= end_idx || tablet_ids.count() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(start_idx), K(end_idx));
+  } else {
+    ObSqlString query_string;
+    sqlclient::ObMySQLResult *result = nullptr;
+    ObTimeoutCtx timeout_ctx;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to create object ObMySQLProxy::MySQLResult", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(query_string.append(" SELECT tenant_id, tablet_id FROM "))) {
+        LOG_WARN("assign sql string failed", K(ret), K(query_string));
+      } else if (OB_FAIL(query_string.append_fmt("( SELECT tenant_id,tablet_id,row_count,data_checksum,b_column_checksums,compaction_scn FROM %s "
+        " WHERE tenant_id = %lu AND tablet_id IN (", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
+        LOG_WARN("assign sql string failed", K(ret), K(query_string));
+      } else {
+        for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+          if (OB_FAIL(query_string.append_fmt(
+            "%lu%s",
+            tablet_ids.at(idx).id(),
+            ((idx == end_idx - 1) ? ")) as J" : ",")))) {
+            LOG_WARN("assign sql string failed", K(ret), K(tenant_id), K(tablet_ids.at(idx).id()));
+          }
+        } // end of for
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(query_string.append(" GROUP BY J.tablet_id, J.compaction_scn"
+              " HAVING MIN(J.data_checksum) != MAX(J.data_checksum)"
+              " OR MIN(J.row_count) != MAX(J.row_count)"
+              " OR MIN(J.b_column_checksums) != MAX(J.b_column_checksums) LIMIT 1"))) {
+            LOG_WARN("assign sql string failed", K(ret), K(tenant_id));
+          } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid arg", K(ret), K(tenant_id), KP(GCTX.sql_proxy_));
+          } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+            LOG_WARN("failed to set timeout ctx", K(ret), K(timeout_ctx));
+          } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, query_string.ptr()))) {
+            LOG_WARN("read record failed", K(ret), K(query_string));
+          } else if ((OB_ISNULL(result = res.get_result()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get sql result", K(ret), KP(result));
+          } else if (OB_FAIL(result->next()) && ret != OB_ITER_END) {
+            LOG_WARN("fail to get sql result", K(ret), KP(result));
+          } else if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            ret = OB_NOT_SUPPORTED; // we expect the sql to return an empty result
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Redefinition on compaction checksum error table is");
+            LOG_WARN("tablet replicas checksum error", K(ret), K(tenant_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(

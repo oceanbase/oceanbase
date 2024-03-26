@@ -1133,6 +1133,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
   NULL, // ObExprLastRefreshScn::eval_last_refresh_scn                         /* 690 */
   NULL, // ObExprDocLength::generate_doc_length,                      /*691*/
+  NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1266,6 +1267,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
+  NULL,//ObExprTopNFilter::eval_topn_filter_batch,                    /* 130 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1381,6 +1383,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprInOrNotIn::eval_vector_in_without_row_fallback,         /* 109 */
   ObExprInOrNotIn::eval_vector_in_without_row,                  /* 110 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
+  NULL,//ObExprTopNFilter::eval_topn_filter_vector,             /* 112 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

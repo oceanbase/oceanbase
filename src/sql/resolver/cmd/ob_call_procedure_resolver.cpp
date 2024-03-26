@@ -341,6 +341,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
   } else if (NULL != stmt->get_call_proc_info()) {
     // find call procedure info in pl cache.
   } else {
+    if (NULL == params_.package_guard_) {
+      pl::ObPLPackageGuard *package_guard = NULL;
+      OZ (params_.session_info_->get_cur_exec_ctx()->get_package_guard(package_guard));
+      CK (OB_NOT_NULL(package_guard));
+      OX (params_.package_guard_ = package_guard);
+    }
     OZ (ObCacheObjectFactory::alloc(stmt->get_cacheobj_guard(),
                                   ObLibCacheNameSpace::NS_CALLSTMT,
                                   session_info_->get_effective_tenant_id()));
@@ -382,13 +388,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
     ObSEArray<ObRawExpr*, 16> expr_params;
-    pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     // 获取routine schem info
     if (OB_SUCC(ret)) {
       if (OB_NOT_NULL(params_node)
           && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
         LOG_WARN("failed to resolve param exprs", K(ret));
-      } else if (OB_FAIL(ObResolverUtils::get_routine(package_guard,
+      } else if (OB_FAIL(ObResolverUtils::get_routine(*params_.package_guard_,
                                                       params_,
                                                       (*session_info_).get_effective_tenant_id(),
                                                       (*session_info_).get_database_name(),
@@ -466,7 +471,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       *(params_.sql_proxy_),
                                                       pl_type,
                                                       NULL,
-                                                      &package_guard.dblink_guard_));
+                                                      &params_.package_guard_->dblink_guard_));
         }
         if (OB_SUCC(ret)) {
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
@@ -543,6 +548,10 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(proc_info) && (OB_INVALID_ID != proc_info->get_dblink_id())) {
       stmt->set_dblink_routine_info(proc_info);
+      if (proc_info->is_function()) {
+        ret = OB_ERR_NOT_VALID_ROUTINE_NAME;
+        LOG_WARN("ORA-06576: not a valid function or procedure name", K(ret), KPC(proc_info));
+      }
     }
     // Step 4: cg raw expr
     OX (call_proc_info->set_param_cnt(params.count()));

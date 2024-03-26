@@ -79,7 +79,7 @@ PN_API int pn_listen(int port, serve_cb_t cb);
 // make sure grp != 0
 PN_API int pn_provision(int listen_id, int grp, int thread_count);
 // gid_tid = (gid<<8) | tid
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
+PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
 PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);
 PN_API int pn_ratelimit(int grp_id, int64_t value);

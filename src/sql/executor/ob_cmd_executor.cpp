@@ -1039,6 +1039,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_CANCEL_CLONE: {
         DEFINE_EXECUTE_CMD(ObCancelCloneStmt, ObCancelCloneExecutor);
         break;
+       }
+      case stmt::T_TRANSFER_PARTITION: {
+        DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
       }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:

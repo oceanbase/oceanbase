@@ -254,6 +254,7 @@ writing_throttling_maximum_duration
 writing_throttling_trigger_percentage
 zone
 _advance_checkpoint_timeout
+_allow_skip_replay_redo_after_detete_tablet
 _audit_mode
 _auto_broadcast_tablet_location_rate_limit
 _auto_drop_recovering_auxiliary_tenant
@@ -384,6 +385,7 @@ _parallel_redo_logging_trigger
 _parallel_server_sleep_time
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
+_preserve_order_for_pagination
 _print_sample_ppm
 _private_buffer_size
 _publish_schema_mode

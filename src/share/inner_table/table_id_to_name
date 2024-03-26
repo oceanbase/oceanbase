@@ -333,6 +333,9 @@
 # 486: __all_clone_job_history
 # 494: __all_aux_stat
 # 495: __all_index_usage_info
+# 498: __all_transfer_partition_task
+# 499: __all_transfer_partition_task_history
+# 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 500: __all_tenant_snapshot_job
 # 502: __all_trusted_root_certificate
 # 507: __all_tenant_snapshot_ls_replica_history
@@ -1054,6 +1057,11 @@
 # 12439: __all_virtual_checkpoint_diagnose_info
 # 12447: __all_virtual_aux_stat
 # 12447: __all_aux_stat  # BASE_TABLE_NAME
+# 12451: __all_virtual_transfer_partition_task
+# 12451: __all_transfer_partition_task  # BASE_TABLE_NAME
+# 12452: __all_virtual_transfer_partition_task_history
+# 12452: __all_transfer_partition_task  # BASE_TABLE_NAME
+# 12452: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
 # 12453: __all_virtual_tenant_snapshot_job
 # 12453: __all_tenant_snapshot_job  # BASE_TABLE_NAME
 # 12458: __all_virtual_ls_snapshot
@@ -1061,6 +1069,7 @@
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
 # 12464: __all_virtual_tenant_snapshot_ls_replica_history
 # 12464: __all_tenant_snapshot_ls_replica_history  # BASE_TABLE_NAME
+# 12487: __all_virtual_nic_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1635,10 +1644,17 @@
 # 15418: __all_virtual_cgroup_config  # BASE_TABLE_NAME
 # 15427: ALL_VIRTUAL_AUX_STAT_REAL_AGENT
 # 15427: __all_aux_stat  # BASE_TABLE_NAME
+# 15430: ALL_VIRTUAL_TRANSFER_PARTITION_TASK_REAL_AGENT
+# 15430: __all_transfer_partition_task  # BASE_TABLE_NAME
+# 15431: ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT
+# 15431: __all_transfer_partition_task  # BASE_TABLE_NAME
+# 15431: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
 # 15439: ALL_VIRTUAL_LS_SNAPSHOT
 # 15439: __all_virtual_ls_snapshot  # BASE_TABLE_NAME
 # 15440: ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
+# 15456: ALL_VIRTUAL_NIC_INFO
+# 15456: __all_virtual_nic_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2011,6 +2027,10 @@
 # 21497: DBA_OB_AUX_STATISTICS
 # 21498: CDB_OB_AUX_STATISTICS
 # 21499: DBA_INDEX_USAGE
+# 21501: DBA_OB_TRANSFER_PARTITION_TASKS
+# 21502: CDB_OB_TRANSFER_PARTITION_TASKS
+# 21503: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
+# 21504: CDB_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 21509: DBA_OB_TRUSTED_ROOT_CERTIFICATE
 # 21510: DBA_OB_CLONE_PROGRESS
 # 21513: CDB_INDEX_USAGE
@@ -2033,6 +2053,8 @@
 # 21538: DBA_MVREF_CHANGE_STATS
 # 21539: CDB_MVREF_STMT_STATS
 # 21540: DBA_MVREF_STMT_STATS
+# 21580: GV$OB_NIC_INFO
+# 21581: V$OB_NIC_INFO
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2287,6 +2309,8 @@
 # 25265: DBA_OB_IMPORT_TABLE_JOB_HISTORY
 # 25266: DBA_OB_IMPORT_TABLE_TASKS
 # 25267: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 25275: DBA_OB_TRANSFER_PARTITION_TASKS
+# 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25278: USER_USERS
 # 25283: DBA_MVIEW_LOGS
 # 25284: ALL_MVIEW_LOGS
@@ -2479,6 +2503,8 @@
 # 28214: DBA_INDEX_USAGE
 # 28215: GV$OB_LS_SNAPSHOTS
 # 28216: V$OB_LS_SNAPSHOTS
+# 28230: GV$OB_NIC_INFO
+# 28231: V$OB_NIC_INFO
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME
@@ -2861,6 +2887,9 @@
 # 101097: __idx_468_idx_mview_refresh_stats_mview_end_time
 # 101097: idx_mview_refresh_stats_mview_end_time  # INDEX_NAME
 # 101097: __all_mview_refresh_stats  # DATA_BASE_TABLE_NAME
+# 101098: __idx_498_idx_transfer_partition_key
+# 101098: idx_transfer_partition_key  # INDEX_NAME
+# 101098: __all_transfer_partition_task  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME

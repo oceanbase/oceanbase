@@ -321,6 +321,10 @@ int ObResultSet::start_stmt()
     }
     LOG_DEBUG("dblink xa trascaction need skip start_stmt()", K(PHY_LINK_DML == phy_plan->get_root_op_spec()->type_), K(my_session_.get_dblink_context().is_dblink_xa_tras()));
   } else {
+    if (phy_plan->has_link_udf() && ac) {
+      my_session_.set_autocommit(false);
+      my_session_.set_restore_auto_commit();
+    }
     if (0 < plan_ctx->get_tx_id()) {
       const transaction::ObTransID tx_id(plan_ctx->get_tx_id());
       if (OB_FAIL(sql::ObTMService::recover_tx_for_callback(tx_id, get_exec_context()))) {
@@ -1288,7 +1292,8 @@ bool ObResultSet::need_end_trans_callback() const
       need = ac && !explicit_start_trans && !is_with_rows();
     } else if (OB_LIKELY(NULL != physical_plan_) &&
                OB_LIKELY(physical_plan_->is_need_trans()) &&
-               !physical_plan_->is_link_dml_plan()) {
+               !physical_plan_->is_link_dml_plan() &&
+               !physical_plan_->has_link_udf()) {
       need = (true == ObSqlTransUtil::plan_can_end_trans(ac, explicit_start_trans)) &&
           (false == ObSqlTransUtil::is_remote_trans(ac, explicit_start_trans, physical_plan_->get_plan_type()));
     }

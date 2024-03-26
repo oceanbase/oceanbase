@@ -1609,7 +1609,9 @@ bool ObQueryRefRawExpr::inner_same_as(
   bool bool_ret = false;
   if (get_expr_type() == expr.get_expr_type()) {
     const ObQueryRefRawExpr &u_expr = static_cast<const ObQueryRefRawExpr &>(expr);
-    if (check_context != NULL && check_context->override_query_compare_) {
+    if (is_set_ != u_expr.is_set_ || is_multiset_ != u_expr.is_multiset_) {
+      /* bool bool_ret = false; */
+    } else if (check_context != NULL && check_context->override_query_compare_) {
       bool_ret = check_context->compare_query(*this, u_expr);
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
@@ -2356,6 +2358,27 @@ void ObOpRawExpr::clear_child()
   exprs_.reset();
 }
 
+int ObOpRawExpr::get_subquery_comparison_flag() const
+{
+  enum {
+    INVALID = 0, // not subquery comparison
+    NONE = 1,
+    ALL = 2,
+    ANY = 3
+  } comparison_flag;
+  comparison_flag = INVALID;
+  if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    if (has_flag(IS_WITH_ALL)) {
+      comparison_flag = ALL;
+    } else if (has_flag(IS_WITH_ANY)) {
+      comparison_flag = ANY;
+    } else {
+      comparison_flag = NONE;
+    }
+  }
+  return comparison_flag;
+}
+
 bool ObOpRawExpr::inner_same_as(
     const ObRawExpr &expr,
     ObExprEqualCheckContext *check_context) const
@@ -2391,6 +2414,12 @@ bool ObOpRawExpr::inner_same_as(
                || (T_OP_GT == get_expr_type() && T_OP_LT == expr.get_expr_type())) {
       cmp_type = REVERSE_CMP;
     } else {
+      need_cmp = false;
+    }
+  } else if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    const ObOpRawExpr &tmp = static_cast<const ObOpRawExpr &>(expr);
+    if (tmp.get_expr_type() != get_expr_type() ||
+        tmp.get_subquery_comparison_flag() != get_subquery_comparison_flag()) {
       need_cmp = false;
     }
   } else if (expr.get_expr_type() != get_expr_type()) {
@@ -4174,8 +4203,22 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
       LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s(", get_func_name().length(), get_func_name().ptr()))) {
+    } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      if (is_valid_id(get_dblink_id())) {
+        if (get_dblink_name().empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dblink name is empty", K(ret), KPC(this));
+        } else if (OB_FAIL(BUF_PRINTF("@%.*s", get_dblink_name().length(), get_dblink_name().ptr()))) {
+          LOG_WARN("failed to print dblink name", K(ret), K(get_dblink_name()));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (T_FUN_COLUMN_CONV == get_expr_type()) {
       if (OB_FAIL(get_column_conv_name(buf, buf_len, pos, type))) {
         LOG_WARN("fail to get_column_conv_name", K(ret));

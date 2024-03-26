@@ -208,18 +208,22 @@ int ObDDLMacroBlockClogCb::on_success()
 {
   int ret = OB_SUCCESS;
   bool is_major_sstable_exist = false;
+  ObTablet *tablet = nullptr;
   ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   if (OB_ISNULL(tenant_direct_load_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is nullptr", K(ret));
   } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-        ls_id_, redo_info_.table_key_.tablet_id_, true/*is_full_direct_load*/, direct_load_mgr_handle, is_major_sstable_exist))) {
+        ls_id_, tablet->get_tablet_meta().tablet_id_, true/*is_full_direct_load*/, direct_load_mgr_handle, is_major_sstable_exist))) {
     if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
       ret = OB_TASK_EXPIRED;
-      LOG_INFO("major sstable already exist", K(ret), K(redo_info_));
+      LOG_INFO("major sstable already exist", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
     } else {
-      LOG_WARN("get tablet mgr failed", K(ret), K(redo_info_));
+      LOG_WARN("get tablet mgr failed", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
     }
   }
 
@@ -242,9 +246,9 @@ int ObDDLMacroBlockClogCb::on_success()
       macro_block.end_row_id_ = redo_info_.end_row_id_;
       const int64_t snapshot_version = redo_info_.table_key_.get_snapshot_version();
       const uint64_t data_format_version = redo_info_.data_format_version_;
-      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle_.get_obj(), macro_block,
+      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet, macro_block,
         snapshot_version, data_format_version, direct_load_mgr_handle))) {
-        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle_), K(macro_block),
+        LOG_WARN("set macro block into ddl kv failed", K(ret), KPC(tablet), K(macro_block),
             K(snapshot_version), K(data_format_version));
       }
     }

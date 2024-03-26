@@ -586,18 +586,9 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
     } else if (meta_array.empty()) {
       // do nothing
     } else {
-      if (ddl_param.table_key_.is_ddl_merge_sstable()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
-          const ObDDLBlockMeta &ddl_block_meta = meta_array.at(i);
-          if (OB_FAIL(index_block_rebuilder.append_macro_row(*ddl_block_meta.block_meta_, ddl_block_meta.end_row_offset_))) {
-            LOG_WARN("append block meta failed", K(ret), K(i), K(ddl_block_meta));
-          }
-        }
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
-          if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i).block_meta_))) {
-            LOG_WARN("append block meta failed", K(ret), K(i));
-          }
+      for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
+        if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i).block_meta_))) {
+          LOG_WARN("append block meta failed", K(ret), K(i));
         }
       }
     }

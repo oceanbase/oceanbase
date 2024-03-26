@@ -64,6 +64,11 @@ struct ObLobAccessParam {
     }
   }
 public:
+
+  bool is_full_read() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && (len_ == byte_size_ || INT64_MAX == len_ || UINT64_MAX == len_); }
+  bool is_full_delete() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && len_ >= byte_size_; }
+  bool is_full_insert() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && 0 == byte_size_; }
+
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   int64_t get_inrow_threshold();
   TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common),

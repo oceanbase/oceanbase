@@ -8141,6 +8141,68 @@ LAST_USED	varchar(128)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_INDEX_USAGE limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_TRANSFER_PARTITION_TASKS;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASKS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TRANSFER_PARTITION_TASKS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+MODIFY_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TRANSFER_PARTITION_TASKS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+FINISH_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TRANSFER_PARTITION_TASK_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TASK_ID	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	NO		NULL	
+FINISH_TIME	timestamp(6)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO		NULL	
+DEST_LS	bigint(20)	NO		NULL	
+BALANCE_JOB_ID	bigint(20)	NO		NULL	
+TRANSFER_TASK_ID	bigint(20)	NO		NULL	
+STATUS	varchar(64)	NO		NULL	
+COMMENT	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_TRUSTED_ROOT_CERTIFICATE;
 Field	Type	Null	Key	Default	Extra
 COMMON_NAME	varchar(256)	NO		NULL	
@@ -8582,6 +8644,24 @@ STMT	longtext	NO		NULL
 EXECUTION_TIME	bigint(20)	NO		NULL	
 EXECUTION_PLAN	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_STMT_STATS limit 1);
+cnt
+1
+desc oceanbase.GV$OB_NIC_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+DEVNAME	varchar(128)	NO		NULL	
+SPEED_MBPS	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_NIC_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_NIC_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+DEVNAME	varchar(128)	NO			
+SPEED_MBPS	bigint(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_NIC_INFO limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

@@ -1154,7 +1154,7 @@ int ObAggregateProcessor::inner_process(
     } else if (aggr_info.is_implicit_first_aggr()) {
       if (!aggr_cell.get_is_evaluated()) {
         ObDatum *result = NULL;
-        if (aggr_info.expr_->eval(eval_ctx_, result)) {
+        if (OB_FAIL(aggr_info.expr_->eval(eval_ctx_, result))) {
           LOG_WARN("eval failed", K(ret));
         } else if (OB_FAIL(clone_aggr_cell(aggr_cell, *result))) {
           LOG_WARN("failed to clone non_aggr cell", K(ret));
@@ -8253,7 +8253,7 @@ struct ObDecIntSumBatchOpFunc<ObNumber, CALC_T, ARG_T, SELECTOR>
         number::ObNumber right_nmb;
         if (OB_FAIL(wide::to_number(accum, scale, tmp_alloc, right_nmb))) {
           LOG_WARN("fail to cast decimal int to number", K(ret));
-        } else if (processor->clone_number_cell(right_nmb, aggr_cell)) {
+        } else if (OB_FAIL(processor->clone_number_cell(right_nmb, aggr_cell))) {
           LOG_WARN("fail to clone number", K(ret));
         }
       } else {

@@ -283,7 +283,7 @@ int ObLogRestoreNetDriver::refresh_fetcher_if_needed_(const share::ObRestoreSour
 int ObLogRestoreNetDriver::refresh_proxy_(const share::ObRestoreSourceServiceAttr &source)
 {
   int ret = OB_SUCCESS;
-  const char *db_name = common::ObCompatibilityMode::ORACLE_MODE == source.user_.mode_ ? "SYS" : "OCEANBASE";
+  const char *db_name = common::ObCompatibilityMode::ORACLE_MODE == source.user_.mode_ ? OB_ORA_SYS_SCHEMA_NAME : OB_SYS_DATABASE_NAME;
   char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
   ObSqlString user;
   if (OB_FAIL(source.get_password(passwd, sizeof(passwd)))) {

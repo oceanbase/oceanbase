@@ -509,7 +509,7 @@ public:
                                        jit::ObLLVMValue &value,
                                        const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const;
-  virtual int get_size(const ObPLINS& ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,

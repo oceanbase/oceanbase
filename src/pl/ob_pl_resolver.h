@@ -335,10 +335,6 @@ public:
                   sql::ObRawExpr *&expr,
                   bool for_write = false);
   int resolve_inner_call(const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func);
-  int mock_self_param(bool need_rotate,
-                      ObIArray<ObObjAccessIdent> &obj_access_idents,
-                      ObIArray<ObObjAccessIdx> &self_access_idxs,
-                      ObPLFunctionAST &func);
   int resolve_sqlcode_or_sqlerrm(sql::ObQualifiedName &q_name,
                                  ObPLCompileUnitAST &unit_ast,
                                  sql::ObRawExpr *&expr);
@@ -373,7 +369,8 @@ public:
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               ObMySQLProxy &sql_proxy,
                               ObIArray<ObObjAccessIdent> &obj_access_idents,
-                              ObIArray<ObObjAccessIdx>& access_idxs);
+                              ObIArray<ObObjAccessIdx>& access_idxs,
+                              ObPLPackageGuard *package_guard);
   static
   int resolve_cparam_list_simple(const ParseNode &node,
                                  ObRawExprFactory &expr_factory,
@@ -576,7 +573,7 @@ public:
   static int adjust_routine_param_type(ObPLDataType &type);
 
   int resolve_udf_info(
-    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func);
+    sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func, const ObIRoutineInfo *routine_info = NULL);
 
   int construct_name(ObString &database_name, ObString &package_name, ObString &routine_name, ObSqlString &object_name);
   static int resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
@@ -601,6 +598,10 @@ public:
                           const ObString &udt_name,
                           ObPLCompileUnitAST &func,
                           ObPLDataType &pl_type);
+  int resolve_dblink_udf(sql::ObQualifiedName &q_name,
+                         ObRawExprFactory &expr_factory,
+                         ObRawExpr *&expr,
+                         ObPLCompileUnitAST &unit_ast);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -750,9 +751,13 @@ private:
   int resolve_udf_without_brackets(sql::ObQualifiedName &q_name, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr);
   int make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&expr);
   int add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                            ObObjAccessIdent &access_ident,
+                            ObIArray<ObObjAccessIdx> &access_idxs,
+                            ObPLCompileUnitAST &func);
+  int add_udt_self_argument(const ObIRoutineInfo *routine_info,
                             ObIArray<ObRawExpr*> &expr_params,
                             ObIArray<ObObjAccessIdx> &access_idxs,
-                            ObUDFInfo &udf_info,
+                            ObUDFInfo *udf_info,
                             ObPLCompileUnitAST &func);
   int resolve_qualified_identifier(sql::ObQualifiedName &q_name,
                                            ObIArray<sql::ObQualifiedName> &columns,

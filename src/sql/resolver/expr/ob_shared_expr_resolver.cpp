@@ -16,6 +16,7 @@
 #include "sql/ob_sql_context.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/oblog/ob_log_print_kv.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -164,10 +165,15 @@ int ObSharedExprResolver::get_shared_instance(ObRawExpr *expr,
       ObRawExpr *new_param_expr = NULL;
       bool is_param_new = false;
       bool disable_share_child = false;
-      if (old_param_expr->get_expr_type() == T_QUESTIONMARK) {
+      if (OB_ISNULL(old_param_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (old_param_expr->get_expr_type() == T_QUESTIONMARK) {
         if (old_param_expr->has_flag(IS_STATIC_PARAM) && disable_share_const_level_ > 0) {
           disable_share_expr = true;
         }
+      } else if (ObTransformUtils::is_const_null(*old_param_expr)) {
+        // skip const null
       } else if (expr->get_expr_type() == T_FUN_SYS_CAST && i == 1) {
         // skip exec var and question mark
       } else if (OB_FAIL(SMART_CALL(get_shared_instance(old_param_expr,

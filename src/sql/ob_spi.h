@@ -742,21 +742,26 @@ public:
   static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
 
 #ifdef OB_BUILD_ORACLE_PL
-  static int spi_execute_dblink(pl::ObPLExecCtx *ctx,
+  static int spi_execute_dblink(ObExecContext &exec_ctx,
+                                ObIAllocator &allocator,
                                 uint64_t dblink_id,
                                 uint64_t package_id,
                                 uint64_t proc_id,
-                                ParamStore &params);
+                                ParamStore &params,
+                                ObObj *result);
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,
                                 const pl::ObPLDbLinkInfo *dblink_info,
                                 const ObRoutineInfo *routine_info,
-                                ParamStore &params);
+                                ParamStore &params,
+                                ObObj *result);
   static int spi_after_execute_dblink(ObSQLSessionInfo *session,
                                       const ObRoutineInfo *routine_info,
                                       ObIAllocator &allocator,
                                       ParamStore &params,
-                                      ParamStore &exec_params);
+                                      ParamStore &exec_params,
+                                      ObObj *result,
+                                      ObObj &tmp_result);
 #endif
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);

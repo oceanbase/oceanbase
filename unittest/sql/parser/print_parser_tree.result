@@ -3494,3 +3494,84 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[zone1], value=[9223372036854775807]
 				|--[2],[T_VARCHAR], str_value_=["10.101.74.122":41425], value=[9223372036854775807]
 
+**************   Case 188   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+
+**************   Case 189   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 190   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+
+**************   Case 191   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 192   ***************
+alter system cancel transfer partition ALL;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+
+**************   Case 193   ***************
+alter system cancel transfer partition ALL tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 194   ***************
+alter system cancel balance job;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+
+**************   Case 195   ***************
+alter system cancel balance job tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+		|--[0],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]

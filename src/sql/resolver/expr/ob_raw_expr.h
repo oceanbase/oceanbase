@@ -950,6 +950,7 @@ struct ObUDFInfo
     udf_name_(),
     udf_package_(),
     udf_database_(),
+    dblink_name_(),
     param_names_(),
     param_exprs_(),
     udf_param_num_(0),
@@ -997,6 +998,7 @@ struct ObUDFInfo
   TO_STRING_KV(K_(udf_name),
                K_(udf_package),
                K_(udf_database),
+               K_(dblink_name),
                K_(param_names),
                K_(param_exprs),
                K_(udf_param_num),
@@ -1009,6 +1011,7 @@ struct ObUDFInfo
   common::ObString udf_name_;
   common::ObString udf_package_;
   common::ObString udf_database_;
+  common::ObString dblink_name_;
   common::ObArray<common::ObString> param_names_;
   common::ObArray<ObRawExpr*> param_exprs_;
 	int64_t	udf_param_num_;
@@ -1187,6 +1190,12 @@ public:
       bret = 0 == access_idents_.at(access_idents_.count() - 1).params_.at(i).second;
     }
     return bret;
+  }
+  inline bool is_dblink_udf() const
+  {
+    bool bret = !access_idents_.empty()
+        && access_idents_.at(access_idents_.count() - 1).is_pl_udf();
+    return bret && !dblink_name_.empty();
   }
   inline bool is_udf_return_access() const
   {
@@ -2958,6 +2967,7 @@ public:
                                    int64_t &pos,
                                    ExplainType type) const;
   bool is_white_runtime_filter_expr() const override;
+  int get_subquery_comparison_flag() const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,

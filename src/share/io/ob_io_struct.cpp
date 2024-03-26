@@ -1119,7 +1119,7 @@ void ObIOSender::stop_submit()
 void ObIOSender::run1()
 {
   int ret = OB_SUCCESS;
-  const int64_t thread_id = get_thread_idx();
+  const int64_t thread_id = sender_index_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));

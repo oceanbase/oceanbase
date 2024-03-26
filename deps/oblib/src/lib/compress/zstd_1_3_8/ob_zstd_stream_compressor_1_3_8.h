@@ -23,26 +23,11 @@ namespace common
 namespace zstd_1_3_8
 {
 
-class ObZstdStreamCtxAllocator
-{
-public:
-  ObZstdStreamCtxAllocator();
-  virtual ~ObZstdStreamCtxAllocator();
-  static ObZstdStreamCtxAllocator &get_thread_local_instance()
-  {
-    thread_local ObZstdStreamCtxAllocator allocator;
-    return allocator;
-  }
-  void *alloc(size_t size);
-  void free(void *addr);
-private:
-  ModulePageAllocator allocator_;
-};
-
 class ObZstdStreamCompressor_1_3_8 : public ObStreamCompressor
 {
 public:
-  explicit ObZstdStreamCompressor_1_3_8() {}
+  explicit ObZstdStreamCompressor_1_3_8(ObIAllocator &allocator)
+    : allocator_(allocator) {}
   virtual ~ObZstdStreamCompressor_1_3_8() {}
 
   inline const char *get_compressor_name() const;
@@ -63,7 +48,8 @@ public:
 
   int get_compress_bound_size(const int64_t src_size, int64_t &bound_size) const;
   int insert_uncompressed_block(void *dctx, const void *block, const int64_t block_size);
-
+private:
+  ObIAllocator &allocator_;
 };
 } // namespace zstd_1_3_8
 } //namespace common

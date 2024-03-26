@@ -132,7 +132,7 @@ public:
     int64_t resp_sz = 0;
     ObRpcPacket resp_pkt;
     ObRpcResultCode rcode;
-    sockaddr_in sock_addr;
+    sockaddr_storage sock_addr;
     uint8_t thread_id = balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
@@ -155,7 +155,7 @@ public:
           &cb
         };
         cb.gtid_ = (pnio_group_id<<32) + thread_id;
-        if (0 != (sys_err = pn_send((pnio_group_id<<32) + thread_id, obaddr2sockaddr(&sock_addr, addr), &pkt, &cb.pkt_id_))) {
+        if (0 != (sys_err = pn_send((pnio_group_id<<32) + thread_id, addr.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
           ret = translate_io_error(sys_err);
           RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
         }
@@ -244,7 +244,7 @@ public:
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", req_sz, pcode, src_tenant_id);
       timeguard.click(rpc_timeguard_str);
       if (OB_SUCC(ret)) {
-        sockaddr_in sock_addr;
+        sockaddr_storage sock_addr;
         const pn_pkt_t pkt = {
           req,
           req_sz,
@@ -255,7 +255,7 @@ public:
         };
         if (0 != (sys_err = pn_send(
             (pnio_group_id<<32) + thread_id,
-            obaddr2sockaddr(&sock_addr, addr),
+            addr.to_sockaddr(&sock_addr),
             &pkt,
             pkt_id_ptr))) {
           ret = translate_io_error(sys_err);
@@ -275,15 +275,6 @@ public:
     return ret;
   }
 
-  static struct sockaddr_in* obaddr2sockaddr(struct sockaddr_in *sin, const ObAddr& addr)
-  {
-    if (NULL != sin) {
-      sin->sin_port = (uint16_t)htons((uint16_t)(addr.get_port()));
-      sin->sin_addr.s_addr = htonl(addr.get_ipv4());
-      sin->sin_family = AF_INET;
-    }
-    return sin;
-  }
   int log_user_error_and_warn(const ObRpcResultCode &rcode) const;
 };
 

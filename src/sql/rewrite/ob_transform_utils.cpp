@@ -12193,6 +12193,24 @@ int ObTransformUtils::extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &
   return ret;
 }
 
+int ObTransformUtils::extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (expr->is_udf_expr() && OB_FAIL(add_var_to_array_no_dup(udf_exprs, expr))) {
+    LOG_WARN("failed to add var to array no dup", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(extract_udf_exprs(expr->get_param_expr(i), udf_exprs)))) {
+        LOG_WARN("failed to extract udf exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::extract_json_object_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &json_exprs)
 {
   int ret = OB_SUCCESS;
@@ -13060,6 +13078,7 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_uint64_max = NULL;
   ObConstRawExpr *const_zero = NULL;
+  ObRawExpr *then_expr = NULL;
   if (OB_ISNULL(aggr) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KR(ret));
@@ -13068,7 +13087,8 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
     LOG_WARN("wrong expr type", K(ret));
   } else if (OB_UNLIKELY(T_FUN_SYS_BIT_AND != aggr->get_expr_type() &&
                          T_FUN_SYS_BIT_OR != aggr->get_expr_type() &&
-                         T_FUN_SYS_BIT_XOR != aggr->get_expr_type())) {
+                         T_FUN_SYS_BIT_XOR != aggr->get_expr_type()) ||
+             OB_ISNULL(then_expr = aggr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("use wrong func type", KR(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*(ctx->expr_factory_),
@@ -13078,9 +13098,12 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
     LOG_WARN("failed to build const uint expr", KR(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*(ctx->expr_factory_), ObUInt64Type, 0, const_zero))) {
     LOG_WARN("failed to build const uint expr", KR(ret));
+  } else if (OB_FAIL(add_cast_for_replace_if_need(*ctx->expr_factory_, aggr, then_expr,
+                                                  ctx->session_info_))) {
+    LOG_WARN("failed to add cast expr", K(ret));
   } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(stmt,
                                                             aggr->get_param_expr(0),
-                                                            aggr->get_param_expr(0),
+                                                            then_expr,
                                                             T_FUN_SYS_BIT_AND == aggr->get_expr_type() ? const_uint64_max : const_zero,
                                                             out_expr,
                                                             ctx))) {
@@ -14797,6 +14820,20 @@ int ObTransformUtils::is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &
     }
   }
   return ret;
+}
+
+bool ObTransformUtils::is_const_null(ObRawExpr &expr)
+{
+  int bret = false;
+  if (!expr.is_const_raw_expr()) {
+    // do nothing
+  } else if (expr.get_expr_type() == T_NULL) {
+    bret = true;
+  } else if (expr.get_expr_type() == T_QUESTIONMARK) {
+    bret = expr.get_result_type().get_param().is_null() ||
+           (lib::is_oracle_mode() && expr.get_result_type().get_param().is_null_oracle());
+  }
+  return bret;
 }
 
 } // namespace sql

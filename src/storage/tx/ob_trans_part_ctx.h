@@ -206,7 +206,7 @@ public:
   int get_prepare_version_if_prepared(bool &is_prepared, share::SCN &prepare_version);
   const share::SCN get_commit_version() const { return ctx_tx_data_.get_commit_version(); }
   uint64_t hash() const { return trans_id_.hash(); }
-  int gts_callback_interrupted(const int errcode);
+  int gts_callback_interrupted(const int errcode, const share::ObLSID target_ls_id);
   int get_gts_callback(const MonotonicTs srr, const share::SCN &gts, const MonotonicTs receive_gts_ts);
   int gts_elapse_callback(const MonotonicTs srr, const share::SCN &gts);
   MonotonicTs get_stc() const { return stc_; }

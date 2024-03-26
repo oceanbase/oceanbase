@@ -2408,21 +2408,27 @@ int ObTransformSimplifyExpr::canonicalize_conditions(ObDMLStmt *stmt, bool &tran
         //simplify semi info
         OPT_TRACE("canonicalize semi_info condition start:");
         for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_infos().count(); ++i) {
+          bool is_happended = false;
           if (OB_ISNULL(stmt->get_semi_infos().at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect null semi info", K(stmt->get_semi_infos().at(i)), K(ret));
-          } else if (OB_FAIL(do_canonicalize(stmt, stmt->get_semi_infos().at(i)->semi_conditions_, canonicalize_semi_info))) {
+          } else if (OB_FAIL(do_canonicalize(stmt, stmt->get_semi_infos().at(i)->semi_conditions_, is_happended))) {
             LOG_WARN("canonicalize_semi_info failed", K(ret));
+          } else {
+            canonicalize_semi_info |= is_happended;
           }
         }
         OPT_TRACE("canonicalize join condition start:");
         //simplify join condition expr
         for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); i++) {
+          bool is_happended = false;
           if (OB_ISNULL(stmt->get_joined_tables().at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect null joined table item", K(stmt->get_joined_tables().at(i)), K(ret));
-          } else if (OB_FAIL(recursive_canonicalize_join_conditions(stmt, stmt->get_joined_tables().at(i), canonicalize_join))) {
+          } else if (OB_FAIL(recursive_canonicalize_join_conditions(stmt, stmt->get_joined_tables().at(i), is_happended))) {
             LOG_WARN("canonicalize_join_condition_expr failed", K(ret));
+          } else {
+            canonicalize_join |= is_happended;
           }
         }
       }
@@ -2856,10 +2862,14 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
       LOG_WARN("failed to do remove duplicate exprs", K(ret));
     } else if (param_conds.count() == conditions.count()) {
       //do nothing
-    } else if (OB_FAIL(conditions.assign(param_conds))) {
-      LOG_WARN("assign array failed", K(ret));
     } else {
-      trans_happened = true;
+      OPT_TRACE("before remove duplicate exprs", conditions);
+      OPT_TRACE("after duplicate exprs happened", param_conds);
+      if (OB_FAIL(conditions.assign(param_conds))) {
+        LOG_WARN("assign array failed", K(ret));
+      } else {
+        trans_happened = true;
+      }
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
@@ -2929,8 +2939,15 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
     ObStmtCompareContext cmp_ctx;
     cmp_ctx.init(&query_ctx.calculable_items_);
     for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
+      if (OB_ISNULL(exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null pointer error");
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
-        if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
+        if (OB_ISNULL(exprs.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null pointer error");
+        } else if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
           if (OB_FAIL(exprs.remove(i))) {
             LOG_WARN("failed to remove", K(ret));
           } else if (!cmp_ctx.equal_param_info_.empty()) {

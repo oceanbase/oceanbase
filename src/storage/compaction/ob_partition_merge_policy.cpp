@@ -1421,9 +1421,17 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
   } else if (table_store->get_minor_sstables().empty() || table_store->get_major_sstables().empty()) {
     ret = OB_NO_NEED_MERGE;
     LOG_DEBUG("no minor/major sstable to do meta major merge", K(ret), KPC(table_store));
-  } else if (OB_ISNULL(base_table = nullptr == table_store->get_meta_major_sstable()
-                                  ? static_cast<ObSSTable*>(table_store->get_major_sstables().get_boundary_table(true/*last*/))
-                                  : table_store->get_meta_major_sstable())) {
+  } else if (is_meta_major_merge(merge_type)) {
+    base_table = table_store->get_meta_major_sstable();
+    if (nullptr == base_table) {
+      base_table = static_cast<ObSSTable*>(table_store->get_major_sstables().get_boundary_table(true/*last*/));
+    }
+  } else {
+    base_table = static_cast<ObSSTable*>(table_store->get_major_sstables().get_boundary_table(true/*last*/));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(base_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null base table", K(ret), KPC(table_store), K(tablet));
   } else if (OB_FAIL(ObPartitionMergePolicy::get_boundary_snapshot_version(tablet, min_snapshot, max_snapshot))) {

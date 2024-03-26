@@ -951,8 +951,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
             int64_t init_size = OB_INVALID_SIZE;
             if (OB_FAIL(collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr))) {
               LOG_WARN("failed to new element", K(ret));
-            } else if (OB_FAIL(collection_type->get_element_type().get_size(*ns,
-                                                                            pl::PL_TYPE_INIT_SIZE,
+            } else if (OB_FAIL(collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE,
                                                                             init_size))) {
               LOG_WARN("failed to get size", K(ret));
             } else {

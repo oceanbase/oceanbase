@@ -443,6 +443,34 @@ int ObLogFetcher::add_ls(
         K(start_parameters));
   }
 
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    logservice::TenantLSID failed_tls_id(source_tenant_id_, ls_id);
+    if (OB_TMP_FAIL(ls_fetch_mgr_.recycle_ls(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to recycle ls in failure post process", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id is not in ls_fetch_mgr, recycle done", K(failed_tls_id));
+      }
+    }
+
+    if (OB_TMP_FAIL(fs_container_mgr_.remove_fsc(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed ", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id not exist in fs_container_mgr_, remove done", K(failed_tls_id));
+      }
+    }
+
+    if (OB_TMP_FAIL(ls_fetch_mgr_.remove_ls(failed_tls_id))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to remove ls in ls_fetch_mgr ", K(failed_tls_id));
+      } else {
+        LOG_INFO("tls_id not exist in ls_fetch_mgr_, remove done", K(failed_tls_id));
+      }
+    }
+  }
+
   return ret;
 }
 

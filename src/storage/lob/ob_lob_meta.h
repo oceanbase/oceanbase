@@ -81,7 +81,9 @@ public:
   bool is_range_begin(const ObLobMetaInfo& info);
   bool is_range_end(const ObLobMetaInfo& info);
   bool is_range_over(const ObLobMetaInfo& info);
-  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(cur_info));
+  void set_not_calc_char_len(bool not_calc_char_len) { not_calc_char_len_ = not_calc_char_len; }
+  bool not_calc_char_len() const { return not_calc_char_len_; }
+  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(cur_info), K_(not_calc_char_len));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
 private:
@@ -92,6 +94,7 @@ private:
   uint64_t cur_pos_;
   uint64_t cur_byte_pos_;
   ObLobMetaInfo cur_info_;
+  bool not_calc_char_len_;
 };
 
 struct ObLobMetaWriteResult {

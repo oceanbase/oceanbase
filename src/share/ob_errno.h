@@ -23,7 +23,6 @@ constexpr int OB_LAST_ERROR_CODE = -38105;
 constexpr int OB_ERR_SQL_START = -5000;
 constexpr int OB_ERR_SQL_END = -5999;
 constexpr int OB_PACKET_NOT_SENT = -4011;
-constexpr int OB_PARTIAL_FAILED = -4025;
 constexpr int OB_SCHEMA_ERROR = -4029;
 constexpr int OB_TENANT_OUT_OF_MEM = -4030;
 constexpr int OB_UNKNOWN_OBJ = -4031;
@@ -1389,6 +1388,7 @@ constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
 constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
 constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
 constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
+constexpr int OB_ARB_DEGRADE = -6331;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1890,7 +1890,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__USER_ERROR_MSG "Item not set"
 #define OB_EAGAIN__USER_ERROR_MSG "Try again"
 #define OB_BUF_NOT_ENOUGH__USER_ERROR_MSG "Buffer not enough"
-#define OB_PARTIAL_FAILED__USER_ERROR_MSG "Partial failed"
+#define OB_PARTIAL_FAILED__USER_ERROR_MSG "%s"
 #define OB_READ_NOTHING__USER_ERROR_MSG "No data - zero rows fetched, selected, or processed"
 #define OB_FILE_NOT_EXIST__USER_ERROR_MSG "File not exist"
 #define OB_DISCONTINUOUS_LOG__USER_ERROR_MSG "Log entry not continuous"
@@ -3484,6 +3484,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
 #define OB_USER_OUTOF_DATA_DISK_SPACE__USER_ERROR_MSG "user data disk is almost full"
+#define OB_ARB_DEGRADE__USER_ERROR_MSG "logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -4123,7 +4124,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4022, Item not set"
 #define OB_EAGAIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4023, Try again"
 #define OB_BUF_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4024, Buffer not enough"
-#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, Partial failed"
+#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, %s"
 #define OB_READ_NOTHING__ORA_USER_ERROR_MSG "ORA-01403: no data found"
 #define OB_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4027, File not exist"
 #define OB_DISCONTINUOUS_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4028, Log entry not continuous"
@@ -5717,6 +5718,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
 #define OB_USER_OUTOF_DATA_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6330, user data disk is almost full"
+#define OB_ARB_DEGRADE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6331, logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -6329,7 +6331,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2229];
+extern int g_all_ob_errnos[2230];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

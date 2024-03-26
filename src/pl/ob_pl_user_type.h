@@ -88,7 +88,7 @@ public:
                    const ObPLINS *ns,
                    int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
                                sql::ObExecContext &exec_ctx,
@@ -197,7 +197,7 @@ public:
   virtual int get_all_depended_user_type(const ObPLResolveCtx &resolve_ctx,
                                          const ObPLBlockNS &current_ns) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
                        char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
@@ -261,8 +261,7 @@ public:
 public:
   int deep_copy(common::ObIAllocator &alloc, const ObRefCursorType &other);
 
-  virtual int get_size(
-    const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_obj(
     share::schema::ObSchemaGetterGuard &schema_guard,
@@ -415,7 +414,7 @@ public:
                      const ObPLINS *ns,
                      int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
@@ -492,7 +491,7 @@ public:
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int get_all_depended_user_type(
     const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS &current_ns) const
@@ -563,7 +562,7 @@ public:
                      const ObPLINS *ns,
                      int64_t &ptr) const;
 
-  virtual int get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const;
+  virtual int get_size(ObPLTypeSize type, int64_t &size) const;
 
   virtual int init_session_var(const ObPLResolveCtx &resolve_ctx,
                                common::ObIAllocator &obj_allocator,
@@ -887,7 +886,7 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT; }
   void print() const;
 
-  TO_STRING_KV(K_(type), K_(count));
+  TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
   int32_t count_; //field count

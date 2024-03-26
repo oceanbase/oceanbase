@@ -123,7 +123,7 @@ public:
   static int construct_msg_details(const ObJoinFilterSpec &spec,
       ObPxSQCProxy *sqc_proxy,
       ObJoinFilterRuntimeConfig &config,
-      ObP2PDatahubMsgBase &msg, int64_t sqc_count);
+      ObP2PDatahubMsgBase &msg, int64_t sqc_count, int64_t estimated_rows);
   void set_task_id(int64_t task_id)  { task_id_ = task_id; }
 
   inline void set_bf_idx_at_sqc_proxy(int64_t idx) { bf_idx_at_sqc_proxy_ = idx; }

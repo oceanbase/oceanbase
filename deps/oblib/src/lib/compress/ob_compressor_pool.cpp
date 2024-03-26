@@ -17,17 +17,20 @@ namespace oceanbase
 namespace common
 {
 ObCompressorPool::ObCompressorPool()
-    :none_compressor(),
+    :allocator_(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "Compressor")), OB_MALLOC_BIG_BLOCK_SIZE),
+     none_compressor(),
      lz4_compressor(),
      lz4_compressor_1_9_1(),
      snappy_compressor(),
      zlib_compressor(),
-     zstd_compressor_1_3_8(),
+     zstd_compressor(allocator_),
+     zstd_compressor_1_3_8(allocator_),
      zlib_lite_compressor(),
      lz4_stream_compressor(),
-     zstd_stream_compressor(),
-     zstd_stream_compressor_1_3_8()
+     zstd_stream_compressor(allocator_),
+     zstd_stream_compressor_1_3_8(allocator_)
 {
+  allocator_.set_nway(32);
 }
 ObCompressorPool &ObCompressorPool::get_instance()
 {

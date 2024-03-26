@@ -213,6 +213,7 @@ typedef enum ObItemType
   T_OP_AGG_DIV = 185,
   T_OP_OUTPUT_PACK = 186,
   T_FUN_GET_TEMP_TABLE_SESSID = 187,
+  T_OP_PUSHDOWN_TOPN_FILTER = 188,
   ///< @note add new operator before this line
 
   // system functions
@@ -898,6 +899,7 @@ typedef enum ObItemType
   T_PSEUDO_EXTERNAL_FILE_COL = 3041,
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval
   T_PSEUDO_EXTERNAL_FILE_URL = 3043,
+  T_PSEUDO_DDL_SLICE_ID = 3044,
   T_WINDOW_FUNCTION = 3151,
   T_WIN_GENERALIZED_WINDOW,
   T_WIN_NEW_GENERALIZED_WINDOW,
@@ -2434,6 +2436,12 @@ typedef enum ObItemType
   T_MV_OPTIONS,
   T_MV_REWRITE,
   T_MV_NO_REWRITE,
+
+  // select into outfile
+  T_INTO_FILE_LIST,
+  T_SINGLE_OPT,
+  T_MAX_FILE_SIZE,
+  T_SHOW_CREATE_USER,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

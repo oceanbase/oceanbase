@@ -3963,6 +3963,24 @@ int ObDMLStmt::get_sequence_exprs(ObIArray<ObRawExpr *> &exprs) const
   return ret;
 }
 
+int ObDMLStmt::get_udf_exprs(common::ObIArray<ObRawExpr *> &exprs) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> relation_exprs;
+  if (OB_FAIL(get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  }
+  ObRawExpr *cur_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); i++) {
+    if (OB_ISNULL(cur_expr = relation_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_udf_exprs(cur_expr, exprs))) {
+      LOG_WARN("failed to extract udf exprs", K(ret));
+    }
+  }
+  return ret;
+}
 int ObDMLStmt::find_var_assign_in_query_ctx(bool &is_found) const
 {
   int ret = OB_SUCCESS;
@@ -4538,7 +4556,7 @@ int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt 
       } else if (schema::EXTERNAL_TABLE == table_item->table_type_) {
         disable_write_table = true;
       } else if (table_item->is_view_table_ && NULL != table_item->ref_query_) {
-        OZ( table_item->ref_query_->disable_writing_external_table(true) );
+        OZ( SMART_CALL(table_item->ref_query_->disable_writing_external_table(true)) );
       }
     }
   }
@@ -4551,7 +4569,7 @@ int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt 
       LOG_WARN("failed to get stmt's child_stmts", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        OZ( child_stmts.at(i)->disable_writing_external_table() );
+        OZ( SMART_CALL(child_stmts.at(i)->disable_writing_external_table()) );
       }
     }
   }

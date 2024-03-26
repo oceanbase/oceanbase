@@ -14,7 +14,6 @@
 #define OCEANBASE_COMMON_STREAM_COMPRESS_ZSTD_COMPRESSOR_
 
 #include "lib/compress/ob_stream_compressor.h"
-#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {
@@ -23,26 +22,11 @@ namespace common
 namespace zstd
 {
 
-class ObZstdStreamCtxAllocator
-{
-public:
-  ObZstdStreamCtxAllocator();
-  virtual ~ObZstdStreamCtxAllocator();
-  static ObZstdStreamCtxAllocator &get_thread_local_instance()
-  {
-    thread_local ObZstdStreamCtxAllocator allocator;
-    return allocator;
-  }
-  void *alloc(size_t size);
-  void free(void *addr);
-private:
-  ModulePageAllocator allocator_;
-};
-
 class ObZstdStreamCompressor : public ObStreamCompressor
 {
 public:
-  explicit ObZstdStreamCompressor() {}
+  explicit ObZstdStreamCompressor(ObIAllocator &allocator)
+    : allocator_(allocator) {}
   virtual ~ObZstdStreamCompressor() {}
 
   const char *get_compressor_name() const;
@@ -63,7 +47,8 @@ public:
 
   int get_compress_bound_size(const int64_t src_size, int64_t &bound_size) const;
   int insert_uncompressed_block(void *dctx, const void *block, const int64_t block_size);
-
+private:
+  ObIAllocator &allocator_;
 };
 } // namespace zstd
 } //namespace common

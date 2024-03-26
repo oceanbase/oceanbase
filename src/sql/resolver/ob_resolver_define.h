@@ -249,6 +249,7 @@ inline int databuff_print_key_obj(char *buf, const int64_t buf_len, int64_t &pos
 namespace pl
 {
 class ObPLBlockNS;
+class ObPLPackageGuard;
 }
 
 namespace sql
@@ -350,7 +351,8 @@ struct ObResolverParams
        need_check_col_dup_(true),
        is_specified_col_name_(false),
        is_in_sys_view_(false),
-       is_expanding_view_(false)
+       is_expanding_view_(false),
+       package_guard_(NULL)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -419,6 +421,7 @@ public:
   bool is_specified_col_name_;//mark if specify the column name in create view or create table as..
   bool is_in_sys_view_;
   bool is_expanding_view_;
+  pl::ObPLPackageGuard *package_guard_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -122,7 +122,7 @@ int ObMediumListChecker::check_next_schedule_medium(
   int ret = OB_SUCCESS;
   if (nullptr != next_medium_info
       && last_major_snapshot > 0
-      && ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2 == next_medium_info->medium_compat_version_
+      && ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2 <= next_medium_info->medium_compat_version_
       && next_medium_info->medium_snapshot_ > last_major_snapshot) {
     if (next_medium_info->from_cur_cluster()) { // same cluster_id & same tenant_id
       if (OB_UNLIKELY(next_medium_info->last_medium_snapshot_ != last_major_snapshot)) {

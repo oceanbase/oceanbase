@@ -30,6 +30,7 @@ void* ObPocRpcRequestOperator::alloc_response_buffer(ObRequest* req, int64_t siz
 
 void ObPocRpcRequestOperator::response_result(ObRequest* req, obrpc::ObRpcPacket* pkt)
 {
+  obmysql::request_finish_callback();
   get_poc_handle_context(req)->resp(pkt);
   get_poc_handle_context(req)->destroy();
 

@@ -26,6 +26,7 @@
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "pl/ob_pl_user_type.h"
 #include "dblink/ob_pl_dblink_guard.h"
+#include "sql/resolver/ob_stmt_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -763,9 +764,8 @@ int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
   return ret;
 }
 
-int ObPLDataType::get_size(const ObPLINS& ns, ObPLTypeSize type, int64_t &size) const
+int ObPLDataType::get_size(ObPLTypeSize type, int64_t &size) const
 {
-  UNUSED(ns);
   UNUSED(type);
   int ret = OB_SUCCESS;
 //  if (is_obj_type()) {
@@ -1151,7 +1151,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj param;
-    if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+    if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
       LOG_WARN("get base type init size failed", K(ret));
     } else if (OB_ISNULL(dst) || (dst_len - dst_pos < init_size)) {
       ret = OB_SIZE_OVERFLOW;

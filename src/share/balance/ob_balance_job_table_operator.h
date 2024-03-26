@@ -80,7 +80,8 @@ public:
   static const int64_t BALANCE_JOB_LS = 0;
   //partition balance
   static const int64_t BALANCE_JOB_PARTITION = 1;
-  static const int64_t BALANCE_JOB_MAX = 2;
+  static const int64_t BALANCE_JOB_TRANSFER_PARTITION = 2;
+  static const int64_t BALANCE_JOB_MAX = 3;
   ObBalanceJobType(const int64_t value = BALANCE_JOB_INVALID) : val_(value) {}
   ObBalanceJobType(const ObString &str);
 public:
@@ -99,6 +100,7 @@ public:
   // ObBalanceJobStatus attribute interface
   bool is_balance_ls() const { return BALANCE_JOB_LS == val_; }
   bool is_balance_partition() const { return BALANCE_JOB_PARTITION == val_; }
+  bool is_transfer_partition() const { return BALANCE_JOB_TRANSFER_PARTITION == val_; }
 private:
   int64_t val_;
 };

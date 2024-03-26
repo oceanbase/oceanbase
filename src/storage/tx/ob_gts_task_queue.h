@@ -38,7 +38,7 @@ public:
                    const MonotonicTs receive_gts_ts);
   int push(ObTsCbTask *task);
   int64_t get_task_count() const { return queue_.size(); }
-  int gts_callback_interrupted(const int errcode);
+  int gts_callback_interrupted(const int errcode, const share::ObLSID ls_id);
 private:
   static const int64_t TOTAL_WAIT_TASK_NUM = 500 * 1000;
 private:

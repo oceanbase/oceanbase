@@ -291,7 +291,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
               int64_t ptr = 0;
               int64_t init_size = OB_INVALID_SIZE;
               OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
-              OZ (collection_type->get_element_type().get_size(*ns, pl::PL_TYPE_INIT_SIZE, init_size));
+              OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
               OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
               OX (static_cast<ObObj*>(coll->get_data())[i] = new_composite);
             } else if (pl::PL_OPAQUE_TYPE == v.get_meta().get_extend_type()

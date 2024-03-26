@@ -561,6 +561,25 @@ int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &h
       }
     }
   }
+  if (OB_SUCC(ret) && !has && enable_check_any_dblink) {
+    ObSEArray<ObRawExpr*, 2> udf_exprs;
+    if (OB_FAIL(stmt->get_udf_exprs(udf_exprs))) {
+      LOG_WARN("failed to get udf exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !has && i < udf_exprs.count(); ++i) {
+      ObRawExpr *expr = udf_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (expr->is_udf_expr()) {
+        ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+        if (OB_INVALID_ID != udf_expr->get_dblink_id()) {
+          has = true;
+        }
+      }
+    }
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
     const TableItem *table_item = stmt->get_table_items().at(i);
     if (OB_ISNULL(table_item)) {

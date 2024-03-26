@@ -74,9 +74,9 @@ int ObUserDefinedType::generate_copy(
 }
 
 int ObUserDefinedType::get_size(
-  const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+  ObPLTypeSize type, int64_t &size) const
 {
-  UNUSEDx(ns, type, size);
+  UNUSEDx(type, size);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
@@ -690,10 +690,10 @@ int ObUserDefinedSubType::newx(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObUserDefinedSubType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+int ObUserDefinedSubType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  OZ (base_type_.get_size(ns, type, size));
+  OZ (base_type_.get_size(type, size));
   return ret;
 }
 
@@ -782,9 +782,9 @@ int ObRefCursorType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, in
   return ret;
 }
 
-int ObRefCursorType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+int ObRefCursorType::get_size(ObPLTypeSize type, int64_t &size) const
 {
-  UNUSEDx(ns, type, size);
+  UNUSEDx(type, size);
   size = sizeof(ObPLCursorInfo) + 8;
   return OB_SUCCESS;
 }
@@ -804,7 +804,7 @@ int ObRefCursorType::init_obj(ObSchemaGetterGuard &schema_guard,
     MEMSET(data, 0, init_size);
     new(data) ObPLCursorInfo(&allocator);
     obj.set_ext(reinterpret_cast<int64_t>(data));
-  } else if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -828,7 +828,7 @@ int ObRefCursorType::init_session_var(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   char *data = NULL;
   int64_t init_size = 0;
-  if (OB_FAIL(get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size))) {
+  if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(obj_allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1203,7 +1203,7 @@ int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
     } else {
       int64_t init_size = OB_INVALID_SIZE;
       int64_t member_ptr = 0;
-      OZ (get_member(i)->get_size(*ns, PL_TYPE_INIT_SIZE, init_size));
+      OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
       OZ (get_member(i)->newx(allocator, ns, member_ptr));
       OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
     }
@@ -1348,7 +1348,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
             OZ (generator.set_current(null_branch));
             OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, stmt)));
             OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
-            OZ (member->member_type_.get_size(ns, PL_TYPE_INIT_SIZE, init_size));
+            OZ (member->member_type_.get_size(PL_TYPE_INIT_SIZE, init_size));
             OZ (generator.get_helper().get_int32(init_size, init_value));
             OZ (generator.generate_set_extend(ptr_elem, type_value, init_value, extend_value));
             OZ (generator.generate_null(ObIntType, allocator));
@@ -1367,7 +1367,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
           int64_t init_size = OB_INVALID_SIZE;
           OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, stmt)));
           OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
-          OZ (member->member_type_.get_size(ns, PL_TYPE_INIT_SIZE, init_size));
+          OZ (member->member_type_.get_size(PL_TYPE_INIT_SIZE, init_size));
           OZ (generator.get_helper().get_int32(init_size, init_value));
           OZ (generator.generate_set_extend(ptr_elem, type_value, init_value, extend_value));
         }
@@ -1377,14 +1377,14 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
   return ret;
 }
 
-int ObRecordType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+int ObRecordType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
   size += get_data_offset(get_record_member_count());
   for (int64_t i = 0; OB_SUCC(ret) && i < get_record_member_count(); ++i) {
     const ObPLDataType *elem_type = get_record_member_type(i);
     CK (OB_NOT_NULL(elem_type));
-    OZ (elem_type->get_size(ns, type, size));
+    OZ (elem_type->get_size(type, size));
   }
   return ret;
 }
@@ -1411,7 +1411,7 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
   }
   if (OB_FAIL(ret) || obj.is_pl_extend()) {
     // do nothing ...
-  } else if (OB_FAIL(get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(obj_allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1440,19 +1440,36 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
         OV (package_id != OB_INVALID_ID, OB_ERR_UNEXPECTED, KPC(this));
         OV (expr_idx != OB_INVALID_INDEX, OB_ERR_UNEXPECTED, KPC(this));
         OZ (sql::ObSPIService::spi_calc_package_expr_v1(resolve_ctx, exec_ctx, obj_allocator, package_id, expr_idx, &result));
-        if (OB_SUCC(ret) && result.is_pl_extend()) {
+        if (OB_FAIL(ret)) {
+        } else if (result.is_pl_extend()) {
           ObObj tmp;
           OZ (ObUserDefinedType::deep_copy_obj(obj_allocator, result, tmp));
           OX (result = tmp);
+          OX (*member = result);
+        } else if (result.is_null() && !get_member(i)->is_obj_type()) {
+          int64_t init_size = OB_INVALID_SIZE;
+          int64_t member_ptr = 0;
+          OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
+          OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+          if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
+            ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
+            CK (OB_NOT_NULL(composite));
+            OX (composite->set_null());
+          }
+        } else {
+          ObObj tmp;
+          OZ (common::deep_copy_obj(obj_allocator, result, tmp));
+          OX (result = tmp);
+          OX (*member = result);
         }
-        OX (*member = result);
       } else {
         if (get_member(i)->is_obj_type()) {
           OX (new (member) ObObj(ObNullType));
         } else {
           int64_t init_size = OB_INVALID_SIZE;
           int64_t member_ptr = 0;
-          OZ (get_member(i)->get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size));
+          OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
           OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
           OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
         }
@@ -1480,7 +1497,7 @@ int ObRecordType::free_session_var(const ObPLResolveCtx &resolve_ctx,
       } else {
         if (OB_FAIL(type->free_data(resolve_ctx, obj_allocator, static_cast<char *>(data)+data_pos))) {
           LOG_WARN("failed to get element serialize size", K(*this), K(ret));
-        } else if (OB_FAIL(type->get_size(resolve_ctx, PL_TYPE_INIT_SIZE, element_init_size))) {
+        } else if (OB_FAIL(type->get_size(PL_TYPE_INIT_SIZE, element_init_size))) {
           LOG_WARN("get record element init size failed", K(ret));
         } else {
           data_pos += element_init_size;
@@ -1513,7 +1530,7 @@ int ObRecordType::free_data(const ObPLResolveCtx &resolve_ctx,
       } else {
         if (OB_FAIL(type->free_data(resolve_ctx, data_allocator, static_cast<char *>(data)+data_pos))) {
           LOG_WARN("failed to get element serialize size", K(*this), K(ret));
-        } else if (OB_FAIL(type->get_size(resolve_ctx, PL_TYPE_INIT_SIZE, element_init_size))) {
+        } else if (OB_FAIL(type->get_size(PL_TYPE_INIT_SIZE, element_init_size))) {
           LOG_WARN("get record element init size failed", K(ret));
         } else {
           data_pos += element_init_size;
@@ -1629,7 +1646,7 @@ int ObRecordType::init_obj(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   char *data = NULL;
   init_size = 0;
-  if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+  if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1724,7 +1741,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
   if (OB_ISNULL(record)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("record is null", K(ret), KP(dst), KP(record));
-  } else if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("failed to get record type init size", K(ret));
   } else if (OB_ISNULL(dst) || (dst_len - dst_pos < init_size)) {
     ret = OB_DESERIALIZE_ERROR;
@@ -1833,14 +1850,14 @@ int ObRecordType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 #ifdef OB_BUILD_ORACLE_PL
 //---------- for ObOpaqueType ----------
 
-int ObOpaqueType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+int ObOpaqueType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
   if (PL_TYPE_INIT_SIZE == type) {
     ObPLOpaque opaque;
     size += opaque.get_init_size();
   } else {
-    OZ (ObUserDefinedType::get_size(ns, type, size));
+    OZ (ObUserDefinedType::get_size(type, size));
   }
   return ret;
 }
@@ -1889,7 +1906,7 @@ int ObOpaqueType::init_session_var(const ObPLResolveCtx &resolve_ctx,
   }
   if (OB_FAIL(ret) || obj.is_pl_extend()) {
     // do nothing ...
-  } else if (OB_FAIL(get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(obj_allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2075,11 +2092,11 @@ int ObCollectionType::get_init_size(int64_t &size) const
   return ret;
 }
 
-int ObCollectionType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
+int ObCollectionType::get_size(ObPLTypeSize type, int64_t &size) const
 {
   int ret = OB_SUCCESS;
   if (PL_TYPE_ROW_SIZE == type) {
-    OZ (get_element_type().get_size(ns, type, size));
+    OZ (get_element_type().get_size(type, size));
   } else if (PL_TYPE_INIT_SIZE == type) {
     OZ (get_init_size(size));
   } else {
@@ -2130,7 +2147,7 @@ int ObCollectionType::set_row_size(ObPLCodeGenerator &generator, const ObPLINS &
   int64_t rowsize = 0;
   ObLLVMValue p_rowsize;
   OZ (generator.extract_rowsize_ptr_from_collection(collection, p_rowsize));
-  OZ (get_size(ns, PL_TYPE_ROW_SIZE, rowsize));
+  OZ (get_size(PL_TYPE_ROW_SIZE, rowsize));
   OZ (generator.get_helper().create_istore(rowsize, p_rowsize));
   return ret;
 }
@@ -2159,9 +2176,9 @@ int ObCollectionType::init_session_var(const ObPLResolveCtx &resolve_ctx,
   }
   if (OB_FAIL(ret) || obj.is_pl_extend()) {
     // do nothing ...
-  } else if (OB_FAIL(get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
-  } else if (OB_FAIL(get_size(resolve_ctx, PL_TYPE_ROW_SIZE, row_size))) {
+  } else if (OB_FAIL(get_size(PL_TYPE_ROW_SIZE, row_size))) {
     LOG_WARN("get row size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(obj_allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2221,7 +2238,7 @@ int ObCollectionType::free_session_var(const ObPLResolveCtx &resolve_ctx,
   if (!OB_ISNULL(data)) {
     ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(data);
     int64_t element_init_size = 0;
-    if (OB_FAIL(element_type_.get_size(resolve_ctx, PL_TYPE_INIT_SIZE, element_init_size))) {
+    if (OB_FAIL(element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size))) {
       LOG_WARN("get table element type init size failed", K(ret));
     } else {
       char *free_ptr = NULL;
@@ -2259,7 +2276,7 @@ int ObCollectionType::free_data(const ObPLResolveCtx &resolve_ctx,
   if (!OB_ISNULL(data)) {
     ObPLNestedTable *table = reinterpret_cast<ObPLNestedTable *>(data);
     int64_t element_init_size = 0;
-    if (OB_FAIL(element_type_.get_size(resolve_ctx, PL_TYPE_INIT_SIZE, element_init_size))) {
+    if (OB_FAIL(element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size))) {
       LOG_WARN("get table element type init size failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table->get_count() ;i++) {
@@ -2485,7 +2502,7 @@ int ObCollectionType::init_obj(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   char *data = NULL;
   init_size = 0;
-  if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+  if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get init size failed", K(ret));
   } else if (OB_ISNULL(data = static_cast<char *>(allocator.alloc(init_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2592,12 +2609,12 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
   int64_t element_init_size = 0;
   int64_t field_cnt = OB_INVALID_COUNT;
 
-  if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
+  if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
     LOG_WARN("get table type init size failed", K(ret), KPC(this));
   } else if (OB_ISNULL(dst) || (dst_len - dst_pos) < init_size) {
     ret = OB_DESERIALIZE_ERROR;
     LOG_WARN("data deserialize failed", K(ret), K(dst), K(init_size), K(dst_len), K(dst_pos));
-  } else if (OB_FAIL(element_type_.get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, element_init_size))) {
+  } else if (OB_FAIL(element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size))) {
     LOG_WARN("get element init size failed", K(ret), KPC(this), K(init_size));
   } else if (OB_FAIL(element_type_.get_field_count(ObPLUDTNS(schema_guard), field_cnt))) {
     LOG_WARN("get field count failed", K(ret));
@@ -2742,7 +2759,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
   CK (OB_LIKELY(dst->is_ext()));
   CK (OB_NOT_NULL(src_table = reinterpret_cast<ObPLCollection *>(src->get_ext())));
   CK (OB_NOT_NULL(dst_table = reinterpret_cast<ObPLCollection *>(dst->get_ext())));
-  OZ (element_type_.get_size(ctx, PL_TYPE_INIT_SIZE, element_init_size));
+  OZ (element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size));
 
   if (OB_SUCC(ret)
     && OB_ISNULL(collection_allocator
@@ -3352,12 +3369,12 @@ int ObPLComposite::copy_element(const ObObj &src,
         OZ (ObUserDefinedType::destruct_obj(dest, session));
         OZ (ObUserDefinedType::alloc_for_second_level_composite(dest, allocator));
         OZ (ObPLComposite::deep_copy(*dest_composite,
-                                   src_composite,
-                                   allocator,
-                                   ns,
-                                   session,
-                                   need_new_allocator,
-                                   ignore_del_element));
+                                     src_composite,
+                                     allocator,
+                                     ns,
+                                     session,
+                                     need_new_allocator,
+                                     ignore_del_element));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                             extend_type,
                             src.get_val_len()));

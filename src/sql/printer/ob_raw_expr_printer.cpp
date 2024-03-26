@@ -3245,7 +3245,13 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUN_UDF: {
+        ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+        CK (OB_NOT_NULL(udf_expr));
         PRINT_IDENT_WITH_QUOT(func_name);
+        if (OB_SUCC(ret) && udf_expr->is_dblink_sys_func()) {
+          CK (!udf_expr->get_dblink_name().empty());
+          DATA_PRINTF("@%.*s", LEN_AND_PTR(udf_expr->get_dblink_name()));
+        }
         OZ(inner_print_fun_params(*expr));
         break;
       }
@@ -3372,6 +3378,10 @@ do { \
       DATA_PRINTF(".");
     }
     PRINT_IDENT_WITH_QUOT(expr->get_func_name());
+    if (expr->is_dblink_sys_func()) {
+      CK (!expr->get_dblink_name().empty());
+      DATA_PRINTF("@%.*s", LEN_AND_PTR(expr->get_dblink_name()));
+    }
     DATA_PRINTF("(");
 
     ObIArray<ObExprResType> &params_type = expr->get_params_type();
@@ -4422,6 +4432,15 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
           LOG_WARN("failed to get udt info", K(ret));
         } else {
+          if (dest_tenant_id != OB_SYS_TENANT_ID) {
+            const share::schema::ObDatabaseSchema *db_schema = NULL;
+            if (OB_FAIL(schema_guard_->get_database_schema(dest_tenant_id, dest_info->get_database_id(), db_schema))) {
+              LOG_WARN("failed to get database schema info", K(ret), KPC(dest_info));
+            } else {
+              PRINT_IDENT_WITH_QUOT(db_schema->get_database_name_str());
+              DATA_PRINTF(".");
+            }
+          }
           PRINT_IDENT_WITH_QUOT(dest_info->get_type_name());
         }
         break;

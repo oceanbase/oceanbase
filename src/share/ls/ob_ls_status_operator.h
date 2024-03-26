@@ -161,6 +161,20 @@ struct ObLSStatusInfo
   {
     return OB_LS_NORMAL == status_;
   }
+  bool operator==(const ObLSStatusInfo &other) const
+  {
+    return tenant_id_ == other.tenant_id_
+      && ls_id_ == other.ls_id_
+      && ls_group_id_ == other.ls_group_id_
+      && status_ == other.status_
+      && unit_group_id_ == other.unit_group_id_
+      && primary_zone_ == other.primary_zone_
+      && flag_ == other.flag_;
+  }
+
+  bool operator!=(const ObLSStatusInfo &other) const {
+    return !(*this == other);
+  }
 
   bool is_user_ls() const { return ls_id_.is_user_ls(); }
 

@@ -36,8 +36,12 @@ public:
       line_str_(),
       closed_cht_(0),
       is_optional_(false),
-      select_exprs_(alloc)
+      select_exprs_(alloc),
+      is_single_(true),
+      max_file_size_(DEFAULT_MAX_FILE_SIZE),
+      escaped_cht_()
   {
+    cs_type_ = ObCharset::get_system_collation();
   }
 
   ObItemType into_type_;
@@ -48,6 +52,11 @@ public:
   char closed_cht_;
   bool is_optional_;
   common::ObFixedArray<ObExpr*, common::ObIAllocator> select_exprs_;
+  bool is_single_;
+  int64_t max_file_size_;
+  common::ObObj escaped_cht_;
+  common::ObCollationType cs_type_;
+  static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
 };
 
 class ObSelectIntoOp : public ObOperator

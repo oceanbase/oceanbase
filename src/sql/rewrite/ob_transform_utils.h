@@ -899,6 +899,9 @@ public:
                                       ObIArray<ObRawExpr*> &equal_conds);
 
   static int extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udt_exprs);
+
+  static int extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs);
+
   // json object with star : json_object(*)
   static int check_is_json_constraint(ObTransformerCtx *ctx,
                                       ObDMLStmt *stmt,
@@ -1872,6 +1875,8 @@ public:
                                     bool &is_fetch_with_ties,
                                     ObWinFunRawExpr *&win_expr);
   static int pushdown_qualify_filters(ObSelectStmt *stmt);
+  // check if a constant or parameterized constant is NULL.
+  static bool is_const_null(ObRawExpr &expr);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

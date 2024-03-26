@@ -222,6 +222,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+#include "observer/virtual_table/ob_all_virtual_nic_info.h"
 
 namespace oceanbase
 {
@@ -2645,6 +2646,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               checkpoint_diagnose_checkpoint_unit_info->set_addr(addr_);
               vt_iter = static_cast<ObAllVirtualCheckpointDiagnoseCheckpointUnitInfo*>(checkpoint_diagnose_checkpoint_unit_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_NIC_INFO_TID: {
+            ObAllVirtualNicInfo *nic_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualNicInfo, nic_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualNicInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(nic_info);
             }
             break;
           }

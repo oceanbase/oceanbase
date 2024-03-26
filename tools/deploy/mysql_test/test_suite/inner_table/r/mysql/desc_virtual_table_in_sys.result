@@ -9111,6 +9111,40 @@ network_speed	bigint(20)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_aux_stat;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_transfer_partition_task;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+object_id	bigint(20)	NO		NULL	
+dest_ls	bigint(20)	NO		NULL	
+status	varchar(64)	NO		NULL	
+balance_job_id	bigint(20)	NO		NULL	
+transfer_task_id	bigint(20)	NO		NULL	
+comment	longtext	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_partition_task;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_transfer_partition_task_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+object_id	bigint(20)	NO		NULL	
+dest_ls	bigint(20)	NO		NULL	
+status	varchar(64)	NO		NULL	
+balance_job_id	bigint(20)	NO		NULL	
+transfer_task_id	bigint(20)	NO		NULL	
+comment	longtext	YES		NULL	
+create_time	timestamp(6)	NO		NULL	
+finish_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_transfer_partition_task_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_snapshot_job;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -9190,5 +9224,17 @@ begin_interval_scn	bigint(20) unsigned	NO		NULL
 end_interval_scn	bigint(20) unsigned	NO		NULL	
 ls_meta_package	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_snapshot_ls_replica_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_nic_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+devname	varchar(128)	NO		NULL	
+speed_Mbps	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_nic_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_nic_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1

@@ -196,7 +196,8 @@ public:
       ObTabletHandle &tablet_handle);
   int rollback_remove_tablet(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_start_scn);
 
   int get_tablet(
       const common::ObTabletID &tablet_id,
@@ -563,6 +564,7 @@ private:
   int offline_build_tablet_without_memtable_();
   int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int offline_destroy_memtable_and_mds_table_();
+  int mock_duplicated_rows_(common::ObNewRowIterator *&duplicated_rows);
 private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,
@@ -781,7 +783,11 @@ private:
   int create_empty_shell_tablet(
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
-
+  int check_rollback_tablet_is_same_(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const share::SCN &transfer_start_scn,
+      bool &is_same);
 private:
   int direct_insert_rows(const uint64_t table_id,
                          const int64_t task_id,
