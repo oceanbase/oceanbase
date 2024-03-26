@@ -430,7 +430,14 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
   } else if (piece_id == max_active_piece_id) {
     piece.piece_info_.checkpoint_scn_ = MIN(new_round_info.checkpoint_scn_, piece.piece_info_.checkpoint_scn_);
     piece.piece_info_.status_.set_active();
-    if (piece.piece_info_.checkpoint_scn_ > piece.piece_info_.start_scn_) {
+    if (piece.piece_info_.checkpoint_scn_ > new_round_info.start_scn_
+        && piece.piece_info_.checkpoint_scn_ >= piece.piece_info_.start_scn_) {
+      // As the scn of one log group is the max log scn among the log entries. If checkpoint_scn_
+      // is equal to start_scn_, the piece is not empty, and may be used for restore. For example,
+      // Piece#1 : <2022-06-01 06:00:00, 2022-06-02 05:00:00, 2022-06-02 06:00:00>
+      // Piece#2 : <2022-06-02 06:00:00, 2022-06-02 06:00:00, 2022-06-03 06:00:00>
+      // And the first log group in Piece#2 with scn range [2022-06-02 05:30:00, 2022-06-02 06:00:00], this piece
+      // is required while restore to 2022-06-02 05:40:00.
       piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
     } else {
       piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE;
