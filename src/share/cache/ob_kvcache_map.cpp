@@ -305,27 +305,18 @@ int ObKVCacheMap::get(
           if (OB_TMP_FAIL(guard.get_ret())) {
             COMMON_LOG(WARN, "Fail to write lock bucket, ", K(tmp_ret), K(bucket_pos));
           } else {
+            Node *curr = get_bucket_node(bucket_pos);
+            bucket_ptr = curr;
             prev = NULL;
-            iter = bucket_ptr;
-            bool is_equal = false;
-            while (NULL != iter && OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-              if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-                if (hash_code == iter->hash_code_) {
-                  if (OB_TMP_FAIL(key.equal(*iter->key_, is_equal))) {
-                    COMMON_LOG(WARN, "Failed to check kvcache key equal", K(tmp_ret));
-                  } else if (is_equal) {
-                    ObKVMemBlockHandle *old_handle = iter->mb_handle_;
-                    if (OB_TMP_FAIL(internal_data_move(prev, iter, bucket_ptr))) {
-                      COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
-                    }
-                    store_->de_handle_ref(old_handle);
-                    break;
-                  }
+            while (nullptr != curr) {
+              if (curr == iter) {
+                if (OB_TMP_FAIL(internal_data_move(prev, iter, bucket_ptr))) {
+                  COMMON_LOG(WARN, "Fail to move node to LFU block, ", K(tmp_ret));
                 }
-                store_->de_handle_ref(iter->mb_handle_);
+                break;
               }
-              prev = iter;
-              iter = iter->next_;
+              prev = curr;
+              curr = curr->next_;
             }
           }
         }
