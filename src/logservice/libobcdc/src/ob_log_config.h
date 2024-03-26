@@ -603,6 +603,9 @@ public:
   DEF_CAP(lob_data_storage_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "lob data storage memory limit");
   T_DEF_INT_INFT(lob_data_storage_clean_interval_sec, OB_CLUSTER_PARAMETER, 5, 1,
                  "lob_data_storage clean task nterval in seconds");
+  DEF_TIME(print_mod_memory_usage_interval, OB_CLUSTER_PARAMETER, "1m", "[0s, ]", "print mod memory usage threshold");
+  DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
+  DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
 
 #undef OB_CLUSTER_PARAMETER
 

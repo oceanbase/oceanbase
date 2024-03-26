@@ -287,6 +287,7 @@ private:
   int config_data_start_schema_version_(const int64_t global_data_start_schema_version);
   int update_data_start_schema_version_on_split_mode_();
   int set_all_tenant_compat_mode_();
+  void dump_malloc_sample_();
 
 private:
   static ObLogInstance *instance_;

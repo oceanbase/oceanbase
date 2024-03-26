@@ -70,8 +70,6 @@ int MySQLConnConfig::reset(const ObAddr &svr,
 }
 
 ////////////////////////////////////// ObLogMySQLConnector /////////////////////////////////
-const char *ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE = "OCEANBASE";
-const char *ObLogMySQLConnector::DEFAULT_DB_NAME_ORACLE_MODE = "SYS";
 
 ObLogMySQLConnector::ObLogMySQLConnector() :
     inited_(false),
@@ -293,7 +291,7 @@ int ObLogMySQLConnector::init_conn_(const MySQLConnConfig &cfg,
     else if (OB_FAIL(set_timeout_variable_(query_timeout_us, trx_timeout_us))) {
       LOG_WARN("set_timeout_variable_ fail", KR(ret), K(query_timeout_us), K(trx_timeout_us), K(cfg));
     } else {
-      db_name = is_oracle_mode() ? DEFAULT_DB_NAME_ORACLE_MODE: DEFAULT_DB_NAME_MYSQL_MODE;
+      db_name = is_oracle_mode() ? OB_ORA_SYS_SCHEMA_NAME : OB_SYS_DATABASE_NAME;
 
       // first connect to db with empty db_name to get tenant_mode, then set default db according to tenant_mode
       if (OB_ISNULL(db_name)) {
