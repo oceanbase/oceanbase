@@ -1895,6 +1895,10 @@ DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_global_enable_rich_vector_format, OB_CLUSTER_PARAMETER, "True",
          "Control whether use rich vector format in vectorization engine",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_allow_skip_replay_redo_after_detete_tablet, OB_TENANT_PARAMETER, "FALSE",
+         "allow skip replay invalid redo log after tablet delete transaction is committed."
+         "The default value is FALSE. Value: TRUE means we allow skip replaying this invalid redo log, False means we do not alow such behavior.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //check os params
 DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
