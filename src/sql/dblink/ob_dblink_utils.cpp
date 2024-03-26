@@ -800,23 +800,33 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_DBLINK
   uint32_t sessid = 0;
-  common::sqlclient::ObISQLConnection *dblink_conn =NULL;
-  oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*);
-  if (OB_ISNULL(tenant_dblink_keeper)) {
+  common::sqlclient::ObISQLConnection *dblink_conn = NULL;
+  // Why do not use MTL(oceanbase::common::sqlclient::ObTenantDblinkKeeper*) ?
+  // MTL(xxx) accesses the ptr in the cache, we need to access the ptr in the memory.
+  // In the following scene，we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed or not:
+  // MTL(ObTenantDblinkKeeper*) destroy firstly, MTL(ObTableApiSessPoolMgr*) destroy later.
+  // When MTL(ObTableApiSessPoolMgr*) destroy, it will destruct ObSQLSessionInfo which will clean dblink in reset(),
+  // so we need to know if MTL(ObTenantDblinkKeeper*) has been destroyed to avoid accessing the memory that has been destroyed
+  if (OB_ISNULL(MTL_CTX())) {
     // do nothing
-  } else if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
-  } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
-  } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid, force_disconnect))) {
-    LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
+  } else {
+    oceanbase::common::sqlclient::ObTenantDblinkKeeper *tenant_dblink_keeper = MTL_CTX()->get<oceanbase::common::sqlclient::ObTenantDblinkKeeper *>();
+    if (OB_ISNULL(tenant_dblink_keeper)) {
+      // do nothing
+    } else if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), KP(session_info_), KP(tenant_dblink_keeper));
+    } else if (FALSE_IT(sessid = session_info_->get_sessid())) {
+    } else if (OB_FAIL(tenant_dblink_keeper->clean_dblink_conn(sessid, force_disconnect))) {
+      LOG_WARN("failed to set dblink", KP(dblink_conn), K(sessid), KP(tenant_dblink_keeper), K(force_disconnect), K(ret));
+    }
+    tx_id_.reset();
+    arena_alloc_.reset();
+    reverse_dblink_ = NULL;
+    reverse_dblink_buf_ = NULL;
+    sys_var_reverse_info_buf_ = NULL;
+    sys_var_reverse_info_buf_size_ = 0;
   }
-  tx_id_.reset();
-  arena_alloc_.reset();
-  reverse_dblink_ = NULL;
-  reverse_dblink_buf_ = NULL;
-  sys_var_reverse_info_buf_ = NULL;
-  sys_var_reverse_info_buf_size_ = 0;
 #endif
   return ret;
 }
