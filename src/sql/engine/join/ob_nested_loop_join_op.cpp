@@ -853,6 +853,7 @@ int ObNestedLoopJoinOp::process_right_batch()
   const ObBatchRows *right_brs = &right_->get_brs();
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
   clear_evaluated_flag();
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.group_rescan_);
   if (OB_FAIL(right_->get_next_batch(op_max_batch_size_, right_brs))) {
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
   } else if (0 == right_brs->size_ && right_brs->end_) {

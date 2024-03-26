@@ -1037,6 +1037,7 @@ int ObSubPlanFilterOp::handle_next_batch_with_group_rescan(const int64_t op_max_
   bool stop_fetch = false;
   ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
   uint64_t left_rows_total_cnt = 0;
+  DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), true);
   if (left_rows_iter_.is_valid() && left_rows_iter_.has_next()) {
     // fetch data from left store
   } else {

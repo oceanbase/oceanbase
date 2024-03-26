@@ -38,6 +38,7 @@ typedef common::ObList<DmlRowkeyDistCtx, common::ObIAllocator> DASDelCtxList;
 
 class ObDASCtx
 {
+  friend class DASGroupScanMarkGuard;
   OB_UNIS_VERSION(1);
 public:
   ObDASCtx(common::ObIAllocator &allocator)
@@ -154,9 +155,28 @@ public:
       uint64_t need_check_server_               : 1; //need to check if partitions hit the same server
       uint64_t same_server_                     : 1; //if partitions hit the same server, could be local or remote
       uint64_t iter_uncommitted_row_            : 1; //iter uncommitted row in fk_checker
-      uint64_t reserved_                        : 60;
+      uint64_t in_das_group_scan_               : 1; //the current execution in das group scan
+      uint64_t reserved_                        : 59;
     };
   };
+};
+
+class DASGroupScanMarkGuard
+{
+public:
+  DASGroupScanMarkGuard(ObDASCtx &das_ctx, bool in_das_group_scan)
+    : das_ctx_(das_ctx)
+  {
+    in_das_group_scan_ = das_ctx.in_das_group_scan_;
+    das_ctx.in_das_group_scan_ = in_das_group_scan;
+  }
+  ~DASGroupScanMarkGuard()
+  {
+    das_ctx_.in_das_group_scan_ = in_das_group_scan_;
+  }
+private:
+  bool in_das_group_scan_;
+  ObDASCtx &das_ctx_;
 };
 }  // namespace sql
 }  // namespace oceanbase

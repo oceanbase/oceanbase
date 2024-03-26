@@ -466,32 +466,34 @@ int ObDASScanOp::do_local_index_lookup()
 //if we need to fetch next row from the next das task,
 //must reset the datum ptr to expr preallocate frame buffer
 //otherwise, get_next_row in the local das task maybe has a wrong status
-void ObDASScanOp::reset_access_datums_ptr()
+void ObDASScanOp::reset_access_datums_ptr(int64_t capacity)
 {
   if (scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
+    int64_t reset_batch_size = capacity > 0 ? capacity : scan_rtdef_->eval_ctx_->max_batch_size_;
+    reset_batch_size = min(reset_batch_size, scan_rtdef_->eval_ctx_->max_batch_size_);
     FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.access_exprs_) {
-      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, reset_batch_size);
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
     if (OB_NOT_NULL(scan_ctdef_->trans_info_expr_)) {
       ObExpr *trans_expr = scan_ctdef_->trans_info_expr_;
-      trans_expr->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      trans_expr->locate_datums_for_update(*scan_rtdef_->eval_ctx_, reset_batch_size);
       ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
   if (get_lookup_rtdef() != nullptr && get_lookup_rtdef()->p_pd_expr_op_->is_vectorized()) {
+    int64_t reset_batch_size = capacity > 0 ? capacity : scan_rtdef_->eval_ctx_->max_batch_size_;
+    reset_batch_size = min(reset_batch_size, scan_rtdef_->eval_ctx_->max_batch_size_);
     FOREACH_CNT(e, get_lookup_ctdef()->pd_expr_spec_.access_exprs_) {
-      (*e)->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
-                                     get_lookup_rtdef()->eval_ctx_->max_batch_size_);
+      (*e)->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_, reset_batch_size);
       ObEvalInfo &info = (*e)->get_eval_info(*get_lookup_rtdef()->eval_ctx_);
       info.point_to_frame_ = true;
     }
     if (OB_NOT_NULL(get_lookup_ctdef()->trans_info_expr_)) {
       ObExpr *trans_expr = get_lookup_ctdef()->trans_info_expr_;
-      trans_expr->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
-                                           get_lookup_rtdef()->eval_ctx_->max_batch_size_);
+      trans_expr->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_, reset_batch_size);
       ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }

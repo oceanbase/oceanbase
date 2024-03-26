@@ -152,7 +152,6 @@ public:
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) = 0;
   virtual const ObDASBaseCtDef *get_ctdef() const { return nullptr; }
   virtual ObDASBaseRtDef *get_rtdef() { return nullptr; }
-  virtual void reset_access_datums_ptr() { }
   DASCtDefFixedArray &get_related_ctdefs() { return related_ctdefs_; }
   DASRtDefFixedArray &get_related_rtdefs() { return related_rtdefs_; }
   ObTabletIDFixedArray &get_related_tablet_ids() { return related_tablet_ids_; }

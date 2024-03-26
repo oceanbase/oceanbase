@@ -581,7 +581,14 @@ int DASOpResultIter::get_next_rows(int64_t &count, int64_t capacity)
         //if we need to fetch next row from the next das task,
         //must reset the datum ptr to expr preallocate frame buffer
         //otherwise, get_next_row in the local das task maybe touch a wild datum ptr
-        reset_wild_datums_ptr();
+        ObDASCtx &das_ctx = scan_op->get_rtdef()->eval_ctx_->exec_ctx_.get_das_ctx();
+        if (!scan_op->is_group_scan() && das_ctx.in_das_group_scan_) {
+          int64_t simulate_max_rowsets = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_MAX_ROWSETS);
+          capacity = simulate_max_rowsets > 0 && simulate_max_rowsets < capacity ? simulate_max_rowsets : capacity;
+          scan_op->reset_access_datums_ptr(capacity);
+        } else {
+          reset_wild_datums_ptr();
+        }
       }
       ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
       if (!scan_op->is_local_task()) {

@@ -597,6 +597,7 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
         if (!rescan_params_->empty()) {
           op_->set_pushdown_param_null(*rescan_params_);
         }
+        DASGroupScanMarkGuard mark_guard(ctx_->get_das_ctx(), true);
         if (OB_FAIL(left_->get_next_batch(max_row_cnt, batch_rows))) {
           LOG_WARN("get next batch from left failed", KR(ret));
         }

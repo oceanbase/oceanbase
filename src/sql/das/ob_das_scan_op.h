@@ -203,7 +203,7 @@ public:
   int init_scan_param();
   virtual int rescan();
   virtual int reuse_iter();
-  virtual void reset_access_datums_ptr() override;
+  void reset_access_datums_ptr(int64_t capacity = 0);
   virtual ObLocalIndexLookupOp *get_lookup_op();
   ObExpr *get_group_id_expr() { return scan_ctdef_->group_id_expr_; }
   bool is_group_scan() { return NULL != scan_ctdef_->group_id_expr_; }
