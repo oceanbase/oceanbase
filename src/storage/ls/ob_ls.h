@@ -861,7 +861,10 @@ public:
   DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
 
   int set_ls_migration_gc(bool &allow_gc);
-
+private:
+  static int check_tablet_status_and_scn(
+      const ObTabletCreateDeleteMdsUserData &data,
+      const share::SCN &scn);
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.

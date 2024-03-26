@@ -4580,7 +4580,8 @@ int ObTablet::get_ddl_info(int64_t &schema_version, int64_t &schema_refreshed_ts
   return ret;
 }
 
-int ObTablet::get_rec_log_scn(SCN &rec_scn) {
+int ObTablet::get_rec_log_scn(SCN &rec_scn)
+{
   int ret = OB_SUCCESS;
   rec_scn = SCN::max_scn();
   ObTableHandleV2 handle;
