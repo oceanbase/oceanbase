@@ -1185,10 +1185,10 @@ bool ObPartTransCtx::has_persisted_log_() const
     (is_follower_() && replay_completeness_.is_unknown());
 }
 
-int ObPartTransCtx::gts_callback_interrupted(const int errcode)
+int ObPartTransCtx::gts_callback_interrupted(const int errcode,
+    const share::ObLSID target_ls_id)
 {
   int ret = OB_SUCCESS;
-  UNUSED(errcode);
 
   bool need_revert_ctx = false;
   {
@@ -1196,15 +1196,19 @@ int ObPartTransCtx::gts_callback_interrupted(const int errcode)
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(ERROR, "ObPartTransCtx not inited", K(ret));
-    } else if (OB_UNLIKELY(!is_exiting_)) {
-      // at this time, ObTxCtxMgr should already be stopped,
-      // so ObPartTransCtx should already be killed
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "ObPartTransCtx is not exiting", K(ret));
+    } else if (OB_LS_OFFLINE == errcode) {
+      if (target_ls_id != ls_id_) {
+        ret = OB_EAGAIN;
+      } else {
+        need_revert_ctx = true;
+        sub_state_.clear_gts_waiting();
+        TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), K(errcode), "context", *this);
+      }
     } else {
+      // for OB_TENANT_NOT_EXIST
       need_revert_ctx = true;
       sub_state_.clear_gts_waiting();
-      TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), "context", *this);
+      TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), K(errcode), "context", *this);
     }
   }
   if (need_revert_ctx) {

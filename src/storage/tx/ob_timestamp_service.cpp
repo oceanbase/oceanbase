@@ -180,13 +180,27 @@ int ObTimestampService::handle_request(const ObGtsRequest &request, ObGtsRpcResu
   return ret;
 }
 
+#ifndef ERRSIM
+ERRSIM_POINT_DEF(EN_GTS_HANDLE_REQUEST)
+#endif
+
 int ObTimestampService::handle_local_request_(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result)
 {
   int ret = OB_SUCCESS;
   int64_t gts = 0;
   const uint64_t tenant_id = request.get_tenant_id();
   const MonotonicTs srr = request.get_srr();
-  if (OB_FAIL(get_timestamp(gts))) {
+#ifndef ERRSIM
+  ret = EN_GTS_HANDLE_REQUEST;
+#endif
+  // the fisrt case for errsim
+  if (OB_SUCCESS != ret) {
+    TRANS_LOG(WARN, "errsim for gts handle local request", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = result.init(tenant_id, ret, srr, 0, 0))) {
+      TRANS_LOG(WARN, "gts result init failed", K(tmp_ret), K(request));
+    }
+  } else if (OB_FAIL(get_timestamp(gts))) {
     if (EXECUTE_COUNT_PER_SEC(10)) {
       TRANS_LOG(WARN, "get timestamp failed", KR(ret));
     }

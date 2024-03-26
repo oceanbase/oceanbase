@@ -357,16 +357,21 @@ int64_t ObGtsSource::get_task_count() const
   return task_count;
 }
 
-int ObGtsSource::gts_callback_interrupted(const int errcode)
+int ObGtsSource::gts_callback_interrupted(const int errcode, const share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   int64_t task_count = 0;
   for (int64_t i = 0; i < TOTAL_GTS_QUEUE_COUNT; i++) {
-    queue_[i].gts_callback_interrupted(errcode);
+    queue_[i].gts_callback_interrupted(errcode, ls_id);
     task_count += queue_[i].get_task_count();
   }
-  if (task_count > 0) {
-    ret = OB_EAGAIN;
+  if (OB_LS_OFFLINE != errcode) {
+    // in this case, all callbacck tasks of this tenant need to be cleared.
+    if (task_count > 0) {
+      ret = OB_EAGAIN;
+    }
+  } else {
+    // if OB_LS_OFFLINE, return OB_SUCCESS
   }
   return ret;
 }
