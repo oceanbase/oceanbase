@@ -579,15 +579,16 @@ int ObTableBatchService::htable_delete(ObTableBatchCtx &ctx)
   tb_ctx.set_batch_operation(ctx.ops_);
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
-  ObHTableLockHandle *lock_handle = nullptr;
+  ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
-  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(ctx.trans_param_->trans_desc_->tid(), lock_handle))) {
-    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_ISNULL(trans_lock_handle) && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(
+      ctx.trans_param_->trans_desc_->tid(), trans_lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret), "tx_id", ctx.trans_param_->trans_desc_->tid());
   } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(tb_ctx.get_table_id(),
                                                      *ctx.ops_,
-                                                     *lock_handle,
+                                                     *trans_lock_handle,
                                                      ObHTableLockMode::SHARED))) {
     LOG_WARN("fail to lock htable rows", K(ret), K(tb_ctx.get_table_id()), K(ctx.ops_));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx,
@@ -629,7 +630,6 @@ int ObTableBatchService::htable_delete(ObTableBatchCtx &ctx)
     }
   }
 
-  ctx.trans_param_->lock_handle_ = lock_handle; // will be release in async commit callback
   return ret;
 }
 
@@ -640,18 +640,19 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
   int64_t affected_rows = 0;
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
-  ObHTableLockHandle *lock_handle = nullptr;
+  ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   // hbase put use 'put' in TABLE_API_EXEC_INSERT
   tb_ctx.set_client_use_put(true);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
-  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(ctx.trans_param_->trans_desc_->tid(), lock_handle))) {
-    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_ISNULL(trans_lock_handle) && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(
+      ctx.trans_param_->trans_desc_->tid(), trans_lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret), "tx_id", ctx.trans_param_->trans_desc_->tid());
   } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(tb_ctx.get_table_id(),
                                                      *ctx.ops_,
-                                                     *lock_handle,
+                                                     *trans_lock_handle,
                                                      ObHTableLockMode::SHARED))) {
     LOG_WARN("fail to lock htable rows", K(ret), K(tb_ctx.get_table_id()), K(ctx.ops_));
   } else if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
@@ -679,7 +680,6 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
     }
   }
 
-  ctx.trans_param_->lock_handle_ = lock_handle; // will be release in async commit callback
   return ret;
 }
 
@@ -775,16 +775,17 @@ int ObTableBatchService::process_htable_put(const ObTableOperation &op,
 int ObTableBatchService::htable_mutate_row(ObTableBatchCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  ObHTableLockHandle *lock_handle = nullptr;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
+  ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
-  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(ctx.trans_param_->trans_desc_->tid(), lock_handle))) {
-    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_ISNULL(trans_lock_handle) && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(
+      ctx.trans_param_->trans_desc_->tid(), trans_lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret), "tx_id", ctx.trans_param_->trans_desc_->tid());
   } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(tb_ctx.get_table_id(),
                                                      *ctx.ops_,
-                                                     *lock_handle,
+                                                     *trans_lock_handle,
                                                      ObHTableLockMode::SHARED))) {
     LOG_WARN("fail to lock htable rows", K(ret), K(tb_ctx.get_table_id()), K(ctx.ops_));
   } else {
@@ -814,7 +815,6 @@ int ObTableBatchService::htable_mutate_row(ObTableBatchCtx &ctx)
     }
   }
 
-  ctx.trans_param_->lock_handle_ = lock_handle; // will be release in async commit callback
   return ret;
 }
 
