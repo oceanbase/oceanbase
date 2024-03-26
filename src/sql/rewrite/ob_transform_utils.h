@@ -1875,6 +1875,8 @@ public:
                                     bool &is_fetch_with_ties,
                                     ObWinFunRawExpr *&win_expr);
   static int pushdown_qualify_filters(ObSelectStmt *stmt);
+  // check if a constant or parameterized constant is NULL.
+  static bool is_const_null(ObRawExpr &expr);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
