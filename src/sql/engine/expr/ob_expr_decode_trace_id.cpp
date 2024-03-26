@@ -84,7 +84,10 @@ int ObExprDecodeTraceId::calc_decode_trace_id_expr_batch(const ObExpr &expr, ObE
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param datum is null pointer", K(ret));
   } else {
+    ObEvalCtx::BatchInfoScopeGuard guard(ctx);
+    guard.set_batch_size(batch_size);
     for (int64_t idx = 0; OB_SUCC(ret) && idx < batch_size; ++idx) {
+      guard.set_batch_idx(idx);
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       } else if (trace_id_datum_array[idx].is_null()) {
