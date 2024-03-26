@@ -577,7 +577,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
     max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX), outputted_rows_cnt_(0),
     is_fetch_with_ties_(false), topn_heap_(NULL), ties_array_pos_(0), ties_array_(),
     last_ties_row_(NULL), rows_(NULL), sort_exprs_(nullptr),
-    compress_type_(NONE_COMPRESSOR)
+    compress_type_(NONE_COMPRESSOR), use_compact_format_(false)
 {
 }
 
@@ -602,7 +602,8 @@ int ObSortOpImpl::init(
   const bool is_fetch_with_ties /* = false */,
   const int64_t default_block_size /* = 64KB */,
   const ObCompressorType compress_type /* = NONE_COMPRESS */,
-  const ExprFixedArray *exprs /* =nullptr */)
+  const ExprFixedArray *exprs /* =nullptr */,
+  const bool use_compact_format /* =false */)
 {
   int ret = OB_SUCCESS;
   if (is_inited()) {
@@ -631,6 +632,7 @@ int ObSortOpImpl::init(
     part_cnt_ = part_cnt;
     topn_cnt_ = topn_cnt;
     compress_type_ = compress_type;
+    use_compact_format_ = use_compact_format;
     sort_exprs_ = exprs;
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = is_fetch_with_ties;
@@ -775,6 +777,7 @@ void ObSortOpImpl::reset()
   rows_ = NULL;
   ties_array_pos_ = 0;
   compress_type_ = NONE_COMPRESSOR;
+  use_compact_format_ = false;
   sort_exprs_ = nullptr;
   if (0 != ties_array_.count()) {
     for (int64_t i = 0; i < ties_array_.count(); ++i) {

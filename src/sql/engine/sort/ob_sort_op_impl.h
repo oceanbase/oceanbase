@@ -254,7 +254,8 @@ public:
       const bool is_fetch_with_ties = false,
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE,
       const common::ObCompressorType compressor_type = common::NONE_COMPRESSOR,
-      const ExprFixedArray *exprs = nullptr);
+      const ExprFixedArray *exprs = nullptr,
+      const bool use_compact_format = false);
 
   virtual int64_t get_prefix_pos() const { return 0;  }
   // keep initialized, can sort same rows (same cell type, cell count, projector) after reuse.
@@ -714,8 +715,7 @@ protected:
                        SortStoredRow *&new_row);
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
-  bool use_compact_store() { return compress_type_ != NONE_COMPRESSOR; }
-
+  bool use_compact_store() { return use_compact_format_ || compress_type_ != NONE_COMPRESSOR; }
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
 protected:
@@ -782,6 +782,7 @@ protected:
   ObChunkDatumStore::IteratedBlockHolder default_blk_holder_;
   const ExprFixedArray *sort_exprs_;
   common::ObCompressorType compress_type_;
+  bool use_compact_format_;
 };
 
 class ObInMemoryTopnSortImpl;
