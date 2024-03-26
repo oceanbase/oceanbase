@@ -448,6 +448,26 @@ private:
   DISALLOW_COPY_AND_ASSIGN(SingleColumnValueFilter);
 };
 
+/// Simple filter that limits results to a specific page size
+class PageFilter: public FilterBase
+{
+public:
+  PageFilter(int64_t page_size)
+      : page_size_(page_size),
+        rows_accepted_(0)
+  {}
+  virtual ~PageFilter() {}
+  virtual bool filter_row() override;
+  virtual bool has_filter_row() override { return true; }
+  virtual bool filter_all_remaining() override;
+  TO_STRING_KV("filter", "PageFilter", K_(page_size), K_(rows_accepted));
+private:
+  int64_t page_size_;
+  int64_t rows_accepted_;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(PageFilter);
+};
+
 /// Simple filter that returns first N columns on row only.
 class ColumnCountGetFilter: public FilterBase
 {
