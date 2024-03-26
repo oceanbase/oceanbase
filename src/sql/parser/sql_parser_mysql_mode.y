@@ -348,7 +348,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
@@ -3047,6 +3047,10 @@ MOD '(' expr ',' expr ')'
 | GEOMCOLLECTION '(' ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
+| SUM_OPNSIZE '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
 }
 ;
 
@@ -11446,6 +11450,30 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, $$, $2, $3);
 }
+| relation_factor use_partition sample_clause use_flashback %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback %prec LOWER_PARENS
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, $2, $3, $5);
+}
+| relation_factor use_partition sample_clause use_flashback index_hint_list %prec LOWER_PARENS
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback index_hint_list %prec LOWER_PARENS
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, $2, $3, $5);
+}
 | relation_factor sample_clause %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, NULL, NULL, $2);
@@ -11469,6 +11497,30 @@ relation_factor %prec LOWER_PARENS
   }
   merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, $$, NULL, $2);
+}
+| relation_factor sample_clause use_flashback %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback %prec LOWER_PARENS
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, NULL, $2, $4);
+}
+| relation_factor sample_clause use_flashback index_hint_list %prec LOWER_PARENS
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback index_hint_list %prec LOWER_PARENS
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, NULL, $2, $4);
 }
 | relation_factor index_hint_list %prec LOWER_PARENS
 {
@@ -11520,6 +11572,54 @@ relation_factor %prec LOWER_PARENS
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $6, NULL, $2, $3);
   $$->sql_str_off_ = @1.first_column;
+}
+| relation_factor sample_clause use_flashback AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback AS relation_name
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback AS relation_name
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $7, NULL, $2, $3, $5);
+}
+| relation_factor sample_clause use_flashback AS relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback AS relation_name index_hint_list
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback AS relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback AS relation_name index_hint_list
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $7, $$, $2, $3, $5);
 }
 | relation_factor AS relation_name index_hint_list
 {
@@ -11651,6 +11751,54 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, $3);
   $$->sql_str_off_ = @1.first_column;
+}
+| relation_factor sample_clause use_flashback relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback relation_name
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback relation_name
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, $2, $3, $5);
+}
+| relation_factor sample_clause use_flashback relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback relation_name index_hint_list
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback relation_name index_hint_list
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, $2, $3, $5);
 }
 | TABLE '(' simple_expr ')' %prec LOWER_PARENS
 {
@@ -20454,6 +20602,7 @@ ACCOUNT
 |       KV_ATTRIBUTES
 |       OBJECT_ID
 |       TRANSFER
+|       SUM_OPNSIZE
 ;
 
 unreserved_keyword_special:

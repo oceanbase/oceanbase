@@ -762,7 +762,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_JSON_OBJECTAGG:
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_ORA_JSON_OBJECTAGG:
-      case T_FUN_ORA_XMLAGG: {
+      case T_FUN_ORA_XMLAGG:
+      case T_FUN_SUM_OPNSIZE:{
 
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));

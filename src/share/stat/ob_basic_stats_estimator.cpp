@@ -68,7 +68,8 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_,
+                                param.use_column_store_ && dst_opt_stats.count() == 1))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
@@ -152,7 +153,9 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
 
 int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
                                                 const ObTableStatParam &param,
-                                                PartitionIdBlockMap &id_block_map)
+                                                PartitionIdBlockMap &id_block_map,
+                                                bool &use_column_store,
+                                                bool &use_split_part)
 {
   int ret = OB_SUCCESS;
   ObGlobalTableStat global_tab_stat;
@@ -164,6 +167,8 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   ObArray<uint64_t> column_group_ids;
   uint64_t table_id = share::is_oracle_mapping_real_virtual_table(param.table_id_) ?
                               share::get_real_table_mappings_tid(param.table_id_) : param.table_id_;
+  use_column_store = false;
+  use_split_part = false;
   if (is_virtual_table(table_id)) {//virtual table no need estimate block count
     //do nothing
   } else if (OB_FAIL(get_all_tablet_id_and_object_id(param, tablet_ids, partition_ids))) {
@@ -180,6 +185,8 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
                                              partition_ids, column_group_ids, estimate_result))) {
     LOG_WARN("failed to do estimate block count", K(ret));
   } else {
+    int64_t total_sstable_row_cnt = 0;
+    int64_t total_memtable_row_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < estimate_result.count(); ++i) {
       BlockNumStat *block_num_stat = NULL;
       void *buf = NULL;
@@ -193,6 +200,8 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
         block_num_stat = new (buf) BlockNumStat();
         block_num_stat->tab_macro_cnt_ = estimate_result.at(i).macro_block_count_;
         block_num_stat->tab_micro_cnt_ = estimate_result.at(i).micro_block_count_;
+        total_sstable_row_cnt += estimate_result.at(i).sstable_row_count_;
+        total_memtable_row_cnt += estimate_result.at(i).memtable_row_count_;
         int64_t partition_id = static_cast<int64_t>(estimate_result.at(i).part_id_);
         if (OB_FAIL(block_num_stat->cg_macro_cnt_arr_.assign(estimate_result.at(i).cg_macro_cnt_arr_)) ||
             OB_FAIL(block_num_stat->cg_micro_cnt_arr_.assign(estimate_result.at(i).cg_micro_cnt_arr_))) {
@@ -240,8 +249,16 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
       }
     }
     if (OB_SUCC(ret)) {
-      if (param.part_level_ == share::schema::PARTITION_LEVEL_ONE ||
-          param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
+      if (OB_FAIL(check_can_use_column_store_and_split_part_gather(total_sstable_row_cnt,
+                                                                   total_memtable_row_cnt,
+                                                                   column_group_ids.count(),
+                                                                   partition_ids.count(),
+                                                                   param.degree_,
+                                                                   use_column_store,
+                                                                   use_split_part))) {
+        LOG_WARN("failed to check can use column table and split part gather", K(ret));
+      } else if (param.part_level_ == share::schema::PARTITION_LEVEL_ONE ||
+                 param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
         BlockNumStat *block_num_stat = NULL;
         void *buf = NULL;
         if (OB_ISNULL(param.allocator_)) {
@@ -1302,34 +1319,31 @@ int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObOptStatGatherPara
 
 int ObBasicStatsEstimator::fill_hints(common::ObIAllocator &alloc,
                                       const ObString &table_name,
-                                      int64_t gather_vectorize)
+                                      int64_t gather_vectorize,
+                                      bool use_column_store)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(table_name.empty())) {
+  ObSqlString default_hints;
+  const char *use_col_tab_hint = lib::is_oracle_mode() ? " USE_COLUMN_TABLE(\"%.*s\")" : " USE_COLUMN_TABLE(`%.*s`) ";
+  const char *use_full_table_hint = lib::is_oracle_mode() ? " FULL(\"%.*s\") " : " FULL(`%.*s`) ";
+  if (OB_UNLIKELY(table_name.empty() || gather_vectorize < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(table_name));
+    LOG_WARN("get unexpected null", K(table_name), K(gather_vectorize));
+  } else if (OB_FAIL(default_hints.append_fmt("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', %ld)",
+                                               gather_vectorize))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(default_hints.append_fmt(use_full_table_hint,
+                                              table_name.length(),
+                                              table_name.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (use_column_store && OB_FAIL(default_hints.append_fmt(use_col_tab_hint,
+                                                                  table_name.length(),
+                                                                  table_name.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(add_hint(default_hints.string(), alloc))) {
+    LOG_WARN("failed to add hint", K(ret));
   } else {
-    const char *fmt_str = "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS FULL(%.*s) OPT_PARAM('ROWSETS_MAX_ROWS', %ld)";
-    int64_t buf_len = table_name.length() + strlen(fmt_str);
-    char *buf = NULL;
-    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(buf), K(buf_len));
-    } else {
-      int64_t real_len = sprintf(buf, fmt_str, table_name.length(), table_name.ptr(), gather_vectorize);
-      if (OB_UNLIKELY(real_len < 0 || real_len > buf_len)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(real_len));
-      } else {
-        ObString hint_str;
-        hint_str.assign_ptr(buf, real_len);
-        if (OB_FAIL(add_hint(hint_str, alloc))) {
-          LOG_WARN("failed to add hint", K(ret));
-        } else {
-          LOG_TRACE("succeed to fill index info", K(hint_str));
-        }
-      }
-    }
+    LOG_TRACE("succeed to fill index info", K(default_hints));
   }
   return ret;
 }
@@ -1343,6 +1357,37 @@ int ObBasicStatsEstimator::generate_column_group_ids(const ObTableStatParam &par
       LOG_WARN("failed to push back", K(ret));
     } else {/*do nothing*/}
   }
+  return ret;
+}
+
+int ObBasicStatsEstimator::check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
+                                                                            const int64_t memtable_row_cnt,
+                                                                            const int64_t cg_cnt,
+                                                                            const int64_t part_cnt,
+                                                                            const int64_t degree,
+                                                                            bool &use_column_store,
+                                                                            bool &use_split_part)
+{
+  int ret = OB_SUCCESS;
+  use_split_part = false;
+  use_column_store = false;
+  int64_t total_rowcnt = sstable_row_cnt + memtable_row_cnt;
+  const int64_t SPLIT_PART_MINIMUM_ROW_COUNT = 1000000;
+  const int64_t COST_SCHEDULER_GATHER_PER_PART = 10000;//10ms
+  const int64_t COST_GATHER_MINIMUM_ROW_COUNT_PER_COLUMN = 100000;//100ms
+  const double RATIO_OF_IMPROVEMENT = 0.3;
+  if (cg_cnt > 0 && sstable_row_cnt > memtable_row_cnt * 10) {
+    use_column_store = true;
+    if (use_column_store && part_cnt > 1 && degree > 0 && total_rowcnt >= SPLIT_PART_MINIMUM_ROW_COUNT) {
+      double cost_scheduler_split_part = 1.0 * COST_SCHEDULER_GATHER_PER_PART * part_cnt;
+      double cost_of_no_split_gather_part = 1.0 * total_rowcnt / SPLIT_PART_MINIMUM_ROW_COUNT * (cg_cnt / 2 + 1) * COST_GATHER_MINIMUM_ROW_COUNT_PER_COLUMN / degree;
+      double cost_of_improvement = cost_of_no_split_gather_part * RATIO_OF_IMPROVEMENT;
+      use_split_part = cost_of_improvement > cost_scheduler_split_part;
+    }
+  }
+  LOG_TRACE("check_can_use_column_store_and_split_part_gather", K(use_split_part), K(use_column_store),
+                                                                K(cg_cnt), K(part_cnt), K(degree),
+                                                                K(sstable_row_cnt), K(memtable_row_cnt));
   return ret;
 }
 

@@ -229,6 +229,8 @@ int ObMultipleMerge::reset_tables()
     } else {
       ret = OB_SUCCESS;
     }
+  } else if (OB_FAIL(set_base_version())) {
+    STORAGE_LOG(WARN, "fail to set base version", K(ret));
   } else if (OB_FAIL(construct_iters())) {
     STORAGE_LOG(WARN, "fail to construct iters", K(ret));
   } else {
@@ -891,6 +893,8 @@ int ObMultipleMerge::open()
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else if (OB_FAIL(nop_pos_.init(*access_ctx_->stmt_allocator_, access_param_->get_max_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Fail to init nop pos, ", K(ret));
+  } else if (OB_FAIL(set_base_version())) {
+    STORAGE_LOG(WARN, "Fail to set base version", K(ret));
   } else if (access_param_->iter_param_.is_use_iter_pool()) {
     if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
       LOG_WARN("Failed to init iter pool", K(ret));
@@ -962,7 +966,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc aggregated store", K(ret));
     } else if (FALSE_IT(group_by_cell_ = new (buf) ObGroupByCell(0, *context.stmt_allocator_))) {
-    } else if (OB_FAIL(group_by_cell_->init_for_single_row(param, param.get_op()->get_eval_ctx()))) {
+    } else if (OB_FAIL(group_by_cell_->init_for_single_row(param, context, param.get_op()->get_eval_ctx()))) {
       LOG_WARN("Failed to init group by cell for single row", K(ret));
     }
   }
@@ -1154,10 +1158,6 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     ret = OB_NOT_INIT;
     LOG_WARN("ObMultipleMerge has not been inited", K(ret), K_(get_table_param), KP_(access_param),
         KP_(access_ctx));
-  } else if (OB_UNLIKELY(!access_ctx_->query_flag_.is_whole_macro_scan() &&
-                         0 != access_ctx_->trans_version_range_.base_version_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("base version should be 0", K(ret), K(access_ctx_->trans_version_range_.base_version_));
   } else if (!refresh && get_table_param_->tablet_iter_.table_iter()->is_valid()) {
     if (OB_FAIL(prepare_tables_from_iterator(*get_table_param_->tablet_iter_.table_iter()))) {
       LOG_WARN("prepare tables fail", K(ret), K(get_table_param_->tablet_iter_.table_iter()));
@@ -1498,6 +1498,21 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
     LOG_ERROR("Dump table info", K(ret), KPC(table));
   }
   LOG_ERROR("==================== End table info ====================");
+}
+
+int ObMultipleMerge::set_base_version() const {
+  int ret = OB_SUCCESS;
+  // When the major table is currently being processed, the snapshot version is taken and placed
+  // in the current context for base version to filter unnecessary rows in the mini or minor sstable
+  if (OB_LIKELY(tables_.count() > 0)) {
+    ObITable *table = nullptr;
+    if (OB_FAIL(tables_.at(0, table))) {
+      STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
+    } else if (table->is_major_sstable()) {
+      access_ctx_->trans_version_range_.base_version_ = table->get_snapshot_version();
+    }
+  }
+  return ret;
 }
 
 }

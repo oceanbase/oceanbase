@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_decoder.h"
+#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_table_access_context.h"
@@ -1797,8 +1798,7 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
     column_decoder->ctx_->set_col_param(col_params.at(0));
     if (filter.null_param_contained() &&
         op_type != sql::WHITE_OP_NU &&
-        op_type != sql::WHITE_OP_NN &&
-        op_type != sql::WHITE_OP_IN) {
+        op_type != sql::WHITE_OP_NN) {
     } else if (!header_->all_lob_in_row_) {
       if (OB_FAIL(filter_pushdown_retro(parent,
                                         filter,
@@ -1894,7 +1894,7 @@ int ObMicroBlockDecoder::filter_pushdown_retro(
 
         bool filtered = false;
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(filter_white_filter(filter, obj_meta, decoded_datum, filtered))) {
+        } else if (OB_FAIL(filter_white_filter(filter, decoded_datum, filtered))) {
           LOG_WARN("Failed to filter row with white filter", K(ret), K(row_id), K(decoded_datum));
         } else if (!filtered && OB_FAIL(result_bitmap.set(offset))) {
           LOG_WARN("Failed to set result bitmap", K(ret), K(row_id));
@@ -2025,10 +2025,19 @@ int ObMicroBlockDecoder::get_aggregate_result(
   decoder_allocator_.reuse();
   const char **cell_datas = agg_datum_buf.get_cell_datas();
   ObDatum *datum_buf = agg_datum_buf.get_datums();
+  const bool need_padding = is_pad_char_to_full_length(context.sql_mode_) &&
+                            col_param.get_meta_type().is_fixed_len_char_type();
   if (OB_FAIL(get_col_datums(col_offset, row_ids, cell_datas, row_cap, datum_buf))) {
     LOG_WARN("Failed to get col datums", K(ret), K(col_offset), K(row_cap));
+  } else if (need_padding && OB_FAIL(storage::pad_on_datums(
+                                     col_param.get_accuracy(),
+                                     col_param.get_meta_type().get_collation_type(),
+                                     decoder_allocator_.get_inner_allocator(),
+                                     row_cap,
+                                     datum_buf))) {
+    LOG_WARN("fail to pad on datums", K(ret), K(row_cap));
   } else if (col_param.get_meta_type().is_lob_storage() && header_->has_lob_out_row() &&
-             OB_FAIL(fill_datums_lob_locator(iter_param, context, col_param, row_cap, datum_buf))) {
+        OB_FAIL(fill_datums_lob_locator(iter_param, context, col_param, row_cap, datum_buf))) {
     LOG_WARN("Fail to fill lob locator", K(ret));
   } else if (OB_FAIL(agg_cell.eval_batch(datum_buf, row_cap))) {
     LOG_WARN("Failed to eval batch", K(ret));

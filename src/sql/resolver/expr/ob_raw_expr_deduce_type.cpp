@@ -1431,7 +1431,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_REGR_COUNT:
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
-      case T_FUN_KEEP_COUNT: {
+      case T_FUN_KEEP_COUNT:
+      case T_FUN_SUM_OPNSIZE: {
         if (lib::is_oracle_mode()) {
           result_type.set_number();
           result_type.set_scale(0);
@@ -2089,6 +2090,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                && T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS != expr.get_expr_type()
                && T_FUN_TOP_FRE_HIST != expr.get_expr_type()
                && T_FUN_HYBRID_HIST != expr.get_expr_type()
+               && T_FUN_SUM_OPNSIZE != expr.get_expr_type()
                && 1 != get_expr_output_column(*param_expr)) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
@@ -2115,6 +2117,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()
+                && T_FUN_SUM_OPNSIZE != expr.get_expr_type()
                 && !expr.is_need_deserialize_row()
                 && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
@@ -2134,7 +2137,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
           K(ret), K(param_expr->get_subschema_id()));
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("lob or json type parameter not expected", K(ret));
+        LOG_WARN("lob or json type parameter not expected", K(ret), K(expr));
       }
     }
   }

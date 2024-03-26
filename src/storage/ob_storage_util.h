@@ -285,6 +285,88 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
   return cmp_func;
 }
 
+struct ObDatumComparator
+{
+public:
+  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal)
+    : cmp_func_(cmp_func),
+      ret_(ret),
+      equal_(equal)
+  {}
+  ~ObDatumComparator() {}
+  OB_INLINE bool operator() (const ObDatum &datum1, const ObDatum &datum2)
+  {
+    int &ret = ret_;
+    int cmp_ret = 0;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+      STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
+    } else if (0 == cmp_ret && !equal_) {
+      equal_ = true;
+    }
+    return cmp_ret < 0;
+  }
+private:
+  ObDatumCmpFuncType cmp_func_;
+  int &ret_;
+  bool &equal_;
+};
+
+enum class ObFilterInCmpType {
+  MERGE_SEARCH,
+  BINARY_SEARCH_DICT,
+  BINARY_SEARCH,
+  HASH_SEARCH,
+};
+
+inline ObFilterInCmpType get_filter_in_cmp_type(
+  const int64_t row_count,
+  const int64_t param_count,
+  const bool is_sorted_dict)
+{
+  // BINARY_HASH_THRESHOLD: means the threshold to choose BINARY_SEARCH or HASH_SEARCH
+  // When the dictionary is unordered, the only variable available for iteration is param_count.
+  // Testing has shown that when the data size is small, the overhead of binary search is
+  // lower than the overhead of computing hashes.
+  // Therefore, this threshold is temporarily set to a small value(8).
+  static constexpr int64_t BINARY_HASH_THRESHOLD = 8;
+
+  // HASH_BUCKETS: means the number of buckets(slots) in hashset.
+  // This value is related to the performance of the hashset.
+  const int64_t HASH_BUCKETS = hash::cal_next_prime(param_count * 2);
+
+  ObFilterInCmpType cmp_type = ObFilterInCmpType::HASH_SEARCH;
+  if (is_sorted_dict) {
+    if (row_count > 3 * param_count) {
+      // row_count >> param_count
+      if (row_count > HASH_BUCKETS * 4) {
+        cmp_type = ObFilterInCmpType::BINARY_SEARCH_DICT;
+      } else {
+        cmp_type = ObFilterInCmpType::MERGE_SEARCH;
+      }
+    } else if (row_count * 3 >= param_count) {
+      // row_count ~~ param_count
+      if (row_count > HASH_BUCKETS) {
+        cmp_type = ObFilterInCmpType::MERGE_SEARCH;
+      } else {
+        cmp_type = ObFilterInCmpType::HASH_SEARCH;
+      }
+    } else {
+      // row_count << param_count
+      cmp_type = ObFilterInCmpType::HASH_SEARCH;
+    }
+  } else {
+    // Unordered dict
+    if (param_count <= BINARY_HASH_THRESHOLD) {
+      cmp_type = ObFilterInCmpType::BINARY_SEARCH;
+    } else {
+      cmp_type = ObFilterInCmpType::HASH_SEARCH;
+    }
+  }
+  return cmp_type;
+}
+
 }
 }
 

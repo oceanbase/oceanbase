@@ -262,7 +262,7 @@ int ObMicroBlockHeader::deep_copy(
         MEMCPY(header->column_checksums_, column_checksums_, column_count_ * sizeof(int64_t));
         new_pos += column_count_ * sizeof(int64_t);
       }
-    } else {
+    } else if (!has_min_merged_trans_version_) {
       header->column_checksums_ = nullptr;
     }
     pos += new_pos;
@@ -306,7 +306,7 @@ int ObMicroBlockHeader::deserialize(const char *buf, int64_t buf_len, int64_t &p
         column_checksums = reinterpret_cast<const int64_t *>(buf + new_pos);
         column_checksums_ = const_cast<int64_t *>(column_checksums);
         new_pos += column_count_ * sizeof(int64_t);
-      } else {
+      } else if (!has_min_merged_trans_version_) {
         column_checksums_ = nullptr;
       }
       pos += new_pos;

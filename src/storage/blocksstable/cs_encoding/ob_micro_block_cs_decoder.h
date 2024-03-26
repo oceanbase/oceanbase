@@ -282,6 +282,11 @@ private:
   int decode_cells(
     const uint64_t row_id, const int64_t col_begin, const int64_t col_end, ObStorageDatum *datums);
   int get_row_impl(int64_t index, ObDatumRow &row);
+  bool can_pushdown_decoder(
+      const ObColumnCSDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const ObAggCell &agg_cell) const;
   OB_INLINE static const ObRowHeader &get_major_store_row_header()
   {
     static ObRowHeader rh = init_major_store_row_header();

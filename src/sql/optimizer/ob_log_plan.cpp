@@ -7115,7 +7115,8 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
                T_FUN_TOP_FRE_HIST != aggr_expr->get_expr_type() &&
                T_FUN_SYS_BIT_AND != aggr_expr->get_expr_type() &&
                T_FUN_SYS_BIT_OR != aggr_expr->get_expr_type() &&
-               T_FUN_SYS_BIT_XOR != aggr_expr->get_expr_type()) {
+               T_FUN_SYS_BIT_XOR != aggr_expr->get_expr_type() &&
+               T_FUN_SUM_OPNSIZE != aggr_expr->get_expr_type()) {
       can_push = false;
     } else if (aggr_expr->is_param_distinct()) {
       can_push = false;
@@ -14682,7 +14683,9 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
     } else if (T_FUN_COUNT != cur_aggr->get_expr_type()
                 && T_FUN_MIN != cur_aggr->get_expr_type()
                 && T_FUN_MAX != cur_aggr->get_expr_type()
-                && T_FUN_SUM != cur_aggr->get_expr_type()) {
+                && T_FUN_SUM != cur_aggr->get_expr_type()
+                && T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS != cur_aggr->get_expr_type()
+                && T_FUN_SUM_OPNSIZE != cur_aggr->get_expr_type()) {
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;

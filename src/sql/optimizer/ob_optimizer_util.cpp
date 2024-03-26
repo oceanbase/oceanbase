@@ -8189,10 +8189,11 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == origin_expr->get_expr_type() ||
              T_FUN_SYS_BIT_AND == origin_expr->get_expr_type() ||
              T_FUN_SYS_BIT_OR == origin_expr->get_expr_type() ||
-             T_FUN_SYS_BIT_XOR == origin_expr->get_expr_type()) {
+             T_FUN_SYS_BIT_XOR == origin_expr->get_expr_type() ||
+             T_FUN_SUM_OPNSIZE == origin_expr->get_expr_type()) {
     /* MAX(a) -> MAX(MAX(a)), MIN(a) -> MIN(MIN(a)) SUM(a) -> SUM(SUM(a)) */
     ObItemType pullup_aggr_type = origin_expr->get_expr_type();
-    if (T_FUN_COUNT == pullup_aggr_type) {
+    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_COUNT_SUM;
     } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE;

@@ -223,6 +223,10 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
     header->row_index_offset_ = static_cast<int32_t>(data_buffer_.length());
     header->contain_uncommitted_rows_ = contain_uncommitted_row_;
     header->max_merged_trans_version_ = max_merged_trans_version_;
+    if (OB_LIKELY(!header->has_column_checksum_)) {
+      header->has_min_merged_trans_version_ = 1;
+      header->min_merged_trans_version_ = min_merged_trans_version_;
+    }
     header->has_string_out_row_ = has_string_out_row_;
     header->all_lob_in_row_ = !has_lob_out_row_;
     header->is_last_row_last_flag_ = is_last_row_last_flag_;

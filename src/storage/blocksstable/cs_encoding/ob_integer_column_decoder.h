@@ -47,6 +47,12 @@ public:
       const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap) const override;
 
+  virtual int get_aggregate_result(
+      const ObColumnCSDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObAggCell &agg_cell) const override;
+
 private:
   static int nu_nn_operator(const ObIntegerColumnDecoderCtx &ctx,
                             const sql::ObPushdownFilterExecutor *parent,
@@ -101,6 +107,12 @@ private:
                                     const sql::PushdownFilterInfo &pd_filter_info,
                                     common::ObBitmap &result_bitmap,
                                     Operator const &eval);
+
+  static int traverse_integer_in_agg(const ObIntegerColumnDecoderCtx &ctx,
+                                     const bool is_col_signed,
+                                     const int64_t row_start,
+                                     const int64_t row_count,
+                                     storage::ObAggCell &agg_cell);
 
 };
 

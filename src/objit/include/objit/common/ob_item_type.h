@@ -2591,6 +2591,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_GROUP_ID || \
                          (op) == T_FUN_ORA_XMLAGG || \
                          (op) == T_FUN_SYS_ST_ASMVT || \
+                         (op) == T_FUN_SUM_OPNSIZE ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

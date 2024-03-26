@@ -34,7 +34,9 @@ struct GatherHelper
     maximum_gather_col_cnt_(1),
     is_approx_gather_(false),
     gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
-    running_monitor_(running_monitor)
+    running_monitor_(running_monitor),
+    use_column_store_(false),
+    use_split_part_(false)
   {}
   bool is_split_gather_;
   int64_t maximum_gather_part_cnt_;
@@ -42,12 +44,16 @@ struct GatherHelper
   bool is_approx_gather_;
   int64_t gather_vectorize_;
   ObOptStatRunningMonitor &running_monitor_;
+  bool use_column_store_;
+  bool use_split_part_;
   TO_STRING_KV(K(is_split_gather_),
                K(maximum_gather_part_cnt_),
                K(maximum_gather_col_cnt_),
                K(is_approx_gather_),
                K(gather_vectorize_),
-               K(running_monitor_));
+               K(running_monitor_),
+               K(use_column_store_),
+               K(use_split_part_));
 };
 
 class ObDbmsStatsExecutor
