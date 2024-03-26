@@ -70,50 +70,6 @@ enum ObPLObjectType
   PACKAGE_SPEC
 };
 
-
-struct PLCacheObjStat
-{
-  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  int64_t pl_schema_id_;
-  common::ObString raw_sql_;
-  common::ObCollationType sql_cs_type_;
-  int64_t gen_time_;
-  int64_t last_active_time_;
-  uint64_t hit_count_;
-
-  PLCacheObjStat()
-    : pl_schema_id_(OB_INVALID_ID),
-      sql_cs_type_(common::CS_TYPE_INVALID),
-      gen_time_(0),
-      last_active_time_(0),
-      hit_count_(0)
-  {
-    sql_id_[0] = '\0';
-  }
-
-  inline bool is_updated() const
-  {
-    return last_active_time_ != 0;
-  }
-
-  void reset()
-  {
-    sql_id_[0] = '\0';
-    pl_schema_id_ = OB_INVALID_ID;
-    sql_cs_type_ = common::CS_TYPE_INVALID;
-    raw_sql_.reset();
-    gen_time_ = 0;
-    last_active_time_ = 0;
-    hit_count_ = 0;
-  }
-
-  TO_STRING_KV(K_(pl_schema_id),
-               K_(gen_time),
-               K_(last_active_time),
-               K_(hit_count),
-               K_(raw_sql));
-};
-
 class ObPLINS
 {
 public:
@@ -499,9 +455,6 @@ public:
   inline bool get_has_parallel_affect_factor() const { return has_parallel_affect_factor_; }
   inline void set_has_parallel_affect_factor(bool value) { has_parallel_affect_factor_ = value; }
 
-  inline const PLCacheObjStat get_stat() const { return stat_; }
-  inline PLCacheObjStat &get_stat_for_update() { return stat_; }
-
   int get_subprogram(const ObIArray<int64_t> &path, ObPLFunction *&routine) const;
 
   inline const common::ObString &get_function_name() const { return function_name_; }
@@ -543,7 +496,6 @@ public:
   * test -> oceanbase, we see oceanbase in interface but can't see test.
   */
   int is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag);
-  virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
 
   common::ObFixedArray<ObPLSqlInfo, common::ObIAllocator>& get_sql_infos()
   {
@@ -578,8 +530,6 @@ private:
   bool is_invoker_right_;
   bool is_pipelined_;
   ObPLNameDebugInfo name_debuginfo_;
-  // stat info
-  PLCacheObjStat stat_;
 
   common::ObString function_name_;
   common::ObString package_name_;

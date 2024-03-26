@@ -1487,6 +1487,7 @@ int ObPL::execute(ObExecContext &ctx,
     LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
       K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start));
 #endif
+  OX (routine.update_execute_time(execute_end - execute_start));
 
   return ret;
 }
@@ -2178,6 +2179,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
         CK (OB_NOT_NULL(routine));
         if (OB_SUCC(ret) && routine->get_can_cached()) {
+          routine->get_stat_for_update().name_ = pc_ctx.raw_sql_;
+          routine->get_stat_for_update().type_ = ObPLCacheObjectType::ANONYMOUS_BLOCK_TYPE;
           OZ (add_pl_lib_cache(routine, pc_ctx));
           // add sql key to plan cache
           //OX (pc_ctx.key_.name_ = sql);
@@ -2292,6 +2295,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           CK (OB_NOT_NULL(routine));
           if (OB_SUCC(ret)
               && routine->get_can_cached()) {
+            routine->get_stat_for_update().name_ = routine->get_function_name();
+            routine->get_stat_for_update().type_ = ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
             OZ (add_pl_lib_cache(routine, pc_ctx));
           }
           OX (need_update_schema = true);
@@ -4155,35 +4160,6 @@ bool ObPLFunction::should_init_as_session_cursor()
   LOG_DEBUG("check external session cursor", K(b_ret));
 
   return b_ret;
-}
-
-int ObPLFunction::update_cache_obj_stat(ObILibCacheCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
-
-  PLCacheObjStat &stat = get_stat_for_update();
-  stat.pl_schema_id_ = pc_ctx.key_.key_id_;
-  stat.gen_time_ = ObTimeUtility::current_time();
-  stat.hit_count_ = 0;
-  MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
-
-  if (ObLibCacheNameSpace::NS_ANON == get_ns()) {
-    ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
-    if (OB_FAIL(ob_write_string(get_allocator(),
-                                trunc_raw_sql.string(),
-                                stat.raw_sql_))) {
-      LOG_WARN("failed to write sql", K(ret));
-    } else {
-      stat.sql_cs_type_ = pc_ctx.session_info_->get_local_collation_connection();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    // Update last_active_time_ last, because last_active_time_ is used to
-    // indicate whether the cache stat has been updated.
-    stat.last_active_time_ = ObTimeUtility::current_time();
-  }
-  return ret;
 }
 
 int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag)

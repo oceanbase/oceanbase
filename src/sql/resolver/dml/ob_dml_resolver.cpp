@@ -11106,7 +11106,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
   return ret;
 }
 
-int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
+int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -11114,131 +11114,35 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
   CK (OB_NOT_NULL(stmt));
 
   if (OB_FAIL(ret)) {
-  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
-    uint64_t package_id = OB_INVALID_ID;
-    const ObPackageInfo *spec_info = NULL;
-    const ObPackageInfo *body_info = NULL;
-    uint64_t dep_obj_id = view_ref_id_;
-    ObSchemaObjVersion ver;
-    CK (expr->get_param_count() >= 3);
-    OX (package_id = static_cast<const ObConstRawExpr *>(expr->get_param_expr(0))->get_value().get_uint64());
-    if (package_id != OB_INVALID_ID) {
-      OZ (pl::ObPLPackageManager::get_package_schema_info(*schema_checker_->get_schema_guard(), package_id, spec_info, body_info));
-    }
-    if (OB_NOT_NULL(spec_info)) {
-      OX (ver.object_id_ = spec_info->get_package_id());
-      OX (ver.version_ = spec_info->get_schema_version());
-      OX (ver.object_type_ = DEPENDENCY_PACKAGE);
-      OZ (stmt->add_global_dependency_table(ver));
-      OZ (stmt->add_ref_obj_version(dep_obj_id, spec_info->get_database_id(), ObObjectType::VIEW, ver, *allocator_));
-    }
-    if (OB_NOT_NULL(body_info)) {
-      OX (ver.object_id_ = body_info->get_package_id());
-      OX (ver.version_ = body_info->get_schema_version());
-      OX (ver.object_type_ = DEPENDENCY_PACKAGE_BODY);
-      OZ (stmt->add_global_dependency_table(ver));
-      OZ (stmt->add_ref_obj_version(dep_obj_id, body_info->get_database_id(), ObObjectType::VIEW, ver, *allocator_));
-    }
   } else if (T_FUN_UDF == expr->get_expr_type()) {
     ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
-    ObSchemaObjVersion udf_version;
-    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
     uint64_t database_id = OB_INVALID_ID;
     CK (OB_NOT_NULL(udf_expr));
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is null", K(ret), K(schema_guard));
-    } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
-                                                      udf_expr->get_database_name().empty() ? session_info_->get_database_name() : udf_expr->get_database_name(),
-                                                      database_id))) {
-      LOG_WARN("failed to get database id", K(ret));
-    } else {
-      bool exist = false;
-      uint64_t object_db_id = OB_INVALID_ID;
-      ObSynonymChecker synonym_checker;
-      ObString object_name;
-      OZ (ObResolverUtils::resolve_synonym_object_recursively(*params_.schema_checker_,
-                                                              synonym_checker,
-                                                              session_info_->get_effective_tenant_id(),
-                                                              database_id,
-                                                              udf_expr->get_func_name(),
-                                                              object_db_id, object_name, exist));
-      if (OB_SUCC(ret) && exist) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-          int64_t schema_version = OB_INVALID_VERSION;
-          uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
-          uint64_t dep_db_id = synonym_checker.get_database_ids().at(i);
-          ObSchemaObjVersion syn_version;
-          OZ (schema_guard->get_schema_version(SYNONYM_SCHEMA,
-                                                session_info_->get_effective_tenant_id(),
-                                                obj_id,
-                                                schema_version));
-          OX (syn_version.object_id_ = obj_id);
-          OX (syn_version.version_ = schema_version);
-          OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
-          OZ (stmt->add_global_dependency_table(syn_version));
-          OZ (stmt->add_ref_obj_version(obj_id, dep_db_id, ObObjectType::SYNONYM, syn_version, *allocator_));
-        }
-      }
-      if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
-        uint64_t dep_obj_id = view_ref_id_;
-        uint64_t dep_db_id = database_id;
-        ObArray<ObSchemaObjVersion> vers;
-        OZ (udf_expr->get_schema_object_version(*schema_guard, vers));
-        for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
-          OZ (stmt->add_global_dependency_table(vers.at(i)));
-          OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, vers.at(i), *allocator_));
-        }
-        //for udf without params, we just set called_in_sql = true,
-        //if this expr go through pl :: build_raw_expr later,
-        //the flag will change to false;
-        OX (expr->set_is_called_in_sql(true));
-      }
-      OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
-                                              *params_.schema_checker_->get_schema_guard(),
-                                              *expr,
-                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
-      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
-      OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
-      if (OB_SUCC(ret) &&
-          T_FIELD_LIST_SCOPE == current_scope_ &&
-          udf_expr->get_result_type().is_ext() &&
-          (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
-           pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
-           pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
-        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-      }
+    OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
+                                            *params_.schema_checker_->get_schema_guard(),
+                                            *expr,
+                                            stmt_->get_query_ctx()->udf_has_select_stmt_));
+    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+    OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
+    if (OB_SUCC(ret) &&
+        T_FIELD_LIST_SCOPE == current_scope_ &&
+        udf_expr->get_result_type().is_ext() &&
+        (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
+          pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
+          pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     }
   } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
-    ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
-    CK (OB_NOT_NULL(object_expr));
     if (T_FIELD_LIST_SCOPE == current_scope_) {
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-    }
-    if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
-      uint64_t dep_obj_id = view_ref_id_;
-      ObSchemaObjVersion coll_schema_version;
-      OZ (object_expr->get_schema_object_version(coll_schema_version));
-      OZ (stmt->add_global_dependency_table(coll_schema_version));
-      OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
     }
   } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
-    ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
-    CK (OB_NOT_NULL(coll_expr));
     if (T_FIELD_LIST_SCOPE == current_scope_) {
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-    }
-    if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
-      uint64_t dep_obj_id = view_ref_id_;
-      ObSchemaObjVersion coll_schema_version;
-      OZ (coll_expr->get_schema_object_version(coll_schema_version));
-      OZ (stmt->add_global_dependency_table(coll_schema_version));
-      OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
     }
   } else if (T_OBJ_ACCESS_REF == expr->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      OZ (collect_schema_version(expr->get_param_expr(i)));
+      OZ (check_disable_parallel_state(expr->get_param_expr(i)));
     }
   }
 
@@ -11285,7 +11189,24 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid expr", K(expr), K(ret));
     }
-    OZ (collect_schema_version(expr));
+    if (OB_SUCC(ret)) {
+      ObArray<ObSchemaObjVersion> dependency_objects;
+      ObArray<uint64_t> dep_db_array;
+      OZ (ObResolverUtils::collect_schema_version(*params_.schema_checker_->get_schema_guard(),
+                                                  params_.session_info_,
+                                                  expr,
+                                                  dependency_objects,
+                                                  true,
+                                                  &dep_db_array));
+      for (int64_t i = 0; OB_SUCC(ret) && i < dependency_objects.count(); ++i) {
+        OZ (stmt_->add_global_dependency_table(dependency_objects.at(i)));
+      }
+      CK (dependency_objects.count() >= dep_db_array.count());
+      for (int64_t i = 0; OB_SUCC(ret) && i < dep_db_array.count(); ++i) {
+        OZ (stmt_->add_ref_obj_version(view_ref_id_, dep_db_array.at(i), ObObjectType::VIEW, dependency_objects.at(i), *allocator_));
+      }
+    }
+    OZ (check_disable_parallel_state(expr));
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {
     ret = OB_ERR_BAD_FIELD_ERROR;

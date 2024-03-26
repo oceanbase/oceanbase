@@ -132,6 +132,7 @@ int ObPLCompiler::compile(
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_compile);
   bool use_jitted_expr = false;
+  int64_t compile_start = ObTimeUtility::current_time();
 
   //Step 1：构造匿名块的ObPLFunctionAST
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
@@ -233,6 +234,8 @@ int ObPLCompiler::compile(
       } // end of HEAP_VAR
     }
   }
+  int64_t compile_end = ObTimeUtility::current_time();
+  OX (func.get_stat_for_update().compile_time_ = compile_end - compile_start);
   return ret;
 }
 
@@ -477,6 +480,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     }
     int64_t final_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Final Time: ", K(id), K(final_end - cg_end));
+    OX (func.get_stat_for_update().compile_time_ = final_end - init_start);
   }
   return ret;
 }
@@ -709,6 +713,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
   bool use_jitted_expr = false;
+  int64_t compile_start = ObTimeUtility::current_time();
 
   ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, ret);
   session_info_.set_for_trigger_package(package_info.is_for_trigger());
@@ -785,6 +790,9 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
       }
     }
   }
+  int64_t compile_end = ObTimeUtility::current_time();
+  OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
+  OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_ROUTINE_TYPE);
   return ret;
 }
 

@@ -403,17 +403,25 @@ public:
   static
   int build_record_type_by_view_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* view_schema,
-                                ObRecordType *&record_type);
+                                ObRecordType *&record_type,
+                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
   static
   int build_record_type_by_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                 common::ObIAllocator &allocator,
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
                                 bool with_rowid = false);
+  static int collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
+                                             const ObTableSchema* view_schema,
+                                             ObIArray<ObSchemaObjVersion> &dependency_objects);
+  static int collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
+                                        const ObTableSchema* table_schema,
+                                        ObIArray<ObSchemaObjVersion> &dependency_objects);
   static
   int build_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* table_schema,
-                                ObRecordType *&record_type, bool with_rowid = false);
+                                ObRecordType *&record_type, bool with_rowid = false,
+                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
 
   static
   int resolve_extern_type_info(bool is_row_type,

@@ -431,7 +431,7 @@ int ObPlanCacheObject::type_to_name(const ObLibCacheNameSpace ns,
                                     common::ObString &type_name)
 {
   int ret = OB_SUCCESS;
-  const char* type_strs[] = {"NS_INVALID", "SQL_PLAN", "PROCEDURE", "FUNCTION", "ANONYMOUS", "TRIGGER", "PACKAGE", "NS_MAX"};
+  const char* type_strs[] = {"NS_INVALID", "SQL_PLAN", "PROCEDURE", "FUNCTION", "ANONYMOUS", "TRIGGER", "PACKAGE", "TABLEAPI", "CALLSTMT", "NS_MAX"};
   char *buf = NULL;
   if (ns <= NS_INVALID || ns >= NS_MAX) {
     ret = OB_INVALID_ARGUMENT;

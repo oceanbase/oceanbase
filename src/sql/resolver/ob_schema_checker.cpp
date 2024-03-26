@@ -2367,10 +2367,12 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
 int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
                                      uint64_t database_id,
                                      const common::ObString &object_name,
-                                     bool &exist)
+                                     bool &exist,
+                                     bool &is_private_syn)
 {
   int ret = OB_SUCCESS;
   exist = false;
+  is_private_syn = false;
   common::ObString database_name;
   const ObDatabaseSchema  *db_schema = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
@@ -2450,6 +2452,20 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
         }
       } else {
         exist = true;
+      }
+    }
+    //check synonym
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ObString obj_db_name;
+      ObString obj_name;
+      uint64_t synonym_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
+      ret = OB_SUCCESS;
+      if (OB_FAIL(get_syn_info(tenant_id, database_name, object_name, obj_db_name,
+                               obj_name, synonym_id, database_id, exist))) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        is_private_syn = true;
       }
     }
   }

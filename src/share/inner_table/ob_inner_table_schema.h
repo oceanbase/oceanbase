@@ -100,7 +100,8 @@ struct ALL_VIRTUAL_PLAN_STAT_CDE {
     OBJECT_STATUS,
     RULE_NAME,
     IS_IN_PC,
-    ERASE_TIME
+    ERASE_TIME,
+    COMPILE_TIME
   };
 };
 
@@ -226,7 +227,8 @@ struct ALL_VIRTUAL_PLAN_STAT_ORA_CDE {
     OBJECT_STATUS,
     RULE_NAME,
     IS_IN_PC,
-    ERASE_TIME
+    ERASE_TIME,
+    COMPILE_TIME
   };
 };
 
@@ -1550,6 +1552,8 @@ public:
   static int dba_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_flt_trace_config_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_pl_cache_object_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_pl_cache_object_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_recover_table_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_recover_table_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_recover_table_job_history_schema(share::schema::ObTableSchema &table_schema);
@@ -1992,6 +1996,8 @@ public:
   static int v_ob_timestamp_service_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ls_log_restore_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_flt_trace_config_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_pl_cache_object_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_pl_cache_object_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -4082,6 +4088,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_tenant_event_history_schema,
   ObInnerTableSchema::cdb_ob_tenant_event_history_schema,
   ObInnerTableSchema::gv_ob_flt_trace_config_schema,
+  ObInnerTableSchema::gv_ob_pl_cache_object_schema,
+  ObInnerTableSchema::v_ob_pl_cache_object_schema,
   ObInnerTableSchema::cdb_ob_recover_table_jobs_schema,
   ObInnerTableSchema::dba_ob_recover_table_jobs_schema,
   ObInnerTableSchema::cdb_ob_recover_table_job_history_schema,
@@ -4524,6 +4532,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_timestamp_service_ora_schema,
   ObInnerTableSchema::v_ob_ls_log_restore_status_ora_schema,
   ObInnerTableSchema::gv_ob_flt_trace_config_ora_schema,
+  ObInnerTableSchema::gv_ob_pl_cache_object_ora_schema,
+  ObInnerTableSchema::v_ob_pl_cache_object_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -5591,6 +5601,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_LS_HISTORY_TID,
   OB_DBA_OB_TENANT_EVENT_HISTORY_TID,
   OB_GV_OB_FLT_TRACE_CONFIG_TID,
+  OB_GV_OB_PL_CACHE_OBJECT_TID,
+  OB_V_OB_PL_CACHE_OBJECT_TID,
   OB_DBA_OB_RECOVER_TABLE_JOBS_TID,
   OB_DBA_OB_RECOVER_TABLE_JOB_HISTORY_TID,
   OB_DBA_OB_IMPORT_TABLE_JOBS_TID,
@@ -6023,6 +6035,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TIMESTAMP_SERVICE_ORA_TID,
   OB_V_OB_LS_LOG_RESTORE_STATUS_ORA_TID,
   OB_GV_OB_FLT_TRACE_CONFIG_ORA_TID,
+  OB_GV_OB_PL_CACHE_OBJECT_ORA_TID,
+  OB_V_OB_PL_CACHE_OBJECT_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -7914,6 +7928,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_LS_HISTORY_TNAME,
   OB_DBA_OB_TENANT_EVENT_HISTORY_TNAME,
   OB_GV_OB_FLT_TRACE_CONFIG_TNAME,
+  OB_GV_OB_PL_CACHE_OBJECT_TNAME,
+  OB_V_OB_PL_CACHE_OBJECT_TNAME,
   OB_DBA_OB_RECOVER_TABLE_JOBS_TNAME,
   OB_DBA_OB_RECOVER_TABLE_JOB_HISTORY_TNAME,
   OB_DBA_OB_IMPORT_TABLE_JOBS_TNAME,
@@ -8346,6 +8362,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TIMESTAMP_SERVICE_ORA_TNAME,
   OB_V_OB_LS_LOG_RESTORE_STATUS_ORA_TNAME,
   OB_GV_OB_FLT_TRACE_CONFIG_ORA_TNAME,
+  OB_GV_OB_PL_CACHE_OBJECT_ORA_TNAME,
+  OB_V_OB_PL_CACHE_OBJECT_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -11604,10 +11622,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 259;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 742;
-const int64_t OB_SYS_VIEW_COUNT = 793;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1799;
+const int64_t OB_SYS_VIEW_COUNT = 797;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1803;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1802;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1806;
 
 } // end namespace share
 } // end namespace oceanbase

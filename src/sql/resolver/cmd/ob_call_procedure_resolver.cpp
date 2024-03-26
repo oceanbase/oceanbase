@@ -337,6 +337,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
   } else if (NULL != stmt->get_call_proc_info()) {
     // find call procedure info in pl cache.
   } else {
+    int64_t compile_start = ObTimeUtility::current_time();
     OZ (ObCacheObjectFactory::alloc(stmt->get_cacheobj_guard(),
                                   ObLibCacheNameSpace::NS_CALLSTMT,
                                   session_info_->get_effective_tenant_id()));
@@ -381,6 +382,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     // 获取routine schem info
     if (OB_SUCC(ret)) {
+      ObSynonymChecker synonym_checker;
       if (OB_NOT_NULL(params_node)
           && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
         LOG_WARN("failed to resolve param exprs", K(ret));
@@ -395,7 +397,8 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       expr_params,
                                                       proc_info,
                                                       dblink_name,
-                                                      &(call_proc_info->get_allocator())))) {
+                                                      &(call_proc_info->get_allocator()),
+                                                      &synonym_checker))) {
         LOG_WARN("failed to get routine info", K(ret), K(db_name), K(package_name), K(sp_name));
       } else if (OB_ISNULL(proc_info)) {
         ret = OB_ERR_UNEXPECTED;
@@ -416,7 +419,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       if (OB_SUCC(ret)) {
         ObSchemaObjVersion obj_version;
         obj_version.object_id_ = proc_info->get_routine_id();
-        obj_version.object_type_ = proc_info->is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION;
+        obj_version.object_type_ = DEPENDENCY_PROCEDURE;
         obj_version.version_ = proc_info->get_schema_version();
         int64_t tenant_id = session_info_->get_effective_tenant_id();
         int64_t tenant_schema_version = OB_INVALID_VERSION;
@@ -426,8 +429,14 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OZ (schema_checker_->get_schema_mgr()->get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
         OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
-        OZ (call_proc_info->init_dependency_table_store(1));
+        OZ (call_proc_info->init_dependency_table_store(1 + (synonym_checker.has_synonym() ? synonym_checker.get_synonym_ids().count() : 0)));
         OZ (call_proc_info->get_dependency_table().push_back(obj_version));
+        if (synonym_checker.has_synonym()) {
+          OZ (ObResolverUtils::add_dependency_synonym_object(schema_checker_->get_schema_mgr(),
+                                                              session_info_,
+                                                              synonym_checker,
+                                                              call_proc_info->get_dependency_table()));
+        }
       }
     }
     ObSEArray<ObRawExpr*, 16> params;
@@ -544,16 +553,20 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     OZ (call_proc_info->prepare_expression(params));
     OZ (call_proc_info->final_expression(params, session_info_, schema_checker_->get_schema_mgr()));
     OX (stmt->set_call_proc_info(call_proc_info));
+    int64_t compile_end = ObTimeUtility::current_time();
     if (params_.is_execute_call_stmt_
         && 0 != params_.cur_sql_.length()
         && NULL == stmt->get_dblink_routine_info()) {
       if (NULL != params_.param_list_) {
         OZ (call_proc_info->set_params_info(*params_.param_list_));
       }
+      OX (call_proc_info->get_stat_for_update().type_ = pl::ObPLCacheObjectType::CALL_STMT_TYPE);
+      OX (call_proc_info->get_stat_for_update().compile_time_ = compile_end - compile_start);
       OZ (add_call_proc_info(call_proc_info));
     }
-    CK (1 == call_proc_info->get_dependency_table().count());
-    OZ (stmt->add_global_dependency_table(call_proc_info->get_dependency_table().at(0)));
+    for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_dependency_table().count(); ++i) {
+      OZ (stmt->add_global_dependency_table(call_proc_info->get_dependency_table().at(i)));
+    }
   }
 
   return ret;

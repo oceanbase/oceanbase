@@ -1721,6 +1721,12 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
           if (exist) {
             OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
+            if (synonym_checker.has_synonym() && OB_NOT_NULL(get_dependency_table())) {
+              OZ (ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
+                                                                &resolve_ctx_.session_info_,
+                                                                synonym_checker,
+                                                                *get_dependency_table()));
+            }
           }
         }
       }
@@ -2180,6 +2186,7 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
     }
   }
   if (OB_SUCC(ret) && routine_infos.empty()) {
+    ObSynonymChecker synonym_checker;
     const ObRoutineInfo *schema_routine_info = NULL;
     ObRoutineType schema_routine_type =
       is_procedure(routine_type) ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
@@ -2191,7 +2198,8 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
                                           routine_name,
                                           schema_routine_type,
                                           expr_params,
-                                          schema_routine_info))) {
+                                          schema_routine_info,
+                                          &synonym_checker))) {
       LOG_WARN("failed to get routine info",
                K(ret), K(db_name), K(package_name), K(routine_name));
     } else {
@@ -2202,9 +2210,15 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
       obj_version.version_ = schema_routine_info->get_schema_version();
       if (OB_FAIL(add_dependency_object(obj_version))) {
         LOG_WARN("add dependency object failed", "package_id", schema_routine_info->get_package_id(), K(ret));
-      } else {
-        OZ (routine_infos.push_back(schema_routine_info));
+      } else if (synonym_checker.has_synonym()) {
+        if (OB_FAIL(ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
+                                                                        &resolve_ctx_.session_info_,
+                                                                        synonym_checker,
+                                                                        *get_dependency_table()))) {
+          LOG_WARN("add dependency synonym failed", K(ret));
+        }
       }
+      OZ (routine_infos.push_back(schema_routine_info));
     }
   }
   return ret;

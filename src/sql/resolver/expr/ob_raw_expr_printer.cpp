@@ -3325,6 +3325,7 @@ do { \
   const share::schema::OBJECT *object_info = NULL; \
   ObSchemaChecker checker; \
   bool exist = false; \
+  bool is_private_synonym = false; \
   if (OB_SYS_TENANT_ID == tenant_id) { \
   } else if (OB_FAIL(schema_guard_->get_object_info_func(tenant_id, object_id, object_info))) { \
     LOG_WARN("failed to get udt info", K(ret), KPC(expr), K(tenant_id)); \
@@ -3341,7 +3342,8 @@ do { \
   } else if (OB_FAIL(checker.check_exist_same_name_object_with_synonym(tenant_id, \
                                                                        database_schema->get_database_id(), \
                                                                        database_schema->get_database_name_str(), \
-                                                                       exist))) { \
+                                                                       exist, \
+                                                                       is_private_synonym))) { \
     LOG_WARN("failed to check exist same name object with database name", K(ret), KPC(database_schema)); \
   } else if (!exist) { \
     PRINT_IDENT_WITH_QUOT(database_schema->get_database_name_str()); \
