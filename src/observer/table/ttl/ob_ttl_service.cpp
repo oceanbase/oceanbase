@@ -95,8 +95,8 @@ int ObTTLService::launch_ttl_task(const obrpc::ObTTLRequestArg &req)
     LOG_WARN("fail to check_inner_stat", KR(ret));
   } else {
     if (OB_ISNULL(tenant_ttl_mgr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant_ttl_mgr is null", KR(ret), K_(tenant_id), KP_(tenant_ttl_mgr));
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant_ttl_mgr is null, need retry", KR(ret), K_(tenant_id), KP_(tenant_ttl_mgr));
     } else if (OB_FAIL(tenant_ttl_mgr_->handle_user_ttl(req))) {
       LOG_WARN("fail to handle user ttl", KR(ret), K_(tenant_id));
     }

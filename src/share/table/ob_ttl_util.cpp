@@ -1068,8 +1068,11 @@ int ObTTLUtil::dispatch_one_tenant_ttl(obrpc::ObTTLRequestArg::TTLRequestType ty
                                 .dst_cluster_id(GCONF.cluster_id)
                                 .dispatch_ttl(req, resp))) {
           LOG_WARN("tenant ttl rpc failed", KR(ret), K(tenant_id), K(leader), K(ttl_info));
-        } else if (FALSE_IT(ret = resp.err_code_)) {
-        } else if (OB_FAIL(ret)) {
+        } else {
+          ret = resp.err_code_;
+        }
+
+        if (OB_FAIL(ret)) {
           if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
             const int64_t RESERVED_TIME_US = 600 * 1000; // 600 ms
             const int64_t timeout_remain_us = THIS_WORKER.get_timeout_remain();
