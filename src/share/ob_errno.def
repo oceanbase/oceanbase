@@ -1819,6 +1819,7 @@ DEFINE_ERROR(OB_INVALID_BATCH_SIZE, -6321, -1, "HY000", "ob invalid batch size")
 DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout");
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
+DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
