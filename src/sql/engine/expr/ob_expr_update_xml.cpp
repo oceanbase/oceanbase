@@ -185,11 +185,11 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   } else if (return_null) {
     res.set_null();
   } else if (OB_ISNULL(xml_base)) {
-    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_res))) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_res))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_res));
     }
   } else if (res_origin == ObUpdateXMLRetType::ObRetInputStr) {
-    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_target))) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_target))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_target));
     }
   } else if (res_origin == ObUpdateXMLRetType::ObRetNullType) {
@@ -201,30 +201,14 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
       LOG_WARN("get xml base failed.", K(ret));
     } else if (OB_FAIL(xml_doc->print_document(buff, CS_TYPE_INVALID, ObXmlFormatType::NO_FORMAT | ObXmlFormatType::NO_ENTITY_ESCAPE))) {
       LOG_WARN("failed to print document.", K(ret));
-    } else if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, buff.string()))) {
-      LOG_WARN("failed to pack long text res.", K(ret));
+    } else {
+      ObString res_str = buff.string();
+      if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, res_str))) {
+        LOG_WARN("failed to pack long text res.", K(ret));
+      }
     }
-
   }
 
-  return ret;
-}
-
-int ObExprUpdateXml::pack_long_text_res(const ObExpr &expr,
-                                        ObEvalCtx &ctx,
-                                        ObDatum &res,
-                                        ObIAllocator &allocator,
-                                        ObString input_res)
-{
-  INIT_SUCC(ret);
-  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-  if (OB_FAIL(text_result.init(input_res.length(), &allocator))) {
-    LOG_WARN("init lob result failed", K(ret));
-  } else if (OB_FAIL(text_result.append(input_res.ptr(), input_res.length()))) {
-    LOG_WARN("failed to append realdata", K(ret), K(input_res), K(text_result));
-  } else {
-    text_result.set_result();
-  }
   return ret;
 }
 
