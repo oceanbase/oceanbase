@@ -121,16 +121,18 @@ static int get_default_net_thread_count()
   int cnt = 1;
   int cpu_num = static_cast<int>(get_cpu_count());
 
-  if (cpu_num <= 4) {
+  if (cpu_num <= 2) {
     cnt = 1;
-  } else if (cpu_num <= 8) {
+  } else if (cpu_num <= 4) {
     cnt = 2;
+  } else if (cpu_num <= 8) {
+    cnt = 3;
   } else if (cpu_num <= 16) {
-    cnt = 4;
+    cnt = cpu_num / 2;
   } else if (cpu_num <= 32) {
-    cnt = 7;
+    cnt = 6 + cpu_num / 8;
   } else {
-    cnt = max(8, cpu_num / 6);
+    cnt = max(10, 4 + cpu_num / 6);
     cnt = min(cnt, 64);
   }
   return cnt;
