@@ -2392,7 +2392,8 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
                                                     range_key_count,
                                                     scan_range.table_id_,
                                                     eval_ctx_,
-                                                    part_range))) {
+                                                    part_range,
+                                                    allocator))) {
           LOG_WARN("get partition real range failed", K(ret));
         }
         LOG_DEBUG("part range info", K(part_range), K(can_prune), K(ret));
