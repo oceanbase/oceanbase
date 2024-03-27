@@ -3527,7 +3527,8 @@ int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
       query_range_ctx_->cur_expr_is_precise_ = false;
       if (OB_FAIL(preliminary_extract(m_expr->get_param_expr(i), tmp, dtc_params))) {
         LOG_WARN("preliminary_extract failed", K(ret));
-      } else if (T_OP_AND == m_expr->get_expr_type()) {
+      } else if (!is_contain_geo_filters() // geo range linked by or
+        && T_OP_AND == m_expr->get_expr_type()) {
         if (OB_FAIL(add_and_item(key_part_list, tmp))) {
           LOG_WARN("push back failed", K(ret));
         }
@@ -3542,7 +3543,8 @@ int ObQueryRange::pre_extract_and_or_op(const ObOpRawExpr *m_expr,
     }
     if (OB_SUCC(ret)) {
       query_range_ctx_->cur_expr_is_precise_ = cur_expr_is_precise;
-      if (T_OP_AND == m_expr->get_expr_type()) {
+      if (!is_contain_geo_filters() // geo range linked by or
+        && T_OP_AND == m_expr->get_expr_type()) {
         if (OB_FAIL(and_range_graph(key_part_list, out_key_part))) {
           LOG_WARN("and range graph failed", K(ret));
         }
