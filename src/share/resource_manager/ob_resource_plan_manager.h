@@ -28,7 +28,6 @@ class ObString;
 namespace share
 {
 static constexpr int64_t OTHER_GROUPS_IOPS_WEIGHT = 100L;
-static constexpr char BACKGROUND_CGROUP[] = "background";
 class ObResourcePlanManager
 {
 public:

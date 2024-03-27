@@ -559,6 +559,32 @@ int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, cons
   return ret;
 }
 
+int ObCgroupCtrl::get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id, const char *base_path)
+{
+  int ret = OB_SUCCESS;
+
+  char group_path[PATH_BUFSIZE];
+  char cpu_stat_value[VALUE_BUFSIZE + 1];
+
+  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
+    LOG_WARN("fail get group path", K(tenant_id), K(ret));
+  } else if (OB_FAIL(get_cgroup_config(group_path, CPU_STAT_FILE, cpu_stat_value))) {
+    LOG_WARN("get cpu.stat failed", K(ret), K(group_path), K(tenant_id));
+  } else {
+    cpu_stat_value[VALUE_BUFSIZE] = '\0';
+    const char *LABEL_STR = "throttled_time ";
+    char *found_ptr = strstr(cpu_stat_value, LABEL_STR);
+    if (OB_ISNULL(found_ptr)) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("get throttled_time failed", K(ret), K(group_path), K(tenant_id), K(group_id), K(cpu_stat_value));
+    } else {
+      found_ptr += strlen(LABEL_STR);
+      throttled_time = std::stoull(found_ptr) / 1000;
+    }
+  }
+  return ret;
+}
+
 int ObCgroupCtrl::set_group_iops(const uint64_t tenant_id,
                                  const uint64_t group_id,
                                  const OBGroupIOInfo &group_io)

@@ -427,7 +427,8 @@ void ObIOStatDiff::reset()
 
 /******************             IOUsage              **********************/
 ObIOUsage::ObIOUsage()
-  : io_stats_(),
+  : group_throttled_time_us_(),
+    io_stats_(),
     io_estimators_(),
     group_avg_iops_(),
     group_avg_byte_(),
@@ -454,6 +455,7 @@ int ObIOUsage::init(const int64_t group_num)
              group_avg_iops_.count() != group_num_ ||
              group_avg_byte_.count() != group_num_ ||
              group_avg_rt_us_.count() != group_num_ ||
+             group_throttled_time_us_.count() != group_num_ ||
              doing_request_count_.count() != group_num_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init io usage failed", K(group_num_));
@@ -472,6 +474,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
              OB_FAIL(group_avg_iops_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_byte_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_rt_us_.reserve(group_num + 1)) ||
+             OB_FAIL(group_throttled_time_us_.reserve(group_num + 1)) ||
              OB_FAIL(doing_request_count_.reserve(group_num + 1))) {
     LOG_WARN("reserver group failed", K(ret), K(group_num));
   } else {
@@ -481,6 +484,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
       ObSEArray<double, GROUP_START_NUM> cur_avg_iops;
       ObSEArray<double, GROUP_START_NUM> cur_avg_byte;
       ObSEArray<double, GROUP_START_NUM> cur_avg_rt_us;
+      ObSEArray<int64_t, GROUP_START_NUM> cur_throttled_time_us;
 
       if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
@@ -516,6 +520,8 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
           LOG_WARN("push avg_byte array failed", K(ret), K(i));
         } else if (OB_FAIL(group_avg_rt_us_.push_back(cur_avg_rt_us))) {
           LOG_WARN("push avg_rt array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_throttled_time_us_.push_back(0))) {
+          LOG_WARN("push throttled_time_us array failed", K(ret), K(i));
         } else if (OB_FAIL(doing_request_count_.push_back(0))) {
           LOG_WARN("push group_doing_req failed", K(ret), K(i));
         } else {

@@ -166,7 +166,7 @@ public:
   int get_cpu_cfs_quota(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   // 获取某个cgroup组的cpuacct.usage, 即cpu time
   int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-
+  int get_throttled_time(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   // 设定指定租户cgroup组的iops，直接更新到租户io_config
   int set_group_iops(const uint64_t tenant_id,
                      const uint64_t group_id,
@@ -191,11 +191,12 @@ private:
   const char *CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
   const char *CPU_CFS_PERIOD_FILE = "cpu.cfs_period_us";
   const char *CPUACCT_USAGE_FILE = "cpuacct.usage";
+  const char *CPU_STAT_FILE = "cpu.stat";
   // 10:1, 确保系统满负载场景下 SYS 能有足够资源
   static const int32_t DEFAULT_SYS_SHARE = 1024;
   static const int32_t DEFAULT_USER_SHARE = 4096;
   static const int32_t PATH_BUFSIZE = 512;
-  static const int32_t VALUE_BUFSIZE = 32;
+  static const int32_t VALUE_BUFSIZE = 64;
   static const int32_t GROUP_NAME_BUFSIZE = 129;
   // 使用 ObCgroupCtrl 之前需要判断 group_ctrl 对象是否 valid，若为 false 则跳过 cgroup 机制
   //  为 false 可能的原因是 cgroup 目录没有操作权限、操作系统不支持 cgroup 等。
