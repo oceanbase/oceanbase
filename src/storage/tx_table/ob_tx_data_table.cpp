@@ -753,8 +753,11 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
       //it may cause the standby tenant to commit and recycle when the primary is switched to standby.
       SCN snapshot_version;
       MonotonicTs unused_ts(0);
-      if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), MonotonicTs(1), NULL, snapshot_version, unused_ts))) {
-        LOG_WARN("failed to get snapshot version", K(ret), K(MTL_ID()));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(OB_TS_MGR.get_gts(MTL_ID(), MonotonicTs(1), NULL, snapshot_version, unused_ts))) {
+        LOG_WARN("failed to get snapshot version", K(tmp_ret), K(MTL_ID()));
+        // recycle nothing this time
+        recycle_scn.set_min();
       } else {
         recycle_scn = std::min(recycle_scn, snapshot_version);
       }
