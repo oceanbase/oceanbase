@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_tx_service.h"
 #include "storage/memtable/ob_memtable.h"
@@ -733,7 +734,9 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
                                     memtable::ObMemtableMutatorIterator *mmi_ptr)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard timeguard("replay_row_in_memtable", 10 * 1000);
+  const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+  common::ObTimeGuard timeguard("replay_row_in_memtable", 10_ms);
   ObIMemtable *mem_ptr = nullptr;
   ObMemtable *data_mem_ptr = nullptr;
   ObStorageTableGuard w_guard(tablet, store_ctx, true, true, log_ts_ns_);
@@ -742,12 +745,25 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
     TRANS_LOG(WARN, "[Replay Tx] invaild arguments", K(ret), KP(mmi_ptr));
   } else if (FALSE_IT(timeguard.click("start"))) {
   } else if (OB_FAIL(prepare_memtable_replay_(w_guard, mem_ptr))) {
-    if (OB_NO_NEED_UPDATE != ret) {
-      TRANS_LOG(WARN, "[Replay Tx] prepare for replay failed", K(ret), KP(mem_ptr), KP(mmi_ptr));
+    if (OB_NO_NEED_UPDATE == ret) {
+      TRANS_LOG(DEBUG, "[Replay Tx] Not need replay row for tablet",
+                K(ret), K(ls_id), K(tablet_id), K(log_ts_ns_),
+                K(tx_part_log_no_), K(mmi_ptr->get_row_head()));
+    } else if (OB_TABLET_NOT_EXIST == ret) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "tenant config is invalid", K(ret));
+      } else if (tenant_config->_allow_skip_replay_redo_after_detete_tablet) {
+        ret = OB_NO_NEED_UPDATE;
+        TRANS_LOG(WARN, "[Replay Tx] tablet does not exist while preparing memtable for replay, allow to skip this clog replaying for emergency",
+            K(ret), K(ls_id), K(tablet_id), K_(log_ts_ns));
+      } else {
+        TRANS_LOG(ERROR, "[Replay Tx] tablet does not exist while preparing memtable for replay",
+            K(ret), K(ls_id), K(tablet_id), K_(log_ts_ns));
+      }
     } else {
-      TRANS_LOG(DEBUG, "[Replay Tx] Not need replay row for tablet", K(log_ts_ns_),
-                K(tx_part_log_no_), K(mmi_ptr->get_row_head()),
-                K(tablet->get_tablet_meta().tablet_id_));
+      TRANS_LOG(WARN, "[Replay Tx] prepare for replay failed", K(ret), K(ls_id), K(tablet_id), KP(mem_ptr), KP(mmi_ptr));
     }
     // dynamic_cast will check whether this is really a ObMemtable.
   } else if (OB_ISNULL(data_mem_ptr = static_cast<ObMemtable *>(mem_ptr))) {
