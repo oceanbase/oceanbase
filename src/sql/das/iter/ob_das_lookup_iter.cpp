@@ -420,8 +420,8 @@ int ObDASGlobalLookupIter::do_index_lookup()
   ObDASMergeIter *merge_iter = static_cast<ObDASMergeIter*>(data_table_iter_);
   if (OB_FAIL(merge_iter->do_table_scan())) {
     LOG_WARN("failed to do global index lookup", K(ret));
-  } else {
-    merge_iter->set_merge_status(merge_iter->get_merge_type());
+  } else if (OB_FAIL(merge_iter->set_merge_status(merge_iter->get_merge_type()))) {
+    LOG_WARN("failed to set merge status for das iter", K(ret));
   }
   return ret;
 }

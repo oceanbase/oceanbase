@@ -60,6 +60,7 @@ public:
       get_next_rows_(nullptr),
       seq_task_idx_(OB_INVALID_INDEX),
       group_id_idx_(OB_INVALID_INDEX),
+      need_prepare_sort_merge_info_(false),
       merge_state_arr_(),
       store_rows_(nullptr)
   {}
@@ -100,6 +101,7 @@ private:
   int get_next_seq_rows(int64_t &count, int64_t capacity);
   int get_next_sorted_row();
   int get_next_sorted_rows(int64_t &count, int64_t capacity);
+  int prepare_sort_merge_info();
   void compare(int64_t cur_idx, int64_t &output_idx);
 
 private:
@@ -163,6 +165,7 @@ private:
   typedef common::ObSEArray<MergeState, 16> MergeStateArray;
   typedef ObChunkDatumStore::LastStoredRow LastDASStoreRow;
   int64_t group_id_idx_;
+  bool need_prepare_sort_merge_info_;
   MergeStateArray merge_state_arr_;
   LastDASStoreRow *store_rows_;
   /********* SORT MERGE END *********/

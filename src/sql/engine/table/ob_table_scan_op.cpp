@@ -1409,8 +1409,10 @@ int ObTableScanOp::do_init_before_get_row()
           group_rescan_cnt_ = ctx_.get_das_ctx().get_group_rescan_cnt();
           group_id_ = ctx_.get_das_ctx().get_skip_scan_group_id();
         }
+        if (OB_FAIL(output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE))) {
+          LOG_WARN("failed to set merge status for das iter", K(ret));
+        }
       }
-      output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE);
     }
   }
   return ret;
@@ -1552,7 +1554,7 @@ int ObTableScanOp::inner_rescan_for_tsc()
     } else {
       ret = local_iter_rescan();
     }
-    if (need_perform_real_batch_rescan()) {
+    if (OB_SUCC(ret) && need_perform_real_batch_rescan()) {
       LOG_TRACE("[group rescan] need perform real batch rescan");
       fold_iter_->init_group_range(0, tsc_rtdef_.bnlj_params_.at(0).gr_param_->count_);
     }
@@ -1634,7 +1636,9 @@ int ObTableScanOp::local_iter_rescan()
       group_rescan_cnt_ = ctx_.get_das_ctx().get_group_rescan_cnt();
       group_id_ = ctx_.get_das_ctx().get_skip_scan_group_id();
     }
-    output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE);
+    if (OB_FAIL(output_->set_merge_status(is_group_rescan() ? SORT_MERGE : SEQUENTIAL_MERGE))) {
+      LOG_WARN("failed to set merge status for das iter", K(ret));
+    }
   }
   return ret;
 }

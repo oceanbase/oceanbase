@@ -37,38 +37,7 @@ int ObDASMergeIter::set_merge_status(MergeType merge_type)
   } else {
     get_next_row_ = &ObDASMergeIter::get_next_sorted_row;
     get_next_rows_ = &ObDASMergeIter::get_next_sorted_rows;
-    if (das_tasks_arr_.count() > 0) {
-      if (merge_state_arr_.empty()) {
-        if (OB_FAIL(merge_state_arr_.reserve(das_tasks_arr_.count()))) {
-          LOG_WARN("failed to reserve merge state array", K(ret));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
-            if (OB_FAIL(merge_state_arr_.push_back(MergeState()))) {
-              LOG_WARN("failed to push back merge state", K(ret));
-            }
-          }
-        } // for end
-      } else {
-        for (int64_t i = 0; i < merge_state_arr_.count(); i++) {
-          merge_state_arr_.at(i).reset();
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(store_rows_)) {
-          store_rows_ = static_cast<LastDASStoreRow *>(
-                         iter_alloc_->alloc(das_tasks_arr_.count() * sizeof(LastDASStoreRow)));
-          if (OB_ISNULL(store_rows_)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to alloc memory", K(das_tasks_arr_.count()));
-          } else {
-            for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
-              new (store_rows_ + i) LastDASStoreRow(*iter_alloc_);
-              store_rows_[i].reuse_ = true;
-            } // for end
-          }
-        }
-      }
-    }
+    need_prepare_sort_merge_info_ = true;
   }
 
   return ret;
@@ -489,6 +458,9 @@ int ObDASMergeIter::get_next_sorted_row()
 {
   int ret = OB_SUCCESS;
   int64_t output_idx = OB_INVALID_INDEX;
+  if (OB_FAIL(prepare_sort_merge_info())) {
+    LOG_WARN("failed to prepare sort merge info", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
     if (!merge_state_arr_[i].das_task_iter_end_) {
       if (!merge_state_arr_[i].row_store_have_data_) {
@@ -498,7 +470,10 @@ int ObDASMergeIter::get_next_sorted_row()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected das task op type", K(ret), KPC(das_tasks_arr_[i]));
         } else if (OB_SUCC(scan_op->get_output_result_iter()->get_next_row())) {
-          if (OB_FAIL(store_rows_[i].save_store_row(*output_, *eval_ctx_))) {
+          if (OB_ISNULL(store_rows_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unpexpected store row nullptr", K(ret));
+          } else if (OB_FAIL(store_rows_[i].save_store_row(*output_, *eval_ctx_))) {
             LOG_WARN("failed to save store row", K(ret));
           } else {
             merge_state_arr_[i].row_store_have_data_ = true;
@@ -542,6 +517,9 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
   int ret = OB_SUCCESS;
   int64_t storage_count = 0;
   int64_t output_idx = OB_INVALID_INDEX;
+  if (OB_FAIL(prepare_sort_merge_info())) {
+    LOG_WARN("failed to prepare sort merge info", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
     if (!merge_state_arr_[i].das_task_iter_end_) {
       if (!merge_state_arr_[i].row_store_have_data_) {
@@ -567,7 +545,10 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
             if (!scan_op->is_local_task()) {
               update_wild_datum_ptr(storage_count);
             }
-            if (OB_FAIL(store_rows_[i].save_store_row(*output_, *eval_ctx_))) {
+            if (OB_ISNULL(store_rows_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unpexpected store row nullptr", K(ret));
+            } else if (OB_FAIL(store_rows_[i].save_store_row(*output_, *eval_ctx_))) {
               LOG_WARN("failed to save store row", K(ret));
             } else {
               merge_state_arr_[i].row_store_have_data_ = true;
@@ -612,6 +593,47 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
     }
   }
 
+  return ret;
+}
+
+int ObDASMergeIter::prepare_sort_merge_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(need_prepare_sort_merge_info_)) {
+    if (das_tasks_arr_.count() > 0) {
+      if (merge_state_arr_.empty()) {
+        if (OB_FAIL(merge_state_arr_.reserve(das_tasks_arr_.count()))) {
+          LOG_WARN("failed to reserve merge state array", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
+            if (OB_FAIL(merge_state_arr_.push_back(MergeState()))) {
+              LOG_WARN("failed to push back merge state", K(ret));
+            }
+          }
+        } // for end
+      } else {
+        for (int64_t i = 0; i < merge_state_arr_.count(); i++) {
+          merge_state_arr_.at(i).reset();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(store_rows_)) {
+          store_rows_ = static_cast<LastDASStoreRow *>(
+                         iter_alloc_->alloc(das_tasks_arr_.count() * sizeof(LastDASStoreRow)));
+          if (OB_ISNULL(store_rows_)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory", K(das_tasks_arr_.count()));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < das_tasks_arr_.count(); i++) {
+              new (store_rows_ + i) LastDASStoreRow(*iter_alloc_);
+              store_rows_[i].reuse_ = true;
+            } // for end
+          }
+        }
+      }
+    }
+    need_prepare_sort_merge_info_ = false;
+  }
   return ret;
 }
 
