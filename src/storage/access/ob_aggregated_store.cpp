@@ -190,11 +190,13 @@ int ObAggRow::init(const ObTableAccessParam &param, const ObTableAccessContext &
         if (OB_ISNULL(agg_expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Unexpected null agg expr", K(ret));
-        } else if (T_FUN_COUNT == agg_expr->type_) {
+        } else if (T_FUN_COUNT == agg_expr->type_ || T_FUN_SUM_OPNSIZE == agg_expr->type_) {
           if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
             exclude_null = col_param->is_nullable_for_write();
           }
-          need_access_data_ = need_access_data_ || exclude_null;
+          // T_FUN_SUM_OPNISZE need_access_data() depends on exclude_null and type,
+          // so deferred judgment in ObAggRow::check_need_access_data()
+          need_access_data_ = T_FUN_COUNT == agg_expr->type_ ? (need_access_data_ || exclude_null) : true;
         } else {
           need_access_data_ = true;
         }
