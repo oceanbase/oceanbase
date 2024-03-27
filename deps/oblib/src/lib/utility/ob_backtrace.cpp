@@ -36,15 +36,17 @@ int light_backtrace(void **buffer, int size)
   void *stack_addr = nullptr;
   size_t stack_size = 0;
   if (OB_LIKELY(OB_SUCCESS == get_stackattr(stack_addr, stack_size))) {
+#define addr_in_stack(addr) (addr >= (int64_t)stack_addr && addr < (int64_t)stack_addr + stack_size)
     int64_t rbp = (int64_t)__builtin_frame_address(0);
     while (rbp != 0 && rv < size) {
-      int64_t return_addr = rbp + 8;
-      if (OB_LIKELY(return_addr >= (int64_t)stack_addr &&
-            return_addr < ((int64_t)stack_addr + stack_size))) {
+      if (!addr_in_stack(*(int64_t*)rbp) &&
+          !FALSE_IT(rbp += 16) &&
+          !addr_in_stack(*(int64_t*)rbp)) {
+        break;
+      } else {
+        int64_t return_addr = rbp + 8;
         buffer[rv++] = (void*)*(int64_t*)return_addr;
         rbp = *(int64_t*)rbp;
-      } else {
-        break;
       }
     }
   }
