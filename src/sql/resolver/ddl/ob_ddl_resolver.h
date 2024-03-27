@@ -110,7 +110,10 @@ public:
   enum INDEX_KEYNAME {
     NORMAL_KEY = 0,
     UNIQUE_KEY = 1,
-    SPATIAL_KEY = 2
+    SPATIAL_KEY = 2,
+    FTS_KEY = 3,
+    MULTI_KEY = 4,
+    MULTI_UNIQUE_KEY = 5
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,

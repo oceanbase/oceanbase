@@ -397,6 +397,7 @@ private:
   bool enable_lob_locator_v2_;
   bool is_spatial_index_;
   bool is_fts_index_;
+  bool is_multivalue_index_;
 };
 } //namespace schema
 } //namespace share

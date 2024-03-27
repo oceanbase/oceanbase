@@ -625,7 +625,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     parser_name_(),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
-    is_fts_index_(false)
+    is_fts_index_(false),
+    is_multivalue_index_(false)
 {
   reset();
 }
@@ -653,6 +654,7 @@ void ObTableParam::reset()
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
   is_fts_index_ = false;
+  is_multivalue_index_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -687,6 +689,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ENCODE(parser_name_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_multivalue_index_);
   }
   return ret;
 }
@@ -767,6 +772,11 @@ OB_DEF_DESERIALIZE(ObTableParam)
       LOG_WARN("Fail to ccopy parser name ", K(ret), K_(parser_name), K(tmp_parser_name));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_multivalue_index_);
+  }
   return ret;
 }
 
@@ -801,6 +811,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ADD_LEN(parser_name_);
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+              is_multivalue_index_);
   }
   return len;
 }

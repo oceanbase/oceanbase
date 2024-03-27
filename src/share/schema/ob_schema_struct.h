@@ -127,6 +127,8 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_COLUMN_UDF_EXPR (INT64_C(1) << 20)
 #define UNUSED_COLUMN_FLAG (INT64_C(1) << 21) // check if the column is unused.
 #define GENERATED_DOC_ID_COLUMN_FLAG (INT64_C(1) << 22)
+#define MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 23) // for multivalue index
+#define MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG (INT64_C(1) << 24) // for multivalue index
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -317,11 +319,15 @@ enum ObIndexType
   INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
   INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE = 21,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE = 22,
+
+  // new index types for multivalue index
+  INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL = 23,
+  INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL = 24,
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 23,
+  INDEX_TYPE_MAX = 25,
 };
 
 // using type for index

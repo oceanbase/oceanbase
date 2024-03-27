@@ -42,7 +42,10 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     read_param_version_(0),
     read_info_(),
     cg_read_infos_(),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    multivalue_col_id_(OB_INVALID_ID),
+    multivalue_arr_col_id_(OB_INVALID_ID),
+    data_table_rowkey_column_num_(0)
 {
 }
 
@@ -71,6 +74,9 @@ void ObTableSchemaParam::reset()
   cg_read_infos_.reset();
   read_param_version_ = 0;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  multivalue_col_id_ = OB_INVALID_ID;
+  multivalue_arr_col_id_ = OB_INVALID_ID;
+  data_table_rowkey_column_num_ =0 ;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -446,6 +452,9 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
       }
     }
   }
+  OB_UNIS_ENCODE(multivalue_col_id_);
+  OB_UNIS_ENCODE(multivalue_arr_col_id_);
+  OB_UNIS_ENCODE(data_table_rowkey_column_num_);
   return ret;
 }
 
@@ -527,6 +536,10 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
       }
     }
   }
+
+  OB_UNIS_DECODE(multivalue_col_id_);
+  OB_UNIS_DECODE(multivalue_arr_col_id_);
+  OB_UNIS_DECODE(data_table_rowkey_column_num_);
   return ret;
 }
 
@@ -568,6 +581,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
       }
     }
   }
+
+  OB_UNIS_ADD_LEN(multivalue_col_id_);
+  OB_UNIS_ADD_LEN(multivalue_arr_col_id_);
+  OB_UNIS_ADD_LEN(data_table_rowkey_column_num_);
   return len;
 }
 
