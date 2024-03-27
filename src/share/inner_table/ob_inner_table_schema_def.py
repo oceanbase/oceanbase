@@ -13608,7 +13608,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_wr_event_name',
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_event_name']))
-# 12442: __all_tenant_scheduler_running_job
+# 12442: __all_virtual_tenant_scheduler_running_job
 #
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -14299,7 +14299,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 # 15420: abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15421', all_def_keywords['__all_virtual_wr_system_event'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15422', all_def_keywords['__all_virtual_wr_event_name'])))
-# 15423: __all_tenant_scheduler_running_job
+# 15423: __all_virtual_tenant_scheduler_running_job
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15424', all_def_keywords['__all_virtual_sqlstat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15425', all_def_keywords['__all_virtual_wr_sqlstat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
