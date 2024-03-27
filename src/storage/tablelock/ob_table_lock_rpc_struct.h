@@ -72,7 +72,8 @@ public:
       is_deadlock_avoid_enabled_(false),
       is_try_lock_(true),
       expired_time_(0),
-      schema_version_(-1)
+      schema_version_(-1),
+      is_for_replace_(false)
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
@@ -88,7 +89,7 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(lock_id), K_(lock_mode), K_(owner_id), K_(op_type),
                K_(is_deadlock_avoid_enabled),
-               K_(is_try_lock), K_(expired_time), K_(schema_version));
+               K_(is_try_lock), K_(expired_time), K_(schema_version), K_(is_for_replace));
 
   ObLockID lock_id_;
   ObTableLockMode lock_mode_;
@@ -103,6 +104,7 @@ public:
   int64_t expired_time_;
   // current schema version
   int64_t schema_version_;
+  bool is_for_replace_;
 };
 
 struct ObLockRequest
