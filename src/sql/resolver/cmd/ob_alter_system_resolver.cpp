@@ -2070,12 +2070,29 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                                                                               affect_all_user,
                                                                               affect_all_meta))) {
                           LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
-                        } else if (affect_all || affect_all_user || affect_all_meta) {
+                        } else if (affect_all || affect_all_meta) {
                           ret = OB_NOT_SUPPORTED;
-                          LOG_WARN("all/all_user/all_meta is not supported by ALTER SYSTEM SET ARCHILVE_LAG_TARGET",
+                          LOG_WARN("all/all_meta is not supported by ALTER SYSTEM SET ARCHIVE_LAG_TARGET",
                                   KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
                           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                                        "use all/all_user/all_meta in 'ALTER SYSTEM SET ARCHILVE_LAG_TARGET' syntax is");
+                                        "use all/all_meta in 'ALTER SYSTEM SET ARCHIVE_LAG_TARGET' syntax is");
+                        } else if (affect_all_user) {
+                          ObSchemaGetterGuard schema_guard;
+                          ObSArray <uint64_t> all_tenant_ids;
+                          if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+                            LOG_WARN("get_schema_guard failed", K(ret));
+                          } else if (OB_FAIL(schema_guard.get_tenant_ids(all_tenant_ids))) {
+                            LOG_WARN("fail to get tenant id from schema guard", K(ret));
+                          } else {
+                            ARRAY_FOREACH_X(all_tenant_ids, i, cnt, OB_SUCC(ret)) {
+                              const uint64_t tmp_tenant_id = all_tenant_ids.at(i);
+                              if (is_user_tenant(tmp_tenant_id)) {
+                                if (OB_FAIL(tenant_ids.push_back(tmp_tenant_id))) {
+                                  LOG_WARN("fail to push back", K(ret), K(tmp_tenant_id));
+                                }
+                              }
+                            }
+                          }
                         } else if (tenant_ids.empty()) {
                           if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
                             LOG_WARN("fail to push back", K(ret), K(tenant_id));
