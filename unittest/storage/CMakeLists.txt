@@ -93,6 +93,7 @@ storage_dml_unittest(test_tablet tablet/test_tablet.cpp)
 storage_unittest(test_compaction_iter compaction/test_compaction_iter.cpp)
 storage_unittest(test_medium_list_checker compaction/test_medium_list_checker.cpp)
 storage_unittest(test_transfer_mds_ctx test_transfer_mds_ctx.cpp)
+storage_unittest(test_choose_migration_source_policy migration/test_choose_migration_source_policy.cpp)
 
 if(OB_BUILD_CLOSE_MODULES)
 storage_dml_unittest(test_compaction_policy)

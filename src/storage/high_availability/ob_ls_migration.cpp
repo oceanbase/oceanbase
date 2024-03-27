@@ -1137,6 +1137,10 @@ int ObStartMigrationTask::choose_src_()
 {
   int ret = OB_SUCCESS;
   ObStorageHAChooseSrcHelper choose_src_helper;
+  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  const char *str = "idc";
+  ObStorageHAGetMemberHelper member_helper;
+  bool enable_choose_source_policy = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
@@ -1149,11 +1153,24 @@ int ObStartMigrationTask::choose_src_()
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
     SCN local_clog_checkpoint_scn = SCN::min_scn();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
-    } else if (OB_FAIL(choose_src_helper.init(tenant_id, ls_id, local_clog_checkpoint_scn, ctx_->arg_, storage_rpc_))) {
+    } else if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant config is invalid", K(ret));
+    } else if (FALSE_IT(str = tenant_config->choose_migration_source_policy.str())) {
+    } else if (FALSE_IT(enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy)) {
+    } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(ctx_->arg_, tenant_id,
+        enable_choose_source_policy, str, policy))) {
+      LOG_WARN("failed to get policy type", K(ret), K(ctx_->arg_), K(tenant_id),
+          K(enable_choose_source_policy), K(str));
+    } else if (OB_FAIL(member_helper.init(storage_rpc_))) {
+      LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc_));
+    } else if (OB_FAIL(choose_src_helper.init(tenant_id, ls_id, local_clog_checkpoint_scn, ctx_->arg_, policy,
+        storage_rpc_, &member_helper))) {
       LOG_WARN("failed to init src provider.", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn),
-          K(ctx_->arg_), KP(storage_rpc_));
+          K(ctx_->arg_), K(policy), KP(storage_rpc_));
     } else if (OB_FAIL(choose_src_helper.get_available_src(ctx_->arg_, src_info))) {
       LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(ctx_->arg_));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {

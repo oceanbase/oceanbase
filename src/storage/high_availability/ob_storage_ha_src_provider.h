@@ -21,11 +21,11 @@
 namespace oceanbase {
 namespace storage {
 
-class ObStorageHAGetMemberHelper final
+class ObStorageHAGetMemberHelper
 {
 public:
   ObStorageHAGetMemberHelper();
-  ~ObStorageHAGetMemberHelper();
+  virtual ~ObStorageHAGetMemberHelper();
   int init(storage::ObStorageRpc *storage_rpc);
   int get_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
       common::ObIArray<common::ObAddr> &addr_list);
@@ -33,12 +33,13 @@ public:
       const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
       common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
       common::ObIArray<common::ObAddr> &member_list);
-  int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
+  virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
+  virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
 
 private:
   int fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
       common::ObAddr &addr, common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &member_list);
-  int get_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+  virtual int get_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const bool need_learner_list, common::ObAddr &leader_addr,
       common::GlobalLearnerList &learner_list, common::ObIArray<common::ObAddr> &member_list);
 
@@ -63,8 +64,9 @@ public:
   virtual ~ObStorageHASrcProvider();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
-      const ObStorageHASrcProvider::ChooseSourcePolicy policy_type,
-      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc);
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   virtual int choose_ob_src(
       const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr) = 0;
 
@@ -74,11 +76,10 @@ public:
   storage::ObStorageRpc *get_storage_rpc() const { return storage_rpc_; }
   const share::SCN &get_local_clog_checkpoint_scn() const { return local_clog_checkpoint_scn_; }
   const share::SCN &get_palf_parent_checkpoint_scn() const { return palf_parent_checkpoint_scn_; }
-  ObStorageHASrcProvider::ChooseSourcePolicy get_policy_type() const { return policy_type_; }
+  ChooseSourcePolicy get_policy_type() const { return policy_type_; }
 
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
   const static char *get_policy_str(const ChooseSourcePolicy policy_type);
-  static int get_policy_type(const ObMigrationOpType::TYPE type, const uint64_t tenant_id, ChooseSourcePolicy &policy);
 
 protected:
   // The validity assessment of replicas includes:
@@ -122,9 +123,9 @@ private:
   ObMigrationOpType::TYPE type_;
   share::SCN local_clog_checkpoint_scn_;
   share::SCN palf_parent_checkpoint_scn_;
-  ObStorageHAGetMemberHelper get_member_helper_;
+  ObStorageHAGetMemberHelper *member_helper_;
   storage::ObStorageRpc *storage_rpc_;
-  ObStorageHASrcProvider::ChooseSourcePolicy policy_type_;
+  ChooseSourcePolicy policy_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHASrcProvider);
 };
 
@@ -135,8 +136,9 @@ public:
   virtual ~ObMigrationSrcByLocationProvider();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
-      const ObStorageHASrcProvider::ChooseSourcePolicy policy_type,
-      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc);
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   virtual int choose_ob_src(
       const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr) override;
 
@@ -160,8 +162,11 @@ protected:
       const common::ObReplicaMember &dst,
       common::ObAddr &choosen_src_addr);
 private:
+  void set_locality_manager_(ObLocalityManager *locality_manager);
   int get_server_region_and_idc_(
       const common::ObAddr &addr, common::ObRegion &region, common::ObIDC &idc);
+private:
+  ObLocalityManager *locality_manager_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSrcByLocationProvider);
 };
@@ -173,8 +178,9 @@ public:
   virtual ~ObMigrationSrcByCheckpointProvider();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
-      const ObStorageHASrcProvider::ChooseSourcePolicy policy_type,
-      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc);
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   virtual int choose_ob_src(
       const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr) override;
 
@@ -194,8 +200,9 @@ public:
   virtual ~ObRSRecommendSrcProvider();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const ObMigrationOpType::TYPE &type, const share::SCN &local_clog_checkpoint_scn,
-      const ObStorageHASrcProvider::ChooseSourcePolicy policy_type,
-      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc);
+      const ChooseSourcePolicy policy_type,
+      const common::ObReplicaType replica_type, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   int choose_ob_src(
       const ObMigrationOpArg &arg, common::ObAddr &chosen_src_addr);
 private:
@@ -211,19 +218,27 @@ public:
   ObStorageHAChooseSrcHelper();
   ~ObStorageHAChooseSrcHelper();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &local_clog_checkpoint_scn,
-      const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc);
+      const ObMigrationOpArg &arg, const ObStorageHASrcProvider::ChooseSourcePolicy policy,
+      storage::ObStorageRpc *storage_rpc, ObStorageHAGetMemberHelper *member_helper);
   int get_available_src(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
+  static int get_policy_type(const ObMigrationOpArg &arg, const uint64_t tenant_id,
+      bool enable_choose_source_policy, const char *policy_str,
+      ObStorageHASrcProvider::ChooseSourcePolicy &policy);
 private:
   int init_rs_recommend_source_provider_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc);
+      const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   int init_choose_source_by_location_provider_(
       const uint64_t tenant_id, const share::ObLSID &ls_id,
       const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg,
-      const ObStorageHASrcProvider::ChooseSourcePolicy policy, storage::ObStorageRpc *storage_rpc);
+      const ObStorageHASrcProvider::ChooseSourcePolicy policy, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   int init_choose_source_by_checkpoint_provider_(
       const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc);
+      const share::SCN &local_clog_checkpoint_scn, const ObMigrationOpArg &arg, storage::ObStorageRpc *storage_rpc,
+      ObStorageHAGetMemberHelper *member_helper);
   void errsim_test_(const ObMigrationOpArg &arg, ObStorageHASrcInfo &src_info);
+  ObStorageHASrcProvider * get_provider() const { return provider_; }
 
 private:
   ObStorageHASrcProvider *provider_;
