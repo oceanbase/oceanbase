@@ -59,6 +59,7 @@ int ObNetEndpointIngressManager::register_endpoint(const ObNetEndpointKey &endpo
   } else if (OB_FAIL(ingress_plan_map_.get_refactored(endpoint_key, endpoint_value))) {
     if (OB_HASH_NOT_EXIST == ret) {
       // initialize
+      ret = OB_SUCCESS;
       endpoint_value = (ObNetEndpointValue *)ob_malloc(sizeof(ObNetEndpointValue), "INGRESS_SERVICE");
       if (OB_ISNULL(endpoint_value)) {
         LOG_WARN("failed to alloc memory for objs");
@@ -66,7 +67,7 @@ int ObNetEndpointIngressManager::register_endpoint(const ObNetEndpointKey &endpo
       } else {
         endpoint_value->expire_time_ = expire_time;
       }
-      if (OB_FAIL(ingress_plan_map_.set_refactored(endpoint_key, endpoint_value))) {
+      if (OB_SUCC(ret) && OB_FAIL(ingress_plan_map_.set_refactored(endpoint_key, endpoint_value))) {
         ob_free(endpoint_value);
         LOG_WARN("endpoint register failed", K(ret), K(endpoint_key), K(expire_time));
       } else {
@@ -91,18 +92,19 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
   const int64_t current_time = ObTimeUtility::current_time();
   {
     ObSpinLockGuard guard(lock_);
-    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); OB_SUCC(ret) && iter != ingress_plan_map_.end(); ++iter) {
+    int tmp_ret = OB_SUCCESS;
+    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); iter != ingress_plan_map_.end(); ++iter) {
       const ObNetEndpointKey &endpoint_key = iter->first;
       ObNetEndpointValue *endpoint_value = iter->second;
       if (endpoint_value->expire_time_ < current_time) {
         LOG_INFO("endpoint expired", K(endpoint_key), K(endpoint_value->expire_time_), K(current_time));
-        if (OB_FAIL(delete_keys.push_back(endpoint_key))) {
+        if (OB_TMP_FAIL(delete_keys.push_back(endpoint_key))) {
           LOG_WARN("fail to push back arrays", K(ret), K(endpoint_key));
         } else {
           ob_free(endpoint_value);
         }
       } else {
-        if (OB_FAIL(update_kvs.push_back(ObNetEndpointKeyValue(endpoint_key, endpoint_value)))) {
+        if (OB_TMP_FAIL(update_kvs.push_back(ObNetEndpointKeyValue(endpoint_key, endpoint_value)))) {
           LOG_WARN("fail to push back arrays", K(ret), K(endpoint_key));
         } else {
           endpoint_value->predicted_bw_ = -1;
@@ -189,40 +191,42 @@ int ObNetEndpointIngressManager::update_ingress_plan(ObNetEndpointKVArray &updat
           predicted_bws[valid_count++] = endpoint_value->predicted_bw_;
         }
       }
-
-      int64_t baseline_bw = 0;
-      int64_t extra_bw = 0;
-      if (remain_bw_limit <= 0) {
-        remain_bw_limit = 0;
-      }
-      std::sort(predicted_bws, predicted_bws + valid_count);
-      int64_t average = (int64_t)remain_bw_limit / valid_count;
-      for (int i = 0; i < valid_count; i++) {
-        average = (int64_t)remain_bw_limit / (valid_count - i);
-        if (average <= predicted_bws[i]) {
+      if (0 != valid_count) {
+        int64_t baseline_bw = 0;
+        int64_t extra_bw = 0;
+        if (remain_bw_limit <= 0) {
           remain_bw_limit = 0;
-          break;
-        } else {
-          remain_bw_limit -= predicted_bws[i];
         }
-      }
-      baseline_bw = average;
-      extra_bw = (int64_t)remain_bw_limit / valid_count;
-
-      for (int64_t i = 0; i < update_kvs.count(); i++) {
-        ObNetEndpointValue *endpoint_value = update_kvs[i].value_;
-        if (OB_UNLIKELY(endpoint_value->predicted_bw_ == -1)) {
-          // do nothing, remain old assigned_bw
-        } else {
-          int64_t predicted_bw = endpoint_value->predicted_bw_;
-          int64_t assigned_bw = -1;
-          if (predicted_bw > baseline_bw) {
-            assigned_bw = baseline_bw;
+        std::sort(predicted_bws, predicted_bws + valid_count);
+        int64_t average = remain_bw_limit / valid_count;
+        bool is_done = false;
+        for (int i = 0; i < valid_count && !is_done; i++) {
+          average = remain_bw_limit / (valid_count - i);
+          if (average <= predicted_bws[i]) {
+            remain_bw_limit = 0;
+            is_done = true;
           } else {
-            assigned_bw = predicted_bw;
+            remain_bw_limit -= predicted_bws[i];
           }
-          assigned_bw += extra_bw;
-          endpoint_value->assigned_bw_ = assigned_bw;
+        }
+        baseline_bw = average;
+        extra_bw = (int64_t)remain_bw_limit / valid_count;
+
+        for (int64_t i = 0; i < update_kvs.count(); i++) {
+          ObNetEndpointValue *endpoint_value = update_kvs[i].value_;
+          if (OB_UNLIKELY(endpoint_value->predicted_bw_ == -1)) {
+            // do nothing, remain old assigned_bw
+          } else {
+            int64_t predicted_bw = endpoint_value->predicted_bw_;
+            int64_t assigned_bw = -1;
+            if (predicted_bw > baseline_bw) {
+              assigned_bw = baseline_bw;
+            } else {
+              assigned_bw = predicted_bw;
+            }
+            assigned_bw += extra_bw;
+            endpoint_value->assigned_bw_ = assigned_bw;
+          }
         }
       }
     }
@@ -451,25 +455,25 @@ void ObIngressBWAllocService::runTimerTask()
 
 void ObIngressBWAllocService::switch_to_follower_forcedly()
 {
-  ATOMIC_SET(&is_leader_, false);
+  ATOMIC_STORE(&is_leader_, false);
 }
 int ObIngressBWAllocService::switch_to_leader()
 {
   int ret = OB_SUCCESS;
-  ATOMIC_SET(&is_leader_, true);
+  ATOMIC_STORE(&is_leader_, true);
   return ret;
 }
 int ObIngressBWAllocService::switch_to_follower_gracefully()
 {
   int ret = OB_SUCCESS;
-  ATOMIC_SET(&is_leader_, false);
+  ATOMIC_STORE(&is_leader_, false);
   return ret;
 }
 int ObIngressBWAllocService::resume_leader()
 {
   int ret = OB_SUCCESS;
   if (!is_leader()) {
-    ATOMIC_SET(&is_leader_, true);
+    ATOMIC_STORE(&is_leader_, true);
   }
   return ret;
 }

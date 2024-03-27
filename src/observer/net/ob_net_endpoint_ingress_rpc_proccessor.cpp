@@ -27,7 +27,7 @@ int ObNetEndpointRegisterP::process()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(gctx_.net_frame_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ob_service is null", KR(ret));
+    LOG_WARN("net_frame in GCTX is null", KR(ret));
   } else if (OB_FAIL(gctx_.net_frame_->net_endpoint_register(arg_.endpoint_key_, arg_.expire_time_))) {
     LOG_WARN("failed to net_endpoint_register", KR(ret), K(arg_));
   }
