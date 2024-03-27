@@ -1463,8 +1463,17 @@ int ObDRWorker::LocalityAlignment::try_get_readonly_all_server_locality_alignmen
       LOG_WARN("ls status info ptr is null", KR(ret), KP(ls_status_info));
     } else {
       share::ObUnit unit;
-      uint64_t unit_group_id = (ls_status_info->is_duplicate_ls() ? 0 : ls_status_info->unit_group_id_);
+      uint64_t unit_group_id = ls_status_info->unit_group_id_;
       int tmp_ret = unit_provider.allocate_unit(zone, unit_group_id, unit);
+      // If duplicate ls has specified unit_group_id, R replicas need to be added on all
+      // tenant units after adding R replica by specified unit_group_id.
+      if (OB_SUCC(ret)
+          && OB_ITER_END == tmp_ret
+          && ls_status_info->is_duplicate_ls()
+          && unit_group_id > 0) {
+        unit_group_id = 0;
+        tmp_ret = unit_provider.allocate_unit(zone, unit_group_id, unit);
+      }
       if (OB_ITER_END == tmp_ret) {
         // bypass
       } else if (OB_SUCCESS == tmp_ret) {
