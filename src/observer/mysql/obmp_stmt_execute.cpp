@@ -321,17 +321,18 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
   return ret;
 }
 
-void ObMPStmtExecute::reset_complex_param_memory(ParamStore *params, ObSQLSessionInfo &session_info)
+void ObMPStmtExecute::reset_complex_param_memory(ParamStore *params, ObSQLSessionInfo *session_info)
 {
   if (OB_NOT_NULL(params)) {
     for (int64_t i = 0; i < params->count(); ++i) {
       ObObjParam &obj = params->at(i);
       if (obj.is_pl_extend()) {
-        int ret = ObUserDefinedType::destruct_obj(obj, &session_info);
+        int ret = ObUserDefinedType::destruct_obj(obj, session_info);
         if (OB_SUCCESS != ret) {
           LOG_WARN("fail to destruct obj", K(ret), K(i));
         }
       }
+      obj.set_null();
     }
   }
 }
@@ -568,6 +569,17 @@ int ObMPStmtExecute::before_process()
     flush_buffer(true);
   }
 
+  return ret;
+}
+
+int ObMPStmtExecute::after_process(int error_code)
+{
+  int ret = OB_SUCCESS;
+  reset_complex_param_memory(arraybinding_params_);
+  reset_complex_param_memory(params_);
+  if (OB_FAIL(ObMPBase::after_process(error_code))) {
+    LOG_WARN("after process fail", K(ret));
+  }
   return ret;
 }
 
@@ -1758,7 +1770,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
       }
       // 释放数组内存避免内存泄漏
-      reset_complex_param_memory(arraybinding_params_, session);
+
       OZ (response_result_for_arraybinding(session, exception_array));
     } else {
       need_response_error = false;
@@ -1784,7 +1796,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
         }
         ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
-      reset_complex_param_memory(params_, session);
     }
     ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
