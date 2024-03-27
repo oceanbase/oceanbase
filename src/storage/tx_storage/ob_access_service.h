@@ -226,11 +226,6 @@ protected:
       transaction::ObTxDesc &tx_desc,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
-  int audit_tablet_opt_dml_stat(
-      const ObDMLBaseParam &dml_param,
-      const common::ObTabletID &tablet_id,
-      const common::ObOptDmlStatType dml_stat_type,
-      const int64_t affected_rows);
   int get_source_ls_tx_table_guard_(
       const ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
