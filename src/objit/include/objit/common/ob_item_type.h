@@ -2442,6 +2442,12 @@ typedef enum ObItemType
   T_SINGLE_OPT,
   T_MAX_FILE_SIZE,
   T_SHOW_CREATE_USER,
+  T_INSTALL_PLUGIN,
+  T_UNINSTALL_PLUGIN,
+  T_FLUSH_MOCK,
+  T_FLUSH_MOCK_LIST,
+  T_HANDLER_MOCK,
+  T_SHOW_PLUGINS,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
