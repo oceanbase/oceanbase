@@ -1073,6 +1073,7 @@ PCODE_DEF(OB_DETECT_RPC_CALL, 0x1595)
 // session info diagnosis
 // PCODE_DEF(OB_SESS_INFO_DIAGNOSIS, 0x1596)
 
+PCODE_DEF(OB_RPC_REVERSE_KEEPALIVE, 0x1597)
 
 // tenant snapshot
 // create tenant snapshot

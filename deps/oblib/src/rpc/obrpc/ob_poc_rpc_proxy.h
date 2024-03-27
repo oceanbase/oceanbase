@@ -105,7 +105,7 @@ public:
   static int64_t get_proxy_timeout(ObRpcProxy& proxy);
   static void set_rcode(ObRpcProxy& proxy, const ObRpcResultCode& rcode);
   static int check_blacklist(const common::ObAddr& addr);
-  static void set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id);
+  static void set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id, int64_t pkt_id, int64_t send_ts);
   static int32_t get_proxy_group_id(ObRpcProxy& proxy);
   static uint8_t balance_assign_tidx()
   {
@@ -181,7 +181,8 @@ public:
       }
       set_rcode(proxy, rcode);
       if (OB_SUCC(ret) && handle) {
-        set_handle(proxy, handle, pcode, opts, resp_pkt.is_stream_next(), resp_pkt.get_session_id());
+        int64_t pkt_id = static_cast<int64_t>(cb.pkt_id_);
+        set_handle(proxy, handle, pcode, opts, resp_pkt.is_stream_next(), resp_pkt.get_session_id(), pkt_id, start_ts);
       }
     }
     rpc::RpcStatPiece piece;
