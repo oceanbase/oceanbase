@@ -58,6 +58,9 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
   if (NULL == xa_service || NULL == my_session || NULL == plan_ctx) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else if (OB_FAIL(my_session->get_tx_timeout(tx_timeout))) {
     LOG_ERROR("fail to get trans timeout ts", K(ret));
   } else if (my_session->get_in_transaction()) {
@@ -184,6 +187,9 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
   if (NULL == xa_service || NULL == my_session || NULL == tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session), KP(tx_desc));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
@@ -231,6 +237,9 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
   if (NULL == xa_service || NULL == my_session || NULL == tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session), KP(tx_desc));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
@@ -267,6 +276,9 @@ int ObTMService::tm_create_savepoint(ObExecContext &exec_ctx, const ObString &sp
   if (OB_ISNULL(xa_service) || OB_ISNULL(my_session)) {
     ret =  OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(sp_name), KP(xa_service));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else if (my_session->is_in_transaction()) {
     ObTxDesc *&tx_desc = my_session->get_tx_desc();
     if (OB_ISNULL(tx_desc)) {
@@ -296,6 +308,9 @@ int ObTMService::tm_rollback_to_savepoint(ObExecContext &exec_ctx, const ObStrin
   if (OB_ISNULL(my_session) || OB_ISNULL(xa_service)) {
     ret =  OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(sp_name), KP(xa_service));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else if (my_session->is_in_transaction()) {
     ObTxDesc *&tx_desc = my_session->get_tx_desc();
     if (OB_ISNULL(tx_desc)) {
@@ -326,6 +341,9 @@ int ObTMService::recover_tx_for_callback(const ObTransID &tx_id,
   } else if (NULL == xa_service || NULL == my_session) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret), KP(xa_service), KP(my_session));
+  } else if (!my_session->is_inner() && my_session->is_txn_free_route_temp()) {
+    ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+    LOG_WARN("not support tx free route for dblink trans");
   } else if (my_session->get_in_transaction()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session", K(ret), K(tx_id), K(tx_desc->tid()));
