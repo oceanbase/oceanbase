@@ -13802,7 +13802,7 @@ def_table_schema(
 
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
-# 12442: __all_tenant_scheduler_running_job
+# 12442: __all_virtual_tenant_scheduler_running_job
 # 12443: __all_virtual_routine_privilege
 # 12444: __all_virtual_routine_privilege_history
 # 12445: __all_virtual_sqlstat
@@ -14362,7 +14362,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 # 15420: abandoned
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
-# 15423: __all_tenant_scheduler_running_job
+# 15423: __all_virtual_tenant_scheduler_running_job
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
 # 15426: __tenant_virtual_statname
