@@ -4712,7 +4712,8 @@ public:
       dst_server_(),
       backup_path_(),
       start_scn_(),
-      end_scn_() {}
+      end_scn_(),
+      is_only_calc_stat_(false) {}
 public:
   int assign(const ObBackupComplLogArg &arg);
   bool is_valid() const;
@@ -4732,6 +4733,7 @@ public:
   share::ObBackupPathString backup_path_;
   share::SCN start_scn_;
   share::SCN end_scn_;
+  bool is_only_calc_stat_;
 };
 
 struct ObBackupBuildIdxArg

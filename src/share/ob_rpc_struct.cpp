@@ -7347,7 +7347,8 @@ int ObBackupTaskRes::assign(const ObBackupTaskRes &res)
 }
 
 OB_SERIALIZE_MEMBER(ObBackupComplLogArg, trace_id_, job_id_, tenant_id_, task_id_, backup_set_id_,
-    incarnation_id_, backup_type_, backup_date_, ls_id_, dst_server_, backup_path_, start_scn_, end_scn_);
+    incarnation_id_, backup_type_, backup_date_, ls_id_, dst_server_, backup_path_, start_scn_, end_scn_,
+    is_only_calc_stat_);
 
 bool ObBackupComplLogArg::is_valid() const
 {
@@ -7386,6 +7387,7 @@ int ObBackupComplLogArg::assign(const ObBackupComplLogArg &arg)
     dst_server_ = arg.dst_server_;
     start_scn_ = arg.start_scn_;
     end_scn_ = arg.end_scn_;
+    is_only_calc_stat_ = arg.is_only_calc_stat_;
   }
   return ret;
 }
