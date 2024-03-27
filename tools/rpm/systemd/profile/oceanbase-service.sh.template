@@ -28,9 +28,10 @@ function prepare_config_json {
     if [[ -n "$key" && ! "$key" =~ ^\; ]]; then
       if [[ $key == *"ip"* ]]; then
         ip=$value
-      elif [[ $key == *"obshellPort"* ]]; then
+      elif [[ $key == *"obshell_port"* ]]; then
         port=$value
-      elif [[ $key == *"rootPwd"* ]]; then
+      elif [[ $key == *"root_pwd"* ]]; then
+        key="rootPwd"
         jq --arg parent "oceanbase_ce" --arg child "cluster" --arg key "$key" --arg value "$value" '.[$parent][$child][$key] = $value' "$json_file" > "$temp_file"
         mv "$temp_file" "$json_file"
       else
