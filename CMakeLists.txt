@@ -38,6 +38,11 @@ if (ENABLE_FATAL_ERROR_HANG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
 endif()
 
+if(ENABLE_AVX512F)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_AVX512F")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_AVX512F")
+endif()
+
 include(CMakeDependentOption)
 # OB_BUILD_RPM => include tools and build them.
 # otherwise    => include tools but don't build them.
