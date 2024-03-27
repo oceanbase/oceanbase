@@ -966,9 +966,9 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
     LOG_WARN("ObTenantTabletStatMgr is not inited", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (compat_version < DATA_VERSION_4_2_3_0) {
-    // do nothing, buffer table opt only supported in version >= 4.2.3
-    LOG_INFO("compat_version is smaller than DATA_VERSION_4_2_3_0, no need to refresh queuing mode", K(compat_version));
+  } else if (not_compat_for_queuing_mode(compat_version)) {
+    // do nothing, buffer table opt only supported in version [4.2.1.5, 4.2.2) union [4.2.3, 4.3)
+    LOG_INFO("compat_version < 4.2.1.5 or 4.2.2 <= compat_version < 4.2.3, no need to refresh queuing mode", K(compat_version));
   } else if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get get schema service", K(ret));

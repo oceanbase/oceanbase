@@ -1395,11 +1395,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           }
           if (OB_FAIL(ret)) {
             SQL_RESV_LOG(WARN, "failed to resolve table mode str!", K(ret));
-          } else if (tenant_data_version < DATA_VERSION_4_2_3_0
+          } else if (not_compat_for_queuing_mode(tenant_data_version)
                  && is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K(table_mode_str), K(tenant_data_version));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
+            LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(table_mode_str), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3");
           }
         }
         if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {

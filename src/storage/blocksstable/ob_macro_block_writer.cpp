@@ -796,7 +796,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Unexpected current row trans version in major merge", K(ret), K(row), K(data_store_desc_->snapshot_version_));
     } else if (!row.mvcc_row_flag_.is_uncommitted_row()) { // update max commit version
-      if (data_store_desc_->is_major_merge() && data_store_desc_->major_working_cluster_version_ < DATA_VERSION_4_2_3_0) {
+      if (data_store_desc_->is_major_merge() && not_compat_for_queuing_mode(data_store_desc_->major_working_cluster_version_)) {
         micro_writer_->update_max_merged_trans_version(-cur_row_version);
       }
       if (!row.mvcc_row_flag_.is_shadow_row()) {
@@ -878,7 +878,7 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
   } else {
     const int64_t trans_version_col_idx = data_store_desc_->schema_rowkey_col_cnt_;
     const int64_t cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
-    if (!data_store_desc_->is_major_merge() || data_store_desc_->major_working_cluster_version_ >= DATA_VERSION_4_2_3_0) {
+    if (!data_store_desc_->is_major_merge() || !not_compat_for_queuing_mode(data_store_desc_->major_working_cluster_version_)) {
       micro_writer_->update_max_merged_trans_version(-cur_row_version);
     }
   }

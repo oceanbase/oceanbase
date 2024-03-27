@@ -1132,10 +1132,10 @@ int ObDDLService::generate_schema(
     LOG_WARN("variable is not init");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-  } else if (compat_version < DATA_VERSION_4_2_3_0 && arg.schema_.is_new_queuing_table_mode()) {
+  } else if (not_compat_for_queuing_mode(compat_version) && arg.schema_.is_new_queuing_table_mode()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K(tenant_id), K(compat_version), K(arg));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
+    LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
@@ -2775,10 +2775,10 @@ int ObDDLService::set_raw_table_options(
           uint64_t compat_version = 0;
           if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-          } else if (compat_version < DATA_VERSION_4_2_3_0 && alter_table_schema.is_new_queuing_table_mode()) {
+          } else if (not_compat_for_queuing_mode(compat_version) && alter_table_schema.is_new_queuing_table_mode()) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
+            LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3");
           } else {
             new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
             need_update_index_table = true;

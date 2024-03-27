@@ -1416,10 +1416,10 @@ int ObTabletMergeFinishTask::try_schedule_adaptive_merge(
   create_dag = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (compat_version < DATA_VERSION_4_2_3_0) {
-    // do nothing, buffer table opt (including meta major merge) only supported in version >= 4.2.3
+  } else if (not_compat_for_queuing_mode(compat_version)) {
+    // do nothing, buffer table opt (including meta major merge) only supported in version [4.2.1.5, 4.2.2) union [4.2.3, 4.3)
     if (REACH_TENANT_TIME_INTERVAL(2 * 60 * 1000 * 1000L /*120s*/)) {
-      LOG_INFO("compat_version is smaller than DATA_VERSION_4_2_3_0, no need to schedule adaptive merge after mini", K(compat_version));
+      LOG_INFO("compat_version < 4.2.1.5 or 4.2.2 <= compat_version < 4.2.3, no need to schedule adaptive merge after mini", K(compat_version));
     }
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;

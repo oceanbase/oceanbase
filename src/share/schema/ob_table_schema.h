@@ -148,6 +148,10 @@ inline bool is_queuing_table_mode(const ObTableModeFlag &table_mode)
 {
   return TABLE_MODE_QUEUING ==  table_mode || is_new_queuing_mode(table_mode);
 }
+inline bool not_compat_for_queuing_mode(const uint64_t min_data_version){
+  return (min_data_version < MOCK_DATA_VERSION_4_2_1_5)
+      || (DATA_VERSION_4_2_2_0 <= min_data_version && min_data_version < DATA_VERSION_4_2_3_0);
+}
 const char *table_mode_flag_to_str(const ObTableModeFlag &table_mode);
 
 enum ObTablePKMode
@@ -396,10 +400,10 @@ struct ObBackUpTableModeOp
        } else {
          ret = common::OB_ERR_PARSER_SYNTAX;
        }
-       if (OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_2_3_0 && is_new_queuing_mode(static_cast<ObTableModeFlag>(ret_mode.mode_flag_))) {
+       if (OB_SUCC(ret) && not_compat_for_queuing_mode(tenant_data_version) && is_new_queuing_mode(static_cast<ObTableModeFlag>(ret_mode.mode_flag_))) {
         ret = OB_NOT_SUPPORTED;
-        SHARE_SCHEMA_LOG(WARN, "moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K(flag_str), K(tenant_data_version));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
+        SHARE_SCHEMA_LOG(WARN, "moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(flag_str), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3");
        }
        flag = strtok_r(NULL, delim, &save_ptr);
     }
