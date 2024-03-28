@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/ob_sql.h"
 
 namespace oceanbase
 {
@@ -238,7 +239,11 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       bool view_is_invalid = (0 == table_schema->get_object_status()
                               || 0 == table_schema->get_column_count()
                               || (table_schema->is_sys_view()
-                                  && table_schema->get_schema_version() <= GCTX.start_time_));
+                                  && table_schema->get_schema_version() <= GCTX.start_time_
+                                  && (nullptr == GCTX.sql_engine_
+                                      || OB_HASH_NOT_EXIST == GCTX.sql_engine_->get_dep_info_queue()
+                                      .read_consistent_sys_view_from_set(table_schema->get_tenant_id(),
+                                                                  table_schema->get_table_id()))));
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
         mem_context_->reset_remain_one_page();
