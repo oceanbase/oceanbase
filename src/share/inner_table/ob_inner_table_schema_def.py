@@ -17783,7 +17783,7 @@ def_table_schema(
       JOIN oceanbase.__all_virtual_tablet_encrypt_info E
       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id
     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13
-    GROUP BY A.tenant_id, A.table_id
+    GROUP BY A.tenant_id, A.table_id, A.table_name, B.tablespace_id, B.encryption_name, B.encrypt_key, B.master_key_id
   """.replace("\n", " ")
 )
 
@@ -17812,7 +17812,7 @@ def_table_schema(
       con_id AS CON_ID
     FROM
       oceanbase.V$OB_ENCRYPTED_TABLES
-    GROUP BY con_id, tablespace_id
+    GROUP BY con_id, tablespace_id, encryptionalg, encryptedkey, masterkeyid
   """.replace("\n", " ")
 )
 
