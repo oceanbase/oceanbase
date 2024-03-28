@@ -6193,10 +6193,10 @@ int ObSchemaServiceSQLImpl::sort_table_partition_info(
     lib::CompatModeGuard g(is_oracle_mode ?
                       lib::Worker::CompatMode::ORACLE :
                       lib::Worker::CompatMode::MYSQL);
-    if (OB_FAIL(ObSchemaServiceSQLImpl::sort_partition_array(table_schema))) {
-      LOG_WARN("failed to sort partition array", KR(ret), K(table_schema));
-    } else if (OB_FAIL(try_mock_partition_array(table_schema))) {
+    if (OB_FAIL(try_mock_partition_array(table_schema))) {
       LOG_WARN("fail to mock partition array", KR(ret), K(table_schema));
+    } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_partition_array(table_schema))) {
+      LOG_WARN("failed to sort partition array", KR(ret), K(table_schema));
     } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_subpartition_array(table_schema))) {
       LOG_WARN("failed to sort subpartition array", KR(ret), K(table_schema));
     }
@@ -6220,6 +6220,15 @@ int ObSchemaServiceSQLImpl::try_mock_partition_array(
     // only mock vtable's partition array after 4.0
     if (OB_FAIL(table_schema.mock_list_partition_array())) {
       LOG_WARN("fail to mock list partition array", KR(ret), K(table_schema));
+    }
+  }
+  // to prevent one/two level table's partition array is empty
+  if (OB_SUCC(ret)
+      && table_schema.is_user_partition_table()) {
+    if (OB_ISNULL(table_schema.get_part_array())
+        || table_schema.get_partition_num() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("partition array is empty", KR(ret), K(table_schema));
     }
   }
   return ret;
@@ -8653,10 +8662,10 @@ int ObSchemaServiceSQLImpl::sort_subpartition_array(ObPartitionSchema &partition
         int64_t subpartition_num = partition->get_subpartition_num();
         if (subpart_num != subpartition_num) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("subpartition num not match", K(ret), K(subpart_num), K(subpartition_num));
+          LOG_ERROR("subpartition num not match", K(ret), K(subpart_num), K(subpartition_num));
         } else if (OB_ISNULL(subpart_array) || subpartition_num <= 0) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("subpartition array is empty", K(ret), K(i), K(partition_schema));
+          LOG_ERROR("subpartition array is empty", K(ret), K(i), K(partition_schema));
         } else if (partition_schema.is_range_subpart()) {
           std::sort(subpart_array, subpart_array + subpartition_num, ObBasePartition::less_than);
           std::sort(partition->get_hidden_subpart_array(),
