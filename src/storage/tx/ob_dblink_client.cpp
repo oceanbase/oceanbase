@@ -38,13 +38,16 @@ void ObDBLinkClient::reset()
     mtl_free(impl_);
     impl_ = NULL;
   }
+  tx_timeout_us_ = -1;
+  dblink_statistics_ = NULL;
   is_inited_ = false;
 }
 
 int ObDBLinkClient::init(const uint32_t index,
                          const DblinkDriverProto dblink_type,
                          const int64_t tx_timeout_us,
-                         ObISQLConnection *dblink_conn)
+                         ObISQLConnection *dblink_conn,
+                         ObDBLinkTransStatistics *dblink_statistics)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -53,17 +56,19 @@ int ObDBLinkClient::init(const uint32_t index,
   } else if (DblinkDriverProto::DBLINK_UNKNOWN == dblink_type
       || NULL == dblink_conn
       || 0 > tx_timeout_us
-      || 0 == index) {
-    ret = OB_ERR_UNEXPECTED;
+      || 0 == index
+      || NULL == dblink_statistics) {
+    ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), K(dblink_type), KP(dblink_conn),
-        K(tx_timeout_us), K(index));
+        K(tx_timeout_us), K(index), KP(dblink_statistics));
   } else {
     index_ = index;
     dblink_conn_ = dblink_conn;
     dblink_type_ = dblink_type;
     tx_timeout_us_ = tx_timeout_us;
+    dblink_statistics_ = dblink_statistics;
     is_inited_ = true;
-    TRANS_LOG(INFO, "init", K(*this));
+    TRANS_LOG(INFO, "dblink client init", K(*this));
   }
   return ret;
 }
@@ -76,10 +81,14 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
+  const int64_t start_ts = ObTimeUtility::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(xid), K(*this));
+  } else if (NULL == dblink_statistics_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(xid), K(*this), KP_(dblink_statistics));
   } else if (!xid.is_valid() || xid.empty() || ObTxIsolationLevel::INVALID == isolation) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), K(isolation));
@@ -110,6 +119,13 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel
     }
     TRANS_LOG(INFO, "rm xa start for dblink", K(ret), K(xid), K(isolation), K(flag));
   }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  dblink_statistics_->inc_dblink_trans_xa_start_count();
+  dblink_statistics_->add_dblink_trans_xa_start_used_time(used_time_us);
+  if (OB_FAIL(ret)) {
+    dblink_statistics_->inc_dblink_trans_xa_start_fail_count();
+  }
   return ret;
 }
 
@@ -123,6 +139,9 @@ int ObDBLinkClient::rm_xa_end()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(*this));
+  } else if (NULL == dblink_statistics_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this), KP_(dblink_statistics));
   } else if (!xid_.is_valid() || xid_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid xid", K(ret), K(*this));
@@ -149,6 +168,9 @@ int ObDBLinkClient::rm_xa_prepare()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(*this));
+  } else if (NULL == dblink_statistics_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this), KP_(dblink_statistics));
   } else if (!xid_.is_valid() || xid_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid xid", K(ret), K(*this));
@@ -173,6 +195,7 @@ int ObDBLinkClient::rm_xa_prepare()
       TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this));
     }
   } else {
+    const int64_t start_ts = ObTimeUtility::current_time();
     state_ = ObDBLinkClientState::PREPARING;
     if (OB_FAIL(impl_->xa_prepare(xid_))) {
       if (OB_TRANS_XA_RDONLY != ret) {
@@ -186,7 +209,14 @@ int ObDBLinkClient::rm_xa_prepare()
     } else {
       // TODO, handle exceptions
     }
-    TRANS_LOG(INFO, "rm xa prepare for dblink", K(ret), K_(xid));
+    // for statistics
+    const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+    dblink_statistics_->inc_dblink_trans_xa_prepare_count();
+    dblink_statistics_->add_dblink_trans_xa_prepare_used_time(used_time_us);
+    if (OB_FAIL(ret) && OB_TRANS_XA_RDONLY != ret) {
+      dblink_statistics_->inc_dblink_trans_xa_prepare_fail_count();
+    }
+    TRANS_LOG(INFO, "rm xa prepare for dblink", K(ret), K_(xid), K(used_time_us));
   }
   return ret;
 }
@@ -199,10 +229,12 @@ int ObDBLinkClient::rm_xa_commit()
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  ObSqlString sql;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(*this));
+  } else if (NULL == dblink_statistics_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this), KP_(dblink_statistics));
   } else if (!xid_.is_valid() || xid_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid xid", K(ret), K(xid_));
@@ -220,6 +252,7 @@ int ObDBLinkClient::rm_xa_commit()
     }
   } else {
     // two phase commit
+    const int64_t start_ts = ObTimeUtility::current_time();
     const int64_t flags = ObXAFlag::OBTMNOFLAGS;
     state_ = ObDBLinkClientState::COMMITTING;
     if (OB_FAIL(impl_->xa_commit(xid_, flags))) {
@@ -227,10 +260,14 @@ int ObDBLinkClient::rm_xa_commit()
     } else {
       state_ = ObDBLinkClientState::COMMITTED;
     }
-    if (OB_SUCCESS != ret) {
-      // TODO, handle exceptions
+    // for statistics
+    const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+    dblink_statistics_->inc_dblink_trans_xa_commit_count();
+    dblink_statistics_->add_dblink_trans_xa_commit_used_time(used_time_us);
+    if (OB_FAIL(ret)) {
+      dblink_statistics_->inc_dblink_trans_xa_commit_fail_count();
     }
-    TRANS_LOG(INFO, "rm xa commit for dblink", K(ret), K_(xid));
+    TRANS_LOG(INFO, "rm xa commit for dblink", K(ret), K_(xid), K(used_time_us));
   }
   return ret;
 }
@@ -244,12 +281,14 @@ int ObDBLinkClient::rm_xa_rollback()
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  ObSqlString sql;
 
   // step 1, execute xa end if necessary
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "dblink client is not inited", K(ret), K(*this));
+  } else if (NULL == dblink_statistics_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this), KP_(dblink_statistics));
   } else if (!xid_.is_valid() || xid_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid xid", K(ret), K(xid_));
@@ -276,16 +315,21 @@ int ObDBLinkClient::rm_xa_rollback()
       TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this));
     }
   } else {
+    const int64_t start_ts = ObTimeUtility::current_time();
     state_ = ObDBLinkClientState::ROLLBACKING;
     if (OB_FAIL(impl_->xa_rollback(xid_))) {
       TRANS_LOG(WARN, "fail to execute query", K(ret), K(*this));
     } else {
       state_ = ObDBLinkClientState::ROLLBACKED;
     }
-    if (OB_SUCCESS != ret) {
-      // TODO, handle exceptions
+    // for statistics
+    const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+    dblink_statistics_->inc_dblink_trans_xa_rollback_count();
+    dblink_statistics_->add_dblink_trans_xa_rollback_used_time(used_time_us);
+    if (OB_FAIL(ret)) {
+      dblink_statistics_->inc_dblink_trans_xa_rollback_fail_count();
     }
-    TRANS_LOG(INFO, "rm xa rollback for dblink", K(ret), K_(xid));
+    TRANS_LOG(INFO, "rm xa rollback for dblink", K(ret), K_(xid), K(used_time_us));
   }
   return ret;
 }
@@ -293,7 +337,7 @@ int ObDBLinkClient::rm_xa_rollback()
 int ObDBLinkClient::rm_xa_end_()
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql;
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (ObDBLinkClientState::START != state_) {
     if (ObDBLinkClientState::END == state_) {
       // return OB_SUCCESS
@@ -310,8 +354,15 @@ int ObDBLinkClient::rm_xa_end_()
     if (OB_SUCCESS != ret) {
       // TODO, handle exceptions
     }
-    TRANS_LOG(INFO, "rm xa end for dblink", K(ret), K_(xid));
   }
+  // for statistics
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  dblink_statistics_->inc_dblink_trans_xa_end_count();
+  dblink_statistics_->add_dblink_trans_xa_end_used_time(used_time_us);
+  if (OB_FAIL(ret)) {
+    dblink_statistics_->inc_dblink_trans_xa_end_fail_count();
+  }
+  TRANS_LOG(INFO, "rm xa end for dblink", K(ret), K_(xid), K(used_time_us));
   return ret;
 }
 
