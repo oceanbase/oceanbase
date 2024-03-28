@@ -1374,16 +1374,15 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
 
     //HEAP_VAR(ObExecContext, exec_ctx, allocator) {
 
+      ObPLCacheCtx pc_ctx;
       uint64_t database_id = OB_INVALID_ID;
       resolve_ctx.session_info_.get_database_id(database_id);
 
-      ObPLCacheCtx pc_ctx;
       pc_ctx.session_info_ = &resolve_ctx.session_info_;
       pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
       (void)ObSQLUtils::md5(sql,pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
       int64_t sys_schema_version = OB_INVALID_VERSION;
       int64_t tenant_schema_version = OB_INVALID_VERSION;
-
       pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
       pc_ctx.key_.db_id_ = database_id;
       pc_ctx.key_.key_id_ = package_id;
@@ -1398,6 +1397,7 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       } else {
         package->set_tenant_schema_version(tenant_schema_version);
         package->set_sys_schema_version(sys_schema_version);
+        package->get_stat_for_update().name_ = package->get_name();
       }
       if (OB_FAIL(ret)) {
         // do nothing

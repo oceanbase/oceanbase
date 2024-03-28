@@ -531,6 +531,13 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
+  audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+  if (audit_record.pl_trace_id_.is_invalid() &&
+        result_set.is_pl_stmt(result_set.get_stmt_type()) &&
+        OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+    audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+  }
+  session.update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
 
   if (enable_perf_event) {
     record_stat(session, result_set.get_stmt_type(), is_from_pl);

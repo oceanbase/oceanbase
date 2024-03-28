@@ -424,7 +424,8 @@ public:
   int check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
                                                 uint64_t database_id,
                                                 const common::ObString &object_name,
-                                                bool &exist);
+                                                bool &exist,
+                                                bool &is_private_syn);
   int get_object_type(const uint64_t tenant_id,
                       const common::ObString &database_name,
                       const common::ObString &table_name,

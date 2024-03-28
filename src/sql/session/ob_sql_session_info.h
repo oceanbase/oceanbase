@@ -966,6 +966,9 @@ public:
   inline bool get_pl_can_retry() { return pl_can_retry_; }
   inline void set_pl_can_retry(bool can_retry) { pl_can_retry_ = can_retry; }
 
+  void reset_plsql_exec_time() { plsql_exec_time_ = 0; }
+  void add_plsql_exec_time(int64_t plsql_exec_time) { plsql_exec_time_ += plsql_exec_time; }
+
   CursorCache &get_cursor_cache() { return pl_cursor_cache_; }
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
   pl::ObDbmsCursorInfo *get_dbms_cursor(int64_t cursor_id);
@@ -1343,6 +1346,8 @@ public:
   int on_user_disconnect();
   virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
+  int64_t get_plsql_exec_time();
+  void update_pure_sql_exec_time(int64_t elapsed_time);
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1443,6 +1448,7 @@ private:
   // otherwise the PL block can be retried in all.
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
+  int64_t plsql_exec_time_;
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null

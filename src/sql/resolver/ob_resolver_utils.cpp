@@ -209,6 +209,191 @@ int ObResolverUtils::check_json_table_column_exists(const TableItem &table_item,
   return ret;
 }
 
+int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                            const ObSQLSessionInfo *session_info,
+                                            ObRawExpr *expr,
+                                            ObIArray<ObSchemaObjVersion> &dependency_objects,
+                                            bool is_called_in_sql,
+                                            ObIArray<uint64_t> *dep_db_array)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(session_info));
+  CK (OB_NOT_NULL(expr));
+
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
+    uint64_t package_id = OB_INVALID_ID;
+    const ObPackageInfo *spec_info = NULL;
+    const ObPackageInfo *body_info = NULL;
+    ObSchemaObjVersion ver;
+    CK (expr->get_param_count() >= 3);
+    OX (package_id = static_cast<const ObConstRawExpr *>(expr->get_param_expr(0))->get_value().get_uint64());
+    if (package_id != OB_INVALID_ID) {
+      OZ (pl::ObPLPackageManager::get_package_schema_info(schema_guard, package_id, spec_info, body_info));
+    }
+    if (OB_NOT_NULL(spec_info)) {
+      OX (ver.object_id_ = spec_info->get_package_id());
+      OX (ver.version_ = spec_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE);
+      OZ (dependency_objects.push_back(ver));
+      if (OB_NOT_NULL(dep_db_array)) {
+        OZ (dep_db_array->push_back(spec_info->get_database_id()));
+      }
+    }
+    if (OB_NOT_NULL(body_info)) {
+      OX (ver.object_id_ = body_info->get_package_id());
+      OX (ver.version_ = body_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE_BODY);
+      OZ (dependency_objects.push_back(ver));
+      if (OB_NOT_NULL(dep_db_array)) {
+        OZ (dep_db_array->push_back(body_info->get_database_id()));
+      }
+    }
+  } else if (T_FUN_UDF == expr->get_expr_type()) {
+    ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+    ObSchemaObjVersion ver;
+    uint64_t database_id = OB_INVALID_ID;
+    CK (OB_NOT_NULL(udf_expr));
+    if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
+      OZ (schema_guard.get_database_id(session_info->get_effective_tenant_id(),
+                                        udf_expr->get_database_name().empty() ? session_info->get_database_name() : udf_expr->get_database_name(),
+                                        database_id));
+      if (OB_SUCC(ret)) {
+        bool exist = false;
+        uint64_t object_db_id = OB_INVALID_ID;
+        ObSchemaChecker schema_checker;
+        ObSynonymChecker synonym_checker;
+        ObString object_name;
+        OZ (schema_checker.init(schema_guard, session_info->get_sessid()));
+        OZ (ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
+                                                                synonym_checker,
+                                                                session_info->get_effective_tenant_id(),
+                                                                database_id,
+                                                                udf_expr->get_func_name(),
+                                                                object_db_id, object_name, exist));
+        if (OB_SUCC(ret) && exist) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+            int64_t schema_version = OB_INVALID_VERSION;
+            uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
+            uint64_t dep_db_id = synonym_checker.get_database_ids().at(i);
+            ObSchemaObjVersion syn_version;
+            OZ (schema_guard.get_schema_version(SYNONYM_SCHEMA,
+                                                  session_info->get_effective_tenant_id(),
+                                                  obj_id,
+                                                  schema_version));
+            OX (syn_version.object_id_ = obj_id);
+            OX (syn_version.version_ = schema_version);
+            OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
+            OZ (dependency_objects.push_back(syn_version));
+            if (OB_NOT_NULL(dep_db_array)) {
+              OZ (dep_db_array->push_back(dep_db_id));
+            }
+          }
+        }
+      }
+      ObArray<ObSchemaObjVersion> vers;
+      OZ (udf_expr->get_schema_object_version(schema_guard, vers));
+      for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
+        OZ (dependency_objects.push_back(vers.at(i)));
+        if (OB_NOT_NULL(dep_db_array)) {
+          OZ (dep_db_array->push_back(database_id));
+        }
+      }
+    }
+    OX (expr->set_is_called_in_sql(is_called_in_sql));
+  } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
+    ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
+    ObSchemaObjVersion ver;
+    CK (OB_NOT_NULL(object_expr));
+    if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
+      OZ (object_expr->get_schema_object_version(ver));
+      OZ (dependency_objects.push_back(ver));
+      if (OB_NOT_NULL(dep_db_array)) {
+        OZ (dep_db_array->push_back(object_expr->get_database_id()));
+      }
+    }
+  } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
+    ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
+    ObSchemaObjVersion ver;
+    CK (OB_NOT_NULL(coll_expr));
+    if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
+      OZ (coll_expr->get_schema_object_version(ver));
+      OZ (dependency_objects.push_back(ver));
+      if (OB_NOT_NULL(dep_db_array)) {
+        OZ (dep_db_array->push_back(coll_expr->get_database_id()));
+      }
+    }
+  } else if (T_OBJ_ACCESS_REF == expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      OZ (collect_schema_version(schema_guard,
+                                 session_info,
+                                 expr->get_param_expr(i),
+                                 dependency_objects,
+                                 is_called_in_sql,
+                                 dep_db_array));
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
+                                                   const ObSQLSessionInfo *session_info,
+                                                   const ObSynonymChecker &synonym_checker,
+                                                   DependenyTableStore &dep_table)
+{
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(schema_guard));
+  CK (OB_NOT_NULL(session_info));
+  for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+    int64_t schema_version = OB_INVALID_VERSION;
+    uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
+    if (OB_FAIL(schema_guard->get_schema_version(SYNONYM_SCHEMA,
+                                                  session_info->get_effective_tenant_id(),
+                                                  obj_id,
+                                                  schema_version))) {
+      LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
+                                            K(obj_id), K(ret));
+    } else {
+      if (OB_FAIL(dep_table.push_back(ObSchemaObjVersion(obj_id, schema_version, DEPENDENCY_SYNONYM)))) {
+        LOG_WARN("add dependency object failed", K(obj_id), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
+                                                   const ObSQLSessionInfo *session_info,
+                                                   const ObSynonymChecker &synonym_checker,
+                                                   const pl::ObPLDependencyTable &dep_table)
+{
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(schema_guard));
+  CK (OB_NOT_NULL(session_info));
+  for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+    int64_t schema_version = OB_INVALID_VERSION;
+    uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
+    if (OB_FAIL(schema_guard->get_schema_version(SYNONYM_SCHEMA,
+                                                  session_info->get_effective_tenant_id(),
+                                                  obj_id,
+                                                  schema_version))) {
+      LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
+                                            K(obj_id), K(ret));
+    } else {
+      ObSchemaObjVersion ver(obj_id, schema_version, DEPENDENCY_SYNONYM);
+      if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(dep_table, ver))) {
+        LOG_WARN("add dependency object failed", K(obj_id), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObResolverUtils::resolve_extended_type_info(const ParseNode &str_list_node, ObIArray<ObString>& type_info_array)
 {
   int ret = OB_SUCCESS;
@@ -403,7 +588,8 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
   const ObString &package_name, const ObString &routine_name,
   const share::schema::ObRoutineType routine_type,
   common::ObIArray<const share::schema::ObIRoutineInfo *> &routines,
-  uint64_t udt_id, const pl::ObPLResolveCtx *resolve_ctx)
+  uint64_t udt_id, const pl::ObPLResolveCtx *resolve_ctx,
+  ObSynonymChecker *outer_synonym_checker)
 {
   int ret = OB_SUCCESS;
 
@@ -451,7 +637,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
   bool exist = false;                         \
   ObSynonymChecker synonym_checker;           \
   OZ (resolve_synonym_object_recursively(     \
-    schema_checker, synonym_checker,          \
+    schema_checker, (outer_synonym_checker != NULL) ? *outer_synonym_checker : synonym_checker,          \
     tenant_id, database_id, synonym_name,     \
     object_db_id, object_name, exist));       \
   if (OB_SUCC(ret) && exist) {                \
@@ -1293,7 +1479,8 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
                                  const common::ObIArray<ObRawExpr *> &expr_params,
                                  const ObRoutineInfo *&routine,
                                  const ObString &dblink_name,
-                                 ObIAllocator *allocator)
+                                 ObIAllocator *allocator,
+                                 ObSynonymChecker *outer_synonym_checker)
 {
   int ret = OB_SUCCESS;
 #define COPY_DBLINK_ROUTINE(dblink_routine) \
@@ -1332,7 +1519,8 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
                       routine_name,
                       routine_type,
                       expr_params,
-                      tmp_routine_info));
+                      tmp_routine_info,
+                      outer_synonym_checker));
       if (OB_SUCC(ret)) {
         if (OB_INVALID_ID == tmp_routine_info->get_dblink_id()) {
           routine = tmp_routine_info;
@@ -1433,7 +1621,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                                  const ObString &routine_name,
                                  const share::schema::ObRoutineType routine_type,
                                  const common::ObIArray<ObRawExpr *> &expr_params,
-                                 const ObRoutineInfo *&routine)
+                                 const ObRoutineInfo *&routine,
+                                 ObSynonymChecker *synonym_checker)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<const share::schema::ObIRoutineInfo *, 4> candidate_routine_infos;
@@ -1451,7 +1640,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                                      routine_type,
                                      candidate_routine_infos,
                                      udt_id,
-                                     &resolve_ctx))) {
+                                     &resolve_ctx,
+                                     synonym_checker))) {
     LOG_WARN("failed to get candidate routine infos",
              K(db_name), K(package_name), K(routine_name), K(ret));
   } else {
@@ -1559,6 +1749,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
   uint64_t synonym_id = OB_INVALID_ID;
   bool exist_with_synonym = false;
   bool exist_non_syn_object = false;
+  bool is_private_syn = false;
   if (OB_FAIL(schema_checker.get_synonym_schema(
       tenant_id, database_id, synonym_name, object_database_id,
       synonym_id, object_name, exist_with_synonym, search_public_schema))) {
@@ -1576,7 +1767,10 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
     } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
                                                                                 object_database_id,
                                                                                 object_name,
-                                                                                exist_non_syn_object)) || !exist_non_syn_object) {
+                                                                                exist_non_syn_object,
+                                                                                is_private_syn)) ||
+                                                                                !exist_non_syn_object ||
+                                                                                is_private_syn) {
       OZ (SMART_CALL(resolve_synonym_object_recursively(
         schema_checker, synonym_checker, tenant_id,
         object_database_id, object_name, object_database_id, object_name, exist_with_synonym,
@@ -6904,7 +7098,8 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       ObQueryCtx &ctx)
+                                       ObQueryCtx &ctx,
+                                       ObIArray<ObSchemaObjVersion> &return_value_version)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6962,6 +7157,23 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
         ctx.udf_has_dml_stmt_ = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
+      ObArenaAllocator alloc;
+      ObPLDataType param_type;
+      ObRoutineParam *param = nullptr;
+      common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+      ObArray<ObSchemaObjVersion> version;
+      CK (routine_info->get_routine_params().count() > 0);
+      OX (param = routine_info->get_routine_params().at(0));
+      CK (OB_NOT_NULL(sql_proxy));
+      OZ (pl::ObPLDataType::transform_from_iparam(param,
+                                                  schema_guard,
+                                                  session_info,
+                                                  alloc,
+                                                  *sql_proxy,
+                                                  param_type,
+                                                  &return_value_version));
     }
   }
   return ret;

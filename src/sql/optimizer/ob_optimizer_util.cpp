@@ -6619,6 +6619,12 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (ObMaxType == res_type.get_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));
+        } else if ((left_type.is_ext() && !right_type.is_ext())
+                    || (!left_type.is_ext() && right_type.is_ext())
+                    || (left_type.is_ext() && right_type.is_ext()
+                          && left_type.get_udt_id() != right_type.get_udt_id())) {
+          ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+          LOG_WARN("expression must have same datatype as corresponding expression", K(ret), K(left_type), K(right_type));
         } else if (left_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
                                                         expr_factory, left_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));

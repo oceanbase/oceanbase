@@ -71,50 +71,6 @@ enum ObPLObjectType
   PACKAGE_SPEC
 };
 
-
-struct PLCacheObjStat
-{
-  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  int64_t pl_schema_id_;
-  common::ObString raw_sql_;
-  common::ObCollationType sql_cs_type_;
-  int64_t gen_time_;
-  int64_t last_active_time_;
-  uint64_t hit_count_;
-
-  PLCacheObjStat()
-    : pl_schema_id_(OB_INVALID_ID),
-      sql_cs_type_(common::CS_TYPE_INVALID),
-      gen_time_(0),
-      last_active_time_(0),
-      hit_count_(0)
-  {
-    sql_id_[0] = '\0';
-  }
-
-  inline bool is_updated() const
-  {
-    return last_active_time_ != 0;
-  }
-
-  void reset()
-  {
-    sql_id_[0] = '\0';
-    pl_schema_id_ = OB_INVALID_ID;
-    sql_cs_type_ = common::CS_TYPE_INVALID;
-    raw_sql_.reset();
-    gen_time_ = 0;
-    last_active_time_ = 0;
-    hit_count_ = 0;
-  }
-
-  TO_STRING_KV(K_(pl_schema_id),
-               K_(gen_time),
-               K_(last_active_time),
-               K_(hit_count),
-               K_(raw_sql));
-};
-
 class ObPLINS
 {
 public:
@@ -500,9 +456,6 @@ public:
   inline bool get_has_parallel_affect_factor() const { return has_parallel_affect_factor_; }
   inline void set_has_parallel_affect_factor(bool value) { has_parallel_affect_factor_ = value; }
 
-  inline const PLCacheObjStat get_stat() const { return stat_; }
-  inline PLCacheObjStat &get_stat_for_update() { return stat_; }
-
   int get_subprogram(const ObIArray<int64_t> &path, ObPLFunction *&routine) const;
 
   inline const common::ObString &get_function_name() const { return function_name_; }
@@ -544,7 +497,6 @@ public:
   * test -> oceanbase, we see oceanbase in interface but can't see test.
   */
   int is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag);
-  virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
 
   common::ObFixedArray<ObPLSqlInfo, common::ObIAllocator>& get_sql_infos()
   {
@@ -579,8 +531,6 @@ private:
   bool is_invoker_right_;
   bool is_pipelined_;
   ObPLNameDebugInfo name_debuginfo_;
-  // stat info
-  PLCacheObjStat stat_;
 
   common::ObString function_name_;
   common::ObString package_name_;
@@ -767,7 +717,10 @@ public:
     current_line_(OB_INVALID_INDEX),
     loc_(loc),
     is_called_from_sql_(is_called_from_sql),
-    dwarf_helper_(NULL) {}
+    dwarf_helper_(NULL),
+    pure_sql_exec_time_(0),
+    pure_plsql_exec_time_(0),
+    pure_sub_plsql_exec_time_(0) {}
   virtual ~ObPLExecState();
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
@@ -819,11 +772,31 @@ public:
   }
   inline jit::ObDWARFHelper* get_dwarf_helper() { return dwarf_helper_; } 
 
+  inline void add_pure_sql_exec_time(int64_t sql_exec_time)
+  {
+    pure_sql_exec_time_ += sql_exec_time;
+  }
+  inline void reset_pure_sql_exec_time() { pure_sql_exec_time_ = 0; }
+
+  int64_t get_pure_sql_exec_time() { return pure_sql_exec_time_; }
+
+  int add_pl_exec_time(int64_t pl_exec_time, bool is_called_from_sql);
+
+  void reset_plsql_exec_time() { pure_plsql_exec_time_ = 0; }
+  void add_plsql_exec_time(int64_t plsql_exec_time) { pure_plsql_exec_time_ = plsql_exec_time; }
+  int64_t get_plsql_exec_time() { return pure_plsql_exec_time_; }
+  void add_sub_plsql_exec_time(int64_t sub_plsql_exec_time) { pure_sub_plsql_exec_time_ += sub_plsql_exec_time; }
+  int64_t get_sub_plsql_exec_time() { return pure_sub_plsql_exec_time_; }
+  void reset_sub_plsql_exec_time() { pure_sub_plsql_exec_time_ = 0; }
+
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
                K_(need_reset_physical_plan),
                K_(loc),
-               K_(is_called_from_sql));
+               K_(is_called_from_sql),
+               K_(pure_sql_exec_time),
+               K_(pure_plsql_exec_time),
+               K_(pure_sub_plsql_exec_time));
 private:
 private:
   ObPLFunction &func_;
@@ -843,6 +816,9 @@ private:
   uint64_t loc_; // combine of line and column number
   bool is_called_from_sql_;
   jit::ObDWARFHelper *dwarf_helper_; // for decode dwarf debuginfo
+  int64_t pure_sql_exec_time_;
+  int64_t pure_plsql_exec_time_;
+  int64_t pure_sub_plsql_exec_time_;
 };
 
 class ObPLContext
@@ -884,6 +860,7 @@ public:
     cur_query_.reset();
     is_function_or_trigger_ = false;
     last_insert_id_ = 0;
+    trace_id_.reset();
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -998,6 +975,7 @@ public:
   pl::ObPLContext *get_parent_stack_ctx() { return parent_stack_ctx_; }
   pl::ObPLContext *get_top_stack_ctx() { return top_stack_ctx_; }
   sql::ObExecContext *get_my_exec_ctx() { return my_exec_ctx_; }
+  ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
 
 private:
   ObPLContext* get_stack_pl_ctx();
@@ -1054,6 +1032,7 @@ private:
   sql::ObExecContext *my_exec_ctx_; //my exec context
   bool is_function_or_trigger_;
   uint64_t last_insert_id_;
+  ObCurTraceId::TraceId trace_id_;
 };
 
 struct PlTransformTreeCtx

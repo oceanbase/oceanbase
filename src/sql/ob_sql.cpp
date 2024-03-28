@@ -636,6 +636,58 @@ int ObSql::fill_result_set(ObResultSet &result_set,
   return ret;
 }
 
+int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
+                                         int64_t type_id,
+                                         ObSqlString &composite_field_name)
+{
+  int ret = OB_SUCCESS;
+  const pl::ObUserDefinedType *user_type = NULL;
+  const ObUDTTypeInfo *udt_info = NULL;
+  ObArenaAllocator allocator;
+  const uint64_t tenant_id = pl::get_tenant_id_by_object_id(type_id);
+  if (OB_FAIL(schema_guard.get_udt_info(tenant_id, type_id, udt_info))) {
+    OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
+  } else if (NULL == udt_info) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "udt info is null.", K(type_id), K(ret));
+  } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+    OB_LOG(WARN, "faild to transform to pl type", K(ret));
+  } else if (NULL == user_type) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "user type is null.", K(type_id), K(ret));
+  } else {
+    if (user_type->is_record_type()) {
+      const pl::ObRecordType *rec_type = static_cast<const pl::ObRecordType *>(user_type);
+      OZ (composite_field_name.append("("));
+      for (int64_t i = 0; OB_SUCC(ret) && i < rec_type->get_member_count(); ++i) {
+        pl::ObRecordMember *member = const_cast<pl::ObRecordMember *>(rec_type->get_record_member(i));
+        CK (OB_NOT_NULL(member));
+        OZ (composite_field_name.append(member->member_name_));
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (member->member_type_.is_record_type() || member->member_type_.is_collection_type()) {
+          OZ (get_composite_type_field_name(schema_guard,
+                                            member->member_type_.get_user_type_id(),
+                                            composite_field_name));
+        }
+        if (i < rec_type->get_member_count() - 1) {
+          OZ (composite_field_name.append(", "));
+        }
+      }
+      OZ (composite_field_name.append(")"));
+    } else if (user_type->is_collection_type()) {
+      const pl::ObCollectionType *coll_type = static_cast<const pl::ObCollectionType*>(user_type);
+      if (coll_type->get_element_type().is_record_type()
+           || coll_type->get_element_type().is_collection_type()) {
+        OZ (get_composite_type_field_name(schema_guard,
+                                          coll_type->get_element_type().get_user_type_id(),
+                                          composite_field_name));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const PlanCacheMode mode,
                                   ObCollationType collation_type, const ObString &type_name,
                                   ObStmt &basic_stmt, ObField &field)
@@ -656,6 +708,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
       const SelectItem &select_item = select_stmt->get_select_item(i);
       LOG_DEBUG("select item info", K(select_item));
       ObRawExpr *expr = select_item.expr_;
+      bool is_ext_field = false;
+      ObSqlString composite_field_name;
       if (OB_UNLIKELY(NULL == expr)) {
         ret = OB_ERR_ILLEGAL_ID;
         LOG_WARN("fail to get expr", K(ret), K(i), K(size));
@@ -670,7 +724,15 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
       }
 
       if (OB_SUCC(ret) && expr->get_result_type().is_ext()) {
-        if ((expr->is_query_ref_expr() && static_cast<ObQueryRefRawExpr*>(expr)->is_cursor())
+#ifdef OB_BUILD_ORACLE_PL
+        // error code compiltable with oracle
+        if (pl::ObPlJsonUtil::is_pl_jsontype(expr->get_result_type().get_udt_id())) {
+          ret = OB_ERR_PL_JSONTYPE_USAGE;
+        }
+#endif
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if ((expr->is_query_ref_expr() && static_cast<ObQueryRefRawExpr*>(expr)->is_cursor())
             || (expr->is_udf_expr() && static_cast<ObUDFRawExpr*>(expr)->get_is_return_sys_cursor())) {
           if (OB_FAIL(ob_write_string(alloc, "SYS_REFCURSOR", field.type_name_))) {
             LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
@@ -680,14 +742,21 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           // xmltype is supported, do nothing
         } else if (NULL == context->secondary_namespace_ // pl resolve
                     && NULL == context->session_info_->get_pl_context()) { // pl execute
-          ret = OB_NOT_SUPPORTED;
-#ifdef OB_BUILD_ORACLE_PL
-          // error code compiltable with oracle
-          if (pl::ObPlJsonUtil::is_pl_jsontype(expr->get_result_type().get_udt_id())) {
-            ret = OB_ERR_PL_JSONTYPE_USAGE;
+          is_ext_field = true;
+          field.type_.set_collation_type(CS_TYPE_BINARY);
+          field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+          field.length_ = OB_MAX_LONGTEXT_LENGTH;
+          if (CS_TYPE_BINARY != expr->get_collation_type()
+            && ObCharset::is_valid_collation(collation_type)) {
+            field.charsetnr_ = static_cast<uint16_t>(collation_type);
+          } else {
+            field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
           }
-#endif
-          LOG_WARN("composite type use in pure sql context not supported!");
+          if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
+                                                    expr->get_result_type().get_udt_id(),
+                                                    composite_field_name))) {
+            LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
+          }
         }
       }
 
@@ -704,7 +773,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           field.type_.set_collation_level(expr->get_collation_level());
         }
         // Setup Scale
-        if (ObVarcharType == field.type_.get_type()) {
+        if (ObVarcharType == field.type_.get_type() || is_ext_field) {
           field.type_.set_varchar(type_name);
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
@@ -738,8 +807,20 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
       ObCollationType field_names_collation =
             ObCharset::is_valid_collation(collation_type) ? collation_type : CS_TYPE_UTF8MB4_BIN;
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(alloc, select_item.alias_name_, field.cname_,
-                                                                CS_TYPE_UTF8MB4_BIN, field_names_collation))) {
+        ObSqlString field_name;
+        if (composite_field_name.length() > 0) {
+          // need record member name
+          if (OB_FAIL(field_name.append(select_item.alias_name_))) {
+            LOG_WARN("append field name fail.", K(ret), K(select_item.alias_name_), K(composite_field_name));
+          } else if (OB_FAIL(field_name.append(composite_field_name.string()))) {
+            LOG_WARN("get field name fail.", K(ret), K(select_item.alias_name_), K(composite_field_name));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(alloc,
+                                field_name.length() > 0 ? field_name.string() : select_item.alias_name_,
+                                field.cname_, CS_TYPE_UTF8MB4_BIN, field_names_collation))) {
           LOG_WARN("fail to alloc string", K(select_item.alias_name_), K(ret));
         } else {
           field.is_hidden_rowid_ = select_item.is_hidden_rowid_;
@@ -842,9 +923,23 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else {
+          ObSqlString paramed_field_name;
           field.paramed_ctx_ = new(buf) ObParamedSelectItemCtx();
-          if (OB_FAIL(ob_write_string(alloc, select_item.paramed_alias_name_,
-                                      field.paramed_ctx_->paramed_cname_))) {
+          if (composite_field_name.length() > 0) {
+            // need record member name
+            if (OB_FAIL(paramed_field_name.append(select_item.paramed_alias_name_))) {
+              LOG_WARN("append paramed field fail.", K(ret), K(select_item.paramed_alias_name_), K(composite_field_name));
+            } else if (OB_FAIL(paramed_field_name.append(composite_field_name.string()))) {
+              LOG_WARN("get field name fail.", K(ret), K(select_item.paramed_alias_name_), K(composite_field_name));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(ob_write_string(alloc,
+                                             paramed_field_name.length() > 0
+                                               ? paramed_field_name.string()
+                                               : select_item.paramed_alias_name_,
+                                             field.paramed_ctx_->paramed_cname_))) {
             LOG_WARN("failed to copy paramed cname", K(ret));
           } else if (OB_FAIL(field.paramed_ctx_->param_str_offsets_.assign(
                                                   select_item.questions_pos_))) {
@@ -3003,7 +3098,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                               stmt_ora_need_privs))) {
       LOG_WARN("failed to generate plan", K(ret));
     }
-  } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type()) {
+  } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type() &&
+             stmt::T_CALL_PROCEDURE != static_cast<ObExecuteStmt*>(basic_stmt)->get_prepare_type()) {
     if (OB_FAIL(handle_text_execute(basic_stmt, sql_ctx, result))) {
       LOG_WARN("handle_text_execute failed", K(ret));
     }

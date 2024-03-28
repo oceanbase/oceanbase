@@ -68,6 +68,10 @@ public:
 
   static int get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type,
                          const bool is_unsigned = false);
+
+  static int extend_cell_str(char *buf, const int64_t len, char *src, obmysql::MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+                              const ObDataTypeCastParams &dtc_params, const ObField *field,
+                              share::schema::ObSchemaGetterGuard *schema_guard, uint64_t tenant_id);
 };
 
 } // end of namespace common

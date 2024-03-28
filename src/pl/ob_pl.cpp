@@ -609,6 +609,9 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     OX (is_autonomous_ = routine->is_autonomous());
     OX (is_function_or_trigger_ = is_function_or_trigger);
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+    trace_id_.set(*ObCurTraceId::get_trace_id());
+  }
 
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
   OX (pl_block_timeout = std::min(pl_block_timeout, OB_MAX_USER_SPECIFIED_TIMEOUT));
@@ -1504,14 +1507,22 @@ int ObPL::execute(ObExecContext &ctx,
     OX (*result = local_result);
   }
 
+  //当前层 pl 执行时间
   int64_t execute_end = ObTimeUtility::current_time();
+  pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
+
 #ifndef NDEBUG
     LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start));
+      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
+        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
+        K(pl.get_plsql_exec_time()), K(pl.get_sub_plsql_exec_time()));
 #else
     LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start));
+      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
+      K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
+      K(pl.get_sub_plsql_exec_time()));
 #endif
+  OX (routine.update_execute_time(execute_end - execute_start));
 
   return ret;
 }
@@ -1726,6 +1737,40 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
   return ret;
 }
 
+struct ObPLExecTraceIdGuard {
+  ObPLExecTraceIdGuard(const ObCurTraceId::TraceId &trace_id,
+                       uint64_t package_id, uint64_t routine_id)
+      : package_id_(package_id), routine_id_(routine_id) {
+    int ret = OB_SUCCESS;
+    if (trace_id.is_valid()
+          && OB_NOT_NULL(ObCurTraceId::get_trace_id())
+          && !(trace_id == *ObCurTraceId::get_trace_id())) {
+      origin_trace_id_.set(*ObCurTraceId::get_trace_id());
+
+      // log with SQL trace_id
+      LOG_TRACE("executing pl, restore trace_id to pl trace_id",
+               K(package_id_), K(routine_id_),
+               "from", origin_trace_id_, "to", trace_id);
+
+      ObCurTraceId::get_trace_id()->set(trace_id);
+    }
+  }
+
+  ~ObPLExecTraceIdGuard() {
+    int ret = OB_SUCCESS;
+    if (origin_trace_id_.is_valid() && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+      ObCurTraceId::TraceId curr_trace_id = *ObCurTraceId::get_trace_id();
+      ObCurTraceId::get_trace_id()->set(origin_trace_id_);
+      LOG_TRACE("pl execution finished, trace id restored from pl trace_id to sql trace_id",
+               K(package_id_), K(routine_id_),
+               "from", curr_trace_id, "to", origin_trace_id_);
+    }
+  }
+  ObCurTraceId::TraceId origin_trace_id_;
+  uint64_t package_id_;
+  uint64_t routine_id_;
+};
+
 // for execute anonymous
 int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
@@ -1812,6 +1857,13 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
     // prepare it.
     if (OB_SUCC(ret)) {
       SMART_VAR(ObPLContext, stack_ctx) {
+        ObCurTraceId::TraceId parent_trace_id;
+        if (nullptr != ctx.get_my_session()->get_pl_context()) {
+          ObPLContext *curr = ctx.get_my_session()->get_pl_context()->get_top_stack_ctx();
+          parent_trace_id.set(curr->get_trace_id());
+        }
+        ObPLExecTraceIdGuard trace_guard(parent_trace_id, OB_INVALID_ID, OB_INVALID_ID);
+
         LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
         OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
@@ -1917,6 +1969,13 @@ int ObPL::execute(ObExecContext &ctx,
   // prepare it...
   if (OB_SUCC(ret)) {
     SMART_VAR(ObPLContext, stack_ctx) {
+      ObCurTraceId::TraceId parent_trace_id;
+      if (nullptr != ctx.get_my_session()->get_pl_context()) {
+        ObPLContext *curr = ctx.get_my_session()->get_pl_context()->get_top_stack_ctx();
+        parent_trace_id.set(curr->get_trace_id());
+      }
+      ObPLExecTraceIdGuard trace_guard(parent_trace_id, OB_INVALID_ID, stmt_id);
+
       LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
       OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
@@ -1975,24 +2034,30 @@ int ObPL::execute(ObExecContext &ctx,
   ObPLFunction *local_routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
   int64_t old_worker_timeout_ts = 0;
+  ObCurTraceId::TraceId parent_trace_id;
   /* !!!
   * PL，req_timeinfo_guard一定要在执行前定义
   * !!!
   */
-  if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
-    // set work timeout for compile it only top level store routine
-    int64_t pl_block_timeout = 0;
-    int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
-    old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
-    OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
-    if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
-      pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
-    }
-    OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
-  }
-
-  observer::ObReqTimeGuard req_timeinfo_guard;
   SMART_VAR(ObPLContext, stack_ctx) {
+    if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
+      // set work timeout for compile it only top level store routine
+      int64_t pl_block_timeout = 0;
+      int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
+      old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+      OZ (ctx.get_my_session()->get_pl_block_timeout(pl_block_timeout));
+      if (OB_SUCC(ret) && pl_block_timeout > OB_MAX_USER_SPECIFIED_TIMEOUT) {
+        pl_block_timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
+      }
+      OX (THIS_WORKER.set_timeout_ts(query_start_time + pl_block_timeout));
+    } else {
+      ObPLContext *curr = ctx.get_my_session()->get_pl_context()->get_top_stack_ctx();
+      parent_trace_id.set(curr->get_trace_id());
+    }
+    ObPLExecTraceIdGuard trace_guard(parent_trace_id, package_id, routine_id);
+
+    observer::ObReqTimeGuard req_timeinfo_guard;
+
     LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
     CHECK_COMPATIBILITY_MODE(ctx.get_my_session());
 
@@ -2233,6 +2298,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
         OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
         CK (OB_NOT_NULL(routine));
         if (OB_SUCC(ret) && routine->get_can_cached()) {
+          routine->get_stat_for_update().name_ = pc_ctx.raw_sql_;
+          routine->get_stat_for_update().type_ = ObPLCacheObjectType::ANONYMOUS_BLOCK_TYPE;
           OZ (add_pl_lib_cache(routine, pc_ctx));
           // add sql key to plan cache
           //OX (pc_ctx.key_.name_ = sql);
@@ -2347,6 +2414,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           CK (OB_NOT_NULL(routine));
           if (OB_SUCC(ret)
               && routine->get_can_cached()) {
+            routine->get_stat_for_update().name_ = routine->get_function_name();
+            routine->get_stat_for_update().type_ = ObPLCacheObjectType::STANDALONE_ROUTINE_TYPE;
             OZ (add_pl_lib_cache(routine, pc_ctx));
           }
           OX (need_update_schema = true);
@@ -2672,6 +2741,30 @@ int ObPLExecState::deep_copy_result_if_need()
     CK (OB_NOT_NULL(allocator));
     OZ (deep_copy_obj(*allocator, result_, new_obj));
     OX (result_ = new_obj);
+  }
+  return ret;
+}
+
+int ObPLExecState::add_pl_exec_time(int64_t pl_exec_time, bool is_called_from_sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(top_context_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("top context is null. ", K(ret));
+  } else if (top_context_->get_exec_stack().count() > 0) {
+    // get_exec_stack is already pop in final(ret)
+    ObPLExecState *parent = top_context_->get_exec_stack().at(top_context_->get_exec_stack().count() - 1);
+    CK (OB_NOT_NULL(parent));
+    CK (parent != this);
+    OX (parent->add_sub_plsql_exec_time(pl_exec_time));
+    if (!is_called_from_sql) {
+      OX (parent->add_pure_sql_exec_time(get_pure_sql_exec_time()));
+    }
+  } else {
+    CK (OB_NOT_NULL(ctx_.exec_ctx_));
+    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()));
+    // top pl exec time , need add to session
+    OX ((ctx_.exec_ctx_->get_my_session()->add_plsql_exec_time(pl_exec_time)));
   }
   return ret;
 }
@@ -4212,35 +4305,6 @@ bool ObPLFunction::should_init_as_session_cursor()
   LOG_DEBUG("check external session cursor", K(b_ret));
 
   return b_ret;
-}
-
-int ObPLFunction::update_cache_obj_stat(ObILibCacheCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
-
-  PLCacheObjStat &stat = get_stat_for_update();
-  stat.pl_schema_id_ = pc_ctx.key_.key_id_;
-  stat.gen_time_ = ObTimeUtility::current_time();
-  stat.hit_count_ = 0;
-  MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
-
-  if (ObLibCacheNameSpace::NS_ANON == get_ns()) {
-    ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
-    if (OB_FAIL(ob_write_string(get_allocator(),
-                                trunc_raw_sql.string(),
-                                stat.raw_sql_))) {
-      LOG_WARN("failed to write sql", K(ret));
-    } else {
-      stat.sql_cs_type_ = pc_ctx.session_info_->get_local_collation_connection();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    // Update last_active_time_ last, because last_active_time_ is used to
-    // indicate whether the cache stat has been updated.
-    stat.last_active_time_ = ObTimeUtility::current_time();
-  }
-  return ret;
 }
 
 int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag)
