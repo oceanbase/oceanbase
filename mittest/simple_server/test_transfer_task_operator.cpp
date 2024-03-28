@@ -49,7 +49,6 @@ public:
   ObTransferTask task_;
   transaction::tablelock::ObTableLockOwnerID lock_owner_id_;
   uint64_t data_version_;
-  share::SCN ora_rowscn_;
 };
 
 void TestTransferTaskOperator::SetUp()
@@ -81,7 +80,6 @@ void TestTransferTaskOperator::SetUp()
   }
   ASSERT_EQ(OB_SUCCESS, task_.init(task_id_, src_ls_, dest_ls_, part_list_, status_, trace_id_,
       ObBalanceTaskID(12), data_version_));
-  ora_rowscn_.convert_for_inner_table_field(1666844202200630);
   LOG_INFO("tranfer task init", K(task_));
 }
 
@@ -187,7 +185,7 @@ TEST_F(TestTransferTaskOperator, test_basic_func)
   ASSERT_TRUE(!task.is_valid());
   ASSERT_EQ(OB_SUCCESS, task.init(task_id_, src_ls_, dest_ls_, part_list_str, empty_str, empty_str, table_lock_tablet_list_str, tablet_list_str,
       start_scn_, finish_scn_, status_, trace_id_, OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT,
-      ObBalanceTaskID(2), lock_owner_id_, data_version_, ora_rowscn_));
+      ObBalanceTaskID(2), lock_owner_id_, data_version_));
   LOG_INFO("tranfer task other init", K(task));
   ASSERT_TRUE(task.is_valid());
   task.reset();

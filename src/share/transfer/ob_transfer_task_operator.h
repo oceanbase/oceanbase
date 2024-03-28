@@ -474,6 +474,12 @@ public:
              common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
   /*-----------------------------------------*/
 
+  static int get_pre_transfer_ora_rowscn(
+             common::ObISQLClient &sql_proxy,
+             const uint64_t tenant_id,
+             const ObTransferTaskID task_id,
+             share::SCN &row_scn);
+
 private:
   static int get_by_ls_id_(
       common::ObISQLClient &sql_proxy,

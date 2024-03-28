@@ -471,8 +471,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do with start status get invalid argument", K(ret), K(task_info));
-  } else if (!enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(
-      task_info.src_ls_id_, task_info.ora_rowscn_))) {
+  } else if (!enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(task_info))) {
     LOG_WARN("failed to prepare active trans before lock member list", K(ret), K(task_info));
   } else if (OB_FAIL(ObTransferUtils::get_gts(task_info.tenant_id_, gts_seq_))) {
     LOG_WARN("failed to get gts seq", K(ret), K(task_info));
@@ -3299,29 +3298,49 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
   return ret;
 }
 
+int ObTransferHandler::get_pre_transfer_ora_rowscn_(
+    const share::ObTransferTaskInfo &task_info, share::SCN &row_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  row_scn.set_invalid();
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObTransferTaskOperator::get_pre_transfer_ora_rowscn(
+      *sql_proxy_, task_info.tenant_id_, task_info.task_id_, row_scn))) {
+    LOG_WARN("failed to get pre transfer ora rowscn", K(ret));
+  }
+  return ret;
+}
+
 int ObTransferHandler::precheck_active_trans_before_lock_member_list_(
-    const share::ObLSID &src_ls_id,
-    const share::SCN &row_scn)
+    const share::ObTransferTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   static const int64_t CHECK_ROW_SCN_INTERVAL = 10_ms;
   static const int64_t TOTAL_CHECK_ROW_SCN_TIME = 30_s;
+  share::SCN ora_rowscn;
   share::SCN weak_read_ts;
-
   bool has_passed_rowscn = false;
+  if (OB_FAIL(get_pre_transfer_ora_rowscn_(task_info, ora_rowscn))) {
+    LOG_WARN("failed to get pre transfer ora rowscn", K(ret), K(task_info));
+  }
+
   const int64_t start_ts = ObTimeUtility::current_time();
+  const share::ObLSID &src_ls_id = task_info.src_ls_id_;
   while (OB_SUCC(ret) && !has_passed_rowscn) {
     if (OB_FAIL(get_ls_weak_read_ts_(src_ls_id, weak_read_ts))) {
       LOG_WARN("failed to get ls weak read ts", K(ret), K(src_ls_id), K(weak_read_ts));
-    } else if (weak_read_ts >= row_scn) {
+    } else if (weak_read_ts >= ora_rowscn) {
       has_passed_rowscn = true;
-      LOG_INFO("src ls weak read ts has passed row scn", K(weak_read_ts), K(row_scn), K(src_ls_id));
+      LOG_INFO("src ls weak read ts has passed row scn", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
     } else if (ObTimeUtility::current_time() - start_ts > TOTAL_CHECK_ROW_SCN_TIME) {
       ret = OB_TIMEOUT;
-      LOG_WARN("precheck active trans before lock member list timeout", K(weak_read_ts), K(row_scn), K(src_ls_id));
+      LOG_WARN("precheck active trans before lock member list timeout", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
       break;
     } else {
-      LOG_WARN("src ls weak read ts has not passed row scn", K(weak_read_ts), K(row_scn), K(src_ls_id));
+      LOG_WARN("src ls weak read ts has not passed row scn", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
       ob_usleep(CHECK_ROW_SCN_INTERVAL);
     }
   }

@@ -346,9 +346,11 @@ private:
       const ObTransferStatus &status,
       const bool find_by_src_ls,
       bool &task_exist) const;
+  int get_pre_transfer_ora_rowscn_(
+      const share::ObTransferTaskInfo &task_info,
+      share::SCN &row_scn);
   int precheck_active_trans_before_lock_member_list_(
-      const share::ObLSID &src_ls_id,
-      const share::SCN &row_scn);
+      const share::ObTransferTaskInfo &task_info);
   int get_ls_weak_read_ts_(
       const share::ObLSID &ls_id,
       share::SCN &weak_read_ts);
