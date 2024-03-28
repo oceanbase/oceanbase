@@ -175,7 +175,7 @@ protected:
       ObTableAccessContext &access_ctx);
   OB_INLINE bool skip_index_block(const ObMicroIndexInfo &index_block_info)
   {
-    return !sstable_->is_major_sstable() && !index_block_info.contain_uncommitted_row() && index_block_info.get_max_merged_trans_version() <= access_ctx_->trans_version_range_.base_version_;
+    return sstable_->is_multi_version_minor_sstable() && !index_block_info.contain_uncommitted_row() && index_block_info.get_max_merged_trans_version() <= access_ctx_->trans_version_range_.base_version_;
   }
 private:
   ObMicroBlockDataHandle &get_read_handle(const int64_t level)
