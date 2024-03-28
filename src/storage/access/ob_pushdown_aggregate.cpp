@@ -1640,7 +1640,6 @@ int ObHyperLogLogAggCell::eval(blocksstable::ObStorageDatum &storage_datum, cons
   if (OB_SUCC(ret)) {
     aggregated_ = true;
   }
-  LOG_DEBUG("after set ndv hash", K(hash_value), K(storage_datum), K_(ndv_calculator));
   return ret;
 }
 

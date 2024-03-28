@@ -743,6 +743,34 @@ int ObIntegerColumnDecoder::get_aggregate_result(
   return ret;
 }
 
+#define INT_DATUM_ASSIGN(datum, datum_width, value)               \
+  switch (datum_width) {                                          \
+    case ObIntegerStream::UW_1_BYTE : {                           \
+      *(uint8_t*)datum.ptr_ = value;                              \
+      datum.pack_ = sizeof(uint8_t);                              \
+      break;                                                      \
+    }                                                             \
+    case ObIntegerStream::UW_2_BYTE : {                           \
+      *(uint16_t*)datum.ptr_ = value;                             \
+      datum.pack_ = sizeof(uint16_t);                             \
+      break;                                                      \
+    }                                                             \
+    case ObIntegerStream::UW_4_BYTE : {                           \
+    *(uint32_t*)datum.ptr_ = value;                               \
+      datum.pack_ = sizeof(uint32_t);                             \
+      break;                                                      \
+    }                                                             \
+    case ObIntegerStream::UW_8_BYTE : {                           \
+    *(uint64_t*)datum.ptr_ = value;                               \
+      datum.pack_ = sizeof(uint64_t);                             \
+      break;                                                      \
+    }                                                             \
+    default : {                                                   \
+      ret = OB_ERR_UNEXPECTED;                                    \
+      LOG_WARN("Unexpected datum width", K(ret), K(datum_width)); \
+    }                                                             \
+  }
+
 int ObIntegerColumnDecoder::traverse_integer_in_agg(
     const ObIntegerColumnDecoderCtx &ctx,
     const bool is_col_signed,
@@ -820,14 +848,21 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
     if (OB_SUCC(ret) && !result_is_null) {
       result += base_value;
       ObStorageDatum storage_datum;
-      storage_datum.set_uint(result);
-      if (OB_FAIL(agg_cell.eval(storage_datum))) {
+      if (ctx.ctx_->meta_.is_decimal_int()) {
+        if (OB_FAIL(ObIntegerStreamDecoder::decimal_datum_assign(storage_datum, ctx.ctx_->meta_.precision_width_tag(), result, true))) {
+          LOG_WARN("Failed to assign decimal datum", K(ret));
+        }
+      } else {
+        INT_DATUM_ASSIGN(storage_datum, get_width_tag_map()[ctx.datum_len_], result);
+      }
+      if (OB_SUCC(ret) && OB_FAIL(agg_cell.eval(storage_datum))) {
         LOG_WARN("Failed to eval agg_cell", KR(ret), K(storage_datum), K(agg_cell));
       }
     }
   }
   return ret;
 }
+#undef INT_DATUM_ASSIGN
 
 }
 }
