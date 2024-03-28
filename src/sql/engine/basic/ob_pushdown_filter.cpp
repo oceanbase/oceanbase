@@ -1876,9 +1876,6 @@ int ObWhiteFilterExecutor::init_in_eval_datums()
         LOG_WARN("Unexpected null arg", K(ret), K(cur_arg));
       } else if (i == 0) {
         param_obj_meta = cur_arg->obj_meta_;
-      } else if (param_obj_meta.get_type() != cur_arg->obj_meta_.get_type()) { // make sure all type is identical
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected param obj meta", K(ret), K(param_obj_meta), K(cur_arg->obj_meta_));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cur_arg->eval(eval_ctx, datum))) {
