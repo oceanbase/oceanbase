@@ -310,11 +310,13 @@ public:
                                        share::schema::ObSchemaType schema_type,
                                        uint64_t object_id,
                                        uint64_t database_id,
-                                       uint64_t dep_obj_id);
+                                       uint64_t dep_obj_id,
+                                       bool is_db_expilicit = false);
   int add_object_versions_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
                                        const ObIArray<uint64_t> &object_ids,
-                                       const ObIArray<uint64_t> &db_ids);
+                                       const ObIArray<uint64_t> &db_ids,
+                                       bool is_db_expilicit = false);
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
@@ -599,7 +601,7 @@ protected:
                                            common::ObString &table_name,
                                            common::ObString &database_name,
                                            bool is_reverse_link);
-  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool error_with_exist);
+  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool is_db_expilicit);
 
   /*
    *
