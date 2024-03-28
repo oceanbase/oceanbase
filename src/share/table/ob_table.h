@@ -1103,6 +1103,8 @@ public:
   {}
   virtual ~ObTableQueryAsyncResult() {}
 public:
+  INHERIT_TO_STRING_KV("ObTableQueryResult", ObTableQueryResult, K_(is_end), K_(query_session_id));
+public:
   bool     is_end_;
   uint64_t  query_session_id_; // from server gen
 };

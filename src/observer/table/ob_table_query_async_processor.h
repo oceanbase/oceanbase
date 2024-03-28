@@ -62,6 +62,24 @@ struct ObTableQueryAsyncCtx
 };
 
 /**
+ * ---------------------------------------- ObTableQueryAsyncEntifyDestroyGuard ----------------------------------------
+ */
+class ObTableQueryAsyncEntifyDestroyGuard
+  {
+  public:
+    ObTableQueryAsyncEntifyDestroyGuard(lib::MemoryContext &entity) : ref_(entity) {}
+    ~ObTableQueryAsyncEntifyDestroyGuard()
+    {
+      if (OB_NOT_NULL(ref_)) {
+        DESTROY_CONTEXT(ref_);
+        ref_ = NULL;
+      }
+    }
+  private:
+    lib::MemoryContext &ref_;
+  };
+
+/**
  * ---------------------------------------- ObTableQueryAsyncSession ----------------------------------------
  */
 class ObTableQueryAsyncSession final
@@ -72,14 +90,16 @@ public:
   explicit ObTableQueryAsyncSession()
     : in_use_(true),
       timeout_ts_(10000000),
+      iterator_mementity_(nullptr),
+      iterator_mementity_destroy_guard_(iterator_mementity_),
+      allocator_("TbAQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tenant_id_(MTL_ID()),
       query_(),
+      select_columns_(),
       result_iterator_(nullptr),
-      allocator_("TbAQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      query_ctx_(allocator_),
-      iterator_mementity_(nullptr)
+      query_ctx_(allocator_)
   {}
-  ~ObTableQueryAsyncSession();
+  ~ObTableQueryAsyncSession() {}
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
   table::ObTableQueryResultIterator *get_result_iter() { return result_iterator_; };
@@ -89,9 +109,13 @@ public:
 
   void set_timout_ts(uint64_t timeout_ts) { timeout_ts_ = timeout_ts; }
   table::ObTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
+  lib::MemoryContext &get_memory_ctx() { return iterator_mementity_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
   common::ObObjectID get_tenant_id() { return tenant_id_; }
   table::ObTableQuery &get_query() { return query_; }
+  common::ObIArray<common::ObString> &get_select_columns() { return select_columns_; }
+  int deep_copy_select_columns(const common::ObIArray<common::ObString> &query_cols_names_,
+                               const common::ObIArray<common::ObString> &tb_ctx_cols_names_);
   ObTableQueryAsyncCtx &get_query_ctx() { return query_ctx_; }
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
@@ -100,12 +124,14 @@ public:
 private:
   bool in_use_;
   uint64_t timeout_ts_;
+  lib::MemoryContext iterator_mementity_;
+  ObTableQueryAsyncEntifyDestroyGuard iterator_mementity_destroy_guard_;
+  ObArenaAllocator allocator_;
   common::ObObjectID tenant_id_;
   table::ObTableQuery query_; // deep copy from arg_.query_
+  ObSEArray<ObString, 16> select_columns_; // deep copy from tb_ctx or query, which includes all the actual col names the user acquired
   table::ObTableQueryResultIterator *result_iterator_;
-  ObArenaAllocator allocator_;
   ObTableQueryAsyncCtx query_ctx_;
-  lib::MemoryContext iterator_mementity_;
 
 private:
   // txn control

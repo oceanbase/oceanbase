@@ -65,11 +65,22 @@ int ObTableQueryAsyncSession::init()
   return ret;
 }
 
-ObTableQueryAsyncSession::~ObTableQueryAsyncSession()
+int ObTableQueryAsyncSession::deep_copy_select_columns(const common::ObIArray<common::ObString> &query_cols_names_,
+                                                       const common::ObIArray<common::ObString> &tb_ctx_cols_names_)
 {
-  if (OB_NOT_NULL(iterator_mementity_)) {
-    DESTROY_CONTEXT(iterator_mementity_);
+  int ret = OB_SUCCESS;
+  // use column names specified in the query if provided
+  // otherwise default to column names from the table context
+  const common::ObIArray<common::ObString> &source_cols = query_cols_names_.count() == 0 ? tb_ctx_cols_names_ : query_cols_names_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_cols.count(); i++) {
+    common::ObString select_column;
+    if (OB_FAIL(ob_write_string(allocator_, source_cols.at(i), select_column))) {
+      LOG_WARN("fail to deep copy select column", K(ret), K(select_columns_.at(i)));
+    } else if (OB_FAIL(select_columns_.push_back(select_column))) {
+      LOG_WARN("fail to push back select column", K(ret), K(select_column));
+    }
   }
+  return ret;
 }
 
 /**
@@ -536,6 +547,8 @@ int ObTableQueryAsyncP::query_scan_with_init()
     LOG_WARN("fail to deep copy query", K(ret), K(arg_.query_));
   } else if (OB_FAIL(init_tb_ctx(tb_ctx))) {
     LOG_WARN("fail to init table ctx", K(ret));
+  } else if (OB_FAIL(query_session_->deep_copy_select_columns(query.get_select_columns(), tb_ctx.get_query_col_names()))) {
+    LOG_WARN("fail to deep copy select columns from table ctx", K(ret));
   } else if (OB_FAIL(start_trans(true,
                                  arg_.consistency_level_,
                                  tb_ctx.get_ls_id(),
@@ -571,7 +584,7 @@ int ObTableQueryAsyncP::query_scan_without_init()
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null result iterator", K(ret));
-  } else if (OB_FAIL(result_.deep_copy_property_names(query_session_->get_query().get_select_columns()))) {
+  } else if (OB_FAIL(result_.deep_copy_property_names(query_session_->get_select_columns()))) {
     LOG_WARN("fail to deep copy property names to one result", K(ret), K(query_session_->get_query()));
   } else {
     ObTableQueryResult *query_result = nullptr;
@@ -715,7 +728,6 @@ int ObTableQueryAsyncP::before_process()
   return ParentType::before_process();
 }
 
-
 int ObTableQueryAsyncP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -729,27 +741,38 @@ int ObTableQueryAsyncP::try_process()
   } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
   } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else {
-    if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
-      ret = process_query_start();
-    } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
-      ret = process_query_next();
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("query execution failed, need rollback", K(ret));
-      int tmp_ret = ret;
-      if (OB_FAIL(destory_query_session(true))) {
-        LOG_WARN("faild to destory query session", K(ret));
+    WITH_CONTEXT(query_session_->get_memory_ctx()) {
+      if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
+        ret = process_query_start();
+      } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
+        ret = process_query_next();
       }
-      ret = tmp_ret;
-    } else if (result_.is_end_) {
-      if (OB_FAIL(destory_query_session(false))) {
-        LOG_WARN("fail to destory query session", K(ret), K(query_session_id_));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("query execution failed, need rollback", K(ret));
+        int tmp_ret = ret;
+        if (OB_FAIL(destory_query_session(true))) {
+          LOG_WARN("faild to destory query session", K(ret));
+        }
+        ret = tmp_ret;
+      } else if (result_.is_end_) {
+        if (OB_FAIL(destory_query_session(false))) {
+          LOG_WARN("fail to destory query session", K(ret), K(query_session_id_));
+        }
+      } else {
+        query_session_->set_in_use(false);
       }
-    } else {
-      query_session_->set_in_use(false);
     }
   }
-  LOG_INFO("one query sync finish", K(result_.is_end_));
+
+  #ifndef NDEBUG
+    // debug mode
+    LOG_INFO("[TABLE] execute query", K(ret), K_(arg), K(result_),
+             K_(retry_count), K_(result_row_count));
+  #else
+    // release mode
+    LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
+              "receive_ts", get_receive_timestamp(), K_(result_row_count));
+  #endif
 
   stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC;  // table querysync
   return ret;
