@@ -31,25 +31,7 @@ ObTableLSExecuteP::ObTableLSExecuteP(const ObGlobalContext &gctx)
 int ObTableLSExecuteP::deserialize()
 {
   arg_.ls_op_.set_deserialize_allocator(&allocator_);
-
-  int ret = ParentType::deserialize();
-  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
-    // For HKV table, modify the timestamp value to be negative
-    for (int64_t i = 0; OB_SUCC(ret) && i < arg_.ls_op_.count(); i++) {
-      const ObTableTabletOp &tablet_op = arg_.ls_op_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < tablet_op.count(); j++) {
-        const ObTableSingleOp &single_op = tablet_op.at(j);
-        const ObIArray<ObTableSingleOpEntity> &entities = single_op.get_entities();
-        for (int64_t k = 0; OB_SUCC(ret) && k < entities.count(); k++) {
-          ObTableSingleOpEntity &entity = const_cast<ObTableSingleOpEntity &>(entities.at(k));
-          if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(entity))) {
-            LOG_WARN("failed to negate timestamp value", K(ret));
-          }
-        } // end for
-      }
-    }
-  }
-  return ret;
+  return ParentType::deserialize();
 }
 
 int ObTableLSExecuteP::before_process()
