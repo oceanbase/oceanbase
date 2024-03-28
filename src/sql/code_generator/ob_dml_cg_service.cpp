@@ -1490,7 +1490,7 @@ int ObDmlCgService::is_table_has_unique_key(ObSchemaGetterGuard *schema_guard,
   return ret;
 }
 
-int ObDmlCgService::check_upd_need_all_columns(ObLogicalOperator &op,
+int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
                                                ObSchemaGetterGuard *schema_guard,
                                                const ObTableSchema *table_schema,
                                                const IndexDMLInfo &index_dml_info,
@@ -1509,7 +1509,7 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogicalOperator &op,
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
-  } else if (binlog_row_image == ObBinlogRowImage::FULL) {
+  } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
   } else if (!is_primary_index) {
@@ -1596,7 +1596,7 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
   return ret;
 }
 
-int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogicalOperator &op,
+int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogDelUpd &op,
                                                      ObTableID index_tid,
                                                      ObDASUpdCtDef &das_upd_ctdef,
                                                      const IndexDMLInfo &index_dml_info,
@@ -1644,7 +1644,8 @@ int ObDmlCgService::generate_minimal_upd_old_row_cid(ObLogicalOperator &op,
   return ret;
 }
 
-int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard,
+int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
+                                               ObSchemaGetterGuard *schema_guard,
                                                const ObTableSchema *table_schema,
                                                bool &need_all_columns)
 {
@@ -1658,7 +1659,7 @@ int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
-  } else if (binlog_row_image == ObBinlogRowImage::FULL) {
+  } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
   } else if (table_schema->is_heap_table()) {
@@ -1672,7 +1673,8 @@ int ObDmlCgService::check_del_need_all_columns(ObSchemaGetterGuard *schema_guard
   return ret;
 }
 
-int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
+int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
+                                                        ObTableID index_tid,
                                                         bool is_primary_index,
                                                         ObDASDelCtDef &das_del_ctdef,
                                                         ObIArray<uint64_t> &minimal_column_ids)
@@ -1695,7 +1697,7 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", KR(ret), K(index_tid));
-  } else if (OB_FAIL(check_del_need_all_columns(schema_guard, table_schema, need_all_columns))) {
+  } else if (OB_FAIL(check_del_need_all_columns(op, schema_guard, table_schema, need_all_columns))) {
     LOG_WARN("fail to check del need all columns", K(ret), K(is_primary_index), K(index_tid));
   } else if (need_all_columns) {
     if (OB_FAIL(minimal_column_ids.assign(das_del_ctdef.column_ids_))) {
@@ -2058,7 +2060,8 @@ int ObDmlCgService::generate_das_del_ctdef(ObLogDelUpd &op,
     LOG_WARN("generate das dml ctdef failed", K(ret));
   } else if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, dml_column_ids))) {
     LOG_WARN("generate dml column ids failed", K(ret));
-  } else if (OB_FAIL(generate_minimal_delete_old_row_cid(index_tid,
+  } else if (OB_FAIL(generate_minimal_delete_old_row_cid(op,
+                                                         index_tid,
                                                          is_primary_table,
                                                          das_del_ctdef,
                                                          minimal_column_ids))) {
