@@ -135,17 +135,11 @@ void ObTableGroupCommitEndTransCb::callback(int cb_param)
       }
     } else {
       // response failed result directly
-      ObSEArray<ObTableOperationResult, 1> failed_results;
-      if (OB_FAIL(cb_param) && OB_FAIL(ObTableGroupExecuteService::generate_failed_results(cb_param,
-                                                                                           result_entity_,
-                                                                                           *group_,
-                                                                                           failed_results))) {
-        LOG_WARN("fail to init failed results", K(ret), K(cb_param));
-      } else if (OB_FAIL(ObTableGroupExecuteService::response(*group_,
-                                                              group_factory_,
-                                                              op_factory_,
-                                                              failed_results))) {
-        LOG_WARN("fail to response", K(ret), KPC_(group), K(failed_results));
+      if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(cb_param,
+                                                                      *group_,
+                                                                      group_factory_,
+                                                                      op_factory_))) {
+        LOG_WARN("fail to response failed results", K(ret), KPC_(group), K(cb_param));
       }
     }
   } else { // commit success
@@ -412,12 +406,31 @@ int ObTableGroupExecuteService::generate_failed_results(int ret_code,
   return ret;
 }
 
-int ObTableGroupExecuteService::execute_read(const ObTableGroupCtx &ctx,
-                                             ObTableGroupCommitOps &group,
-                                             bool add_failed_group)
+int ObTableGroupExecuteService::response_failed_results(int ret_code,
+                                                        ObTableGroupCommitOps &group,
+                                                        ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
+                                                        ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory)
 {
   int ret = OB_SUCCESS;
-  bool had_do_response = false;
+  ObTableEntity result_entity;
+  ObSEArray<ObTableOperationResult, 1> failed_results;
+
+  if (OB_FAIL(generate_failed_results(ret_code, result_entity, group, failed_results))) {
+    LOG_WARN("fail to generate failed results", K(ret), K(ret_code), K(group));
+  } else if (OB_FAIL(response(group, group_factory, op_factory, failed_results))) {
+    LOG_WARN("fail to response", K(ret), K(group), K(failed_results));
+  }
+
+  return ret;
+}
+
+int ObTableGroupExecuteService::execute_read(const ObTableGroupCtx &ctx,
+                                             ObTableGroupCommitOps &group,
+                                             bool add_failed_group,
+                                             bool &had_do_response)
+{
+  int ret = OB_SUCCESS;
+  had_do_response = false;
   ObArenaAllocator tmp_allocator("TbGroupRead", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   int32_t stat_event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   ObTableEntityFactory<ObTableEntity> entity_factory;
@@ -479,12 +492,14 @@ int ObTableGroupExecuteService::execute_read(const ObTableGroupCtx &ctx,
         }
       } else {
         // response failed result directly
-        tmp_ret = ret;
-        ObSEArray<ObTableOperationResult, 1> failed_results;
-        if (OB_FAIL(generate_failed_results(tmp_ret, *batch_ctx.result_entity_, group, failed_results))) {
-          LOG_WARN("fail to generate failed results", K(ret), K(tmp_ret), K(group));
-        } else if (OB_FAIL(response(group, ctx.group_factory_, ctx.op_factory_, failed_results))) {
-          LOG_WARN("fail to response", K(ret), K(group), K(failed_results));
+        int ret_code = ret;
+        if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(ret_code,
+                                                                        group,
+                                                                        ctx.group_factory_,
+                                                                        ctx.op_factory_))) {
+          LOG_WARN("fail to response failed results", K(ret), K(group));
+        } else {
+          had_do_response = true;
         }
       }
     }
@@ -495,9 +510,11 @@ int ObTableGroupExecuteService::execute_read(const ObTableGroupCtx &ctx,
 
 int ObTableGroupExecuteService::execute_dml(const ObTableGroupCtx &ctx,
                                             ObTableGroupCommitOps &group,
-                                            bool add_failed_group)
+                                            bool add_failed_group,
+                                            bool &had_do_response)
 {
   int ret = OB_SUCCESS;
+  had_do_response = false;
   ObArenaAllocator tmp_allocator("TbGroupDml", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   int32_t stat_event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   OpFixedArray ops(tmp_allocator);
@@ -551,7 +568,8 @@ int ObTableGroupExecuteService::execute_dml(const ObTableGroupCtx &ctx,
     }
     ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
 
-    if (OB_FAIL(ret) && !batch_ctx.trans_param_->had_do_response_) {
+    had_do_response = batch_ctx.trans_param_->had_do_response_;
+    if (OB_FAIL(ret) && !had_do_response) {
       if (add_failed_group) {
         // move group to failed_groups if execute failed.
         ret = OB_SUCCESS; // cover ret code
@@ -563,13 +581,14 @@ int ObTableGroupExecuteService::execute_dml(const ObTableGroupCtx &ctx,
         }
       } else {
         // response failed result directly
-        tmp_ret = ret;
-        ObTableEntity result_entity;
-        ObSEArray<ObTableOperationResult, 1> failed_results;
-        if (OB_FAIL(generate_failed_results(tmp_ret, result_entity, group, failed_results))) {
-          LOG_WARN("fail to generate failed results", K(ret), K(tmp_ret), K(group));
-        } else if (OB_FAIL(response(group, ctx.group_factory_, ctx.op_factory_, failed_results))) {
-          LOG_WARN("fail to response", K(ret), K(group), K(failed_results));
+        int ret_code = ret;
+        if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(ret_code,
+                                                                        group,
+                                                                        ctx.group_factory_,
+                                                                        ctx.op_factory_))) {
+          LOG_WARN("fail to response failed results", K(ret), K(group));
+        } else {
+          had_do_response = true;
         }
       }
     }
@@ -580,16 +599,17 @@ int ObTableGroupExecuteService::execute_dml(const ObTableGroupCtx &ctx,
 
 int ObTableGroupExecuteService::execute(const ObTableGroupCtx &ctx,
                                         ObTableGroupCommitOps &group,
-                                        bool add_failed_group /* = true */)
+                                        bool add_failed_group,
+                                        bool &had_do_response)
 {
   int ret = OB_SUCCESS;
 
   if (group.is_get()) {
-    if (OB_FAIL(execute_read(ctx, group, add_failed_group))) {
+    if (OB_FAIL(execute_read(ctx, group, add_failed_group, had_do_response))) {
       LOG_WARN("fail to execute read group", K(ret), K(ctx), K(group), K(add_failed_group));
     }
   } else {
-    if (OB_FAIL(execute_dml(ctx, group, add_failed_group))) {
+    if (OB_FAIL(execute_dml(ctx, group, add_failed_group, had_do_response))) {
       LOG_WARN("fail to execute dml group", K(ret), K(ctx), K(group), K(add_failed_group));
     }
   }
@@ -601,7 +621,8 @@ int ObTableGroupExecuteService::execute(ObTableGroupCommitOps &group,
                                         ObTableFailedGroups *failed_groups,
                                         ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                                         ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory,
-                                        bool add_failed_group /* = true */)
+                                        bool add_failed_group,
+                                        bool &had_do_response)
 {
   int ret = OB_SUCCESS;
 
@@ -633,8 +654,51 @@ int ObTableGroupExecuteService::execute(ObTableGroupCommitOps &group,
     ctx.group_factory_ = group_factory;
     ctx.op_factory_ = op_factory;
 
-    if (OB_FAIL(ObTableGroupExecuteService::execute(ctx, group, add_failed_group))) {
+    if (OB_FAIL(ObTableGroupExecuteService::execute(ctx, group, add_failed_group, had_do_response))) {
       LOG_WARN("fail to execute group", K(ret), K(ctx), K(group), K(add_failed_group));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableGroupExecuteService::execute_one_by_one(ObTableGroupCommitOps &group,
+                                                   ObTableFailedGroups *failed_groups,
+                                                   ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
+                                                   ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObTableGroupCommitSingleOp*> &ops = group.ops_;
+  bool add_failed_group = false;
+  bool had_do_response = false;
+
+  for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); i++) {
+    ObTableGroupCommitOps *group_with_one_op = nullptr;
+    if (OB_ISNULL(group_with_one_op = group_factory->alloc())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc group", K(ret));
+    } else {
+      ObTableGroupCommitSingleOp *op = ops.at(i);
+      if (OB_FAIL(group_with_one_op->init(group.credential_,
+                                          group.ls_id_,
+                                          group.table_id_,
+                                          group.tablet_id_,
+                                          group.entity_type_,
+                                          group.timeout_ts_))) {
+        LOG_WARN("fail to init group", K(ret), K(group));
+      } else if (OB_FAIL(group_with_one_op->add_op(op))) {
+        LOG_WARN("fail to add op", K(ret), K(group_with_one_op));
+      } else if (OB_FAIL(execute(*group_with_one_op, failed_groups, group_factory, op_factory, add_failed_group, had_do_response))) {
+        LOG_WARN("fail to execute group", K(ret), K(group_with_one_op), K(had_do_response));
+      }
+      if (OB_FAIL(ret)) {
+        if (!had_do_response) {
+          int ret_code = ret;
+          if (OB_FAIL(response_failed_results(ret_code, *group_with_one_op, group_factory, op_factory))) {
+            LOG_WARN("fail to response failed results", K(ret), KPC(group_with_one_op));
+          }
+        }
+      }
     }
   }
 

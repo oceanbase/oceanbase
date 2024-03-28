@@ -153,20 +153,26 @@ public:
   static const int64_t DEFAULT_TRANS_TIMEOUT = 3 * 1000 * 1000L; // 3s
   static int execute(const ObTableGroupCtx &ctx,
                      ObTableGroupCommitOps &group,
-                     bool add_failed_group = true);
+                     bool add_failed_group,
+                     bool &had_do_response);
   static int execute(ObTableGroupCommitOps &group,
                      ObTableFailedGroups *failed_groups,
                      ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                      ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory,
-                     bool add_failed_group = true);
+                     bool add_failed_group,
+                     bool &had_do_response);
+  static int execute_one_by_one(ObTableGroupCommitOps &group,
+                                ObTableFailedGroups *failed_groups,
+                                ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
+                                ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory);
   static int response(ObTableGroupCommitOps &group,
                       ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                       ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory,
                       common::ObIArray<ObTableOperationResult> &results);
-  static int generate_failed_results(int ret_code,
-                                     ObITableEntity &result_entity,
+  static int response_failed_results(int ret_code,
                                      ObTableGroupCommitOps &group,
-                                     common::ObIArray<ObTableOperationResult> &results);
+                                     ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
+                                     ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory);
 private:
   static int start_trans(ObTableBatchCtx &batch_ctx);
   static int end_trans(const ObTableBatchCtx &batch_ctx,
@@ -178,10 +184,16 @@ private:
                        ObTableGroupFactory<ObTableGroupCommitSingleOp> &op_factory);
   static int execute_read(const ObTableGroupCtx &ctx,
                           ObTableGroupCommitOps &group,
-                          bool add_failed_group);
+                          bool add_failed_group,
+                          bool &had_do_response);
   static int execute_dml(const ObTableGroupCtx &ctx,
                          ObTableGroupCommitOps &group,
-                         bool add_failed_group);
+                         bool add_failed_group,
+                         bool &had_do_response);
+  static int generate_failed_results(int ret_code,
+                                     ObITableEntity &result_entity,
+                                     ObTableGroupCommitOps &group,
+                                     common::ObIArray<ObTableOperationResult> &results);
 };
 
 } // end namespace table

@@ -38,62 +38,15 @@ int ObTableGroupService::check_legality(const ObTableGroupCtx &ctx)
   return ret;
 }
 
-// it meads only one operation in a batch operation
-int ObTableGroupService::process_one_by_one(ObTableGroupCommitOps &group)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<ObTableGroupCommitSingleOp*> &ops = group.ops_;
-  bool add_failed_group = false;
-  ObTableGroupFactory<ObTableGroupCommitOps> &group_factory = TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
-  ObTableGroupFactory<ObTableGroupCommitSingleOp> &op_factory = TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
-  ObTableFailedGroups &failed_group = TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
-
-  for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); i++) {
-    ObTableGroupCommitOps *group_with_one_op = nullptr;
-    if (OB_ISNULL(group_with_one_op = group_factory.alloc())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc group", K(ret));
-    } else {
-      ObTableGroupCommitSingleOp *op = ops.at(i);
-      if (OB_FAIL(group_with_one_op->init(group.credential_,
-                                          group.ls_id_,
-                                          group.table_id_,
-                                          group.tablet_id_,
-                                          group.entity_type_,
-                                          group.timeout_ts_))) {
-        LOG_WARN("fail to init group", K(ret), K(group));
-      } else if (OB_FAIL(group_with_one_op->add_op(op))) {
-        LOG_WARN("fail to add op", K(ret), K(group_with_one_op));
-      } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group_with_one_op,
-                                                             &failed_group,
-                                                             &group_factory,
-                                                             &op_factory,
-                                                             add_failed_group))) {
-        LOG_WARN("fail to execute group", K(ret), K(group_with_one_op));
-      }
-      if (OB_FAIL(ret)) {
-        LOG_WARN("execute one operation fail", K(ret), KPC(op));
-        ret = OB_SUCCESS; // cover ret code, we need to execute all operation in failed group
-        if (OB_NOT_NULL(group_with_one_op)) {
-          group_factory.free(group_with_one_op);
-        }
-
-        if (OB_NOT_NULL(op)) {
-          op_factory.free(op);
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 // only execute one group once
 int ObTableGroupService::process_failed_group()
 {
   int ret = OB_SUCCESS;
-
+  ObTableGroupFactory<ObTableGroupCommitOps> &group_factory = TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
+  ObTableGroupFactory<ObTableGroupCommitSingleOp> &op_factory = TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
+  ObTableFailedGroups &failed_groups = TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
   ObTableFailedGroups &groups = TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
+
   if (groups.empty()) {
     // do nothing
   } else {
@@ -101,8 +54,11 @@ int ObTableGroupService::process_failed_group()
     if (OB_ISNULL(group)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("group is null", K(ret));
-    } else if (OB_FAIL(process_one_by_one(*group))) {
-      LOG_WARN("fail to process group one by one", K(ret));
+    } else if (OB_FAIL(ObTableGroupExecuteService::execute_one_by_one(*group,
+                                                                       &failed_groups,
+                                                                       &group_factory,
+                                                                       &op_factory))) {
+      LOG_WARN("fail to execute group one by one", K(ret));
     }
 
     if (OB_NOT_NULL(group)) {
@@ -116,6 +72,8 @@ int ObTableGroupService::process_failed_group()
 int ObTableGroupService::process_other_group()
 {
   int ret = OB_SUCCESS;
+  bool add_failed_group = true;
+  bool had_do_response = false;
   ObTableGroupCommitMgr::ObTableGroupCommitMap &groups = TABLEAPI_GROUP_COMMIT_MGR->get_groups();
   ObTableExecuteGroupsGetter getter;
 
@@ -139,7 +97,9 @@ int ObTableGroupService::process_other_group()
       } else if (OB_FAIL(ObTableGroupExecuteService::execute(*execute_group,
                                                              &TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups(),
                                                              &TABLEAPI_GROUP_COMMIT_MGR->get_group_factory(),
-                                                             &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory()))) {
+                                                             &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory(),
+                                                             add_failed_group,
+                                                             had_do_response))) {
         LOG_WARN("fail to execute group", K(ret), KPC(execute_group));
       } else {
         has_execute_one = true;
@@ -159,6 +119,8 @@ int ObTableGroupService::process_other_group()
 int ObTableGroupService::process(const ObTableGroupCtx &ctx, ObTableGroupCommitSingleOp *op)
 {
   int ret = OB_SUCCESS;
+  bool add_failed_group = true;
+  bool had_do_response = false;
   const ObTableGroupCommitKey *key = ctx.key_;
 
   if (OB_ISNULL(key)) {
@@ -190,7 +152,10 @@ int ObTableGroupService::process(const ObTableGroupCtx &ctx, ObTableGroupCommitS
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (feeder.need_execute()) {
-      if (OB_FAIL(ObTableGroupExecuteService::execute(ctx, *feeder.get_group()))) {
+      if (OB_FAIL(ObTableGroupExecuteService::execute(ctx,
+                                                      *feeder.get_group(),
+                                                      add_failed_group,
+                                                      had_do_response))) {
         LOG_WARN("fail to execute group", K(ret), K(ctx), KPC(feeder.get_group()));
       }
     } else if (TABLEAPI_GROUP_COMMIT_MGR->has_failed_groups()) {

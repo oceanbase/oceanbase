@@ -29,7 +29,6 @@ public:
   static int process(const ObTableGroupCtx &ctx, ObTableGroupCommitSingleOp *op);
   static int process_trigger();
 private:
-  static int process_one_by_one(ObTableGroupCommitOps &group);
   static int process_failed_group();
   static int process_other_group();
   static int check_legality(const ObTableGroupCtx &ctx);

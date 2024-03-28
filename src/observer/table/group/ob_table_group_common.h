@@ -296,6 +296,7 @@ public:
     }
     return group;
   }
+  OB_INLINE const common::ObList<ObTableGroupCommitOps*, common::ObIAllocator>& get_failed_groups() const { return failed_ops_; }
   int construct_trigger_requests(common::ObIAllocator &request_allocator,
                                  common::ObIArray<ObTableGroupTriggerRequest*> &requests);
 private:

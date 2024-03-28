@@ -294,22 +294,49 @@ void ObTableGroupCommitMgr::destroy()
       LOG_WARN("fail to foreach groups", K(ret));
     } else {
       bool add_failed_group = false;
+      bool had_do_response = false;
       for (int64_t i = 0; i < foreacher.groups_.count() && OB_SUCC(ret); i++) {
         ObTableGroupCommitOps *group = foreacher.groups_.at(i);
         if (OB_ISNULL(group)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("group is null", K(ret));
         } else if (OB_FAIL(ObTableGroupExecuteService::execute(*group,
-                                                               &TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups(),
-                                                               &TABLEAPI_GROUP_COMMIT_MGR->get_group_factory(),
-                                                               &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory(),
-                                                               add_failed_group))) {
-          LOG_WARN("fail to execute group", K(ret), KPC(group));
+                                                               &failed_groups_,
+                                                               &group_factory_,
+                                                               &op_factory_,
+                                                               add_failed_group,
+                                                               had_do_response))) {
+          LOG_WARN("fail to execute group", K(ret), KPC(group), K(had_do_response));
+        }
+        if (OB_FAIL(ret) && !had_do_response && OB_NOT_NULL(group)) {
+          int ret_code = ret;
+          if (OB_FAIL(ObTableGroupExecuteService::response_failed_results(ret_code,
+                                                                          *group,
+                                                                          &group_factory_,
+                                                                          &op_factory_))) {
+            LOG_WARN("fail to response failed results", K(ret), KPC(group));
+          }
         }
       }
     }
 
-    // 3. clear resource
+    // 3. check whether there are any remaining operations in the failed groups_ that have not been executed
+    FOREACH_X(tmp_node, failed_groups_.get_failed_groups(), OB_SUCC(ret)) {
+      ObTableGroupCommitOps *group = *tmp_node;
+      if (OB_NOT_NULL(group)) {
+        if (OB_FAIL(ObTableGroupExecuteService::execute_one_by_one(*group,
+                                                                   &failed_groups_,
+                                                                   &group_factory_,
+                                                                   &op_factory_))) {
+          LOG_WARN("fail to execute group one by one", K(ret));
+        }
+        if (OB_NOT_NULL(group)) {
+          group_factory_.free(group);
+        }
+      }
+    }
+
+    // 4. clear resource
     groups_.clear();
     group_factory_.free_all();
     op_factory_.free_all();
