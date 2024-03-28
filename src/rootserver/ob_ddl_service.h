@@ -2026,6 +2026,10 @@ public:
              common::ObIAllocator *allocator = NULL);
 #endif
 private:
+  // this function is used for add extra tenant config init during create excepet data version
+  int add_extra_tenant_init_config_(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
                                      share::schema::ObSAuditSchema &audit_schema);
   int handle_security_audit_for_object(const obrpc::ObSecurityAuditArg &arg,

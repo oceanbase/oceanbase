@@ -498,7 +498,7 @@ DEF_VERSION(compatible, OB_TENANT_PARAMETER, "4.2.1.5", "compatible version for 
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True", "specifies whether DDL operation is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_parallel_table_creation, OB_TENANT_PARAMETER, "True", "specifies whether create table parallelly. "
+DEF_BOOL(_enable_parallel_table_creation, OB_TENANT_PARAMETER, "False", "specifies whether create table parallelly. "
          "Value:  True: create table parallelly;  False: create table serially",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
