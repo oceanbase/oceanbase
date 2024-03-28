@@ -896,7 +896,7 @@ int ObLobManager::query(
         if (!lob_common->is_init_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid lob common header for out row.", K(ret), KPC(lob_common));
-        } else if (!param.tablet_id_.is_inner_tablet() && param.is_full_read()) {
+        } else if (param.is_full_read()) {
           if (OB_FAIL(read_all(param, meta_iter, output_data))) {
             LOG_WARN("read_all fail", K(ret), K(param));
           }

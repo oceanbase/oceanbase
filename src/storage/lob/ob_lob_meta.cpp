@@ -86,7 +86,10 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
       } else {
         cur_info_ = row;
         if (is_char && row.char_len_ == UINT32_MAX) {
-          if (not_calc_char_len()) {
+          if (row.byte_len_ != byte_size_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected situation", K(ret), K(byte_size_), KPC(this), K(row));
+          } else if (not_calc_char_len()) {
             LOG_DEBUG("not_calc_char_len", KPC(this), K(cur_info_));
           } else {
             // char len has not been calc, just calc char len here
