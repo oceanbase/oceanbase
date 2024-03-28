@@ -1251,11 +1251,11 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(
                 K(range_array));
   } else if (OB_FAIL(get_split_tables(table_iter, tables))) {
     STORAGE_LOG(WARN, "Failed to get all sstables", K(ret), K(table_iter));
-  } else if (tables.empty()) {
-    // only small tables, can not support arbitrary range split
-    total_size = 0;
   } else if (OB_FAIL(try_estimate_range_size(range_array, tables, estimate_size))) {
     STORAGE_LOG(WARN, "fail to estimate range size");
+  } else if (tables.empty()) {
+    // only small tables, can not support arbitrary range split
+    total_size = estimate_size;
   } else {
     RangeSplitInfoArray range_info_array;
     bool all_single_rowkey = false;
@@ -1504,7 +1504,7 @@ int ObPartitionMultiRangeSpliter::fast_build_range_array(
     int64_t avg_range_cnt = range_array.count() / expected_task_cnt, remain_range_cnt = range_array.count() % expected_task_cnt;
 
     for (int64_t i =0 ; OB_SUCC(ret) && i < range_array.count(); i++) {
-      int64_t task_range_cnt = avg_range_cnt + multi_range_split_array.count() < remain_range_cnt ? 1 : 0;
+      int64_t task_range_cnt = avg_range_cnt + (multi_range_split_array.count() < remain_range_cnt ? 1 : 0);
       if (OB_FAIL(range_array.at(i).deep_copy(allocator, store_range))) {
         STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(i), K(range_array.at(i)));
       } else if (OB_FAIL(range_split_array.push_back(store_range))) {
