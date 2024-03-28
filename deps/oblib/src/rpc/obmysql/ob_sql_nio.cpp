@@ -814,7 +814,6 @@ public:
       ret = OB_IO_ERROR;
       LOG_WARN("epoll_create fail", K(ret), K(errno));
     } else {
-      int ret = OB_SUCCESS;
       if ((lfd_ = listen_create(!oceanbase::lib::use_ipv6() ? AF_INET : AF_INET6, port, need_monopolize)) < 0) {
         ret = OB_SERVER_LISTEN_ERROR;
         LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
