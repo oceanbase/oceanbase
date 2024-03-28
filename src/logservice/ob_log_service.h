@@ -225,6 +225,7 @@ public:
   cdc::ObCdcService *get_cdc_service() { return &cdc_service_; }
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
   ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
+  ObLogApplyService *get_log_apply_service()  { return &apply_service_; }
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService *get_arbitration_service() { return &arb_service_; }
 #endif
