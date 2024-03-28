@@ -101,7 +101,7 @@ public:
                             const uint64_t cid);
 
   // 执行所有尝试插入的 das task， fetch冲突行的主表主键
-  int fetch_conflict_rowkey();
+  int fetch_conflict_rowkey(int64_t row_cnt);
   int get_next_conflict_rowkey(DASTaskIter &task_iter);
 
   virtual void destroy()
@@ -209,7 +209,7 @@ protected:
 
   int deal_hint_part_selection(ObObjectID partition_id);
   virtual int check_need_exec_single_row() override;
-
+  virtual ObDasParallelType check_das_parallel_type() override;
 private:
   int check_insert_up_ctdefs_valid() const;
 
@@ -229,6 +229,7 @@ private:
 
 protected:
   const static int64_t OB_DEFAULT_INSERT_UP_MEMORY_LIMIT = 2 * 1024 * 1024L;  // 2M in default
+  const static int64_t OB_DEFAULT_INSERT_UP_BATCH_ROW_COUNT = 1000L;  // 1000 in default
   int64_t insert_rows_;
   int64_t upd_changed_rows_;
   int64_t found_rows_;

@@ -193,7 +193,9 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
     ObArray<ObTaskId> finish_task;
     ObArray<ObTabletID> high_pri_tablet_need_redo;
     ObArray<ObTabletID> wait_tablet_need_redo;
+    int64_t finished_tablet_cnt = 0;
     bool is_task_doing = false;
+    ObLSRestoreStatus ls_restore_status = restore_state_handler_->get_restore_status();
     lib::ObMutexGuard guard(mtx_);
     FOREACH_X(iter, tablet_map_, OB_SUCC(ret)) {
       if (OB_FAIL(check_task_exist_(iter->first, is_task_doing))) {
@@ -206,7 +208,12 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
         const ToRestoreTabletGroup &restored_tg = iter->second;
         LOG_INFO("task is finished", "task_id", iter->first, K_(ls_id), K(restored_tg), KP(&high_pri_wait_tablet_set_), KP(&wait_tablet_set_));
         if (!restored_tg.is_tablet_group_task()) {
-        } else if (OB_FAIL(handle_task_finish_(ls, restored_tg, restored_tablets, high_pri_tablet_need_redo, wait_tablet_need_redo))) {
+        } else if (OB_FAIL(handle_task_finish_(ls,
+                                               restored_tg,
+                                               restored_tablets,
+                                               high_pri_tablet_need_redo,
+                                               wait_tablet_need_redo,
+                                               finished_tablet_cnt))) {
           LOG_WARN("fail to handle finish task", K(ret), "task_id", iter->first);
         }
       }
@@ -215,6 +222,9 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
     if (FAILEDx(redo_failed_tablets_(high_pri_tablet_need_redo, wait_tablet_need_redo))) {
       LOG_WARN("failed to redo failed tablets", K(ret));
     } else {
+      if (ls_restore_status.is_restore_major_data() && OB_FAIL(restore_state_handler_->add_finished_tablet_cnt(finished_tablet_cnt))) {
+        LOG_WARN("failed to add finished tablet cnt", K(ret));
+      }
       remove_finished_task_(finish_task);
       LOG_INFO("succeed remove restored tablets", K_(ls_id), K(high_pri_tablet_need_redo), K(wait_tablet_need_redo), K(restored_tablets));
     }
@@ -554,6 +564,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
   ObLSTabletService *ls_tablet_svr = nullptr;
   ObLS *ls = nullptr;
   bool is_follower = is_follower_();
+  int64_t unfinished_tablet_cnt = 0;
   if (OB_ISNULL(ls = restore_state_handler_->get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret));
@@ -586,6 +597,7 @@ int ObLSRestoreTaskMgr::reload_tablets_()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is nullptr", K(ret), K(tablet_handle));
       } else {
+        ++unfinished_tablet_cnt;
         const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
         const ObTabletID &tablet_id = tablet_meta.tablet_id_;
         if (tablet_meta.has_transfer_table() && ls_restore_status.is_quick_restore()) {
@@ -620,6 +632,11 @@ int ObLSRestoreTaskMgr::reload_tablets_()
           }
         }
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (ls_restore_status.is_restore_major_data() && OB_FAIL(restore_state_handler_->report_unfinished_tablet_cnt(unfinished_tablet_cnt))) {
+      LOG_WARN("failed to report unfinished tablet cnt", K(ret), K_(ls_id), K(unfinished_tablet_cnt));
     }
   }
 
@@ -939,10 +956,19 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
 
   if(!need_remove_tablet.empty()) {
     int tmp_ret = OB_SUCCESS;
+    int64_t finished_tablet_cnt = 0;
     ARRAY_FOREACH(need_remove_tablet, i) {
       if (OB_TMP_FAIL(wait_tablet_set_.erase_refactored(need_remove_tablet.at(i)))) {
         LOG_WARN("failed to erase from wait_tablet_set_", K(tmp_ret));
+      } else {
+        ++finished_tablet_cnt = 0;
       }
+    }
+
+    if (ls_restore_status.is_restore_major_data()
+        && finished_tablet_cnt > 0
+        && OB_TMP_FAIL(restore_state_handler_->add_finished_tablet_cnt(finished_tablet_cnt))) {
+      LOG_WARN("failed to add finished tablet cnt", K(ret), K(finished_tablet_cnt), K(tmp_ret));
     }
   }
 
@@ -1123,21 +1149,25 @@ int ObLSRestoreTaskMgr::handle_task_finish_(
     const ToRestoreTabletGroup &restored_tg,
     ObIArray<common::ObTabletID> &restored_tablets,
     ObIArray<common::ObTabletID> &high_pri_tablet_need_redo,
-    ObIArray<common::ObTabletID> &wait_tablet_need_redo)
+    ObIArray<common::ObTabletID> &wait_tablet_need_redo,
+    int64_t &finished_tablet_cnt)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
   bool is_restored = false;
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   const ObIArray<ObTabletID> &tablet_id_array = restored_tg.get_tablet_list();
+  finished_tablet_cnt = 0;
   // find all finished task, and group all tablet by restored or not.
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
     const ObTabletID &tablet_id = tablet_id_array.at(i);
     if (OB_FAIL(check_tablet_status_(*ls, tablet_id, is_exist, is_restored, restore_status))) {
       LOG_WARN("fail to check tablet status", K(ret), KPC(ls), K(tablet_id));
     } else if (!is_exist) {
+      ++finished_tablet_cnt;
       LOG_INFO("this tablet is not exist, may be deleted", K_(ls_id), K(tablet_id));
     } else if (is_restored) {
+      ++finished_tablet_cnt;
       // if tablet is restored by leader, then it will be send to follower to restore.
       if (OB_FAIL(restored_tablets.push_back(tablet_id))) {
         LOG_WARN("fail to push tablet id", K(ret), K(tablet_id));

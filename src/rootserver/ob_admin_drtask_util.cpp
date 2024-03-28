@@ -176,10 +176,11 @@ int ObAdminDRTaskUtil::construct_arg_for_add_command_(
                       tenant_id,
                       ls_id,
                       add_member,
-                      data_source_member,
+                      ObReplicaMember(),
                       orig_paxos_replica_number,
                       new_paxos_replica_number,
-                      false/*is_skip_change_member_list-not used*/))) {
+                      false/*is_skip_change_member_list-not used*/,
+                      data_source_member/*force_data_source*/))) {
       LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(ls_id), K(add_member),
                K(data_source_member), K(orig_paxos_replica_number), K(new_paxos_replica_number));
     }

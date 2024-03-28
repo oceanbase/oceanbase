@@ -54,12 +54,15 @@ const char* const CLUSTER_ID = "cluster_id";
 const char* const CLUSTER_NAME = "cluster";
 const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
 const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
+const char* const DATA_DISK_WRITE_LIMIT_PERCENTAGE = "data_disk_write_limit_percentage";
+const char* const DATA_DISK_USAGE_LIMIT_PERCENTAGE = "data_disk_usage_limit_percentage";
 const char* const COMPATIBLE = "compatible";
 const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
 const char* const PARTITION_BALANCE_SCHEDULE_INTERVAL = "partition_balance_schedule_interval";
 const char* const BALANCER_IDLE_TIME = "balancer_idle_time";
 const char* const LOG_DISK_UTILIZATION_LIMIT_THRESHOLD = "log_disk_utilization_limit_threshold";
 const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percentage";
+const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 
 class ObServerMemoryConfig;
 

@@ -97,7 +97,6 @@ int ObDASDeleteOp::open_op()
       LOG_WARN("delete row to partition storage failed", K(ret));
     }
   } else {
-    del_rtdef_->affected_rows_ += affected_rows;
     affected_rows_ = affected_rows;
   }
   return ret;
@@ -106,6 +105,26 @@ int ObDASDeleteOp::open_op()
 int ObDASDeleteOp::release_op()
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObDASDeleteOp::record_task_result_to_rtdef()
+{
+  int ret = OB_SUCCESS;
+  del_rtdef_->affected_rows_ += affected_rows_;
+  return ret;
+}
+
+int ObDASDeleteOp::assign_task_result(ObIDASTaskOp *other)
+{
+  int ret = OB_SUCCESS;
+  if (other->get_type() != get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), KPC(other));
+  } else {
+    ObDASDeleteOp *del_op = static_cast<ObDASDeleteOp *>(other);
+    affected_rows_ = del_op->get_affected_rows();
+  }
   return ret;
 }
 
@@ -118,7 +137,7 @@ int ObDASDeleteOp::decode_task_result(ObIDASTaskResult *task_result)
 #endif
   if (OB_SUCC(ret)) {
     ObDASDeleteResult *del_result = static_cast<ObDASDeleteResult*>(task_result);
-    del_rtdef_->affected_rows_ += del_result->get_affected_rows();
+    affected_rows_ = del_result->get_affected_rows();
   }
   return ret;
 }

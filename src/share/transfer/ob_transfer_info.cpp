@@ -424,6 +424,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Unable to process task due to transaction timeout",
   "Unable to process task due to inactive server in member list",
   "Wait to retry due to the last failure",
+  "Wait for learner list to be same",
   "Unknow"/*MAX_COMMENT*/
 };
 
@@ -493,7 +494,8 @@ ObTransferTask::ObTransferTask()
       comment_(ObTransferTaskComment::EMPTY_COMMENT),
       balance_task_id_(),
       table_lock_owner_id_(OB_INVALID_INDEX),
-      data_version_(0)
+      data_version_(0),
+      ora_rowscn_()
 {
 }
 
@@ -517,6 +519,7 @@ void ObTransferTask::reset()
   balance_task_id_.reset();
   table_lock_owner_id_ = OB_INVALID_INDEX;
   data_version_ = 0;
+  ora_rowscn_.reset();
 }
 
 // init by necessary info, other members take default values
@@ -555,6 +558,7 @@ int ObTransferTask::init(
       start_scn_.set_min();
       finish_scn_.set_min();
       data_version_ = data_version;
+      ora_rowscn_.set_min();
     }
   }
   return ret;
@@ -578,7 +582,8 @@ int ObTransferTask::init(
     const ObTransferTaskComment &comment,
     const ObBalanceTaskID balance_task_id,
     const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
-    const uint64_t data_version)
+    const uint64_t data_version,
+    const share::SCN &ora_rowscn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!task_id.is_valid()
@@ -615,6 +620,7 @@ int ObTransferTask::init(
     balance_task_id_ = balance_task_id;
     table_lock_owner_id_ = lock_owner_id;
     data_version_ = data_version;
+    ora_rowscn_ = ora_rowscn;
   }
   return ret;
 }
@@ -647,6 +653,7 @@ int ObTransferTask::assign(const ObTransferTask &other)
     balance_task_id_ = other.balance_task_id_;
     table_lock_owner_id_ = other.table_lock_owner_id_;
     data_version_ = other.data_version_;
+    ora_rowscn_ = other.ora_rowscn_;
   }
   return ret;
 }
@@ -678,7 +685,8 @@ ObTransferTaskInfo::ObTransferTaskInfo()
     start_scn_(),
     finish_scn_(),
     result_(OB_SUCCESS),
-    data_version_(0)
+    data_version_(0),
+    ora_rowscn_()
 {
 }
 
@@ -696,6 +704,7 @@ void ObTransferTaskInfo::reset()
   start_scn_.reset();
   finish_scn_.reset();
   result_ = OB_SUCCESS;
+  ora_rowscn_.reset();
 }
 
 // table_lock_tablet_list_ may be empty
@@ -733,6 +742,7 @@ int ObTransferTaskInfo::convert_from(const uint64_t tenant_id, const ObTransferT
     finish_scn_ = task.get_finish_scn();
     result_ = task.get_result();
     data_version_ = task.get_data_version();
+    ora_rowscn_ = task.get_ora_rowscn();
   }
   return ret;
 }
@@ -759,6 +769,7 @@ int ObTransferTaskInfo::assign(const ObTransferTaskInfo &task_info)
     finish_scn_ = task_info.finish_scn_;
     result_ = task_info.result_;
     data_version_ = task_info.data_version_;
+    ora_rowscn_ = task_info.ora_rowscn_;
   }
   return ret;
 }

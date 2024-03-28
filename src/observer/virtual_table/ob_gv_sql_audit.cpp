@@ -21,6 +21,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "share/rc/ob_tenant_base.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 #include <algorithm> // std::sort
 
@@ -545,7 +546,8 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case INDEX_BLOCK_CACHE_HIT:
     case BLOCKSCAN_BLOCK_CNT:
     case BLOCKSCAN_ROW_CNT:
-    case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
+    case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
+    case NETWORK_WAIT_TIME: {
       is_contain = true;
       break;
     }
@@ -565,7 +567,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
   ObObj *cells = cur_row_.cells_;
   const bool is_perf_event_closed = record.data_.is_perf_event_closed_;
 
-  if (OB_ISNULL(cells)) {
+  if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cells));
   } else {
@@ -686,7 +688,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case QUERY_SQL: {
           ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
                 record.data_.sql_cs_type_ : ObCharset::get_system_collation();
-          ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
+          ObString src_string(static_cast<int64_t>(record.data_.sql_len_), record.data_.sql_);
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
                                                         src_string,
@@ -1058,6 +1060,59 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         } break;
         case PLSQL_EXEC_TIME: {
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
+        } break;
+        case NETWORK_WAIT_TIME: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
+        } break;
+        case STMT_TYPE: {
+          ObString stmt_type_name;
+          ObString tmp_type_name = ObResolverUtils::get_stmt_type_string(record.data_.stmt_type_);
+          if (!tmp_type_name.empty()) {
+            stmt_type_name = tmp_type_name.make_string(tmp_type_name.ptr() + 2);
+          } else {
+            stmt_type_name = tmp_type_name;
+          }
+          cells[cell_idx].set_varchar(stmt_type_name);
+          cells[cell_idx].set_default_collation_type();
+        } break;
+        case SEQ_NUM: {
+          cells[cell_idx].set_null();
+        } break;
+        case TOTAL_MEMSTORE_READ_ROW_COUNT: {
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_
+                                + record.data_.total_memstore_read_row_count_);
+          } else {
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
+          }
+        } break;
+        case TOTAL_SSSTORE_READ_ROW_COUNT: {
+          if (record.data_.sql_len_ > 0) {
+            // qc thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_
+                                  + record.data_.total_ssstore_read_row_count_);
+          } else {
+            // work thread
+            cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
+          }
+        } break;
+        case PROXY_USER_NAME: {
+          int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
+        } break;
+        //format_sql_id
+        case FORMAT_SQL_ID: {
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.format_sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.format_sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

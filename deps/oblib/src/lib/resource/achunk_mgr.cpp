@@ -61,11 +61,13 @@ AChunkMgr &AChunkMgr::instance()
 AChunkMgr::AChunkMgr()
   : limit_(DEFAULT_LIMIT), urgent_(0), hold_(0),
     total_hold_(0), used_(0), shadow_hold_(0),
-    huge_slot_(0)
+    max_chunk_cache_size_(limit_)
 {
+  // only cache normal_chunk or large_chunk
   for (int i = 0; i < ARRAYSIZEOF(slots_); ++i) {
     new (slots_ + i) Slot();
   }
+  slots_[HUGE_ACHUNK_INDEX]->set_max_chunk_cache_size(0);
 }
 
 void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow)
@@ -229,7 +231,7 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
   }
   if (OB_ISNULL(chunk)) {
     bool updated = false;
-    for (int i = ARRAYSIZEOF(slots_) - 1; !updated && i >= 0; --i) {
+    for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
       while (!(updated = update_hold(hold_size, high_prio)) &&
           OB_NOT_NULL(chunk = slots_[i]->pop())) {
         // Wash chunk from all-cache when observer's hold reaches limit
@@ -269,17 +271,19 @@ void AChunkMgr::free_chunk(AChunk *chunk)
     const int64_t hold_size = chunk->hold();
     const uint64_t all_size = chunk->aligned();
     IGNORE_RETURN ATOMIC_AAF(&used_, -hold_size);
-    int64_t free_memory = limit_ - hold_;
-    int64_t expect_free_memory = (hold_ - used_) * 0.1;
-    // keep free memory to direct allocate huge_chunk, which can avoid to wash cached_chunk frequently.
-    if (free_memory < expect_free_memory) {
+    const double max_large_cache_ratio = 0.5;
+    int64_t max_large_cache_size = min(limit_ - used_, max_chunk_cache_size_) * max_large_cache_ratio;
+    const int64_t cache_hold = hold_ - used_;
+    const int64_t large_cache_hold = cache_hold - slots_[NORMAL_ACHUNK_INDEX]->hold();
+    bool freed = true;
+    if (cache_hold + hold_size <= max_chunk_cache_size_
+        && (NORMAL_ACHUNK_SIZE == all_size || large_cache_hold <= max_large_cache_size)
+        && 0 == chunk->washed_size_) {
+      freed = !get_slot(all_size)->push(chunk);
+    }
+    if (freed) {
       direct_free(chunk, all_size);
       IGNORE_RETURN update_hold(-hold_size, false);
-    } else {
-      if (chunk->washed_size_ > 0 || !get_slot(all_size)->push(chunk)) {
-        direct_free(chunk, all_size);
-        IGNORE_RETURN update_hold(-hold_size, false);
-      }
     }
   }
 }
@@ -291,7 +295,7 @@ AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
 
   AChunk *chunk = nullptr;
   bool updated = false;
-  for (int i = ARRAYSIZEOF(slots_) - 1; !updated && i >= 0; --i) {
+  for (int i = MAX_LARGE_ACHUNK_INDEX; !updated && i >= 0; --i) {
     while (!(updated = update_hold(hold_size, true)) &&
       OB_NOT_NULL(chunk = slots_[i]->pop())) {
       int64_t all_size = chunk->aligned();
@@ -380,12 +384,12 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
   int64_t memory_used = get_virtual_memory_used(&resident_size);
   int64_t large_maps = 0;
   int64_t large_unmaps = 0;
-  for (int i = 1; i < ARRAYSIZEOF(slots_); ++i) {
+  for (int i = MIN_LARGE_ACHUNK_INDEX; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     large_maps += slots_[i].maps_;
     large_unmaps += slots_[i].unmaps_;
   }
-  int64_t total_maps = slots_[0].maps_ + large_maps + huge_slot_.maps_;
-  int64_t total_unmaps = slots_[0].unmaps_ + large_unmaps + huge_slot_.unmaps_;
+  int64_t total_maps = slots_[NORMAL_ACHUNK_INDEX].maps_ + large_maps + slots_[HUGE_ACHUNK_INDEX].maps_;
+  int64_t total_unmaps = slots_[NORMAL_ACHUNK_INDEX].unmaps_ + large_unmaps + slots_[HUGE_ACHUNK_INDEX].unmaps_;
   ret = databuff_printf(buf, buf_len, pos,
       "[CHUNK_MGR] limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld freelists_hold=%'15ld"
       " total_maps=%'15ld total_unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld huge_maps=%'15ld huge_unmaps=%'15ld"
@@ -396,7 +400,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
       " virtual_memory_used=%'15ld actual_virtual_memory_used=%'15ld\n",
 #endif
       limit_, hold_, total_hold_, used_, hold_ - used_,
-      total_maps, total_unmaps, large_maps, large_unmaps, huge_slot_.maps_, huge_slot_.unmaps_,
+      total_maps, total_unmaps, large_maps, large_unmaps, slots_[HUGE_ACHUNK_INDEX].maps_, slots_[HUGE_ACHUNK_INDEX].unmaps_,
       0, resident_size,
 #ifndef ENABLE_SANITY
       memory_used
@@ -404,7 +408,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
       memory_used - shadow_hold_, memory_used
 #endif
       );
-  for (int i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(slots_); ++i) {
+  for (int i = 0; OB_SUCC(ret) && i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     const AChunkList &free_list = slots_[i].free_list_;
     const int64_t maps = slots_[i].maps_;
     const int64_t unmaps = slots_[i].unmaps_;
@@ -420,7 +424,7 @@ int64_t AChunkMgr::to_string(char *buf, const int64_t buf_len) const
 int64_t AChunkMgr::sync_wash()
 {
   int64_t washed_size = 0;
-  for (int i = 0; i < ARRAYSIZEOF(slots_); ++i) {
+  for (int i = 0; i <= MAX_LARGE_ACHUNK_INDEX; ++i) {
     AChunk *head = slots_[i]->popall();
     if (OB_NOT_NULL(head)) {
       AChunk *chunk = head;

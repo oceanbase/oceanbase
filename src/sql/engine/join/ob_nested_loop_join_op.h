@@ -122,6 +122,8 @@ public:
   int fill_cur_row_rescan_param();
   int calc_other_conds(bool &is_match);
 
+  int get_next_batch_from_right(const ObBatchRows *right_brs);
+  int get_next_row_from_right();
 private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoinOp::*state_operation_func_type)();

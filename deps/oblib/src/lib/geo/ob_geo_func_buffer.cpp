@@ -61,13 +61,6 @@ private:
   static bool apply_bg_equal(ObGeographPolygon &geo1,
                              ObGeographPolygon &geo2,
                              const ObSrsItem *srs);
-  template<typename MultiPointType, typename MultiLineType, typename MultiPolygonType>
-  static int apply_bg_remove_duplicate_geo(ObIAllocator &allocator,
-                                           const ObSrsItem *srs,
-                                           ObGeometry *&geo);
-  static int remove_duplicate_geo(ObIAllocator &allocator,
-                                  const ObSrsItem *srs,
-                                  ObGeometry *&geo);
   template <typename GeoTreeType>
   static int unwrap_geo_tree_inner(ObGeometry *geo_in,
                                    ObGeometry *&geo_out);
@@ -231,10 +224,10 @@ private:
     ObCartesianMultipolygon *mpt_res = NULL;
     ObCartesianMultipolygon *ml_res = NULL;
     ObCartesianMultipolygon *mpo_res = NULL;
-    ObCartesianMultipolygon *geo_res = NULL;
     ObGeometry *dedup_pt_ptr = NULL;
     ObGeometry *dedup_ml_ptr = NULL;
     ObGeometry *dedup_mpo_ptr = NULL;
+    ObArenaAllocator tmp_allocator;
 
     ObCartesianGeometrycollection *geo_tree = NULL;
     common::ObIAllocator *allocator = context.get_allocator();
@@ -247,135 +240,106 @@ private:
     } else if ((srid != 0) && OB_ISNULL(srs)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid strategy for cartisan collection with null srs", K(srid), K(ret));
+    } else if (OB_FAIL(ObGeoFuncUtils::ob_gc_prepare<ObCartesianGeometrycollection>(context, const_cast<ObGeometry *>(g), mpt, ml, mpo))) {
+      LOG_WARN("fail to do gc prepare", K(ret));
+    } else if (OB_ISNULL(mpt) || OB_ISNULL(ml) || OB_ISNULL(mpo)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null geometry collection union", K(ret), KP(mpt), KP(ml), KP(mpo));
+    } else if (OB_ISNULL(strategy = context.get_val_arg(0)->strategy_)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (strategy->distance_val_ < 0 && !(mpt->empty() && ml->empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("negative distance is only permitted for geometry collection with only (multi)polygon", K(ret));
+    } else if (OB_NOT_NULL(mpt)
+        && (dedup_pt_ptr = reinterpret_cast<ObGeometry *>(mpt))
+        && OB_FAIL(ObGeoTypeUtil::remove_duplicate_geo(dedup_pt_ptr, context.get_mem_ctx(), srs, false))) {
+      LOG_WARN("failed to deduplicate points", K(ret));
+    } else if (OB_NOT_NULL(ml) && (dedup_ml_ptr = reinterpret_cast<ObGeometry *>(ml))
+        && OB_FAIL(ObGeoTypeUtil::remove_duplicate_geo(dedup_ml_ptr, context.get_mem_ctx(), srs, false))) {
+      LOG_WARN("failed to deduplicate lines", K(ret));
+    } else if (OB_NOT_NULL(mpo) && (dedup_mpo_ptr = reinterpret_cast<ObGeometry *>(mpo))
+        && OB_FAIL(ObGeoTypeUtil::remove_duplicate_geo(dedup_mpo_ptr, context.get_mem_ctx(), srs, false))) {
+      LOG_WARN("failed to deduplicate polygons", K(ret));
+    } else if (OB_ISNULL(mpt_res = OB_NEWx(ObCartesianMultipolygon, &tmp_allocator, srid, tmp_allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else if (OB_ISNULL(ml_res = OB_NEWx(ObCartesianMultipolygon, &tmp_allocator, srid, tmp_allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else if (OB_ISNULL(mpo_res = OB_NEWx(ObCartesianMultipolygon, &tmp_allocator, srid, tmp_allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
     } else {
-      ObGeoToTreeVisitor visitor(allocator);
-      if (is_tree == false) {
-        ObIWkbGeomCollection *i_geo =
-          const_cast<ObIWkbGeomCollection *>(reinterpret_cast<const ObIWkbGeomCollection *>(g));
-        if (OB_FAIL(i_geo->do_visit(visitor))) {
-          LOG_WARN("failed to do geo to tree visit", K(ret));
-        } else {
-          geo_tree = static_cast<ObCartesianGeometrycollection *>(visitor.get_geometry());
+      mpt = reinterpret_cast<ObCartesianMultipoint *>(dedup_pt_ptr);
+      ml = reinterpret_cast<ObCartesianMultilinestring *>(dedup_ml_ptr);
+      mpo = reinterpret_cast<ObCartesianMultipolygon *>(dedup_mpo_ptr);
+
+      // param 1, 2
+      bg::strategy::buffer::distance_symmetric<double> distance_s(strategy->distance_val_);
+      bg::strategy::buffer::side_straight side_s;
+      // param 3
+      bg::strategy::buffer::join_round join_round_s(strategy->join_round_val_);
+      bg::strategy::buffer::join_miter join_miter_s(strategy->join_miter_val_);
+      // param 4
+      bg::strategy::buffer::end_round end_round_s(strategy->end_round_val_);
+      bg::strategy::buffer::end_flat end_flat_s;
+      // param 5
+      bg::strategy::buffer::point_circle point_circle_s(strategy->point_circle_val_);
+      bg::strategy::buffer::point_square point_square_s;
+
+      switch (ObGeoBufferStrategyStateType(strategy->state_num_)) {
+        case ObGeoBufferStrategyStateType::JR_ER_PC: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
+          break;
         }
-      } else {
-        geo_tree =
-          const_cast<ObCartesianGeometrycollection *>(reinterpret_cast<const ObCartesianGeometrycollection *>(g));
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_ISNULL(geo_tree)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to convert to geo tree", K(ret), KP(geo_res));
-      } else if (OB_ISNULL((geo_res = OB_NEWx(ObCartesianMultipolygon , allocator, srid, *allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret), KP(geo_res));
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(*allocator, *geo_tree, mpt, ml, mpo))) {
-        LOG_WARN("failed to do geometry collection split", K(ret));
-      } else if (OB_ISNULL(mpt) || OB_ISNULL(ml) || OB_ISNULL(mpo)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null geometry collection split", K(ret), KP(mpt), KP(ml), KP(mpo));
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *srs, mpt, ml, mpo))) {
-        LOG_WARN("failed to do geometry collection union", K(ret));
-      } else if (OB_ISNULL(mpt) || OB_ISNULL(ml) || OB_ISNULL(mpo)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null geometry collection union", K(ret), KP(mpt), KP(ml), KP(mpo));
-      } else if (OB_ISNULL(strategy = context.get_val_arg(0)->strategy_)) {
-        ret = OB_INVALID_ARGUMENT;
-      } else if (strategy->distance_val_ < 0 && !(mpt->empty() && ml->empty())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("negative distance is only permitted for geometry collection with only (multi)polygon", K(ret));
-      } else if (OB_NOT_NULL(mpt)
-          && (dedup_pt_ptr = reinterpret_cast<ObGeometry *>(mpt))
-          && OB_FAIL(remove_duplicate_geo(*allocator, srs, dedup_pt_ptr))) {
-        LOG_WARN("failed to deduplicate points", K(ret));
-      } else if (OB_NOT_NULL(ml) && (dedup_ml_ptr = reinterpret_cast<ObGeometry *>(ml))
-          && OB_FAIL(remove_duplicate_geo(*allocator, srs, dedup_ml_ptr))) {
-        LOG_WARN("failed to deduplicate lines", K(ret));
-      } else if (OB_NOT_NULL(mpo) && (dedup_mpo_ptr = reinterpret_cast<ObGeometry *>(mpo))
-          && OB_FAIL(remove_duplicate_geo(*allocator, srs, dedup_mpo_ptr))) {
-        LOG_WARN("failed to deduplicate polygons", K(ret));
-      } else if (OB_ISNULL(mpt_res = OB_NEWx(ObCartesianMultipolygon, allocator, srid, *allocator))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret));
-      } else if (OB_ISNULL(ml_res = OB_NEWx(ObCartesianMultipolygon, allocator, srid, *allocator))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret));
-      } else if (OB_ISNULL(mpo_res = OB_NEWx(ObCartesianMultipolygon, allocator, srid, *allocator))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret));
-      } else {
-        mpt = reinterpret_cast<ObCartesianMultipoint *>(dedup_pt_ptr);
-        ml = reinterpret_cast<ObCartesianMultilinestring *>(dedup_ml_ptr);
-        mpo = reinterpret_cast<ObCartesianMultipolygon *>(dedup_mpo_ptr);
-
-        // param 1, 2
-        bg::strategy::buffer::distance_symmetric<double> distance_s(strategy->distance_val_);
-        bg::strategy::buffer::side_straight side_s;
-        // param 3
-        bg::strategy::buffer::join_round join_round_s(strategy->join_round_val_);
-        bg::strategy::buffer::join_miter join_miter_s(strategy->join_miter_val_);
-        // param 4
-        bg::strategy::buffer::end_round end_round_s(strategy->end_round_val_);
-        bg::strategy::buffer::end_flat end_flat_s;
-        // param 5
-        bg::strategy::buffer::point_circle point_circle_s(strategy->point_circle_val_);
-        bg::strategy::buffer::point_square point_square_s;
-
-        switch (ObGeoBufferStrategyStateType(strategy->state_num_)) {
-          case ObGeoBufferStrategyStateType::JR_ER_PC: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_round_s, point_circle_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JR_ER_PS: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JR_EF_PC: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JR_EF_PS: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JM_ER_PC: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JM_ER_PS: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JM_EF_PC: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
-            break;
-          }
-          case ObGeoBufferStrategyStateType::JM_EF_PS: {
-            bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
-            bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
-            bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
-            break;
-          }
-          default: {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("error strategy state number", K(ret), K(strategy->state_num_));
-            break;
-          }
+        case ObGeoBufferStrategyStateType::JR_ER_PS: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_round_s, point_square_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JR_EF_PC: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_flat_s, point_circle_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JR_EF_PS: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_round_s, end_flat_s, point_square_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JM_ER_PC: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_round_s, point_circle_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JM_ER_PS: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_round_s, point_square_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JM_EF_PC: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_flat_s, point_circle_s);
+          break;
+        }
+        case ObGeoBufferStrategyStateType::JM_EF_PS: {
+          bg::buffer(*mpt, *mpt_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
+          bg::buffer(*ml, *ml_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
+          bg::buffer(*mpo, *mpo_res, distance_s, side_s, join_miter_s, end_flat_s, point_square_s);
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("error strategy state number", K(ret), K(strategy->state_num_));
+          break;
         }
       }
     }
@@ -389,13 +353,13 @@ private:
         }
       } else {
         ObGeometry *temp_geo = NULL;
-        ObGeoEvalCtx union_context_mpt_ml(allocator, srs);
+        ObGeoEvalCtx union_context_mpt_ml(context.get_mem_ctx(), srs);
         union_context_mpt_ml.append_geo_arg(mpt_res);
         union_context_mpt_ml.append_geo_arg(ml_res);
         if (OB_FAIL(ObGeoFuncUnion::eval(union_context_mpt_ml, temp_geo))) {
           LOG_WARN("union buffer result of multipoints and multistringline failed", K(ret));
         } else {
-          ObGeoEvalCtx union_context_mpt_ml_mpo(allocator, srs);
+          ObGeoEvalCtx union_context_mpt_ml_mpo(context.get_mem_ctx(), srs);
           union_context_mpt_ml_mpo.append_geo_arg(temp_geo);
           union_context_mpt_ml_mpo.append_geo_arg(mpo_res);
           if (OB_FAIL(ObGeoFuncUnion::eval(union_context_mpt_ml_mpo, temp_geo))) {
@@ -428,8 +392,8 @@ private:
       ObGeoBufferStrategy *strategy = context.get_val_arg(0)->strategy_;
       // Notice: transfrom context use dest srs
       common::ObIAllocator *allocator = context.get_allocator();
-      ObGeoEvalCtx transfrom_proj_context(allocator, strategy->srs_proj_);
-      ObGeoEvalCtx transfrom_wgs84_context(allocator, strategy->srs_wgs84_);
+      ObGeoEvalCtx transfrom_proj_context(context.get_mem_ctx(), strategy->srs_proj_);
+      ObGeoEvalCtx transfrom_wgs84_context(context.get_mem_ctx(), strategy->srs_wgs84_);
       ObGeometry *projected_geo = NULL;
       ObGeometry *projected_result = NULL;
       ObGeometry *projected_bin = NULL;
@@ -770,140 +734,6 @@ bool ObGeoFuncBufferImpl::apply_bg_equal(ObGeographPolygon &geo1,
   bg::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
   ObLlLaAaStrategy line_strategy(geog_sphere);
   return bg::equals(geo1, geo2, line_strategy);
-}
-
-template<typename MultiPointType, typename MultiLineType, typename MultiPolygonType>
-int ObGeoFuncBufferImpl::apply_bg_remove_duplicate_geo(ObIAllocator &allocator,
-                                                       const ObSrsItem *srs,
-                                                       ObGeometry *&geo)
-{
-  INIT_SUCC(ret);
-  switch (geo->type()) {
-    case ObGeoType::POINT :
-    case ObGeoType::LINESTRING :
-    case ObGeoType::POLYGON :
-      break;
-    case ObGeoType::MULTIPOINT : {
-      MultiPointType *mp = OB_NEWx(MultiPointType, (&allocator));
-      if (OB_ISNULL(mp)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for multipoint", K(ret));
-      } else {
-        bool is_equal = false;
-        MultiPointType *g = static_cast<MultiPointType *>(geo);
-        FOREACH_X(item, (*g), OB_SUCC(ret)) {
-          FOREACH(point, *mp) {
-            is_equal = ObGeoFuncBufferImpl::apply_bg_equal(*item, *point, srs);
-            if (is_equal) {
-              break;
-            }
-          }
-          if (!is_equal) {
-            if(OB_FAIL(mp->push_back(*item))) {
-              LOG_WARN("failed to add point to multipoint", K(ret));
-            }
-          }
-        }
-        geo = mp;
-      }
-      break;
-    }
-    case ObGeoType::MULTILINESTRING : {
-      MultiLineType *ml = OB_NEWx(MultiLineType, (&allocator));
-      if (OB_ISNULL(ml)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for multiline", K(ret));
-      } else {
-        bool is_equal = false;
-        MultiLineType *g = static_cast<MultiLineType *>(geo);
-        FOREACH_X(item, (*g), OB_SUCC(ret)) {
-          FOREACH(line, *ml) {
-            is_equal = ObGeoFuncBufferImpl::apply_bg_equal(*item, *line, srs);
-            if (is_equal) {
-              break;
-            }
-          }
-          if (!is_equal) {
-            if(OB_FAIL(ml->push_back(*item))) {
-              LOG_WARN("failed to add line to multiline", K(ret));
-            }
-          }
-        }
-        geo = ml;
-      }
-      break;
-    }
-    case ObGeoType::MULTIPOLYGON : {
-      MultiPolygonType *mpoly = OB_NEWx(MultiPolygonType, (&allocator));
-      if (OB_ISNULL(mpoly)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for multipolygon", K(ret));
-      } else {
-        bool is_equal = false;
-        MultiPolygonType *g = static_cast<MultiPolygonType *>(geo);
-        FOREACH_X(item, *g, OB_SUCC(ret)) {
-          FOREACH(poly, *mpoly) {
-            is_equal = ObGeoFuncBufferImpl::apply_bg_equal(*item, *poly, srs);
-            if (is_equal) {
-              break;
-            }
-          }
-          if (!is_equal) {
-            if(OB_FAIL(mpoly->push_back(*item))) {
-              LOG_WARN("failed to add polygon to multipolygon", K(ret));
-            }
-          }
-        }
-        geo = mpoly;
-      }
-      break;
-    }
-    default : {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid geo type", K(ret), K(geo->type()), K(geo->crs()));
-      break;
-    }
-  }
-  return ret;
-}
-
-int ObGeoFuncBufferImpl::remove_duplicate_geo(ObIAllocator &allocator,
-                                              const ObSrsItem *srs,
-                                              ObGeometry *&geo)
-{
-  INIT_SUCC(ret);
-  if (geo == NULL) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("input geo is null", K(ret));
-  } else if ((srs == NULL || srs->srs_type() != ObSrsType::GEOGRAPHIC_SRS)
-      && geo->crs() == ObGeoCRS::Geographic) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid srs type", K(ret), KP(srs), K(geo->crs()));
-  } else {
-    switch (geo->crs()) {
-      case ObGeoCRS::Geographic : {
-        ret = apply_bg_remove_duplicate_geo<ObGeographMultipoint,
-          ObGeographMultilinestring, ObGeographMultipolygon>(allocator, srs, geo);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to remove duplicate geo", K(ret), K(geo->crs()));
-        }
-        break;
-      }
-      case ObGeoCRS::Cartesian : {
-        ret = apply_bg_remove_duplicate_geo<ObCartesianMultipoint,
-          ObCartesianMultilinestring, ObCartesianMultipolygon>(allocator, srs, geo);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to remove duplicate geo", K(ret), K(geo->crs()));
-        }
-        break;
-      }
-      default : {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid geo type", K(ret), K(srs->srs_type()), K(geo->crs()));
-      }
-    }
-  }
-  return ret;
 }
 
 template <typename GeoTreeType>

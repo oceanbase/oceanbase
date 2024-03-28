@@ -39,6 +39,7 @@ bf_cache_miss_count_threshold
 bf_cache_priority
 builtin_db_data_verify_cycle
 cache_wash_threshold
+choose_migration_source_policy
 clog_sync_time_warn_threshold
 cluster
 cluster_id
@@ -60,6 +61,7 @@ datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
+data_disk_write_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
 ddl_thread_score
@@ -81,6 +83,8 @@ enable_cgroup
 enable_dblink
 enable_ddl
 enable_early_lock_release
+enable_global_background_resource_isolation
+enable_kv_group_commit
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
@@ -105,6 +109,7 @@ enable_user_defined_rewrite_rules
 external_kms_info
 freeze_trigger_percentage
 fuse_row_cache_priority
+global_background_cpu_quota
 ha_high_thread_score
 ha_low_thread_score
 ha_mid_thread_score
@@ -121,6 +126,7 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota
 location_cache_refresh_min_interval
@@ -279,6 +285,7 @@ _enable_adaptive_compaction
 _enable_backtrace_function
 _enable_balance_kill_transaction
 _enable_block_file_punch_hole
+_enable_choose_migration_source_policy
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
@@ -290,10 +297,12 @@ _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
 _enable_inner_session_mgr
 _enable_in_range_optimization
+_enable_memleak_light_backtrace
 _enable_newsort
 _enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_oracle_priv_check
+_enable_parallel_das_dml
 _enable_parallel_minor_merge
 _enable_parallel_table_creation
 _enable_partition_level_retry
@@ -351,6 +360,7 @@ _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _min_malloc_sample_interval
+_multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode
@@ -396,6 +406,7 @@ _px_max_message_pool_pct
 _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
+_query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency
 _resource_limit_max_session_num

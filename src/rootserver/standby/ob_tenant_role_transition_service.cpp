@@ -1476,7 +1476,7 @@ int ObTenantRoleTransitionService::check_restore_source_for_switchover_to_primar
   } else if (OB_UNLIKELY(!item.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore source item is invalid");
-  } else if (share::is_location_log_source_type(item.type_)) {
+  } else if (share::is_location_log_source_type(item.type_) || share::is_raw_path_log_source_type(item.type_)) {
     // archive mode, cannot check whether previous primary tenant becomes standby
   } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
     LOG_WARN("fail to assign standby source value", K(item.value_));

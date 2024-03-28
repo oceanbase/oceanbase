@@ -134,8 +134,12 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    use_rich_format_(false),
     subschema_ctx_(allocator_),
-    all_local_session_vars_(&allocator_)
+    das_dop_(0),
+    disable_auto_memory_mgr_(false),
+    all_local_session_vars_(&allocator_),
+    udf_has_dml_stmt_(false)
 {
 }
 
@@ -231,8 +235,12 @@ void ObPhysicalPlan::reset()
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
+  das_dop_ = 0;
   all_local_session_vars_.reset();
   sql_stat_record_value_.reset();
+  use_rich_format_ = false;
+  udf_has_dml_stmt_ = false;
+  disable_auto_memory_mgr_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -788,7 +796,11 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    subschema_ctx_);
+                    subschema_ctx_,
+                    use_rich_format_,
+                    disable_auto_memory_mgr_,
+                    udf_has_dml_stmt_,
+                    stat_.format_sql_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1113,7 +1125,7 @@ void ObPhysicalPlan::calc_whether_need_trans()
     }
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
-  if (!bool_ret && contain_pl_udf_or_trigger() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;
@@ -1178,8 +1190,10 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.slow_count_ = 0;
     stat_.slowest_exec_time_ = 0;
     stat_.slowest_exec_usec_ = 0;
+    int64_t sql_length = ObSQLUtils::get_query_record_size_limit(
+        pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id());
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
-      ObTruncatedString trunc_stmt(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
+      ObTruncatedString trunc_stmt(pc_ctx.raw_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),
                                   trunc_stmt.string(),
                                   stat_.stmt_))) {
@@ -1187,7 +1201,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       }
       stat_.ps_stmt_id_ = pc_ctx.fp_result_.pc_key_.key_id_;
     } else {
-      ObTruncatedString trunc_stmt(pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_, OB_MAX_SQL_LENGTH);
+      ObTruncatedString trunc_stmt(pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),
                                   trunc_stmt.string(),
                                   stat_.stmt_))) {
@@ -1200,7 +1214,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.outline_version_ = get_outline_state().outline_version_.version_;
     stat_.outline_id_ = get_outline_state().outline_version_.object_id_;
     // Truncate the raw sql to avoid the plan memory being too large due to the long raw sql
-    ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
+    ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, sql_length);
     if (OB_FAIL(pc_ctx.get_not_param_info_str(get_allocator(), stat_.sp_info_str_))) {
       SQL_PC_LOG(WARN, "fail to get special param info string", K(ret));
     } else if (OB_FAIL(ob_write_string(get_allocator(),

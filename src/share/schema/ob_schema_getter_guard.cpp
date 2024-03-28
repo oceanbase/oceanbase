@@ -2925,18 +2925,77 @@ int ObSchemaGetterGuard::check_user_access(
                    "client_ip_", login_info.client_ip_, KR(ret));
         }
       }
+      const ObUserInfo *proxied_user_info = NULL;
+      uint64_t proxied_info_idx = OB_INVALID_INDEX;
+      if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+        if (!login_info.proxied_user_name_.empty()) {
+          users_info.reuse();
+          if (OB_FAIL(get_user_info(s_priv.tenant_id_, login_info.proxied_user_name_, users_info))) {
+            LOG_WARN("get user info failed", KR(ret), K(s_priv.tenant_id_), K(login_info));
+          } else if (users_info.count() <= 0) {
+            ret = OB_PASSWORD_WRONG;
+            LOG_WARN("proxy user not existed", K(ret));
+          } else if (OB_ISNULL(proxied_user_info = users_info.at(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          } else {
+            is_found = false;
+            for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < proxied_user_info->get_proxied_user_info_cnt(); i++) {
+              const ObProxyInfo *proxied_info = proxied_user_info->get_proxied_user_info_by_idx(i);
+              if (OB_ISNULL(proxied_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error", K(ret));
+              } else if (proxied_info->user_id_ == user_info->get_user_id()) {
+                is_found = true;
+                proxied_info_idx = i;
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (!is_found) {
+              ret = OB_PASSWORD_WRONG;
+              LOG_WARN("proxy user not existed", KR(ret), K(user_info->get_user_id()), KPC(proxied_user_info));
+              proxied_user_info = NULL;
+            } else {
+              s_priv.proxy_user_name_ = user_info->get_user_name_str();
+              s_priv.proxy_host_name_ = user_info->get_host_name_str();
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && proxied_user_info!= NULL) {
+        if (proxied_user_info->get_is_locked()
+            && !sql::ObOraSysChecker::is_super_user(proxied_user_info->get_user_id())) {
+          ret = OB_ERR_USER_IS_LOCKED;
+          LOG_WARN("User is locked", KR(ret));
+        }
+      }
 
       if (OB_SUCC(ret)) {
         s_priv.tenant_id_ = user_info->get_tenant_id();
-        s_priv.user_id_ = user_info->get_user_id();
-        s_priv.user_name_ = user_info->get_user_name_str();
-        s_priv.host_name_ = user_info->get_host_name_str();
-        s_priv.user_priv_set_ = user_info->get_priv_set();
+        if (proxied_user_info != NULL) {
+          s_priv.user_id_ = proxied_user_info->get_user_id();
+          s_priv.proxy_user_id_ = user_info->get_user_id();
+          s_priv.user_name_ = proxied_user_info->get_user_name_str();
+          s_priv.host_name_ = proxied_user_info->get_host_name_str();
+          s_priv.proxy_user_name_ = user_info->get_user_name_str();
+          s_priv.proxy_host_name_ = user_info->get_host_name_str();
+          s_priv.user_priv_set_ = proxied_user_info->get_priv_set();
+          sel_user_info = proxied_user_info;
+        } else {
+          s_priv.user_id_ = user_info->get_user_id();
+          s_priv.proxy_user_id_ = OB_INVALID_ID;
+          s_priv.user_id_ = user_info->get_user_id();
+          s_priv.user_name_ = user_info->get_user_name_str();
+          s_priv.host_name_ = user_info->get_host_name_str();
+          s_priv.proxy_user_name_ = ObString();
+          s_priv.proxy_host_name_ = ObString();
+          s_priv.user_priv_set_ = user_info->get_priv_set();
+          sel_user_info = user_info;
+        }
         s_priv.db_ = login_info.db_;
-        sel_user_info = user_info;
-        // load role priv
+        // load role privx
         if (OB_SUCC(ret)) {
-          const ObSEArray<uint64_t, 8> &role_id_array = user_info->get_role_id_array();
           bool activate_all_role = false;
           CK (user_info->get_role_id_array().count() ==
               user_info->get_role_id_option_array().count());
@@ -2947,6 +3006,57 @@ int ObSchemaGetterGuard::check_user_access(
             }
           }
 
+          ObSEArray<uint64_t, 8> role_id_array;
+          ObSEArray<uint64_t, 8> role_id_option_array;
+          if (proxied_user_info != NULL) {
+            CK (proxied_user_info->get_role_id_array().count() ==
+                proxied_user_info->get_role_id_option_array().count());
+            OZ (role_id_array.assign(proxied_user_info->get_role_id_array()));
+            OZ (role_id_option_array.assign(proxied_user_info->get_role_id_option_array()));
+          } else {
+            CK (user_info->get_role_id_array().count() ==
+                user_info->get_role_id_option_array().count());
+            OZ (role_id_array.assign(user_info->get_role_id_array()));
+            OZ (role_id_option_array.assign(user_info->get_role_id_option_array()));
+          }
+          if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE && proxied_user_info != NULL) {
+            const ObProxyInfo *proxied_info = NULL;
+            if (OB_UNLIKELY(proxied_info_idx < 0 || proxied_info_idx >= proxied_user_info->get_proxied_user_info_cnt())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (OB_ISNULL(proxied_info = proxied_user_info->get_proxied_user_info_by_idx(proxied_info_idx))
+                      || OB_UNLIKELY(proxied_info->user_id_ != user_info->get_user_id())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else {
+              ObArray<uint64_t> new_role_id_array;
+              ObArray<uint64_t> new_role_id_option_array;
+              if (OB_FAIL(sql::ObSQLUtils::get_proxy_can_activate_role(role_id_array,
+                                                                  role_id_option_array,
+                                                                  *proxied_info,
+                                                                  new_role_id_array,
+                                                                  new_role_id_option_array))) {
+                LOG_WARN("get proxy can activate role failed", K(ret));
+              } else {
+                role_id_array.reuse();
+                role_id_option_array.reuse();
+                for (int64_t i = 0; OB_SUCC(ret) && i < new_role_id_array.count(); i++) {
+                  const ObUserInfo *role_info = NULL;
+                  if (OB_FAIL(get_user_info(s_priv.tenant_id_, new_role_id_array.at(i), role_info))) {
+                    LOG_WARN("failed to get role ids", KR(ret), K(new_role_id_array.at(i)));
+                  } else if (NULL == role_info) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("role info is null", KR(ret), K(new_role_id_array.at(i)));
+                  } else if (!role_info->get_passwd_str().empty()) {
+                    //do nothing
+                  } else {
+                    OZ (role_id_array.push_back(new_role_id_array.at(i)));
+                    OZ (role_id_option_array.push_back(new_role_id_option_array.at(i)));
+                  }
+                }
+              }
+            }
+          }
           for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
             const ObUserInfo *role_info = NULL;
             if (OB_FAIL(get_user_info(s_priv.tenant_id_, role_id_array.at(i), role_info))) {
@@ -2956,9 +3066,8 @@ int ObSchemaGetterGuard::check_user_access(
               LOG_WARN("role info is null", KR(ret), K(role_id_array.at(i)));
             } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
               s_priv.user_priv_set_ |= role_info->get_priv_set();
-              if (user_info->get_disable_option(
-                             user_info->get_role_id_option_array().at(i)) == 0) {
-                OZ (add_role_id_recursively(user_info->get_tenant_id(),
+              if (user_info->get_disable_option(role_id_option_array.at(i)) == 0) {
+                OZ (add_role_id_recursively(s_priv.tenant_id_,
                                             role_id_array.at(i),
                                             s_priv));
               }
@@ -6333,6 +6442,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     uint64_t &outline_id,
     bool &exist)
 {
@@ -6356,7 +6466,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_name(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id, database_id,
-        name, schema))) {
+        name, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(name));
     } else if (NULL != schema) {
@@ -6372,6 +6482,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6393,7 +6504,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql_id(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id, database_id,
-        sql_id, schema))) {
+        sql_id, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(sql_id));
     } else if (NULL != schema) {
@@ -6408,6 +6519,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &paramlized_sql,
+    const bool is_format,
     bool &exist)
 {
   int ret= OB_SUCCESS;
@@ -6429,7 +6541,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id, database_id,
-        paramlized_sql, schema))) {
+        paramlized_sql, is_format, schema))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(paramlized_sql));
     } else if (NULL != schema) {
@@ -6852,6 +6964,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6872,7 +6985,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, name, simple_outline))) {
+      database_id, name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(name));
   } else if (NULL == simple_outline) {
     LOG_INFO("outline not exist", K(tenant_id), K(database_id), K(name));
@@ -6894,6 +7007,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
     const uint64_t tenant_id,
     const ObString &db_name,
     const ObString &outline_name,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6919,7 +7033,7 @@ int ObSchemaGetterGuard::get_outline_info_with_name(
   } else if (OB_INVALID_ID == database_id) {
     // do-nothing
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_name(tenant_id,
-      database_id, outline_name, simple_outline))) {
+      database_id, outline_name, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(outline_name));
   } else if (NULL == simple_outline) {
     LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(outline_name));
@@ -6940,6 +7054,7 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &signature,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -6960,10 +7075,10 @@ int ObSchemaGetterGuard::get_outline_info_with_signature(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id,
-      database_id, signature, simple_outline))) {
+      database_id, signature, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(signature));
   } else if (NULL == simple_outline) {
-    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(signature));
+    LOG_TRACE("outline not exist", K(tenant_id), K(is_format), K(database_id), K(signature));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),
@@ -7527,6 +7642,7 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const common::ObString &sql_id,
+    const bool is_format,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -7547,10 +7663,10 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_sql_id(tenant_id,
-      database_id, sql_id, simple_outline))) {
+      database_id, sql_id, is_format, simple_outline))) {
     LOG_WARN("get simple outline failed", KR(ret), K(tenant_id), K(database_id), K(sql_id));
   } else if (NULL == simple_outline) {
-    LOG_DEBUG("outline not exist", K(tenant_id), K(database_id), K(sql_id));
+    LOG_TRACE("outline not exist", K(tenant_id), K(database_id), K(sql_id));
   } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
                                 simple_outline->get_tenant_id(),
                                 simple_outline->get_outline_id(),

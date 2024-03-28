@@ -68,7 +68,8 @@ struct ObTransformerCtx
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
     is_spm_outline_(false),
-    in_accept_transform_(false)
+    in_accept_transform_(false),
+    push_down_filters_()
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -129,6 +130,7 @@ struct ObTransformerCtx
   /* end used for hint and outline below */
   bool is_spm_outline_;
   bool in_accept_transform_;
+  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
 };
 
 enum TransMethod
@@ -175,6 +177,7 @@ enum TRANSFORM_TYPE {
   SELECT_EXPR_PULLUP            ,
   PROCESS_DBLINK                ,
   DECORRELATE                   ,
+  CONDITIONAL_AGGR_COALESCE     ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -266,7 +269,8 @@ public:
       (1L << CONST_PROPAGATE) |
       (1L << LEFT_JOIN_TO_ANTI) |
       (1L << COUNT_TO_EXISTS) |
-      (1L << SEMI_TO_INNER);
+      (1L << SEMI_TO_INNER) |
+      (1L << CONDITIONAL_AGGR_COALESCE);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |

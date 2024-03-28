@@ -21,17 +21,32 @@
 #include "lib/utility/ob_defer.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/coro/co_var.h"
+#include "common/ob_common_utility.h"
 
 namespace oceanbase
 {
 namespace common
 {
-
-int ob_backtrace(void **buffer, int size)
+int light_backtrace(void **buffer, int size)
 {
   int rv = 0;
-  if (OB_LIKELY(g_enable_backtrace)) {
-    rv = backtrace(buffer, size);
+  if (rv < size) {
+    buffer[rv++] = (void*)light_backtrace;
+  }
+  void *stack_addr = nullptr;
+  size_t stack_size = 0;
+  if (OB_LIKELY(OB_SUCCESS == get_stackattr(stack_addr, stack_size))) {
+    int64_t rbp = (int64_t)__builtin_frame_address(0);
+    while (rbp != 0 && rv < size) {
+      int64_t return_addr = rbp + 8;
+      if (OB_LIKELY(return_addr >= (int64_t)stack_addr &&
+            return_addr < ((int64_t)stack_addr + stack_size))) {
+        buffer[rv++] = (void*)*(int64_t*)return_addr;
+        rbp = *(int64_t*)rbp;
+      } else {
+        break;
+      }
+    }
   }
   return rv;
 }
@@ -127,13 +142,13 @@ RLOCAL(ByteBuf<LBT_BUFFER_LENGTH>, buffer);
 
 char *lbt()
 {
-  int size = OB_BACKTRACE_M(addrs, MAX_ADDRS_COUNT);
+  int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(*&buffer, LBT_BUFFER_LENGTH, (int64_t *)addrs, size);
 }
 
 char *lbt(char *buf, int32_t len)
 {
-  int size = OB_BACKTRACE_M(addrs, MAX_ADDRS_COUNT);
+  int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(buf, len, (int64_t *)addrs, size);
 }
 
@@ -178,7 +193,7 @@ void addrs_to_offsets(void **buffer, int size)
 EXTERN_C_BEGIN
 int ob_backtrace_c(void **buffer, int size)
 {
-  return OB_BACKTRACE_M(buffer, size);
+  return ob_backtrace(buffer, size);
 }
 char *parray_c(char *buf, int64_t len, int64_t *array, int size)
 {

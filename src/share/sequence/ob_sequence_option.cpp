@@ -28,7 +28,8 @@ OB_SERIALIZE_MEMBER(ObSequenceOption,
                     minvalue_,
                     cache_,
                     cycle_,
-                    order_);
+                    order_,
+                    flag_);
 
 
 ObSequenceMaxMinInitializer::ObSequenceMaxMinInitializer()
@@ -125,6 +126,7 @@ int ObSequenceOption::assign(const share::ObSequenceOption &from)
   OZ(cache_.assign(from.cache_));
   cycle_ = from.cycle_;
   order_ = from.order_;
+  flag_ = from.flag_;
   return ret;
 }
 

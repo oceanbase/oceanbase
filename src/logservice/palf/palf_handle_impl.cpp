@@ -600,6 +600,19 @@ int PalfHandleImpl::get_election_leader(ObAddr &addr) const
   return ret;
 }
 
+int PalfHandleImpl::get_parent(common::ObAddr &parent) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else {
+    parent = config_mgr_.get_parent();
+    ret = (parent.is_valid())? OB_SUCCESS: OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
 int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
                                                    const LogGetMCStReq &req,
                                                    LogGetMCStResp &resp)

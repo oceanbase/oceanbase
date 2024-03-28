@@ -163,11 +163,11 @@ int ObDataStoreDesc::init(
     STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(snapshot_version));
   } else if (OB_FAIL(inner_init(merge_schema, ls_id, tablet_id, merge_type, snapshot_version, cluster_version))) {
     STORAGE_LOG(WARN, "failed to inner init data desc, ", K(ret));
-  } else if (OB_FAIL(init_col_default_checksum_array(merge_schema, storage::is_major_merge_type(merge_type) || storage::is_meta_major_merge(merge_type) /*init_by_schema*/))) {
+  } else if (OB_FAIL(init_col_default_checksum_array(merge_schema, storage::is_major_or_meta_merge_type(merge_type)/*init_by_schema*/))) {
     STORAGE_LOG(WARN, "failed to init col default checksum array", K(ret), K(merge_type), K(merge_schema));
   } else {
     row_column_count_ = full_stored_col_cnt_;
-    const bool is_major = (storage::is_major_merge_type(merge_type) || storage::is_meta_major_merge(merge_type));
+    const bool is_major = (storage::is_major_or_meta_merge_type(merge_type));
     if (is_major) {
       if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
         STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
@@ -255,7 +255,7 @@ int ObDataStoreDesc::inner_init(
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
-    const bool is_major = (storage::is_major_merge_type(merge_type) || storage::is_meta_major_merge(merge_type));
+    const bool is_major = storage::is_major_or_meta_merge_type(merge_type);
     if (OB_FAIL(end_scn_.convert_for_tx(snapshot_version))) { // will update in ObPartitionMerger::open_macro_writer
       STORAGE_LOG(WARN, "fail to convert scn", K(ret), K(snapshot_version));
     } else if (OB_FAIL(cal_row_store_type(merge_schema, merge_type))) {
@@ -361,7 +361,7 @@ int ObDataStoreDesc::init_col_default_checksum_array(
 
   // init hash index
   if (OB_SUCC(ret)) {
-    bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE && !is_major_merge();
+    bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE && !is_major_or_meta_merge_type();
     if (need_build_hash_index
       && OB_FAIL(ObMicroBlockHashIndexBuilder::need_build_hash_index(merge_schema, need_build_hash_index))) {
       STORAGE_LOG(WARN, "Failed to judge whether to build hash index", K(ret));

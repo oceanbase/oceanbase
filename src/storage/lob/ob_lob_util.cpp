@@ -113,6 +113,17 @@ int64_t ObLobAccessParam::get_inrow_threshold()
   return res;
 }
 
+int ObLobAccessParam::is_timeout()
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (cur_time > timeout_) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("query timeout", K(ret), K(cur_time), K(timeout_));
+  }
+  return ret;
+}
+
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,
                                          const bool is_for_read,
                                          const int64_t timeout_ts,

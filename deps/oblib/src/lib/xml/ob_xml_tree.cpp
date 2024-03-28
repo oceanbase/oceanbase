@@ -276,6 +276,62 @@ int ObXmlElement::get_attribute_pos(ObMulModeNodeType xml_type, const ObString& 
   return ret;
 }
 
+int ObXmlElement::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
+{
+  INIT_SUCC(ret);
+  ObXmlElement *ele = nullptr;
+  ObXmlNode *origin_node = nullptr;
+  node = ObXmlUtil::clone_new_node<ObXmlElement>(ctx->allocator_, type(), ctx);
+  if (OB_ISNULL(node)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator xml text node.", K(ret));
+  } else if (OB_ISNULL(ele = static_cast<ObXmlElement*>(node)) ||
+             OB_ISNULL(origin_node = static_cast<ObXmlNode*>(this))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("clone new node cast to element is null", K(ret));
+  } else {
+    ele->set_prefix(prefix_);
+    ele->set_xml_key(tag_info_);
+    ele->set_standalone(standalone_);
+    ele->set_has_xml_decl(has_xml_decl_);
+    ele->set_empty(is_empty_);
+    ele->set_unparse(is_unparse_);
+    ele->set_encoding_flag(encoding_val_empty_);
+
+    int64_t child_size = size();
+    int64_t attr_count = attribute_size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < attr_count; i++) {
+      ObXmlAttribute *attr = nullptr;
+      ObXmlNode *clone_node = nullptr;
+      if (OB_FAIL(get_attribute(attr, i))) {
+        LOG_WARN("failed to get attribute.", K(ret), K(i));
+      } else if (OB_ISNULL(attr)) {
+        ret =OB_ERR_UNEXPECTED;
+        LOG_WARN("get attribute is null.", K(ret), K(i));
+      } else if (OB_FAIL(attr->clone(ctx, clone_node))) {
+        LOG_WARN("failed to clone attribute.", K(ret), KP(attr));
+      } else if (OB_FAIL(ele->add_attribute(clone_node))) {
+        LOG_WARN("failed to add attribute.", K(ret), K(i), KP(clone_node));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_size; i++) {
+      ObXmlNode *child_node = nullptr;
+      ObXmlNode *clone_node = nullptr;
+      if (OB_ISNULL(child_node = origin_node->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get child node.", K(ret), K(i), KP(origin_node));
+      } else if (OB_FAIL(child_node->clone(ctx, clone_node))) {
+        LOG_WARN("failed to clone child_node.", K(ret), KP(child_node));
+      } else if (OB_FAIL(ele->add_element(clone_node, false, i))) {
+        LOG_WARN("failed to add xmlnode into element.", K(ret), K(i), KP(child_node), KP(origin_node));
+      }
+    }
+  }
+
+  return ret;
+}
+
 ObXmlAttribute* ObXmlElement::get_attribute_by_name(const ObString& ns_value, const ObString& name) // get attr by name
 {
   ObXmlAttribute* res_node = NULL;
@@ -988,6 +1044,43 @@ int64_t ObXmlDocument::get_serialize_size()
   return res;
 }
 
+int ObXmlDocument::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
+{
+  INIT_SUCC(ret);
+  ObXmlDocument *doc = nullptr;
+  ObXmlNode *origin_node = nullptr;
+  node = ObXmlUtil::clone_new_node<ObXmlDocument>(ctx->allocator_, type(), ctx);
+  if (OB_ISNULL(node)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator xml text node.", K(ret));
+  } else if (OB_ISNULL(doc = static_cast<ObXmlDocument*>(node)) ||
+             OB_ISNULL(origin_node = static_cast<ObXmlNode*>(this))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("clone new node cast to document is null", K(ret));
+  } else {
+    doc->set_version(version_);
+    doc->set_encoding(encoding_);
+    doc->set_extSubset(extSubset_);
+    doc->set_inSubset(intSubset_);
+
+    int64_t child_size = size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_size; i++) {
+      ObXmlNode *child_node = nullptr;
+      ObXmlNode *clone_node = nullptr;
+      if (OB_ISNULL(child_node = origin_node->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get child node.", K(ret), K(i), KP(origin_node));
+      } else if (OB_FAIL(child_node->clone(ctx, clone_node))) {
+        LOG_WARN("failed to clone child_node.", K(ret), KP(child_node));
+      } else if (OB_FAIL(doc->add_element(clone_node, false, i))) {
+        LOG_WARN("failed to add xmlnode into element.", K(ret), K(i), KP(child_node), KP(origin_node));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObXmlElement::remove_attribute(int pos)
 {
   INIT_SUCC(ret);
@@ -1210,6 +1303,37 @@ int ObXmlText::compare(const ObString& key, int& res)
 {
   INIT_SUCC(ret);
   res = get_text().compare(key);
+  return ret;
+}
+
+int ObXmlText::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
+{
+  INIT_SUCC(ret);
+  node = ObXmlUtil::clone_new_node<ObXmlText>(ctx->allocator_, type(), ctx);
+  if (OB_ISNULL(node)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator xml text node.", K(ret));
+  } else {
+    node->set_value(text_);
+  }
+  return ret;
+}
+
+int ObXmlAttribute::clone(ObMulModeMemCtx *ctx, ObXmlNode *&node)
+{
+  INIT_SUCC(ret);
+  node = ObXmlUtil::clone_new_node<ObXmlAttribute>(ctx->allocator_, type(), ctx);
+  if (OB_ISNULL(node)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocator xml attributes node.", K(ret));
+  } else {
+    ObXmlAttribute *attr = static_cast<ObXmlAttribute*>(node);
+    attr->set_prefix(prefix_);
+    attr->set_ns(ns_);
+    attr->set_xml_key(name_);
+    attr->set_value(value_);
+    attr->set_attr_decl(attr_decl_);
+  }
   return ret;
 }
 

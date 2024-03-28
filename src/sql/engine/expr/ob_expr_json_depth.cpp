@@ -59,14 +59,15 @@ int ObExprJsonDepth::eval_json_depth(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   bool is_null_result = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
-  if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
+  if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType || json_datum->is_null()) {
     is_null_result = true;
   } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
-                                                    json_doc, is_null_result))) {
+                                                    json_doc, is_null_result, false))) {
     LOG_WARN("get_json_doc failed", K(ret));
   } else {
     // do nothing

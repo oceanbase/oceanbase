@@ -64,7 +64,7 @@ protected:
   virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
   virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_block, bool &rewrite);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) = 0;
-  template <typename T> T *alloc_merge_helper();
+  template <typename T, typename... Args> T *alloc_merge_helper(Args... args);
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) = 0;
   int init_data_store_desc(ObTabletMergeCtx &ctx);
   int open_macro_writer(ObMergeParameter &merge_param);

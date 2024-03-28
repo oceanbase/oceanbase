@@ -14,6 +14,7 @@
 #include "share/schema/ob_column_schema.h"
 #include "ob_index_block_row_scanner.h"
 #include "ob_index_block_row_struct.h"
+#include "storage/access/ob_rows_info.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
@@ -181,8 +182,9 @@ ObIndexBlockRowScanner::ObIndexBlockRowScanner()
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     end_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
-    step_(1), range_idx_(0), nested_offset_(0), index_format_(IndexFormat::INVALID), is_get_(false),
-    is_reverse_scan_(false), is_left_border_(false), is_right_border_(false), is_inited_(false)
+    step_(1), range_idx_(0), nested_offset_(0), rowkey_begin_idx_(0), rowkey_end_idx_(0),
+    index_format_(IndexFormat::INVALID), is_get_(false), is_reverse_scan_(false),
+    is_left_border_(false), is_right_border_(false), is_inited_(false)
 {}
 
 ObIndexBlockRowScanner::~ObIndexBlockRowScanner() {}
@@ -221,6 +223,8 @@ void ObIndexBlockRowScanner::reset()
   step_ = 1;
   range_idx_ = 0;
   nested_offset_ = 0;
+  rowkey_begin_idx_ = 0;
+  rowkey_end_idx_ = 0;
   index_format_ = IndexFormat::INVALID;
   is_get_ = false;
   is_reverse_scan_ = false;
@@ -320,46 +324,70 @@ int ObIndexBlockRowScanner::open(
   return ret;
 }
 
-int ObIndexBlockRowScanner::get_next(ObMicroIndexInfo &idx_block_row)
+int ObIndexBlockRowScanner::open(
+    const MacroBlockId &macro_id,
+    const ObMicroBlockData &idx_block_data,
+    const ObRowsInfo *rows_info,
+    const int64_t rowkey_begin_idx,
+    const int64_t rowkey_end_idx)
 {
-  idx_block_row.reset();
-  const ObDatumRowkey *endkey = nullptr;
-  const ObIndexBlockRowHeader *idx_row_header = nullptr;
-  const ObIndexBlockRowMinorMetaInfo *idx_minor_info = nullptr;
-  const char *idx_data_buf = nullptr;
   int ret = OB_SUCCESS;
+  int64_t row_count = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid() || !idx_block_data.is_valid() || nullptr == rows_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to open an index micro block", K(ret), K(macro_id), K(idx_block_data),
+              KP(rows_info));
+  } else if (OB_FAIL(init_by_micro_data(idx_block_data))) {
+    LOG_WARN("Fail to init scanner by micro data", K(ret), K(idx_block_data));
+  } else if (IndexFormat::TRANSFORMED == index_format_) {
+    row_count = idx_data_header_->row_cnt_;
+  } else if (IndexFormat::BLOCK_TREE == index_format_) {
+    row_count = block_meta_tree_->get_rowkey_count();
+  } else if (IndexFormat::RAW_DATA == index_format_) {
+    if (OB_FAIL(micro_reader_->get_row_count(row_count))) {
+      LOG_WARN("Failed to get row count", K(ret), K(idx_block_data));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected index format", K_(index_format));
+  }
+
+  if (OB_SUCC(ret)) {
+    start_ = 0;
+    end_ = row_count - 1;
+    macro_id_ = macro_id;
+    rows_info_ = rows_info;
+    rowkey_begin_idx_ = rowkey_begin_idx;
+    rowkey_end_idx_ = rowkey_end_idx;
+    current_ = 0;
+    is_get_ = false;
+  }
+  return ret;
+}
+
+int ObIndexBlockRowScanner::get_next(
+    ObMicroIndexInfo &idx_block_row,
+    const bool is_multi_check)
+{
+  int ret = OB_SUCCESS;
+  idx_block_row.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
   } else if (end_of_block()) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(read_curr_idx_row(idx_row_header, endkey))) {
-    LOG_WARN("Fail to read currend index row", K(ret), K_(index_format), K_(current));
-  } else if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null index block row header/endkey", K(ret),
-             K(index_format_), KP(idx_row_header), KP(endkey));
-  } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
-    if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
-      LOG_WARN("Fail to get minor meta info", K(ret));
+  } else if (is_multi_check && OB_FAIL(skip_to_next_valid_position(idx_block_row))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("Failed to skip to next valid position", K(ret));
+    } else {
+      current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
     }
+  } else if (OB_FAIL(get_next_idx_row(idx_block_row))) {
+    LOG_WARN("Failed to get next idx row", K(ret), K(is_multi_check));
   }
-
-  if (OB_SUCC(ret)) {
-    idx_block_row.flag_ = 0;
-    idx_block_row.endkey_ = endkey;
-    idx_block_row.row_header_ = idx_row_header;
-    idx_block_row.minor_meta_info_ = idx_minor_info;
-    idx_block_row.is_get_ = is_get_;
-    idx_block_row.is_left_border_ = is_left_border_ && current_ == start_;
-    idx_block_row.is_right_border_ = is_right_border_ && current_ == end_;
-    current_ += step_;
-    idx_block_row.range_idx_ = range_idx_;
-    idx_block_row.query_range_ = query_range_;
-    idx_block_row.parent_macro_id_ = macro_id_;
-    idx_block_row.nested_offset_ = nested_offset_;
-  }
-  LOG_DEBUG("Get next index block row", K(ret), K_(current), K_(start), K_(end), K(idx_block_row));
   return ret;
 }
 
@@ -713,6 +741,148 @@ int ObIndexBlockRowScanner::read_curr_idx_row(const ObIndexBlockRowHeader *&idx_
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported index format", K(ret), K(index_format_));
+  }
+  return ret;
+}
+
+int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
+{
+  int ret = OB_SUCCESS;
+  const ObDatumRowkey *endkey = nullptr;
+  const ObIndexBlockRowHeader *idx_row_header = nullptr;
+  const ObIndexBlockRowMinorMetaInfo *idx_minor_info = nullptr;
+  const char *idx_data_buf = nullptr;
+  const char *agg_row_buf = nullptr;
+  int64_t agg_buf_size = 0;
+  if (OB_FAIL(read_curr_idx_row(idx_row_header, endkey))) {
+    LOG_WARN("Fail to read currend index row", K(ret), K_(index_format), K_(current));
+  } else if (OB_UNLIKELY(nullptr == idx_row_header || nullptr == endkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null index block row header/endkey", K(ret),
+             K(index_format_), KP(idx_row_header), KP(endkey));
+  } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+    if (OB_FAIL(idx_row_parser_.get_minor_meta(idx_minor_info))) {
+      LOG_WARN("Fail to get minor meta info", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    idx_block_row.flag_ = 0;
+    idx_block_row.endkey_ = endkey;
+    idx_block_row.row_header_ = idx_row_header;
+    idx_block_row.minor_meta_info_ = idx_minor_info;
+    idx_block_row.is_get_ = is_get_;
+    idx_block_row.is_left_border_ = is_left_border_ && current_ == start_;
+    idx_block_row.is_right_border_ = is_right_border_ && current_ == end_;
+    current_ += step_;
+    idx_block_row.range_idx_ = range_idx_;
+    idx_block_row.query_range_ = query_range_;
+    idx_block_row.parent_macro_id_ = macro_id_;
+    idx_block_row.nested_offset_ = nested_offset_;
+  }
+  LOG_DEBUG("Get next index block row", K(ret), K_(current), K_(start), K_(end), K(idx_block_row), K_(endkey), KP(this));
+  return ret;
+}
+
+void ObIndexBlockRowScanner::skip_index_rows()
+{
+  for (; rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
+    if (!rows_info_->is_row_skipped(rowkey_begin_idx_)) {
+      break;
+    }
+  }
+}
+
+int ObIndexBlockRowScanner::find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx)
+{
+  int ret = OB_SUCCESS;
+  bool is_decided = false;
+  const ObDatumRowkey *cur_rowkey = nullptr;
+  if (IndexFormat::TRANSFORMED == index_format_) {
+    cur_rowkey = idx_data_header_->rowkey_array_ + current_;
+  } else if (IndexFormat::BLOCK_TREE == index_format_) {
+    cur_rowkey = block_meta_tree_->get_rowkey(current_);
+  }
+
+  for (; OB_SUCC(ret) && rowkey_begin_idx_ < rowkey_end_idx_; ++rowkey_begin_idx_) {
+    if (rows_info_->is_row_skipped(rowkey_begin_idx_)) {
+      continue;
+    }
+    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(rowkey_begin_idx_);
+    int32_t cmp_ret = 0;
+    if (nullptr != cur_rowkey) {
+      if (OB_FAIL(rowkey.compare(*cur_rowkey, *datum_utils_, cmp_ret, false))) {
+        LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), KPC(cur_rowkey));
+      }
+    } else if (OB_FAIL(micro_reader_->compare_rowkey(rowkey, current_, cmp_ret))) {
+      LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey));
+    } else {
+      cmp_ret = -cmp_ret;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (cmp_ret > 0) {
+      rowkey_idx = rowkey_begin_idx_;
+      is_decided = true;
+      break;
+    } else if (cmp_ret == 0) {
+      rowkey_idx = rowkey_begin_idx_ + 1;
+      is_decided = true;
+      break;
+    }
+  }
+  if (!is_decided) {
+    rowkey_idx = rowkey_begin_idx_;
+  }
+  return ret;
+}
+
+int ObIndexBlockRowScanner::skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row)
+{
+  int ret = OB_SUCCESS;
+  skip_index_rows();
+  if (rowkey_begin_idx_ == rowkey_end_idx_) {
+    ret = OB_ITER_END;
+  } else if (IndexFormat::TRANSFORMED == index_format_) {
+    const ObDatumRowkey &rowkey = rows_info_->get_rowkey(rowkey_begin_idx_);
+    ObDatumComparor<ObDatumRowkey> cmp(*datum_utils_, ret, false, true, false);
+    const ObDatumRowkey *first = idx_data_header_->rowkey_array_ + current_;
+    const ObDatumRowkey *last = idx_data_header_->rowkey_array_ + end_ + 1;
+    const ObDatumRowkey *found = std::lower_bound(first, last, rowkey, cmp);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("Failed to get lower bound of rowkey", K(ret), K(rowkey), KPC_(idx_data_header));
+    } else if (found == last) {
+      ret = OB_ITER_END;
+    } else {
+      current_ = found - idx_data_header_->rowkey_array_;
+    }
+  } else if (IndexFormat::BLOCK_TREE == index_format_) {
+    if (OB_FAIL(block_meta_tree_->skip_to_next_valid_position(rows_info_->get_rowkey(rowkey_begin_idx_),
+                                                              *datum_utils_,
+                                                              current_))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("Failed to skip to next valid position in block meta tree", K(ret), K_(current), K_(rowkey_begin_idx),
+                 KPC_(idx_data_header));
+      }
+    }
+  } else if (IndexFormat::RAW_DATA == index_format_) {
+    bool equal = false;
+    if (OB_FAIL(micro_reader_->find_bound(rows_info_->get_rowkey(rowkey_begin_idx_), true, current_, current_, equal))) {
+      LOG_WARN("Failed to skip to next valid position in micro block reader", K(ret), K_(current), K_(rowkey_begin_idx),
+               KPC_(idx_data_header));
+    } else if (current_ == (end_ + 1)) {
+      ret = OB_ITER_END;
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected index format", K_(index_format));
+  }
+  if (OB_SUCC(ret)) {
+    idx_block_row.rows_info_ = rows_info_;
+    idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
+    if (OB_FAIL(find_rowkeys_belong_to_same_idx_row(idx_block_row.rowkey_end_idx_))) {
+      LOG_WARN("Failed to find rowkeys belong to same index row", K(ret), K_(current), KPC_(idx_data_header));
+    }
   }
   return ret;
 }

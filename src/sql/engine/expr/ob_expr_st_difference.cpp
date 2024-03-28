@@ -18,7 +18,6 @@
 #include "sql/engine/ob_exec_context.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_difference.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_elevation_visitor.h"
 #include "lib/geo/ob_geo_func_utils.h"
@@ -60,7 +59,7 @@ int ObExprSTDifference::calc_result_type2(ObExprResType &type, ObExprResType &ty
 }
 
 int ObExprSTDifference::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
-    ObIAllocator &allocator, ObGeometry *&geo1, ObGeometry *&geo2, bool &is_null_res,
+    MultimodeAlloctor &allocator, ObGeometry *&geo1, ObGeometry *&geo2, bool &is_null_res,
     const ObSrsItem *&srs)
 {
   int ret = OB_SUCCESS;
@@ -71,7 +70,7 @@ int ObExprSTDifference::process_input_geometry(const ObExpr &expr, ObEvalCtx &ct
   ObObjType input_type1 = gis_arg1->datum_meta_.type_;
   ObObjType input_type2 = gis_arg2->datum_meta_.type_;
   is_null_res = false;
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+  if (OB_FAIL(allocator.eval_arg(gis_arg1, ctx, gis_datum1)) || OB_FAIL(allocator.eval_arg(gis_arg2, ctx, gis_datum2))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     is_null_res = true;
@@ -85,18 +84,19 @@ int ObExprSTDifference::process_input_geometry(const ObExpr &expr, ObEvalCtx &ct
     omt::ObSrsCacheGuard srs_guard;
     bool is_geo1_valid = false;
     bool is_geo2_valid = false;
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(allocator,
             *gis_datum1,
             gis_arg1->datum_meta_,
             gis_arg1->obj_meta_.has_lob_header(),
             wkb1))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(allocator,
                    *gis_datum2,
                    gis_arg2->datum_meta_,
                    gis_arg2->obj_meta_.has_lob_header(),
                    wkb2))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb2));
+    } else if (FALSE_IT(allocator.set_baseline_size(wkb1.length() + wkb2.length()))) {
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DIFFERENCE);
@@ -119,14 +119,14 @@ int ObExprSTDifference::process_input_geometry(const ObExpr &expr, ObEvalCtx &ct
                    geo1,
                    srs,
                    N_ST_DIFFERENCE,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D))) {
+                   GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
                    wkb2,
                    geo2,
                    srs,
                    N_ST_DIFFERENCE,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D))) {
+                   GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     }
   }
@@ -143,13 +143,17 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
   bool is_null_res = false;
   const ObSrsItem *srs = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_DIFFERENCE);
   ObGeometry *diff_res = nullptr;
   bool is_empty_res = false;
   if (OB_FAIL(
           process_input_geometry(expr, ctx, temp_allocator, geo1_3d, geo2_3d, is_null_res, srs))) {
     LOG_WARN("fail to process input geometry", K(ret));
-  } else if (!is_null_res) {
+  }
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+  if (!is_null_res && OB_SUCC(ret)) {
     ObGeometry *geo1 = nullptr;
     ObGeometry *geo2 = nullptr;
     bool is_3d_geo1 = ObGeoTypeUtil::is_3d_geo_type(geo1_3d->type());
@@ -175,6 +179,11 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
       geo2 = geo2_3d;
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
                || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
       LOG_WARN("check geo empty failed", K(ret));
@@ -188,7 +197,7 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
         diff_res = to_tree.get_geometry();
       }
     } else {
-      ObGeoEvalCtx gis_context(&temp_allocator, srs);
+      ObGeoEvalCtx gis_context(*mem_ctx, srs);
       if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
         LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
       } else if (OB_FAIL(
@@ -207,19 +216,13 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
         LOG_WARN("fail to create 3D empty collection", K(ret));
       }
     } else {
-      if (geo1->crs() == ObGeoCRS::Cartesian
-         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObCartesianGeometrycollection>(diff_res, temp_allocator, srs))) {
-        // should not do simplify in symdifference functor, it may affect
-        // ObGeoFuncUtils::ob_geo_gc_union
-        LOG_WARN("fail to simplify result", K(ret));
-      }  else if (geo1->crs() == ObGeoCRS::Geographic
-         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObGeographGeometrycollection>(diff_res, temp_allocator, srs))) {
+      if (OB_FAIL(ObGeoTypeUtil::remove_duplicate_geo(diff_res, *mem_ctx, srs))) {
         // should not do simplify in symdifference functor, it may affect
         // ObGeoFuncUtils::ob_geo_gc_union
         LOG_WARN("fail to simplify result", K(ret));
       } else if (is_3d_geo1 && is_3d_geo2) {
         // populate Z coordinates
-        ObGeoElevationVisitor visitor(temp_allocator, srs);
+        ObGeoElevationVisitor visitor(*mem_ctx, srs);
         ObGeometry *diff_res_bin = nullptr;
         if (OB_FAIL(visitor.init(*geo1_3d, *geo2_3d))) {
           LOG_WARN("fail to init elevation visitor", K(ret));
@@ -244,6 +247,9 @@ int ObExprSTDifference::eval_st_difference(const ObExpr &expr, ObEvalCtx &ctx, O
     } else {
       res.set_string(res_wkb);
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }

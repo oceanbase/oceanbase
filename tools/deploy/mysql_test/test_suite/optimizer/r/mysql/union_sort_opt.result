@@ -1075,6 +1075,8 @@ Outputs & filters:
        4}, {'56', 56, 1}, {'44', 4.5, 4})
 insert into t72 values('11', 1.2, 1),('22', 2.3, 2),('33', 3.4, 3), ('44', 4.5, 4), ('55', 5.6, 5),
 ('12', 1.244, 4),('22', 2.3, 3),('3', 3.4, 2), ('44', 4.5, 4), ('56', 56, 1),('44', 4.5, 4);
+Warnings:
+Warning	1265	Data truncated for column '"union_sort_opt_db"."t72"."c2"' at row 6
 create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
 #4.4.1 两个表上索引升降序一致, 不一一对应但两侧分支匹配, 可以优化, 8 rows
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
@@ -1833,16 +1835,16 @@ Query Plan
 =============================================================================
 |ID|OPERATOR                   |NAME                  |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------
-|0 |SORT                       |                      |5       |51          |
-|1 |└─SUBPLAN SCAN             |TUT                   |5       |49          |
-|2 |  └─MERGE UNION DISTINCT   |                      |11      |49          |
+|0 |SORT                       |                      |5       |85          |
+|1 |└─SUBPLAN SCAN             |TUT                   |5       |83          |
+|2 |  └─MERGE UNION DISTINCT   |                      |11      |83          |
 |3 |    ├─MERGE UNION DISTINCT |                      |6       |39          |
 |4 |    │ ├─TABLE GET          |table2_bigint         |5       |26          |
 |5 |    │ └─SORT               |                      |1       |11          |
 |6 |    │   └─TOP-N SORT       |                      |1       |11          |
 |7 |    │     └─TABLE FULL SCAN|table100_bigint       |1       |10          |
-|8 |    └─SORT                 |                      |5       |7           |
-|9 |      └─TABLE FULL SCAN    |table2_bigint(Reverse)|5       |6           |
+|8 |    └─SORT                 |                      |5       |42          |
+|9 |      └─TABLE FULL SCAN    |table2_bigint(Reverse)|5       |40          |
 =============================================================================
 Outputs & filters:
 -------------------------------------

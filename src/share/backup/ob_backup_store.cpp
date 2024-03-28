@@ -184,6 +184,12 @@ bool ObBackupStore::is_init() const
   return IS_INIT;
 }
 
+void ObBackupStore::reset()
+{
+  is_inited_ = false;
+  backup_dest_.reset();
+}
+
 const ObBackupDest &ObBackupStore::get_backup_dest() const
 {
   return backup_dest_;

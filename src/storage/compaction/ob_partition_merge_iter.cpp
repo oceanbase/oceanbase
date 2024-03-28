@@ -342,7 +342,7 @@ bool ObPartitionMacroMergeIter::inner_check(const ObMergeParameter &merge_param)
   } else if (OB_UNLIKELY(!is_base_iter())) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected iter idx for major macro merge iter", K(bret), K(merge_param));
-  } else if (OB_UNLIKELY(!table_->is_major_sstable() && !table_->is_meta_major_sstable())) {
+  } else if (OB_UNLIKELY(!table_->is_major_sstable())) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
   }
@@ -548,7 +548,7 @@ bool ObPartitionMicroMergeIter::inner_check(const ObMergeParameter &merge_param)
   } else if (OB_UNLIKELY(!is_base_iter())) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected iter idx for major micro merge iter", K(bret), K(merge_param));
-  } else if (OB_UNLIKELY(!table_->is_major_sstable() && !table_->is_meta_major_sstable())) {
+  } else if (OB_UNLIKELY(!table_->is_major_sstable())) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected base table type for major macro merge iter", K(bret), KPC(table_));
   }

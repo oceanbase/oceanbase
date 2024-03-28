@@ -33,7 +33,7 @@ int ObTableApiScanExecutor::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
   const ObTableApiScanCtDef &tsc_ctdef = scan_spec_.get_ctdef();
   bool is_lookup = (&das_ctdef == tsc_ctdef.lookup_ctdef_);
   das_rtdef.timeout_ts_ = tb_ctx.get_timeout_ts();
-  das_rtdef.scan_flag_.scan_order_ = tb_ctx.get_scan_order();
+  das_rtdef.scan_flag_.scan_order_ = is_lookup ? ObQueryFlag::KeepOrder : tb_ctx.get_scan_order();
   das_rtdef.scan_flag_.index_back_ = tb_ctx.is_index_back();
   das_rtdef.scan_flag_.read_latest_ = tb_ctx.is_read_latest();
   das_rtdef.need_check_output_datum_ = false;

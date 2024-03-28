@@ -765,6 +765,7 @@ public:
   inline int add_intf()   { return flags_.add_member(INTF); }
 
   inline int add_compile_flag(int flag) { return flags_.add_member(flag); }
+  inline int del_compile_flag(int flag) { return flags_.del_member(flag); }
 
   inline int add_compile_flag(const ObPLCompileFlag &flag)
   {

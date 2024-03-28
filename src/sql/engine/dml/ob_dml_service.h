@@ -251,6 +251,8 @@ public:
   static int get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, ObExecContext* &needed_ctx);
 
 private:
+  static int check_agg_task_state(ObDMLRtCtx &dml_rtctx, ObIDASTaskOp *das_op, int64_t row_size, bool &reach_mem_limit);
+  static int parallel_submit_das_task(ObDMLRtCtx &dml_rtctx, ObDasAggregatedTask *agg_task);
   template <int N>
   static int write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                  ObDASDMLBaseRtDef &rtdef,

@@ -83,6 +83,13 @@ public:
                                 const ColStatIndMap &online_column_stats);
 
   static int cancel_gather_stats(ObExecContext &ctx, ObString &task_id);
+
+  static int gather_system_stats(ObExecContext &ctx, int64_t tenant_id);
+
+  static int delete_system_stats(ObExecContext &ctx, int64_t tenant_id);
+
+  static int set_system_stats(ObExecContext &ctx, const ObSetSystemStatParam &param);
+
 private:
 
   static int prepare_gather_stats(ObExecContext &ctx,

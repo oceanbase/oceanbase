@@ -260,7 +260,7 @@ int ObTempTableInsertOp::init_chunk_row_store(ObDTLIntermResultInfo *&chunk_row_
     uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
     ObMemAttr mem_attr(tenant_id, "TempTableInsert", ObCtxIds::WORK_AREA);
     dtl::ObDTLIntermResultInfoGuard result_info_guard;
-    if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().create_interm_result_info(
+    if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->create_interm_result_info(
                                           mem_attr,
                                           result_info_guard,
                                           dtl::ObDTLIntermResultMonitorInfo(
@@ -305,11 +305,11 @@ int ObTempTableInsertOp::insert_chunk_row_store()
   if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy_plan_ctx is NULL", K(ret));
-  } else if (!MY_SPEC.is_distributed_ && 
+  } else if (!MY_SPEC.is_distributed_ &&
              all_datum_store_.empty() &&
              OB_FAIL(init_chunk_row_store(chunk_row_store))) {
     //local temp table需要一个空的row store占位
-    LOG_WARN("failed to init chunk row store", K(ret));    
+    LOG_WARN("failed to init chunk row store", K(ret));
   } else if (!MY_SPEC.is_distributed_ && all_datum_store_.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("local temp table shoud have one chunk row store", K(ret));
@@ -330,16 +330,16 @@ int ObTempTableInsertOp::insert_chunk_row_store()
     } else {
       dtl_int_key.channel_id_ = interm_result_id;
       dtl_int_key.start_time_ = oceanbase::common::ObTimeUtility::current_time();
-      dtl_int_key.time_us_ = phy_plan_ctx->get_timeout_timestamp();
+      dtl_int_key.timeout_ts_ = phy_plan_ctx->get_timeout_timestamp();
       row_store->set_eof(true);
       //chunk row store不需要管理dump逻辑
       row_store->is_read_ = true;
-      if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().insert_interm_result_info(
+      if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->insert_interm_result_info(
                                         dtl_int_key, row_store))) {
         LOG_WARN("failed to insert row store.", K(ret), K(dtl_int_key.channel_id_));
       } else if (OB_FAIL(keys_insert.push_back(dtl_int_key))) {
         LOG_WARN("failed to push back key", K(ret));
-        dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(dtl_int_key);
+        MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(dtl_int_key);
       } else {
         row_store->datum_store_->reset_callback();
         ObPxSqcHandler *handler = ctx_.get_sqc_handler();
@@ -361,7 +361,7 @@ int ObTempTableInsertOp::insert_chunk_row_store()
   if (OB_FAIL(ret)) {
     //异常处理
     for (int64_t i = 0; i < keys_insert.count(); ++i) {
-      dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(keys_insert.at(i));
+      MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(keys_insert.at(i));
     }
   } else {
     clear_all_datum_store();
@@ -376,7 +376,7 @@ int ObTempTableInsertOp::clear_all_datum_store()
   for (int64_t i = 0; OB_SUCC(ret) && i < all_datum_store_.count(); ++i) {
     ObDTLIntermResultInfo *datum_store = all_datum_store_.at(i);
     if (NULL != datum_store) {
-      dtl::ObDTLIntermResultManager::dec_interm_result_ref_count(datum_store);
+      MTL(dtl::ObDTLIntermResultManager*)->dec_interm_result_ref_count(datum_store);
     }
   }
   all_datum_store_.reset();

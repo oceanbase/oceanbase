@@ -23,6 +23,7 @@
 #include "pl/ob_pl_compile.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_json_type.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_interface_pragma.h"
 #include "observer/ob_server_struct.h"
@@ -46,6 +47,7 @@
 #include "pl/ob_pl_udt_object_manager.h"
 #include "pl/debug/ob_pl_debugger.h"
 #include "pl/debug/ob_pl_debugger_manager.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
@@ -184,6 +186,10 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_add_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_handle_ref_cursor_refcount"),
                                 (void*)(sql::ObSPIService::spi_handle_ref_cursor_refcount));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_before_record"),
+                                (void*)(sql::ObSPIService::spi_pl_profiler_before_record));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_after_record"),
+                                (void*)(sql::ObSPIService::spi_pl_profiler_after_record));
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
@@ -636,7 +642,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
     if (lib::is_oracle_mode()) {
-      if (!in_nested_sql_ctrl()) {
+      OZ (ObPLContext::debug_start(&session_info));
+      if (OB_SUCC(ret) && !in_nested_sql_ctrl()) {
         /*!
          * 如果已经开始了STMT, 说明在嵌套语句中, 此时不需要设置SAVEPOINT,
          * 因为目前嵌套语句的实现保证了不需要再嵌套语句内部回滚PL的执行;
@@ -652,8 +659,8 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
           LOG_DEBUG("create pl implicit savepoint for oracle", K(ret), K(PL_IMPLICIT_SAVEPOINT));
         }
       }
-      if (session_info.get_local_autocommit()) {
-        OX (reset_autocommit_ = true);
+      if (OB_SUCC(ret) && session_info.get_local_autocommit()) {
+        reset_autocommit_ = true;
         OZ (session_info.set_autocommit(false));
       }
     } else { // MySQL Mode
@@ -683,8 +690,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
     OX (session_info.set_pl_stack_ctx(this));
     OX (session_info.set_pl_can_retry(true));
-
-    OZ (ObPLContext::debug_start(&session_info));
   } else if (is_function_or_trigger && lib::is_mysql_mode()) {
     //mysql模式, 内层function或者trigger不需要创建隐式savepoint, 只需要重置ac
     //如果是procedure调udf场景:
@@ -1768,6 +1773,10 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       }
     }
   }
+  // generate sql_id using paramiterized sql, and overwrite privious sql_id
+  OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
+                      (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
+  OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
   OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }
@@ -1832,7 +1841,9 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 
   OZ (ObPLContext::valid_execute_context(ctx));
 
-  OX (is_forbid_anony_parameter = is_forbid_anony_parameter || ctx.get_my_session()->is_pl_debug_on());
+  OX (is_forbid_anony_parameter = is_forbid_anony_parameter
+                                    || ctx.get_my_session()->is_pl_debug_on()
+                                    || ctx.get_my_session()->get_pl_profiler() != nullptr);
 
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
@@ -1879,6 +1890,10 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
         // stmt_id is OB_INVALID_ID for anonymous block from text protocol
         OZ (compiler.compile(block, OB_INVALID_ID, *routine, &params, false));
         OX (routine->set_debug_priv());
+        if (OB_SUCC(ret) && params.count() != routine->get_params_info().count()) {
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("text anonymous can not contain bind variable", K(ret));
+        }
       }
     }
     // restore work timeout
@@ -2282,6 +2297,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.mode_ = ctx.get_my_session()->get_pl_profiler() != nullptr
+                          ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
     if (OB_SUCC(ret)) {
       if (stmt_id != OB_INVALID_ID) {
@@ -2436,6 +2453,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.key_.db_id_ = database_id;
     pc_ctx.key_.key_id_ = routine_id;
     pc_ctx.key_.sessid_ = ctx.get_my_session()->is_pl_debug_on() ? ctx.get_my_session()->get_sessid() : 0;
+    pc_ctx.key_.mode_ =  ctx.get_my_session()->get_pl_profiler() != nullptr
+                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
@@ -2619,7 +2638,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
     OZ (compiler.compile(
       block_node, stmt_id, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
-    OZ (routine->set_params_info(params));
+    OZ (routine->set_params_info(params, true));
   }
 
   int64_t compile_end = ObTimeUtility::current_time();
@@ -3006,6 +3025,35 @@ int ObPLExecState::final(int ret)
     }
   }
 
+#ifdef OB_BUILD_ORACLE_PL
+  // save profiler time stack data
+  if (OB_NOT_NULL(profiler_time_stack_)) {
+    ObPLProfiler *profiler = nullptr;
+
+    if (OB_NOT_NULL(ctx_.exec_ctx_)
+          && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
+          && OB_NOT_NULL(profiler = ctx_.exec_ctx_->get_my_session()->get_pl_profiler())) {
+      int ret = OB_SUCCESS;
+
+      if (OB_FAIL(profiler_time_stack_->pop_all(*profiler))) {
+        LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler time stack", K(ret), K(lbt()));
+      }
+
+      if (is_top_call()) {
+        if (OB_FAIL(profiler->flush_data())) {
+          LOG_WARN("[DBMS_PROFILER] failed to flush pl profiler data", K(ret), K(lbt()));
+        }
+      }
+    }
+
+    profiler_time_stack_->~ObPLProfilerTimeStack();
+    if (OB_NOT_NULL(get_allocator())) {
+      get_allocator()->free(profiler_time_stack_);
+    }
+    profiler_time_stack_ = nullptr;
+  }
+#endif // OB_BUILD_ORACLE_PL
+
   if (OB_NOT_NULL(top_context_)
       && top_context_->get_exec_stack().count() > 0
       && top_context_->get_exec_stack().at(
@@ -3023,6 +3071,13 @@ int ObPLExecState::final(int ret)
       ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
     }
     exec_ctx_bak_.restore(*ctx_.exec_ctx_);
+  }
+
+  if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
+  #ifdef OB_BUILD_ORACLE_PL
+    ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+    ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
+  #endif
   }
 
   return OB_SUCCESS;
@@ -3355,7 +3410,7 @@ do {                                                                  \
        */
       if (func_.get_in_args().has_member(i)) {
         const ObPLDataType &pl_type = func_.get_variables().at(i);
-        if (is_anonymous) {
+        if (is_anonymous && !func_.get_params_info().at(i).flag_.need_to_check_type_) {
           OX (get_params().at(i) = params->at(i));
         } else if (params->at(i).is_pl_mock_default_param()) { // 使用参数默认值
           ObObjParam result;
@@ -3782,6 +3837,9 @@ int ObPL::check_exec_priv(
                                       exec_ctx.get_my_session()->get_database_name(),
                                       session_priv))) {
           LOG_WARN("fail to get_session_priv_info", K(ret));
+      } else if (OB_FAIL(exec_ctx.get_my_session()->get_security_version(
+                                                          session_priv.security_version_))) {
+        LOG_WARN("fail to get security version", K(ret));
       } else if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,

@@ -67,10 +67,18 @@ public:
            && OB_INVALID_ID != id_low_;
   }
 
+  void reset() {
+    id_high_ = common::OB_INVALID_ID;
+    id_low_ = common::OB_INVALID_ID;
+  }
+
 public:
   uint64_t id_high_;
   uint64_t id_low_;
 };
+
+static const ObBalanceGroupID NON_PART_BG_ID(0, 0);
+static const ObBalanceGroupID DUP_TABLE_BG_ID(0, 1);
 
 class ObBalanceGroup
 {
@@ -98,6 +106,7 @@ public:
   TO_STRING_KV(K_(id), K_(name));
 public:
   const static char* NON_PART_BG_NAME;
+  const static char* DUP_TABLE_BG_NAME;
 private:
   ObBalanceGroupID id_;
   ObBalanceGroupName name_;

@@ -2103,6 +2103,7 @@ int ObServer::init_pre_setting()
   reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
   ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                       GCONF._min_malloc_sample_interval);
+  enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
 
   // oblog configuration
   if (OB_SUCC(ret)) {

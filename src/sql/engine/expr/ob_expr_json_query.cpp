@@ -181,7 +181,9 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   bool is_null_result = false;
   uint8_t is_type_mismatch = 0;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObIJsonBase *jb_empty = NULL;
@@ -196,7 +198,6 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   // get context first
   ObJsonParamCacheCtx ctx_cache(&temp_allocator);
   ObJsonParamCacheCtx* param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }

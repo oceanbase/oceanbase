@@ -419,6 +419,34 @@ int ObStorageHAUtils::check_ls_is_leader(
   return ret;
 }
 
+int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus migration_status;
+  share::ObLSRestoreStatus restore_status;
+  if (!ls_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ls_info));
+  } else if (OB_FAIL(check_server_version(ls_info.version_))) {
+    if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+      LOG_WARN("this src is not compatible", K(ret), K(ls_info));
+    } else {
+      LOG_WARN("failed to check version", K(ret), K(ls_info));
+    }
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_info));
+  } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+    ret = OB_DATA_SOURCE_NOT_VALID;
+    LOG_WARN("this src is not suitable, migration status check failed", K(ret), K(ls_info));
+  } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls_info));
+  } else if (restore_status.is_restore_failed()) {
+    ret = OB_DATA_SOURCE_NOT_EXIST;
+    LOG_WARN("some ls replica restore failed, can not migrate", K(ret), K(ls_info));
+  }
+  return ret;
+}
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;
@@ -1090,6 +1118,78 @@ int ObTransferUtils::check_ls_replay_scn(
     }
   }
   return ret;
+}
+
+void ObTransferUtils::transfer_tablet_restore_stat(
+    const uint64_t tenant_id,
+    const share::ObLSID &src_ls_id,
+    const share::ObLSID &dest_ls_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle src_ls_handle;
+  ObLSHandle dest_ls_handle;
+  ObLS *src_ls = nullptr;
+  ObLS *dest_ls = nullptr;
+  ObRestorePersistHelper helper;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ObArray<ObLSRestoreProgressPersistInfo> ls_restore_progress_array;
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id, dest_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(dest_ls_id));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), K(dest_ls_handle));
+  } else if (OB_FAIL(ls_service->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(src_ls_id));
+  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(src_ls_handle));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(helper.init(tenant_id, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else {
+    ObLSRestoreJobPersistKey src_ls_key;
+    ObLSRestoreJobPersistKey dest_ls_key;
+    if (OB_FAIL(helper.get_all_ls_restore_progress(trans, ls_restore_progress_array))) {
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else if (ls_restore_progress_array.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else {
+      dest_ls_key.tenant_id_ = tenant_id;
+      dest_ls_key.job_id_ = ls_restore_progress_array.at(0).key_.job_id_;
+      dest_ls_key.ls_id_ = dest_ls_id;
+      dest_ls_key.addr_ = GCTX.self_addr();
+
+      src_ls_key = dest_ls_key;
+      src_ls_key.ls_id_ = src_ls_id;
+      if (OB_FAIL(helper.transfer_tablet(trans, src_ls_key, dest_ls_key))) {
+        LOG_WARN("fail to transfer tablet restore stat", K(ret), K(src_ls_key), K(dest_ls_key));
+      }
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+
+    if (FAILEDx(dest_ls->get_ls_restore_handler()->restore_stat().inc_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(dest_ls_key));
+    } else if (OB_FAIL(src_ls->get_ls_restore_handler()->restore_stat().dec_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(src_ls_key));
+    }
+  }
 }
 
 } // end namespace storage

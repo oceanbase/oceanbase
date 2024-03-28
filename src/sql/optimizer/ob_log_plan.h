@@ -435,6 +435,7 @@ public:
   int check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                      ObLogicalOperator &top,
                                      const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                     bool use_parallel_das,
                                      bool &is_multi_part_dml,
                                      bool &is_result_local);
 
@@ -1319,6 +1320,12 @@ public:
                                 IndexDMLInfo *&index_dml_info,
                                 int64_t &wait_ts,
                                 bool &skip_locked);
+  int get_table_for_update_info_for_hierarchical(const uint64_t table_id,
+                                                 ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                                 int64_t &wait_ts,
+                                                 bool &skip_locked);
+  int is_hierarchical_for_update(bool &is_hierarchical);
+  int check_hierarchical_for_update(const TableItem *table, uint64_t base_tid);
 
   int get_part_column_exprs(const uint64_t table_id,
                             const uint64_t ref_table_id,

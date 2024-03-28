@@ -16,6 +16,7 @@
 #include "ob_storage_ha_struct.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
 #include "ob_transfer_struct.h"
+#include "storage/ob_storage_rpc.h"
 
 namespace oceanbase
 {
@@ -53,6 +54,8 @@ public:
 
   static int calc_tablet_sstable_macro_block_cnt(
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
+
+  static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
@@ -153,6 +156,10 @@ public:
       const common::ObIArray<ObAddr> &member_addr_list,
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
+  static void transfer_tablet_restore_stat(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

@@ -329,18 +329,18 @@ ObCSVTableRowIterator::~ObCSVTableRowIterator()
 {
   release_buf();
   if (nullptr != bit_vector_cache_) {
-    allocator_.free(bit_vector_cache_);
+    malloc_alloc_.free(bit_vector_cache_);
   }
 }
 
 void ObCSVTableRowIterator::release_buf()
 {
   if (nullptr != state_.buf_) {
-    allocator_.free(state_.buf_);
+    malloc_alloc_.free(state_.buf_);
   }
 
   if (nullptr != state_.escape_buf_) {
-    allocator_.free(state_.escape_buf_);
+    malloc_alloc_.free(state_.escape_buf_);
   }
 }
 
@@ -367,11 +367,12 @@ int ObCSVTableRowIterator::expand_buf()
   if (OB_UNLIKELY(new_buf_len > MAX_BUFFER_SIZE)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("buffer size overflow", K(ret), K(new_buf_len));
-  } else if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(new_buf_len)))) {
+  } else if (OB_ISNULL(new_buf = static_cast<char *>(malloc_alloc_.alloc(new_buf_len)))
+             || OB_ISNULL(new_escape_buf = static_cast<char *>(malloc_alloc_.alloc(new_buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_ISNULL(new_escape_buf = static_cast<char *>(allocator_.alloc(new_buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+    if (OB_NOT_NULL(new_buf)) {
+      malloc_alloc_.free(new_buf);
+    }
     LOG_WARN("fail to alloc memory", K(ret));
   } else {
     int64_t remain_len =  (nullptr != old_buf) ? (state_.data_end_ - state_.pos_) : 0;
@@ -436,7 +437,8 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan param is null", K(ret));
   } else {
-    allocator_.set_attr(lib::ObMemAttr(scan_param->tenant_id_, "CSVRowIter"));
+    malloc_alloc_.set_attr(lib::ObMemAttr(scan_param->tenant_id_, "CSVRowIter"));
+    arena_alloc_.set_attr(lib::ObMemAttr(scan_param->tenant_id_, "CSVRowIter"));
     OZ (ObExternalTableRowIterator::init(scan_param));
     OZ (parser_.init(scan_param->external_file_format_.csv_format_));
     OZ (init_exprs(scan_param));
@@ -445,7 +447,7 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 
     if (OB_SUCC(ret)) {
       if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
-        if (OB_ISNULL(state_.ip_port_buf_ = static_cast<char *>(allocator_.alloc(max_ipv6_port_length)))) {
+        if (OB_ISNULL(state_.ip_port_buf_ = static_cast<char *>(arena_alloc_.alloc(max_ipv6_port_length)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret));
         }
@@ -522,7 +524,7 @@ int ObCSVTableRowIterator::open_next_file()
         OZ (full_name.append(state_.ip_port_buf_, state_.ip_port_len_));
         OZ (full_name.append("%"));
         OZ (full_name.append(this->state_.cur_file_name_));
-        OZ (ob_write_string(allocator_, full_name.string(), state_.file_with_url_));
+        OZ (ob_write_string(arena_alloc_, full_name.string(), state_.file_with_url_));
       }
     }
     LOG_DEBUG("try next file", K(ret), K(url_), K(file_url), K(state_));
@@ -714,7 +716,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 
   if (OB_ISNULL(bit_vector_cache_)) {
     void *mem = nullptr;
-    if (OB_ISNULL(mem = allocator_.alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+    if (OB_ISNULL(mem = malloc_alloc_.alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for skip", K(ret), K(eval_ctx.max_batch_size_));
     } else {

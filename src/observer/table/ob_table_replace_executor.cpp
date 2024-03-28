@@ -168,46 +168,6 @@ int ObTableApiReplaceExecutor::insert_row_to_das()
   return ret;
 }
 
-int ObTableApiReplaceExecutor::calc_del_tablet_loc(ObExpr *calc_part_id_expr,
-                                                   ObDASTableLoc &table_loc,
-                                                   ObDASTabletLoc *&tablet_loc)
-{
-  int ret = OB_SUCCESS;
-  if (!tb_ctx_.has_global_index()) {
-    if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
-      LOG_WARN("fail to calc local tablet loc", K(ret));
-    }
-  } else { // for global index
-    if (OB_ISNULL(calc_part_id_expr)) {
-      const ObConflictCheckerCtdef &checker_ctdef = conflict_checker_.checker_ctdef_;
-      // primary table tablet_loc use conflict checker lookup tablet loc:
-      // because the lookup tablet loc may not local tablet loc
-      calc_part_id_expr = checker_ctdef.calc_part_id_expr_;
-      if (OB_ISNULL(calc_part_id_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("lookup part id expr is NULL", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::clear_evaluated_flag(checker_ctdef.part_id_dep_exprs_, eval_ctx_))) {
-        LOG_WARN("fail to clear rowkey flag", K(ret), KPC(calc_part_id_expr));
-      }
-    } else {
-      clear_evaluated_flag();
-    }
-    if (OB_SUCC(ret)) {
-      ObObjectID partition_id = OB_INVALID_ID;
-      ObTabletID tablet_id;
-      if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr,
-                                                                  eval_ctx_,
-                                                                  partition_id,
-                                                                  tablet_id))) {
-        LOG_WARN("calc part and tablet id by expr failed", K(ret), KPC(calc_part_id_expr));
-      } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
-        LOG_WARN("extended tablet loc failed", K(ret), K(tablet_id));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableApiReplaceExecutor::delete_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -226,18 +186,15 @@ int ObTableApiReplaceExecutor::delete_row_to_das()
       LOG_WARN("replace ctdef is NULL", K(ret), K(i));
     } else {
       const ObTableDelCtDef &del_ctdef = replace_ctdef->del_ctdef_;
-      if (OB_FAIL(calc_del_tablet_loc(del_ctdef.old_part_id_expr_,
-                                      *del_rtdef.das_rtdef_.table_loc_,
-                                      tablet_loc))) {
-        LOG_WARN("fail to calculate the old row tablet loc", K(ret),
-                  KPC(del_ctdef.old_part_id_expr_), KPC(del_rtdef.das_rtdef_.table_loc_));
-      } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef.das_ctdef_,
-                                                  del_rtdef.das_rtdef_,
-                                                  tablet_loc,
-                                                  dml_rtctx_,
-                                                  del_ctdef.old_row_,
-                                                  stored_row))) {
-        LOG_WARN("fail to delete row to das op", K(ret), K(del_ctdef), K(del_rtdef), KPC(tablet_loc));
+      bool is_primary_table = (i == 0);
+      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_
+                                                    : del_ctdef.old_part_id_expr_;
+      if (OB_FAIL(ObTableApiModifyExecutor::delete_row_to_das(is_primary_table,
+                                                              calc_part_id_expr,
+                                                              conflict_checker_.checker_ctdef_.part_id_dep_exprs_,
+                                                              del_ctdef,
+                                                              del_rtdef))) {
+        LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef), K(i));
       }
     }
   }

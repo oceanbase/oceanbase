@@ -61,6 +61,8 @@
 #include "pl/sys_package/ob_sdo_geometry.h"
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_json_array_type.h"
+#include "pl/sys_package/ob_utl_recomp.h"
+#include "pl/sys_package/ob_dbms_profiler.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
@@ -340,6 +342,9 @@
   INTERFACE_DEF(INTERFACE_DBMS_STATS_IMPORT_INDEX_STATS, "IMPORT_INDEX_STATS", (ObDbmsStats::import_index_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_COPY_TABLE_STATS, "COPY_TABLE_STATS", (ObDbmsStats::copy_table_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_CNACEL_GATHER_STATS, "CANCEL_GATHER_STATS", (ObDbmsStats::cancel_gather_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_SYSTEM_STATS, "GATHER_SYSTEM_STATS", (ObDbmsStats::gather_system_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_DELETE_SYSTEM_STATS, "DELETE_SYSTEM_STATS", (ObDbmsStats::delete_system_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_SYSTEM_STATS, "SET_SYSTEM_STATS", (ObDbmsStats::set_system_stats))
   //end of dbms_stat
 
 #ifdef OB_BUILD_ORACLE_PL
@@ -461,6 +466,8 @@
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETCLOBVAL, "XML_TYPE_GETCLOBVAL", (ObXmlType::getclobval))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETSTRINGVAL, "XML_TYPE_GETSTRINGVAL", (ObXmlType::getstringval))
+  INTERFACE_DEF(INTERFACE_XML_TYPE_EXISTSNODE, "XML_TYPE_EXISTSNODE", (ObXmlType::existsnode))
+  INTERFACE_DEF(INTERFACE_XML_TYPE_EXTRACT, "XML_TYPE_EXTRACT", (ObXmlType::extract))
   INTERFACE_DEF(INTERFACE_XML_TYPE_CREATEXML, "XML_TYPE_CREATEXML", (ObXmlType::createxml))
   INTERFACE_DEF(INTERFACE_XML_TYPE_CONSTRUCTOR, "XML_TYPE_CONSTRUCTOR", (ObXmlType::constructor))
   //end of xmltype
@@ -696,7 +703,26 @@
   INTERFACE_DEF(INTERFACE_DBMS_WR_MODIFY_SNAPSHOT_SETTINGS, "WR_MODIFY_SNAPSHOT_SETTINGS", (ObDbmsWorkloadRepository::modify_snapshot_settings))
   INTERFACE_DEF(INTERFACE_DBMS_GENERATE_ASH_REPORT_TEXT, "GENERATE_ASH_REPORT_TEXT", (ObDbmsWorkloadRepository::generate_ash_report_text))
   // end of dbms_workload_repository
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of dbms_profiler
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_CHECK_VERSION, "DBMS_PROFILER_CHECK_VERSION", (ObDBMSProfiler::check_version))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_START, "DBMS_PROFILER_START_PROFILER", (ObDBMSProfiler::start_profiler))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_STOP, "DBMS_PROFILER_STOP_PROFILER", (ObDBMSProfiler::stop_profiler))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_CHANGE_STATE, "DBMS_PROFILER_CHANGE_STATE", (ObDBMSProfiler::change_state))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_FLUSH_DATA, "DBMS_PROFILER_FLUSH_DATA", (ObDBMSProfiler::flush_data))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_INIT_OBJECTS, "DBMS_PROFILER_INIT_OBJECTS", (ObDBMSProfiler::init_objects))
+  INTERFACE_DEF(INTERFACE_DBMS_PROFILER_DROP_OBJECTS, "DBMS_PROFILER_DROP_OBJECTS", (ObDBMSProfiler::drop_objects))
+  // end of dbms_profiler
+#endif // OB_BUILD_ORACLE_PL
   /****************************************************************************/
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of utl_recomp
+  INTERFACE_DEF(INTERFACE_UTL_RECOMP_INVALIDATE_OBJS, "UTL_RECOMP_INVALIDATE_OBJS", (ObUtlRecomp::invalidate_objs))
+  INTERFACE_DEF(INTERFACE_UTL_RECOMP_DELETE_ERRORS, "UTL_RECOMP_DELETE_ERRORS", (ObUtlRecomp::delete_errors))
+  // end of utl_recomp
+#endif
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

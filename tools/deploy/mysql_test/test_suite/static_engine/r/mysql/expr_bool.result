@@ -67,6 +67,9 @@ insert into t1 values(
 
   b'001'
 );
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t1"."col_decimal"' at row 1
+Warning	1265	Data truncated for column '"oceanbase"."t1"."col_udecimal"' at row 1
 create table t2 (c1 int);
 insert into t2 values(1);
 
@@ -394,6 +397,9 @@ insert into t1 values(1, 2,
     7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '9.5', '10.5', 'blob type', 'text type');
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"oceanbase"."t1"."c18"' at row 1
 set ob_enable_plan_cache = 0;
 explain_protocol: 2
 EXPLAIN select c1 and c1 from t1;

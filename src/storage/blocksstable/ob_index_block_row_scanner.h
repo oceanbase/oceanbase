@@ -26,6 +26,7 @@ namespace storage
 struct ObTableIterParam;
 struct ObTableAccessContext;
 class ObBlockMetaTree;
+class ObRowsInfo;
 }
 namespace blocksstable
 {
@@ -104,7 +105,15 @@ public:
       const int64_t range_idx,
       const bool is_left_border,
       const bool is_right_border);
-  int get_next(ObMicroIndexInfo &idx_block_row);
+  int open(
+      const MacroBlockId &macro_id,
+      const ObMicroBlockData &idx_block_data,
+      const ObRowsInfo *rows_info,
+      const int64_t rowkey_begin_idx,
+      const int64_t rowkey_end_idx);
+  int get_next(
+      ObMicroIndexInfo &idx_block_row,
+      const bool is_multi_check = false);
   bool end_of_block() const;
   int get_index_row_count(int64_t &index_row_count) const;
   int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan);
@@ -113,6 +122,7 @@ public:
   TO_STRING_KV(K_(current), K_(start), K_(end), K_(step),
                K_(range_idx), K_(is_get), K_(is_reverse_scan),
                K_(is_left_border), K_(is_right_border),
+               K_(rowkey_begin_idx), K_(rowkey_end_idx),
                K_(is_inited), K_(index_format), K_(macro_id), KPC_(idx_data_header), KPC_(datum_utils));
 private:
   int init_by_micro_data(const ObMicroBlockData &idx_block_data);
@@ -120,10 +130,15 @@ private:
   int locate_range(const ObDatumRange &range, const bool is_left_border, const bool is_right_border);
   int init_datum_row();
   int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
+  int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
+  void skip_index_rows();
+  int find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx);
+  int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:
   union {
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
+    const ObRowsInfo *rows_info_;
     const void *query_range_;
   };
   enum IndexFormat {
@@ -150,6 +165,8 @@ private:
   int64_t step_;
   int64_t range_idx_;
   int64_t nested_offset_;
+  int64_t rowkey_begin_idx_;
+  int64_t rowkey_end_idx_;
   IndexFormat index_format_;
   bool is_get_;
   bool is_reverse_scan_;

@@ -310,7 +310,7 @@ public:
   static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                ObRawExpr &expr,
-                               bool &contain_select_stmt,
+                               ObQueryCtx &ctx,
                                ObIArray<ObSchemaObjVersion> &return_value_version);
 
   static int resolve_external_symbol(common::ObIAllocator &allocator,
@@ -371,6 +371,7 @@ public:
                            const common::ObCollationType server_collation,
                            ObExprInfo *parents_expr_info,
                            const ObSQLMode mode,
+                           const ObCompatType compat_type,
                            bool is_from_pl = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
@@ -533,6 +534,7 @@ public:
                                   char *str,
                                   int64_t *str_len,
                                   const int64_t max_len);
+  static int check_user_variable_length(char *str, int64_t str_len);
   static int resolve_check_constraint_expr(
              ObResolverParams &params,
              const ParseNode *node,
@@ -810,6 +812,20 @@ public:
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
+  static int fast_get_param_type(const ParseNode &parse_node,
+                                 const ParamStore *param_store,
+                                 const ObCollationType connect_collation,
+                                 const ObCollationType nchar_collation,
+                                 const ObCollationType server_collation,
+                                 ObObjType &obj_type,
+                                 ObCollationType &coll_type,
+                                 ObCollationLevel &coll_level);
+  static int create_values_table_query(ObSQLSessionInfo *session_info,
+                                       ObIAllocator *allocator,
+                                       ObRawExprFactory *expr_factory,
+                                       ObQueryCtx *query_ctx,
+                                       ObSelectStmt *select_stmt,
+                                       ObValuesTableDef *table_def);
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
 private:

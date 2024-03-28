@@ -29,7 +29,6 @@ ObTableGlobalIndexLookupExecutor::ObTableGlobalIndexLookupExecutor(ObTableApiSca
     tb_ctx_(scan_executor_->get_table_ctx()),
     das_ref_(scan_executor_->get_eval_ctx(), scan_executor_->get_exec_ctx()),
     lookup_result_(),
-    need_force_index_scan_stop_(false),
     lookup_range_()
 {}
 
@@ -51,9 +50,7 @@ int ObTableGlobalIndexLookupExecutor::check_lookup_row_cnt()
   if (OB_ISNULL(scan_executor_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan executor is NULL", K(ret));
-  } else if (GCONF.enable_defensive_check() &&
-      OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_) &&
-      index_group_cnt_ == lookup_group_cnt_) {
+  } else if (GCONF.enable_defensive_check() && OB_UNLIKELY(lookup_rowkey_cnt_ != lookup_row_cnt_)) {
     ret = OB_ERR_DEFENSIVE_CHECK;
     ObString func_name = ObString::make_string("check_lookup_row_cnt");
     LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
@@ -89,23 +86,17 @@ int ObTableGlobalIndexLookupExecutor::open()
 int ObTableGlobalIndexLookupExecutor::get_next_row_from_index_table()
 {
   int ret = OB_SUCCESS;
-  bool got_row = false;
   uint64_t tenant_id = tb_ctx_.get_tenant_id();
-  do {
-    if (allocator_.used() > get_memory_limit(tenant_id)) {
-      // if the memory used is out of memory limit, force to stop the index table scan
-      // and the reserved index rows will be scanned in next batch
-      need_force_index_scan_stop_ = true;
-      ret = OB_ITER_END;
-      LOG_WARN("allocator use reach limit", K(ret), K(allocator_.used()), K(get_memory_limit(tenant_id)));
-    } else if (OB_FAIL(scan_executor_->get_next_row_for_tsc())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("get next row from child failed", K(ret));
-      }
-    } else {
-      got_row = true;
+  if (allocator_.used() > get_memory_limit(tenant_id)) {
+    // if the memory used is out of memory limit, force to stop the index table scan
+    // and the reserved index rows will be scanned in next batch
+    ret = OB_ITER_END;
+    LOG_WARN("allocator use reach limit", K(ret), K(allocator_.used()), K(get_memory_limit(tenant_id)));
+  } else if (OB_FAIL(scan_executor_->get_next_row_for_tsc())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next row from child failed", K(ret));
     }
-  } while(OB_SUCC(ret) && !got_row);
+  }
   return ret;
 }
 
@@ -252,25 +243,15 @@ int ObTableGlobalIndexLookupExecutor::get_next_row_from_data_table()
   return ret;
 }
 
-int ObTableGlobalIndexLookupExecutor::process_next_index_batch_for_row()
+int ObTableGlobalIndexLookupExecutor::reset_lookup_state()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(check_lookup_row_cnt())) {
-    LOG_WARN("check lookup row cnt failed", K(ret));
-  } else if (need_next_index_batch()) {
-    if (OB_FAIL(das_ref_.close_all_task())) {
-      LOG_WARN("close all das task failed", K(ret));
-    } else {
-      state_ = INDEX_SCAN;
-      das_ref_.reuse();
-      index_end_ = false;
-      need_force_index_scan_stop_ = false;
-      if (OB_SUCC(ret)) {
-        allocator_.reset_remain_one_page();
-      }
-    }
+  if (OB_FAIL(das_ref_.close_all_task())) {
+    LOG_WARN("close all das task failed", K(ret));
   } else {
-    state_ = FINISHED;
+    das_ref_.reuse();
+    allocator_.reset_remain_one_page();
+    index_end_ = false;
   }
   return ret;
 }
@@ -292,19 +273,12 @@ void ObTableGlobalIndexLookupExecutor::destroy()
   allocator_.reset_remain_one_page();
 }
 
-int ObTableGlobalIndexLookupExecutor::do_index_table_scan_for_rows(const int64_t max_row_cnt,
-                                                                   const int64_t start_group_idx,
-                                                                   const int64_t default_row_batch_cnt)
+int ObTableGlobalIndexLookupExecutor::get_next_rows_from_index_table(int64_t &count, int64_t capacity)
 {
   return OB_NOT_IMPLEMENT;
 }
 
 int ObTableGlobalIndexLookupExecutor::get_next_rows_from_data_table(int64_t &count, int64_t capacity)
-{
-  return OB_NOT_IMPLEMENT;
-}
-
-int ObTableGlobalIndexLookupExecutor::process_next_index_batch_for_rows(int64_t &count)
 {
   return OB_NOT_IMPLEMENT;
 }

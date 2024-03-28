@@ -121,10 +121,13 @@ public:
   //----End of definitions for managing outlines----
 
   RPC_S(PRD create_routine, obrpc::OB_CREATE_ROUTINE, (ObCreateRoutineArg));
+  RPC_S(PRD create_routine_with_res, obrpc::OB_CREATE_ROUTINE_WITH_RES, (ObCreateRoutineArg), ObRoutineDDLRes);
   RPC_S(PRD drop_routine, obrpc::OB_DROP_ROUTINE, (ObDropRoutineArg));
   RPC_S(PRD alter_routine, obrpc::OB_ALTER_ROUTINE, (ObCreateRoutineArg));
+  RPC_S(PRD alter_routine_with_res, obrpc::OB_ALTER_ROUTINE_WITH_RES, (ObCreateRoutineArg), ObRoutineDDLRes);
 
   RPC_S(PRD create_udt, obrpc::OB_CREATE_UDT, (ObCreateUDTArg));
+  RPC_S(PRD create_udt_with_res, obrpc::OB_CREATE_UDT_WITH_RES, (ObCreateUDTArg), ObRoutineDDLRes);
   RPC_S(PRD drop_udt, obrpc::OB_DROP_UDT, (ObDropUDTArg));
 
   //----Definitions for managing dblinks----
@@ -174,12 +177,15 @@ public:
   //----End of definitions for managing profile----
 
   RPC_S(PRD create_package, obrpc::OB_CREATE_PACKAGE, (ObCreatePackageArg));
+  RPC_S(PRD create_package_with_res, obrpc::OB_CREATE_PACKAGE_WITH_RES, (ObCreatePackageArg), ObRoutineDDLRes);
   RPC_S(PRD alter_package, obrpc::OB_ALTER_PACKAGE, (ObAlterPackageArg));
+  RPC_S(PRD alter_package_with_res, obrpc::OB_ALTER_PACKAGE_WITH_RES, (ObAlterPackageArg), ObRoutineDDLRes);
   RPC_S(PRD drop_package, obrpc::OB_DROP_PACKAGE, (ObDropPackageArg));
 
   RPC_S(PRD create_trigger, obrpc::OB_CREATE_TRIGGER, (ObCreateTriggerArg));
   RPC_S(PRD create_trigger_with_res, obrpc::OB_CREATE_TRIGGER_WITH_RES, (ObCreateTriggerArg), ObCreateTriggerRes);
   RPC_S(PRD alter_trigger, obrpc::OB_ALTER_TRIGGER, (ObAlterTriggerArg));
+  RPC_S(PRD alter_trigger_with_res, obrpc::OB_ALTER_TRIGGER_WITH_RES, (ObAlterTriggerArg), ObRoutineDDLRes);
   RPC_S(PRD drop_trigger, obrpc::OB_DROP_TRIGGER, (ObDropTriggerArg));
 
   RPC_S(PR5 execute_bootstrap, OB_EXECUTE_BOOTSTRAP, (ObBootstrapArg));
@@ -220,6 +226,7 @@ public:
   RPC_S(PR5 admin_reload_zone, obrpc::OB_ADMIN_RELOAD_ZONE);
   RPC_S(PR5 admin_clear_merge_error, obrpc::OB_ADMIN_CLEAR_MERGE_ERROR, (ObAdminMergeArg));
   RPC_S(PR5 admin_migrate_unit, obrpc::OB_ADMIN_MIGRATE_UNIT, (ObAdminMigrateUnitArg));
+  RPC_S(PR5 admin_alter_ls_replica, obrpc::OB_ADMIN_ALTER_LS_REPLICA, (ObAdminAlterLSReplicaArg));
   RPC_S(PRD admin_upgrade_virtual_schema, obrpc::OB_ADMIN_UPGRADE_VIRTUAL_SCHEMA);
   RPC_S(PRD run_job, obrpc::OB_RUN_JOB, (ObRunJobArg));
   RPC_S(PRD run_upgrade_job, obrpc::OB_RUN_UPGRADE_JOB, (ObUpgradeJobArg));
@@ -318,6 +325,7 @@ public:
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 get_root_key, obrpc::OB_GET_ROOT_KEY, (obrpc::ObRootKeyArg), obrpc::ObRootKeyResult);
 #endif
+  RPC_S(PRD alter_user_proxy, obrpc::OB_ALTER_USER_PROXY, (ObAlterUserProxyArg), obrpc::ObAlterUserProxyRes);
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {

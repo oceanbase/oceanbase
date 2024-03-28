@@ -574,7 +574,7 @@ bool ObIOUsage::is_request_doing(const int64_t index) const
 
 int64_t ObIOUsage::get_io_usage_num() const
 {
-  return group_num_;
+  return ATOMIC_LOAD(&group_num_);
 }
 
 int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
@@ -1085,7 +1085,7 @@ void ObIOSender::stop_submit()
 void ObIOSender::run1()
 {
   int ret = OB_SUCCESS;
-  const int64_t thread_id = get_thread_idx();
+  const int64_t thread_id = sender_index_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));

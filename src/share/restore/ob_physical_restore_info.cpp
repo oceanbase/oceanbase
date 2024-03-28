@@ -241,6 +241,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(status),
     K_(comment),
     K_(restore_start_ts),
+    K_(restoring_start_ts),
     K_(restore_scn),
     K_(consistent_scn),
     K_(post_data_version),
@@ -280,6 +281,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     restore_type_ = other.restore_type_;
     status_ = other.status_;
     restore_start_ts_ = other.restore_start_ts_;
+    restoring_start_ts_ = other.restoring_start_ts_;
     restore_scn_ = other.restore_scn_;
     consistent_scn_ = other.consistent_scn_;
     post_data_version_ = other.post_data_version_;
@@ -343,6 +345,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
+  restoring_start_ts_ = 0;
   restore_scn_ = SCN::min_scn();
   consistent_scn_ = SCN::min_scn();
   post_data_version_ = 0;

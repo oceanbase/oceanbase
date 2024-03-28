@@ -700,7 +700,7 @@ int ObAggregateProcessor::HashBasedDistinctExtraResult::build_distinct_data_for_
       LOG_WARN("failed to check status", K(ret));
     } else if (OB_FAIL(hp_infras_->insert_row_for_batch(exprs,
                                                         hash_values_for_batch_,
-                                                        batch_size,
+                                                        read_rows,
                                                         nullptr,
                                                         output_vec))) {
       LOG_WARN("failed to insert batch rows, dump", K(ret));
@@ -7337,15 +7337,13 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
       } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
         ObIJsonBase *j_base = NULL;
         ObStringBuffer *buff = bin_agg.get_buffer();
-        if (OB_FAIL(string_buffer.reserve(buff->length()))) {
-          LOG_WARN("fail to reserve string.", K(ret), K(buff->length()));
-        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
+        if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
                                                       ObJsonInType::JSON_BIN,
                                                       j_base))) {
           LOG_WARN("fail to get real data.", K(ret), K(buff));
-        } else if (OB_FAIL(j_base->print(string_buffer, true, false))) {
+        } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));
         } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
@@ -7559,7 +7557,8 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
   ObString result;
-  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  MultimodeAlloctor tmp_alloc(tmp_allocator, T_FUN_ORA_XMLAGG, MTL_ID(), ret);
   ObXmlDocument *content = NULL;
   ObXmlDocument* doc = NULL;
   ObString blob_locator;
@@ -7785,6 +7784,7 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(ObXMLExprHelper::pack_binary_res(*aggr_info.expr_, eval_ctx_, bin_agg.get_buffer()->string(), blob_locator))) {
           LOG_WARN("pack binary res failed", K(ret));
         } else {
+          tmp_alloc.set_baseline_size_and_flag(bin_agg.get_buffer()->length());
           concat_result.set_string(blob_locator.ptr(), blob_locator.length());
         }
       }
@@ -7948,15 +7948,13 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       } else if (OB_FALSE_IT(buff = bin_agg.get_buffer())) {
       } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
         ObIJsonBase *j_base = NULL;
-        if (OB_FAIL(string_buffer.reserve(buff->length()))) {
-          LOG_WARN("fail to reserve string.", K(ret), K(buff->length()));
-        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
+        if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
                                                       ObJsonInType::JSON_BIN,
                                                       j_base))) {
           LOG_WARN("fail to get real data.", K(ret), K(buff));
-        } else if (OB_FAIL(j_base->print(string_buffer, true, false))) {
+        } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));
         } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};

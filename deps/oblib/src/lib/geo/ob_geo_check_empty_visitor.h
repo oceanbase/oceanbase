@@ -31,6 +31,7 @@ public:
   // stop when found first non-empty point
   bool is_end(ObGeometry *geo) { UNUSED(geo); return (is_empty_ == false); }
   bool get_result() { return is_empty_; };
+  bool set_after_visitor() { return false; }
 
 private:
   int check_empty(ObIWkbPoint *geo) { is_empty_ = geo->is_empty(); return OB_SUCCESS; }

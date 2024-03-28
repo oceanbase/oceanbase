@@ -116,6 +116,45 @@ struct AutoDOPParams {
   int64_t parallel_min_scan_time_threshold_; // auto dop threshold for table scan cost
 };
 
+struct OptSystemStat {
+  OptSystemStat()
+  :last_analyzed_(0),
+  cpu_speed_(0),
+  disk_seq_read_speed_(0),
+  disk_rnd_read_speed_(0),
+  network_speed_(0)
+  {
+  }
+
+  inline int64_t get_last_analyzed() const { return last_analyzed_; }
+  void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
+
+  inline int64_t get_cpu_speed() const { return cpu_speed_; }
+  void set_cpu_speed(int64_t cpu_speed) { cpu_speed_ = cpu_speed; }
+
+  inline int64_t get_disk_seq_read_speed() const { return disk_seq_read_speed_; }
+  void set_disk_seq_read_speed(int64_t disk_seq_read_speed) { disk_seq_read_speed_ = disk_seq_read_speed; }
+
+  inline int64_t get_disk_rnd_read_speed() const { return disk_rnd_read_speed_; }
+  void set_disk_rnd_read_speed(int64_t disk_rnd_read_speed) { disk_rnd_read_speed_ = disk_rnd_read_speed; }
+
+  inline int64_t get_network_speed() const { return network_speed_; }
+  void set_network_speed(int64_t network_speed) { network_speed_ = network_speed; }
+
+  TO_STRING_KV(K(last_analyzed_),
+               K(cpu_speed_),
+               K(disk_seq_read_speed_),
+               K(disk_rnd_read_speed_),
+               K(network_speed_));
+
+private:
+  int64_t last_analyzed_;
+  int64_t cpu_speed_;
+  int64_t disk_seq_read_speed_;
+  int64_t disk_rnd_read_speed_;
+  int64_t network_speed_;
+};
+
 class ObOptimizerContext
 {
 
@@ -150,6 +189,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
     can_use_pdml_(false),
+    can_use_parallel_das_dml_(false),
     max_parallel_(ObGlobalHint::UNSET_PARALLEL),
     auto_dop_params_(),
     is_online_ddl_(false),
@@ -195,7 +235,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     nested_loop_join_enabled_(true),
     storage_estimation_enabled_(false),
     enable_random_plan_(false),
-    enable_new_query_range_(false)
+    enable_new_query_range_(false),
+    system_stat_()
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -287,6 +328,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_auto_dop_params(const AutoDOPParams &auto_dop_params) {  auto_dop_params_ = auto_dop_params; }
   const AutoDOPParams &get_auto_dop_params() {  return auto_dop_params_; }
   void set_can_use_pdml(bool u) { can_use_pdml_ = u; }
+  void set_can_use_parallel_das_dml(bool v) { can_use_parallel_das_dml_ = v; }
+  bool get_can_use_parallel_das_dml() const { return can_use_parallel_das_dml_; }
   inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
   void set_ddl_sample_column_count(const int64_t count) { ddl_sample_column_count_ = count; }
@@ -567,6 +610,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool generate_random_plan() const { return enable_random_plan_; }
   inline void set_enable_new_query_range(bool v) { enable_new_query_range_ = v; }
   inline bool enable_new_query_range() const { return enable_new_query_range_; }
+  inline OptSystemStat& get_system_stat() { return system_stat_; }
+  inline const OptSystemStat& get_system_stat() const { return system_stat_; }
+
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -586,6 +632,7 @@ private:
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;
   bool can_use_pdml_; // can use pdml after check parallel
+  bool can_use_parallel_das_dml_; // can use parallel das dml after check parallel
   int64_t max_parallel_;
   AutoDOPParams auto_dop_params_; // parameters to calc dop for Auto DOP
   bool is_online_ddl_;
@@ -651,6 +698,7 @@ private:
   bool storage_estimation_enabled_;
   bool enable_random_plan_;
   bool enable_new_query_range_;
+  OptSystemStat system_stat_;
 };
 }
 }

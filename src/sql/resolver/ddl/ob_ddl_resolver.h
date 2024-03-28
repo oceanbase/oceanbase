@@ -50,7 +50,7 @@ struct PartitionInfo
 
 enum NUMCHILD {
   CREATE_TABLE_NUM_CHILD = 7,
-  CREATE_TABLE_AS_SEL_NUM_CHILD = 9,
+  CREATE_TABLE_AS_SEL_NUM_CHILD = 10,
   COLUMN_DEFINITION_NUM_CHILD = 4,
   COLUMN_DEF_NUM_CHILD = 3,
   INDEX_NUM_CHILD = 5,
@@ -944,6 +944,7 @@ protected:
   ObNameGeneratedType name_generated_type_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
+  int64_t auto_increment_cache_size_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

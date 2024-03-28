@@ -420,7 +420,11 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
     }
     get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child_card);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    ObSortCostInfo cost_info(child_card / parallel,
+    double child_card_per_dop = child_card / parallel;
+    if (double_topn_count > child_card_per_dop) {
+      double_topn_count = child_card_per_dop;
+    }
+    ObSortCostInfo cost_info(child_card_per_dop,
                              child->get_width(),
                              get_prefix_pos(),
                              get_sort_keys(),
@@ -429,7 +433,7 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
                              &get_plan()->get_selectivity_ctx(),
                              double_topn_count,
                              part_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
+    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
     } else if (NULL != topn_expr_) {
       double_topn_count = std::min(double_topn_count * parallel, child_card);
@@ -463,6 +467,17 @@ int ObLogSort::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
     LOG_WARN("get unexpected null", K(ret));
   } else if (T_FUN_SYS_ENCODE_SORTKEY == expr->get_expr_type() || expr == hash_sortkey_.expr_) {
     is_fixed = true;
+  }
+  return ret;
+}
+
+int ObLogSort::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = -1;
+  if (!is_prefix_sort() && !is_local_merge_sort()) {
+    used = false;
   }
   return ret;
 }

@@ -115,7 +115,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     kv_attributes_(),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     is_set_lob_inrow_threshold_(false),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    auto_increment_cache_size_(0)
 {
   table_mode_.reset();
 }
@@ -1350,7 +1351,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_TABLE_MODE: {
-        if (OB_ISNULL(option_node->children_[0])) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (OB_ISNULL(option_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
         } else {
@@ -1360,23 +1364,42 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(session_info_, is_sync_ddl_user))) {
             LOG_WARN("Failed to check sync_ddl_user", K(ret));
           } else if (is_sync_ddl_user) { // in backup mode
-            if (OB_FAIL(ObBackUpTableModeOp::get_table_mode(table_mode_str, table_mode_))) {
+            if (OB_FAIL(ObBackUpTableModeOp::get_table_mode(table_mode_str, table_mode_, tenant_data_version))) {
               LOG_WARN("Failed to get table mode from string", K(ret), K(table_mode_str));
             }
           } else if (0 == table_mode_str.case_compare("normal")) {
             table_mode_.mode_flag_ = TABLE_MODE_NORMAL;
           } else if (0 == table_mode_str.case_compare("queuing")) {
             table_mode_.mode_flag_ = TABLE_MODE_QUEUING;
+          } else if (0 == table_mode_str.case_compare("moderate")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_MODERATE;
+          } else if (0 == table_mode_str.case_compare("super")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_SUPER;
+          } else if (0 == table_mode_str.case_compare("extreme")) {
+            table_mode_.mode_flag_ = TABLE_MODE_QUEUING_EXTREME;
           } else if (0 == table_mode_str.case_compare("heap_organized_table")) {
             table_mode_.organization_mode_ = TOM_HEAP_ORGANIZED;
             table_mode_.pk_mode_ = TPKM_TABLET_SEQ_PK;
           } else if (0 == table_mode_str.case_compare("index_organized_table")) {
             table_mode_.organization_mode_ = TOM_INDEX_ORGANIZED;
           } else {
-            ret = OB_ERR_PARSER_SYNTAX;
+            ret = OB_NOT_SUPPORTED;
+            int tmp_ret = OB_SUCCESS;
+            ObSqlString err_msg;
+            if (OB_TMP_FAIL(err_msg.append_fmt("Table mode %s is", table_mode_str.ptr()))) {
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "this table mode is");
+              LOG_WARN("failed to append err msg", K(tmp_ret), K(err_msg), K(table_mode_str));
+            } else {
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+            }
           }
           if (OB_FAIL(ret)) {
             SQL_RESV_LOG(WARN, "failed to resolve table mode str!", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_2_3_0
+                 && is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.3", K(ret), K(table_mode_str), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.3");
           }
         }
         if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {
@@ -1387,7 +1410,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
                 LOG_WARN("get table schema failed", K(ret));
               } else if ((tmp_table_schema.is_primary_aux_vp_table() || tmp_table_schema.is_aux_vp_table())
-                  && table_mode_.mode_flag_ == TABLE_MODE_QUEUING) {
+                  && is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "set vertical partition table as queuing table mode");
                 SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
@@ -1709,6 +1732,44 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_AUTO_INCREMENT_CACHE_SIZE: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter table auto_increment_cache_size is not supported in data version less than 4.2.3",
+                   K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table auto_increment_cache_size is not supported in data version less than 4.2.3");
+        } else if (OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
+        } else {
+          const static int64_t MAX_AUTO_INCREMENT_CACHE_SIZE = 100000000;
+          const int64_t cache_size = option_node->children_[0]->value_;
+          if (cache_size < 0 || cache_size > MAX_AUTO_INCREMENT_CACHE_SIZE) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "Specify table auto increment cache size should be [0, 100000000]",
+                        K(ret), K(cache_size));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "table auto_increment_cache_size");
+          } else {
+            auto_increment_cache_size_ = cache_size;
+          }
+        }
+        if (OB_SUCCESS == ret && stmt::T_ALTER_TABLE ==stmt_->get_stmt_type()) {
+          HEAP_VAR(ObTableSchema, tmp_table_schema) {
+            if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
+              LOG_WARN("get table schema failed", K(ret));
+            } else if (auto_increment_cache_size_ ==
+                         tmp_table_schema.get_auto_increment_cache_size()) {
+              // same as the original auto_increment_mode, do nothing
+            } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::INCREMENT_CACHE_SIZE))) {
+              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+            }
+          }
+        }
+        break;
+      }
       case T_ENABLE_EXTENDED_ROWID: {
         if (OB_ISNULL(option_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
@@ -1836,9 +1897,20 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             duplicate_scope_ = my_duplicate_scope;
           }
           if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("alter table duplicate scope not supported", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
+            uint64_t tenant_data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+              LOG_WARN("get tenant data version failed", KR(ret), K(tenant_id));
+            } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("alter table duplicate scope not supported", KR(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
+            } else if (!is_user_tenant(tenant_id)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not user tenant, alter table duplicate scope not supported", KR(ret), K(tenant_id));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, alter table duplicate scope");
+            } else if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DUPLICATE_SCOPE))) {
+              LOG_WARN("fail to add member duplicate_scope to bitset", KR(ret), K(tenant_id));
+            }
           }
         }
         break;
@@ -2144,7 +2216,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_TTL_DEFINITION: {
-        uint64_t tenant_data_version = 0;;
+        uint64_t tenant_data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
           LOG_WARN("get tenant data version failed", K(ret));
         } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
@@ -2180,7 +2252,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         break;
       }
       case T_KV_ATTRIBUTES: {
-        uint64_t tenant_data_version = 0;;
+        uint64_t tenant_data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
           LOG_WARN("get tenant data version failed", K(ret));
         } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
@@ -3781,7 +3853,7 @@ int ObDDLResolver::resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session_info_->get_effective_tenant_id();
-  uint64_t tenant_data_version = 0;;
+  uint64_t tenant_data_version = 0;
 
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
@@ -4024,7 +4096,7 @@ int ObDDLResolver::resolve_lob_inrow_threshold(const ParseNode *option_node, con
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = 0;
-  uint64_t tenant_data_version = 0;;
+  uint64_t tenant_data_version = 0;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "session_info_ is null", K(ret));
@@ -4604,7 +4676,9 @@ void ObDDLResolver::reset() {
   hash_subpart_num_ = -1;
   ttl_definition_.reset();
   kv_attributes_.reset();
+  is_set_lob_inrow_threshold_ = false;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  auto_increment_cache_size_ = 0;
 }
 
 bool ObDDLResolver::is_valid_prefix_key_type(const ObObjTypeClass column_type_class)

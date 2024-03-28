@@ -686,6 +686,49 @@ int ObXAHbRespP::process()
   return ret;
 }
 
+template <ObRpcPacketCode PC>
+void ObXARPCCB<PC>::statistics()
+{
+  int ret = OB_SUCCESS;
+  if (is_valid_tenant_id(tenant_id_) && 0 < start_ts_) {
+    MTL_SWITCH(tenant_id_) {
+      ObXAService *xa_service = MTL(ObXAService *);
+      const int64_t used_time_us = ObTimeUtility::current_time() - start_ts_;
+      if (NULL != xa_service && 0 < used_time_us) {
+        xa_service->get_statistics().inc_xa_inner_rpc_total_count();
+        xa_service->get_statistics().add_xa_inner_rpc_total_used_time(used_time_us);
+        if (10000 <= used_time_us) {
+          xa_service->get_statistics().inc_xa_inner_rpc_ten_ms_total_count();
+        }
+        if (20000 <= used_time_us) {
+          xa_service->get_statistics().inc_xa_inner_rpc_twenty_ms_total_count();
+        }
+      }
+    } // MTL_SWITCH
+  }
+}
+
+void ObXACommitRPCCB::statistics()
+{
+  int ret = OB_SUCCESS;
+  ObXAService *xa_service = MTL(ObXAService *);
+  if (is_valid_tenant_id(tenant_id_) && 0 < start_ts_) {
+    MTL_SWITCH(tenant_id_) {
+      ObXAService *xa_service = MTL(ObXAService *);
+      const int64_t used_time_us = ObTimeUtility::current_time() - start_ts_;
+      if (NULL != xa_service && 0 < used_time_us) {
+        xa_service->get_statistics().inc_xa_inner_rpc_total_count();
+        xa_service->get_statistics().add_xa_inner_rpc_total_used_time(used_time_us);
+        if (10000 <= used_time_us) {
+          xa_service->get_statistics().inc_xa_inner_rpc_ten_ms_total_count();
+        }
+        if (20000 <= used_time_us) {
+          xa_service->get_statistics().inc_xa_inner_rpc_twenty_ms_total_count();
+        }
+      }
+    }
+  }
+}
 }//obrpc
 
 using namespace obrpc;

@@ -113,10 +113,10 @@ ObGroupJoinBufffer::ObGroupJoinBufffer()
     above_left_group_params_(), above_right_group_params_(),
     group_params_(), above_group_params_(),
     last_row_(), last_batch_(),
-    right_cnt_(0), cur_group_idx_(0), left_store_read_(0),
+    right_cnt_(0), cur_group_idx_(-1), left_store_read_(0),
     above_group_idx_for_expand_(0), above_group_idx_for_read_(0),
     above_group_size_(0), max_group_size_(0),
-    group_scan_size_(0), flags_(0)
+    group_scan_size_(0), group_rescan_cnt_(0), rescan_params_info_(), flags_(0)
 {
   need_check_above_ = true;
 }
@@ -294,9 +294,6 @@ int ObGroupJoinBufffer::fill_cur_row_group_param()
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    cur_group_idx_++;
-  }
   return ret;
 }
 
@@ -457,7 +454,13 @@ int ObGroupJoinBufffer::rescan_right()
   if (skip_rescan_right_) {
     skip_rescan_right_ = false;
   } else {
+    cur_group_idx_++;
+    if (OB_FAIL(fill_cur_row_group_param())) {
+      LOG_WARN("failed to fill cur row group param");
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < right_cnt_; i++) {
+      GroupParamBackupGuard guard(right_[i].get_exec_ctx().get_das_ctx());
+      guard.bind_batch_rescan_params(cur_group_idx_, group_rescan_cnt_, &rescan_params_info_);
       int cur_ret = right_[i].rescan();
       if (OB_SUCC(cur_ret) || OB_ITER_END == cur_ret) {
         if (0 == i) {
@@ -501,6 +504,7 @@ int ObGroupJoinBufffer::fill_group_buffer()
     }
     if (OB_SUCC(ret)) {
       reset_buffer_state();
+      group_rescan_cnt_++;
       if (OB_FAIL(last_row_.init(
               mem_context_->get_malloc_allocator(), left_->get_spec().output_.count()))) {
         LOG_WARN("failed to init right last row", KR(ret));
@@ -551,8 +555,6 @@ int ObGroupJoinBufffer::fill_group_buffer()
         LOG_WARN("finish add row to row store failed", KR(ret));
       } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
         LOG_WARN("begin iterator for chunk row store failed", KR(ret));
-      } else if (OB_FAIL(bind_group_params_to_store())) {
-        LOG_WARN("bind group params to store failed", KR(ret));
       } else if (OB_FAIL(rescan_right())) {
         ret = (OB_ITER_END == ret) ? OB_ERR_UNEXPECTED : ret;
         LOG_WARN("rescan right failed", KR(ret));
@@ -592,11 +594,13 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       }
       batch_rows = &left_->get_brs();
       reset_buffer_state();
+      group_rescan_cnt_++;
       while (OB_SUCC(ret) && !is_full() && !batch_rows->end_) {
         op_->clear_evaluated_flag();
         if (!rescan_params_->empty()) {
           op_->set_pushdown_param_null(*rescan_params_);
         }
+        DASGroupScanMarkGuard mark_guard(ctx_->get_das_ctx(), true);
         if (OB_FAIL(left_->get_next_batch(max_row_cnt, batch_rows))) {
           LOG_WARN("get next batch from left failed", KR(ret));
         }
@@ -646,8 +650,6 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
         LOG_WARN("finish add row to row store failed", KR(ret));
       } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
         LOG_WARN("begin iterator for chunk row store failed", KR(ret));
-      } else if (OB_FAIL(bind_group_params_to_store())) {
-        LOG_WARN("bind group params to store failed", KR(ret));
       } else if (OB_FAIL(rescan_right())) {
         ret = (OB_ITER_END == ret) ? OB_ERR_UNEXPECTED : ret;
         LOG_WARN("rescan right failed", KR(ret));
@@ -819,6 +821,24 @@ int ObGroupJoinBufffer::init_group_params()
       }
     }
   }
+
+  // collect batch nlj params needed by rescan right op
+  if (OB_FAIL(ret) || (group_params_.empty())) {
+    // do nothing
+  } else if (rescan_params_info_.empty()) { // only perform once
+    int64_t rescan_params_info_cnt = group_params_.count();
+    if (OB_FAIL(rescan_params_info_.allocate_array(ctx_->get_allocator(),rescan_params_info_cnt))) {
+      LOG_WARN("failed to allocate group param info", K(ret), K(rescan_params_info_cnt));
+    } else {
+      // collect rescan params of current nlj op
+      int64_t j = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < group_params_.count() && j < rescan_params_info_.count(); ++i, ++j) {
+        int64_t param_idx = rescan_params_->at(i).param_idx_;
+        rescan_params_info_.at(j).param_idx_ = param_idx;
+        rescan_params_info_.at(j).gr_param_ = &group_params_.at(i);
+      }
+    }
+  }
   return ret;
 }
 
@@ -868,39 +888,6 @@ int ObGroupJoinBufffer::deep_copy_dynamic_obj()
   return ret;
 }
 
-int ObGroupJoinBufffer::bind_group_params_to_store()
-{
-  int ret = OB_SUCCESS;
-  int64_t param_cnt = rescan_params_->count();
-  ParamStore &param_store = GET_PHY_PLAN_CTX(*ctx_)->get_param_store_for_update();
-  if (OB_UNLIKELY(param_cnt != group_params_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("param count is invalid", KR(ret), K(param_cnt), K(group_params_.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
-    const ObDynamicParamSetter &rescan_param = rescan_params_->at(i);
-    int64_t param_idx = rescan_param.param_idx_;
-    int64_t array_obj_addr = reinterpret_cast<int64_t>(&group_params_.at(i));
-    param_store.at(param_idx).set_extend(array_obj_addr, T_EXT_SQL_ARRAY);
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (is_multi_level_) {
-    if (OB_UNLIKELY(above_group_params_.count() != right_rescan_params_->count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param counts do not match", KR(ret),
-               K(above_group_params_.count()),
-               K(right_rescan_params_->count()));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < right_rescan_params_->count(); i++) {
-      int64_t param_idx = right_rescan_params_->at(i).param_idx_;
-      int64_t array_obj_addr = reinterpret_cast<int64_t>(&above_group_params_.at(i));
-      param_store.at(param_idx).set_extend(array_obj_addr, T_EXT_SQL_ARRAY);
-    }
-  }
-  return ret;
-}
-
 int ObGroupJoinBufffer::prepare_rescan_params()
 {
   int ret = OB_SUCCESS;
@@ -931,24 +918,39 @@ int ObGroupJoinBufffer::build_above_group_params(
   int ret = OB_SUCCESS;
   group_size = 0;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*ctx_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < above_rescan_params.count(); i++) {
-    int64_t param_idx = above_rescan_params.at(i).param_idx_;
-    const ObObjParam &obj_param = plan_ctx->get_param_store().at(param_idx);
-    ObSqlArrayObj *array_obj = NULL;
-    if (obj_param.is_ext_sql_array()) {
-      array_obj = reinterpret_cast<ObSqlArrayObj*>(obj_param.get_ext());
-      if (0 == group_size) {
-        group_size = array_obj->count_;
-      } else if (OB_UNLIKELY(group_size != array_obj->count_)) {
+  const GroupParamArray* group_params_above = nullptr;
+  if (OB_ISNULL(group_params_above = ctx_->get_das_ctx().get_group_params())) {
+    // the above operator of this nlj don't use batch rescan, do nothing
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is nullptr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < above_rescan_params.count(); i++) {
+      int64_t param_idx = above_rescan_params.at(i).param_idx_;
+      ObSqlArrayObj *array_obj = NULL;
+      uint64_t array_idx = OB_INVALID_ID;
+      bool exist = false;
+      if (OB_FAIL(ctx_->get_das_ctx().find_group_param_by_param_idx(param_idx, exist, array_idx))) {
+        LOG_WARN("failed to find group param by param idx", K(ret), K(i), K(param_idx));
+      } else if (!exist || array_idx == OB_INVALID_ID || array_idx > group_params_above->count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group sizes do not match", KR(ret),
-                 K(group_size), K(array_obj->count_));
+        LOG_WARN("failed to find group param", K(ret), K(exist), K(i), K(array_idx));
+      } else {
+        const GroupRescanParam &group_param = group_params_above->at(array_idx);
+        array_obj = group_param.gr_param_;
+        if (0 == group_size) {
+          group_size = array_obj->count_;
+        } else if (OB_UNLIKELY(group_size != array_obj->count_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("group sizes do not match", KR(ret),
+                  K(group_size), K(array_obj->count_));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(above_group_params.push_back(array_obj))) {
-      LOG_WARN("push array obj failed", KR(ret), K(i), KP(array_obj));
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(above_group_params.push_back(array_obj))) {
+        LOG_WARN("push array obj failed", KR(ret), K(i), KP(array_obj));
+      }
     }
   }
   return ret;
@@ -976,7 +978,7 @@ int ObGroupJoinBufffer::set_above_group_size() {
 
 void ObGroupJoinBufffer::reset_buffer_state()
 {
-  cur_group_idx_ = 0;
+  cur_group_idx_ = -1;
   left_store_read_ = 0;
   left_store_iter_.reset();
   left_store_.reset();
@@ -1038,5 +1040,38 @@ int ObGroupJoinBufffer::restore_above_params(common::ObIArray<ObObjParam> &left_
   }
   return ret;
 }
+
+int ObGroupJoinBufffer::get_next_batch_from_right(int64_t max_batch_size, const ObBatchRows *brs)
+{
+  int ret = OB_SUCCESS;
+  if (right_cnt_ == 1) {
+    GroupParamBackupGuard guard(right_[0].get_exec_ctx().get_das_ctx());
+    guard.bind_batch_rescan_params(cur_group_idx_, group_rescan_cnt_, &rescan_params_info_);
+    if (OB_FAIL(right_[0].get_next_batch(max_batch_size, brs))) {
+      LOG_WARN("failed to get next batch from right op in batch NLJ", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the right child cnt of NLJ is not 1", K(ret));
+  }
+  return ret;
+}
+
+int ObGroupJoinBufffer::get_next_row_from_right()
+{
+  int ret = OB_SUCCESS;
+  if (right_cnt_ == 1) {
+    GroupParamBackupGuard guard(right_[0].get_exec_ctx().get_das_ctx());
+    guard.bind_batch_rescan_params(cur_group_idx_, group_rescan_cnt_, &rescan_params_info_);
+    if (OB_FAIL(right_[0].get_next_row())) {
+      LOG_WARN("failed to get next row from right op in batch NLJ", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the right child cnt of NLJ is not 1", K(ret));
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

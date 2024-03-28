@@ -40,7 +40,7 @@ int ObTableApiSessPoolMgr::start()
 {
   int ret = OB_SUCCESS;
 
-  if (!is_inited_) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("table api session pool mgr isn't inited", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
@@ -330,7 +330,7 @@ void ObTableApiSessPool::destroy()
 int ObTableApiSessPool::retire_session_node()
 {
   int ret = OB_SUCCESS;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
   ObTableApiSessForeachOp op;
 
   if (OB_FAIL(key_node_map_.foreach_refactored(op))) {
@@ -383,7 +383,7 @@ int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
   int64_t delete_count = 0;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
   ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
@@ -493,7 +493,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(sess_node)) {
-    int64_t cur_time = ObTimeUtility::current_time();
+    int64_t cur_time = ObTimeUtility::fast_current_time();
     ATOMIC_STORE(&sess_node->last_active_ts_, cur_time);
   }
 
@@ -512,7 +512,7 @@ int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTab
     LOG_WARN("fail to alloc mem for ObTableApiSessNode", K(ret), K(sizeof(ObTableApiSessNode)));
   } else {
     tmp_node = new (buf) ObTableApiSessNode(credential);
-    tmp_node->last_active_ts_ = ObTimeUtility::current_time();
+    tmp_node->last_active_ts_ = ObTimeUtility::fast_current_time();
     node = tmp_node;
   }
 
@@ -552,7 +552,7 @@ int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
   int ret = OB_SUCCESS;
   ObTableApiSessNode *node = nullptr;
   const uint64_t key = credential.hash_val_;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObTimeUtility::fast_current_time();
 
   if (OB_FAIL(get_sess_node(key, node))) {
     if (OB_HASH_NOT_EXIST == ret) { // not exist, create
@@ -600,7 +600,7 @@ int ObTableApiSessNodeVal::init_sess_info()
 {
   int ret = OB_SUCCESS;
 
-  if (!is_inited_) {
+  if (IS_NOT_INIT) {
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObTenantSchema *tenant_schema = nullptr;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {

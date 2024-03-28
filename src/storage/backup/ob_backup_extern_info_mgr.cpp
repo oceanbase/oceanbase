@@ -371,7 +371,7 @@ int ObExternTabletMetaWriter::prepare_backup_file_(const int64_t file_id)
   int ret = OB_SUCCESS;
   share::ObBackupPath backup_path;
   common::ObBackupIoAdapter util;
-  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   const int64_t data_file_size = get_data_file_size();
   if (OB_FAIL(ObBackupPathUtil::get_ls_data_tablet_info_path(
       backup_set_dest_, ls_id_, turn_id_, retry_id_, file_id, backup_path))) {
@@ -433,6 +433,8 @@ int ObExternTabletMetaWriter::switch_file_()
 int ObExternTabletMetaWriter::close()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet meta writer not inited", K(ret));
@@ -440,6 +442,24 @@ int ObExternTabletMetaWriter::close()
     LOG_WARN("failed to flush trailer", K(ret));
   } else if (OB_FAIL(file_write_ctx_.close())) {
     LOG_WARN("failed to close file writer", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
+      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  } else {
+    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+    }
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
   }
   return ret;
 }

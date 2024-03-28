@@ -545,7 +545,7 @@ bool ObTTLUtil::check_can_do_work() {
   bool bret = true;
   int ret = OB_SUCCESS;
   int64_t tenant_id = MTL_ID();
-  uint64_t tenant_data_version = 0;;
+  uint64_t tenant_data_version = 0;
   if (GCTX.is_standby_cluster()) {
     bret = false;
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {

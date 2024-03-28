@@ -85,6 +85,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_sdo_geo_func_to_wkb.cpp
   geo/ob_wkb_to_sdo_geo_visitor.cpp
   geo/ob_wkb_to_json_visitor.cpp
+  geo/ob_wkb_to_json_bin_visitor.cpp
   geo/ob_wkb_byte_order_visitor.cpp
   geo/ob_geo_3d.cpp
   geo/ob_sdo_geo_object.cpp
@@ -106,6 +107,17 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_simplify_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
   geo/ob_geo_func_dissolve_polygon.cpp
+  geo/ob_geo_close_ring_visitor.cpp
+  geo/ob_geo_cache.cpp
+  geo/ob_geo_vertex_collect_visitor.cpp
+  geo/ob_geo_segment_collect_visitor.cpp
+  geo/ob_geo_cache_polygon.cpp
+  geo/ob_geo_cache_point.cpp
+  geo/ob_geo_cache_linestring.cpp
+  geo/ob_geo_segment_intersect_analyzer.cpp
+  geo/ob_geo_topology_calculate.cpp
+  geo/ob_point_location_analyzer.cpp
+  geo/ob_geo_point_location_visitor.cpp
 )
 
 ob_set_subtarget(oblib_lib common_mixed

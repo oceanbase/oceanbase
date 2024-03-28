@@ -106,12 +106,13 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   bool is_null_result = false;
   bool may_match_many = (expr.arg_cnt_ > 2);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
-  } else if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, json_datum)))) {
+  } else if (OB_FAIL(allocator.eval_arg(json_arg, ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (json_datum->is_null()) {
     is_null_result = true; // mysql return NULL result
@@ -125,6 +126,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null_result))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (OB_FALSE_IT(allocator.set_baseline_size(j_str.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
@@ -151,7 +153,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     for (int64_t i = 1; OB_SUCC(ret) && (!is_null_result) && i < expr.arg_cnt_; i++) {
       hit.reset();
       ObDatum *path_data = NULL;
-      if (OB_FAIL(expr.args_[i]->eval(ctx, path_data))) {
+      if (OB_FAIL(allocator.eval_arg(expr.args_[i], ctx, path_data))) {
         LOG_WARN("eval json path datum failed", K(ret));
       } else if (path_data->is_null()) {
         is_null_result = true;
@@ -201,7 +203,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
         ObJsonBin *j_node = NULL;
         ObIJsonBase *jb_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < hit_size; i++) {
-          if (ObJsonBaseFactory::transform(&allocator, hits[i], ObJsonInType::JSON_BIN, jb_node)) { // to binary
+          if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, hits[i], ObJsonInType::JSON_BIN, jb_node))) { // to binary
             LOG_WARN("fail to transform to tree", K(ret), K(i), K(*(hits[i])));
           } else {
             j_node = static_cast<ObJsonBin *>(jb_node);

@@ -260,6 +260,7 @@ private:
       const share::SCN &log_sync_scn,
       const common::ObTabletID &tablet_id,
       const share::ObStorageHACostItemName name) const;
+  void transfer_tablet_restore_stat_() const;
 private:
   bool is_inited_;
   ObTransferBackfillTXCtx *ctx_;

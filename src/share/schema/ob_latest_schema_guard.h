@@ -228,23 +228,6 @@ public:
       const ObString &udt_name,
       bool &exist);
 
-  // 1. won't cache versions.
-  // @param[in]:
-  // - table_ids
-  // @param[out]:
-  // - versions
-  int get_table_schema_versions(
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObIArray<ObSchemaIdVersion> &versions);
-
-  // 1. won't cache versions.
-  // @param[in]:
-  // - table_ids
-  // @param[out]:
-  // - versions
-  int get_mock_fk_parent_table_schema_versions(
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObIArray<ObSchemaIdVersion> &versions);
 
   // 1. won't cache.
   // 2. return audits which is AUDIT_OBJ_DEFAULT and owner is OB_AUDIT_MOCK_USER_ID.
@@ -298,6 +281,51 @@ public:
       const uint64_t data_table_id,
       const ObString &index_name,
       ObIndexSchemaInfo &index_info);
+
+ // 1. won't cache versions.
+  // @param[in]:
+  // - obj_ids
+  // @param[out]:
+  // - versions
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  int get_##OBJECT_NAME##_schema_versions(const common::ObIArray<uint64_t> &obj_ids, \
+                                          common::ObIArray<ObSchemaIdVersion> &versions);
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
+  // 1. won't cache
+  // 2. this function is used to get obj_privs of specified object
+  // @param[in]:
+  // - obj_id: the obj_id that privs belong to
+  // - obj_type: the type of obj
+  // @param[out]:
+  // - obj_privs: return empty if obj has no privs
+  //
+  int get_obj_privs(const uint64_t obj_id,
+                    const ObObjectType obj_type,
+                    common::ObIArray<ObObjPriv> &obj_privs);
+  // 1. won't cache
+  // @param[in]:
+  // - rls_id
+  // @param[out]:
+  // - rls_schema: return NULL if rls not exist
+#ifndef GET_RLS_SCHEMA
+#define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \
+  int get_##SCHEMA##s(const uint64_t rls_id, \
+                      const SCHEMA_TYPE *&rls_schema);
+  GET_RLS_SCHEMA(rls_policy, ObRlsPolicySchema);
+  GET_RLS_SCHEMA(rls_group, ObRlsGroupSchema);
+  GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
+#undef GET_RLS_SCHEMA
+#endif
 
   /* -------------- interfaces without cache end ---------------*/
 
@@ -364,7 +392,15 @@ public:
   // - udt_info: return NULL if udt not exist
   int get_udt_info(
       const uint64_t udt_id,
-      const ObUDTTypeInfo *udt_info);
+      const ObUDTTypeInfo *&udt_info);
+  // 1. will cache trigger schema in guard
+  // @param[in]:
+  // - trigger_id
+  // @param[out]:
+  // - trigger_schema: return NULL if trigger not exist
+  int get_trigger_info(const uint64_t trigger_id,
+                       const ObTriggerInfo *&trigger_info);
+
   /* -------------- interfaces with cache end ---------------*/
 private:
   int check_inner_stat_();

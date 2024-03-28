@@ -258,6 +258,15 @@ public:
       ObStoreCtx &store_ctx,
       const ObColDescIArray &col_descs,
       const ObStoreRow &row);
+  int insert_rows(
+      ObRelativeTable &relative_table,
+      ObStoreCtx &store_ctx,
+      ObStoreRow *rows,
+      ObRowsInfo &rows_info,
+      const bool check_exist,
+      const ObColDescIArray &col_descs,
+      const int64_t row_count,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
   int insert_row_without_rowkey_check(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -293,8 +302,6 @@ public:
   int get_sstables_size(int64_t &used_size, const bool ignore_shared_block = false) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const;
-  int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
-  int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
   ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(bowen.gbw): get memtable mgr from tablet pointer handle
@@ -495,6 +502,7 @@ public:
       ObTabletFullMemoryMdsData &mds_data);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
+  int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }

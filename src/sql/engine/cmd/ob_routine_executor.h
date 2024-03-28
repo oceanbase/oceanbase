@@ -54,10 +54,43 @@ class ObCallProcedureStmt;
 class ObAnonymousBlockStmt;
 class ObRawExpr;
 
+class ObCompileRoutineInf
+{
+public:
+  ObCompileRoutineInf() {}
+  virtual ~ObCompileRoutineInf() {}
+  static int compile_routine(ObExecContext &ctx,
+                      uint64_t tenant_id,
+                      uint64_t database_id,
+                      ObString &routine_name,
+                      ObRoutineType routine_type,
+                      int64_t schema_version);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCompileRoutineInf);
+};
+
+class ObCreateRoutineExecutor : ObCompileRoutineInf
+{
+public:
+  ObCreateRoutineExecutor() {}
+  virtual ~ObCreateRoutineExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateRoutineStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateRoutineExecutor);
+};
+
+class ObAlterRoutineExecutor : ObCompileRoutineInf
+{
+public:
+  ObAlterRoutineExecutor() {}
+  virtual ~ObAlterRoutineExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAlterRoutineExecutor);
+};
+
 //参考alter system定义
-DEF_SIMPLE_EXECUTOR(ObCreateRoutine);
 DEF_SIMPLE_EXECUTOR(ObDropRoutine);
-DEF_SIMPLE_EXECUTOR(ObAlterRoutine);
 
 class ObCallProcedureExecutor
 {

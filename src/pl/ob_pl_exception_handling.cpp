@@ -515,7 +515,8 @@ bool ObPLEH::is_internal_error(int error_code)
     || OB_TRANS_XA_BRANCH_FAIL == error_code
     || OB_TRANS_SQL_SEQUENCE_ILLEGAL == error_code
     || OB_ERR_SESSION_INTERRUPTED == error_code
-    || OB_ERR_QUERY_INTERRUPTED == error_code;
+    || OB_ERR_QUERY_INTERRUPTED == error_code
+    || OB_TIMEOUT == error_code;
 }
 
 ObPLConditionType ObPLEH::eh_classify_exception(const char *sql_state)

@@ -3120,10 +3120,11 @@ int ObOptimizerUtil::get_fd_set_parent_exprs(const ObIArray<ObFdItem *> &fd_item
   for (int64_t i = 0; OB_SUCC(ret) && i < fd_item_set.count(); ++i) {
     if (OB_ISNULL(fd_item = fd_item_set.at(i))
         || OB_ISNULL(parent_exprs = fd_item->get_parent_exprs())) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < parent_exprs->count(); ++j) {
-        if (add_var_to_array_no_dup(fd_set_parent_exprs, parent_exprs->at(j))) {
+        if (OB_FAIL(add_var_to_array_no_dup(fd_set_parent_exprs, parent_exprs->at(j)))) {
           LOG_WARN("failed to append array no dup", K(ret));
         }
       }
@@ -3453,34 +3454,29 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
   if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
-    const EqualSet *input_eset = input_equal_sets.at(i);
-    bool contain_exec_param = false;
-    raw_eset.reuse();
-    if (OB_ISNULL(input_eset)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(check_contain_my_exec_param(*input_eset,
-                                                   table_item->exec_params_,
-                                                   contain_exec_param))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contain_exec_param) {
-      // do nothing
-    } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
-                                                                  dummy_equal_sets,
-                                                                  table_id,
-                                                                  parent_stmt,
-                                                                  child_stmt,
-                                                                  true,
-                                                                  *input_eset,
-                                                                  raw_eset))) {
-     LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (raw_eset.count() > 1 &&
-               OB_FAIL(ObRawExprSetUtils::add_expr_set(allocator, raw_eset, output_equal_sets))) {
-      LOG_WARN("failed to push back equal set", K(ret));
-    } else { /*do nothing*/ }
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
+      const EqualSet *input_eset = input_equal_sets.at(i);
+      raw_eset.reuse();
+      if (OB_ISNULL(input_eset)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
+                                                                    dummy_equal_sets,
+                                                                    table_id,
+                                                                    parent_stmt,
+                                                                    child_stmt,
+                                                                    true,
+                                                                    *input_eset,
+                                                                    raw_eset))) {
+      LOG_WARN("failed to convert subplan scan expr", K(ret));
+      } else if (raw_eset.count() > 1 &&
+                OB_FAIL(ObRawExprSetUtils::add_expr_set(allocator, raw_eset, output_equal_sets))) {
+        LOG_WARN("failed to push back equal set", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -3504,76 +3500,73 @@ int ObOptimizerUtil::convert_subplan_scan_fd_item_sets(ObFdItemFactory &fd_facto
   } else if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_fd_item_sets.count(); ++i) {
-    const ObFdItem *old_fd_item = NULL;
-    bool contain_exec_param = false;
-    new_parent_exprs.reuse();
-    if (OB_ISNULL(old_fd_item = input_fd_item_sets.at(i)) ||
-        OB_ISNULL(old_fd_item->get_parent_exprs())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(old_fd_item));
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(check_contain_my_exec_param(*old_fd_item->get_parent_exprs(),
-                                                   table_item->exec_params_,
-                                                   contain_exec_param))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contain_exec_param) {
-      // do nothing
-    } else if (OB_FAIL(convert_subplan_scan_fd_parent_exprs(expr_factory,
-                                                            equal_sets,
-                                                            const_exprs,
-                                                            table_id,
-                                                            parent_stmt,
-                                                            child_stmt,
-                                                            *old_fd_item->get_parent_exprs(),
-                                                            new_parent_exprs))) {
-      LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (new_parent_exprs.empty()) {
-      /*do nothing*/
-    } else if (old_fd_item->is_unique()) {
-      ObTableFdItem *table_fd_item = NULL;
-      if (OB_FAIL(fd_factory.create_table_fd_item(table_fd_item, true, new_parent_exprs, tables))) {
-        LOG_WARN("failed to create fd item", K(ret));
-      } else if (OB_FAIL(output_fd_item_sets.push_back(table_fd_item))) {
-        LOG_WARN("failed to push back fd item", K(ret));
-      }
-    } else {
-      ObRawExpr *temp_expr = NULL;
-      ObSEArray<ObRawExpr *, 8> child_select_exprs;
-      ObSEArray<ObRawExpr *, 8> new_child_exprs;
-      ObExprFdItem *expr_fd_item = NULL;
-      if (OB_FAIL(child_stmt.get_select_exprs(child_select_exprs))) {
-        LOG_WARN("failed to get select exprs", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < child_select_exprs.count(); ++j) {
-          bool is_in_child = false;
-          if (OB_FAIL(old_fd_item->check_expr_in_child(child_select_exprs.at(j),
-                                                       equal_sets,
-                                                       is_in_child))) {
-            LOG_WARN("failed to check expr in child");
-          } else if (!is_in_child) {
-            /*do nothing*/
-          } else if (NULL == (temp_expr = parent_stmt.get_column_expr_by_id(
-                                          table_id,
-                                          OB_APP_MIN_COLUMN_ID + j))) {
-            /*do nothing*/
-          } else if (OB_FAIL(new_child_exprs.push_back(temp_expr))) {
-            LOG_WARN("failed to push back exprs", K(ret));
-          } else { /*do nothing*/ }
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_fd_item_sets.count(); ++i) {
+      const ObFdItem *old_fd_item = NULL;
+      bool contain_exec_param = false;
+      new_parent_exprs.reuse();
+      if (OB_ISNULL(old_fd_item = input_fd_item_sets.at(i)) ||
+          OB_ISNULL(old_fd_item->get_parent_exprs())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(old_fd_item));
+      } else if (OB_FAIL(convert_subplan_scan_fd_parent_exprs(expr_factory,
+                                                              equal_sets,
+                                                              const_exprs,
+                                                              table_id,
+                                                              parent_stmt,
+                                                              child_stmt,
+                                                              *old_fd_item->get_parent_exprs(),
+                                                              new_parent_exprs))) {
+        LOG_WARN("failed to convert subplan scan expr", K(ret));
+      } else if (new_parent_exprs.empty()) {
+        /*do nothing*/
+      } else if (old_fd_item->is_unique()) {
+        ObTableFdItem *table_fd_item = NULL;
+        if (OB_FAIL(fd_factory.create_table_fd_item(table_fd_item, true, new_parent_exprs, tables))) {
+          LOG_WARN("failed to create fd item", K(ret));
+        } else if (OB_FAIL(output_fd_item_sets.push_back(table_fd_item))) {
+          LOG_WARN("failed to push back fd item", K(ret));
         }
-        if (OB_SUCC(ret) && !new_child_exprs.empty()) {
-          if (OB_FAIL(fd_factory.create_expr_fd_item(expr_fd_item, false,
-                                                     new_parent_exprs,
-                                                     new_child_exprs))) {
-            LOG_WARN("failed to create fd item", K(ret));
-          } else if (OB_FAIL(output_fd_item_sets.push_back(expr_fd_item))) {
-            LOG_WARN("failed to push back fd item", K(ret));
-          } else { /*do nothing*/}
+      } else {
+        ObRawExpr *temp_expr = NULL;
+        ObSEArray<ObRawExpr *, 8> child_select_exprs;
+        ObSEArray<ObRawExpr *, 8> new_child_exprs;
+        ObExprFdItem *expr_fd_item = NULL;
+        if (OB_FAIL(child_stmt.get_select_exprs(child_select_exprs))) {
+          LOG_WARN("failed to get select exprs", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < child_select_exprs.count(); ++j) {
+            bool is_in_child = false;
+            if (OB_FAIL(old_fd_item->check_expr_in_child(child_select_exprs.at(j),
+                                                        equal_sets,
+                                                        is_in_child))) {
+              LOG_WARN("failed to check expr in child");
+            } else if (!is_in_child) {
+              /*do nothing*/
+            } else if (NULL == (temp_expr = parent_stmt.get_column_expr_by_id(
+                                            table_id,
+                                            OB_APP_MIN_COLUMN_ID + j))) {
+              /*do nothing*/
+            } else if (OB_FAIL(new_child_exprs.push_back(temp_expr))) {
+              LOG_WARN("failed to push back exprs", K(ret));
+            } else { /*do nothing*/ }
+          }
+          if (OB_SUCC(ret) && !new_child_exprs.empty()) {
+            if (OB_FAIL(fd_factory.create_expr_fd_item(expr_fd_item, false,
+                                                      new_parent_exprs,
+                                                      new_child_exprs))) {
+              LOG_WARN("failed to create fd item", K(ret));
+            } else if (OB_FAIL(output_fd_item_sets.push_back(expr_fd_item))) {
+              LOG_WARN("failed to push back fd item", K(ret));
+            } else { /*do nothing*/}
+          }
         }
       }
     }
   }
+
   return ret;
 }
 
@@ -4484,6 +4477,7 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
   all_contain = true;
   for (int64_t i = 0; OB_SUCC(ret) && all_contain && i < or_qual.get_param_count(); ++i) {
     ObRawExpr *cur_expr = or_qual.get_param_expr(i);
+    bool contain_op_row = false;
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr in or expr is null", K(ret));
@@ -4492,11 +4486,16 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
       ObOpRawExpr *and_expr = static_cast<ObOpRawExpr *>(cur_expr);
       for (int64_t j = 0; OB_SUCC(ret) && j < and_expr->get_param_count(); ++j) {
         ObRawExpr *cur_and_expr = and_expr->get_param_expr(j);
+        contain_op_row = false;
         if (OB_ISNULL(cur_and_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr in and expr is null", K(ret));
         } else if (cur_and_expr->has_flag(CNT_SUB_QUERY)) {
           //do nothing
+        } else if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(cur_and_expr, contain_op_row))) {
+          LOG_WARN("fail to check contain op row", K(ret));
+        } else if (contain_op_row) {
+          // do nothing
         } else if (!table_ids.is_superset(cur_and_expr->get_relation_ids())) {
           //do nothing
         } else if (cur_and_expr->get_relation_ids().is_empty() &&
@@ -4511,6 +4510,10 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
         all_contain = false;
       }
     } else if (cur_expr->has_flag(CNT_SUB_QUERY)) {
+      all_contain = false;
+    } else if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(cur_expr, contain_op_row))) {
+      LOG_WARN("fail to check contain op row", K(ret));
+    } else if (contain_op_row) {
       all_contain = false;
     } else if (!table_ids.is_superset(cur_expr->get_relation_ids())) {
       all_contain = false;
@@ -4570,26 +4573,10 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    //split expr may result T_OP_ROW shared
-    ObSEArray<ObRawExpr*, 4> new_or_exprs;
-    ObRawExprCopier copier(expr_factory);
-    ReplaceExprByType replacer(T_OP_ROW);
-    if (OB_FAIL(copier.copy_on_replace(new_expr_params,
-                                       new_or_exprs,
-                                       &replacer))) {
-      LOG_WARN("failed to copy on replace start with exprs", K(ret));
-    } else if (OB_UNLIKELY(new_expr_params.count() != new_or_exprs.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(new_expr_params.count()), K(new_or_exprs.count()));
-    } else if (OB_FAIL(new_expr_params.assign(new_or_exprs))) {
-      LOG_WARN("failed to assign assign results", K(ret));
-    } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
-      LOG_WARN("failed to assign param exprs", K(ret));
-    }
-  }
   if (OB_FAIL(ret)) {
     /* do nothing */
+  } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
+    LOG_WARN("failed to assign param exprs", K(ret));
   } else if (OB_FAIL(new_expr->formalize(session_info))) {
     LOG_WARN("failed to formalize or expr", K(ret));
   } else if (OB_FAIL(new_expr->pull_relation_id())) {
@@ -4942,33 +4929,30 @@ int ObOptimizerUtil::get_subplan_const_column(const ObDMLStmt &parent_stmt,
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
-    const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
-    ObRawExpr *parent_expr = NULL;
-    bool is_const = false;
-    bool contains = false;
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret), K(expr));
-    } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
-      LOG_WARN("failed to check expr is const expr", K(ret));
-    } else if (!is_const) {
-      // do nothing
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(ObOptimizerUtil::check_contain_my_exec_param(expr,
-                                                                    table_item->exec_params_,
-                                                                    contains))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contains) {
-      // do nothing
-    } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
-                                                                        OB_APP_MIN_COLUMN_ID + i))) {
-      // parent expr is prunned
-    } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs, parent_expr))) {
-      LOG_WARN("failed to add parent expr into output", K(ret));
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
+      const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
+      ObRawExpr *parent_expr = NULL;
+      bool is_const = false;
+      bool contains = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(expr));
+      } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
+        LOG_WARN("failed to check expr is const expr", K(ret));
+      } else if (!is_const) {
+        // do nothing
+      } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
+                                                                          OB_APP_MIN_COLUMN_ID + i))) {
+        // parent expr is prunned
+      } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs, parent_expr))) {
+        LOG_WARN("failed to add parent expr into output", K(ret));
+      }
     }
   }
+
   return ret;
 }
 
@@ -4984,34 +4968,42 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   bool is_valid = true;
   ObSEArray<ObRawExpr*, 8> temp_exprs;
+  TableItem *table_item = parent_stmt.get_table_item_by_id(table_id);
   ObRawExprCopier copier(expr_factory);
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < input_exprs.count(); i++) {
-    ObRawExpr *expr = NULL;
-    if (OB_ISNULL(input_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null expr", K(input_exprs.at(i)), K(ret));
-    } else if (OB_FAIL(convert_subplan_scan_expr(copier,
-                                                 equal_sets,
-                                                 table_id,
-                                                 parent_stmt,
-                                                 child_stmt,
-                                                 input_exprs.at(i),
-                                                 expr))) {
-      LOG_WARN("failed to generate subplan scan expr", K(ret));
-    } else if (OB_ISNULL(expr)) {
-      if (!skip_invalid) {
-        is_valid = false;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < input_exprs.count(); i++) {
+      ObRawExpr *expr = NULL;
+      if (OB_ISNULL(input_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(input_exprs.at(i)), K(ret));
+      } else if (OB_FAIL(convert_subplan_scan_expr(copier,
+                                                  equal_sets,
+                                                  table_id,
+                                                  parent_stmt,
+                                                  child_stmt,
+                                                  input_exprs.at(i),
+                                                  expr))) {
+        LOG_WARN("failed to generate subplan scan expr", K(ret));
+      } else if (OB_ISNULL(expr)) {
+        if (!skip_invalid) {
+          is_valid = false;
+        }
+      } else if (OB_FAIL(add_var_to_array_no_dup(temp_exprs, expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && is_valid && !temp_exprs.empty()) {
+      if (OB_FAIL(output_exprs.assign(temp_exprs))) {
+        LOG_WARN("failed to push back exprs", K(ret));
+      } else {
+        LOG_TRACE("succeed to convert subplan scan expr", K(input_exprs),
+                  K(output_exprs));
       }
-    } else if (OB_FAIL(add_var_to_array_no_dup(temp_exprs, expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret) && is_valid && !temp_exprs.empty()) {
-    if (OB_FAIL(output_exprs.assign(temp_exprs))) {
-      LOG_WARN("failed to push back exprs", K(ret));
-    } else {
-      LOG_TRACE("succeed to convert subplan scan expr", K(input_exprs),
-                K(output_exprs));
     }
   }
   return ret;
@@ -6082,6 +6074,30 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
   return ret;
 }
 
+int ObOptimizerUtil::get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr)
+{
+  int ret = OB_SUCCESS;
+  ObOpRawExpr *op_expr = NULL;
+  ObRawExpr *l_expr = NULL;
+  ObRawExpr *r_expr = NULL;
+  expr = ori_expr;
+  if (OB_ISNULL(ori_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_FUN_SYS_NVL != ori_expr->get_expr_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(op_expr = static_cast<ObOpRawExpr*>(expr))) {
+  } else if (OB_ISNULL(l_expr = op_expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_expr_without_lossless_cast(l_expr, l_expr))) {
+    LOG_WARN("get expr without lossless cast", K(ret));
+  } else if (l_expr->is_column_ref_expr()) {
+    expr = l_expr;
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                                          ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
@@ -6306,6 +6322,99 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
   return ret;
 }
 
+/*
+* Oracle has more strict constraints for data types used in set operator
+* https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
+*/
+// need to refine this when more data type are added in oracle mode
+int ObOptimizerUtil::check_set_child_res_types(const ObExprResType &left_type,
+                                               const ObExprResType &right_type,
+                                               const bool is_ps_prepare_stage,
+                                               const bool is_distinct,
+                                               const bool is_mysql_recursive_union,
+                                               bool &skip_add_cast)
+{
+  int ret = OB_SUCCESS;
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) || is_mysql_recursive_union) {
+    if (is_oracle_mode) {
+      if (!((left_type.is_null() && !right_type.is_lob() && !right_type.is_lob_locator())
+            || (left_type.is_null() && (right_type.is_lob() || right_type.is_lob_locator()) && !is_distinct)
+            || (right_type.is_null() && !left_type.is_lob() && !left_type.is_lob_locator())
+            || (right_type.is_null() && (left_type.is_lob() || left_type.is_lob_locator()) && !is_distinct)
+            || (left_type.is_raw() && right_type.is_raw())
+            || (left_type.is_character_type() && right_type.is_character_type())
+            || (ob_is_oracle_numeric_type(left_type.get_type()) && ob_is_oracle_numeric_type(right_type.get_type()))
+            || (ob_is_oracle_temporal_type(left_type.get_type()) && (ob_is_oracle_temporal_type(right_type.get_type())))
+            || (left_type.is_urowid() && right_type.is_urowid())
+            || (left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
+            || (left_type.is_geometry() && right_type.is_geometry())
+            || (left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
+            || ((ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type())) &&
+                (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
+            // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
+            // Originally, cases like "select clob from t union all select blob from t" return error
+        if (is_ps_prepare_stage) {
+          skip_add_cast = true;
+          LOG_WARN("ps prepare stage expression has different datatype", K(left_type), K(right_type));
+        } else {
+          ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+          LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
+                   K(right_type.is_varchar_or_char()), K(left_type), K(right_type));
+        }
+      } else if (left_type.is_character_type() &&
+                 right_type.is_character_type() &&
+                 (left_type.is_varchar_or_char() != right_type.is_varchar_or_char())) {
+        ret = OB_ERR_CHARACTER_SET_MISMATCH;
+        LOG_WARN("character set mismatch", K(ret), K(left_type), K(right_type));
+      } else if (left_type.is_string_or_lob_locator_type() &&
+                 right_type.is_string_or_lob_locator_type()) {
+        ObCharsetType left_cs = left_type.get_charset_type();
+        ObCharsetType right_cs = right_type.get_charset_type();
+        if (left_cs != right_cs) {
+          if (CHARSET_UTF8MB4 == left_cs || CHARSET_UTF8MB4 == right_cs) {
+            //sys table column exist utf8 varchar types, let it go
+          } else {
+            ret = OB_ERR_COLLATION_MISMATCH; //ORA-12704
+            LOG_WARN("character set mismatch", K(ret), K(left_cs), K(right_cs));
+          }
+        }
+      } else if (is_distinct && (right_type.is_geometry() || left_type.is_geometry())) {
+        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      }
+    } else {
+      if (is_mysql_recursive_union && left_type.is_null()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected rcte type", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if ((left_type.is_ext() && !right_type.is_ext()) ||
+          (!left_type.is_ext() && right_type.is_ext()) ||
+          (left_type.is_ext() && right_type.is_ext() && left_type.get_udt_id() != right_type.get_udt_id())) {
+        ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+        LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
+                 K(left_type), K(right_type));
+      }
+    }
+  } else {
+    if (is_oracle_mode) {
+      if (is_distinct && (left_type.is_lob() || left_type.is_lob_locator())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      } else if (is_distinct && right_type.is_json()) {
+        ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      } else if (is_distinct && right_type.is_geometry()) {
+        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     ObSQLSessionInfo *session_info,
                                                     ObRawExprFactory *expr_factory,
@@ -6320,6 +6429,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
   ObExprResType res_type;
   ObSEArray<ObExprResType, 8> left_types;
   ObSEArray<ObExprResType, 8> right_types;
+  ObCollationType coll_type = CS_TYPE_INVALID;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
     ret = OB_NOT_INIT;
     LOG_WARN("params is invalid", K(ret));
@@ -6331,141 +6441,57 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_UNLIKELY(left_types.count() != right_types.count())) {
     ret = OB_ERR_COLUMN_SIZE;
-    LOG_WARN("The used SELECT statements have a different number of columns",
-                                        K(left_types.count()),  K(right_types.count()));
+    LOG_WARN("The used SELECT statements have a different number of columns", K(ret),
+             K(left_types.count()), K(right_types.count()));
+  } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
+    LOG_WARN("failed to get collation connection", K(ret));
   } else {
     if (NULL != res_types) {
       res_types->reuse();
     }
+    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
+    const bool is_ps_prepare_stage = session_info->is_varparams_sql_prepare();
     const int64_t num = left_types.count();
+    const bool is_oracle_mode = lib::is_oracle_mode();
     for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
       res_type.reset();
       ObExprResType &left_type = left_types.at(i);
       ObExprResType &right_type = right_types.at(i);
+      bool skip_add_cast = false;
       if (!left_type.has_result_flag(NOT_NULL_FLAG) || !right_type.has_result_flag(NOT_NULL_FLAG)) {
         left_type.unset_result_flag(NOT_NULL_FLAG);
         right_type.unset_result_flag(NOT_NULL_FLAG);
       }
-      if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) || is_mysql_recursive_union) {
+      if (OB_FAIL(check_set_child_res_types(left_type, right_type, is_ps_prepare_stage, is_distinct,
+                                            is_mysql_recursive_union, skip_add_cast))) {
+        LOG_WARN("failed to check set child res types", K(ret));
+      } else if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) ||
+                 is_mysql_recursive_union) {
         ObSEArray<ObExprResType, 2> types;
         ObExprVersion dummy_op(*allocator);
-        ObCollationType coll_type = CS_TYPE_INVALID;
-        bool skip_add_cast = false;
-        if (lib::is_oracle_mode()) {
-          /*
-          * Oracle has more strict constraints for data types used in set operator
-          * https://docs.oracle.com/cd/B19306_01/server.102/b14200/queries004.htm
-          */
-          // need to refine this when more data type are added in oracle mode
-          if (!((left_type.is_null() && !right_type.is_lob() && !right_type.is_lob_locator())
-                || (left_type.is_null() && (right_type.is_lob() || right_type.is_lob_locator()) && !is_distinct)
-                || (right_type.is_null() && !left_type.is_lob() && !left_type.is_lob_locator())
-                || (right_type.is_null() && (left_type.is_lob() || left_type.is_lob_locator()) && !is_distinct)
-                || (left_type.is_raw() && right_type.is_raw())
-                || (left_type.is_character_type() && right_type.is_character_type())
-                || (ob_is_oracle_numeric_type(left_type.get_type())
-                    && ob_is_oracle_numeric_type(right_type.get_type()))
-                || (ob_is_oracle_temporal_type(left_type.get_type())
-                    && (ob_is_oracle_temporal_type(right_type.get_type())))
-                || (left_type.is_urowid() && right_type.is_urowid())
-                || (is_oracle_mode() && left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
-                || (is_oracle_mode() && left_type.is_geometry() && right_type.is_geometry())
-                || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
-                || (is_oracle_mode() && (ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
-                                     && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
-                // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
-                // Originally, cases like "select clob from t union all select blob from t" return error
-            if (session_info->is_varparams_sql_prepare()) {
-              skip_add_cast = true;
-              LOG_WARN("ps prepare stage expression has different datatype", K(i), K(left_type), K(right_type));
-            } else {
-              ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
-              LOG_WARN("expression must have same datatype as corresponding expression", K(ret),
-              K(session_info->is_varparams_sql_prepare()), K(right_type.is_varchar_or_char()),
-              K(i), K(left_type), K(right_type));
-            }
-          } else if (left_type.is_character_type()
-                    && right_type.is_character_type()
-                    && (left_type.is_varchar_or_char() != right_type.is_varchar_or_char())) {
-            ret = OB_ERR_CHARACTER_SET_MISMATCH;
-            LOG_WARN("character set mismatch", K(ret), K(left_type), K(right_type));
-          } else if (left_type.is_string_or_lob_locator_type() &&
-                    right_type.is_string_or_lob_locator_type()) {
-            ObCharsetType left_cs = left_type.get_charset_type();
-            ObCharsetType right_cs = right_type.get_charset_type();
-            if (left_cs != right_cs) {
-              if (CHARSET_UTF8MB4 == left_cs || CHARSET_UTF8MB4 == right_cs) {
-                //sys table column exist utf8 varchar types, let it go
-              } else {
-                ret = OB_ERR_COLLATION_MISMATCH; //ORA-12704
-                LOG_WARN("character set mismatch", K(ret), K(left_cs), K(right_cs));
-              }
-            }
-          } else if (lib::is_oracle_mode() && is_distinct
-                     && (right_type.is_geometry() || left_type.is_geometry())) {
-            ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
-            LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
-          }
-          LOG_DEBUG("data type check for each select item in set operator", K(left_type),
-                                                                            K(right_type));
-        }
-        const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
-        if (OB_FAIL(ret)) {
-        } else if (is_mysql_recursive_union) {
-          if (left_type.is_null()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected rcte type", K(ret), K(left_stmts));
-          } else {
-            res_type = left_type;
-          }
-        } else if (skip_add_cast) {
+        if (skip_add_cast || is_mysql_recursive_union) {
           res_type = left_type;
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
-        } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
-          LOG_WARN("failed to get collation connection", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                            coll_type, is_oracle_mode(), length_semantics))) {
-          if (session_info->is_varparams_sql_prepare()) {
-            skip_add_cast = true;
-            res_type = left_type;
-            LOG_WARN("failed to deduce type in ps prepare stage", K(types));
-          } else {
-            LOG_WARN("failed to aggregate result type for merge", K(ret));
-          }
+                                                    coll_type, is_oracle_mode, length_semantics))) {
+          LOG_WARN("failed to aggregate result type for merge", K(ret));
         }
         if (OB_FAIL(ret) || skip_add_cast) {
-        } else if (ObMaxType == res_type.get_type()) {
+        } else if (OB_UNLIKELY(ObMaxType == res_type.get_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));
-        } else if ((left_type.is_ext() && !right_type.is_ext())
-                    || (!left_type.is_ext() && right_type.is_ext())
-                    || (left_type.is_ext() && right_type.is_ext()
-                          && left_type.get_udt_id() != right_type.get_udt_id())) {
-          ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
-          LOG_WARN("expression must have same datatype as corresponding expression", K(ret), K(left_type), K(right_type));
-        } else if (left_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
-                                                        expr_factory, left_stmts, res_type, i))) {
+        } else if (left_type != res_type &&
+                   OB_FAIL(add_cast_to_set_list(session_info, expr_factory, left_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));
-        } else if (!is_mysql_recursive_union &&
-                   right_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
-                                                        expr_factory, right_stmts, res_type, i))) {
+        } else if (!is_mysql_recursive_union && right_type != res_type &&
+                   OB_FAIL(add_cast_to_set_list(session_info, expr_factory, right_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));
         } else if (is_mysql_recursive_union &&
                    OB_FAIL(add_column_conv_to_set_list(session_info, expr_factory, right_stmts,
                                                        res_type, i, rcte_col_name))) {
           LOG_WARN("failed to add column_conv to set list", K(ret));
         }
-      } else if (lib::is_oracle_mode() && is_distinct &&
-                (left_type.is_lob() || left_type.is_lob_locator())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
-      } else if (lib::is_oracle_mode() && is_distinct && right_type.is_json()) {
-        ret = OB_ERR_INVALID_CMP_OP;
-        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
-      } else if (lib::is_oracle_mode() && is_distinct && right_type.is_geometry()) {
-        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
-        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
       } else {
         res_type = left_type;
       }
@@ -6493,40 +6519,83 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
     LOG_WARN("unexpected null", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
-    if (OB_ISNULL(stmt = stmts.at(i)) || idx >= stmt->get_select_item_size()
-        || OB_ISNULL(src_expr = stmt->get_select_item(idx).expr_)) {
+    if (OB_ISNULL(stmt = stmts.at(i)) || idx >= stmt->get_select_item_size()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected stmt", K(ret), K(stmts.at(i)));
-    } else if (ob_is_enumset_tc(src_expr->get_result_type().get_type())) {
-      ObSysFunRawExpr *to_str_expr = NULL;
-      if (src_expr->get_result_type() == res_type) {
-        /*do nothing*/
-      } else if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(*expr_factory,
-                                                                 src_expr,
-                                                                 to_str_expr,
-                                                                 session_info,
-                                                                 true))) {
-        LOG_WARN("create to str expr for stmt failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
-                                                                *to_str_expr, res_type,
-                                                                new_expr))) {
-        LOG_WARN("create cast expr for stmt failed", K(ret));
-      } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
-        LOG_WARN("failed to add flag", K(ret));
-      } else {
-        stmt->get_select_item(idx).expr_ = new_expr;
-      }
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
-                                                               *src_expr, res_type,
-                                                               new_expr))) {
-      LOG_WARN("create cast expr for stmt failed", K(ret));
-    } else if (src_expr == new_expr) {
+    } else if (OB_FAIL(add_cast_to_set_select_expr(session_info, *expr_factory, res_type,
+                                                   stmt->get_select_item(idx).expr_))) {
+      LOG_WARN("failed to add cast to expr");
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
+                                          ObRawExprFactory *expr_factory,
+                                          ObIArray<ObRawExpr*> &exprs,
+                                          const ObExprResType &res_type,
+                                          const int64_t column_idx,
+                                          const int64_t row_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *src_expr = NULL;
+  ObRawExpr *new_expr = NULL;
+  int64_t column_cnt = 0;
+  if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) ||
+      OB_UNLIKELY(exprs.empty() || row_cnt <= 0 || column_idx < 0 || exprs.count() % row_cnt != 0 ||
+                  exprs.count() / row_cnt <= column_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret));
+  } else {
+    column_cnt = exprs.count() / row_cnt;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
+    if (OB_ISNULL(exprs.at(column_idx + column_cnt * i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr", K(ret));
+    } else if (OB_FAIL(add_cast_to_set_select_expr(session_info, *expr_factory, res_type,
+                                                   exprs.at(column_idx + column_cnt * i)))) {
+      LOG_WARN("failed to add cast to expr");
+    }
+  }
+  return ret;
+}
+
+/* add cast to a select_expr of set child */
+int ObOptimizerUtil::add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
+                                                 ObRawExprFactory &expr_factory,
+                                                 const ObExprResType &res_type,
+                                                 ObRawExpr *&src_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *new_expr = NULL;
+  if (OB_ISNULL(src_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected select expr", K(ret));
+  } else if (ob_is_enumset_tc(src_expr->get_result_type().get_type())) {
+    ObSysFunRawExpr *to_str_expr = NULL;
+    if (src_expr->get_result_type() == res_type) {
       /*do nothing*/
+    } else if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory, src_expr, to_str_expr,
+                                                               session_info, true))) {
+      LOG_WARN("create to str expr for stmt failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, session_info,
+                                                               *to_str_expr, res_type, new_expr))) {
+      LOG_WARN("create cast expr for stmt failed", K(ret));
     } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
       LOG_WARN("failed to add flag", K(ret));
     } else {
-      stmt->get_select_item(idx).expr_ = new_expr;
+      src_expr = new_expr;
     }
+  } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory, session_info,
+                                                             *src_expr, res_type, new_expr))) {
+    LOG_WARN("create cast expr for stmt failed", K(ret));
+  } else if (src_expr == new_expr) {
+    /*do nothing*/
+  } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("failed to add flag", K(ret));
+  } else {
+    src_expr = new_expr;
   }
   return ret;
 }
@@ -6563,6 +6632,93 @@ int ObOptimizerUtil::add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
                                                               stmt->get_select_item(idx).expr_))) {
       LOG_WARN("failed to build column conv expr", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
+                                                 ObSQLSessionInfo *session_info,
+                                                 ObRawExprFactory *expr_factory,
+                                                 const int64_t column_cnt,
+                                                 const bool is_distinct,
+                                                 ObIArray<ObRawExpr*> &select_exprs,
+                                                 ObIArray<ObExprResType> *res_types)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType coll_type = CS_TYPE_INVALID;
+  if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("params is invalid", K(ret));
+  } else if (OB_UNLIKELY(column_cnt == 0) || OB_UNLIKELY(select_exprs.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty select exprs", K(ret));
+  } else if (OB_UNLIKELY(select_exprs.count() % column_cnt != 0)) {
+    ret = OB_ERR_COLUMN_SIZE;
+    LOG_WARN("The used SELECT statements have a different number of columns", K(column_cnt));
+  } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
+    LOG_WARN("failed to get collation connection", K(ret));
+  } else {
+    if (NULL != res_types) {
+      res_types->reuse();
+    }
+    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
+    const bool is_ps_prepare_stage = session_info->is_varparams_sql_prepare();
+    const bool is_oracle_mode = lib::is_oracle_mode();
+    const int64_t row_cnt = select_exprs.count() / column_cnt;
+    ObRawExpr *expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
+      ObExprResType result_type;
+      /* 1. column type decude */
+      if (OB_ISNULL(expr = select_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("empty select exprs", K(ret), K(i));
+      } else {
+        result_type = expr->get_result_type();
+      }
+      for (int64_t j = 1; OB_SUCC(ret) && j < row_cnt; j++) {
+        ObExprResType left_type = result_type;
+        bool skip_add_cast = false;
+        if (OB_ISNULL(expr = select_exprs.at(i + j * column_cnt))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("empty select exprs", K(ret), K(i), K(j));
+        } else {
+          const ObExprResType &right_type = expr->get_result_type();
+          if (left_type != right_type || ob_is_enumset_tc(right_type.get_type())) {
+            ObSEArray<ObExprResType, 2> types;
+            ObExprVersion dummy_op(*allocator);
+            if (OB_FAIL(check_set_child_res_types(left_type, right_type, is_ps_prepare_stage,
+                                                  is_distinct, false, skip_add_cast))) {
+              LOG_WARN("failed to check set child res types", K(ret));
+            } else if (skip_add_cast) {
+              /* left_type is res_type */
+            } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
+              LOG_WARN("failed to push back", K(ret));
+            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(result_type, &types.at(0), 2,
+                               coll_type, is_oracle_mode, length_semantics))) {
+              LOG_WARN("failed to aggregate result type for merge", K(ret));
+            } else if (OB_UNLIKELY(ObMaxType == result_type.get_type())) {
+              ret = OB_ERR_INVALID_TYPE_FOR_OP;
+              LOG_WARN("column type incompatible", K(ret), K(result_type));
+            } else if (left_type != result_type &&
+                       OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_exprs, result_type, i, row_cnt))) {
+              LOG_WARN("failed to add add cast to set list", K(ret));
+            } else if (right_type != result_type &&
+                       OB_FAIL(add_cast_to_set_list(session_info, expr_factory, select_exprs, result_type, i, row_cnt))) {
+              LOG_WARN("failed to add add cast to set list", K(ret));
+            }
+          }
+        }
+      } // end for row
+
+      /* 2. add cast*/
+      if (OB_SUCC(ret)) {
+        // const set query doesn't use not null flag
+        result_type.unset_result_flag(NOT_NULL_FLAG);
+        if (NULL != res_types && OB_FAIL(res_types->push_back(result_type))) {
+          LOG_WARN("failed to push back res type", K(ret));
+        }
+      }
+    } // end for column
   }
   return ret;
 }

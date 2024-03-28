@@ -52,9 +52,12 @@ public:
                                  const uint64_t max_value,
                                  const uint64_t local_sync_value,
                                  const int64_t &autoinc_version,
+                                 const int64_t cache_size,
                                  uint64_t &global_sync_value);
   int local_sync_with_global_value(const AutoincKey &key, const int64_t &autoinc_version, uint64_t &global_sync_value);
   int clear_global_autoinc_cache(const AutoincKey &key);
+
+  int get_sequence_next_value(const schema::ObSequenceSchema &schema, ObSequenceValue &nextval);
 
 private:
   int get_leader_(const uint64_t tenant_id, common::ObAddr &leader);

@@ -29,28 +29,15 @@ public:
   void destroy();
   // implement of virtual func
   virtual void do_clear_evaluated_flag();
+  virtual int reset_lookup_state() override;
   virtual int get_next_row_from_index_table() override;
   virtual int process_data_table_rowkey() override;
   virtual int do_index_lookup() override;
   virtual int get_next_row_from_data_table() override;
+  virtual int get_next_rows_from_index_table(int64_t &count, int64_t capacity) override;
   virtual int get_next_rows_from_data_table(int64_t &count, int64_t capacity) override;
-  virtual int process_next_index_batch_for_row() override;
-  virtual int process_next_index_batch_for_rows(int64_t &count) override;
   virtual int process_data_table_rowkeys(const int64_t size, const ObBitVector *skip) override;
-  virtual bool need_next_index_batch() const override {  return need_force_index_scan_stop_ || !index_end_; }
   virtual int check_lookup_row_cnt() override;
-  virtual int do_index_table_scan_for_rows(const int64_t max_row_cnt,
-                                           const int64_t start_group_idx,
-                                           const int64_t default_row_batch_cnt) override;
-  virtual bool is_group_scan() const override { return false; }
-  virtual int init_group_range(int64_t cur_group_idx, int64_t group_size) override { return common::OB_NOT_IMPLEMENT; }
-  virtual void update_state_in_output_rows_state(int64_t &count) override { lookup_row_cnt_ += count; }
-  virtual void update_states_in_finish_state() override {}
-  virtual void update_states_after_finish_state() override {}
-  virtual int64_t get_index_group_cnt() const override { return 0; }
-  virtual int64_t get_lookup_group_cnt() const override { return 0; }
-  virtual void inc_index_group_cnt() override { /* do nothing */ }
-  virtual void inc_lookup_group_cnt() override { /* do nothing */ }
   virtual ObEvalCtx& get_eval_ctx() override { return scan_executor_->eval_ctx_; }
   virtual const ExprFixedArray& get_output_expr() override { return get_ctdef().output_exprs_; }
 
@@ -73,7 +60,6 @@ private:
   ObTableCtx &tb_ctx_;
   ObDASRef das_ref_;
   DASOpResultIter lookup_result_;
-  bool need_force_index_scan_stop_;
   ObNewRange lookup_range_;
 
 private:

@@ -175,6 +175,7 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
   ObSEArray<ObRawExpr *, 4> exprs;
   const bool with_vector_assgin = true;
   const ObQueryHint* query_hint = nullptr;
+  bool is_hsfu = false;
   OPT_TRACE("try aggregation first");
   if (OB_ISNULL(stmt) || OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -183,6 +184,10 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
     LOG_WARN("invalid params", K(ret), K(stmt));
   } else if (stmt->is_hierarchical_query() || stmt->is_set_stmt() || !stmt->is_sel_del_upd()) {
     OPT_TRACE("hierarchical/set/insert/merge query can not transform");
+  } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {
+    LOG_WARN("failed to check hierarchical for update", K(ret));
+  } else if (is_hsfu) {
+    OPT_TRACE("hierarchical for update query can not transform");
   } else if (OB_FAIL(exprs.assign(stmt->get_condition_exprs()))) {
     LOG_WARN("failed to assign conditions", K(ret));
   } else if (OB_FAIL(ObTransformUtils::get_post_join_exprs(stmt, exprs, with_vector_assgin))) {
@@ -949,8 +954,6 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
       OB_ISNULL(subquery = query_expr->get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(ctx_), K(subquery));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt.get_subquery_exprs(), query_expr))) {
-    LOG_WARN("failed to remove subquery expr", K(ret));
   } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, &stmt, subquery, view_table))) {
     LOG_WARN("failed to add new table item", K(ret));
   } else if (OB_ISNULL(view_table)) {
@@ -1598,10 +1601,7 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt.get_subquery_exprs(),
-                                             query_ref_expr))) {
-      LOG_WARN("failed to remove query ref expr", K(ret));
-    } else if (is_exists_op(root_expr->get_expr_type())) {
+    if (is_exists_op(root_expr->get_expr_type())) {
       bool need_lnnvl = root_expr->get_expr_type() == T_OP_NOT_EXISTS;
       if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt.get_condition_exprs(), root_expr))) {
         LOG_WARN("failed to remove exprs", K(ret));
@@ -1642,8 +1642,6 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       LOG_WARN("failed to append check constraint items", K(ret));
     } else if (OB_FAIL(append(select_stmt.get_aggr_items(), subquery->get_aggr_items()))) {
       LOG_WARN("failed to append aggr items", K(ret));
-    } else if (OB_FAIL(append(select_stmt.get_subquery_exprs(), subquery->get_subquery_exprs()))) {
-      LOG_WARN("failed to append subquery exprs", K(ret));
     } else if (OB_FAIL(select_stmt.rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(select_stmt.update_column_item_rel_id())) {

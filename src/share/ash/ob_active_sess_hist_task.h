@@ -15,17 +15,20 @@
 
 #include "lib/task/ob_timer.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "observer/net/ob_net_queue_traver.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
+using ObNetInfo = rpc::ObNetTraverProcessAutoDiag::ObNetQueueTraRes;
+
 class ObActiveSessHistTask : public common::ObTimerTask
 {
 public:
   ObActiveSessHistTask()
-      : is_inited_(false) {}
+      : is_inited_(false), sample_time_(OB_INVALID_TIMESTAMP), prev_sample_time_(OB_INVALID_TIMESTAMP) {}
   virtual ~ObActiveSessHistTask() = default;
   static ObActiveSessHistTask &get_instance();
   int init();
@@ -35,9 +38,11 @@ public:
   void destroy();
   virtual void runTimerTask() override;
   bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
+  void process_net_request(const ObNetInfo &net_info);
 private:
   bool is_inited_;
   int64_t sample_time_;
+  int64_t prev_sample_time_;  // record prev sample time for rpc db time calculation.
 };
 
 }

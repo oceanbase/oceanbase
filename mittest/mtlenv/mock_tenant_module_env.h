@@ -87,6 +87,7 @@
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "observer/table/group/ob_table_tenant_group.h"
 
 namespace oceanbase
 {
@@ -260,6 +261,17 @@ public:
     UNUSED(ts_type);
     MonotonicTs unused;
     return source_.get_gts(stc, NULL, gts, unused);
+  }
+  virtual int remove_dropped_tenant(const uint64_t tenant_id)
+  {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
+  virtual int interrupt_gts_callback_for_ls_offline(const uint64_t tenant_id, const share::ObLSID ls_id)
+  {
+    UNUSED(tenant_id);
+    UNUSED(ls_id);
+    return OB_SUCCESS;
   }
 private:
   MockObGtsSource &source_;
@@ -717,6 +729,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
 

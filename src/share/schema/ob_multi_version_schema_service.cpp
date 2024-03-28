@@ -2916,6 +2916,7 @@ int ObMultiVersionSchemaService::check_outline_exist_with_name(const uint64_t te
                                                                const uint64_t database_id,
                                                                const common::ObString &outline_name,
                                                                uint64_t &outline_id,
+                                                               bool is_format,
                                                                bool &exist)
 {
   int ret = OB_SUCCESS;
@@ -2939,6 +2940,7 @@ int ObMultiVersionSchemaService::check_outline_exist_with_name(const uint64_t te
                 tenant_id,
                 database_id,
                 outline_name,
+                is_format,
                 outline_id,
                 exist))) {
       LOG_WARN("failed to check outline name exist", K(tenant_id), K(database_id), K(outline_name),
@@ -2951,6 +2953,7 @@ int ObMultiVersionSchemaService::check_outline_exist_with_name(const uint64_t te
 int ObMultiVersionSchemaService::check_outline_exist_with_sql(const uint64_t tenant_id,
                                                               const uint64_t database_id,
                                                               const common::ObString &paramlized_sql,
+                                                              bool is_format,
                                                               bool &exist)
 
 {
@@ -2972,6 +2975,7 @@ int ObMultiVersionSchemaService::check_outline_exist_with_sql(const uint64_t ten
                 tenant_id,
                 database_id,
                 paramlized_sql,
+                is_format,
                 exist))) {
       LOG_WARN("failed to check outline sql exist", K(tenant_id), K(database_id),
                K(paramlized_sql), K(ret));
@@ -3179,6 +3183,7 @@ int ObMultiVersionSchemaService::check_label_se_component_long_name_exist(const 
 int ObMultiVersionSchemaService::check_outline_exist_with_sql_id(const uint64_t tenant_id,
                                                               const uint64_t database_id,
                                                               const common::ObString &sql_id,
+                                                              bool is_format,
                                                               bool &exist)
 
 {
@@ -3200,6 +3205,7 @@ int ObMultiVersionSchemaService::check_outline_exist_with_sql_id(const uint64_t 
                 tenant_id,
                 database_id,
                 sql_id,
+                is_format,
                 exist))) {
       LOG_WARN("failed to check outline sql exist", K(tenant_id), K(database_id),
                K(sql_id), K(ret));
@@ -3409,9 +3415,9 @@ int ObMultiVersionSchemaService::get_gc_candidates(ObHashSet<uint64_t> &candidat
   // and to prevent the new tenant schema from being considered as dropped tenants and being GC dropped
   // during the schema refresh process.
   lib::ObMutexGuard guard(schema_refresh_mutex_);
-  if (!is_sys_full_schema()) {
+  if (!is_tenant_refreshed(OB_SYS_TENANT_ID)) {
     ret = OB_SCHEMA_EAGAIN;
-    LOG_WARN("full schema is not ready, cann't get fallback schema guard", K(ret));
+    LOG_WARN("sys tenant's full schema is not ready, we cannot gc normal tenant schema now", KR(ret));
   } else if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("get schema guard failed ", K(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
@@ -3429,6 +3435,7 @@ int ObMultiVersionSchemaService::get_gc_candidates(ObHashSet<uint64_t> &candidat
 # define GET_GC_TENANT_CANDIDATES(MEM_MGR_MAP) \
       FOREACH_X(it, MEM_MGR_MAP, OB_SUCC(ret)) { \
         bool can_release = false; \
+        bool is_dropped = false; \
         uint64_t tenant_id = (*it).first; \
         ObSchemaMemMgr *mem_mgr = (*it).second; \
         ret = tenant_id_set.exist_refactored(tenant_id); \
@@ -3443,8 +3450,13 @@ int ObMultiVersionSchemaService::get_gc_candidates(ObHashSet<uint64_t> &candidat
           LOG_WARN("fail to check if tenant can release", K(ret), K(tenant_id)); \
         } else if (!can_release) { \
           continue; \
-        } else if (OB_FAIL(candidates.set_refactored(tenant_id))) { \
-          LOG_WARN("fail to set candidate", K(ret), K(tenant_id)); \
+        } else if (OB_FAIL(check_if_tenant_has_been_dropped(tenant_id, is_dropped))) { \
+          LOG_WARN("fail to check tenant has been dropped", KR(ret), K(tenant_id)); \
+        } else if (is_dropped) { \
+          LOG_INFO("tenant has been dropped, we can release it's schema", K(tenant_id), K(tenant_id_set)); \
+          if (OB_FAIL(candidates.set_refactored(tenant_id))) { \
+            LOG_WARN("fail to set candidate", KR(ret), K(tenant_id)); \
+          } \
         } \
       }
 

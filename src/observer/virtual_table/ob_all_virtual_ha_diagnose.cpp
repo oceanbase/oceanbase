@@ -54,7 +54,11 @@ int ObAllVirtualHADiagnose::inner_get_next_row(common::ObNewRow *&row)
       if (NULL == ls_service) {
         SERVER_LOG(INFO, "tenant has no ObLSService", K(MTL_ID()));
       } else if (OB_FAIL(ls_service->iterate_diagnose(func_iter_ls))) {
-        SERVER_LOG(WARN, "iter ls failed", K(ret));
+        if (OB_NOT_RUNNING == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          SERVER_LOG(WARN, "iter ls failed", K(ret));
+        }
       } else {
         SERVER_LOG(INFO, "iter ls succ", K(ret));
       }

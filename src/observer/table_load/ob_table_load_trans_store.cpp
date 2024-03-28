@@ -397,6 +397,10 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
 {
   int ret = OB_SUCCESS;
   ObObj out_obj;
+  if (OB_UNLIKELY(row.count_ != table_data_desc_->column_count_)) {
+    ret = OB_ERR_INVALID_COLUMN_NUM;
+    LOG_WARN("column count not match", KR(ret), K(row.count_), K(table_data_desc_->column_count_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_data_desc_->column_count_; ++i) {
     out_obj.set_null();
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
@@ -405,9 +409,13 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     const bool is_null_autoinc =
       (column_schema->is_autoincrement() || column_schema->is_identity_column()) &&
       row.cells_[i].is_null();
-    if (!is_null_autoinc && OB_FAIL(ObTableLoadObjCaster::cast_obj(cast_obj_ctx, column_schema,
-                                                                   row.cells_[i], out_obj))) {
+    if (row.cells_[i].is_nop_value()) {
+      out_obj = column_schema->get_cur_default_value();
+    } else if (!is_null_autoinc && OB_FAIL(ObTableLoadObjCaster::cast_obj(
+                                     cast_obj_ctx, column_schema, row.cells_[i], out_obj))) {
       LOG_WARN("fail to cast obj and check", KR(ret), K(i), K(row.cells_[i]));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(datum_row.storage_datums_[i].from_obj_enhance(out_obj))) {
       LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
     } else if (column_schema->is_autoincrement() &&

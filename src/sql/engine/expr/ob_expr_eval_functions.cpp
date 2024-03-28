@@ -324,12 +324,15 @@
 #include "ob_expr_xml_attributes.h"
 #include "ob_expr_extract_value.h"
 #include "ob_expr_extract_xml.h"
+#include "ob_expr_existsnode_xml.h"
 #include "ob_expr_xml_serialize.h"
 #include "ob_expr_xmlcast.h"
 #include "ob_expr_update_xml.h"
 #include "ob_expr_insert_child_xml.h"
 #include "ob_expr_xml_delete_xml.h"
 #include "ob_expr_xml_sequence.h"
+#include "ob_expr_xml_concat.h"
+#include "ob_expr_xml_forest.h"
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
@@ -361,6 +364,11 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_decode_trace_id.h"
+#include "ob_expr_priv_st_geohash.h"
+#include "ob_expr_priv_st_makepoint.h"
+#include "ob_expr_password.h"
+#include "ob_expr_inner_table_option_printer.h"
 
 namespace oceanbase
 {
@@ -1118,23 +1126,26 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //eval_questionmark_decint2decint_eqcast,                     /* 659 */
   NULL, //eval_questionmark_decint2decint_normalcast,                 /* 660 */
   NULL, //ObExprExtractExpiredTime::eval_extract_cert_expired_time,   /* 661 */
-  NULL, //ObExprXmlConcat::eval_xml_concat,                           /* 662 */
-  NULL, //ObExprXmlForest::eval_xml_forest,                           /* 663 */
-  NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 664 */
-  NULL, //ObExprPassword::eval_password,                              /* 665 */
+  ObExprXmlConcat::eval_xml_concat,                                   /* 662 */
+  ObExprXmlForest::eval_xml_forest,                                   /* 663 */
+  ObExprExistsNodeXml::eval_existsnode_xml,                           /* 664 */
+  ObExprPassword::eval_password,                                      /* 665 */
   NULL, //ObExprDocID::generate_doc_id,                               /* 666 */
   NULL, //ObExprWordSegment::generate_fulltext_column,                /* 667 */
   NULL, //ObExprWordCount::generate_word_count,                       /* 668 */
   NULL, //ObExprBM25::eval_bm25_relevance_expr,                       /* 669 */
   NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
-  NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 671 */
-  NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 672 */
+  ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
+  ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
   NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
   NULL, //ObExprIs::json_is_true,                                     /* 675 */
   NULL, //ObExprIs::json_is_false,                                    /* 676 */
   ObExprCurrentRole::eval_current_role,                               /* 677 */
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
+  ObExprPrivSTGeoHash::eval_priv_st_geohash,                          /* 679 */
+  ObExprPrivSTMakePoint::eval_priv_st_makepoint,                      /* 680 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 681 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1254,7 +1265,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
-  calc_sqrt_expr_oracle_number_in_batch                               /* 116 */
+  calc_sqrt_expr_oracle_number_in_batch,                              /* 116 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 117 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

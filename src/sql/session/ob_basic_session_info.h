@@ -26,6 +26,7 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "rpc/ob_sql_request_operator.h"
+#include "share/ob_compatibility_control.h"
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -230,7 +231,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
-  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024 * 1024;
   class TransFlags
   {
   public:
@@ -306,21 +307,32 @@ public:
     {
       reset();
     }
+    ~BaseSavedValue()
+    {
+      destroy();
+    }
     inline void reset()
     {
       cur_phy_plan_ = NULL;
-      cur_query_[0] = 0;
       cur_query_len_ = 0;
+      cur_query_buf_len_ = 0;
+      cur_query_ = NULL;
       total_stmt_tables_.reset();
       cur_stmt_tables_.reset();
       read_uncommited_ = false;
       inc_autocommit_ = false;
       need_serial_exec_ = false;
     }
+    inline void destroy()
+    {
+      if (cur_query_ != nullptr) {
+        ob_free(cur_query_);
+      }
+      reset();
+    }
   public:
     // 原StmtSavedValue的属性
     ObPhysicalPlan *cur_phy_plan_;
-    char cur_query_[MAX_QUERY_STRING_LEN];
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -330,6 +342,8 @@ public:
     bool read_uncommited_;
     bool inc_autocommit_;
     bool need_serial_exec_;
+    int64_t cur_query_buf_len_;
+    char *cur_query_;
   public:
     // 原TransSavedValue的属性
 //  transaction::ObTxDesc trans_desc_;   // 两者都有trans_desc，但执行操作完全不同，不放在基类中。
@@ -352,6 +366,11 @@ public:
       cur_query_start_time_ = 0;
       in_transaction_ = false;
       stmt_type_ = sql::stmt::StmtType::T_NONE;
+    }
+    inline void destroy()
+    {
+      BaseSavedValue::destroy();
+      reset();
     }
   public:
     transaction::ObTxExecResult tx_result_;
@@ -512,6 +531,7 @@ public:
   bool is_query_killed() const;
   bool is_valid() const { return is_valid_; };
   uint64_t get_user_id() const { return user_id_; }
+  uint64_t get_proxy_user_id() const { return proxy_user_id_; }
   bool is_auditor_user() const { return is_ora_auditor_user(user_id_); };
   bool is_lbacsys_user() const { return is_ora_lbacsys_user(user_id_); };
   bool is_oracle_sys_user() const { return is_ora_sys_user(user_id_); };
@@ -546,8 +566,8 @@ public:
   const common::ObLogIdLevelMap *get_log_id_level_map() const;
   const common::ObString &get_client_version() const { return client_version_; }
   const common::ObString &get_driver_version() const { return driver_version_; }
-
-
+  void destory_json_pl_mngr();
+  intptr_t get_json_pl_mngr();
   int get_tx_timeout(int64_t &tx_timeout) const
   {
     tx_timeout = sys_vars_cache_.get_ob_trx_timeout();
@@ -693,9 +713,13 @@ public:
 
   /// @{ thread_data_ related: }
   int set_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
+  int set_proxy_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
+  inline void set_proxy_user_id(const uint64_t proxy_user_id) { proxy_user_id_ = proxy_user_id; }
   int set_real_client_ip(const common::ObString &client_ip);
   const common::ObString &get_user_name() const { return thread_data_.user_name_;}
   const common::ObString &get_host_name() const { return thread_data_.host_name_;}
+  const common::ObString &get_proxy_user_name() const { return thread_data_.proxy_user_name_;}
+  const common::ObString &get_proxy_host_name() const { return thread_data_.proxy_host_name_;}
   const common::ObString &get_client_ip() const { return thread_data_.client_ip_;}
   const common::ObString &get_user_at_host() const { return thread_data_.user_at_host_name_;}
   const common::ObString &get_user_at_client_ip() const { return thread_data_.user_at_client_ip_;}
@@ -1315,6 +1339,10 @@ public:
   common::ObActiveSessionStat &get_ash_stat() { return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
+  int get_compatibility_control(share::ObCompatType &compat_type) const;
+  int get_compatibility_version(uint64_t &compat_version) const;
+  int get_security_version(uint64_t &security_version) const;
+  int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -1424,7 +1452,9 @@ protected:
                          interactive_timeout_(0),
                          max_packet_size_(MultiThreadData::DEFAULT_MAX_PACKET_SIZE),
                          is_shadow_(false),
-                         is_in_retry_(SESS_NOT_IN_RETRY)
+                         is_in_retry_(SESS_NOT_IN_RETRY),
+                         proxy_user_name_(),
+                         proxy_host_name_()
     {
       CHAR_CARRAY_INIT(database_name_);
     }
@@ -1461,6 +1491,8 @@ protected:
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
       is_shadow_ = false;
       is_in_retry_ = SESS_NOT_IN_RETRY;
+      proxy_user_name_.reset();
+      proxy_host_name_.reset();
     }
     ~MultiThreadData ()
     {
@@ -1494,6 +1526,8 @@ protected:
     int64_t max_packet_size_;
     bool is_shadow_;
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
+    common::ObString proxy_user_name_;
+    common::ObString proxy_host_name_;
   };
 
 public:
@@ -2052,6 +2086,8 @@ private:
   uint64_t proxy_sessid_;
   int64_t global_vars_version_; // used for obproxy synchronize variables
   int64_t sys_var_base_version_;
+
+  uint64_t proxy_user_id_;              // current user id
   /*******************************************
    * transaction ctrl relative for session
    *******************************************/
@@ -2094,6 +2130,7 @@ protected:
   common::ObSmallBlockAllocator<> cursor_info_allocator_; // for alloc memory of PS CURSOR/SERVER REF CURSOR
   common::ObSmallBlockAllocator<> package_info_allocator_; // for alloc memory of session package state
   common::ObStringBuf name_pool_; // for variables names and statement names
+  intptr_t json_pl_mngr_; // for pl json manage
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
   bool need_reset_package_; // for dbms_session.reset_package
@@ -2267,7 +2304,7 @@ private:
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const
 {
   common::ObString str_ret;
-  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int32_t>(thread_data_.cur_query_len_));
+  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int64_t>(thread_data_.cur_query_len_));
   return str_ret;
 }
 

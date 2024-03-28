@@ -458,8 +458,9 @@ int ObLogExchange::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     double child_cost = child->get_cost();
     const int64_t parallel = param.need_parallel_;
     param.need_parallel_ = ObGlobalHint::UNSET_PARALLEL;
-    if (is_block_op()) {
-      param.need_row_count_ = -1; //reset need row count
+    //forbit limit re estimate cost
+    if (is_producer() || is_block_op()) {
+      param.need_row_count_ = -1;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
@@ -493,7 +494,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                     get_in_server_cnt());
     if (OB_FAIL(ObOptEstCost::cost_exchange_out(est_cost_info,
                                                 op_cost,
-                                                opt_ctx.get_cost_model_type()))) {
+                                                opt_ctx))) {
       LOG_WARN("failed to cost exchange out", K(ret));
     }
   } else {
@@ -507,7 +508,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                    sort_keys_);
     if (OB_FAIL(ObOptEstCost::cost_exchange_in(est_cost_info,
                                                op_cost,
-                                               opt_ctx.get_cost_model_type()))) {
+                                               opt_ctx))) {
       LOG_WARN("failed to cost exchange in", K(ret));
     }
   }
@@ -1032,4 +1033,15 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
              expr == partition_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
+}
+
+int ObLogExchange::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (is_producer() || !is_merge_sort()) {
+    used = false;
+  }
+  return ret;
 }

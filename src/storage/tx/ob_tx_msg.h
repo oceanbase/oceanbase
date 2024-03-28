@@ -353,8 +353,8 @@ namespace transaction
           ObTxMsg(TX_2PC_PRE_COMMIT_RESP)
       {}
     public:
-      //set commit_version when the root participant 
-      //which recover from prepare log recive a pre_commit response 
+      //set commit_version when the root participant
+      //which recover from prepare log receive a pre_commit response
       //because the coord_state_ will be set as pre_commit
       share::SCN commit_version_;
       bool is_valid() const;

@@ -423,9 +423,6 @@ public:
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);
 
-  // not implemented rpc, helper function for rs rpc processor define.
-  int not_implement();
-
   int execute_bootstrap(const obrpc::ObBootstrapArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int check_sys_tenant_initial_master_key_valid();
@@ -550,6 +547,7 @@ public:
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
   int revoke_syspriv(const obrpc::ObRevokeSysPrivArg &arg);
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res);
   int alter_role(const obrpc::ObAlterRoleArg &arg);
   //----End of functions for managing privileges----
 
@@ -570,12 +568,24 @@ public:
 
   //----Functions for managing routines----
   int create_routine(const obrpc::ObCreateRoutineArg &arg);
+  int create_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_routine(const obrpc::ObDropRoutineArg &arg);
+  int alter_routine_common(const obrpc::ObCreateRoutineArg &arg,
+                           obrpc::ObRoutineDDLRes* res = nullptr);
   int alter_routine(const obrpc::ObCreateRoutineArg &arg);
+  int alter_routine_with_res(const obrpc::ObCreateRoutineArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   //----End of functions for managing routines----
 
   //----Functions for managing routines----
   int create_udt(const obrpc::ObCreateUDTArg &arg);
+  int create_udt_common(const obrpc::ObCreateUDTArg &arg,
+                        obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_udt_with_res(const obrpc::ObCreateUDTArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_udt(const obrpc::ObDropUDTArg &arg);
   //----End of functions for managing routines----
 
@@ -605,7 +615,15 @@ public:
 
   //----Functions for managing package----
   int create_package(const obrpc::ObCreatePackageArg &arg);
+  int create_package_common(const obrpc::ObCreatePackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int create_package_with_res(const obrpc::ObCreatePackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int alter_package(const obrpc::ObAlterPackageArg &arg);
+  int alter_package_common(const obrpc::ObAlterPackageArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_package_with_res(const obrpc::ObAlterPackageArg &arg,
+                              obrpc::ObRoutineDDLRes &res);
   int drop_package(const obrpc::ObDropPackageArg &arg);
   //----End of functions for managing package----
 
@@ -614,6 +632,10 @@ public:
   int create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
                               obrpc::ObCreateTriggerRes &res);
   int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
+  int alter_trigger_common(const obrpc::ObAlterTriggerArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
+  int alter_trigger_with_res(const obrpc::ObAlterTriggerArg &arg,
+                             obrpc::ObRoutineDDLRes &res);
   int drop_trigger(const obrpc::ObDropTriggerArg &arg);
   //----End of functions for managing trigger----
 
@@ -694,6 +716,7 @@ public:
   int admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
   int admin_switch_rs_role(const obrpc::ObAdminSwitchRSRoleArg &arg);
   int admin_drop_replica(const obrpc::ObAdminDropReplicaArg &arg);
+  int admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg &arg);
   int admin_change_replica(const obrpc::ObAdminChangeReplicaArg &arg);
   int admin_migrate_replica(const obrpc::ObAdminMigrateReplicaArg &arg);
   int admin_report_replica(const obrpc::ObAdminReportReplicaArg &arg);
@@ -898,6 +921,9 @@ private:
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 
   int parallel_ddl_pre_check_(const uint64_t tenant_id);
+  int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
+  int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

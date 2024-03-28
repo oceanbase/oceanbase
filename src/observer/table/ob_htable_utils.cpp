@@ -264,7 +264,7 @@ int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &c
       // compare qualifiers
       ObString qualifier1 = cell1.get_qualifier();
       ObString qualifier2 = cell2.get_qualifier();
-      if(common::ObQueryFlag::Reverse == scan_order){ 
+      if (common::ObQueryFlag::Reverse == scan_order){
         cmp_ret = qualifier2.compare(qualifier1);
       } else {
         cmp_ret = qualifier1.compare(qualifier2);
@@ -327,16 +327,16 @@ int ObHTableUtils::int64_to_java_bytes(int64_t val, char bytes[8])
   return OB_SUCCESS;
 }
 
-int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
 {
   int ret = OB_SUCCESS;
-  const int64_t N = mutations.count();
+  const int64_t N = ops.count();
   if (table_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table id", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const ObITableEntity &entity = mutations.at(i).entity();
+    const ObITableEntity &entity = ops.at(i).entity();
     ObHTableCellEntity3 htable_cell(&entity);
     ObString row = htable_cell.get_rowkey();
     if (row.empty()) {

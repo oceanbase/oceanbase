@@ -151,7 +151,7 @@ struct ObTagCtxBase
     } else {
       buf[pos++] = '{';
       buf[pos++] = '\"';
-      IGNORE_RETURN strcpy(buf + pos, __tag_name_mapper[tag_type_]);
+      IGNORE_RETURN strncpy(buf + pos, __tag_name_mapper[tag_type_], buf_len - pos);
       pos += l;
       buf[pos++] = '\"';
       buf[pos++] = ':';

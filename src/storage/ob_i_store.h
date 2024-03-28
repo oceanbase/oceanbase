@@ -230,6 +230,14 @@ public:
     is_delayed_cleanout_(false),
     mvcc_row_(NULL),
     trans_scn_(share::SCN::max_scn()) {}
+  inline bool is_lock_decided() const
+  {
+    return is_locked_ || !trans_version_.is_min();
+  }
+  inline bool is_locked(const transaction::ObTransID trans_id) const
+  {
+    return is_locked_ && lock_trans_id_ != trans_id;
+  }
   void reset();
   TO_STRING_KV(K_(is_locked),
                K_(trans_version),
@@ -249,8 +257,6 @@ public:
   memtable::ObMvccRow *mvcc_row_;
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };
-
-
 
 struct ObStoreRow
 {

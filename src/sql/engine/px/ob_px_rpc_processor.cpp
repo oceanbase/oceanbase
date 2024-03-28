@@ -491,6 +491,13 @@ void ObFastInitSqcCB::on_timeout()
   interrupt_qc(ret);
 }
 
+void ObFastInitSqcCB::log_warn_sqc_fail(int ret)
+{
+  // Do not change the follow log about px_obdiag_sqc_addr, becacue it will use in obdiag tool
+  LOG_WARN("init fast sqc cb async interrupt qc", K_(trace_id), K(timeout_ts_), K(interrupt_id_),
+           K(ret), "px_obdiag_sqc_addr", addr_);
+}
+
 int ObFastInitSqcCB::process()
 {
   //
@@ -499,8 +506,7 @@ int ObFastInitSqcCB::process()
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
     if (timeout_ts_ - cur_timestamp > 0) {
       interrupt_qc(ret);
-      LOG_WARN("init fast sqc cb async interrupt qc", K_(trace_id),
-               K(addr_), K(timeout_ts_), K(interrupt_id_), K(ret));
+      log_warn_sqc_fail(ret);
     } else {
       LOG_WARN("init fast sqc cb async timeout", K_(trace_id),
                K(addr_), K(timeout_ts_), K(cur_timestamp), K(ret));
@@ -673,7 +679,7 @@ int ObPxCleanDtlIntermResP::process()
           key.channel_id_ = ch_set.get_ch_info_set().at(ch_idx).chid_;
           for (int64_t batch_id = 0; batch_id < batch_size && OB_SUCC(ret); batch_id++) {
             key.batch_id_= batch_id;
-            if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+            if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
               if (OB_HASH_NOT_EXIST == ret) {
                 // interm result is written from batch_id = 0 to batch_size,
                 // if some errors happen when batch_id = i, no interm result of batch_id > i will be written.

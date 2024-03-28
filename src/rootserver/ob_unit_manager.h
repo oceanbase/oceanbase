@@ -193,9 +193,6 @@ public:
       common::ObIArray<uint64_t> &new_ug_id_array,
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
       const uint64_t tenant_id);
-  virtual int try_complete_shrink_tenant_pool_unit_num_rs_job(
-      const uint64_t tenant_id,
-      common::ObMySQLTransaction &trans);
   virtual int get_tenant_alive_servers_non_block(const uint64_t tenant_id,
                                            common::ObIArray<common::ObAddr> &servers);
   virtual int get_pool_ids_of_tenant(const uint64_t tenant_id,

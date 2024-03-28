@@ -127,7 +127,7 @@ int ObTableApiTTLExecutor::refresh_exprs_frame(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
   ObTableTTLCtDef *ttl_ctdef = nullptr;
-
+  clear_evaluated_flag();
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
@@ -226,8 +226,18 @@ int ObTableApiTTLExecutor::do_delete()
     if (OB_ISNULL(ttl_ctdef = ttl_spec_.get_ctdefs().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ttl ctdef is NULL", K(ret), K(i));
-    } else if (OB_FAIL(delete_row_to_das(ttl_ctdef->del_ctdef_, del_rtdef))) {
-      LOG_WARN("fail to delete row to das", K(ret), K(ttl_ctdef->del_ctdef_), K(del_rtdef), K(i));
+    } else {
+      bool is_primary_table = (i == 0);
+      const ObTableDelCtDef &del_ctdef = ttl_ctdef->del_ctdef_;
+      ObExpr *calc_part_id_expr = is_primary_table ? conflict_checker_.checker_ctdef_.calc_part_id_expr_
+                                                    : del_ctdef.old_part_id_expr_;
+      if (OB_FAIL(delete_row_to_das(is_primary_table,
+                                    calc_part_id_expr,
+                                    conflict_checker_.checker_ctdef_.part_id_dep_exprs_,
+                                    del_ctdef,
+                                    del_rtdef))) {
+        LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef), K(i));
+      }
     }
   }
 

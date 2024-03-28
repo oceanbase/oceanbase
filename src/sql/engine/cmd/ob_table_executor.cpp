@@ -103,23 +103,67 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
   const char sep_char = lib::is_oracle_mode()? '"': '`';
   const ObSelectStmt *select_stmt = NULL;
   int64_t pos1 = 0;
+  uint64_t insert_mode = 0;
   if (OB_ISNULL(stmt_) || OB_ISNULL(select_stmt= stmt_->get_sub_select())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
-                              do_osg_
-                              ? "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
-                              : "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
-                              stmt_->get_parallelism(),
-                              sep_char,
-                              stmt_->get_database_name().length(),
-                              stmt_->get_database_name().ptr(),
-                              sep_char,
-                              sep_char,
-                              stmt_->get_table_name().length(),
-                              stmt_->get_table_name().ptr(),
-                              sep_char))) {
-    LOG_WARN("fail to print insert into string", K(ret));
+  } else {
+    insert_mode = stmt_->get_insert_mode();
+    if (insert_mode != 0 &&
+        insert_mode != 1 &&
+        insert_mode != 2 ) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected insert_mode", K(insert_mode), K(ret));
+    } else if (insert_mode == 1 /*ignore*/) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                  do_osg_
+                                  ? "insert ignore /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                  : "insert ignore /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                  stmt_->get_parallelism(),
+                                  sep_char,
+                                  stmt_->get_database_name().length(),
+                                  stmt_->get_database_name().ptr(),
+                                  sep_char,
+                                  sep_char,
+                                  stmt_->get_table_name().length(),
+                                  stmt_->get_table_name().ptr(),
+                                  sep_char))) {
+        LOG_WARN("fail to print insert into string", K(ret));
+      }
+    } else if (insert_mode == 2 /*replace*/) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                  do_osg_
+                                  ? "replace /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                  : "replace /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                  stmt_->get_parallelism(),
+                                  sep_char,
+                                  stmt_->get_database_name().length(),
+                                  stmt_->get_database_name().ptr(),
+                                  sep_char,
+                                  sep_char,
+                                  stmt_->get_table_name().length(),
+                                  stmt_->get_table_name().ptr(),
+                                  sep_char))) {
+        LOG_WARN("fail to print insert into string", K(ret));
+      }
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                       do_osg_
+                                       ? "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                       : "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                       stmt_->get_parallelism(),
+                                       sep_char,
+                                       stmt_->get_database_name().length(),
+                                       stmt_->get_database_name().ptr(),
+                                       sep_char,
+                                       sep_char,
+                                       stmt_->get_table_name().length(),
+                                       stmt_->get_table_name().ptr(),
+                                       sep_char))) {
+      LOG_WARN("fail to print insert into string", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
   } else if (lib::is_oracle_mode()) {
     const ObTableSchema &table_schema = stmt_->get_create_table_arg().schema_;
     int64_t used_column_count = 0;
@@ -545,13 +589,6 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     create_table_arg.is_inner_ = my_session->is_inner();
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     const_cast<obrpc::ObCreateTableArg&>(create_table_arg).ddl_stmt_str_ = first_stmt;
-    bool enable_parallel_create_table = false;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      enable_parallel_create_table = tenant_config.is_valid()
-                                     && tenant_config->_enable_parallel_table_creation;
-
-    }
     if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
       ret = OB_NOT_INIT;
       LOG_WARN("get task executor context failed", K(ret));
@@ -566,11 +603,26 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_ISNULL(select_stmt)) { // 普通建表的处理
+      bool is_parallel_create = false;
       if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", KR(ret));
-      } else if (table_schema.is_view_table()
-                 || data_version < DATA_VERSION_4_2_1_0
-                 || !enable_parallel_create_table) {
+      } else if (table_schema.is_view_table()) {
+        if (data_version < DATA_VERSION_4_2_3_0
+            || table_schema.is_materialized_view()) {
+          is_parallel_create = false;
+        } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                          ObParallelDDLControlMode::CREATE_VIEW,
+                          tenant_id, is_parallel_create))) {
+          LOG_WARN("fail to check whether is parallel create view", KR(ret), K(tenant_id));
+        }
+      } else {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+        is_parallel_create = tenant_config.is_valid()
+                             && tenant_config->_enable_parallel_table_creation;
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (!is_parallel_create) {
         if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, res))) {
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         }
@@ -591,6 +643,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           }
           int64_t end_time = ObTimeUtility::current_time();
           LOG_INFO("[parallel_create_table]", KR(ret),
+                   "table_type", create_table_arg.schema_.get_table_type(),
                    "cost", end_time - start_time,
                    "execute_time", refresh_time - start_time,
                    "wait_schema", end_time - refresh_time,

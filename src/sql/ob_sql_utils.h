@@ -31,6 +31,7 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "sql/rewrite/ob_query_range_provider.h"
+#include "share/ob_compatibility_control.h"
 namespace oceanbase
 {
 namespace share {
@@ -404,7 +405,8 @@ public:
                               common::ObString &outline_key,
                               share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                               ParseMode mode,
-                              bool &has_questionmark_in_sql);
+                              bool &has_questionmark_in_sql,
+                              bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,
@@ -482,7 +484,8 @@ public:
                                  int64_t range_key_count,
                                  uint64_t table_id,
                                  ObEvalCtx &eval_ctx,
-                                 common::ObNewRange &partition_range);
+                                 common::ObNewRange &partition_range,
+                                 ObArenaAllocator &allocator);
 
   static int revise_hash_part_object(common::ObObj &obj,
                                      const ObNewRow &row,
@@ -519,6 +522,8 @@ public:
                                                   ObCollationType &cs_type);
   static int merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
                                                           int64_t &max_allowed_packet);
+  static int merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+                                                      uint64_t &compat_version);
 
   static bool is_oracle_sys_view(const ObString &table_name);
 
@@ -568,7 +573,15 @@ public:
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
                                  bool is_sensitive = false);
-
+  static int64_t get_query_record_size_limit(uint64_t tenant_id)
+  {
+    int64_t thredhold = OB_MAX_SQL_LENGTH;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      thredhold = tenant_config->_query_record_size_limit;
+    }
+    return thredhold;
+  }
   // convert escape char from '\\' to '\\\\';
   static int convert_escape_char(common::ObIAllocator &allocator,
                                  const ObString &in,
@@ -695,8 +708,35 @@ public:
                               const bool check_for_path_char, const int64_t max_ident_len);
 
   static int compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id);
+  static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
+                                            const ObIArray<uint64_t> &role_id_option_array,
+                                            const ObProxyInfo &proxied_info,
+                                            ObIArray<uint64_t> &new_role_id_array,
+                                            ObIArray<uint64_t> &new_role_id_option_array);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
+  static bool part_expr_has_virtual_column(const ObExpr *part_expr);
+  static int get_range_for_vector(
+                                  ObObj *start_row_key,
+                                  ObObj *end_row_key,
+                                  int64_t range_key_count,
+                                  uint64_t table_id,
+                                  common::ObNewRange &part_range);
+  static int get_partition_range_common(
+                                    ObObj *function_obj,
+                                    const share::schema::ObPartitionFuncType part_type,
+                                    const ObExpr *part_expr,
+                                    ObEvalCtx &eval_ctx);
+  static int get_range_for_scalar(ObObj *start_row_key,
+                                  ObObj *end_row_key,
+                                  ObObj *function_obj,
+                                  const share::schema::ObPartitionFuncType part_type,
+                                  const ObExpr *part_expr,
+                                  int64_t range_key_count,
+                                  uint64_t table_id,
+                                  ObEvalCtx &eval_ctx,
+                                  common::ObNewRange &part_range,
+                                  ObArenaAllocator &allocator);
   struct SessionInfoCtx
   {
     common::ObCollationType collation_type_;

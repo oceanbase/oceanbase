@@ -13,9 +13,9 @@
 #ifndef OB_LOAD_DATA_STMT_H_
 #define OB_LOAD_DATA_STMT_H_
 
+#include "sql/engine/cmd/ob_load_data_storage_info.h"
 #include "sql/resolver/cmd/ob_cmd_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
-#include "share/backup/ob_backup_struct.h"
 namespace oceanbase
 {
 namespace sql
@@ -106,7 +106,7 @@ struct ObLoadArgument
   ObLoadDupActionType dupl_action_;
   common::ObCollationType file_cs_type_;
   common::ObString file_name_;
-  share::ObBackupStorageInfo access_info_;
+  ObLoadDataStorageInfo access_info_;
   common::ObString database_name_;
   common::ObString table_name_;
   common::ObString combined_name_;

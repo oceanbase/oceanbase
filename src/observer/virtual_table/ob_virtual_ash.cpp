@@ -227,11 +227,21 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case ACTION: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.action_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.action_, static_cast<ObString::obstr_size_t>(STRLEN(node.action_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case CLIENT_ID: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.client_id_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.client_id_, static_cast<ObString::obstr_size_t>(STRLEN(node.client_id_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case BACKTRACE: {
@@ -373,6 +383,10 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       }
       case IN_FILTER_ROWS: {
         cells[cell_idx].set_bool(node.in_filter_rows_);
+        break;
+      }
+      case GROUP_ID: {
+        cells[cell_idx].set_int(node.group_id_);
         break;
       }
       default: {

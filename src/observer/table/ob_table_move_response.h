@@ -23,7 +23,7 @@ class ObTableMoveResponseSender
 {
 public:
   ObTableMoveResponseSender(rpc::ObRequest *req, const int ret_code)
-      :response_sender_(req, result_, ret_code)
+      :response_sender_(req, &result_, ret_code)
   {
   }
   virtual ~ObTableMoveResponseSender() = default;

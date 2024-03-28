@@ -316,9 +316,14 @@ int ObTscCgService::generate_agent_vt_access_meta(const ObLogTableScan &op, ObTa
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr));
     } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("rowscan not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+      column_id = OB_HIDDEN_TRANS_VERSION_COLUMN_ID;
+      ObObjMeta obj_meta;
+      obj_meta.set_type(ObIntType);
+      if (OB_FAIL(agent_vt_meta.access_column_ids_.push_back(column_id))) {
+        LOG_WARN("store access column id failed", K(ret));
+      } else if (OB_FAIL(agent_vt_meta.access_row_types_.push_back(obj_meta))) {
+        LOG_WARN("failed to push back row types", K(ret));
+      }
     } else {
       ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       column_id = col_expr->get_column_id();
@@ -591,9 +596,7 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("rowscan not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+        // keep orign expr as access expr
       } else if (OB_ISNULL(mapping_expr = op.get_real_expr(expr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr is null", K(ret), KPC(expr));
@@ -908,7 +911,9 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     //for virtual agent table, DAS scan need the colum of the mapping real table
     for (int64_t i = 0; OB_SUCC(ret) && i < das_output_cols.count(); ++i) {
       ObRawExpr *mapping_expr = op.get_real_expr(das_output_cols.at(i));
-      if (!mapping_expr->is_column_ref_expr()) {
+      if (T_ORA_ROWSCN == mapping_expr->get_expr_type()) {
+        OZ (output_cids.push_back(OB_HIDDEN_TRANS_VERSION_COLUMN_ID));
+      } else if (!mapping_expr->is_column_ref_expr()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr type is invalid", K(ret), KPC(mapping_expr), KPC(das_output_cols.at(i)));
       } else if (OB_FAIL(output_cids.push_back(static_cast<ObColumnRefRawExpr*>(mapping_expr)->get_column_id()))) {

@@ -173,27 +173,9 @@ const int64_t OB_MAX_SPAN_LENGTH = 1024;
 const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
 const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
 const int64_t OB_MAX_LS_FLAG_LENGTH = 2048;
-const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
-const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
-const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
-const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
 // The timeout provided to the storage layer will be reduced by 100ms
 const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
-OB_INLINE bool is_user_group(const int64_t group_id)
-{
-  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
-}
-
-OB_INLINE bool is_sys_group(const int64_t group_id)
-{
-  return group_id >= SYS_RESOURCE_GROUP_START_ID && group_id <= SYS_RESOURCE_GROUP_START_ID + SYS_RESOURCE_GROUP_CNT;
-}
-
-OB_INLINE bool is_valid_resource_group(const int64_t group_id)
-{
-  //other group or user group
-  return group_id == 0 || (group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID);
-}
+const uint64_t MAX_STMT_TYPE_NAME_LENGTH = 128;
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
@@ -693,6 +675,11 @@ const char *const OB_LOCAL_PREFIX = "local://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
+const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -802,6 +789,7 @@ const int64_t MAX_INFOSCHEMA_COLUMN_PRIVILEGE_LENGTH = 64;
 const int64_t MAX_COLUMN_YES_NO_LENGTH = 3;
 const int64_t MAX_COLUMN_VARCHAR_LENGTH = 262143;
 const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
+const int64_t MAX_NAME_CHAR_LEN = 64;
 const uint64_t COLUMN_GROUP_START_ID = 1000;
 
 //Oracle
@@ -1470,7 +1458,7 @@ const char *const OB_MYSQL_OCI_CLIENT_NAME = "OceanBase Connector/C";
 const char *const OB_MYSQL_JAVA_CLIENT_MODE_NAME = "__ob_java_client";
 const char *const OB_MYSQL_OCI_CLIENT_MODE_NAME = "__ob_libobclient";
 const char *const OB_MYSQL_JDBC_CLIENT_MODE_NAME = "__ob_jdbc_client";
-
+const char *const OB_MYSQL_CLIENT_PROXY_USER_NAME = "__ob_client_proxy_user_name";
 const char *const OB_MYSQL_CLIENT_ATTRIBUTE_CAPABILITY_FLAG = "__ob_client_attribute_capability_flag";
 
 enum ObClientMode
@@ -1740,6 +1728,10 @@ const int64_t OB_DEFAULT_LOB_CHUNK_SIZE = OB_MAX_LOB_CHUNK_SIZE;
 const int64_t OB_MIN_LOB_INROW_THRESHOLD = 0; // 0 means disable inrow lob
 const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH / 2; // 1.5M/2
 const int64_t OB_DEFAULT_LOB_INROW_THRESHOLD = 4096; // 4K
+
+// this's used for ob_default_lob_inrow_threshold system variable
+// used to set the default inrow threshold for newly created tables
+const int64_t OB_SYS_VAR_DEFAULT_LOB_INROW_THRESHOLD = 8192; // 8K
 
 const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
 const int64_t OB_MAX_CAST_CHAR_TEXT_LENGTH = 16383;
@@ -2011,6 +2003,10 @@ const int64_t ASYNC_CLOG = 1 << CLOG_BITS_SHIFT;
 // replica type associated with encryption
 const int64_t WITHOUT_ENCRYPTION = 0 << ENCRYPTION_BITS_SHIFT;
 const int64_t WITH_ENCRYPTION = 1 << ENCRYPTION_BITS_SHIFT;
+
+// tracepoint, refer to OB_MAX_CONFIG_xxx
+const int64_t OB_MAX_TRACEPOINT_NAME_LEN = 128;
+const int64_t OB_MAX_TRACEPOINT_DESCRIBE_LEN = 4096;
 
 // Need to manually maintain the replica_type_to_str function in utility.cpp,
 // Currently there are only three types: REPLICA_TYPE_FULL, REPLICA_TYPE_READONLY, and REPLICA_TYPE_LOGONLY
@@ -2514,7 +2510,7 @@ inline bool is_x86() {
 #endif
 }
 #define __maybe_unused  __attribute__((unused))
-#define DO_PRAGMA(x) _Pragma (#x)
+#define DO_PRAGMA(x) _Pragma(#x)
 #define DISABLE_WARNING_GCC_PUSH _Pragma("GCC diagnostic push")
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")

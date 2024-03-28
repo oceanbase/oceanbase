@@ -222,13 +222,13 @@ int ObLogDistinct::inner_est_cost(const int64_t parallel, double child_card, dou
                                                   per_dop_ndv,
                                                   child->get_width(),
                                                   distinct_exprs_,
-                                                  opt_ctx.get_cost_model_type());
+                                                  opt_ctx);
     } else {
       op_cost = ObOptEstCost::cost_hash_distinct(per_dop_card,
                                                 per_dop_ndv,
                                                 child->get_width(),
                                                 distinct_exprs_,
-                                                opt_ctx.get_cost_model_type());
+                                                opt_ctx);
     }
   }
   return ret;
@@ -377,6 +377,18 @@ int ObLogDistinct::get_card_without_filter(double &card)
 {
   int ret = OB_SUCCESS;
   card = get_total_ndv();
+  return ret;
+}
+
+int ObLogDistinct::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_AGGREGATE == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  }
   return ret;
 }
 

@@ -145,6 +145,16 @@ public:
   static int check_and_generate_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                            const SqlInfo &not_param_info,
                                            common::ObIArray<ObPCParam *> &special_param_info);
+  static int formalize_fast_parameter_sql(ObIAllocator &allocator, const ObString &src_sql,
+                                          ObString &dest_sql, ObIArray<ObPCParam *> &raw_params,
+                                          const FPContext &fp_ctx);
+  static int formalize_sql_filter_hint(ObIAllocator &allocator,
+                                       const ObString &src_sql,
+                                       ObString &dest_sql,
+                                       ObIArray<ObPCParam *> &raw_params);
+  static int formalize_sql_text(ObIAllocator &allocator, const ObString &src_sql,
+                                ObString &fmt_sql, const SqlInfo &sql_info,
+                                const FPContext &fp_ctx);
   static int transform_neg_param(ObIArray<ObPCParam *> &pc_params);
   static int construct_not_param(const ObString &no_param_sql,
                                   ObPCParam *pc_param,
@@ -169,6 +179,17 @@ public:
                            char *buf,
                            int32_t buf_len,
                            int32_t &pos);
+  static int try_format_in_expr(const common::ObString &con_sql,
+                           char *buf,
+                           int32_t buf_len,
+                           int32_t &pos,
+                           bool& can_format);
+  static int search_vector(const char* start, const int64_t buf_len,
+                           int64_t& vec_start, int64_t& vec_end,
+                           bool &is_valid, int64_t& qm_cnt);
+  static bool is_in_expr_prefix(char c);
+  static int search_in_expr_pos(const char* buf, const int64_t buf_len,
+                                int64_t& pos, bool& found);
   static int construct_sql_for_pl(const common::ObString &no_param_sql,
                                   common::ObIArray<ObPCParam *> &not_params,
                                   char *buf,
@@ -212,7 +233,8 @@ private:
 
   static int get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                         ParseNode *tree,
-                                        SelectItemParamInfoArray *select_item_param_infos);
+                                        SelectItemParamInfoArray *select_item_param_infos,
+                                        const ObSQLSessionInfo &session);
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);

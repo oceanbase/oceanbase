@@ -393,7 +393,7 @@ int ObTempTableAccessOp::locate_interm_result(int64_t result_id)
   // The current operation of obtaining intermediate results and
   // the operation of the background thread of dumping intermediate results
   // are mutually exclusive
-  if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().atomic_get_interm_result_info(
+  if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->atomic_get_interm_result_info(
        dtl_int_key, result_info_guard_))) {
     LOG_WARN("failed to create row store.", K(ret));
   } else if (FALSE_IT(result_info = result_info_guard_.result_info_)) {

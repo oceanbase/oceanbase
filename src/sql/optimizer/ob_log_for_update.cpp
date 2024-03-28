@@ -63,11 +63,51 @@ int ObLogForUpdate::get_plan_item_info(PlanText &plan_text,
           OB_ISNULL(table = stmt->get_table_item_by_id(index_dml_info_.at(i)->table_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret), K(index_dml_info_.at(i)), K(table));
-      } else if (OB_FAIL(BUF_PRINTF("%c%.*s%c",
-                                    i == 0 ? '(' : ' ',
-                                    table->get_table_name().length(),
-                                    table->get_table_name().ptr(),
-                                    i == index_dml_info_.count() - 1 ? ')' : ','))) {
+      } else if (table->is_generated_table()) {
+        // For hierarchical query, we only lock table in right view which is mocked by transform preprocess,
+        // the name of right view is meaningless, hence we only print the base table name here.
+        if (OB_ISNULL(table->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ref query is NULL", K(ret));
+        } else if (stmt->is_hierarchical_query()) {
+          if (OB_ISNULL(table = table->ref_query_->get_table_item_by_id(index_dml_info_.at(i)->loc_table_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table item is NULL", K(ret));
+          }
+        } else if (table->ref_query_->is_hierarchical_query()) {
+          // for split hierarchical query
+          TableItem *base_table = NULL;
+          for (int j = 0; OB_SUCC(ret) && j < table->ref_query_->get_table_size(); ++j) {
+            TableItem *mocked_join_table = table->ref_query_->get_table_item(j);
+            if(OB_ISNULL(mocked_join_table)
+               || OB_UNLIKELY(!mocked_join_table->is_generated_table())
+               || OB_ISNULL(mocked_join_table->ref_query_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected mocked join table", K(ret), KPC(mocked_join_table));
+            } else {
+              base_table = mocked_join_table->ref_query_->get_table_item_by_id(index_dml_info_.at(i)->loc_table_id_);
+              if (base_table != NULL) {
+                break;
+              }
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(base_table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("base table is not find", K(ret));
+          } else {
+            table = base_table;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("not a hierarchical query", K(ret), KPC(stmt));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("%c%.*s%c",
+                                  i == 0 ? '(' : ' ',
+                                  table->get_table_name().length(),
+                                  table->get_table_name().ptr(),
+                                  i == index_dml_info_.count() - 1 ? ')' : ','))) {
         LOG_WARN("failed to print lock table name", K(ret));
       }
     }
@@ -158,17 +198,14 @@ int ObLogForUpdate::generate_multi_part_partition_id_expr()
     LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info_.count(); ++i) {
-    const TableItem *table_item = NULL;
     ObRawExpr *part_expr = NULL;
-    if (OB_ISNULL(index_dml_info_.at(i)) ||
-        OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(
-                    index_dml_info_.at(i)->table_id_))) {
+    if (OB_ISNULL(index_dml_info_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(index_dml_info_.at(i)), K(table_item));
-    } else if (OB_FAIL(get_plan()->gen_calc_part_id_expr(table_item->table_id_,
-                                                        table_item->ref_id_,
-                                                        CALC_PARTITION_TABLET_ID,
-                                                        part_expr))) {
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(get_plan()->gen_calc_part_id_expr(index_dml_info_.at(i)->loc_table_id_,
+                                                         index_dml_info_.at(i)->ref_table_id_,
+                                                         CALC_PARTITION_TABLET_ID,
+                                                         part_expr))) {
       LOG_WARN("failed to gen calc part id expr", K(ret));
     } else if (OB_ISNULL(part_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -225,7 +262,7 @@ int ObLogForUpdate::est_cost()
   } else {
     // todo: refine for update cost
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    set_op_cost(ObOptEstCost::cost_get_rows(first_child->get_card(), opt_ctx.get_cost_model_type()));
+    set_op_cost(ObOptEstCost::cost_get_rows(first_child->get_card(), opt_ctx));
     set_cost(first_child->get_cost() + op_cost_);
     set_card(first_child->get_card());
   }

@@ -66,7 +66,8 @@ ObTextStringIter::~ObTextStringIter()
 int ObTextStringIter::init(uint32_t buffer_len,
                            const sql::ObBasicSessionInfo *session,
                            ObIAllocator *res_allocator,
-                           ObIAllocator *tmp_allocator)
+                           ObIAllocator *tmp_allocator,
+                           ObLobAccessCtx *lob_access_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_init_) {
@@ -101,6 +102,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
       } else {
         ctx_ = new (ctx_buffer) ObLobTextIterCtx(locator, session, res_allocator, buffer_len);
         ctx_ ->init();
+        ctx_->lob_access_ctx_ = lob_access_ctx;
       }
     }
   }
@@ -180,6 +182,7 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     param.scan_backward_ = false;
     param.offset_ = 0; // use 0 offset when reading full lob data
     param.len_ = 0;
+    param.access_ctx_ = lob_iter_ctx->lob_access_ctx_;
   }
 
   return ret;
@@ -641,6 +644,14 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
         COMMON_LOG(WARN,"Lob: falied to get first block.", K(ret));
       }
     } else {
+      // if put backward, we should compact buffer remain and move reserved part closed to the reading value
+      if (output_data.remain() > 0 && ctx_->is_backward_ && ctx_->reserved_byte_len_ > 0) {
+        // from :[0, output_data.length_][output_data.length_, output_data.buffer_size_][reserved_part]
+        // to   :[0, output_data.length_][reserved_part]
+        MEMMOVE(output_data.ptr() + output_data.length(),
+                output_data.ptr() + output_data.length() + output_data.remain(),
+                ctx_->reserved_byte_len_);
+      }
       ctx_->content_byte_len_ = ctx_->reserved_byte_len_ + output_data.length();
       // ToDo: @gehao get directly from lob mngr ?
       uint32 cur_out_len = static_cast<uint32_t>(ObCharset::strlen_char(cs_type_,
@@ -650,7 +661,7 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
       ctx_->last_accessed_byte_len_ = ctx_->accessed_byte_len_;
       ctx_->last_accessed_len_ = ctx_->accessed_len_;
       ctx_->accessed_byte_len_ += output_data.length();
-      ctx_->accessed_len_ += cur_out_len;\
+      ctx_->accessed_len_ += cur_out_len;
       ctx_->iter_count_++;
       str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
     }
@@ -739,7 +750,7 @@ void ObTextStringIter::set_reserved_byte_len(uint32_t reserved_byte_len)
 
 void ObTextStringIter::reset_reserve_len()
 {
-  if (is_valid_for_config()) {
+  if (is_valid_for_config(TEXTSTRING_ITER_NEXT)) {
     ctx_->reserved_byte_len_ = 0;
     ctx_->reserved_len_ = 0;
   }

@@ -227,6 +227,38 @@ struct ObGroupingSetsItem
   common::ObSEArray<ObCubeItem, 2, common::ModulePageAllocator, true> cube_items_;
 };
 
+struct ForUpdateDMLInfo
+{
+  ForUpdateDMLInfo()
+  : table_id_(OB_INVALID_ID),
+    base_table_id_(OB_INVALID_ID),
+    ref_table_id_(OB_INVALID_ID),
+    rowkey_cnt_(0),
+    is_nullable_(false),
+    for_update_wait_us_(-1),
+    skip_locked_(false)
+  {}
+  int assign(const ForUpdateDMLInfo& other);
+  int deep_copy(ObIRawExprCopier &expr_copier,
+                const ForUpdateDMLInfo &other);
+  TO_STRING_KV(K_(table_id),
+               K_(base_table_id),
+               K_(ref_table_id),
+               K_(rowkey_cnt),
+               K_(unique_column_ids),
+               K_(is_nullable),
+               K_(for_update_wait_us),
+               K_(skip_locked));
+  uint64_t table_id_;       // view table id
+  uint64_t base_table_id_;  // for update base table id
+  uint64_t ref_table_id_;   // base table ref id
+  int64_t rowkey_cnt_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> unique_column_ids_;
+  bool is_nullable_;
+  int64_t for_update_wait_us_;
+  bool skip_locked_;
+};
+
 }
 
 namespace common
@@ -625,6 +657,11 @@ public:
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
   int get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const;
+  inline int add_for_update_dml_info(ForUpdateDMLInfo *for_update_dml_info) { return for_update_dml_info_.push_back(for_update_dml_info); }
+  inline const common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() const { return for_update_dml_info_; }
+  inline common::ObIArray<ForUpdateDMLInfo*>& get_for_update_dml_infos() { return for_update_dml_info_; }
+  void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
+  bool is_select_straight_join() const { return is_select_straight_join_; }
 
 private:
   SetOperator set_op_;
@@ -666,6 +703,9 @@ private:
   /* for set stmt child stmt*/
   common::ObSEArray<ObSelectStmt*, 2, common::ModulePageAllocator, true> set_query_;
 
+  /* for hierarchical query with for update */
+  common::ObSEArray<ForUpdateDMLInfo*, 2, common::ModulePageAllocator, true> for_update_dml_info_;
+
   /* for show statment*/
   ObShowStmtCtx show_stmt_ctx_;
   // view
@@ -684,6 +724,8 @@ private:
   bool is_hierarchical_query_;
   bool has_prior_;
   bool has_reverse_link_;
+  //denote if the query option 'STRAIGHT_JOIN' has been specified
+  bool is_select_straight_join_;
 };
 }
 }

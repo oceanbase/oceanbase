@@ -46,6 +46,27 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace blocksstable;
 
+const static char * ObTableModeFlagStr[] = {
+    "NORMAL",
+    "QUEUING",
+    "PRIMARY_AUX_VP",
+    "MODERATE",
+    "SUPER",
+    "EXTREME",
+};
+
+const char *table_mode_flag_to_str(const ObTableModeFlag &table_mode)
+{
+  STATIC_ASSERT(static_cast<int64_t>(TABLE_MODE_MAX) == ARRAYSIZEOF(ObTableModeFlagStr), "table mode flag str len is mismatch");
+  const char *str = "";
+  if (is_valid_table_mode_flag(table_mode)) {
+    str = ObTableModeFlagStr[table_mode];
+  } else {
+    str = "invalid_table_mode_flag_type";
+  }
+  return str;
+}
+
 ObColumnIdKey ObGetColumnKey<ObColumnIdKey, ObColumnSchemaV2 *>::operator()(const ObColumnSchemaV2 *column_schema) const
 {
   return ObColumnIdKey(column_schema->get_column_id());
@@ -4739,7 +4760,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
           is_same = true;
         }
       } else {
-        if (src_column.get_data_precision() == dst_column.get_data_precision() &&
+        if ((ob_is_int_tc(src_column.get_data_type()) ||
+            src_column.get_data_precision() == dst_column.get_data_precision()) &&
             src_column.get_data_scale() == dst_column.get_data_scale()) {
           is_same = true;
         }

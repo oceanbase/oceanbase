@@ -182,6 +182,7 @@ public:
   int update_job(int64_t job_id, share::ObDMLSqlSplicer &pairs, common::ObISQLClient &trans);
   int update_job_progress(int64_t job_id, int64_t progress, common::ObISQLClient &trans);
   int complete_job(int64_t job_id, int result_code, common::ObISQLClient &trans);
+  int complete_all_job_for_dropping_tenant(int64_t tenant_id, common::ObISQLClient &trans);
 
   // misc
   int64_t get_max_job_id() const { return max_job_id_; }
@@ -288,5 +289,8 @@ public:
     }                                                                   \
     tmp_ret;                                                            \
   })
+
+#define RS_JOB_COMPLETE_ALL_JOB_FOR_DROPPING_TENANT(tenant_id, trans)                    \
+  THE_RS_JOB_TABLE.complete_all_job_for_dropping_tenant((tenant_id), (trans))
 
 #endif /* _OB_RS_JOB_TABLE_OPERATOR_H */

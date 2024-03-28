@@ -59,7 +59,7 @@ struct ObLobTextIterCtx
     total_access_len_(0), total_byte_len_(0), content_byte_len_(0), content_len_(0),
     reserved_byte_len_(0), reserved_len_(0), accessed_byte_len_(0), accessed_len_(0),
     last_accessed_byte_len_(0), last_accessed_len_(0), iter_count_(0), is_cloned_temporary_(false),
-    is_backward_(false), locator_(locator), lob_query_iter_(NULL)
+    is_backward_(false), locator_(locator), lob_query_iter_(NULL), lob_access_ctx_(nullptr)
   {}
 
   TO_STRING_KV(KP_(alloc), KP_(session), KP_(buff), K_(buff_byte_len), K_(start_offset), K_(total_access_len),
@@ -104,6 +104,7 @@ struct ObLobTextIterCtx
 
   ObLobLocatorV2 locator_;
   ObLobQueryIter *lob_query_iter_;
+  ObLobAccessCtx *lob_access_ctx_;
 };
 
 // wrapper class to handle string/text type input
@@ -142,7 +143,8 @@ public:
   int init(uint32_t buffer_len,
            const sql::ObBasicSessionInfo *session = NULL,
            ObIAllocator *res_allocator = NULL,
-           ObIAllocator *tmp_allocator = NULL);
+           ObIAllocator *tmp_allocator = NULL,
+           ObLobAccessCtx *lob_access_ctx = NULL);
 
   ObTextStringIterState get_next_block(ObString &str);
 
@@ -193,10 +195,10 @@ private:
   int get_outrow_prefix_data(uint32_t prefix_char_len);
   int reserve_data();
   int reserve_byte_data();
-  OB_INLINE bool is_valid_for_config()
+  OB_INLINE bool is_valid_for_config(ObTextStringIterState valid_state = TEXTSTRING_ITER_INIT)
   {
     return (is_init_ && is_outrow_ && has_lob_header_
-            && state_ == TEXTSTRING_ITER_INIT && OB_NOT_NULL(ctx_));
+            && state_ == valid_state && OB_NOT_NULL(ctx_));
   }
 private:
   ObObjType type_;

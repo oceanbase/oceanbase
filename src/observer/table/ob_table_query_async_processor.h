@@ -35,7 +35,10 @@ namespace observer
 struct ObTableQueryAsyncCtx
 {
   explicit ObTableQueryAsyncCtx(common::ObIAllocator &allocator)
-      : tb_ctx_(allocator),
+      : table_id_(OB_INVALID_ID),
+        schema_version_(OB_INVALID_SCHEMA_VERSION),
+        sess_guard_(),
+        tb_ctx_(allocator),
         expr_frame_info_(allocator),
         spec_(nullptr),
         executor_(nullptr)
@@ -47,6 +50,10 @@ struct ObTableQueryAsyncCtx
       spec_->destroy_executor(executor_);
     }
   }
+
+  uint64_t table_id_;
+  int64_t schema_version_;
+  table::ObTableApiSessGuard sess_guard_;
   table::ObTableCtx tb_ctx_;
   ObExprFrameInfo expr_frame_info_;
   table::ObTableApiSpec *spec_;
@@ -68,7 +75,7 @@ public:
       tenant_id_(MTL_ID()),
       query_(),
       result_iterator_(nullptr),
-      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      allocator_("TbAQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       query_ctx_(allocator_),
       iterator_mementity_(nullptr)
   {}
@@ -187,19 +194,20 @@ public:
   explicit ObTableQueryAsyncP(const ObGlobalContext &gctx);
   virtual ~ObTableQueryAsyncP() {}
   virtual int deserialize() override;
+  virtual int before_process() override;
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
-  virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
-
+  int init_query_ctx(const ObString &arg_table_name);
 
 private:
   int process_query_start();
   int process_query_next();
   int destory_query_session(bool need_rollback_trans);
+  int init_schema_cache_guard();
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 
 private:
@@ -212,6 +220,12 @@ private:
   int check_query_type();
   int init_tb_ctx(table::ObTableCtx &ctx);
   int execute_query();
+  int start_trans(bool is_readonly,
+                  const table::ObTableConsistencyLevel consistency_level,
+                  const share::ObLSID &ls_id,
+                  int64_t timeout_ts,
+                  bool need_global_snapshot,
+                  sql::TransState *trans_state);
 
 private:
   int64_t result_row_count_;

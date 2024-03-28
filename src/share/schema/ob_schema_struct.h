@@ -4017,8 +4017,82 @@ enum ObUserType
   OB_TYPE_MAX,
 };
 
+#define PROXY_USER_ACTIVATE_ALL_ROLES 1
+#define PROXY_USER_NO_ROLES_BE_ACTIVATED 2
+#define PROXY_USER_MAY_ACTIVATE_ROLE 4
+#define PROXY_USER_ROLE_CAN_NOT_BE_ACTIVATED 8
+
+struct ObProxyInfo
+{
+  OB_UNIS_VERSION(1);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
+public:
+  ObProxyInfo(common::ObIAllocator *allocator) : allocator_(allocator), user_id_(OB_INVALID_ID), proxy_flags_(0),
+                                credential_type_(0), role_ids_(NULL), role_id_cnt_(0), role_id_capacity_(0) {}
+  inline int64_t get_convert_size() const
+  {
+    int64_t convert_size = sizeof(*this);
+    convert_size += role_id_cnt_ * sizeof(uint64_t);
+    return convert_size;
+  }
+  void reset();
+  int assign(const ObProxyInfo &other);
+  int add_role_id(const uint64_t role_id);
+  uint64_t get_role_id_by_idx(const int64_t idx) const;
+
+  TO_STRING_KV(K_(user_id), K_(proxy_flags), K(ObArrayWrap<uint64_t>(role_ids_, role_id_cnt_)), K_(role_id_cnt));
+
+  common::ObIAllocator *allocator_;
+  uint64_t user_id_;
+  uint64_t proxy_flags_;
+  uint64_t credential_type_;
+  uint64_t *role_ids_;
+  uint64_t role_id_cnt_;
+  uint64_t role_id_capacity_;
+};
+
 #define ADMIN_OPTION_SHIFT 0
 #define DISABLE_FLAG_SHIFT 1
+
+enum ObProxyActivatedFlag
+{
+  PROXY_NERVER_BEEN_ACTIVATED = 0,
+  PROXY_BEEN_ACTIVATED_BEFORE = 1,
+  PROXY_ACTIVATED_MAX,
+};
+
+//In user schema def, flag is a int column.
+//int is int64_t, not uint64_t. So only 63 bit can be used.
+struct ObUserFlags
+{
+  OB_UNIS_VERSION_V(1);
+private:
+  static const int32_t F_PROXY_INFO_OFFSET = 0;
+  static const int32_t F_PROXY_INFO_BITS = 1;
+  static const int32_t F_RESERVED = 63;
+  static const uint32_t F_PROXY_INFO_MASK = (((1L << F_PROXY_INFO_BITS) - 1) << F_PROXY_INFO_OFFSET);
+public:
+  ObUserFlags() { reset(); }
+  virtual ~ObUserFlags() { reset(); }
+  void reset() { flags_ = 0; }
+  bool operator ==(const ObUserFlags &other) const
+  {
+    return flags_ == other.flags_;
+  }
+  int assign(const ObUserFlags &other);
+  ObUserFlags &operator=(const ObUserFlags &other);
+  bool is_valid() const;
+
+  TO_STRING_KV("proxy_activated_flag", proxy_activated_flag_);
+  union {
+    int64_t flags_;
+    struct {
+      uint64_t proxy_activated_flag_ :F_PROXY_INFO_BITS;
+      uint64_t reserved_ :F_RESERVED;
+    };
+  };
+};
 
 class ObUserInfo : public ObSchema, public ObPriv
 {
@@ -4032,12 +4106,13 @@ public:
      type_(OB_USER), grantee_id_array_(), role_id_array_(), profile_id_(common::OB_INVALID_ID), password_last_changed_timestamp_(common::OB_INVALID_TIMESTAMP),
      role_id_option_array_(),
      max_connections_(0),
-     max_user_connections_(0)
+     max_user_connections_(0),
+     proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
+     proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_()
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
-  ObUserInfo(const ObUserInfo &other);
-  ObUserInfo& operator=(const ObUserInfo &other);
+  int assign(const ObUserInfo &other);
   static bool cmp(const ObUserInfo *lhs, const ObUserInfo *rhs)
   { return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_user_id() < rhs->get_tenant_user_id() : false; }
   static bool equal(const ObUserInfo *lhs, const ObUserInfo *rhs)
@@ -4093,6 +4168,14 @@ public:
   const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const { return grantee_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_array() const { return role_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const { return role_id_option_array_; }
+  uint64_t get_proxied_user_info_cnt() const { return proxied_user_info_cnt_; }
+  uint64_t get_proxy_user_info_cnt() const { return proxy_user_info_cnt_; }
+  const ObProxyInfo* get_proxied_user_info_by_idx(uint64_t idx) const;
+  ObProxyInfo* get_proxied_user_info_by_idx_for_update(uint64_t idx);
+  const ObProxyInfo* get_proxy_user_info_by_idx(uint64_t idx) const;
+  ObProxyInfo* get_proxy_user_info_by_idx_for_update(uint64_t idx);
+  int add_proxied_user_info(const ObProxyInfo &proxied_info);
+  int add_proxy_user_info(const ObProxyInfo &proxy_info);
   int add_grantee_id(const uint64_t id) { return grantee_id_array_.push_back(id); }
   int add_role_id(const uint64_t id,
                   const uint64_t admin_option = NO_OPTION,
@@ -4114,11 +4197,34 @@ public:
                K_(info), K_(locked),
                K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
                K_(type), K_(grantee_id_array), K_(role_id_array),
-               K_(profile_id)
+               K_(profile_id), K_(proxied_user_info_cnt), K_(proxy_user_info_cnt),
+               "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
+               "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
+               K_(user_flags)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
+  inline void set_flags(const int64_t flags) { user_flags_.flags_ = flags; }
+  inline int64_t get_flags() const { return user_flags_.flags_; }
+  inline void set_proxy_activated_flag(const ObProxyActivatedFlag flag) {
+    static_assert(ObProxyActivatedFlag::PROXY_ACTIVATED_MAX == 2, "proxy activated flag not valid");
+    user_flags_.proxy_activated_flag_ = flag;
+  }
+  inline ObProxyActivatedFlag get_proxy_activated_flag() { return (ObProxyActivatedFlag)(user_flags_.proxy_activated_flag_); }
+
 private:
+  int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
+  int assign_proxy_info_array_(ObProxyInfo **src_arr,
+                              const uint64_t src_cnt,
+                              const uint64_t src_capacity,
+                              ObProxyInfo **&tar_arr,
+                              uint64_t &tar_cnt,
+                              uint64_t &tar_capacity);
+
+  int deserialize_proxy_info_array_(ObProxyInfo **&arr, uint64_t &cnt, uint64_t &capacity,
+                                            const char *buf, const int64_t data_len, int64_t &pos);
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 8;
   common::ObString user_name_;
   common::ObString host_name_;
   common::ObString passwd_;
@@ -4137,6 +4243,14 @@ private:
   common::ObSEArray<uint64_t, 8> role_id_option_array_; // Record which roles the user/role has
   uint64_t max_connections_;
   uint64_t max_user_connections_;
+  ObProxyInfo** proxied_user_info_; //record users who can proxy the user
+  uint64_t proxied_user_info_capacity_;
+  uint64_t proxied_user_info_cnt_;
+  ObProxyInfo** proxy_user_info_; //recode users whom the user can proxy
+  uint64_t proxy_user_info_capacity_;
+  uint64_t proxy_user_info_cnt_;
+  ObUserFlags user_flags_;
+  DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 
 struct ObDBPrivSortKey
@@ -5187,7 +5301,11 @@ struct ObSessionPrivInfo
       user_priv_set_(0),
       db_priv_set_(0),
       effective_tenant_id_(common::OB_INVALID_ID),
-      enable_role_id_array_()
+      enable_role_id_array_(),
+      security_version_(0),
+      proxy_user_id_(),
+      proxy_user_name_(),
+      proxy_host_name_()
   {}
   ObSessionPrivInfo(const uint64_t tenant_id,
                     const uint64_t effective_tenant_id,
@@ -5203,7 +5321,11 @@ struct ObSessionPrivInfo
         user_priv_set_(user_priv_set),
         db_priv_set_(db_priv_set),
         effective_tenant_id_(effective_tenant_id),
-        enable_role_id_array_()
+        enable_role_id_array_(),
+        security_version_(0),
+        proxy_user_id_(),
+        proxy_user_name_(),
+        proxy_host_name_()
   {}
 
   virtual ~ObSessionPrivInfo() {}
@@ -5219,6 +5341,11 @@ struct ObSessionPrivInfo
     user_priv_set_ = 0;
     db_priv_set_ = 0;
     enable_role_id_array_.reset();
+    security_version_ = 0;
+    proxy_user_id_ = common::OB_INVALID_ID;
+    proxy_user_name_.reset();
+    proxy_host_name_.reset();
+
   }
   bool is_valid() const
   {
@@ -5229,7 +5356,8 @@ struct ObSessionPrivInfo
   void set_effective_tenant_id(uint64_t effective_tenant_id) { effective_tenant_id_ = effective_tenant_id; }
   uint64_t get_effective_tenant_id() { return effective_tenant_id_; }
   virtual TO_STRING_KV(K_(tenant_id), K_(effective_tenant_id), K_(user_id), K_(user_name), K_(host_name),
-                       K_(db), K_(user_priv_set), K_(db_priv_set));
+                       K_(db), K_(user_priv_set), K_(db_priv_set),  K_(security_version), K_(proxy_user_id), K_(proxy_user_name),
+                       K_(proxy_host_name));
 
   uint64_t tenant_id_; //for privilege.Current login tenant. if normal tenant access
                        //sys tenant's object should use other method for priv checking.
@@ -5242,6 +5370,10 @@ struct ObSessionPrivInfo
   // Only used for privilege check to determine whether there are currently tenants, otherwise the value is illegal
   uint64_t effective_tenant_id_;
   common::ObSEArray<uint64_t, 8> enable_role_id_array_;
+  uint64_t security_version_;
+  uint64_t proxy_user_id_;
+  common::ObString proxy_user_name_;
+  common::ObString proxy_host_name_;
 };
 
 struct ObUserLoginInfo
@@ -5252,7 +5384,7 @@ struct ObUserLoginInfo
                   const common::ObString &client_ip,
                   const common::ObString &passwd,
                   const common::ObString &db)
-      : tenant_name_(tenant_name), user_name_(user_name), client_ip_(client_ip),
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
         passwd_(passwd), db_(db), scramble_str_()
   {}
 
@@ -5262,13 +5394,25 @@ struct ObUserLoginInfo
                   const common::ObString &passwd,
                   const common::ObString &db,
                   const common::ObString &scramble_str)
-      : tenant_name_(tenant_name), user_name_(user_name), client_ip_(client_ip),
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(), client_ip_(client_ip),
         passwd_(passwd), db_(db), scramble_str_(scramble_str)
   {}
 
-  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(client_ip), K_(db), K_(scramble_str));
+  ObUserLoginInfo(const common::ObString &tenant_name,
+                  const common::ObString &user_name,
+                  const common::ObString &proxied_user_name,
+                  const common::ObString &client_ip,
+                  const common::ObString &passwd,
+                  const common::ObString &db,
+                  const common::ObString &scramble_str)
+      : tenant_name_(tenant_name), user_name_(user_name), proxied_user_name_(proxied_user_name), client_ip_(client_ip),
+        passwd_(passwd), db_(db), scramble_str_(scramble_str)
+  {}
+
+  TO_STRING_KV(K_(tenant_name), K_(user_name), K_(proxied_user_name), K_(client_ip), K_(db), K_(scramble_str));
   common::ObString tenant_name_;
   common::ObString user_name_;
+  common::ObString proxied_user_name_;
   common::ObString client_ip_;//client ip for current user
   common::ObString passwd_;
   common::ObString db_;
@@ -5455,11 +5599,15 @@ public:
   int set_signature(const common::ObString &sig) { return deep_copy_str(sig, signature_); }
   int set_sql_id(const char *sql_id) { return deep_copy_str(sql_id, sql_id_); }
   int set_sql_id(const common::ObString &sql_id) { return deep_copy_str(sql_id, sql_id_); }
+  int set_format_sql_id(const char *sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
+  int set_format_sql_id(const common::ObString &sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
   int set_outline_params(const common::ObString &outline_params_str);
   int set_outline_content(const char *content) { return deep_copy_str(content, outline_content_); }
   int set_outline_content(const common::ObString &content) { return deep_copy_str(content, outline_content_); }
   int set_sql_text(const char *sql) { return deep_copy_str(sql, sql_text_); }
   int set_sql_text(const common::ObString &sql) { return deep_copy_str(sql, sql_text_); }
+  int set_format_sql_text(const char *sql) { return deep_copy_str(sql, format_sql_text_); }
+  int set_format_sql_text(const common::ObString &sql) { return deep_copy_str(sql, format_sql_text_); }
   int set_outline_target(const char *target) { return deep_copy_str(target, outline_target_); }
   int set_outline_target(const common::ObString &target) { return deep_copy_str(target, outline_target_); }
   int set_owner(const char *owner) { return deep_copy_str(owner, owner_); }
@@ -5471,6 +5619,7 @@ public:
   void set_compatible(const bool compatible) { compatible_ = compatible;}
   void set_enabled(const bool enabled) { enabled_ = enabled;}
   void set_format(const ObHintFormat hint_format) { format_ = hint_format;}
+  void set_format_outline(bool is_format) { format_outline_ = is_format;}
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_owner_id() const { return owner_id_; }
@@ -5486,12 +5635,17 @@ public:
   inline const char *get_signature() const { return extract_str(signature_); }
   inline const char *get_sql_id() const { return extract_str(sql_id_); }
   inline const common::ObString &get_sql_id_str() const { return sql_id_; }
+  inline const char *get_format_sql_id() const { return extract_str(format_sql_id_); }
+  inline const common::ObString &get_format_sql_id_str() const { return format_sql_id_; }
   inline const common::ObString &get_signature_str() const { return signature_; }
   inline const char *get_outline_content() const { return extract_str(outline_content_); }
   inline const common::ObString &get_outline_content_str() const { return outline_content_; }
   inline const char *get_sql_text() const { return extract_str(sql_text_); }
   inline const common::ObString &get_sql_text_str() const { return sql_text_; }
   inline common::ObString &get_sql_text_str() { return sql_text_; }
+  inline const char *get_format_sql_text() const { return extract_str(format_sql_text_); }
+  inline const common::ObString &get_format_sql_text_str() const { return format_sql_text_; }
+  inline common::ObString &get_format_sql_text_str() { return format_sql_text_; }
   inline const char *get_outline_target() const { return extract_str(outline_target_); }
   inline const common::ObString &get_outline_target_str() const { return outline_target_; }
   inline common::ObString &get_outline_target_str() { return outline_target_; }
@@ -5504,6 +5658,8 @@ public:
   int get_hex_str_from_outline_params(common::ObString &hex_str, common::ObIAllocator &allocator) const;
   const ObOutlineParamsWrapper &get_outline_params_wrapper() const { return outline_params_wrapper_; }
   ObOutlineParamsWrapper &get_outline_params_wrapper() { return outline_params_wrapper_; }
+  bool is_format() { return format_outline_; }
+  bool is_format() const { return format_outline_; }
   bool has_outline_params() const { return outline_params_wrapper_.get_outline_params().count() > 0; }
   int has_concurrent_limit_param(bool &has) const;
   int gen_valid_allocator();
@@ -5516,7 +5672,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(outline_id), K_(schema_version),
                        K_(name), K_(signature), K_(sql_id), K_(outline_content), K_(sql_text),
                        K_(owner_id), K_(owner), K_(used), K_(compatible),
-                       K_(enabled), K_(format), K_(outline_params_wrapper), K_(outline_target));
+                       K_(enabled), K_(format), K_(outline_params_wrapper), K_(outline_target),
+                       K_(format_sql_text), K_(format_sql_id), K_(format_outline));
   static bool is_sql_id_valid(const common::ObString &sql_id);
 private:
   static int replace_question_mark(const common::ObString &not_param_sql,
@@ -5550,6 +5707,9 @@ protected:
   ObHintFormat format_;
   uint64_t owner_id_;
   ObOutlineParamsWrapper outline_params_wrapper_;
+  common::ObString format_sql_text_;
+  common::ObString format_sql_id_;
+  bool format_outline_;
 };
 
 class ObDbLinkBaseInfo : public ObSchema
@@ -6221,10 +6381,11 @@ class ObOutlineNameHashWrapper
 public:
   ObOutlineNameHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                database_id_(common::OB_INVALID_ID),
-                               name_() {}
+                               name_(),
+                               is_format_(false) {}
   ObOutlineNameHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                           const common::ObString &name_)
-      : tenant_id_(tenant_id), database_id_(database_id), name_(name_)
+                           const common::ObString &name_, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), name_(name_), is_format_(is_format)
   {}
   ~ObOutlineNameHashWrapper() {}
   inline uint64_t hash() const;
@@ -6236,10 +6397,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_name() const { return name_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString name_;
+  bool is_format_;
 };
 
 inline uint64_t ObOutlineNameHashWrapper::hash() const
@@ -6248,12 +6412,14 @@ inline uint64_t ObOutlineNameHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(name_.ptr(), name_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineNameHashWrapper::operator ==(const ObOutlineNameHashWrapper &rv) const
 {
-  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (name_ == rv.name_);
+  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
+            && (name_ == rv.name_) && (is_format_ == rv.is_format_);
 }
 
 class ObOutlineSignatureHashWrapper
@@ -6261,10 +6427,11 @@ class ObOutlineSignatureHashWrapper
 public:
   ObOutlineSignatureHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                     database_id_(common::OB_INVALID_ID),
-                                    signature_() {}
+                                    signature_(),
+                                    is_format_(false) {}
   ObOutlineSignatureHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                                const common::ObString &signature)
-      : tenant_id_(tenant_id), database_id_(database_id), signature_(signature)
+                                const common::ObString &signature, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), signature_(signature), is_format_(is_format)
   {}
   ~ObOutlineSignatureHashWrapper() {}
   inline uint64_t hash() const;
@@ -6276,10 +6443,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_signature() const { return signature_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString signature_;
+  bool is_format_;
 };
 
 class ObOutlineSqlIdHashWrapper
@@ -6287,10 +6457,11 @@ class ObOutlineSqlIdHashWrapper
 public:
   ObOutlineSqlIdHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                     database_id_(common::OB_INVALID_ID),
-                                    sql_id_() {}
+                                    sql_id_(),
+                                    is_format_(false) {}
   ObOutlineSqlIdHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                                const common::ObString &sql_id)
-      : tenant_id_(tenant_id), database_id_(database_id), sql_id_(sql_id)
+                                const common::ObString &sql_id, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), sql_id_(sql_id), is_format_(is_format)
   {}
   ~ObOutlineSqlIdHashWrapper() {}
   inline uint64_t hash() const;
@@ -6302,10 +6473,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_sql_id() const { return sql_id_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString sql_id_;
+  bool is_format_;
 };
 
 inline uint64_t ObOutlineSqlIdHashWrapper::hash() const
@@ -6314,13 +6488,14 @@ inline uint64_t ObOutlineSqlIdHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(sql_id_.ptr(), sql_id_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineSqlIdHashWrapper::operator ==(const ObOutlineSqlIdHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
-      && (sql_id_ == rv.sql_id_);
+      && (sql_id_ == rv.sql_id_) && (is_format_ == rv.is_format_);
 }
 
 inline uint64_t ObOutlineSignatureHashWrapper::hash() const
@@ -6329,13 +6504,14 @@ inline uint64_t ObOutlineSignatureHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(signature_.ptr(), signature_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineSignatureHashWrapper::operator ==(const ObOutlineSignatureHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
-      && (signature_ == rv.signature_);
+      && (signature_ == rv.signature_) && (is_format_ == rv.is_format_);
 }
 
 class ObSysTableChecker
@@ -7083,6 +7259,11 @@ public:
   // inline void set_cache_size(int64_t val) { option_.set_cache_size(val); }
   inline void set_cycle_flag(bool cycle) { option_.set_cycle_flag(cycle); }
   inline void set_order_flag(bool order) { option_.set_order_flag(order); }
+  inline void set_flag(int64_t flag) { option_.set_flag(flag); }
+  inline void set_cache_order_mode(ObSequenceCacheOrderMode mode)
+  {
+    option_.set_cache_order_mode(mode);
+  }
 
   // Temporary compatibility code, in order to support max_value etc. as Number type
   // int set_max_value(const common::ObString &str);
@@ -7113,8 +7294,13 @@ public:
   //inline int64_t get_increment_by() const { return option_.get_increment_by(); }
   //inline int64_t get_start_with() const { return option_.get_start_with(); }
   //inline int64_t get_cache_size() const { return option_.get_cache_size(); }
+  inline int64_t get_flag() const { return option_.get_flag(); }
   inline bool get_cycle_flag() const { return option_.get_cycle_flag(); }
   inline bool get_order_flag() const { return option_.get_order_flag(); }
+  inline ObSequenceCacheOrderMode get_cache_order_mode() const
+  {
+    return option_.get_cache_order_mode();
+  }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }

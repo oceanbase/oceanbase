@@ -21,13 +21,18 @@
 
 namespace oceanbase {
 namespace common {
+static const int64_t DEFAULT_PAGE_SIZE_GEO = 8192;
+static const int64_t POINT_PAGE_SIZE_GEO = 512; // 32 point
+static const int64_t LINE_PAGE_SIZE_GEO = 1024; // 8 line
+static const int64_t POLY_PAGE_SIZE_GEO = 2048; // 8 poly
+static const int64_t GEOM_PAGE_SIZE_GEO = 512; //  128 geometry *
 
 class ObIGeoVisitor;
 
 template <typename T>
-class ObGeomConstIterator : public array::Iterator<common::ObArray<T, ModulePageAllocator, true>, T>
+class ObGeomConstIterator : public array::Iterator<common::ObArray<T, ModulePageAllocator, false>, T>
 {
-  typedef array::Iterator<common::ObArray<T, ModulePageAllocator, true>, T> base_t;
+  typedef array::Iterator<common::ObArray<T, ModulePageAllocator, false>, T> base_t;
   typedef ObGeomConstIterator<T> self_t;
 public:
   typedef typename std::random_access_iterator_tag iterator_category;
@@ -128,7 +133,7 @@ class ObGeomVector
 public:
   typedef T value_type;
   typedef ObGeomConstIterator<T> const_iterator;
-  typedef typename ObArray<T, ModulePageAllocator, true>::iterator iterator;
+  typedef typename ObArray<T, ModulePageAllocator, false>::iterator iterator;
   typedef int64_t size_type;
   typedef const T *const_pointer;
   typedef const T &const_reference;
@@ -137,8 +142,8 @@ public:
   typedef int64_t difference_type;
 
 public:
-  ObGeomVector(ModulePageAllocator &page_allocator)
-    : vec_(OB_MALLOC_NORMAL_BLOCK_SIZE, page_allocator) {}
+  ObGeomVector(const ModulePageAllocator &page_allocator, int64_t block_size = DEFAULT_PAGE_SIZE_GEO)
+    : vec_(block_size, page_allocator) {}
   ObGeomVector(const ObGeomVector<T> &v) = default;
   ObGeomVector<T> &operator=(const ObGeomVector<T> &rhs) = default;
   ~ObGeomVector() {};
@@ -147,18 +152,20 @@ public:
   size_type size() const { return vec_.size(); }
   bool empty() const { return vec_.size() == 0;}
   void pop_front() { vec_.remove(0); }
-  void resize(int32_t size) {
+  int resize(int64_t size) {
     int ret = OB_SUCCESS;
     if (size > vec_.size()) {
       if (OB_FAIL(vec_.prepare_allocate(size))) {
-        OB_LOG(WARN, "failed to resize ObGeomVector", K(ret));
+        OB_LOG(WARN, "failed to resize ObGeomVector", K(ret), K(size));
       }
     } else {
       while (size != vec_.size()) {
         vec_.pop_back();
       }
     }
+    return ret;
   }
+  int reserve(int64_t capacity) { return vec_.reserve(capacity); }
   void clear() { vec_.reuse(); }
   value_type &back() { return *(vec_.end()-1); }
   const value_type &back() const { return *(vec_.end()-1); };
@@ -168,14 +175,14 @@ public:
   const value_type &operator[](int64_t i) const { return vec_[i]; }
   // iterator
   iterator begin() { return vec_.begin(); }
-  const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, true> *>(&vec_))->begin()); }
+  const_iterator begin() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, false> *>(&vec_))->begin()); }
   iterator end() { return vec_.end(); }
-  const_iterator end() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, true> *>(&vec_))->end()); }
-  // ObArray<T, ModulePageAllocator, true>& get_vec_() const { return vec_; }
+  const_iterator end() const { return const_iterator(&*(const_cast<common::ObArray<T, ModulePageAllocator, false> *>(&vec_))->end()); }
+  // ObArray<T, ModulePageAllocator, false>& get_vec_() const { return vec_; }
   int remove(int64_t idx) { return vec_.remove(idx); }
 
 private:
-  common::ObArray<T, ModulePageAllocator, true> vec_;
+  common::ObArray<T, ModulePageAllocator, false> vec_;
 };
 
 // ObPoint is an abstract class
@@ -183,8 +190,8 @@ class ObPoint : public ObGeometry
 {
 public:
   // constructor
-  ObPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL) :
-    ObGeometry(srid, allocator) {};
+  ObPoint(uint32_t srid = 0) :
+    ObGeometry(srid) {};
   ~ObPoint() {};
   ObPoint(const ObPoint&) = default;
   ObPoint &operator=(const ObPoint&) = default;
@@ -210,12 +217,12 @@ public:
 class ObCartesianPoint : public ObPoint
 {
 public:
-  // constructor
-  ObCartesianPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid, allocator) {
+  // constructor, allocator is not used, just for compatible with other tree constructors
+  ObCartesianPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid) {
     point_.set<0>(std::nan(""));
     point_.set<1>(std::nan(""));
   };
-  ObCartesianPoint(double x, double y, uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid, allocator) {
+  ObCartesianPoint(double x, double y, uint32_t srid = 0) : ObPoint(srid) {
     point_.set<0>(x);
     point_.set<1>(y);
   };
@@ -245,11 +252,11 @@ class ObGeographPoint : public ObPoint
 {
 public:
   // constructor
-  ObGeographPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid, allocator) {
+  ObGeographPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid) {
     point_.set<0>(std::nan(""));
     point_.set<1>(std::nan(""));
   };
-  ObGeographPoint(double x, double y, uint32_t srid = 0, ObIAllocator *allocator = NULL) : ObPoint(srid, allocator) {
+  ObGeographPoint(double x, double y, uint32_t srid = 0) : ObPoint(srid) {
     point_.set<0>(x);
     point_.set<1>(y);
   };
@@ -281,16 +288,16 @@ class ObCurve : public ObGeometry
 public:
   // do nothing
   // constructor
-  ObCurve(uint32_t srid = 0, ObIAllocator *allocator = NULL) :
-    ObGeometry(srid, allocator){};
+  ObCurve(uint32_t srid = 0) :
+    ObGeometry(srid){};
   ~ObCurve() {};
 };
 
 class ObLineString : public ObCurve
 {
 public:
-  ObLineString(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObCurve(srid, allocator)
+  ObLineString(uint32_t srid = 0)
+    : ObCurve(srid)
     {}
 
   ~ObLineString() {}
@@ -309,7 +316,7 @@ public:
                                ObIAllocator &allocator, ObLineString*& output);
 };
 
-static const int64_t DEFAULT_PAGE_SIZE_GEO = 8192;
+
 class ObCartesianLineString : public ObLineString
 {
 public:
@@ -319,14 +326,12 @@ public:
   typedef ObGeomVector<ObWkbGeomInnerPoint>::const_iterator const_iterator;
 public:
   ObCartesianLineString(uint32_t srid, ObIAllocator &allocator)
-    : ObLineString(srid, &allocator),
-      page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-      points_(page_allocator_) {}
+    : ObLineString(srid),
+      points_(ModulePageAllocator(allocator, "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObCartesianLineString()
-    : ObLineString(0, NULL),
-      page_allocator_(),
-      points_(page_allocator_) {}
+    : ObLineString(0),
+      points_(ModulePageAllocator(CURRENT_CONTEXT->get_arena_allocator(), "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObCartesianLineString(const ObCartesianLineString&) = default;
   ObCartesianLineString &operator=(const ObCartesianLineString&) = default;
@@ -341,7 +346,7 @@ public:
   int push_back(const ObWkbGeomInnerPoint& point) { return points_.push_back(point); }
   int64_t size() const override { return points_.size(); }
   void pop_front() override { points_.pop_front(); }
-  void resize(int32_t size) { points_.resize(size); }
+  int resize(int64_t size) { return points_.resize(size); }
   void clear() override { points_.clear(); }
   ObWkbGeomInnerPoint &back() { return points_.back(); }
   const ObWkbGeomInnerPoint &back() const { return points_.back(); }
@@ -357,11 +362,11 @@ public:
   const_iterator end() const { return points_.end(); }
   const ObGeomVector<ObWkbGeomInnerPoint> &get_points() const {return points_;}
   ObGeomVector<ObWkbGeomInnerPoint> &get_points() {return points_;}
+  int reserve(int64_t capacity) { return points_.reserve(capacity); }
   TO_STRING_KV("type", "ObCartesianLineString",
                "size", size());
 
 private:
-  ModulePageAllocator page_allocator_;
   ObGeomVector<ObWkbGeomInnerPoint> points_;
 };
 
@@ -373,14 +378,12 @@ public:
   typedef ObGeomVector<ObWkbGeogInnerPoint>::const_iterator const_iterator;
 public:
   ObGeographLineString(uint32_t srid, ObIAllocator &allocator)
-    : ObLineString(srid, &allocator),
-      page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-      points_(page_allocator_) {}
+    : ObLineString(srid),
+      points_(ModulePageAllocator(allocator, "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObGeographLineString()
-    : ObLineString(0, NULL),
-      page_allocator_(),
-      points_(page_allocator_) {}
+    : ObLineString(0),
+      points_(ModulePageAllocator(CURRENT_CONTEXT->get_arena_allocator(), "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObGeographLineString(const ObGeographLineString&) = default;
   ObGeographLineString &operator=(const ObGeographLineString&) = default;
@@ -394,7 +397,7 @@ public:
   int push_back(const ObWkbGeogInnerPoint& point) { return points_.push_back(point); }
   int64_t size() const override { return points_.size(); }
   void pop_front() override { points_.pop_front(); }
-  void resize(int32_t size) { points_.resize(size); }
+  int resize(int64_t size) { return points_.resize(size); }
   void clear() override { points_.clear(); }
   ObWkbGeogInnerPoint &back() { return points_.back(); }
   const ObWkbGeogInnerPoint &back() const { return points_.back(); }
@@ -411,11 +414,11 @@ public:
   const_iterator end() const { return points_.end(); }
   const ObGeomVector<ObWkbGeogInnerPoint> &get_points() const {return points_;}
   ObGeomVector<ObWkbGeogInnerPoint> &get_points() {return points_;}
+  int reserve(int64_t capacity) { return points_.reserve(capacity); }
   TO_STRING_KV("type", "ObGeographLineString",
                "size", size());
 
 private:
-  ModulePageAllocator page_allocator_;
   ObGeomVector<ObWkbGeogInnerPoint> points_;
 };
 
@@ -448,7 +451,7 @@ public:
   bool is_empty() const override { return ObCartesianLineString::is_empty(); }
   bool empty() const { return ObCartesianLineString::empty(); }
   void pop_front() override { ObCartesianLineString::pop_front(); }
-  void resize(int32_t size) { ObCartesianLineString::resize(size); }
+  int resize(int64_t size) { return ObCartesianLineString::resize(size); }
   void clear() override { ObCartesianLineString::clear(); }
   ObWkbGeomInnerPoint &back() { return ObCartesianLineString::back(); }
   const ObWkbGeomInnerPoint &back() const { return ObCartesianLineString::back(); };
@@ -456,6 +459,8 @@ public:
   const ObWkbGeomInnerPoint &front() const { return ObCartesianLineString::front(); }
   ObWkbGeomInnerPoint &operator[](int32_t i) { return ObCartesianLineString::operator[](i); }
   const ObWkbGeomInnerPoint &operator[](int32_t i) const { return ObCartesianLineString::operator[](i); }
+  TO_STRING_KV("type", "ObCartesianLinearring",
+               "size", size());
 };
 
 class ObGeographLinearring : public ObGeographLineString, public ObLinearring
@@ -479,7 +484,7 @@ public:
   bool is_empty() const override { return ObGeographLineString::is_empty(); }
   bool empty() const { return ObGeographLineString::empty(); }
   void pop_front() override { ObGeographLineString::pop_front(); }
-  void resize(int32_t size) { ObGeographLineString::resize(size); }
+  int resize(int64_t size) { return ObGeographLineString::resize(size); }
   void clear() override { ObGeographLineString::clear(); }
   ObWkbGeogInnerPoint &back() { return ObGeographLineString::back(); }
   const ObWkbGeogInnerPoint &back() const { return ObGeographLineString::back(); };
@@ -487,6 +492,8 @@ public:
   const ObWkbGeogInnerPoint &front() const { return ObGeographLineString::front(); }
   ObWkbGeogInnerPoint &operator[](int32_t i) { return ObGeographLineString::operator[](i); }
   const ObWkbGeogInnerPoint &operator[](int32_t i) const { return ObGeographLineString::operator[](i); }
+  TO_STRING_KV("type", "ObGeographLineString",
+               "size", size());
 };
 
 class ObSurface : public ObGeometry
@@ -494,8 +501,8 @@ class ObSurface : public ObGeometry
 public:
   // do nothing
   // constructor
-  ObSurface(uint32_t srid = 0, ObIAllocator *allocator = NULL) :
-    ObGeometry(srid, allocator){};
+  ObSurface(uint32_t srid = 0) :
+    ObGeometry(srid){};
   ~ObSurface() {};
 };
 
@@ -503,8 +510,8 @@ class ObPolygon : public ObSurface
 {
 public:
   // contructor
-  ObPolygon(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObSurface(srid, allocator)
+  ObPolygon(uint32_t srid = 0)
+    : ObSurface(srid)
     {}
   ~ObPolygon() {}
 	ObGeoType type() const override { return ObGeoType::POLYGON; }
@@ -537,16 +544,14 @@ class ObCartesianPolygon : public ObPolygon
 public:
   // constructor
   ObCartesianPolygon(uint32_t srid, ObIAllocator &allocator)
-    : ObPolygon(srid, &allocator),
-      page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+    : ObPolygon(srid),
       exterior_(srid, allocator),
-      inner_rings_(page_allocator_) {}
+      inner_rings_(ModulePageAllocator(allocator, "GISModule"), LINE_PAGE_SIZE_GEO) {}
 
   ObCartesianPolygon()
     : ObPolygon(),
-      page_allocator_(),
       exterior_(),
-      inner_rings_(page_allocator_) {}
+      inner_rings_(ModulePageAllocator(CURRENT_CONTEXT->get_arena_allocator(), "GISModule"), LINE_PAGE_SIZE_GEO) {}
   ObCartesianPolygon(const ObCartesianPolygon &v) = default;
   ObCartesianPolygon &operator=(const ObCartesianPolygon &rhs) = default;
   ~ObCartesianPolygon() {};
@@ -567,11 +572,11 @@ public:
   ObCartesianLinearring &cartesian_exterior_ring() const { return const_cast<ObCartesianLinearring &>(exterior_); }
   ObGeomVector<ObCartesianLinearring> &interior_rings() { return inner_rings_; }
   ObGeomVector<ObCartesianLinearring> const &const_interior_rings() const { return inner_rings_; }
+  int reserve(int64_t capacity);
   TO_STRING_KV("type", "ObCartesianPolygon",
                "size", size());
 
 private:
-  ModulePageAllocator page_allocator_;
   ObCartesianLinearring exterior_;
   ObGeomVector<ObCartesianLinearring> inner_rings_;
 };
@@ -581,16 +586,14 @@ class ObGeographPolygon : public ObPolygon
 public:
   // constructor
   ObGeographPolygon(uint32_t srid, ObIAllocator &allocator)
-    : ObPolygon(srid, &allocator),
-      page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+    : ObPolygon(srid),
       exterior_(srid, allocator),
-      inner_rings_(page_allocator_) {}
+      inner_rings_(ModulePageAllocator(allocator, "GISModule"), LINE_PAGE_SIZE_GEO) {}
 
   ObGeographPolygon()
-    : ObPolygon(0, NULL),
-      page_allocator_(),
+    : ObPolygon(0),
       exterior_(),
-      inner_rings_(page_allocator_) {}
+      inner_rings_(ModulePageAllocator(CURRENT_CONTEXT->get_arena_allocator(), "GISModule"), LINE_PAGE_SIZE_GEO) {}
   ObGeographPolygon(const ObGeographPolygon &v) = default;
   ObGeographPolygon &operator=(const ObGeographPolygon &rhs) = default;
   ~ObGeographPolygon() {};
@@ -612,11 +615,11 @@ public:
   ObGeographLinearring &geographic_exterior_ring() const { return const_cast<ObGeographLinearring &>(exterior_); }
   ObGeomVector<ObGeographLinearring> &interior_rings() { return inner_rings_; }
   ObGeomVector<ObGeographLinearring> const &const_interior_rings() const { return inner_rings_; }
+  int reserve(int64_t capacity);
   TO_STRING_KV("type", "ObGeographPolygon",
                "size", size());
 
 private:
-  ModulePageAllocator page_allocator_;
   ObGeographLinearring exterior_;
   ObGeomVector<ObGeographLinearring> inner_rings_;
 };
@@ -625,14 +628,12 @@ class ObGeometrycollection : public ObGeometry
 {
 public:
   // constructor
-  ObGeometrycollection(uint32_t srid, ObIAllocator &allocator)
-    : ObGeometry(srid, &allocator),
-      page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)
+  ObGeometrycollection(uint32_t srid)
+    : ObGeometry(srid)
     {}
 
   ObGeometrycollection()
-    : ObGeometry(0, NULL),
-      page_allocator_()
+    : ObGeometry(0)
     {}
   ~ObGeometrycollection() {};
 
@@ -643,20 +644,18 @@ public:
   virtual void pop_front() = 0;
   virtual bool empty() const = 0;
   virtual uint64_t size() const = 0;
-  virtual void resize(int32_t count) = 0;
+  virtual int resize(int64_t count) = 0;
   virtual void clear() = 0;
   virtual int push_back(const ObGeometry &g) = 0;
   static int create_collection(ObGeoCRS crs, uint32_t srid,
                                ObIAllocator &allocator, ObGeometrycollection*& output);
-protected:
-  ModulePageAllocator page_allocator_;
 };
 
 class ObMultipoint : public ObGeometrycollection
 {
 public:
-  ObMultipoint(uint32_t srid, ObIAllocator &allocator) :
-    ObGeometrycollection(srid, allocator){};
+  ObMultipoint(uint32_t srid) :
+    ObGeometrycollection(srid){};
 
   ObMultipoint() :
     ObGeometrycollection(){};
@@ -678,12 +677,12 @@ public:
 
 public:
   ObCartesianMultipoint(uint32_t srid, ObIAllocator &allocator)
-    : ObMultipoint(srid, allocator),
-      points_(page_allocator_) {}
+    : ObMultipoint(srid),
+      points_(ModulePageAllocator(allocator, "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObCartesianMultipoint()
     : ObMultipoint(),
-      points_(page_allocator_) {}
+      points_(ModulePageAllocator(), POINT_PAGE_SIZE_GEO) {}
 
   ~ObCartesianMultipoint() {}
 
@@ -701,7 +700,7 @@ public:
     return true;
   }
   uint64_t size() const override { return points_.size(); }
-  void resize(int32_t size) { points_.resize(size); }
+  int resize(int64_t size) { return points_.resize(size); }
   void clear() override { points_.clear(); }
   ObWkbGeomInnerPoint &front() { return points_.front(); }
   const ObWkbGeomInnerPoint &front() const { return points_.front(); }
@@ -715,6 +714,7 @@ public:
   const_iterator begin() const { return points_.begin(); }
   iterator end() { return points_.end(); }
   const_iterator end() const { return points_.end(); }
+  int reserve(int64_t capacity) { return points_.reserve(capacity); }
   TO_STRING_KV("type", "ObCartesianMultipoint",
                "size", size());
 
@@ -732,12 +732,12 @@ public:
 
 public:
   ObGeographMultipoint(uint32_t srid, ObIAllocator &allocator)
-    : ObMultipoint(srid, allocator),
-      points_(page_allocator_) {}
+    : ObMultipoint(srid),
+      points_(ModulePageAllocator(allocator, "GISModule"), POINT_PAGE_SIZE_GEO) {}
 
   ObGeographMultipoint()
     : ObMultipoint(),
-      points_(page_allocator_) {}
+      points_(ModulePageAllocator(), POINT_PAGE_SIZE_GEO) {}
   ~ObGeographMultipoint() {}
 
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
@@ -754,7 +754,7 @@ public:
     return true;
   }
   uint64_t size() const override { return points_.size(); }
-  void resize(int32_t size) { points_.resize(size); }
+  int resize(int64_t size) { return points_.resize(size); }
   void clear() override { points_.clear(); }
   ObWkbGeogInnerPoint &front() { return points_.front(); }
   const ObWkbGeogInnerPoint &front() const { return points_.front(); }
@@ -768,6 +768,7 @@ public:
   const_iterator begin() const { return points_.begin(); }
   iterator end() { return points_.end(); }
   const_iterator end() const { return points_.end(); }
+  int reserve(int64_t capacity) { return points_.reserve(capacity); }
   TO_STRING_KV("type", "ObGeographMultipoint",
                "size", size());
 
@@ -781,8 +782,8 @@ class ObMulticurve : public ObGeometrycollection
 public:
   // do nothing
   // constructor
-  ObMulticurve(uint32_t srid, ObIAllocator &allocator) :
-    ObGeometrycollection(srid, allocator){};
+  ObMulticurve(uint32_t srid) :
+    ObGeometrycollection(srid){};
   ObMulticurve() :
     ObGeometrycollection(){};
   ~ObMulticurve() {};
@@ -791,8 +792,8 @@ public:
 class ObMultilinestring : public ObMulticurve
 {
  public:
-  ObMultilinestring(uint32_t srid, ObIAllocator &allocator) :
-    ObMulticurve(srid, allocator){};
+  ObMultilinestring(uint32_t srid) :
+    ObMulticurve(srid){};
 
   ObMultilinestring() :
     ObMulticurve(){};
@@ -813,12 +814,12 @@ public:
 
 public:
   ObCartesianMultilinestring(uint32_t srid, ObIAllocator &allocator)
-    : ObMultilinestring(srid, allocator),
-      lines_(page_allocator_) {}
+    : ObMultilinestring(srid),
+      lines_(ModulePageAllocator(allocator, "GISModule"), LINE_PAGE_SIZE_GEO) {}
 
   ObCartesianMultilinestring()
     : ObMultilinestring(),
-      lines_(page_allocator_) {}
+      lines_(ModulePageAllocator(), LINE_PAGE_SIZE_GEO) {}
 
   ~ObCartesianMultilinestring() {}
   // Geometry interface
@@ -836,7 +837,7 @@ public:
     return true;
   }
   uint64_t size() const override { return lines_.size(); }
-  void resize(int32_t size) { lines_.resize(size); }
+  int resize(int64_t size) { return lines_.resize(size); }
   void clear() override { lines_.clear(); }
   ObCartesianLineString &front() { return *(lines_.begin()); }
   const ObCartesianLineString &front() const { return *(lines_.begin()); }
@@ -851,6 +852,7 @@ public:
   iterator end() { return lines_.end(); }
   const_iterator end() const { return lines_.end(); }
   int remove(int64_t idx) { return lines_.remove(idx); }
+  int reserve(int64_t capacity) { return lines_.reserve(capacity); }
   TO_STRING_KV("type", "ObCartesianMultilinestring",
                "size", size());
 
@@ -868,12 +870,12 @@ public:
 
 public:
   ObGeographMultilinestring(uint32_t srid, ObIAllocator &allocator)
-    : ObMultilinestring(srid, allocator),
-      lines_(page_allocator_) {}
+    : ObMultilinestring(srid),
+      lines_(ModulePageAllocator(allocator, "GISModule"), LINE_PAGE_SIZE_GEO) {}
 
   ObGeographMultilinestring()
     : ObMultilinestring(),
-      lines_(page_allocator_) {}
+      lines_(ModulePageAllocator(), LINE_PAGE_SIZE_GEO) {}
 
   ~ObGeographMultilinestring() {}
 
@@ -893,7 +895,7 @@ public:
     return true;
   }
   uint64_t size() const override { return lines_.size(); }
-  void resize(int32_t size) { lines_.resize(size); }
+  int resize(int64_t size) { return lines_.resize(size); }
   void clear() override { lines_.clear(); }
   ObGeographLineString &front() { return *(lines_.begin()); }
   const ObGeographLineString &front() const { return *(lines_.begin()); }
@@ -907,6 +909,7 @@ public:
   const_iterator begin() const { return lines_.begin(); }
   iterator end() { return lines_.end(); }
   const_iterator end() const { return lines_.end(); }
+  int reserve(int64_t capacity) { return lines_.reserve(capacity); }
   TO_STRING_KV("type", "ObGeographMultilinestring",
                "size", size());
 
@@ -920,8 +923,8 @@ class ObMultisurface : public ObGeometrycollection
 public:
   // do nothing
   // constructor
-  ObMultisurface(uint32_t srid, ObIAllocator &allocator) :
-    ObGeometrycollection(srid, allocator){};
+  ObMultisurface(uint32_t srid) :
+    ObGeometrycollection(srid){};
 
   ObMultisurface() :
     ObGeometrycollection(){};
@@ -931,8 +934,8 @@ public:
 class ObMultipolygon : public ObMultisurface
 {
 public:
-  ObMultipolygon(uint32_t srid, ObIAllocator &allocator) :
-    ObMultisurface(srid, allocator){};
+  ObMultipolygon(uint32_t srid) :
+    ObMultisurface(srid){};
 
   ObMultipolygon() :
     ObMultisurface(){};
@@ -953,12 +956,12 @@ public:
 
 public:
   ObCartesianMultipolygon(uint32_t srid, ObIAllocator &allocator)
-    : ObMultipolygon(srid, allocator),
-      polygons_(page_allocator_) {}
+    : ObMultipolygon(srid),
+      polygons_(ModulePageAllocator(allocator, "GISModule"), POLY_PAGE_SIZE_GEO) {}
 
   ObCartesianMultipolygon()
     : ObMultipolygon(),
-      polygons_(page_allocator_) {}
+      polygons_(ModulePageAllocator(), POLY_PAGE_SIZE_GEO) {}
 
   ~ObCartesianMultipolygon() {}
 
@@ -978,7 +981,7 @@ public:
     return true;
   }
   uint64_t size() const override { return polygons_.size(); }
-  void resize(int32_t size) { polygons_.resize(size); }
+  int resize(int64_t size) { return polygons_.resize(size); }
   void clear() override { polygons_.clear(); }
   ObCartesianPolygon &front() { return *(polygons_.begin()); }
   const ObCartesianPolygon &front() const { return *(polygons_.begin()); }
@@ -991,6 +994,7 @@ public:
   const_iterator begin() const { return polygons_.begin(); }
   iterator end() { return polygons_.end(); }
   const_iterator end() const { return polygons_.end(); }
+  int reserve(int64_t capacity) { return polygons_.reserve(capacity); }
   TO_STRING_KV("type", "ObCartesianMultipolygon",
                "size", size());
 
@@ -1008,12 +1012,12 @@ public:
 
 public:
   ObGeographMultipolygon(uint32_t srid, ObIAllocator &allocator)
-    : ObMultipolygon(srid, allocator),
-      polygons_(page_allocator_) {}
+    : ObMultipolygon(srid),
+      polygons_(ModulePageAllocator(allocator, "GISModule"), POLY_PAGE_SIZE_GEO) {}
 
   ObGeographMultipolygon()
     : ObMultipolygon(),
-      polygons_(page_allocator_) {}
+      polygons_(ModulePageAllocator(), POLY_PAGE_SIZE_GEO) {}
   ~ObGeographMultipolygon() {}
 
   // Geometry interface
@@ -1032,7 +1036,7 @@ public:
     return true;
   }
   uint64_t size() const override { return polygons_.size(); }
-  void resize(int32_t size) { polygons_.resize(size); }
+  int resize(int64_t size) { return polygons_.resize(size); }
   void clear() override { polygons_.clear(); }
   ObGeographPolygon &front() { return *(polygons_.begin()); }
   const ObGeographPolygon &front() const { return *(polygons_.begin()); }
@@ -1046,6 +1050,7 @@ public:
   const_iterator begin() const { return polygons_.begin(); }
   iterator end() { return polygons_.end(); }
   const_iterator end() const { return polygons_.end(); }
+  int reserve(int64_t capacity) { return polygons_.reserve(capacity); }
   TO_STRING_KV("type", "ObGeographMultipolygon",
                "size", size());
 
@@ -1088,6 +1093,8 @@ public:
   ObCartesianBox() = default;
   ObCartesianBox(ObWkbGeomInnerPoint &min_point, ObWkbGeomInnerPoint &max_point)
       : min_p_(min_point), max_p_(max_point) {}
+  ObCartesianBox(double min_x, double min_y, double max_x, double max_y);
+  void set_box(double min_x, double min_y, double max_x, double max_y);
   ObGeoCRS coordinate_system() const {
     return ObGeoCRS::Cartesian;
   }
@@ -1155,22 +1162,20 @@ public:
 
 public:
   ObCartesianGeometrycollection(uint32_t srid, ObIAllocator &allocator)
-    : ObGeometrycollection(srid, allocator),
-      mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
-      geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
+    : ObGeometrycollection(srid),
+      geoms_(GEOM_PAGE_SIZE_GEO, ModulePageAllocator(allocator, "GISModule")) {}
 
   ObCartesianGeometrycollection()
     : ObGeometrycollection(),
-      mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
-      geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
-  ~ObCartesianGeometrycollection() { geoms_.clear(); }
+      geoms_(GEOM_PAGE_SIZE_GEO, ModulePageAllocator()) {}
+  ~ObCartesianGeometrycollection() {}
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
   void pop_front() override {
-    geoms_.remove(geoms_.begin());
+    geoms_.remove(0);
   }
-  int push_back(const ObGeometry &g) { return geoms_.push_back(&g); }
+  int push_back(const ObGeometry &g) { return geoms_.push_back(&const_cast<ObGeometry &>(g)); }
   bool empty() const override { return geoms_.size() == 0; }
   bool is_empty() const override {
     for (uint64_t i = 0; i < size(); i++) {
@@ -1181,8 +1186,8 @@ public:
     return true;
   }
   uint64_t size() const override { return geoms_.size(); }
-  void resize(int32_t size) override { geoms_.reserve(size); }
-  void clear() override { geoms_.clear(); }
+  int resize(int64_t size) override;
+  void clear() override { geoms_.reuse(); }
 
   iterator begin() { return geoms_.begin(); }
   const_iterator begin() const { return geoms_.begin(); }
@@ -1198,10 +1203,13 @@ public:
     return *geoms_[i];
   }
 
+  int set(uint32_t index, ObGeometry *geo);
+  int reserve(int64_t capacity) { return geoms_.reserve(capacity); }
+  TO_STRING_KV("type", "ObCartesianGeometrycollection",
+               "size", size());
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCartesianGeometrycollection);
-  ObCGeoModuleArena mode_arena_;
-  ObVector<ObGeometry *, ObCGeoModuleArena> geoms_;
+  ObArray<ObGeometry *> geoms_;
 };
 
 class ObGeographGeometrycollection : public ObGeometrycollection
@@ -1217,22 +1225,20 @@ public:
 
 public:
   ObGeographGeometrycollection(uint32_t srid, ObIAllocator &allocator)
-    : ObGeometrycollection(srid, allocator),
-      mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
-      geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
+    : ObGeometrycollection(srid),
+      geoms_(GEOM_PAGE_SIZE_GEO, ModulePageAllocator(allocator, "GISModule")) {}
 
   ObGeographGeometrycollection()
     : ObGeometrycollection(),
-      mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
-      geoms_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
-  ~ObGeographGeometrycollection() { geoms_.clear(); }
+      geoms_(GEOM_PAGE_SIZE_GEO, ModulePageAllocator()) {}
+  ~ObGeographGeometrycollection() {}
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
   // visitor interface
   int do_visit(ObIGeoVisitor &visitor);
   void pop_front() override {
-    geoms_.remove(geoms_.begin());
+    geoms_.remove(0);
   }
-  int push_back(const ObGeometry &g) { return geoms_.push_back(&g); }
+  int push_back(const ObGeometry &g) { return geoms_.push_back(&const_cast<ObGeometry &>(g));  }
   bool empty() const override { return geoms_.size() == 0; }
   bool is_empty() const override {
     for (uint64_t i = 0; i < size(); i++) {
@@ -1243,8 +1249,8 @@ public:
     return true;
   }
   uint64_t size() const override { return geoms_.size(); }
-  void resize(int32_t size) override { geoms_.reserve(size); }
-  void clear() override { geoms_.clear(); }
+  int resize(int64_t size) override;
+  void clear() override { geoms_.reuse(); }
 
   iterator begin() { return geoms_.begin(); }
   const_iterator begin() const { return geoms_.begin(); }
@@ -1260,10 +1266,14 @@ public:
     return *geoms_[i];
   }
 
+  int set(uint32_t index, ObGeometry *geo);
+  int reserve(int64_t capacity) { return geoms_.reserve(capacity); }
+  TO_STRING_KV("type", "ObGeographGeometrycollection",
+               "size", size());
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGeographGeometrycollection);
-  ObCGeoModuleArena mode_arena_;
-  ObVector<ObGeometry *, ObCGeoModuleArena> geoms_;
+  ObArray<ObGeometry *> geoms_;
 };
 
 } // namespace common

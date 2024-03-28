@@ -20,6 +20,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/ob_phy_operator_type.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/dtl/ob_dtl_linked_buffer.h"
 
 namespace oceanbase {
 namespace sql {
@@ -42,7 +43,7 @@ public:
     global_bound_size_(INT64_MAX), dop_(-1), plan_id_(-1), exec_id_(-1), sql_id_(), db_id_(-1),
     session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
-    pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
+    pre_mem_used_(0), dumped_size_(0), max_dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
     calc_count_(0)
   {
     sql_id_[0] = '\0';
@@ -69,6 +70,7 @@ public:
   }
 
   int set_exec_info(ObExecContext &exec_ctx);
+  int set_exec_info(dtl::ObDtlLinkedBuffer &buffer);
   OB_INLINE void set_operator_type(ObPhyOperatorType op_type) { op_type_ = op_type; }
   OB_INLINE void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
   OB_INLINE void set_exec_ctx(ObExecContext *exec_ctx) { exec_ctx_ = exec_ctx; }
@@ -134,6 +136,7 @@ public:
   int64_t get_max_mem_used() const { return max_mem_used_; }
   int64_t get_mem_used() const { return mem_used_; }
   int64_t get_dumped_size() const { return dumped_size_; }
+  int64_t get_max_dumped_size() const { return max_dumped_size_; }
   int64_t get_data_ratio() const { return data_ratio_; }
   OB_INLINE bool is_registered() const { return OB_NOT_NULL(get_next())
                                                 || OB_NOT_NULL(get_prev()); }
@@ -195,6 +198,7 @@ public:
   int64_t mem_used_;
   int64_t pre_mem_used_;
   int64_t dumped_size_;
+  int64_t max_dumped_size_;
   double data_ratio_;
 public:
   // some statistics

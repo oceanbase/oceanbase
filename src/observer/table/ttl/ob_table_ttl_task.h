@@ -20,7 +20,7 @@
 #include "share/table/ob_table.h"
 #include "observer/table/ob_table_cache.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
-
+#include "observer/table/ob_table_schema_cache.h"
 namespace oceanbase
 {
 namespace table
@@ -84,18 +84,27 @@ public:
   int init(table::ObTenantTabletTTLMgr *ttl_tablet_mgr,
           const table::ObTTLTaskParam &ttl_para,
           table::ObTTLTaskInfo &ttl_info);
-  int init_tb_ctx(const table::ObITableEntity &entity, table::ObTableCtx &ctx);
-  int init_scan_tb_ctx(table::ObTableCtx &tb_ctx, table::ObTableApiCacheGuard &cache_guard);
-  int execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_row_iter,
+  int init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                  const table::ObITableEntity &entity,
+                  table::ObTableCtx &ctx);
+  int init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                       table::ObTableCtx &tb_ctx,
+                       table::ObTableApiCacheGuard &cache_guard);
+  int execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                         ObTableTTLDeleteRowIterator &ttl_row_iter,
                          table::ObTableTTLOperationResult &result,
                          transaction::ObTxDesc *trans_desc,
                          transaction::ObTxReadSnapshot &snapshot);
-  int process_ttl_delete(const table::ObITableEntity &new_entity,
+  int process_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                         const table::ObITableEntity &new_entity,
                          int64_t &affected_rows,
                          transaction::ObTxDesc *trans_desc,
                          transaction::ObTxReadSnapshot &snapshot);
   common::ObIAllocator &get_allocator() { return allocator_; }
   int init_credential(const table::ObTTLTaskParam &ttl_param);
+  int init_sess_info();
+  int init_schema_info(int64_t tenant_id, uint64_t table_id);
+  int init_kv_schema_guard(ObKvSchemaCacheGuard &schema_cache_guard);
 
   virtual int process() override;
   common::ObTabletID get_tablet_id() const
@@ -117,12 +126,15 @@ private:
   bool is_inited_;
   table::ObTTLTaskParam param_;
   table::ObTTLTaskInfo info_;
+  table::ObTableApiCredential credential_;
+  ObTableApiSessGuard sess_guard_;
+  share::schema::ObSchemaGetterGuard schema_guard_;
+  const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
   common::ObArenaAllocator allocator_;
   common::ObRowkey rowkey_;
   table::ObTenantTabletTTLMgr *ttl_tablet_mgr_;
   share::ObLSID ls_id_;
   ObTableEntity delete_entity_;
-  table::ObTableApiCredential credential_;
   uint64_t hbase_cur_version_;
   common::ObArenaAllocator rowkey_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDeleteTask);

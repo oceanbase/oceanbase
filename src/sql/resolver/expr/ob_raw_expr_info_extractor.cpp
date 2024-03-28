@@ -567,12 +567,6 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
-
-    if (OB_SUCC(ret)
-        && (IS_LABEL_SE_POLICY_FUNC(expr.get_expr_type()))
-        && OB_FAIL(expr.clear_flag(IS_CONST_EXPR))) {
-      LOG_WARN("failed to clear flag", K(ret));
-    }
   }
   return ret;
 }

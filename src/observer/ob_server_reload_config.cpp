@@ -154,6 +154,7 @@ int ObServerReloadConfig::operator()()
 #endif
     ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                      GCONF._min_malloc_sample_interval);
+    enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
     if (!is_arbitration_mode) {
       ObIOConfig io_config;
       int64_t cpu_cnt = GCONF.cpu_count;
@@ -187,20 +188,14 @@ int ObServerReloadConfig::operator()()
   }
 
   int64_t cache_size = GCONF.memory_chunk_cache_size;
-  int64_t limit = GMEMCONF.get_server_memory_limit();
-  int64_t normal_chunk_cache_size = limit;
-  int64_t large_chunk_cache_size = limit;
-  if (0 == cache_size) {
-    // do-nothing
-  } else if (1 == cache_size) {
-    // use old_way that only keep 2M-cache.
-    large_chunk_cache_size = 0;
-  } else {
-    normal_chunk_cache_size = cache_size;
-    large_chunk_cache_size = 0;
+  bool use_large_chunk_cache = 1 != cache_size;
+  if (0 == cache_size || 1 == cache_size) {
+    cache_size = GMEMCONF.get_server_memory_limit();
+    if (cache_size >= (32L<<30)) {
+      cache_size -= (4L<<30);
+    }
   }
-  lib::AChunkMgr::instance().set_max_chunk_cache_size(normal_chunk_cache_size);
-  lib::AChunkMgr::instance().set_max_large_chunk_cache_size(large_chunk_cache_size);
+  lib::AChunkMgr::instance().set_max_chunk_cache_size(cache_size, use_large_chunk_cache);
 
   if (!is_arbitration_mode) {
     // Refresh cluster_id, cluster_name_hash for non arbitration mode

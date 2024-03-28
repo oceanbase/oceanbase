@@ -20,6 +20,10 @@
 #include "lib/container/ob_array.h"
 
 #define ASH_PROGRAM_STR_LEN 64
+#define ASH_MODULE_STR_LEN 32
+#define ASH_CLIENT_ID_STR_LEN 32
+#define ASH_ACTION_STR_LEN 32
+#define ASH_BACKTRACE_STR_LEN 256
 #define WR_ASH_SAMPLE_INTERVAL 10
 
 namespace oceanbase
@@ -58,7 +62,8 @@ public:
         is_wr_sample_(false),
         delta_time_(0),
         delta_cpu_time_(0),
-        delta_db_time_(0)
+        delta_db_time_(0),
+        group_id_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -69,6 +74,8 @@ public:
 #endif
     program_[0] = '\0';
     module_[0] = '\0';
+    action_[0] = '\0';
+    client_id_[0] = '\0';
   }
   ~ObActiveSessionStatItem() = default;
   void reuse()
@@ -91,8 +98,11 @@ public:
     delta_time_ = 0;
     delta_cpu_time_ = 0;
     delta_db_time_ = 0;
+    group_id_ = 0;
     program_[0] = '\0';
     module_[0] = '\0';
+    action_[0] = '\0';
+    client_id_[0] = '\0';
   }
 public:
   enum SessionType
@@ -148,16 +158,20 @@ public:
   int64_t delta_time_;
   int64_t delta_cpu_time_;
   int64_t delta_db_time_;
+  int32_t group_id_;
   char program_[ASH_PROGRAM_STR_LEN];
-  char module_[64];
+  char module_[ASH_MODULE_STR_LEN];
+  char action_[ASH_ACTION_STR_LEN];
+  char client_id_[ASH_CLIENT_ID_STR_LEN];
 #ifndef NDEBUG
-  char bt_[256];
+  char bt_[ASH_BACKTRACE_STR_LEN];
 #endif
   TO_STRING_KV(K_(tenant_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
       "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time), K_(time_model), K_(trace_id),
       K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
       K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),
-      K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module));
+      K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module), K_(action), K_(client_id),
+      K_(group_id));
 };
 
 // record run-time stat for each OB session
@@ -319,10 +333,11 @@ private:
 class ObRPCActiveGuard
 {
 public:
-  ObRPCActiveGuard(int pcode);
+  ObRPCActiveGuard(int pcode, int64_t tenant_id);
   ~ObRPCActiveGuard();
 private:
   bool prev_is_bkgd_active_;
+  int64_t prev_tenant_id_;
 };
 
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \

@@ -66,15 +66,16 @@ void flush_trace()
         int ret = OB_SUCCESS;
         ObTagCtxBase* tag = span->tags_;
         bool first = true;
+        char tagstr[] = "\"tags\":[";
         INIT_SPAN(span);
         while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
-          if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
+          if (pos + sizeof(tagstr) + 1 >= MAX_TRACE_LOG_SIZE) {
             ret = OB_BUF_NOT_ENOUGH;
           } else {
             buf[pos++] = ',';
             if (first) {
-              strcpy(buf + pos, "\"tags\":[");
-              pos += 8;
+              strncpy(buf + pos, tagstr, MAX_TRACE_LOG_SIZE - pos);
+              pos += sizeof(tagstr) - 1;
               first = false;
             }
             ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);

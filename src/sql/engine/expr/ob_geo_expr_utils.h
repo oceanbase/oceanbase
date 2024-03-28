@@ -25,9 +25,16 @@
 #include "share/ob_i_sql_expression.h" // for ObExprCtx
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
+#include "lib/rc/context.h"
 
 namespace oceanbase
 {
+
+namespace common
+{
+class ObCachedGeom;
+}
 namespace sql
 {
 struct ObGeoUnit
@@ -87,6 +94,7 @@ const ObGeoUnit OB_GEO_UNITS[] = {
   { "yard", 0.9144 }
 };
 
+class ObGeoConstParamCache;
 enum class ObGeoAxisOrder
 {
   LONG_LAT = 0,
@@ -122,7 +130,8 @@ public:
                                 const common::ObSrsItem *&srs,
                                 common::ObGeometry *&geo,
                                 const char *func_name,
-                                bool has_srid = true);
+                                bool has_srid = true,
+                                bool with_copy = true);
   static int check_coordinate_range(const common::ObSrsItem *srs,
                                     common::ObGeometry *geo,
                                     const char *func_name,
@@ -145,7 +154,7 @@ public:
                               int32 &bestsrid);
   static int normalize_wkb(const common::ObSrsItem *srs,
                            common::ObString &wkb,
-                           common::ObArenaAllocator &allocator,
+                           common::ObIAllocator &allocator,
                            common::ObGeometry *&geo);
   static int normalize_wkb(common::ObString &proj4text,
                            common::ObGeometry *geo); // for st_transform
@@ -175,22 +184,62 @@ public:
                            common::ObString &res_wkb,
                            uint32_t srs_id = 0);
   static void geo_func_error_handle(int ret, const char* func_name);
-  static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2);
+  static int zoom_in_geos_for_relation(const ObSrsItem *srs, common::ObGeometry &geo1, common::ObGeometry &geo2,
+                                       bool is_geo1_cached = false, bool is_geo2_cached = false);
 
   static int pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
   static int reverse_coordinate(ObGeometry *geo, const char *func_name);
   static int length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs, double in_num, double &out_num);
-  static int get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
-    omt::ObSrsCacheGuard &srs_guard, const char *func_name,
-    const ObSrsItem *&srs, ObGeometry *&geo);
+  static int get_input_geometry(const char* func_name, MultimodeAlloctor &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    omt::ObSrsCacheGuard &srs_guard, const ObSrsItem *&srs, ObGeometry *&geo);
   static int make_valid_polygon_inner(
-    ObCartesianPolygon &poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+    ObCartesianPolygon &poly, lib::MemoryContext &mem_ctx, ObGeometry *&valid_poly);
   static int union_polygons(
-    ObIAllocator &allocator, const ObGeometry &poly, ObGeometry *&polygons_union);
-  static int make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+    lib::MemoryContext &mem_ctx, const ObGeometry &poly, ObGeometry *&polygons_union);
+  static int make_valid_polygon(ObGeometry *poly, lib::MemoryContext &mem_ctx, ObGeometry *&valid_poly);
   static int create_3D_empty_collection(ObIAllocator &allocator, uint32_t srid, bool is_3d, bool is_geog, ObGeometry *&geo);
+  static int string_to_double(const common::ObString &in_str, ObCollationType cs_type, double &res);
+  static ObGeoConstParamCache* get_geo_constParam_cache(const uint64_t& id, ObExecContext *exec_ctx);
+  static void expr_get_const_param_cache(ObGeoConstParamCache* const_param_cache, ObGeometry *&geo, uint32_t& srid, bool& is_geo_cached, int cache_idx);
+  static int expr_prepare_build_geometry(MultimodeAlloctor &allocator, const ObDatum &datum, const ObExpr &gis_arg, ObString& wkb, ObGeoType& type, uint32_t& srid);
+  static int check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, lib::MemoryContext& ctx,
+                                   ObGeoConstParamCache* const_param_cache,
+                                   bool is_geo1_cached, bool is_geo2_cached, bool& box_intersects);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
+  static int init_box_by_geo(ObGeometry &geo, lib::MemoryContext& ctx, ObGeogBox *&box_ptr);
+  static void init_boxes_by_cache(ObGeogBox *&box_ptr1, ObGeogBox& box1,
+                                  ObGeogBox *&box_ptr2, ObGeogBox& box2,
+                                  ObGeoConstParamCache* const_param_cache,
+                                  bool is_geo1_cached, bool is_geo2_cached);
+  static void init_box_by_cache(ObGeogBox *&box_ptr, ObGeogBox& box, ObCachedGeom* cache);
+};
+
+class ObGeoConstParamCache : public ObExprOperatorCtx {
+
+public:
+  ObGeoConstParamCache(common::ObIAllocator *allocator) :
+        ObExprOperatorCtx(),
+        allocator_(allocator),
+        param1_(nullptr),
+        cached_param1_(nullptr),
+        param2_(nullptr),
+        cached_param2_(nullptr) {}
+  ~ObGeoConstParamCache();
+
+  ObGeometry *get_const_param_cache(int arg_idx);
+  ObCachedGeom *get_cached_geo(int arg_idx);
+  int add_const_param_cache(int arg_idx, const common::ObGeometry &cache);
+  void add_cached_geo(int arg_idx, common::ObCachedGeom *cache);
+  void set_allocator(common::ObIAllocator *allocator);
+  common::ObIAllocator* get_allocator() { return allocator_; }
+
+private:
+  common::ObIAllocator *allocator_;
+  common::ObGeometry * param1_;          // ObGeometry * param1_ 与 ObCachedGeom *cached_param1_的区别
+  common::ObCachedGeom *cached_param1_;
+  common::ObGeometry * param2_;
+  common::ObCachedGeom *cached_param2_;
 };
 
 } // sql

@@ -268,6 +268,9 @@ public:
   int check_contain_goto_block(const ObPLStmt *cur_stmt,
                                const ObPLStmtBlock *goto_block,
                                bool &is_contain);
+  static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
@@ -635,6 +638,20 @@ private:
                           ObPLDataType &pl_type,
                           ObPLExternTypeInfo *extern_type_info = NULL,
                           bool with_rowid = false);
+  int resolve_dblink_row_type_node(const ParseNode &access_node,
+                                   const ParseNode &dblink_node,
+                                   ObPLDataType &pl_type,
+                                   bool is_row_type);
+  int resolve_dblink_row_type(const ObString &db_name,
+                              const ObString &table_name,
+                              const ObString &col_name,
+                              const ObString &dblink_name,
+                              ObPLDataType &pl_type,
+                              bool is_row_type);
+  int resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_ctx,
+                                           const common::ObIArray<ObObjAccessIdx> &access_idxs,
+                                           ObPLDataType &pl_type,
+                                           bool is_row_type);
   int resolve_dblink_type(const ParseNode *node,
                           ObPLCompileUnitAST &func,
                           ObPLDataType &pl_type);
@@ -1105,9 +1122,6 @@ private:
                                     ObRawExpr *real_expr);
 
   int replace_udf_param_expr(ObQualifiedName &q_name,
-                             ObIArray<ObQualifiedName> &columns,
-                             ObIArray<ObRawExpr*> &real_exprs);
-  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
   int get_names_by_access_ident(ObObjAccessIdent &access_ident,

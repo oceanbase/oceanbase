@@ -1616,6 +1616,11 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       } else if (!strict_compat_ && OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_MODE = '%s' ",
                          table_schema.is_order_auto_increment_mode() ? "ORDER" : "NOORDER"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print auto increment mode", K(ret), K(table_schema));
+      } else if (!strict_compat_ && table_schema.get_auto_increment_cache_size() > 0 &&
+                   OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_CACHE_SIZE = %ld ",
+                      table_schema.get_auto_increment_cache_size()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print table auto increment cache size", K(ret),
+                         K(table_schema));
       }
     }
   }
@@ -1782,7 +1787,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
     if (!agent_mode) {
       if (table_schema.is_queuing_table()) {
-        table_mode_str = "QUEUING";
+        table_mode_str = table_mode_flag_to_str(table_schema.get_table_mode_flag());
       }
     } else { // true == agent_mode
       table_mode_str = ObBackUpTableModeOp::get_table_mode_str(table_schema.get_table_mode_struct());
@@ -2123,6 +2128,10 @@ int ObSchemaPrinter::print_table_definition_table_options(
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_MODE = '%s' ",
                          table_schema.is_order_auto_increment_mode() ? "ORDER" : "NOORDER"))) {
         OB_LOG(WARN, "fail to print auto increment mode", K(ret), K(table_schema));
+      } else if (table_schema.get_auto_increment_cache_size() > 0 &&
+                   OB_FAIL(databuff_printf(buf, buf_len, pos, "AUTO_INCREMENT_CACHE_SIZE = %ld ",
+                      table_schema.get_auto_increment_cache_size()))) {
+        OB_LOG(WARN, "fail to print table auto increment cache size", K(ret), K(table_schema));
       }
     }
   }
@@ -2278,7 +2287,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl) {
     if (!is_agent_mode) {
       if (table_schema.is_queuing_table()) {
-        table_mode_str = "QUEUING";
+        table_mode_str = table_mode_flag_to_str(table_schema.get_table_mode_flag());
       }
     } else { // true == agent_mode
       table_mode_str = ObBackUpTableModeOp::get_table_mode_str(table_schema.get_table_mode_struct());
@@ -5504,9 +5513,18 @@ int ObSchemaPrinter::print_table_definition_lob_params(const ObTableSchema &tabl
                                                        int64_t& pos) const
 {
   int ret = OB_SUCCESS;
-  if (table_schema.get_lob_inrow_threshold() == OB_DEFAULT_LOB_INROW_THRESHOLD) {
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t data_version = 0;
+  if (table_schema.is_sys_table() || table_schema.is_vir_table()) {
+    // skip for sys/vir table
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_2_3_0 && table_schema.get_lob_inrow_threshold() == OB_DEFAULT_LOB_INROW_THRESHOLD) {
     // if is default not display
     SHARE_SCHEMA_LOG(INFO, "default inrow threashold not display", K(ret), "lob inrow threshold", table_schema.get_lob_inrow_threshold());
+  } else if (data_version >= DATA_VERSION_4_2_3_0 && table_schema.get_lob_inrow_threshold() == OB_SYS_VAR_DEFAULT_LOB_INROW_THRESHOLD) {
+    // new create table in 4.2.3, it's lob_inrow_threshold will be OB_SYS_VAR_DEFAULT_LOB_INROW_THRESHOLD
+    SHARE_SCHEMA_LOG(INFO, "new default inrow threashold not display", K(ret), "lob inrow threshold", table_schema.get_lob_inrow_threshold());
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "LOB_INROW_THRESHOLD=%ld ", table_schema.get_lob_inrow_threshold()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print lob inrow threshold", K(ret), K(table_schema));
   }

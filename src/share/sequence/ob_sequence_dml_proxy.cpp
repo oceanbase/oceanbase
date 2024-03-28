@@ -116,15 +116,12 @@ int ObSequenceDMLProxy::next_batch(
   const ObNumber &increment_by = option.get_increment_by();
   bool order_flag = option.get_order_flag();
   bool cycle_flag = option.get_cycle_flag();
+  ObSequenceCacheOrderMode cache_order_mode = option.get_cache_order_mode();
 
-  if (true == order_flag) {
-    // 注意：性能很差！！
-    // 对于要求全局有序的场景, OB 只能强制要求每次都读
-    // __all_sequence_value 表，使用行锁来保证全局顺序
-    // 性能很差，但目前并没有更好的解决方案
-    //
-    // 为了达到每次都读表的目的，只要 order_flag = true，
-    // 则强制每次读取 all_sequence_value 一行
+  if (true == order_flag && OLD_ACTION == cache_order_mode) {
+    // When the version is lower than 4.2.3, the cache order mode default cache size is 1 and the
+    // __all_sequence_value table must be read every time. After the upgrade, this restriction no
+    // longer exists.
     ret = cache_size.from(static_cast<int64_t>(1), allocator); // allocator_use_1
   } else {
     cache_size.shadow_copy(option.get_cache_size());

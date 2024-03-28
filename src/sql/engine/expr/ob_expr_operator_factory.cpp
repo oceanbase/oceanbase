@@ -63,6 +63,7 @@
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
+#include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_not_in.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
@@ -398,9 +399,12 @@
 #include "sql/engine/expr/ob_expr_priv_xml_binary.h"
 #include "sql/engine/expr/ob_expr_xmlparse.h"
 #include "sql/engine/expr/ob_expr_xml_element.h"
+#include "sql/engine/expr/ob_expr_xml_forest.h"
+#include "sql/engine/expr/ob_expr_xml_concat.h"
 #include "sql/engine/expr/ob_expr_xml_attributes.h"
 #include "sql/engine/expr/ob_expr_extract_value.h"
 #include "sql/engine/expr/ob_expr_extract_xml.h"
+#include "sql/engine/expr/ob_expr_existsnode_xml.h"
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
@@ -430,6 +434,10 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_decode_trace_id.h"
+#include "sql/engine/expr/ob_expr_priv_st_geohash.h"
+#include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
+#include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -665,6 +673,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprGreaterThan);
     REG_OP(ObExprGreatest);
     REG_OP(ObExprHex);
+    REG_OP(ObExprPassword);
     REG_OP(ObExprIn);
     REG_OP(ObExprNotIn);
     REG_OP(ObExprInt2ip);
@@ -1051,7 +1060,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSTSymDifference);
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
+    REG_OP(ObExprPrivSTGeoHash);
+    REG_OP(ObExprPrivSTMakePoint);
+    REG_OP(ObExprInnerTableOptionPrinter);
+    REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprCurrentRole);
+    REG_OP(ObExprDecodeTraceId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1355,9 +1369,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprPrivXmlBinary);
   REG_OP_ORCL(ObExprXmlparse);
   REG_OP_ORCL(ObExprXmlElement);
+  REG_OP_ORCL(ObExprXmlConcat);
+  REG_OP_ORCL(ObExprXmlForest);
   REG_OP_ORCL(ObExprXmlAttributes);
   REG_OP_ORCL(ObExprExtractValue);
   REG_OP_ORCL(ObExprExtractXml);
+  REG_OP_ORCL(ObExprExistsNodeXml);
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
@@ -1370,6 +1387,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerIsTrue);
   REG_OP_ORCL(ObExprInnerDecodeLike);
   REG_OP_ORCL(ObExprJsonObjectStar);
+  REG_OP_ORCL(ObExprInnerTableOptionPrinter);
+  REG_OP_ORCL(ObExprInnerTableSequenceGetter);
+  REG_OP_ORCL(ObExprDecodeTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

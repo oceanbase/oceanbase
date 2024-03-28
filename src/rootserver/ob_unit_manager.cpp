@@ -1691,29 +1691,6 @@ int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
   return ret;
 }
 
-int ObUnitManager::try_complete_shrink_tenant_pool_unit_num_rs_job(
-    const uint64_t tenant_id,
-    common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  // this function is called by ObDDLService::drop_resource_pool_pre
-  const int check_ret = OB_SUCCESS; // no need to check ls status
-  int64_t job_id = 0;
-  if (OB_FAIL(find_alter_resource_tenant_unit_num_rs_job(tenant_id, job_id, trans))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to execute find_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
-    }
-  } else {
-    ret = complete_shrink_tenant_pool_unit_num_rs_job_(
-          tenant_id, job_id, check_ret, trans);
-    FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] complete an inprogress rs job DROP_TENANT_FORCE",
-        KR(ret), K(tenant_id), K(job_id));
-  }
-  return ret;
-}
-
 int ObUnitManager::complete_shrink_tenant_pool_unit_num_rs_job_(
     const uint64_t tenant_id,
     const int64_t job_id,

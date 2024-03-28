@@ -184,6 +184,9 @@ public:
   static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
                                   common::ObIAllocator &allocator,
                                   ObString& str, bool& is_null);
+  static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                  MultimodeAlloctor &allocator,
+                                  ObString& str, bool& is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -195,12 +198,17 @@ public:
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
   static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
-                          common::ObArenaAllocator &allocator,
+                          common::ObIAllocator &allocator,
+                          uint16_t index, ObIJsonBase*& j_base,
+                          bool &is_null, bool need_to_tree=true,
+                          bool relax = true, bool preserve_dup = false);
+  static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
+                          MultimodeAlloctor &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
                           bool &is_null, bool need_to_tree=true,
                           bool relax = true, bool preserve_dup = false);
   static int get_json_schema(const ObExpr &expr, ObEvalCtx &ctx,
-                            common::ObArenaAllocator &allocator,
+                            MultimodeAlloctor &allocator,
                             uint16_t index, ObIJsonBase*& j_base,
                             bool &is_null);
 
@@ -268,7 +276,7 @@ public:
                                     ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
 
-  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
+  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, MultimodeAlloctor *allocator,
                                 ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
   /*

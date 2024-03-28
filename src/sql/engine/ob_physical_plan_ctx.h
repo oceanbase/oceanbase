@@ -235,6 +235,22 @@ public:
   {
     affected_rows_ += affected_rows;
   }
+  inline void add_total_memstore_read_row_count(int64_t v)
+  {
+    total_memstore_read_row_count_ += v;
+  }
+  inline void add_total_ssstore_read_row_count(int64_t v)
+  {
+    total_ssstore_read_row_count_ += v;
+  }
+  inline int64_t get_total_memstore_read_row_count()
+  {
+    return total_memstore_read_row_count_;
+  }
+  inline int64_t get_total_ssstore_read_row_count()
+  {
+    return total_ssstore_read_row_count_;
+  }
   int64_t get_found_rows() const
   {
     return found_rows_;
@@ -614,6 +630,8 @@ private:
   ObSubSchemaCtx subschema_ctx_;
   // for dependant exprs of generated columns
   common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
+  int64_t total_memstore_read_row_count_;
+  int64_t total_ssstore_read_row_count_;
 };
 
 }

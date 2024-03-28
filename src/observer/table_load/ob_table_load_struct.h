@@ -146,7 +146,8 @@ struct ObTableLoadParam
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       avail_memory_(0),
       write_session_count_(0),
-      exe_mode_(ObTableLoadExeMode::MAX_TYPE)
+      exe_mode_(ObTableLoadExeMode::MAX_TYPE),
+      compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
   {
   }
 
@@ -168,12 +169,14 @@ struct ObTableLoadParam
            parallel_ > 0 &&
            session_count_ > 0 &&
            batch_size_ > 0 &&
-           column_count_ > 0;
+           column_count_ > 0 &&
+           ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
   }
 
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
                K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dup_action), K_(avail_memory), K_(write_session_count), K_(exe_mode));
+               K_(online_opt_stat_gather), K_(dup_action), K_(avail_memory),
+               K_(write_session_count), K_(exe_mode), K_(compressor_type));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -190,6 +193,7 @@ public:
   int64_t avail_memory_;
   int32_t write_session_count_;
   ObTableLoadExeMode exe_mode_;
+  ObCompressorType compressor_type_;
 };
 
 struct ObTableLoadDDLParam

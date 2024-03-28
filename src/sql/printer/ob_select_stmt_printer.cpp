@@ -59,7 +59,7 @@ int ObSelectStmtPrinter::do_print()
           LOG_WARN("fail to print_unpivot",
                    KPC(stmt_->get_transpose_item()), K(ret));
         }
-      } else if (OB_FAIL(print())) {
+      } else if (OB_FAIL(SMART_CALL(print()))) {
         LOG_WARN("fail to print stmt", KPC(stmt_), K(ret));
       }
     }
@@ -424,6 +424,9 @@ int ObSelectStmtPrinter::print_select()
       } else if (select_stmt->is_unpivot_select()) {
         DATA_PRINTF(" * ");
       } else {
+        if (select_stmt->is_select_straight_join()) { // straight_join
+          DATA_PRINTF("straight_join ");
+        }
         if (select_stmt->has_distinct()) { // distinct
           DATA_PRINTF("distinct ");
         }

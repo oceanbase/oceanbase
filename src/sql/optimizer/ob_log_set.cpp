@@ -26,13 +26,14 @@ using namespace oceanbase::sql::log_op_def;
 
 const char *ObLogSet::get_name() const
 {
-  static const char *set_op_all[ObSelectStmt::SET_OP_NUM] =
+  static const char *set_op_all[ObSelectStmt::SET_OP_NUM + 1] =
   {
     "NONE",
     "UNION ALL",
     "INTERSECT ALL",
     "EXCEPT ALL",
     "RECURSIVE UNION ALL",
+    "RECURSIVE UNION DISTINCT",
   };
   static const char *merge_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
   {
@@ -54,7 +55,7 @@ const char *ObLogSet::get_name() const
     ret_char = !is_distinct_ ? set_op_all[set_op_] :
                (HASH_SET == set_algo_ ? hash_set_op_distinct[set_op_] : merge_set_op_distinct[set_op_]);
     if (is_recursive_union_) {
-      ret_char = set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
+      ret_char = is_distinct_ ? set_op_all[ObSelectStmt::SetOperator::RECURSIVE + 1] : set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
     }
   } else { /* Do nothing */ }
   return ret_char;
@@ -454,6 +455,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       }
       child_cost += cur_child_cost;
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       double cur_child_ndv = child_ndv_.at(i);
       if (need_scale_ndv) {
         cur_child_ndv = std::min(
@@ -463,7 +465,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       if (0 == i) {
         card = cur_child_ndv;
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, set_type);
       }
       child_cost += cur_child_cost;
     }
@@ -480,22 +482,24 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
   double tmp_card = 0.0;
   double child_cost = 0.0;
   ObSEArray<ObBasicCostInfo, 4> cost_infos;
-  ObOptEstCost::MODEL_TYPE model_type = ObOptEstCost::MODEL_TYPE::NORMAL_MODEL;
   const ObSelectStmt *stmt = dynamic_cast<const ObSelectStmt*>(get_stmt());
   if (OB_ISNULL(stmt) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(model_type = get_plan()->get_optimizer_context().get_cost_model_type())) {
   } else if (OB_FAIL(get_re_est_cost_infos(param, cost_infos, child_cost, tmp_card))) {
     LOG_WARN("failed to get re est cost infos", K(ret));
   } else if (is_recursive_union() || !is_set_distinct()) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info, op_cost, model_type))) {
+    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info,
+                                             op_cost,
+                                             get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
   } else if (MERGE_SET == set_algo_) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, op_cost, model_type))) {
+    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info,
+                                             op_cost,
+                                             get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
   } else if (HASH_SET == set_algo_) {
@@ -510,7 +514,9 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
                                        cost_infos.at(1).rows_, cost_infos.at(1).width_,
                                        get_set_op(), select_exprs,
                                        NULL, NULL /* no need for hash set*/ );
-      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info, op_cost, model_type))) {
+      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info,
+                                              op_cost,
+                                              get_plan()->get_optimizer_context()))) {
         LOG_WARN("Fail to calcuate hash set cost", K(ret));
       }
     }
@@ -894,12 +900,30 @@ int ObLogSet::get_card_without_filter(double &card)
         card = ObOptSelectivity::get_set_stmt_output_count(card, child->get_card(), set_type);
       }
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       if (0 == i) {
         card = child_ndv_.at(i);
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), set_type);
       }
     }
+  }
+  return ret;
+}
+
+int ObLogSet::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_SET == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (!is_set_distinct()) {
+    used = false;
+  }
+  if (is_recursive_union()) {
+    inherit_child_ordering_index = -1;
   }
   return ret;
 }

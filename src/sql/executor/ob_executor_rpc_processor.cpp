@@ -69,11 +69,10 @@ int ObRpcEraseIntermResultP::process()
   int ret = OB_SUCCESS;
   LOG_TRACE("receive erase interm result request", K(arg_));
   dtl::ObDTLIntermResultKey dtl_int_key;
-  dtl::ObDTLIntermResultManager &mgr = dtl::ObDTLIntermResultManager::getInstance();
   ObIArray<uint64_t> &interm_result_ids = arg_.interm_result_ids_;
   for (int64_t i = 0; OB_SUCC(ret) && i < interm_result_ids.count(); ++i) {
     dtl_int_key.channel_id_ = interm_result_ids.at(i);
-    if (OB_FAIL(mgr.erase_interm_result_info(dtl_int_key))) {
+    if (OB_FAIL(MTL(dtl::ObDTLIntermResultManager*)->erase_interm_result_info(dtl_int_key))) {
       LOG_WARN("failed to erase interm result info in manager.", K(ret));
     }
   }

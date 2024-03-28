@@ -124,6 +124,7 @@ public:
   int set_child_ndv(ObIArray<double> &ndv) { return child_ndv_.assign(ndv); }
   int add_child_ndv(double ndv) { return child_ndv_.push_back(ndv); }
   virtual int get_card_without_filter(double &card) override;
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
 private:
   bool is_distinct_;
   bool is_recursive_union_;

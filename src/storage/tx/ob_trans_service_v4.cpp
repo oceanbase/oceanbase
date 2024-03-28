@@ -2780,6 +2780,19 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
   return ret;
 }
 
+int ObTransService::update_savepoint_with_sessid(ObTxDesc &tx, const uint32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(tx.lock_);
+  ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
+    ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
+    if (it.is_savepoint()) {
+      it.session_id_ = session_id;
+    }
+  }
+  return ret;
+}
+
 int ObTransService::get_tx_stmt_info(ObTxDesc &tx, ObTxStmtInfo &stmt_info)
 {
   int ret = OB_SUCCESS;

@@ -26,6 +26,7 @@
 #include "pl/ob_pl_allocator.h"
 #include "share/ob_lob_access_utils.h"
 #include "observer/mysql/ob_query_driver.h"
+#include "lib/json_type/ob_json_parse.h"
 
 namespace oceanbase
 {
@@ -382,6 +383,14 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
     case PL_OPAQUE_TYPE: {
       ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(src.get_ext());
       CK (OB_NOT_NULL(opaque));
+      // json pl object manage
+      if (OB_NOT_NULL(opaque) && opaque->is_json_type()) {
+        ObPLJsonBaseType* pl_jsontype = static_cast<ObPLJsonBaseType*>(opaque);
+        ObPlJsonNode* pl_json_node = pl_jsontype->get_data();
+        if (OB_NOT_NULL(pl_json_node) && OB_NOT_NULL(pl_json_node->get_data_node())) {
+          pl_jsontype->destroy();
+        }
+      }
       OX (opaque->~ObPLOpaque());
     }
       break;
@@ -1624,12 +1633,29 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
         OV (package_id != OB_INVALID_ID, OB_ERR_UNEXPECTED, KPC(this));
         OV (expr_idx != OB_INVALID_INDEX, OB_ERR_UNEXPECTED, KPC(this));
         OZ (sql::ObSPIService::spi_calc_package_expr_v1(resolve_ctx, exec_ctx, obj_allocator, package_id, expr_idx, &result));
-        if (OB_SUCC(ret) && result.is_pl_extend()) {
+        if (OB_FAIL(ret)) {
+        } else if (result.is_pl_extend()) {
           ObObj tmp;
           OZ (ObUserDefinedType::deep_copy_obj(obj_allocator, result, tmp));
           OX (result = tmp);
+          OX (*member = result);
+        } else if (result.is_null() && !get_member(i)->is_obj_type()) {
+          int64_t init_size = OB_INVALID_SIZE;
+          int64_t member_ptr = 0;
+          OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
+          OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+          if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
+            ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
+            CK (OB_NOT_NULL(composite));
+            OX (composite->set_null());
+          }
+        } else {
+          ObObj tmp;
+          OZ (common::deep_copy_obj(obj_allocator, result, tmp));
+          OX (result = tmp);
+          OX (*member = result);
         }
-        OX (*member = result);
       } else {
         if (get_member(i)->is_obj_type()) {
           OX (new (member) ObObj(ObNullType));
@@ -5578,32 +5604,6 @@ int ObPLXmlType::deep_copy(ObPLOpaque *dst)
     }
     if (OB_SUCC(ret)) {
       OZ(ob_write_obj(copy->get_allocator(), *data_, *(copy->get_data())));
-    }
-  }
-
-  return ret;
-}
-
-int ObPLJsonBaseType::deep_copy(ObPLOpaque *dst)
-{
-  int ret = OB_SUCCESS;
-
-  ObPLJsonBaseType *copy = NULL;
-  OZ (ObPLOpaque::deep_copy(dst));
-  CK (OB_NOT_NULL(copy = new(dst)ObPLJsonBaseType()));
-  OX (copy->set_err_behavior(static_cast<int32_t>(behavior_)));
-  if (OB_SUCC(ret) && OB_NOT_NULL(data_)) {
-    if (need_shallow_copy()) {
-      copy->set_data(data_);
-      copy->set_shallow_copy(1);
-    } else {
-      ObJsonNode *json_dst = data_->clone(&copy->get_allocator(), true);
-      if (OB_ISNULL(json_dst)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory for clone json node failed", K(ret));
-      } else {
-        copy->set_data(json_dst);
-      }
     }
   }
 

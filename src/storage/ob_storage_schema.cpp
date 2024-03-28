@@ -871,6 +871,7 @@ int ObStorageSchema::init_column_meta_array(
 
 int ObStorageSchema::get_orig_default_row(
     const common::ObIArray<ObColDesc> &column_ids,
+    bool need_trim,
     blocksstable::ObDatumRow &default_row) const
 {
   int ret = OB_SUCCESS;
@@ -890,12 +891,31 @@ int ObStorageSchema::get_orig_default_row(
         ret = OB_ERR_SYS;
         STORAGE_LOG(WARN, "column id not found", K(ret), K(column_ids.at(i)));
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
+        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+      } else if (need_trim && col_schema->get_orig_default_value().is_fixed_len_char_type()) {
+        trim(col_schema->get_orig_default_value().get_collation_type(), default_row.storage_datums_[i]);
       }
     }
   }
   return ret;
 }
+
+void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum) const
+{
+    const char *str = storage_datum.ptr_;
+    int32_t len = storage_datum.len_;
+    ObString space_pattern = ObCharsetUtils::get_const_str(type, ' ');
+
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(),
+            space_pattern.ptr(),
+            space_pattern.length())) {
+        break;
+      }
+    }
+    storage_datum.len_ = len;
+}
+
 
 const ObStorageColumnSchema *ObStorageSchema::get_column_schema(const int64_t column_idx) const
 {

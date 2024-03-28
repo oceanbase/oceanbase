@@ -41,7 +41,7 @@ WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, true, 
 WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
-WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait for network request in queue", "pcode", "retry_times", "", NETWORK, true, true)
+WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait for network request in queue", "pcode", "level", "priority", NETWORK, true, true)
 
 // APPLICATION
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)

@@ -17,6 +17,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_placement_hashset.h"
 #include "lib/container/ob_2d_array.h"
+#include "lib/random/ob_random.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "lib/hash_func/murmur_hash.h"
@@ -432,26 +433,38 @@ struct ObBaselineKey
   ObBaselineKey()
   : db_id_(common::OB_INVALID_ID),
     constructed_sql_(),
-    sql_id_() {}
-  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql, const ObString &sql_id)
+    sql_id_(),
+    format_sql_id_(),
+    format_sql_() {}
+  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql,
+                const ObString &sql_id, const ObString &format_sql_id,
+                const ObString &format_sql)
   : db_id_(db_id),
     constructed_sql_(constructed_sql),
-    sql_id_(sql_id) {}
+    sql_id_(sql_id),
+    format_sql_id_(format_sql_id),
+    format_sql_(format_sql) {}
 
   inline void reset()
   {
     db_id_ = common::OB_INVALID_ID;
     constructed_sql_.reset();
     sql_id_.reset();
+    format_sql_id_.reset();
+    format_sql_.reset();
   }
 
   TO_STRING_KV(K_(db_id),
                K_(constructed_sql),
-               K_(sql_id));
+               K_(sql_id),
+               K_(format_sql_id),
+               K_(format_sql));
 
   uint64_t  db_id_;
   common::ObString constructed_sql_;
   common::ObString sql_id_;
+  common::ObString format_sql_id_;
+  common::ObString format_sql_;
 };
 
 struct ObSpmCacheCtx
@@ -565,6 +578,7 @@ public:
   bool is_show_trace_stmt_;  // [OUT]
   int64_t retry_times_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   ExecType exec_type_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
@@ -685,10 +699,10 @@ public:
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
-      udf_has_select_stmt_(false),
       has_dblink_udf_(false),
-      has_pl_udf_(false),
-      optimizer_features_enable_version_(0)
+      optimizer_features_enable_version_(0),
+      injected_random_status_(false),
+      udf_flag_(0)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -732,10 +746,10 @@ public:
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
-    udf_has_select_stmt_ = false;
     has_dblink_udf_ = false;
-    has_pl_udf_ = false;
     optimizer_features_enable_version_ = 0;
+    injected_random_status_ = false;
+    udf_flag_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -764,6 +778,11 @@ public:
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
+  bool get_injected_random_status() const { return injected_random_status_; }
+  void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
+  void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
+
+
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -818,10 +837,19 @@ public:
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
-  bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
   bool has_dblink_udf_;
-  bool has_pl_udf_; // //used to mark sql contain pl udf
   uint64_t optimizer_features_enable_version_;
+  bool injected_random_status_;
+  ObRandom rand_gen_;
+  union {
+    int8_t udf_flag_;
+    struct {
+      int8_t has_pl_udf_ : 1; // used to mark sql contain pl udf
+      int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
+      int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
+      int8_t reserved_:5;
+    };
+  };
 };
 } /* ns sql*/
 } /* ns oceanbase */

@@ -22,8 +22,8 @@ namespace common
 class ObGeoInteriorPointVisitor : public ObEmptyGeoVisitor
 {
 public:
-  explicit ObGeoInteriorPointVisitor(ObIAllocator *allocator)
-      : allocator_(allocator),
+  explicit ObGeoInteriorPointVisitor(lib::MemoryContext &mem_ctx)
+      : allocator_(&mem_ctx->get_arena_allocator()),
         interior_point_(nullptr),
         min_dist_(DBL_MAX),
         interior_endpoint_(nullptr),
@@ -34,7 +34,8 @@ public:
         max_width_(-1),
         is_geo_empty_(true),
         is_inited_(false),
-        dimension_(-1)
+        dimension_(-1),
+        mem_ctx_(mem_ctx)
   {}
   ~ObGeoInteriorPointVisitor()
   {}
@@ -142,6 +143,7 @@ private:
   bool is_geo_empty_;
   bool is_inited_;
   int8_t dimension_; // for collection
+  lib::MemoryContext &mem_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObGeoInteriorPointVisitor);
 };
 

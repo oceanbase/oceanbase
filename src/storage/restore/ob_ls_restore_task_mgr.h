@@ -198,7 +198,8 @@ private:
       const ToRestoreTabletGroup &restored_tg,
       ObIArray<common::ObTabletID> &restored_tablets,
       ObIArray<common::ObTabletID> &high_pri_tablet_need_redo,
-      ObIArray<common::ObTabletID> &wait_tablet_need_redo);
+      ObIArray<common::ObTabletID> &wait_tablet_need_redo,
+      int64_t &finished_tablet_cnt);
 
   int redo_failed_tablets_(
       ObIArray<common::ObTabletID> &high_pri_tablet_need_redo,

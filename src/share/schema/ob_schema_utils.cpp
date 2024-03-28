@@ -786,7 +786,8 @@ const char* DDLType[]
 {
   "TRUNCATE_TABLE",
   "SET_COMMENT",
-  "CREATE_INDEX"
+  "CREATE_INDEX",
+  "CREATE_VIEW"
 };
 
 int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)

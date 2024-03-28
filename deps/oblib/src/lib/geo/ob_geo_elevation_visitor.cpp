@@ -125,15 +125,16 @@ void ObGeoElevationExtent::calculate_z()
   is_z_calculated_ = true;
 }
 
-ObGeoElevationVisitor::ObGeoElevationVisitor(ObIAllocator &allocator, const common::ObSrsItem *srs)
+ObGeoElevationVisitor::ObGeoElevationVisitor(lib::MemoryContext &mem_ctx, const common::ObSrsItem *srs)
       : extent_(nullptr),
         is_inited_(false),
-        allocator_(&allocator),
-        buffer_(allocator),
+        allocator_(&mem_ctx->get_arena_allocator()),
+        buffer_(*allocator_),
         srs_(srs),
         type_3D_(ObGeoType::GEO3DTYPEMAX),
         crs_(ObGeoCRS::Cartesian),
-        srid_(0)
+        srid_(0),
+        mem_ctx_(&mem_ctx)
 {
   if (OB_NOT_NULL(srs_)) {
     crs_ = (srs_->srs_type() == ObSrsType::PROJECTED_SRS) ? ObGeoCRS::Cartesian
@@ -156,7 +157,7 @@ int ObGeoElevationVisitor::add_geometry(
       LOG_WARN("fail to check is geometry empty", K(ret));
     } else if (!is_geo_empty) {
       ObGeometry *geo_2D = nullptr;
-      ObGeoEvalCtx geo_ctx(allocator_, srs_);
+      ObGeoEvalCtx geo_ctx(*mem_ctx_, srs_);
       geo_ctx.set_is_called_in_pg_expr(true);
       ObGeogBox *box = nullptr;
       if (OB_FAIL(geo_3D.to_2d_geo(tmp_allocator, geo_2D))) {

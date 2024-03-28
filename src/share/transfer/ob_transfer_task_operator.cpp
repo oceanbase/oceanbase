@@ -45,7 +45,7 @@ int ObTransferTaskOperator::get(
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE task_id = %ld%s",
+      if (OB_FAIL(sql.assign_fmt("SELECT *, ORA_ROWSCN FROM %s WHERE task_id = %ld%s",
           OB_ALL_TRANSFER_TASK_TNAME, task_id.id(), for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id), K(for_update));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr(), group_id))) {
@@ -80,7 +80,7 @@ int ObTransferTaskOperator::get_task_with_time(
       common::sqlclient::ObMySQLResult *res = NULL;
       const bool with_time = true;
       if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time_int64, "
-          "time_to_usec(gmt_modified) AS finish_time_int64, * FROM %s WHERE task_id = %ld%s",
+          "time_to_usec(gmt_modified) AS finish_time_int64, *, ORA_ROWSCN FROM %s WHERE task_id = %ld%s",
           OB_ALL_TRANSFER_TASK_TNAME, task_id.id(), for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id), K(for_update));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -124,7 +124,7 @@ int ObTransferTaskOperator::get_by_status(
   } else {
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE status = '%s'",
+      if (OB_FAIL(sql.assign_fmt("SELECT *, ORA_ROWSCN FROM %s WHERE status = '%s'",
           OB_ALL_TRANSFER_TASK_TNAME, status.str()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(status));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -730,12 +730,12 @@ int ObTransferTaskOperator::get_by_ls_id_(
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, result) {
       if (is_src_ls) {
-        if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE src_ls = %ld",
+        if (OB_FAIL(sql.assign_fmt("SELECT *, ORA_ROWSCN FROM %s WHERE src_ls = %ld",
             OB_ALL_TRANSFER_TASK_TNAME, ls_id.id()))) {
           LOG_WARN("fail to assign sql", KR(ret), K(ls_id));
         }
       } else {
-        if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE dest_ls = %ld",
+        if (OB_FAIL(sql.assign_fmt("SELECT *, ORA_ROWSCN FROM %s WHERE dest_ls = %ld",
             OB_ALL_TRANSFER_TASK_TNAME, ls_id.id()))) {
           LOG_WARN("fail to assign sql", KR(ret), K(ls_id));
         }
@@ -857,6 +857,7 @@ int ObTransferTaskOperator::parse_sql_result_(
   ObString tablet_list_str;
   uint64_t start_scn_val = OB_INVALID_SCN_VAL;
   uint64_t finish_scn_val = OB_INVALID_SCN_VAL;
+  uint64_t ora_rowscn_val = OB_INVALID_SCN_VAL;
   ObString status_str;
   char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
   int64_t real_length = 0;
@@ -867,6 +868,7 @@ int ObTransferTaskOperator::parse_sql_result_(
   ObTransferStatus status;
   SCN start_scn;
   SCN finish_scn;
+  SCN ora_rowscn;
   common::ObCurTraceId::TraceId trace_id;
   uint64_t data_version = 0;
   ObString data_version_str;
@@ -895,6 +897,7 @@ int ObTransferTaskOperator::parse_sql_result_(
   EXTRACT_STRBUF_FIELD_MYSQL(res, "trace_id", trace_id_buf, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET_WITH_COLUMN_INFO(res, "data_version", data_version_str,
       data_version_is_null, data_version_not_exist);
+  EXTRACT_INT_FIELD_MYSQL(res, "ORA_ROWSCN", ora_rowscn_val, uint64_t);
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(data_version_is_null)) {
     ret = OB_ERR_UNEXPECTED;
@@ -916,6 +919,9 @@ int ObTransferTaskOperator::parse_sql_result_(
   } else if (finish_scn_val != OB_INVALID_SCN_VAL
       && OB_FAIL(finish_scn.convert_for_inner_table_field(finish_scn_val))) {
     LOG_WARN("fail to convert for inner table field", KR(ret), K(finish_scn_val));
+  } else if (ora_rowscn_val != OB_INVALID_SCN_VAL
+      && OB_FAIL(ora_rowscn.convert_for_inner_table_field(ora_rowscn_val))) {
+    LOG_WARN("fail to convert for inner table field", KR(ret), K(ora_rowscn_val));
   } else if (OB_FAIL(trace_id.parse_from_buf(trace_id_buf))) {
     LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_buf));
   } else if (OB_FAIL(status.parse_from_str(status_str))) {
@@ -937,10 +943,11 @@ int ObTransferTaskOperator::parse_sql_result_(
       str_to_transfer_task_comment(comment),
       ObBalanceTaskID(balance_task_id),
       ObTableLockOwnerID(table_lock_owner_id),
-      data_version))) {
+      data_version,
+      ora_rowscn))) {
     LOG_WARN("fail to init transfer task", KR(ret), K(task_id), K(src_ls), K(dest_ls), K(part_list_str),
         K(not_exist_part_list_str), K(lock_conflict_part_list_str), K(table_lock_tablet_list_str), K(tablet_list_str), K(start_scn),
-        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(table_lock_owner_id), K(data_version));
+        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(table_lock_owner_id), K(data_version), K(ora_rowscn));
   }
 
   return ret;
@@ -1042,7 +1049,7 @@ int ObTransferTaskOperator::get_history_task(
       bool with_time = true;
       common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
-          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s WHERE task_id = %ld",
+          "time_to_usec(finish_time) AS finish_time_int64, *, ORA_ROWSCN FROM %s WHERE task_id = %ld",
           OB_ALL_TRANSFER_TASK_HISTORY_TNAME, task_id.id()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -1136,7 +1143,7 @@ int ObTransferTaskOperator::get_last_task_by_balance_task_id(
       ObSqlString sql;
       common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
-          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s "
+          "time_to_usec(finish_time) AS finish_time_int64, *, ORA_ROWSCN FROM %s "
           "WHERE balance_task_id = %ld order by task_id desc limit 1",
           OB_ALL_TRANSFER_TASK_HISTORY_TNAME,
           balance_task_id.id()))) {

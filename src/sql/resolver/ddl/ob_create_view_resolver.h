@@ -72,6 +72,8 @@ public:
                                         schema::ObColumnSchemaV2 &column_schema,
                                         common::ObIAllocator &alloc,
                                         sql::ObSQLSessionInfo &session_info);
+  static int try_add_error_info(const uint64_t error_number,
+                                share::schema::ObErrorInfo &error_info);
 private:
   int check_privilege(ObCreateTableStmt *stmt,
                       ObSelectStmt *select_stmt);
@@ -90,8 +92,6 @@ private:
   int check_privilege_needed(ObCreateTableStmt &stmt,
                              ObSelectStmt &select_stmt,
                              const bool is_force_view);
-  int try_add_error_info(const uint64_t error_number,
-                         share::schema::ObErrorInfo &error_info);
   int create_alias_names_auto(
       ObArray<int64_t> &index_array,
       ObSelectStmt *select_stmt,

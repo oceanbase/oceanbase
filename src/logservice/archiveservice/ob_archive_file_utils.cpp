@@ -135,7 +135,7 @@ int ObArchiveFileUtils::get_file_range(const ObString &prefix,
   ObBackupIoAdapter util;
   ObFileRangeOp file_range_op;
 
-  if (OB_FAIL(util.list_files(prefix, storage_info, file_range_op))) {
+  if (OB_FAIL(util.adaptively_list_files(prefix, storage_info, file_range_op))) {
     ARCHIVE_LOG(WARN, "list_files fail", K(ret), K(prefix));
   } else if (0 == file_range_op.get_file_num()) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -154,7 +154,7 @@ int ObArchiveFileUtils::list_files(const ObString &prefix,
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
   ObFileListOp file_list_op;
-  if (OB_FAIL(util.list_files(prefix, storage_info, file_list_op))) {
+  if (OB_FAIL(util.adaptively_list_files(prefix, storage_info, file_list_op))) {
     ARCHIVE_LOG(WARN, "list_files fail", K(ret), K(prefix));
   } else if (OB_FAIL(file_list_op.get_file_list(array))) {
     ARCHIVE_LOG(WARN, "get_file_list fail", K(ret), K(prefix));
@@ -171,7 +171,7 @@ int ObArchiveFileUtils::read_file(const ObString &uri,
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
 
-  if (OB_FAIL(util.read_single_file(uri, storage_info, buf, file_length, read_size))) {
+  if (OB_FAIL(util.adaptively_read_single_file(uri, storage_info, buf, file_length, read_size))) {
     if (OB_BACKUP_FILE_NOT_EXIST != ret) {
       ARCHIVE_LOG(WARN, "read_single_file fail", K(ret), K(uri));
     } else {
@@ -196,7 +196,7 @@ int ObArchiveFileUtils::range_read(const ObString &uri,
   if (OB_UNLIKELY(NULL == buf || buf_size  < 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(buf_size), K(offset), K(uri));
-  } else if (OB_FAIL(util.read_part_file(uri, storage_info, buf, buf_size, offset, read_size))) {
+  } else if (OB_FAIL(util.adaptively_read_part_file(uri, storage_info, buf, buf_size, offset, read_size))) {
     ARCHIVE_LOG(WARN, "read part file failed", K(ret), K(uri), K(buf_size), K(offset));
   }
   return ret;
@@ -240,7 +240,7 @@ int ObArchiveFileUtils::get_file_length(const ObString &uri,
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
 
-  if (OB_FAIL(util.get_file_length(uri, storage_info, file_len))) {
+  if (OB_FAIL(util.adaptively_get_file_length(uri, storage_info, file_len))) {
     if (OB_BACKUP_FILE_NOT_EXIST != ret) {
       ARCHIVE_LOG(WARN, "get_file_length fail", K(ret), K(uri), KP(storage_info));
     } else {

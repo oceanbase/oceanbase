@@ -358,21 +358,21 @@ int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, doub
     if (SCALAR_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_scalar_group(per_dop_card,
                                                 get_aggr_funcs().count(),
-                                                opt_ctx.get_cost_model_type());
+                                                opt_ctx);
     } else if (MERGE_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_merge_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_rollup_exprs,
                                               get_aggr_funcs().count(),
-                                              opt_ctx.get_cost_model_type());
+                                              opt_ctx);
     } else {
       op_cost = ObOptEstCost::cost_hash_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_exprs_,
                                               get_aggr_funcs().count(),
-                                              opt_ctx.get_cost_model_type());
+                                              opt_ctx);
     }
 
     child_ndv = std::min(child_card, per_dop_ndv * parallel);
@@ -897,5 +897,20 @@ int ObLogGroupBy::get_card_without_filter(double &card)
 {
   int ret = OB_SUCCESS;
   card = get_distinct_card();
+  return ret;
+}
+
+int ObLogGroupBy::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_AGGREGATE == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (get_group_by_exprs().empty() &&
+             get_rollup_exprs().empty()) {
+    used = false;
+  }
   return ret;
 }

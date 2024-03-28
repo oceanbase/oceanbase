@@ -37,6 +37,7 @@
 #include "share/ob_rpc_struct.h" // ObCreateDupLSArg & ObCreateDupLSResult
 #include "rootserver/ob_root_service.h"
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
+#include "rootserver/ob_primary_ls_service.h" // ObDupLSCreateHelper
 
 namespace oceanbase
 {
@@ -755,45 +756,49 @@ int ObNewTableTabletAllocator::alloc_tablet_for_create_balance_group(
              K(ls_id_array),
              K(part_num));
   } else {
+    /*
+      Example: 3 LS, 7 partitions
+          -------------------
+          |  LS1  LS2  LS3  |
+          |  p0   p1   p2   |
+          |  p3   p4   p5   | min_itl = 2
+          |  p6             |
+          -------------------
+          max_cnt = 1
+      Result ls_id_array_: 2 * {LS1, LS2, LS3} + {LS1}
+    */
     const int64_t bucket_num = ls_id_array.count();
     const int64_t min_itl = part_num / bucket_num;
     const int64_t max_itl = ((min_itl * bucket_num == part_num) ? (min_itl) : (min_itl + 1));
-    const int64_t min_cnt = max_itl * bucket_num - part_num;
-    const int64_t max_cnt = bucket_num - min_cnt;
+    const int64_t max_cnt = part_num % bucket_num;
     common::ObArray<ObBalanceGroupLSStat> bg_ls_stat_array;
     int64_t start_idx = fetch_ls_offset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array.count(); ++i) {
-      const share::ObLSID &ls_id = ls_id_array.at((start_idx + i) % ls_id_array.count());
-      const int64_t tablet_cnt = ((i < min_cnt) ? min_itl : max_itl);
-      for (int64_t j = 0; OB_SUCC(ret) && j < tablet_cnt; ++j) {
-        if (OB_FAIL(ls_id_array_.push_back(ls_id))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObBalanceGroupLSStat bg_ls_stat;
-        if (OB_FAIL(bg_ls_stat.build(
-                tenant_id_,
-                bg_id,
-                ls_id,
-                tablet_cnt,
-                bg_name))) {
-          LOG_WARN("fail to build bg ls stat", KR(ret));
-        } else if (OB_FAIL(bg_ls_stat_array.push_back(
-                bg_ls_stat))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
+    // 1.alloc ls
+    for (int64_t j = 0; OB_SUCC(ret) && j < part_num; ++j) {
+      const share::ObLSID &ls_id = ls_id_array.at((start_idx + j) % ls_id_array.count());
+      if (OB_FAIL(ls_id_array_.push_back(ls_id))) {
+        LOG_WARN("fail to push back", KR(ret), K(ls_id), K(ls_id_array_));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
-              THIS_WORKER.get_timeout_remain(),
-              *sql_proxy_,
-              tenant_id_,
-              bg_id,
-              bg_ls_stat_array))) {
-        LOG_WARN("fail to insert update balance group ls stat", KR(ret));
+    // 2.update __all_balance_group_ls_stat
+    ARRAY_FOREACH(ls_id_array, i) {
+      const share::ObLSID &ls_id = ls_id_array.at((start_idx + i) % ls_id_array.count());
+      const int64_t tablet_cnt = ((i < max_cnt) ? max_itl : min_itl);
+      ObBalanceGroupLSStat bg_ls_stat;
+      if (OB_FAIL(bg_ls_stat.build(tenant_id_, bg_id, ls_id, tablet_cnt, bg_name))) {
+        LOG_WARN("fail to build bg ls stat", KR(ret), K(bg_id), K(ls_id), K(tablet_cnt), K(bg_name));
+      } else if (OB_FAIL(bg_ls_stat_array.push_back(bg_ls_stat))) {
+        LOG_WARN("fail to push back", KR(ret), K(bg_ls_stat));
       }
+    }
+    if (FAILEDx(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
+        THIS_WORKER.get_timeout_remain(),
+        *sql_proxy_,
+        tenant_id_,
+        bg_id,
+        bg_ls_stat_array))) {
+      LOG_WARN("fail to insert update balance group ls stat",
+          KR(ret), K(tenant_id_), K(bg_id), K(bg_ls_stat_array));
     }
   }
   return ret;
@@ -1614,117 +1619,34 @@ int ObNewTableTabletAllocator::alloc_ls_for_normal_table_tablet(
   return ret;
 }
 
-int ObNewTableTabletAllocator::wait_ls_elect_leader_(
-    const uint64_t tenant_id,
-    const ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  ObTimeoutCtx ctx;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObNewTableTabletAllocator not init", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(GCTX.location_service_)
-             || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
-    LOG_WARN("failed to set default timeout", KR(ret));
-  } else {
-    bool has_leader = false;
-    ObAddr ls_leader;
-    while (OB_SUCC(ret) && !has_leader) {
-      int tmp_ret = OB_SUCCESS;
-      ls_leader.reset();
-      const share::ObLSReplica *leader_replica = nullptr;
-      if (0 > ctx.get_timeout()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("wait ls elect leader timeout", KR(ret));
-      } else if (OB_TMP_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id, tenant_id, ls_id, ls_leader))) {
-        LOG_WARN("fail to get ls leader", KR(ret), K(tenant_id), K(ls_id), K(ls_leader));
-      } else {
-        has_leader = true;
-      }
-      if (OB_SUCC(ret) && !has_leader) {
-        LOG_WARN("fail to wait log stream elect leader, need retry", K(tenant_id), K(ls_id), K(ls_leader));
-        ob_usleep(WAIT_INTERVAL_US);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObNewTableTabletAllocator::alloc_ls_for_duplicate_table_(
     const share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = table_schema.get_tenant_id();
-  LOG_INFO("alloc ls for duplicate table tablet",
-           "tenant_id", table_schema.get_tenant_id(),
-           "table_id", table_schema.get_table_id());
-  share::ObLSStatusOperator ls_status_operator;
-  share::ObLSStatusInfo duplicate_ls_status_info;
-  ObTimeoutCtx ctx;
+  ObLSID dup_ls_id;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const int64_t start_time = ObTimeUtil::current_time();
+  ObDupLSCreateHelper dup_ls_create_helper;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)
-             || OB_ISNULL(GCTX.location_service_)
-             || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
-    LOG_WARN("failed to set default timeout", KR(ret));
+  } else if (OB_FAIL(dup_ls_create_helper.init(
+      tenant_id,
+      GCTX.sql_proxy_,
+      GCTX.srv_rpc_proxy_,
+      GCTX.location_service_))) {
+    LOG_WARN("init failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(dup_ls_create_helper.check_and_create_duplicate_ls_if_needed(dup_ls_id))) {
+    LOG_WARN("create and wait duplicate ls ready if needed failed", KR(ret), K(tenant_id));
   } else {
-    obrpc::ObCreateDupLSArg arg;
-    obrpc::ObCreateDupLSResult result;
-    while (OB_SUCC(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      duplicate_ls_status_info.reset();
-      if (0 > ctx.get_timeout()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("wait creating duplicate log stream timeout", KR(ret));
-      } else if (OB_TMP_FAIL(ls_status_operator.get_duplicate_ls_status_info(
-                             tenant_id,
-                             *GCTX.sql_proxy_,
-                             duplicate_ls_status_info,
-                             share::OBCG_DEFAULT/*group_id*/))) {
-        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-          LOG_INFO("duplicate log stream not exist, should create one duplicate log stream");
-          tmp_ret = OB_SUCCESS;
-          // create duplicate ls
-          ObAddr leader;
-          const int64_t timeout = ctx.get_timeout();
-          if (OB_TMP_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id, tenant_id,
-                                                             SYS_LS, FALSE, leader))) {
-            LOG_WARN("failed to get leader", KR(tmp_ret), K(tenant_id));
-          } else if (OB_TMP_FAIL(arg.init(tenant_id))) {
-            LOG_WARN("failed to init arg", KR(ret), K(tenant_id));
-          } else if (OB_TMP_FAIL(GCTX.srv_rpc_proxy_->to(leader).timeout(timeout).notify_create_duplicate_ls(arg, result))) {
-            LOG_WARN("failed to create tenant duplicate ls", KR(tmp_ret), K(tenant_id), K(leader), K(arg), K(timeout));
-          }
-        } else {
-          LOG_WARN("fail to get duplicate log stream from table", KR(tmp_ret), K(tenant_id));
-        }
-      } else if (!duplicate_ls_status_info.ls_is_normal()) {
-        LOG_TRACE("duplicate log stream is not in normal status", K(duplicate_ls_status_info));
-      } else if (OB_FAIL(wait_ls_elect_leader_(
-                             duplicate_ls_status_info.tenant_id_,
-                             duplicate_ls_status_info.ls_id_))) {
-        LOG_WARN("fail to wait duplicate ls elect leader", KR(ret), K(duplicate_ls_status_info));
-      } else {
-        for (int64_t i = 0; i < table_schema.get_all_part_num() && OB_SUCC(ret); i++) {
-          if (OB_FAIL(ls_id_array_.push_back(duplicate_ls_status_info.ls_id_))) {
-            LOG_WARN("failed to push_back", KR(ret), K(i), K(duplicate_ls_status_info));
-          }
-        }
-        break;
-      }
-      if (OB_SUCC(ret)) {
-        LOG_WARN("fail to get duplicate log stream, need retry", K(tenant_id), K(duplicate_ls_status_info));
-        ob_usleep(WAIT_INTERVAL_US);
+    for (int64_t i = 0; i < table_schema.get_all_part_num() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(ls_id_array_.push_back(dup_ls_id))) {
+        LOG_WARN("failed to push_back", KR(ret), K(i), K(dup_ls_id));
       }
     }
   }
+  LOG_INFO("alloc ls for duplicate table tablet finished", KR(ret), K(tenant_id), K(dup_ls_id),
+      "table_id", table_schema.get_table_id(), "cost_time", ObTimeUtil::current_time() - start_time);
   return ret;
 }
 

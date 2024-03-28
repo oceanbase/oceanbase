@@ -591,6 +591,9 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         MEMCPY(pc_ctx.sql_ctx_.sql_id_,
                plan->stat_.sql_id_.ptr(),
                plan->stat_.sql_id_.length());
+        MEMCPY(pc_ctx.sql_ctx_.format_sql_id_,
+               plan->stat_.format_sql_id_.ptr(),
+               plan->stat_.format_sql_id_.length());
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
@@ -965,6 +968,7 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   can_do_batch = false;
   batch_count = 0;
+  pc_ctx.is_batch_insert_opt_ = false;
   if (fp_result.values_token_pos_ != 0 &&
       can_do_insert_batch_opt(pc_ctx)) {
     char *new_param_sql = nullptr;
@@ -1005,6 +1009,7 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
       pc_ctx.insert_batch_opt_info_.insert_params_count_ = ins_params_count;
       pc_ctx.insert_batch_opt_info_.update_params_count_ = upd_params_count;
       pc_ctx.insert_batch_opt_info_.sql_delta_length_ = delta_length;
+      pc_ctx.is_batch_insert_opt_ = true;
     }
     // if batch_count >= 1, then sql is a insert into .. values ()...;
     if (batch_count >= 1) {
@@ -2259,6 +2264,10 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
     MEMCPY(pc_ctx.sql_ctx_.sql_id_,
            sql_plan->stat_.sql_id_.ptr(),
            sql_plan->stat_.sql_id_.length());
+    MEMCPY(pc_ctx.sql_ctx_.format_sql_id_,
+           sql_plan->stat_.format_sql_id_.ptr(),
+           sql_plan->stat_.format_sql_id_.length());
+
   }
   //check read only privilege
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {

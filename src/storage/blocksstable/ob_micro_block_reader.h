@@ -82,7 +82,7 @@ public:
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
-      int64_t &version,
+      int64_t &trans_version,
       int64_t &sql_sequence);
   // Filter interface for filter pushdown
   int filter_pushdown_filter(
@@ -123,15 +123,22 @@ public:
       const int64_t row_cap,
       ObDatumRow &row_buf,
       common::ObIArray<storage::ObAggCell*> &agg_cells);
-  OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
-
-protected:
+  virtual int compare_rowkey(
+      const ObDatumRowkey &rowkey,
+      const int64_t index,
+      int32_t &compare_result) override;
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) override;
+  virtual int find_bound_through_linear_search(
+      const ObDatumRowkey &rowkey,
+      const int64_t begin_idx,
+      int64_t &row_idx) override;
+  OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
+protected:
   virtual int find_bound(
       const ObDatumRange &range,
       const int64_t begin_idx,

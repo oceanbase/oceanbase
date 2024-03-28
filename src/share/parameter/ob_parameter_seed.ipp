@@ -412,6 +412,12 @@ DEF_INT(freeze_trigger_percentage, OB_TENANT_PARAMETER, "20", "(0, 100)",
 DEF_INT(writing_throttling_trigger_percentage, OB_TENANT_PARAMETER, "60", "(0, 100]",
           "the threshold of the size of the mem store when writing_limit will be triggered. Rang:(0,100]. setting 100 means turn off writing limit",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(data_disk_write_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
+        "used to stop user write operations. "
+        "When the user data disk reaches this watermark, SQL requests will report that the disk is full. "
+        "The configuration should be greater than data_disk_usage_limit_percentage, "
+        "with the recommended setting being: (1 - memstore_limit_size / data_disk_size) * 100%",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3d]",
           "maximum duration of writting throttling(in minutes), max value is 3 days",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1452,7 +1458,9 @@ DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "true",
 "specifies whether SQL serial network is turned on. Turned on to support mysql_send_long_data"
 "The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-
+DEF_BOOL(_enable_parallel_das_dml, OB_TENANT_PARAMETER, "False",
+        "By default, the das service is allowed to use multiple threads to submit das tasks",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // Add a config to enable use das if the sql statement has variable assignment
 DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "False",
          "enable use das if the sql statement has variable assignment",
@@ -1584,6 +1592,13 @@ ERRSIM_DEF_STR(errsim_migration_src_server_addr, OB_CLUSTER_PARAMETER, "",
 DEF_BOOL(enable_cgroup, OB_CLUSTER_PARAMETER, "True",
          "when set to false, cgroup will not init; when set to true but cgroup root dir is not ready, print ERROR",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(enable_global_background_resource_isolation, OB_CLUSTER_PARAMETER, "False",
+         "When set to false, foreground and background tasks are isolated within the tenant; When set to true, isolate background tasks individually upon tenant-level",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(global_background_cpu_quota, OB_CLUSTER_PARAMETER, "-1", "[-1,)",
+         "When enable_global_background_resource_isolation is True, specify the number of vCPUs allocated to the background tasks"
+         "-1 for the CPU is not limited by the cgroup",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_user_defined_rewrite_rules, OB_TENANT_PARAMETER, "False",
          "specify whether the user defined rewrite rules are enabled. "
          "Value: True: enable  False: disable",
@@ -1851,6 +1866,9 @@ DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
 DEF_INT(_checkpoint_diagnose_preservation_count, OB_TENANT_PARAMETER, "100", "[0,800]",
         "the count of checkpoint diagnose info preservation",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_multimodel_memory_trace_level, OB_TENANT_PARAMETER, "0", "[0,100)",
+        "Multi-mode memory tracking mechanism",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_backup_task_batch_size, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the batch size backup task receive in errsim mode"
         "Range: [0,) in integer",
@@ -1867,9 +1885,32 @@ DEF_TIME(_faststack_min_interval, OB_CLUSTER_PARAMETER, "30m", "[1s,)",
 ERRSIM_DEF_BOOL(errsim_migration_solo_send_medium_info, OB_CLUSTER_PARAMETER, "False",
          "send migration tablet meta without medium info list, follow by N medium infos.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_query_record_size_limit, OB_TENANT_PARAMETER, "65536", "[0, 67108864] in integer",
+        "set sql_audit and plan stat query sql size. Range: [0,67108864] in integer in integer.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(ls_rebuild_without_check_limit, OB_TENANT_PARAMETER, "False",
          "ls rebuild without check limit",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "idc",
+        common::ObConfigMigrationChooseSourceChecker,
+        "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
+        "'region' means firstly choose follower replica of the same region as source",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
+        "Control whether to use chose_migration_source_policy. "
+        "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// obkv group commit
+DEF_BOOL(enable_kv_group_commit, OB_TENANT_PARAMETER, "False",
+    "Enable or disable group commit",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512M]",
+        "For outrow-stored LOBs, if the length is less than or equal to that threshold, "
+        "they can be admitted into the block cache to speed up the next query.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memleak_light_backtrace, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether allow memleak to get the backtrace of malloc by light_backtrace",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

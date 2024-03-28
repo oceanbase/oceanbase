@@ -21,15 +21,19 @@ namespace common
 void init_proc_map_info();
 extern bool g_enable_backtrace;
 const int64_t LBT_BUFFER_LENGTH = 1024;
-int ob_backtrace(void **buffer, int size);
+int light_backtrace(void **buffer, int size);
 // save one layer of call stack
-#define OB_BACKTRACE_M(buffer, size)                      \
-  ({                                                      \
-    int rv = 0;                                           \
-    if (OB_LIKELY(::oceanbase::common::g_enable_backtrace)) {   \
-      rv = backtrace(buffer, size);                       \
-    }                                                     \
-  rv;                                                     \
+#define ob_backtrace(buffer, size)                                \
+  ({                                                              \
+    int rv = 0;                                                   \
+    if (OB_LIKELY(::oceanbase::common::g_enable_backtrace)) {     \
+      if (::oceanbase::lib::ObLightBacktraceGuard::is_enabled()) {\
+        rv = light_backtrace(buffer, size);                       \
+      } else {                                                    \
+        rv = backtrace(buffer, size);                             \
+      }                                                           \
+    }                                                             \
+    rv;                                                           \
   })
 char *lbt();
 char *lbt(char *buf, int32_t len);

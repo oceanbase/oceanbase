@@ -109,6 +109,12 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "ALTER ROUTINE"; break;
     case OB_PRIV_CREATE_ROUTINE:
       name = "CREATE ROUTINE"; break;
+    case OB_PRIV_CREATE_TABLESPACE:
+      name = "CREATE TABLESPACE"; break;
+    case OB_PRIV_SHUTDOWN:
+      name = "SHUTDOWN"; break;
+    case OB_PRIV_RELOAD:
+      name = "RELOAD"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

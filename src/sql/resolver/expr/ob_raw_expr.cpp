@@ -690,19 +690,24 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
                         ObExprEqualCheckContext *check_context) const
 {
   bool bret = false;
+  int ret = OB_SUCCESS;
   if (this == &expr) {
     bret = true;
   } else {
     if (NULL != check_context) {
       check_context->recursion_level_ += 1;
     }
-
     const ObRawExpr *l = get_same_identify(this, check_context);
     const ObRawExpr *r = get_same_identify(&expr, check_context);
-    bret = l->inner_same_as(*r, check_context);
-
+    ret = SMART_CALL(bret = l->inner_same_as(*r, check_context));
     if (NULL != check_context) {
-      check_context->recursion_level_ -= 1;
+      if (OB_SIZE_OVERFLOW == ret) {
+        bret = false;
+        check_context->error_code_ = ret;
+        LOG_WARN("check smart call fail", K(ret));
+      } else {
+        check_context->recursion_level_ -= 1;
+      }
     }
 
     if (bret) {
@@ -812,6 +817,10 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_VALUES == type_
+      || T_OP_GET_PACKAGE_VAR == type_
+      || T_OP_GET_SUBPROGRAM_VAR == type_
+      || IS_LABEL_SE_POLICY_FUNC(type_)
       || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
@@ -1493,7 +1502,9 @@ bool ObQueryRefRawExpr::inner_same_as(
   bool bool_ret = false;
   if (get_expr_type() == expr.get_expr_type()) {
     const ObQueryRefRawExpr &u_expr = static_cast<const ObQueryRefRawExpr &>(expr);
-    if (check_context != NULL && check_context->override_query_compare_) {
+    if (is_set_ != u_expr.is_set_ || is_multiset_ != u_expr.is_multiset_) {
+      /* bool bool_ret = false; */
+    } else if (check_context != NULL && check_context->override_query_compare_) {
       bool_ret = check_context->compare_query(*this, u_expr);
     } else {
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
@@ -1725,6 +1736,8 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_unique_key_column_ = tmp.is_unique_key_column_;
       is_mul_key_column_ = tmp.is_mul_key_column_;
       is_strict_json_column_ = tmp.is_strict_json_column_;
+      srs_id_ = tmp.srs_id_;
+      udt_set_id_ = tmp.udt_set_id_;
     }
   }
   return ret;
@@ -2240,6 +2253,27 @@ void ObOpRawExpr::clear_child()
   exprs_.reset();
 }
 
+int ObOpRawExpr::get_subquery_comparison_flag() const
+{
+  enum {
+    INVALID = 0, // not subquery comparison
+    NONE = 1,
+    ALL = 2,
+    ANY = 3
+  } comparison_flag;
+  comparison_flag = INVALID;
+  if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    if (has_flag(IS_WITH_ALL)) {
+      comparison_flag = ALL;
+    } else if (has_flag(IS_WITH_ANY)) {
+      comparison_flag = ANY;
+    } else {
+      comparison_flag = NONE;
+    }
+  }
+  return comparison_flag;
+}
+
 bool ObOpRawExpr::inner_same_as(
     const ObRawExpr &expr,
     ObExprEqualCheckContext *check_context) const
@@ -2275,6 +2309,12 @@ bool ObOpRawExpr::inner_same_as(
                || (T_OP_GT == get_expr_type() && T_OP_LT == expr.get_expr_type())) {
       cmp_type = REVERSE_CMP;
     } else {
+      need_cmp = false;
+    }
+  } else if (IS_SUBQUERY_COMPARISON_OP(get_expr_type())) {
+    const ObOpRawExpr &tmp = static_cast<const ObOpRawExpr &>(expr);
+    if (tmp.get_expr_type() != get_expr_type() ||
+        tmp.get_subquery_comparison_flag() != get_subquery_comparison_flag()) {
       need_cmp = false;
     }
   } else if (expr.get_expr_type() != get_expr_type()) {

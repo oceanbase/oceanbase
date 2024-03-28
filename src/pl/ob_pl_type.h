@@ -740,6 +740,8 @@ public:
 
   static bool is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
+  static bool is_dblink_table(const common::ObIArray<ObObjAccessIdx> &access_idxs);
+  static bool is_dblink_table_column(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_local_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_function_return_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);
   static bool is_subprogram_variable(const common::ObIArray<ObObjAccessIdx> &access_idxs);
@@ -1027,7 +1029,8 @@ public:
   int prepare_spi_cursor(sql::ObSPICursor *&spi_cursor,
                           uint64_t tenant_id,
                           uint64_t mem_limit,
-                          bool is_local_for_update = false);
+                          bool is_local_for_update = false,
+                          sql::ObSQLSessionInfo* session_info = nullptr);
   ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
 
 

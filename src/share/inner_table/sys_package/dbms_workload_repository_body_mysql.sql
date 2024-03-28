@@ -23,7 +23,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
                            ETIME         DATETIME,
                            SQL_ID        VARCHAR(64)  DEFAULT NULL,
                            TRACE_ID      VARCHAR(64)  DEFAULT NULL,
-                           WAIT_CLASS    VARCHAR(64)  DEFAULT NULL
+                           WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
+                           SVR_IP        VARCHAR(64)  DEFAULT NULL,
+                           SVR_PORT      INT          DEFAULT NULL
   )RETURN TEXT;
   PRAGMA INTERFACE(C, GENERATE_ASH_REPORT_TEXT);
 
@@ -33,10 +35,12 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
     SQL_ID        VARCHAR(64)  DEFAULT NULL,
     TRACE_ID      VARCHAR(64)  DEFAULT NULL,
     WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
-    REPORT_TYPE   VARCHAR(64)  DEFAULT 'text')
+    REPORT_TYPE   VARCHAR(64)  DEFAULT 'text',
+    SVR_IP        VARCHAR(64)  DEFAULT NULL,
+    SVR_PORT      INT          DEFAULT NULL)
   BEGIN
     IF LOWER(REPORT_TYPE) = 'text' THEN
-        SELECT DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME,SQL_ID,TRACE_ID,WAIT_CLASS) AS REPORT ;
+        SELECT DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME,SQL_ID,TRACE_ID,WAIT_CLASS, SVR_IP, SVR_PORT) AS REPORT ;
     ELSE
         SELECT "Other formats are not currently supported besides TEXT" AS Message;
     END IF;

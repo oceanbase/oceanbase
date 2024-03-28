@@ -267,6 +267,35 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
           }
           break;
         }
+        case FORMAT_SQL_TEXT : {
+          ObString format_sql_text;
+          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_text_str(), format_sql_text))) {
+            LOG_WARN("fail to deep copy obstring", K(ret),
+                      K(outline_info->get_format_sql_text_str()), K(format_sql_text));
+          } else {
+            cells[cell_idx].set_lob_value(ObLongTextType, format_sql_text.ptr(),
+                                          static_cast<int32_t>(format_sql_text.length()));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        }
+        case FORMAT_SQL_ID : {
+          ObString format_sql_id;
+          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_id_str(), format_sql_id))) {
+            LOG_WARN("fail to deep copy obstring", K(ret),
+                      K(outline_info->get_format_sql_id_str()), K(format_sql_id));
+          } else {
+            cells[cell_idx].set_varchar(format_sql_id);
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        }
+        case FORMAT_OUTLINE : {
+          cells[cell_idx].set_int(static_cast<int64_t>(outline_info->is_format()));
+          break;
+        }
         default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));

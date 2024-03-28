@@ -16,18 +16,17 @@
 #include "share/tablet/ob_tablet_table_iterator.h"    // ObTenantTabletMetaIterator
 #include "share/schema/ob_part_mgr_util.h"            // ObPartitionSchemaIter
 #include "share/schema/ob_schema_mgr_cache.h"         // ObSchemaMgrItem
-
-#include "rootserver/ob_partition_balance.h"         // ObPartitionHelper
+#include "share/ls/ob_ls_status_operator.h"           // ObLSStatusOperator
 #include "ob_all_balance_group_builder.h"
 
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_GROUP_BUILDER] " fmt, K_(mod), ##args)
 
-#define ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid) \
+#define ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid) \
     do {\
-      if (OB_FAIL(add_new_part_(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid))) {\
-        LOG_WARN("add new partition fail", KR(ret), K(bg), K(table_id), K(part_object_id), \
-            K(dest_ls_id), K(in_new_pg), K(part_group_uid));\
+      if (OB_FAIL(add_new_part_(bg, table_schema, part_object_id, tablet_id, part_group_uid))) {\
+        LOG_WARN("add new partition fail", KR(ret), K(bg), K(part_object_id), K(part_group_uid), \
+        K(pre_dest_ls_id_), K(pre_dup_to_normal_dest_ls_id_), K(pre_bg_id_), K(pre_part_group_uid_), K(table_schema));\
       }\
     } while (0)
 
@@ -38,16 +37,77 @@ using namespace share::schema;
 using namespace common;
 namespace rootserver
 {
+int ObPartitionHelper::check_partition_option(const schema::ObSimpleTableSchemaV2 &t1, const schema::ObSimpleTableSchemaV2 &t2, bool is_subpart, bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  is_matched = false;
+  if (OB_FAIL(share::schema::ObSimpleTableSchemaV2::compare_partition_option(t1, t2, is_subpart, is_matched))) {
+    LOG_WARN("fail to compare partition optition", KR(ret));
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, ObPartInfo &part_info)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id;
+  ObObjectID part_id;
+  ObObjectID first_level_part_id;
+  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, -1, tablet_id, part_id, first_level_part_id))) {
+    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx));
+  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
+    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_sub_part_num(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t &sub_part_num)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObPartition *partition = NULL;
+  if (OB_FAIL(table_schema.get_partition_by_partition_index(part_idx, schema::CHECK_PARTITION_MODE_NORMAL, partition))) {
+    LOG_WARN("fail to get partition by part_idx", KR(ret), K(part_idx));
+  } else if (OB_ISNULL(partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition not exist", KR(ret), K(table_schema), K(part_idx));
+  } else {
+    sub_part_num = partition->get_sub_part_num();
+  }
+  return ret;
+}
+
+int ObPartitionHelper::get_sub_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t sub_part_idx, ObPartInfo &part_info)
+{
+  int ret = OB_SUCCESS;
+
+  ObTabletID tablet_id;
+  ObObjectID part_id;
+  ObObjectID first_level_part_id;
+  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, sub_part_idx, tablet_id, part_id, first_level_part_id))) {
+    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx), K(sub_part_idx));
+  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
+    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
+  }
+  return ret;
+}
+
 ObAllBalanceGroupBuilder::ObAllBalanceGroupBuilder() :
     inited_(false),
     mod_(""),
     tenant_id_(OB_INVALID_TENANT_ID),
+    dup_ls_id_(),
+    pre_dest_ls_id_(),
+    pre_dup_to_normal_dest_ls_id_(),
+    pre_bg_id_(),
+    pre_part_group_uid_(OB_INVALID_ID),
     callback_(NULL),
     sql_proxy_(NULL),
     schema_service_(NULL),
     schema_guard_(schema::ObSchemaMgrItem::MOD_PARTITION_BALANCE),
     tablet_to_ls_(),
-    tablet_data_size_()
+    tablet_data_size_(),
+    allocator_("AllBGBuilder"),
+    related_tablets_map_()
 {
 }
 
@@ -73,13 +133,25 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
     LOG_WARN("create map for tablet to LS fail", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tablet_data_size_.create(MAP_BUCKET_NUM, lib::ObLabel("TabletSizeMap")))) {
     LOG_WARN("create map for tablet data size fail", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(related_tablets_map_.create(
+      MAP_BUCKET_NUM,
+      lib::ObLabel("RelatedTbltMap"),
+      ObModIds::OB_HASH_NODE,
+      tenant_id))) {
+    LOG_WARN("create map for related tablet map failed", KR(ret), K(tenant_id));
   } else {
     mod_ = mod;
     tenant_id_ = tenant_id;
+    dup_ls_id_.reset();
+    pre_dest_ls_id_.reset();
+    pre_dup_to_normal_dest_ls_id_.reset();
+    pre_bg_id_.reset();
+    pre_part_group_uid_ = OB_INVALID_ID;
     callback_ = &callback;
     sql_proxy_ = &sql_proxy;
     schema_service_ = &schema_service;
     schema_guard_.reset();
+    allocator_.set_tenant_id(tenant_id);
     inited_ = true;
   }
   return ret;
@@ -88,14 +160,26 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
 void ObAllBalanceGroupBuilder::destroy()
 {
   inited_ = false;
+  FOREACH(iter, related_tablets_map_) {
+    if (OB_NOT_NULL(iter->second)) {
+      iter->second->~ObIArray<ObTabletID>();
+    }
+  }
+  related_tablets_map_.destroy();
   tablet_data_size_.destroy();
   tablet_to_ls_.destroy();
   schema_guard_.reset();
   schema_service_ = NULL;
   sql_proxy_ = NULL;
   callback_ = NULL;
+  pre_part_group_uid_ = OB_INVALID_ID;
+  pre_bg_id_.reset();
+  pre_dup_to_normal_dest_ls_id_.reset();
+  pre_dest_ls_id_.reset();
+  dup_ls_id_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
   mod_ = "";
+  allocator_.reset();
 }
 
 int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
@@ -103,6 +187,8 @@ int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
   int64_t step_time = 0;
+  ObLSStatusOperator ls_status_operator;
+  ObLSStatusInfo dup_ls_status;
 
   if (OB_UNLIKELY(! inited_) || OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
@@ -115,12 +201,29 @@ int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
   } else if (OB_FAIL(tablet_to_ls_.build(tenant_id_, *sql_proxy_))) {
     LOG_WARN("build tablet to LS info fail", KR(ret), K(tenant_id_));
   } else if (FALSE_IT(step_time = ObTimeUtility::current_time())) {
-  } else if (need_load_tablet_size && OB_FAIL(prepare_tablet_data_size_())) {
-    LOG_WARN("prepare tablet data size fail", KR(ret));
+  } else if (!need_load_tablet_size) {
+    // finish
+  } else if (OB_FAIL(prepare_related_tablets_map_())) {
+    LOG_WARN("prepare related tablets map failed", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(prepare_tablet_data_size_())) {
+    LOG_WARN("prepare tablet data size fail", KR(ret), K(tenant_id_));
+  }
+  if (FAILEDx(ls_status_operator.get_duplicate_ls_status_info(
+      tenant_id_,
+      *sql_proxy_,
+      dup_ls_status))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      dup_ls_id_.reset();
+    } else {
+      LOG_WARN("get duplicate ls status info failed", KR(ret), K(tenant_id_));
+    }
+  } else {
+    dup_ls_id_ = dup_ls_status.get_ls_id();
   }
 
   int64_t finish_time = ObTimeUtility::current_time();
-  ISTAT("prepare data", KR(ret), K_(tenant_id), "cost", finish_time - start_time,
+  ISTAT("prepare data", KR(ret), K_(tenant_id), K_(dup_ls_id), "cost", finish_time - start_time,
       "tablet_to_ls_count", tablet_to_ls_.size(),
       "cost1", step_time - start_time,
       "cost2", finish_time - step_time);
@@ -240,6 +343,8 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_tablegroup_(
   } else if (table_schemas.empty()) {
     ISTAT("table_schemas empty in tablegroup, need not build balance group", K_(tenant_id), K(tablegroup_schema));
     // do nothing
+  } else if (OB_FAIL(check_table_schemas_in_tablegroup_(table_schemas))) { // defensive check
+    LOG_WARN("check table schemas for tablegroup failed", KR(ret), K(tenant_id_), K(tablegroup_schema));
   } else if (tablegroup_schema.is_sharding_none() || PARTITION_LEVEL_ZERO == max_part_level) {
     // sharding none tablegroup or non-partition tables always distribute together on same LS
     if (OB_FAIL(build_bg_for_tablegroup_sharding_none_(tablegroup_schema, table_schemas, max_part_level))) {
@@ -267,6 +372,24 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_tablegroup_(
         K(max_part_level));
   }
 
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::check_table_schemas_in_tablegroup_(
+    const ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH(table_schemas, idx) {
+    const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(idx);
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", KR(ret), KP(table_schema), K(idx));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == table_schema->get_tablegroup_id()
+        || table_schema->is_duplicate_table())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table_schema in tablegroup", KR(ret), KPC(table_schema));
+    }
+  }
   return ret;
 }
 
@@ -313,8 +436,6 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
     LOG_WARN("init balance group by tablegroup fail", KR(ret), K(bg), K(max_part_level),
         K(tablegroup_schema));
   } else {
-    ObLSID dest_ls_id; // binding to the first table first tablet
-    bool in_new_pg = true; // in new partition group
     const uint64_t part_group_uid = 0; // all partitions belong to the same partition group for each LS
     for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
       const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(t);
@@ -322,7 +443,6 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table_schema is null", KR(ret), K(tenant_id_), K(tablegroup_schema), K(t));
       } else {
-        const uint64_t table_id = table_schema->get_table_id();
         ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
         ObPartitionSchemaIter::Info info;
         while (OB_SUCC(ret)) {
@@ -335,7 +455,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_none_(
             ObObjectID part_object_id = info.object_id_;
             ObTabletID tablet_id = info.tablet_id_;
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+            ADD_NEW_PART(bg, *table_schema, part_object_id, tablet_id, part_group_uid);
           }
         }
       }
@@ -405,14 +525,11 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
   }
 
   for (int64_t p = 0; OB_SUCC(ret) && primary_table_schema != nullptr && p < primary_table_schema->get_partition_num(); p++) {
-    ObLSID dest_ls_id;
     // partitions/subpartitions of all tables with same one-level-partition-value, are in the same partition group.
     // Here, partitions/subpartitions with same one-level-partition-index of all tables are in the same partition group
-    bool in_new_pg = true; // in new partition group
     const uint64_t part_group_uid = p; // all partitions/subpartitions with same one-level part index belong to the same partition group for each LS
     for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
       const ObSimpleTableSchemaV2 &table_schema = *table_schemas.at(t);
-      const uint64_t table_id = table_schema.get_table_id();
       if (PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
         ObPartitionHelper::ObPartInfo part_info;
         if (OB_FAIL(ObPartitionHelper::get_part_info(table_schema, p, part_info))) {
@@ -422,7 +539,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
           ObObjectID part_object_id = part_info.get_part_id();
           ObTabletID tablet_id = part_info.get_tablet_id();
 
-          ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+          ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
         }
       } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
         int64_t sub_part_num = 0;
@@ -438,7 +555,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
               ObObjectID part_object_id = part_info.get_part_id();
               ObTabletID tablet_id = part_info.get_tablet_id();
 
-              ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+              ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
             }
           }
         }
@@ -487,12 +604,9 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
           K(tablegroup_schema), K(part_idx));
     } else {
       for (int64_t sp = 0; OB_SUCC(ret) && sp < partition->get_sub_part_num(); sp++) {
-        ObLSID dest_ls_id;
-        bool in_new_pg = true; // in new partition group
         const uint64_t part_group_uid = sp; // subpartitions with same sub_part_idx belong to the same partition group for each LS
         for (int64_t t = 0; OB_SUCC(ret) && t < table_schemas.count(); t++) {
           const ObSimpleTableSchemaV2 &table_schema = *table_schemas.at(t);
-          const uint64_t table_id = table_schema.get_table_id();
           ObPartitionHelper::ObPartInfo part_info;
           if (OB_FAIL(ObPartitionHelper::get_sub_part_info(table_schema, part_idx, sp, part_info))) {
             LOG_WARN("get sub partition info fail", KR(ret), K(table_schema), K(part_idx), K(sp));
@@ -501,7 +615,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
             ObObjectID part_object_id = part_info.get_part_id();
             ObTabletID tablet_id = part_info.get_tablet_id();
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
           }
         }
       }
@@ -525,14 +639,11 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_zero_(const ObSimpleTableSc
   if (OB_FAIL(bg.init_by_table(table_schema, NULL/*partition*/))) {
     LOG_WARN("init balance group by table fail", KR(ret), K(bg), K(table_schema));
   } else {
-    bool in_new_pg = true; // in new partition group
-    ObLSID dest_ls_id;
-    const uint64_t table_id = table_schema.get_table_id();
-    ObObjectID part_object_id = table_schema.get_object_id();
+    ObObjectID part_object_id = table_schema.get_object_id(); // equal to table_id
     ObTabletID tablet_id = table_schema.get_tablet_id();
-    const uint64_t part_group_uid = table_id; // each table is an independent partition group
+    const uint64_t part_group_uid = table_schema.get_table_id(); // each table is an independent partition group
 
-    ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+    ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
   }
   return ret;
 }
@@ -546,7 +657,6 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_one_(const ObSimpleTableSch
   if (OB_FAIL(bg.init_by_table(table_schema, NULL/*partition*/))) {
     LOG_WARN("init balance group by table fail", KR(ret), K(bg), K(table_schema));
   } else {
-    const uint64_t table_id = table_schema.get_table_id();
     for (int64_t part_idx = 0; OB_SUCC(ret) && part_idx < table_schema.get_partition_num(); part_idx++) {
       const ObPartition *part = nullptr;
       if (OB_FAIL(table_schema.get_partition_by_partition_index(part_idx, CHECK_PARTITION_MODE_NORMAL, part))) {
@@ -555,13 +665,11 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_one_(const ObSimpleTableSch
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition is null", KR(ret), K(table_schema));
       } else {
-        bool in_new_pg = true; // in new partition group
-        ObLSID dest_ls_id;
         ObObjectID part_object_id = part->get_part_id();
         ObTabletID tablet_id = part->get_tablet_id();
         const uint64_t part_group_uid = part_object_id; // each partition is an independent partition group
 
-        ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+        ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
       }
     }
   }
@@ -571,7 +679,6 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_one_(const ObSimpleTableSch
 int ObAllBalanceGroupBuilder::build_bg_for_partlevel_two_(const ObSimpleTableSchemaV2 &table_schema)
 {
   int ret = OB_SUCCESS;
-  uint64_t table_id = table_schema.get_table_id();
   ObPartIterator iter(table_schema, CHECK_PARTITION_MODE_NORMAL);
   while (OB_SUCC(ret)) {
     const ObPartition *part = nullptr;
@@ -600,15 +707,12 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_two_(const ObSimpleTableSch
           } else if (OB_ISNULL(sub_part)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("sub partition is null", KR(ret), K(table_schema));
-          } else {
-            // every subpartition is an independent partition group
-            ObLSID dest_ls_id;
-            bool in_new_pg = true; // in new partition group
+          } else { // every subpartition is an independent partition group
             ObObjectID part_object_id = sub_part->get_sub_part_id();
             ObTabletID tablet_id = sub_part->get_tablet_id();
             const uint64_t part_group_uid = part_object_id; // each subpartition is an independent partition group
 
-            ADD_NEW_PART(bg, table_id, part_object_id, tablet_id, dest_ls_id, in_new_pg, part_group_uid);
+            ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid);
           }
         }
       }
@@ -619,54 +723,81 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_two_(const ObSimpleTableSch
 
 int ObAllBalanceGroupBuilder::add_new_part_(
     const ObBalanceGroup &bg,
-    const ObObjectID table_id,
+    const ObSimpleTableSchemaV2 &table_schema,
     const ObObjectID part_object_id,
     const ObTabletID tablet_id,
-    ObLSID &dest_ls_id,
-    bool &in_new_partition_group,
     const uint64_t part_group_uid)
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls_id;
+  ObLSID dest_ls_id;
+  bool in_new_part_group = false;
+  const uint64_t table_id = table_schema.get_table_id();
+  const bool is_dup_table = table_schema.is_duplicate_table();
+  uint64_t tablet_size = 0;
 
-  // Tablet data size may not exist, as meta table may not be reported or tablet be dropped
-  // Ignore tablet size not exist error
-  const uint64_t *tablet_size_ptr = tablet_data_size_.get(tablet_id);
-  const uint64_t tablet_size = (tablet_size_ptr != nullptr ? *tablet_size_ptr : 0);
-
-  if (OB_ISNULL(callback_)) {
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(callback_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("callback is NULL, unexpected", KR(ret), K(callback_));
+    LOG_WARN("not init", KR(ret), KP(callback_));
+  } else if (OB_UNLIKELY(!bg.id().is_valid()
+      || !is_valid_id(part_object_id)
+      || !tablet_id.is_valid()
+      || !is_valid_id(part_group_uid))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(bg), K(part_object_id), K(tablet_id), K(part_group_uid), K(table_schema));
   } else if (OB_FAIL(tablet_to_ls_.get(tablet_id, src_ls_id))) {
-    LOG_WARN("fail to get LS info for tablet, tablet may be dropped", KR(ret), K(tablet_id), K(table_id));
+    LOG_WARN("fail to get LS info for tablet, tablet may be dropped", KR(ret), K(tablet_id), K(table_schema));
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       // skip this partition
     }
-  } else if ((in_new_partition_group && dest_ls_id.is_valid())
-      || (!in_new_partition_group && !dest_ls_id.is_valid())
-      || !is_valid_id(part_group_uid)) {
-    // dest_ls_id should only be valid when this partition is the first partition in new partition group
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(in_new_partition_group),
-        K(dest_ls_id), K(bg), K(table_id), K(part_object_id), K(tablet_id), K(part_group_uid));
-  } else if (in_new_partition_group && FALSE_IT(dest_ls_id = src_ls_id)) {
-    // use first partition's LS as all other partitions' LS in same partition group
-  } else if (OB_FAIL(callback_->on_new_partition(
-      bg,
-      table_id,
-      part_object_id,
-      tablet_id,
-      src_ls_id,
-      dest_ls_id,
-      tablet_size,
-      in_new_partition_group,
-      part_group_uid))) {
-    LOG_WARN("callback handle new partition fail", KR(ret), K(bg), K(table_id), K(part_object_id),
-        K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size), K(in_new_partition_group), K(part_group_uid));
   } else {
-    // auto clear flag
-    in_new_partition_group = false;
+    // parts with same bg_id and part_group_uid belong to the same part group
+    in_new_part_group = (bg.id() != pre_bg_id_ || part_group_uid != pre_part_group_uid_);
+    dest_ls_id = (in_new_part_group ? src_ls_id : pre_dest_ls_id_);
+    if (is_dup_table) {
+      if (OB_UNLIKELY(!dup_ls_id_.is_valid() || !in_new_part_group)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("err unexpected", KR(ret), K(dup_ls_id_), K(in_new_part_group), K(bg),
+            K(pre_bg_id_), K(part_group_uid), K(pre_part_group_uid_), K(pre_dest_ls_id_), K(table_schema));
+      } else {
+        dest_ls_id = dup_ls_id_;
+      }
+    } else if (dup_ls_id_.is_valid() && src_ls_id == dup_ls_id_) { // normal table on dup ls
+      if (OB_FAIL(get_dup_to_normal_dest_ls_id_(dest_ls_id))) {
+        LOG_WARN("get dup to normal dest ls id failed", KR(ret), K(dest_ls_id), K(table_schema));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!dest_ls_id.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dest ls id must be valid", KR(ret), K(dup_ls_id_), K(in_new_part_group), K(bg),
+          K(pre_bg_id_), K(part_group_uid), K(pre_part_group_uid_), K(pre_dest_ls_id_),
+          K(pre_dup_to_normal_dest_ls_id_), K(table_schema));
+    } else if (OB_FAIL(get_data_size_with_related_tablets_(tablet_id, tablet_size))) {
+      LOG_WARN("get data size with related tablets failed", KR(ret), K(bg),
+          K(table_id), K(part_object_id), K(tablet_id), K(src_ls_id), K(dest_ls_id),
+          K(tablet_size), K(in_new_part_group), K(part_group_uid));
+    } else if (OB_FAIL(callback_->on_new_partition(
+        bg,
+        table_id,
+        part_object_id,
+        tablet_id,
+        src_ls_id,
+        dest_ls_id,
+        tablet_size,
+        in_new_part_group,
+        part_group_uid))) {
+      LOG_WARN("callback handle new partition fail", KR(ret), K(bg), K(table_id),
+          K(part_object_id), K(tablet_id), K(src_ls_id), K(dest_ls_id), K(tablet_size),
+          K(in_new_part_group), K(part_group_uid), K(pre_dest_ls_id_),
+          K(pre_dup_to_normal_dest_ls_id_), K(pre_bg_id_), K(pre_part_group_uid_));
+    } else {
+      pre_bg_id_ = bg.id();
+      pre_part_group_uid_ = part_group_uid;
+      pre_dest_ls_id_ = dest_ls_id;
+    }
   }
   return ret;
 }
@@ -709,6 +840,166 @@ int ObAllBalanceGroupBuilder::prepare_tablet_data_size_()
 
   int64_t finish_time = ObTimeUtility::current_time();
   ISTAT("prepare tablet data_size", KR(ret), K_(tenant_id), "cost", finish_time - start_time, "count", tablet_data_size_.size());
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::prepare_related_tablets_map_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<const ObSimpleTableSchemaV2 *> tenant_table_schemas;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(schema_guard_.get_table_schemas_in_tenant(tenant_id_, tenant_table_schemas))) {
+    LOG_WARN("get table schemas fail", KR(ret), K(tenant_id_));
+  } else {
+    uint64_t data_table_id = OB_INVALID_ID;
+    ARRAY_FOREACH(tenant_table_schemas, idx) {
+      const ObSimpleTableSchemaV2 *table_schema = tenant_table_schemas.at(idx);
+      const ObSimpleTableSchemaV2 *data_table_schema = NULL;
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret), K(tenant_id_), K(idx));
+      } else if (is_inner_table(table_schema->get_table_id())
+          || !is_related_table(table_schema->get_table_type(), table_schema->get_index_type())) {
+        // skip
+      } else if (FALSE_IT(data_table_id = table_schema->get_data_table_id())) {
+      } else if (OB_FAIL(schema_guard_.get_simple_table_schema(
+          tenant_id_,
+          data_table_id,
+          data_table_schema))) {
+        LOG_WARN("get simple table schema failed", KR(ret), K(tenant_id_), K(data_table_id));
+      } else if (OB_ISNULL(data_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data table schema can't be null", KR(ret),
+            K(tenant_id_), K(data_table_id), KP(data_table_schema));
+      } else if (OB_FAIL(add_to_related_tablets_map_(*data_table_schema, *table_schema))) {
+        LOG_WARN("build related tablets map failed",
+            KR(ret), KPC(data_table_schema), KPC(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::add_to_related_tablets_map_(
+    const ObSimpleTableSchemaV2 &primary_table_schema,
+    const ObSimpleTableSchemaV2 &related_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!is_related_table(related_table_schema.get_table_type(), related_table_schema.get_index_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not related table", KR(ret), K(primary_table_schema), K(related_table_schema));
+  } else if (OB_UNLIKELY(primary_table_schema.get_all_part_num() != related_table_schema.get_all_part_num())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_num of primary_table_schema and related_table_schema not match",
+        KR(ret), K(primary_table_schema), K(related_table_schema));
+  } else {
+    ObPartitionSchemaIter primary_iter(primary_table_schema, CHECK_PARTITION_MODE_NORMAL);
+    ObPartitionSchemaIter related_iter(related_table_schema, CHECK_PARTITION_MODE_NORMAL);
+    while (OB_SUCC(ret)) {
+      ObPartitionSchemaIter::Info primary_info;
+      ObPartitionSchemaIter::Info related_info;
+      ObIArray<ObTabletID> *tablet_array = NULL;
+      if (OB_FAIL(primary_iter.next_partition_info(primary_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter next partition partition info failed", KR(ret));
+        }
+      } else if (OB_FAIL(related_iter.next_partition_info(related_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter next partition info failed", KR(ret));
+        }
+      } else if (OB_FAIL(related_tablets_map_.get_refactored(primary_info.tablet_id_, tablet_array))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // create new tablet_array
+          void *ptr = allocator_.alloc(sizeof(ObArray<ObTabletID, ObIAllocator &>));
+          if (OB_ISNULL(ptr)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail alloc memory", KR(ret));
+          } else {
+            tablet_array = new (ptr)ObArray<ObTabletID, ObIAllocator &>(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_);
+            if (OB_FAIL(related_tablets_map_.set_refactored(primary_info.tablet_id_, tablet_array))) {
+              LOG_WARN("set refactored failed", KR(ret), K(primary_info));
+            }
+          }
+        } else {
+          LOG_WARN("get_refactored failed", KR(ret), K(primary_info));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(tablet_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet_array can not be null", KR(ret), K(primary_info), KP(tablet_array));
+      } else if (OB_FAIL(tablet_array->push_back(related_info.tablet_id_))) {
+        LOG_WARN("push back failed", KR(ret), K(primary_info), K(related_info));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::get_data_size_with_related_tablets_(
+    const ObTabletID &tablet_id,
+    uint64_t &data_size)
+{
+  int ret = OB_SUCCESS;
+  data_size = 0;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet_id", KR(ret), K(tablet_id));
+  } else {
+    // tablet data size may not exist, as meta table may not be reported or tablet be dropped
+    const uint64_t *tablet_size_ptr = tablet_data_size_.get(tablet_id);
+    data_size = (tablet_size_ptr != NULL ? *tablet_size_ptr : 0);
+    // related tablets may not exist
+    ObIArray<ObTabletID> *related_tablets = NULL;
+    if (OB_FAIL(related_tablets_map_.get_refactored(tablet_id, related_tablets))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // ignore
+      } else {
+        LOG_WARN("get_refactored failed", KR(ret), K(tablet_id));
+      }
+    } else if (OB_ISNULL(related_tablets)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("related_tablets can not be null", KR(ret), K(tablet_id), KP(related_tablets));
+    } else {
+      ARRAY_FOREACH(*related_tablets, idx) {
+        const ObTabletID &related_tablet = related_tablets->at(idx);
+        const uint64_t *related_size_ptr = tablet_data_size_.get(related_tablet);
+        data_size += (related_size_ptr != NULL ? *related_size_ptr : 0);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::get_dup_to_normal_dest_ls_id_(share::ObLSID &dest_ls_id)
+{
+  int ret = OB_SUCCESS;
+  dest_ls_id.reset();
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(sql_proxy_));
+  } else if (pre_dup_to_normal_dest_ls_id_.is_valid()) {
+    dest_ls_id = pre_dup_to_normal_dest_ls_id_;
+  } else {
+    // TODO: optimize to select a more suitable user ls as dest
+    ObLSAttrOperator ls_operator(tenant_id_, sql_proxy_);
+    if (OB_FAIL(ls_operator.get_random_normal_user_ls(dest_ls_id))) {
+      LOG_WARN("get random normal user ls failed", KR(ret), K(tenant_id_), K(dest_ls_id));
+    } else {
+      pre_dup_to_normal_dest_ls_id_ = dest_ls_id;
+    }
+  }
   return ret;
 }
 

@@ -513,6 +513,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   ObTryTransHelper try_trans_helper1;
   ObTryTransHelper try_trans_helper2;
+  int64_t flag_view_sel_count = 0;
+  ObSelectStmt *orig_flag_stmt = NULL;
   StmtUniqueKeyProvider unique_key_provider1;
   try_trans_helper1.unique_key_provider_ = &unique_key_provider1;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_) ||
@@ -551,7 +553,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(add_select_item_to_ref_query(ref_query, not_null_side_table->table_id_,
                                                   unique_key_provider1,
-                                                  left_unique_pos, right_flag_pos))) {
+                                                  left_unique_pos, right_flag_pos,
+                                                  flag_view_sel_count, orig_flag_stmt))) {
     LOG_WARN("failed to set stmt unique", K(ret));
   } else if (OB_FAIL(try_trans_helper2.fill_helper(stmt->get_query_ctx()))) {
     // after create_single_joined_table_stmt, may generate new stmt
@@ -596,6 +599,11 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (!trans_happened && OB_FAIL(recover_flag_temp_table(ref_query,
+                                                                  not_null_side_table->table_id_,
+                                                                  flag_view_sel_count,
+                                                                  orig_flag_stmt))) {
+      LOG_WARN("failed to recover flag temp table", K(ret));
     } else if (!trans_happened && OB_FAIL(try_trans_helper1.recover(stmt->get_query_ctx()))) {
       LOG_WARN("failed to recover params", K(ret));
     } else {
@@ -715,7 +723,9 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                          const uint64_t flag_table_id,
                                                          StmtUniqueKeyProvider &unique_key_provider,
                                                          ObSqlBitSet<> &left_unique_pos,
-                                                         ObSqlBitSet<> &right_flag_pos)
+                                                         ObSqlBitSet<> &right_flag_pos,
+                                                         int64_t &flag_view_sel_count,
+                                                         ObSelectStmt *&orig_flag_stmt)
 {
   int ret = OB_SUCCESS;
   JoinedTable *joined_table = NULL;
@@ -726,7 +736,7 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
   ObSEArray<ObRawExpr*, 4> right_flag_exprs;
   ObSEArray<ObRawExpr*, 4> select_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)
-      || OB_ISNULL(ctx_->allocator_)) {
+      || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
   } else if (OB_UNLIKELY(1 != stmt->get_from_item_size()) ||
@@ -749,15 +759,19 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     ObSelectStmt *view_stmt = NULL;
     ObConstRawExpr *const_expr = NULL;
     ObSEArray<ObRawExpr*, 4> select_list;
+    orig_flag_stmt = flag_table->ref_query_;
     if (OB_ISNULL(view_stmt = flag_table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view_stmt is null", K(ret), K(view_stmt));
+    } else if (OB_FALSE_IT(flag_view_sel_count = view_stmt->get_select_item_size())) {
     } else if (view_stmt->is_set_stmt() &&
                OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_, view_stmt, flag_table->ref_query_))) {
       LOG_WARN("failed to create stmt with generated table", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_, ObNumberType,
                                               number::ObNumber::get_positive_one(), const_expr))) {
       LOG_WARN("failed to build const expr", K(ret));
+    } else if (OB_FAIL(const_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize const number expr", K(ret));
     } else if (OB_FAIL(select_list.push_back(const_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *flag_table, stmt,
@@ -814,6 +828,44 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
         LOG_WARN("failed to create select item", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformOrExpansion::recover_flag_temp_table(ObSelectStmt *stmt,
+                                                    const uint64_t flag_table_id,
+                                                    const int64_t orig_sel_count,
+                                                    ObSelectStmt *orig_flag_stmt)
+{
+  int ret = OB_SUCCESS;
+  TableItem *flag_table = NULL;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt));
+  } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
+    LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
+  } else if (!flag_table->is_temp_table()) {
+    // do nothing
+  } else if (OB_ISNULL(view_stmt = flag_table->ref_query_) || OB_ISNULL(orig_flag_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(view_stmt), K(orig_flag_stmt));
+  } else if (view_stmt != orig_flag_stmt) {
+    if (OB_UNLIKELY(!orig_flag_stmt->is_set_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected origin flag stmt", K(ret), KPC(orig_flag_stmt));
+    } else if (OB_UNLIKELY(orig_flag_stmt->get_select_item_size() != orig_sel_count)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item count mismatch", K(ret), K(orig_sel_count), KPC(orig_flag_stmt));
+    } else {
+      flag_table->ref_query_ = orig_flag_stmt;
+    }
+  } else if (OB_UNLIKELY(orig_sel_count <= 0
+                         || orig_sel_count > view_stmt->get_select_item_size())) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected original select item count", K(ret), K(orig_sel_count), KPC(view_stmt));
+  } else {
+    ObOptimizerUtil::revert_items(view_stmt->get_select_items(), orig_sel_count);
   }
   return ret;
 }
@@ -2225,6 +2277,7 @@ int ObTransformOrExpansion::adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds
   ObRawExprFactory *expr_factory = NULL;
   ObRawExpr *transformed_expr = NULL;
   ObSEArray<ObQueryRefRawExpr *, 4> removed_subqueries;
+  ObSEArray<ObRawExpr*, 4> generated_exprs;
   if (OB_ISNULL(conds_exprs) || OB_ISNULL(ctx_)
       || OB_ISNULL(session_info = ctx_->session_info_)
       || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
@@ -2239,54 +2292,28 @@ int ObTransformOrExpansion::adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds
   } else if (OB_ISNULL(transformed_expr = conds_exprs->at(expr_pos))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null transformed expr", K(ret));
-  } else if (OB_FAIL(conds_exprs->remove(expr_pos))) {
-    LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (T_OP_OR == transformed_expr->get_expr_type()) {
-    ObSEArray<ObRawExpr*, 4> generated_exprs;
-    if (OB_FAIL(create_expr_for_or_expr(*transformed_expr,
-                                        param_pos,
-                                        ctx,
-                                        generated_exprs))) {
-      LOG_WARN("failed to create expr", K(ret));
-    } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
-      LOG_WARN("failed to append expr", K(ret));
-    } else { /*do nothing*/ }
-  } else if (T_OP_IN == transformed_expr->get_expr_type()) {
-    ObSEArray<ObRawExpr*, 4> generated_exprs;
-    if (OB_FAIL(create_expr_for_in_expr(*transformed_expr,
-                                        param_pos,
-                                        ctx,
-                                        generated_exprs))) {
-      LOG_WARN("failed to create expr", K(ret), K(generated_exprs));
-    } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else { /*do nothing*/ }
-  } else {
+  } else if (OB_UNLIKELY(T_OP_IN != transformed_expr->get_expr_type() &&
+                         T_OP_OR != transformed_expr->get_expr_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr type", K(transformed_expr->get_expr_type()), K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info))) {
-      LOG_WARN("failed to formalize stmt", K(ret));
-    } else {
-      // clean unused subqueries
-      ObSEArray<ObRawExpr*, 4> relation_exprs;
-      ObSEArray<ObQueryRefRawExpr *, 8> used_subquery_exprs;
-      if (OB_FAIL(or_expansion_stmt->get_relation_exprs(relation_exprs))) {
-        LOG_WARN("failed to get relation exprs");
-      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(relation_exprs, used_subquery_exprs))) {
-        LOG_WARN("failed to get query exprs");
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < or_expansion_stmt->get_subquery_exprs().count(); ++i) {
-          ObQueryRefRawExpr *expr = or_expansion_stmt->get_subquery_exprs().at(i);
-          if (ObOptimizerUtil::find_item(used_subquery_exprs, expr)) {
-            // do nothing
-          } else if (OB_FAIL(ObOptimizerUtil::remove_item(or_expansion_stmt->get_subquery_exprs(), expr))) {
-            LOG_WARN("failed to remove item from subquery exprs", K(ret));
-          }
-        }
-      }
-    }
+  } else if (OB_FAIL(conds_exprs->remove(expr_pos))) {
+    LOG_WARN("failed to remove condition expr", K(ret));
+  } else if (T_OP_OR == transformed_expr->get_expr_type() &&
+             OB_FAIL(create_expr_for_or_expr(*transformed_expr,
+                                             param_pos,
+                                             ctx,
+                                             generated_exprs))) {
+    LOG_WARN("failed to create expr", K(ret));
+  } else if (T_OP_IN == transformed_expr->get_expr_type() &&
+             OB_FAIL(create_expr_for_in_expr(*transformed_expr,
+                                             param_pos,
+                                             ctx,
+                                             generated_exprs))) {
+    LOG_WARN("failed to create expr", K(ret), K(generated_exprs));
+  } else if (OB_FAIL(append(*conds_exprs, generated_exprs))) {
+    LOG_WARN("failed to append expr", K(ret));
+  } else if (OB_FAIL(or_expansion_stmt->formalize_stmt(session_info))) {
+    LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
 }

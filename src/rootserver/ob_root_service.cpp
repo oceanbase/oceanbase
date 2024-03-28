@@ -5727,14 +5727,6 @@ int ObRootService::fetch_sys_tenant_ls_info()
   return ret;
 }
 
-int ObRootService::not_implement()
-{
-  int ret = OB_NOT_IMPLEMENT;
-  bt("not implement");
-  LOG_WARN("rpc not implemented", K(ret));
-  return ret;
-}
-
 ObRootService::ObRestartTask::ObRestartTask(ObRootService &root_service)
 :ObAsyncTimerTask(root_service.task_queue_),
     root_service_(root_service)
@@ -5950,6 +5942,27 @@ int ObRootService::alter_user_profile(const ObAlterUserProfileArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ddl_service_.alter_user_profile(arg))){
     LOG_WARN("lock user failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter user grant connect through is not supported when data version is below 4.2.3");
+  } else if (OB_FAIL(ddl_service_.alter_user_proxy(arg))){
+    LOG_WARN("alter user failed", K(arg), K(ret));
   }
   return ret;
 }
@@ -6175,7 +6188,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     bool is_update = false;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.check_outline_exist(outline_info, is_or_replace, is_update))) {
-        LOG_WARN("failed to check_outline_exist", K(outline_info), K(ret));
+        LOG_WARN("failed to check_outline_exist", K(outline_info), K(is_or_replace), K(is_update), K(ret));
       }
     }
 
@@ -6267,7 +6280,8 @@ int ObRootService::drop_outline(const obrpc::ObDropOutlineArg &arg)
 }
 //-----End of functions for managing outlines-----
 
-int ObRootService::create_routine(const ObCreateRoutineArg &arg)
+int ObRootService::create_routine_common(const ObCreateRoutineArg &arg,
+                                         obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6384,11 +6398,30 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = routine_info.get_schema_version();
+    }
   }
   return ret;
 }
 
-int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
+int ObRootService::create_routine(const ObCreateRoutineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_routine_common(arg));
+  return ret;
+}
+
+int ObRootService::create_routine_with_res(const ObCreateRoutineArg &arg,
+                                           obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_routine_common(arg, &res));
+  return ret;
+}
+
+int ObRootService::alter_routine_common(const ObCreateRoutineArg &arg,
+                                       obrpc::ObRoutineDDLRes* res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6415,16 +6448,33 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
     if (OB_FAIL(ret)) {
     } else if ((lib::is_oracle_mode() && arg.is_or_replace_) ||
                (lib::is_mysql_mode() && arg.is_need_alter_)) {
-      if (OB_FAIL(create_routine(arg))) {
+      if (OB_FAIL(create_routine_common(arg, res))) {
         LOG_WARN("failed to alter routine with create", K(ret));
       }
     } else {
       if (OB_FAIL(ddl_service_.alter_routine(*routine_info, error_info, &arg.ddl_stmt_str_,
                                              schema_guard))) {
         LOG_WARN("alter routine failed", K(ret), K(arg.routine_info_), K(error_info));
+      } else if (OB_NOT_NULL(res)) {
+        res->store_routine_schema_version_ = routine_info->get_schema_version();
       }
     }
   }
+  return ret;
+}
+
+int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_routine_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_routine_with_res(const ObCreateRoutineArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_routine_common(arg, &res));
   return ret;
 }
 
@@ -6533,7 +6583,8 @@ int ObRootService::drop_routine(const ObDropRoutineArg &arg)
   return ret;
 }
 
-int ObRootService::create_udt(const ObCreateUDTArg &arg)
+int ObRootService::create_udt_common(const ObCreateUDTArg &arg,
+                                    obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -6604,8 +6655,9 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
         }
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
         if (!exist && exist_valid_udt) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("valid udt found during resolving can not be found again",
+          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+          LOG_WARN("valid udt at resolve stage can not be found any more at rootservice stage, "
+                   "could be dropped by another parallel ddl",
                    K(ret), K(database_name), K(udt_info.get_type_name()));
         } else if (exist && exist_valid_udt && !is_or_replace) {
           ret = OB_ERR_SP_ALREADY_EXISTS;
@@ -6679,7 +6731,25 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = udt_info.get_schema_version();
+    }
   }
+  return ret;
+}
+
+int ObRootService::create_udt(const ObCreateUDTArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_udt_common(arg));
+  return ret;
+}
+
+int ObRootService::create_udt_with_res(const ObCreateUDTArg &arg,
+                                      obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_udt_common(arg, &res));
   return ret;
 }
 
@@ -6729,8 +6799,9 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
                                               udt_name, exist))) {
           LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
       } else if (!exist && exist_valid_udt) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("valid udt can not be found any more", K(ret), K(udt_name));
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("valid udt at resolve stage can not be found any more at rootservice stage, "
+                 "could be dropped by another parallel ddl", K(ret), K(udt_name));
       } else if (exist) {
         if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
                                               db_schema->get_database_id(),
@@ -7001,7 +7072,8 @@ int ObRootService::admin_sync_rewrite_rules(const obrpc::ObSyncRewriteRuleArg &a
   return ret;
 }
 
-int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
+int ObRootService::create_package_common(const obrpc::ObCreatePackageArg &arg,
+                                         obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7115,11 +7187,31 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
                        new_package_info.get_package_name().length(), new_package_info.get_package_name().ptr());
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+      res->store_routine_schema_version_ = new_package_info.get_schema_version();
+    }
   }
   return ret;
 }
 
-int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
+int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_package_common(arg));
+  return ret;
+}
+
+int ObRootService::create_package_with_res(const obrpc::ObCreatePackageArg &arg,
+                                           obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (create_package_common(arg, &res));
+  return ret;
+}
+
+
+int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
+                                        obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7162,11 +7254,14 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
         } else if (OB_FAIL(ddl_service_.alter_package(schema_guard,
-                                                      *package_info,
+                                                      const_cast<ObPackageInfo &>(*package_info),
                                                       public_routine_infos,
                                                       const_cast<ObErrorInfo &>(arg.error_info_),
                                                       &arg.ddl_stmt_str_))) {
           LOG_WARN("drop package failed", K(ret), K(package_name));
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+          res->store_routine_schema_version_ = package_info->get_schema_version();
         }
       } else {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -7178,6 +7273,21 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
     }
   }
 
+  return ret;
+}
+
+int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_package_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_package_with_res(const obrpc::ObAlterPackageArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_package_common(arg, &res));
   return ret;
 }
 
@@ -7274,7 +7384,8 @@ int ObRootService::create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
   return ret;
 }
 
-int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
+int ObRootService::alter_trigger_common(const obrpc::ObAlterTriggerArg &arg,
+                                        obrpc::ObRoutineDDLRes *res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7283,9 +7394,24 @@ int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ddl_service_.alter_trigger(arg))) {
+  } else if (OB_FAIL(ddl_service_.alter_trigger(arg, res))) {
     LOG_WARN("failed to alter trigger", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::alter_trigger(const obrpc::ObAlterTriggerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_trigger_common(arg));
+  return ret;
+}
+
+int ObRootService::alter_trigger_with_res(const obrpc::ObAlterTriggerArg &arg,
+                                          obrpc::ObRoutineDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  OZ (alter_trigger_common(arg, &res));
   return ret;
 }
 
@@ -8700,6 +8826,95 @@ int ObRootService::admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg)
   return ret;
 }
 
+#define ADD_EVENT_FOR_ALTER_LS_REPLICA                                               \
+              "admin_alter_ls_replica", arg.get_alter_task_type().get_type_str(),    \
+              "ret_code", ret_val,                                                   \
+              "tenant_id", arg.get_tenant_id()                                       \
+
+int ObRootService::add_rs_event_for_alter_ls_replica_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    const int ret_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    char extra_info[MSG_SIZE] = {0};
+    char addr_str_buf[OB_SERVER_ADDR_STR_LEN];
+    if (OB_FAIL(arg.get_data_source().ip_port_to_string(addr_str_buf, OB_SERVER_ADDR_STR_LEN))) {
+      LOG_WARN("data source to string failed", KR(ret), K(arg));
+    } else {
+      snprintf(extra_info, sizeof(extra_info),
+      "data_source: %s, paxos_replica_num: %ld", addr_str_buf, arg.get_paxos_replica_num());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (arg.get_alter_task_type().is_add_task()
+            || arg.get_alter_task_type().is_modify_replica_task()
+            || arg.get_alter_task_type().is_remove_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "target_replica", arg.get_server_addr(),
+                            "replica_type", replica_type_to_str(arg.get_replica_type()),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_migrate_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "source_replica", arg.get_server_addr(),
+                            "target_replica", arg.get_destination_addr(),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_modify_paxos_replica_num_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "paxos_replica_num", arg.get_paxos_replica_num());
+    } else if (arg.get_alter_task_type().is_cancel_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "task_id", arg.get_task_id());
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("receive alter ls replica request", K(arg));
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    ObSystemAdminCtx ctx;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", KR(ret));
+    } else {
+      ObAdminAlterLSReplica admin_util(ctx);
+      if (OB_FAIL(admin_util.execute(arg))) {
+        LOG_WARN("execute alter ls replica failed", KR(ret), K(arg));
+      }
+    }
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("alter ls replica over", KR(ret), K(arg), K(cost_time));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = add_rs_event_for_alter_ls_replica_(arg, ret))) {
+    // ignore
+    LOG_WARN("add rs event for alter ls replica failed", KR(ret), KR(tmp_ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::admin_upgrade_virtual_schema()
 {
   int ret = OB_SUCCESS;
@@ -8809,7 +9024,13 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
       // just to check sys tenant's schema with latest schema version
       ObDDLSQLTransaction trans(schema_service_, false /*end_signal*/);
-      if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
+      ObTimeoutCtx ctx;
+      const int64_t DEFAULT_TIMEOUT = 60_s;
+      const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+      const int64_t timeout = MAX(DEFAULT_TIMEOUT, INNER_SQL_TIMEOUT);
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
+        LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout));
+      } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
         LOG_WARN("failed to start trans, ", K(ret));
       } else if (OB_FAIL(RS_JOB_CREATE_EXT(job_id, RESTORE_TENANT, trans,
                          "sql_text", ObHexEscapeSqlStr(arg.get_sql_stmt())))) {
@@ -9790,6 +10011,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
           LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
         }
       }
+    } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_WRITE_LIMIT_PERCENTAGE)) {
+      ret = check_data_disk_write_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_USAGE_LIMIT_PERCENTAGE)) {
+      ret = check_data_disk_usage_limit_(*item);
     }
   }
   return ret;
@@ -10943,6 +11168,53 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   return ret;
 }
 #endif
+
+int ObRootService::check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const char *warn_log = "cluster config data_disk_write_limit_percentage. "
+    "It should greater than or equal with data_disk_usage_limit_percentage";
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (!is_valid) {
+    // invalid argument
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(value));
+  } else if (value == 0) {
+    // does not need check data disk write limit percentage
+  } else if (value < GCONF.data_disk_usage_limit_percentage) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const char *warn_log = "cluster config data_disk_usage_limit_percentage. "
+    "It should less than or equal with data_disk_write_limit_percentage";
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (!is_valid) {
+    // invalid argument
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(value));
+  } else if (0 == GCONF.data_disk_write_limit_percentage) {
+    // does not need check data disk write limit percentage
+  } else if (value > GCONF.data_disk_write_limit_percentage) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
+  return ret;
+}
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

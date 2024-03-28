@@ -6,7 +6,11 @@ create table t1(col_int int, col_decimal decimal, col_varchar varchar(100),
                 col_date date, col_datetime datetime, col_timestamp timestamp,
                 col_null int);
 insert into t1 values(123, 123.123, 'invalid char', '2020-01-01 12:12:12', '0000-00-00 00:00:00.000', '2020-01-01 12:12:12.1234', null);
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t1"."col_decimal"' at row 1
 insert into t1 values(123, 123.123, '2020-01-01', '2019-01-01', '0000-00-00', '2020-01-01', null);
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t1"."col_decimal"' at row 1
 
 // to check type
 create table t2 (c1 int, c2 int unsigned, 
@@ -31,6 +35,9 @@ insert into t2 values(1, 2,
     7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '9.5', '10.5');
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t2"."c17"' at row 1
+Warning	1265	Data truncated for column '"oceanbase"."t2"."c18"' at row 1
 insert into t2 values(-1, 2, 
     -1, 2, 
     -1, 2, 
@@ -42,6 +49,9 @@ insert into t2 values(-1, 2,
     -7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '9.5', '10.5');
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t2"."c17"' at row 1
+Warning	1265	Data truncated for column '"oceanbase"."t2"."c18"' at row 1
 
 // sleep 2
 select col_int, to_days(col_int) from t1;

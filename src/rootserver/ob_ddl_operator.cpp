@@ -3808,6 +3808,7 @@ int ObDDLOperator::update_aux_table(
           // index table should only inherit table mode and table state flag from data table
           new_aux_table_schema.set_table_mode(new_table_schema.get_table_mode_flag());
           new_aux_table_schema.set_table_state_flag(new_table_schema.get_table_state_flag());
+          new_aux_table_schema.set_duplicate_scope(new_table_schema.get_duplicate_scope());
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {
@@ -6629,10 +6630,14 @@ int ObDDLOperator::rename_user(
       ret = OB_ERR_USER_NOT_EXIST;
       LOG_WARN("User not exist", K(ret));
     } else {
-      ObUserInfo new_user_info = *user_info;
-      new_user_info.set_user_name(new_account.user_name_);
-      new_user_info.set_host(new_account.host_name_);
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else if (OB_FAIL(new_user_info.set_user_name(new_account.user_name_))) {
+        LOG_WARN("set user name failed", K(ret));
+      } else if (OB_FAIL(new_user_info.set_host(new_account.host_name_))) {
+        LOG_WARN("set user host failed", K(ret));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().rename_user(
                   new_user_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -6671,10 +6676,13 @@ int ObDDLOperator::set_passwd(
       LOG_WARN("User not exist", K(ret));
     } else {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_user_info = *user_info;
-      new_user_info.set_passwd(passwd);
-      new_user_info.set_password_last_changed(ObTimeUtility::current_time());
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else if (OB_FAIL(new_user_info.set_passwd(passwd))) {
+        LOG_WARN("set passwd failed", K(ret));
+      } else if (OB_FALSE_IT(new_user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_passwd(
                         new_user_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -6715,14 +6723,18 @@ int ObDDLOperator::set_max_connections(
       LOG_WARN("User not exist", K(ret));
     } else {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_user_info = *user_info;
-      if (OB_INVALID_ID != max_connections_per_hour) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      }
+      if (OB_SUCC(ret) && OB_INVALID_ID != max_connections_per_hour) {
         new_user_info.set_max_connections(max_connections_per_hour);
       }
-      if (OB_INVALID_ID != max_user_connections) {
+      if (OB_SUCC(ret) && OB_INVALID_ID != max_user_connections) {
         new_user_info.set_max_user_connections(max_user_connections);
       }
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_max_connections(
                         new_user_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -6762,9 +6774,12 @@ int ObDDLOperator::alter_role(
       LOG_WARN("Role not exist", K(ret));
     } else {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_role_info = *role_info;
-      new_role_info.set_passwd(passwd);
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_role_info;
+      if (OB_FAIL(new_role_info.assign(*role_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else if (OB_FAIL(new_role_info.set_passwd(passwd))) {
+        LOG_WARN("set passwd failed", K(ret));
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().alter_role(
                          new_role_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -6865,12 +6880,17 @@ int ObDDLOperator::alter_user_require(const uint64_t tenant_id,
       LOG_WARN("User not exist", K(ret));
     } else {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_user_info = *user_info;
-      new_user_info.set_ssl_type(arg.ssl_type_);
-      new_user_info.set_ssl_cipher(arg.ssl_cipher_);
-      new_user_info.set_x509_issuer(arg.x509_issuer_);
-      new_user_info.set_x509_subject(arg.x509_subject_);
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else {
+        new_user_info.set_ssl_type(arg.ssl_type_);
+        new_user_info.set_ssl_cipher(arg.ssl_cipher_);
+        new_user_info.set_x509_issuer(arg.x509_issuer_);
+        new_user_info.set_x509_subject(arg.x509_subject_);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().alter_user_require(
                          new_user_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -6919,9 +6939,14 @@ int ObDDLOperator::grant_revoke_user(
       }
       //no matter privilege change or not, write a sql
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_user_info = *user_info;
-      new_user_info.set_priv_set(new_priv);
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else {
+        new_user_info.set_priv_set(new_priv);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().grant_revoke_user(
                          new_user_info, new_schema_version, ddl_stmt_str, trans, is_from_inner_sql))) {
@@ -6960,9 +6985,14 @@ int ObDDLOperator::lock_user(
       LOG_WARN("User not exist", K(ret));
     } else if (locked != user_info->get_is_locked()) {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObUserInfo new_user_info = *user_info;
-      new_user_info.set_is_locked(locked);
-      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      ObUserInfo new_user_info;
+      if (OB_FAIL(new_user_info.assign(*user_info))) {
+        LOG_WARN("assign failed", K(ret));
+      } else {
+        new_user_info.set_is_locked(locked);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().lock_user(
                          new_user_info, new_schema_version, ddl_stmt_str, trans))) {
@@ -8088,6 +8118,20 @@ int ObDDLOperator::grant_revoke_role(
                                                      role_info->get_user_name(),
                                                      role_info->get_host_name()))) {
             LOG_WARN("append sql failed", K(ret));
+          } else if (!is_grant) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < user_info.get_proxied_user_info_cnt(); j++) {
+              const ObProxyInfo *proxy_info = user_info.get_proxied_user_info_by_idx(j);
+              if (OB_ISNULL(proxy_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error", K(ret));
+              }
+              for (int64_t k = 0; OB_SUCC(ret) && k < proxy_info->role_id_cnt_; k++) {
+                if (proxy_info->get_role_id_by_idx(k) == role_id) {
+                  OZ (schema_service->get_priv_sql_service().grant_proxy_role(tenant_id, user_info.get_user_id(),
+                                                proxy_info->user_id_, role_id, new_schema_version, trans, is_grant));
+                }
+              }
+            }
           }
         }
       }
@@ -8626,6 +8670,11 @@ int ObDDLOperator::replace_routine(ObRoutineInfo &routine_info,
     routine_info.set_routine_id(old_routine_info->get_routine_id());
     routine_info.set_schema_version(new_schema_version);
   }
+  if (OB_SUCC(ret) && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+    OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                          old_routine_info->get_tenant_id(),
+                                                          old_routine_info->get_routine_id()));
+  }
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, old_routine_info->get_tenant_id(),
                                      old_routine_info->get_routine_id(),
                                      new_schema_version,
@@ -8903,6 +8952,25 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
       }
     }
     if (is_replace) {
+      if (OB_SUCC(ret) && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+        // when recreate package header, need clear package body cache if exist package body
+        if (PACKAGE_TYPE == old_package_info->get_type()) {
+          const ObPackageInfo *del_package_info = NULL;
+          if (OB_FAIL(schema_guard.get_package_info(tenant_id,
+                                                    old_package_info->get_database_id(),
+                                                    old_package_info->get_package_name(),
+                                                    PACKAGE_BODY_TYPE,
+                                                    old_package_info->get_compatibility_mode(),
+                                                    del_package_info))) {
+            LOG_WARN("get package body info failed", K(ret));
+          } else if (OB_NOT_NULL(del_package_info)) {
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, del_package_info->get_package_id()));
+          }
+        } else {
+          // do nothing
+        }
+        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, old_package_info->get_package_id()));
+      }
       OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      old_package_info->get_package_id(),
                                      new_schema_version,
@@ -8920,7 +8988,7 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
   return ret;
 }
 
-int ObDDLOperator::alter_package(const ObPackageInfo &package_info,
+int ObDDLOperator::alter_package(ObPackageInfo &package_info,
                                  ObSchemaGetterGuard &schema_guard,
                                  ObMySQLTransaction &trans,
                                  ObIArray<ObRoutineInfo> &public_routine_infos,
@@ -8933,7 +9001,9 @@ int ObDDLOperator::alter_package(const ObPackageInfo &package_info,
   const uint64_t tenant_id = package_info.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   uint64_t package_id = package_info.get_package_id();
-  ObPackageInfo new_package_info;
+  uint64_t database_id = package_info.get_database_id();
+  const ObString &package_name = package_info.get_package_name();
+  int64_t compatible_mode = package_info.get_compatibility_mode();
   OV (OB_NOT_NULL(schema_service_impl), OB_ERR_SYS);
   OV (OB_INVALID_ID != tenant_id && OB_INVALID_ID != package_id, OB_INVALID_ARGUMENT);
   if (OB_SUCC(ret)) {
@@ -8961,13 +9031,14 @@ int ObDDLOperator::alter_package(const ObPackageInfo &package_info,
           OZ (schema_service_impl->get_routine_sql_service().update_routine(routine_info, &trans));
         }
       }
-      OZ (new_package_info.assign(package_info));
       OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
-      OX (new_package_info.set_schema_version(new_schema_version));
-      OZ (schema_service_impl->get_routine_sql_service().alter_package(new_package_info, &trans, ddl_stmt_str));
+      OX (package_info.set_schema_version(new_schema_version));
+      OZ (schema_service_impl->get_routine_sql_service().alter_package(package_info, &trans, ddl_stmt_str));
     }
   }
+
   OZ (error_info.handle_error_info(trans, &package_info));
+
   return ret;
 }
 
@@ -9179,6 +9250,13 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                                           trigger_info.get_object_type()));
     OZ (insert_dependency_infos(trans, dep_infos, trigger_info.get_tenant_id(), trigger_info.get_trigger_id(),
                                 trigger_info.get_schema_version(), trigger_info.get_owner_id()));
+
+    if (OB_SUCC(ret) && is_replace && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+      OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id())));
+      OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                    share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id())));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(error_info.handle_error_info(trans, &trigger_info))) {
@@ -9250,6 +9328,10 @@ int ObDDLOperator::alter_trigger(ObTriggerInfo &trigger_info,
           trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
           base_table_id, trigger_info.get_trigger_name());
   }
+  OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id())));
+  OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id())));
   ObErrorInfo error_info;
   OZ (error_info.handle_error_info(trans, &trigger_info), error_info);
   return ret;
@@ -9618,7 +9700,17 @@ int ObDDLOperator::replace_udt(ObUDTTypeInfo &udt_info,
       // do nothing
     }
   }
-
+  if (OB_SUCC(ret) && public_routine_infos.count() > 0 && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+    if (OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id))) {
+      OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                    ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id))));
+      if (old_udt_info->has_type_body() &&
+          OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id))) {
+        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                      ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id))));
+      }
+    }
+  }
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      old_udt_info->get_type_id(),
                                      new_schema_version,
@@ -11357,6 +11449,131 @@ int ObDDLOperator::drop_directory(const ObString &ddl_str,
   return ret;
 }
 //----End of functions for directory object----
+
+
+int ObDDLOperator::alter_user_proxy(const ObUserInfo* client_user_info,
+                                    const ObUserInfo* proxy_user_info,
+                                    const uint64_t flags,
+                                    const bool is_grant,
+                                    const ObIArray<uint64_t> &role_ids,
+                                    ObIArray<ObUserInfo> &users_to_update,
+                                    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  ObArray<uint64_t> cur_role_ids;
+  if (OB_ISNULL(schema_sql_service) || OB_ISNULL(client_user_info) || OB_ISNULL(proxy_user_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service must not null", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(client_user_info->get_tenant_id(), new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(client_user_info->get_tenant_id()));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < client_user_info->get_proxied_user_info_cnt(); i++) {
+      const ObProxyInfo *proxy_info = client_user_info->get_proxied_user_info_by_idx(i);
+      if (OB_ISNULL(proxy_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (proxy_info->user_id_ == proxy_user_info->get_user_id()) {
+        found = true;
+        for (int64_t j = 0; OB_SUCC(ret) && j < proxy_info->role_id_cnt_; j++) {
+          OZ (cur_role_ids.push_back(proxy_info->get_role_id_by_idx(j)));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!found) {
+      if (!is_grant) {
+        ret = OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT;
+        LOG_WARN("revoke no such grant", K(ret));
+      }
+    }
+  }
+  ObArray<uint64_t> role_to_add;
+  ObArray<uint64_t> role_to_del;
+  for (int64_t i = 0; OB_SUCC(ret) && i < role_ids.count(); i++) {
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < cur_role_ids.count(); j++) {
+      if (cur_role_ids.at(j) == role_ids.at(i)) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      if (OB_FAIL(role_to_add.push_back(role_ids.at(i)))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cur_role_ids.count(); i++) {
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < role_ids.count(); j++) {
+      if (cur_role_ids.at(i) == role_ids.at(j)) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      if (OB_FAIL(role_to_del.push_back(cur_role_ids.at(i)))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_proxy(client_user_info->get_tenant_id(),
+                client_user_info->get_user_id(), proxy_user_info->get_user_id(), flags, new_schema_version, trans, is_grant))) {
+      LOG_WARN("grant proxy failed", KPC(proxy_user_info), KPC(client_user_info), K(new_schema_version), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < role_to_add.count(); i++) {
+        if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_proxy_role(client_user_info->get_tenant_id(),
+                  client_user_info->get_user_id(), proxy_user_info->get_user_id(), role_to_add.at(i), new_schema_version, trans, true/*grant*/))) {
+          LOG_WARN("grant proxy role failed", KPC(proxy_user_info), KPC(client_user_info), K(new_schema_version), K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < role_to_del.count(); i++) {
+        if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_proxy_role(client_user_info->get_tenant_id(),
+                  client_user_info->get_user_id(), proxy_user_info->get_user_id(), role_to_del.at(i), new_schema_version, trans, false/*delete*/))) {
+          LOG_WARN("grant proxy role failed", KPC(proxy_user_info), KPC(client_user_info), K(new_schema_version), K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      bool found_client_user = false;
+      bool found_proxy_user = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !(found_client_user && found_proxy_user) && i < users_to_update.count(); i++) {
+        if (users_to_update.at(i).get_user_id() == client_user_info->get_user_id()) {
+          found_client_user = true;
+        }
+        if (users_to_update.at(i).get_user_id() == proxy_user_info->get_user_id()) {
+          found_proxy_user = true;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!found_client_user) {
+          if (OB_FAIL(users_to_update.push_back(*client_user_info))) {
+            LOG_WARN("fail to push back", K(ret));
+          } else if (is_grant) {
+            users_to_update.at(users_to_update.count() - 1).set_proxy_activated_flag(ObProxyActivatedFlag::PROXY_BEEN_ACTIVATED_BEFORE);
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (client_user_info->get_user_id() == proxy_user_info->get_user_id()) {
+          //skip
+        } else if (!found_proxy_user) {
+          if (OB_FAIL(users_to_update.push_back(*proxy_user_info))) {
+            LOG_WARN("fail to push back", K(ret));
+          } else if (is_grant) {
+            users_to_update.at(users_to_update.count() - 1).set_proxy_activated_flag(ObProxyActivatedFlag::PROXY_BEEN_ACTIVATED_BEFORE);
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 
 //----Functions for rls object----
 int ObDDLOperator::create_rls_policy(ObRlsPolicySchema &schema,

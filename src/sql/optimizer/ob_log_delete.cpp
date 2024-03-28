@@ -95,7 +95,7 @@ int ObLogDelete::inner_est_cost(double child_card, double &op_cost)
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     cost_info.constraint_count_ = delete_dml_info->ck_cst_exprs_.count();
-    if (OB_FAIL(ObOptEstCost::cost_delete(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
+    if (OB_FAIL(ObOptEstCost::cost_delete(cost_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to get delete cost", K(ret));
     }
   }
@@ -175,6 +175,9 @@ int ObLogDelete::get_plan_item_info(PlanText &plan_text,
     } else if (need_barrier()) {
       ret = BUF_PRINTF(", ");
       ret = BUF_PRINTF("with_barrier");
+    }
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
     }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item. special_predicates_len_);

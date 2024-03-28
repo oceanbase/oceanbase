@@ -1806,10 +1806,10 @@ int ObSelectLogPlan::candi_allocate_set(const ObIArray<ObSelectLogPlan*> &child_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (select_stmt->is_recursive_union()) {
-    // generate recursive union all plans
-    if (OB_FAIL(candi_allocate_recursive_union_all(child_plans))) {
-      LOG_WARN("failed to allocate recursive union all", K(ret));
-    } else { /*do nothing*/ }
+    // generate recursive union plans
+    if (OB_FAIL(candi_allocate_recursive_union(child_plans))) {
+      LOG_WARN("failed to allocate recursive union", K(ret));
+    }
   } else if (ObSelectStmt::UNION == select_stmt->get_set_op() &&
             (!select_stmt->is_set_distinct() || child_plans.count() > 2)) {
     // generate union all or union distinct with more than two children plans
@@ -2526,7 +2526,7 @@ int ObSelectLogPlan::allocate_set_distinct_as_top(ObLogicalOperator *&top)
                                                        top->get_card(),
                                                        top->get_width(),
                                                        distinct_exprs,
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
       distinct->set_cost(top->get_cost() + distinct_cost);
       distinct->set_op_cost(distinct_cost);
       top = distinct_op;
@@ -2535,7 +2535,7 @@ int ObSelectLogPlan::allocate_set_distinct_as_top(ObLogicalOperator *&top)
   return ret;
 }
 
-int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectLogPlan*> &child_plans)
+int ObSelectLogPlan::candi_allocate_recursive_union(const ObIArray<ObSelectLogPlan*> &child_plans)
 {
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> all_plans;
@@ -2559,22 +2559,22 @@ int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectL
   } else if (OB_FAIL(get_minimal_cost_candidates(right_plan->get_candidate_plans().candidate_plans_,
                                                  right_best_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
-  } else if (OB_FAIL(create_recursive_union_all_plan(left_best_plans,
+  } else if (OB_FAIL(create_recursive_union_plan(left_best_plans,
                                                      right_best_plans,
                                                      candi_order_items,
                                                      false,
                                                      all_plans))) {
-    LOG_WARN("failed to create recursive union all plan", K(ret));
+    LOG_WARN("failed to create recursive union plan", K(ret));
   } else if (!all_plans.empty()) {
     LOG_TRACE("succeed to generate set plans using hint", K(all_plans.count()));
   } else if (OB_FAIL(get_log_plan_hint().check_status())) {
     LOG_WARN("failed to generate plans with hint", K(ret));
-  } else if (OB_FAIL(create_recursive_union_all_plan(left_best_plans,
+  } else if (OB_FAIL(create_recursive_union_plan(left_best_plans,
                                                      right_best_plans,
                                                      candi_order_items,
                                                      true,
                                                      all_plans))) {
-    LOG_WARN("failed to create recursive union all plan", K(ret));
+    LOG_WARN("failed to create recursive union plan", K(ret));
   } else {
     LOG_TRACE("succeed to generate set plans ignore hint", K(all_plans.count()));
   }
@@ -2590,7 +2590,7 @@ int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectL
   return ret;
 }
 
-int ObSelectLogPlan::create_recursive_union_all_plan(ObIArray<CandidatePlan> &left_best_plans,
+int ObSelectLogPlan::create_recursive_union_plan(ObIArray<CandidatePlan> &left_best_plans,
                                                      ObIArray<CandidatePlan> &right_best_plans,
                                                      const ObIArray<OrderItem> &order_items,
                                                      const bool ignore_hint,
@@ -2600,12 +2600,12 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObIArray<CandidatePlan> &le
   CandidatePlan candidate_plan;
   for (int64_t i = 0; OB_SUCC(ret) && i < left_best_plans.count(); i++) {
     for (int64_t j = 0; OB_SUCC(ret) && j < right_best_plans.count(); j++) {
-      if (OB_FAIL(create_recursive_union_all_plan(left_best_plans.at(i).plan_tree_,
+      if (OB_FAIL(create_recursive_union_plan(left_best_plans.at(i).plan_tree_,
                                                   right_best_plans.at(j).plan_tree_,
                                                   order_items,
                                                   ignore_hint,
                                                   candidate_plan.plan_tree_))) {
-        LOG_WARN("failed to create recursive union all plan", K(ret));
+        LOG_WARN("failed to create recursive union plan", K(ret));
       } else if (NULL == candidate_plan.plan_tree_) {
         /*do nothing*/
       } else if (OB_FAIL(all_plans.push_back(candidate_plan))) {
@@ -2616,7 +2616,7 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObIArray<CandidatePlan> &le
   return ret;
 }
 
-int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_child,
+int ObSelectLogPlan::create_recursive_union_plan(ObLogicalOperator *left_child,
                                                      ObLogicalOperator *right_child,
                                                      const ObIArray<OrderItem> &order_items,
                                                      const bool ignore_hint,
@@ -2677,14 +2677,16 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_chi
                                                               prefix_pos,
                                                               left_child->get_is_local_order()))) {
       LOG_WARN("failed to allocate operator for join style op", K(ret));
-    } else if (OB_FAIL(allocate_recursive_union_all_as_top(left_child, right_child, dist_set_method, top))) {
-      LOG_WARN("failed to allocate recursive union all as top", K(ret));
-    } else { /*do nothing*/ }
+    } else if (OB_FAIL(
+                 allocate_recursive_union_as_top(left_child, right_child, dist_set_method, top))) {
+      LOG_WARN("failed to allocate recursive union as top", K(ret));
+    } else { /*do nothing*/
+    }
   }
   return ret;
 }
 
-int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
+int ObSelectLogPlan::allocate_recursive_union_as_top(ObLogicalOperator *left_child,
                                                          ObLogicalOperator *right_child,
                                                          DistAlgo dist_set_method,
                                                          ObLogicalOperator *&top)
@@ -2703,13 +2705,27 @@ int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left
   } else {
     set_op->set_left_child(left_child);
     set_op->set_right_child(right_child);
-    set_op->assign_set_distinct(false);
+    set_op->assign_set_distinct(select_stmt->is_set_distinct());
     set_op->assign_set_op(select_stmt->get_set_op());
-    set_op->set_algo_type(MERGE_SET);
+    set_op->set_algo_type(select_stmt->is_set_distinct() ? HASH_SET : MERGE_SET);
     set_op->set_distributed_algo(dist_set_method);
     set_op->set_recursive_union(true);
     set_op->set_is_breadth_search(select_stmt->is_breadth_search());
-    if (OB_FAIL(set_op->set_search_ordering(select_stmt->get_search_by_items()))) {
+    // Recursvie Union Distict need child_ndv to compute row count
+    if (set_op->is_set_distinct()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < set_op->get_num_of_child(); i++) {
+        const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
+        double child_ndv = 0;
+        if (OB_NOT_NULL(table_meta)) {
+          child_ndv = table_meta->get_distinct_rows();
+        }
+        if (OB_FAIL(set_op->add_child_ndv(child_ndv))) {
+          LOG_WARN("failed to add child ndv", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_op->set_search_ordering(select_stmt->get_search_by_items()))) {
       LOG_WARN("set search order failed", K(ret));
     } else if (OB_FAIL(set_op->set_cycle_items(select_stmt->get_cycle_items()))) {
       LOG_WARN("set cycle item failed", K(ret));
@@ -3453,7 +3469,7 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
                                                        right_need_sort,
                                                        right_prefix_pos,
                                                        right_path_cost,
-                                                       get_optimizer_context().get_cost_model_type()))) {
+                                                       get_optimizer_context()))) {
         LOG_WARN("failed to compute cost for merge join style op", K(ret));
       } else if (NULL == best_plan || right_path_cost < best_cost) {
         if (OB_FAIL(best_order_items.assign(right_order_items))) {
@@ -4699,7 +4715,7 @@ int ObSelectLogPlan::decide_sort_keys_for_runion(const common::ObIArray<OrderIte
           ObRawExpr* real_expr = select_exprs.at(projector_offset);
           if (OB_ISNULL(real_expr)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("convert recursive union all generate operator sort failed");
+            LOG_WARN("convert recursive union generate operator sort failed");
           } else if (real_expr->is_const_expr()) {
             // do nothing.
           } else {
@@ -6386,29 +6402,45 @@ int ObSelectLogPlan::sort_window_functions(const ObFdItemSet &fd_item_set,
   ObSEArray<std::pair<int64_t, int64_t>, 8> expr_entries;
   bool is_const = false;
   ObSEArray<ObRawExpr*, 4> simplified_exprs;
+  ObSEArray<ObRawExpr*, 4> tmp_exprs;
   if (OB_UNLIKELY(win_func_exprs.empty())) {
      ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(win_func_exprs.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs.count(); ++i) {
-    int64_t non_const_exprs = 0;
-    simplified_exprs.reuse();
     if (OB_ISNULL(win_func_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(fd_item_set,
-                                                        equal_sets,
-                                                        const_exprs,
-                                                        win_func_exprs.at(i)->get_partition_exprs(),
-                                                        simplified_exprs))) {
-      LOG_WARN("failed to simplify exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(tmp_exprs,
+                                        win_func_exprs.at(i)->get_partition_exprs()))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
     }
-    for (int64_t j = 0; OB_SUCC(ret) && j < simplified_exprs.count(); ++j) {
-      if (OB_FAIL(ObOptimizerUtil::is_const_expr(simplified_exprs.at(j),
-                                                  equal_sets,
-                                                  const_exprs,
-                                                  get_onetime_query_refs(),
-                                                  is_const))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptimizerUtil::simplify_exprs(fd_item_set,
+                                                     equal_sets,
+                                                     const_exprs,
+                                                     tmp_exprs,
+                                                     simplified_exprs))) {
+    LOG_WARN("failed to simplified exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs.count(); ++i) {
+    int64_t non_const_exprs = 0;
+    tmp_exprs.reuse();
+    if (OB_ISNULL(win_func_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(simplified_exprs,
+                                                        win_func_exprs.at(i)->get_partition_exprs(),
+                                                        tmp_exprs))) {
+      LOG_WARN("failed to intersect exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < tmp_exprs.count(); ++j) {
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(tmp_exprs.at(j),
+                                                 equal_sets,
+                                                 const_exprs,
+                                                 get_onetime_query_refs(),
+                                                 is_const))) {
         LOG_WARN("failed to check is const expr", K(ret));
       } else if (!is_const) {
         ++non_const_exprs;
@@ -7091,7 +7123,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     // set card and cost
     table_scan->set_card(1.0);
     table_scan->set_op_cost(ObOptEstCost::cost_late_materialization_table_get(stmt->get_column_size(),
-                                                                              get_optimizer_context().get_cost_model_type()));
+                                                                              get_optimizer_context()));
     table_scan->set_cost(table_scan->get_op_cost());
     table_scan->set_table_row_count(index_scan->get_table_row_count());
     table_scan->set_output_row_count(1.0);
@@ -7196,7 +7228,7 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
                                                        right_child->get_cost(),
                                                        join->get_op_cost(),
                                                        join->get_cost(),
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
     if (OB_FAIL(join->set_op_ordering(left_child->get_op_ordering()))) {
       LOG_WARN("failed to set op ordering", K(ret));
     } else {
@@ -7310,7 +7342,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                              phy_query_range_row_count,
                                              op_cost,
                                              index_back_cost,
-                                             get_optimizer_context().get_cost_model_type()))) {
+                                             get_optimizer_context()))) {
           LOG_WARN("failed to get index access info", K(ret));
         } else {
           table_scan->set_cost(op_cost);
@@ -7356,7 +7388,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                                   top->get_cost(),
                                                   stmt->get_column_size(),
                                                   late_mater_cost,
-                                                  get_optimizer_context().get_cost_model_type());
+                                                  get_optimizer_context());
 
           OPT_TRACE("late materialization plan cost:", late_mater_cost);
         }

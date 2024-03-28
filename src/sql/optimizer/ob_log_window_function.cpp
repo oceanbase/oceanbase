@@ -321,7 +321,7 @@ int ObLogWindowFunction::est_cost()
                                                         first_child->get_width(),
                                                         win_exprs_.count(),
                                                         op_cost_,
-                                                        get_plan()->get_optimizer_context().get_cost_model_type()))) {
+                                                        get_plan()->get_optimizer_context()))) {
     LOG_WARN("calculate cost of window function failed", K(ret));
   } else {
     set_card(first_child->get_card());
@@ -352,7 +352,7 @@ int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, d
                                                           child->get_width(),
                                                           win_exprs_.count(),
                                                           op_cost,
-                                                          opt_ctx.get_cost_model_type()))) {
+                                                          opt_ctx))) {
       LOG_WARN("calculate cost of window function failed", K(ret));
     } else {
       cost = child_cost + op_cost;
@@ -599,4 +599,15 @@ int ObLogWindowFunction::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr);
   return OB_SUCCESS;
+}
+
+int ObLogWindowFunction::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (get_sort_keys().empty()) {
+    used = false;
+  }
+  return ret;
 }

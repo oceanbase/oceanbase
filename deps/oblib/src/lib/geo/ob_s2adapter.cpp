@@ -243,6 +243,15 @@ int64_t ObS2Adapter::get_cellids(ObS2Cellids &cells, bool is_query)
   return ret;
 }
 
+int64_t ObS2Adapter::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors)
+{
+  INIT_SUCC(ret);
+  if(OB_FAIL(visitor_->get_cellids_and_unrepeated_ancestors(cells, ancestors, need_buffer_, distance_))) {
+    LOG_WARN("fail to get cellid from visitor", K(ret));
+  }
+  return ret;
+}
+
 int64_t ObS2Adapter::get_inner_cover_cellids(ObS2Cellids &cells)
 {
   INIT_SUCC(ret);
@@ -286,20 +295,21 @@ int64_t ObS2Adapter::get_mbr(ObSpatialMBR &mbr)
         mbr.x_max_ = rect.lng_hi().degrees();
       }
     } else {
-      ObCartesianBox box;
-      ObArenaAllocator tmp_allocator;
-      ObGeoEvalCtx gis_context(&tmp_allocator, NULL);
-      if (OB_FAIL(gis_context.append_geo_arg(geo_))) {
-        LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
-      } else if (OB_FAIL(ObGeoFuncEnvelope::eval(gis_context, box))) {
-        LOG_WARN("get mbr box failed", K(ret));
-      } else if (box.is_empty()) {
-        LOG_DEBUG("It's might be empty geometry collection", K(geo_->type()), K(geo_->is_empty()));
-      } else {
-        mbr.x_min_ = box.min_corner().get<0>();
-        mbr.y_min_ = box.min_corner().get<1>();
-        mbr.x_max_ = box.max_corner().get<0>();
-        mbr.y_max_ = box.max_corner().get<1>();
+      CREATE_WITH_TEMP_CONTEXT(lib::ContextParam().set_mem_attr(MTL_ID(), "GISModule", ObCtxIds::DEFAULT_CTX_ID)) {
+        ObCartesianBox box;
+        ObGeoEvalCtx gis_context(CURRENT_CONTEXT, NULL);
+        if (OB_FAIL(gis_context.append_geo_arg(geo_))) {
+          LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
+        } else if (OB_FAIL(ObGeoFuncEnvelope::eval(gis_context, box))) {
+          LOG_WARN("get mbr box failed", K(ret));
+        } else if (box.is_empty()) {
+          LOG_DEBUG("It's might be empty geometry collection", K(geo_->type()), K(geo_->is_empty()));
+        } else {
+          mbr.x_min_ = box.min_corner().get<0>();
+          mbr.y_min_ = box.min_corner().get<1>();
+          mbr.x_max_ = box.max_corner().get<0>();
+          mbr.y_max_ = box.max_corner().get<1>();
+        }
       }
     }
   }

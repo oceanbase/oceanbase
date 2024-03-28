@@ -215,7 +215,7 @@ int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, doubl
   } else if (get_stmt()->is_insert_stmt()) {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card = static_cast<const ObInsertStmt*>(get_stmt())->get_insert_row_count();
-    op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type());
+    op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx);
     cost = op_cost;
   } else if (is_values_table_) {
     if (OB_ISNULL(table_def_)) {
@@ -224,13 +224,13 @@ int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, doubl
     } else {
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
       card = get_card();
-      op_cost = ObOptEstCost::cost_filter_rows(table_def_->row_cnt_, filter_exprs_, opt_ctx.get_cost_model_type());
+      op_cost = ObOptEstCost::cost_filter_rows(table_def_->row_cnt_, filter_exprs_, opt_ctx);
       cost = op_cost;
     }
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card = 1.0;
-    op_cost = ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx.get_cost_model_type());
+    op_cost = ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx);
     cost = op_cost;
   }
   return ret;

@@ -564,7 +564,7 @@ int LSFetchCtx::read_miss_tx_log(
 {
   int ret = OB_SUCCESS;
   const char *buf = log_entry.get_data_buf();
-  const int64_t buf_len = log_entry.get_data_len();
+  int64_t buf_len = log_entry.get_data_len();
   const int64_t submit_ts = log_entry.get_scn().get_val_for_logservice();
   int64_t pos = 0;
   logservice::ObLogBaseHeader log_base_header;
@@ -581,14 +581,37 @@ int LSFetchCtx::read_miss_tx_log(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("expect trans log while reading miss_log", KR(ret), K(log_entry), K(log_base_header), K(lsn));
   } else {
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+    char *decompression_buf = NULL;
+    int64_t decompressed_len = 0;
+    IObLogFetcher *fetcher = static_cast<IObLogFetcher *>(ls_fetch_mgr_->get_fetcher_host());
+    if (OB_ISNULL(fetcher)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fetcher is nullptr", KR(ret), K(fetcher));
+    } else if (log_base_header.is_compressed()) {
+      if (OB_FAIL(decompress_log_(buf, buf_len, pos, decompression_buf, decompressed_len, fetcher))) {
+        LOG_ERROR("deserialize_log_entry_base_header_ failed", K(log_entry),  K(lsn), K_(tls_id));
+      } else {
+        buf = decompression_buf;
+        buf_len = decompressed_len;
+        pos = 0;
+      }
+    }
+#endif
 
     if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn, submit_ts, serve_info_, missing, tsi))) {
       if (OB_ITEM_NOT_SETTED != ret && OB_IN_STOP_STATE != ret) {
         LOG_ERROR("resolve miss_log fail", KR(ret), K(log_entry), K(log_base_header), K(lsn), K(missing));
       }
     }
-  }
 
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+    if (NULL != fetcher && NULL != decompression_buf) {
+      fetcher->free_decompression_buf(static_cast<void *>(decompression_buf));
+      decompression_buf = NULL;
+    }
+#endif
+  }
   return ret;
 }
 

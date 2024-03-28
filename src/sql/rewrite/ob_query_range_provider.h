@@ -30,7 +30,7 @@ typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, true> ObRangesArray;
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
 static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
-
+static const int64_t NEW_MAX_NOT_IN_SIZE = 1000; // mysql support 1000 not in range node
 class ObQueryRangeProvider
 {
 public:
@@ -60,12 +60,14 @@ public:
   virtual bool is_contain_geo_filters() const = 0;
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const = 0;
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const = 0;
+  virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const = 0;
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
                               bool &contain_always_false) const = 0;
 
   // to string
   virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
+  virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const = 0;
 };
 
 }

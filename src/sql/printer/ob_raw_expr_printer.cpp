@@ -3206,6 +3206,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_XML_FOREST : {
+        if (OB_FAIL(print_xml_forest_expr(expr))) {
+          LOG_WARN("print xml_forest expr failed", K(ret));
+        }
+        break;
+      }
       case T_FUN_SYS_XML_ATTRIBUTES : {
         if (OB_FAIL(print_xml_attributes_expr(expr))) {
           LOG_WARN("print xml_attributes expr failed", K(ret));
@@ -4498,6 +4504,15 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
           LOG_WARN("failed to get udt info", K(ret));
         } else {
+          if (dest_tenant_id != OB_SYS_TENANT_ID) {
+            const share::schema::ObDatabaseSchema *db_schema = NULL;
+            if (OB_FAIL(schema_guard_->get_database_schema(dest_tenant_id, dest_info->get_database_id(), db_schema))) {
+              LOG_WARN("failed to get database schema info", K(ret), KPC(dest_info));
+            } else {
+              PRINT_IDENT_WITH_QUOT(db_schema->get_database_name_str());
+              DATA_PRINTF(".");
+            }
+          }
           PRINT_IDENT_WITH_QUOT(dest_info->get_type_name());
         }
         break;
@@ -4755,6 +4770,43 @@ int ObRawExprPrinter::print_xml_element_expr(ObSysFunRawExpr *expr)
         DATA_PRINTF(")");
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_xml_forest_expr(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  int num = expr->get_param_count();
+  int64_t format_type = 0;
+  if (num % 3 != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlforest(");
+    for (int i = 0; i < num / 3; i++) {
+      PRINT_EXPR(expr->get_param_expr(3 * i));
+      format_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(3 * i + 2))->get_value().get_int();
+      if (format_type == 0) {
+        DATA_PRINTF(" AS ");
+        int64_t cur_pos = *pos_;
+        PRINT_EXPR(expr->get_param_expr(3 * i + 1));
+        int64_t new_pos = *pos_;
+        if (buf_[cur_pos] == '\'') {
+            buf_[cur_pos] = '"';
+        }
+        if (buf_[new_pos - 1] == '\'') {
+            buf_[new_pos - 1] = '"';
+        }
+      } else if (format_type == 1) {
+        DATA_PRINTF(" AS EVALNAME ");
+        PRINT_EXPR(expr->get_param_expr(3 * i + 1));
+      }
+      if (i != num / 3 - 1) {
+        DATA_PRINTF(", ");
+      }
+    }
+    DATA_PRINTF(")");
   }
   return ret;
 }

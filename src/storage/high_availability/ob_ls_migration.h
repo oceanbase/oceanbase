@@ -260,6 +260,7 @@ private:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
+  common::ObMySQLProxy *sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObStartMigrationTask);
 };
 

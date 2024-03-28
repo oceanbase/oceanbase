@@ -280,6 +280,7 @@ void* Thread::__th_start(void *arg)
   ObActiveSessionGuard::get_stat().user_id_      = 0;
   ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
   ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+  ObTenantStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_);
 
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);

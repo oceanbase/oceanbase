@@ -308,6 +308,18 @@ int ObLocalDevice::open(const char *pathname, const int flags, const mode_t mode
   return ret;
 }
 
+int ObLocalDevice::complete(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::abort(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
+}
+
 int ObLocalDevice::close(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
@@ -648,6 +660,39 @@ int ObLocalDevice::fstat(const ObIOFd &fd, ObIODFileStat &statbuf)
     }
   }
   return ret;
+}
+
+int ObLocalDevice::del_unmerged_parts(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_exist(const char *pathname, bool &is_exist)
+{
+  UNUSED(pathname);
+  UNUSED(is_exist);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_stat(const char *pathname, ObIODFileStat &statbuf)
+{
+  UNUSED(pathname);
+  UNUSED(statbuf);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_unlink(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op)
+{
+  UNUSED(dir_name);
+  UNUSED(op);
+  return OB_NOT_SUPPORTED;
 }
 
 //block interfaces
@@ -1342,6 +1387,56 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
 int ObLocalDevice::check_space_full(const int64_t required_size) const
 {
   int ret = OB_SUCCESS;
+  int64_t used_percent = 0;
+  const int64_t NO_LIMIT_PERCENT = 100;
+
+  if (OB_UNLIKELY(!is_marked_)) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "The ObLocalDevice has not been marked", K(ret));
+  } else if (GCONF.data_disk_usage_limit_percentage == NO_LIMIT_PERCENT) {
+    // do nothing
+  } else if (OB_FAIL(get_data_disk_used_percentage_(required_size,
+                                                    used_percent))) {
+    SHARE_LOG(WARN, "Fail to get disk used percentage", K(ret));
+  } else if (used_percent >= GCONF.data_disk_usage_limit_percentage) {
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
+    if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
+      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "disk is almost full", K(ret), K(required_size), K(used_percent));
+    }
+  }
+  return ret;
+}
+
+int ObLocalDevice::check_write_limited() const
+{
+  int ret = OB_SUCCESS;
+  int64_t used_percent = 0;
+  const int64_t required_size = 0;
+  const int64_t limit_percent = GCONF.data_disk_write_limit_percentage;
+
+  if (OB_UNLIKELY(!is_marked_)) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "The ObLocalDevice has not been marked", K(ret));
+  } else if (limit_percent == 0) {
+    // do nothing
+  } else if (OB_FAIL(get_data_disk_used_percentage_(required_size,
+                                                    used_percent))) {
+    SHARE_LOG(WARN, "Fail to get disk used percentage", K(ret));
+  } else if (used_percent >= limit_percent) {
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000 /* 1min */)) {
+      SHARE_LOG(WARN, "disk is full, user write should be stopped", K(ret), K(used_percent),
+                K(limit_percent));
+    }
+  }
+  return ret;
+}
+
+int ObLocalDevice::get_data_disk_used_percentage_(
+    const int64_t required_size,
+    int64_t &percent) const
+{
+  int ret = OB_SUCCESS;
   int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
 
   if (OB_UNLIKELY(!is_marked_)) {
@@ -1358,18 +1453,9 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
     if (max_block_cnt > total_block_cnt_) {  // auto extend is on
       actual_free_block_cnt = max_block_cnt - total_block_cnt_ + free_block_cnt_;
     }
-    const int64_t NO_LIMIT_PERCENT = 100;
     const int64_t required_count = required_size / block_size_;
     const int64_t free_count = actual_free_block_cnt - required_count;
-    const int64_t used_percent = 100 - 100 * free_count / total_block_cnt_;
-    if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT
-        && used_percent >= GCONF.data_disk_usage_limit_percentage) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
-        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "disk is almost full", K(ret), K(required_size),
-            K(required_count), K(free_count), K(used_percent));
-      }
-    }
+    percent = 100 - 100 * free_count / total_block_cnt_;
   }
   return ret;
 }

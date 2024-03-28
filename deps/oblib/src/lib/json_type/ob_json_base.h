@@ -311,7 +311,7 @@ public:
   // @param [in] is_pretty  Whether from JSON_PRETTY function or not.
   // @param [in]  depth      The depth of json tree.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  virtual int print(ObJsonBuffer &j_buf, bool is_quoted,
+  virtual int print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len = 0,
                     bool is_pretty = false, uint64_t depth = 0) const;
   
   // calculate json hash value
@@ -332,7 +332,7 @@ public:
   // Get depth of current json document.
   //
   // @return uint32_t.
-  virtual uint32_t depth();
+  virtual uint32_t depth() const = 0;
 
   // Returns a string in json path form from the root node to the current location.
   //

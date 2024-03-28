@@ -51,7 +51,12 @@ class ObMemtableGetIterator;
 
 struct ObMtStat
 {
+  ObMtStat() { reset(); }
+  ~ObMtStat() = default;
   void reset() { memset(this, 0, sizeof(*this));}
+  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
+               K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
+               K_(release_time), K_(push_table_into_gc_queue_time), K_(last_print_time));
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
@@ -61,6 +66,40 @@ struct ObMtStat
   int64_t release_time_;
   int64_t push_table_into_gc_queue_time_;
   int64_t last_print_time_;
+};
+
+struct ObMvccRowAndWriteResult
+{
+  ObMvccRow *mvcc_row_;
+  ObMvccWriteResult write_result_;
+  TO_STRING_KV(K_(write_result), KP_(mvcc_row));
+};
+// report the dml stat to ObOptStatMonitorManager
+struct ObReportedDmlStat
+{
+  static constexpr int64_t REPORT_INTERVAL = 1_s;
+  ObReportedDmlStat() { reset(); }
+  ~ObReportedDmlStat() = default;
+  void reset() {
+    last_report_time_ = 0;
+    insert_row_count_ = 0;
+    update_row_count_ = 0;
+    delete_row_count_ = 0;
+    table_id_ = OB_INVALID_ID;
+    is_reporting_ = false;
+  }
+
+  int64_t last_report_time_;
+  int64_t insert_row_count_;
+  int64_t update_row_count_;
+  int64_t delete_row_count_;
+  // record the table_id for report the residual dml stat when memtable freeze,
+  // in which case the table_id can't be acquired
+  int64_t table_id_;
+  bool is_reporting_;
+
+  TO_STRING_KV(K_(last_report_time), K_(insert_row_count),
+      K_(update_row_count), K_(delete_row_count), K_(table_id), K_(is_reporting));
 };
 
 class ObMTKVBuilder
@@ -231,6 +270,7 @@ private:
 
 public:
   typedef common::ObGMemstoreAllocator::AllocHandle ObMemstoreAllocator;
+  using ObMvccRowAndWriteResults = common::ObSEArray<ObMvccRowAndWriteResult, 16>;
   ObMemtable();
   virtual ~ObMemtable();
 public:
@@ -263,12 +303,26 @@ public:
       const share::ObEncryptMeta *encrypt_meta);
   virtual int set(
       const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
+	    storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const ObIArray<int64_t> &update_idx,
       const storage::ObStoreRow &old_row,
       const storage::ObStoreRow &new_row,
       const share::ObEncryptMeta *encrypt_meta);
+  int multi_set(
+      const storage::ObTableIterParam &param,
+	    storage::ObTableAccessContext &context,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
+      const share::ObEncryptMeta *encrypt_meta,
+      storage::ObRowsInfo &rows_info);
+  int check_rows_locked(
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      ObRowsInfo &rows_info);
 
   // lock is used to lock the row(s)
   // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
@@ -365,6 +419,7 @@ public:
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
   ObMtStat& get_mt_stat() { return mt_stat_; }
+  const ObMtStat& get_mt_stat() const { return mt_stat_; }
   int64_t get_size() const;
   int64_t get_occupied_size() const;
   int64_t get_physical_row_cnt() const { return query_engine_.btree_size(); }
@@ -506,7 +561,6 @@ public:
   void dec_unsubmitted_and_unsynced_cnt();
   virtual uint32_t get_freeze_flag() override;
   virtual OB_INLINE int64_t get_timestamp() const override { return timestamp_; }
-  void inc_timestamp(const int64_t timestamp) { timestamp_ = MAX(timestamp_, timestamp + 1); }
   int get_active_table_ids(common::ObIArray<uint64_t> &table_ids);
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
@@ -582,10 +636,12 @@ private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
   int mvcc_write_(
       const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
-	  const ObMemtableKey *key,
-	  const ObTxNodeArg &arg,
-	  bool &is_new_locked);
+	    storage::ObTableAccessContext &context,
+	    const ObMemtableKey *key,
+	    const ObTxNodeArg &arg,
+	    bool &is_new_locked,
+      ObMvccRowAndWriteResult *mvcc_row = nullptr,
+      bool check_exist = false);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
@@ -593,10 +649,42 @@ private:
   int lock_row_on_frozen_stores_(
       const storage::ObTableIterParam &param,
       const ObTxNodeArg &arg,
-      storage::ObTableAccessContext &context,
       const ObMemtableKey *key,
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
       ObMvccRow *value,
       ObMvccWriteResult &res);
+
+  int lock_row_on_frozen_stores_on_success(
+      const bool row_locked,
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const share::SCN &max_trans_version,
+      storage::ObTableAccessContext &context,
+      ObMvccRow *value,
+      ObMvccWriteResult &res);
+
+  void lock_row_on_frozen_stores_on_failure(
+      const blocksstable::ObDmlFlag writer_dml_flag,
+      const ObMemtableKey &key,
+      int &ret,
+      ObMvccRow *value,
+      storage::ObTableAccessContext &context,
+      ObMvccWriteResult &res);
+
+  int lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      ObMvccRowAndWriteResults &mvcc_rows,
+      ObRowsInfo &rows_info);
+
+  int internal_lock_rows_on_frozen_stores_(
+      const bool check_exist,
+      const ObIArray<ObITable *> &iter_tables,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      share::SCN &max_trans_version,
+      ObRowsInfo &rows_info);
 
   void get_begin(ObMvccAccessCtx &ctx);
   void get_end(ObMvccAccessCtx &ctx, int ret);
@@ -608,15 +696,23 @@ private:
   int check_standby_cluster_schema_condition_(storage::ObStoreCtx &ctx,
                                               const int64_t table_id,
                                               const int64_t table_version);
-
-
   int set_(
-	  const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
+	    const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,
       const storage::ObStoreRow &new_row,
       const storage::ObStoreRow *old_row,
-      const common::ObIArray<int64_t> *update_idx);
+      const common::ObIArray<int64_t> *update_idx,
+      storage::ObTableAccessContext &context,
+      ObMvccRowAndWriteResult *mvcc_row = nullptr,
+      bool check_exist = false);
+  int multi_set_(
+      const storage::ObTableIterParam &param,
+      const common::ObIArray<share::schema::ObColDesc> &columns,
+      const storage::ObStoreRow *rows,
+      const int64_t row_count,
+      const bool check_exist,
+	    storage::ObTableAccessContext &context,
+      storage::ObRowsInfo &rows_info);
   int lock_(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -639,6 +735,8 @@ private:
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+  int try_report_dml_stat_(const int64_t table_id);
+  int report_residual_dml_stat_();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
@@ -652,6 +750,7 @@ private:
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;
   mutable ObMtStat mt_stat_;
+  mutable ObReportedDmlStat reported_dml_stat_;
   int64_t max_schema_version_;  // to record the max schema version of memtable & schema_change_clog
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log

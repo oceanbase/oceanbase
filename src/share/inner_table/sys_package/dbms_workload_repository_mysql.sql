@@ -19,7 +19,9 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
                            ETIME         DATETIME,
                            SQL_ID        VARCHAR(64)  DEFAULT NULL,
                            TRACE_ID      VARCHAR(64)  DEFAULT NULL,
-                           WAIT_CLASS    VARCHAR(64)  DEFAULT NULL
+                           WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
+                           SVR_IP        VARCHAR(64)  DEFAULT NULL,
+                           SVR_PORT      INT          DEFAULT NULL
   )RETURN TEXT ;
 
   PROCEDURE ASH_REPORT(BTIME         DATETIME,
@@ -27,6 +29,8 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
                        SQL_ID        VARCHAR(64)  DEFAULT NULL,
                        TRACE_ID      VARCHAR(64)  DEFAULT NULL,
                        WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
-                       REPORT_TYPE   VARCHAR(64)  DEFAULT 'text');
+                       REPORT_TYPE   VARCHAR(64)  DEFAULT 'text',
+                       SVR_IP        VARCHAR(64)  DEFAULT NULL,
+                       SVR_PORT      INT          DEFAULT NULL);
 
 END dbms_workload_repository;

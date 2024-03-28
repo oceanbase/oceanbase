@@ -33,8 +33,8 @@ enum ObLineType {
 class ObGeometry3D: public ObGeometry
 {
 public:
-  ObGeometry3D(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-          : ObGeometry(srid, allocator), cur_pos_(0) {}
+  ObGeometry3D(uint32_t srid = 0)
+          : ObGeometry(srid), cur_pos_(0) {}
   virtual ~ObGeometry3D() = default;
   ObGeometry3D(const ObGeometry3D& g) = default;
   ObGeometry3D& operator=(const ObGeometry3D& g) = default;
@@ -63,7 +63,7 @@ public:
   int to_sdo_geometry(ObSdoGeoObject &sdo_geo);
   int to_geo_json(ObIAllocator *allocator, common::ObString &geo_json);
   int create_elevation_extent(ObGeoElevationExtent &extent);
-  int normalize(const ObSrsItem *srs, uint32_t &zoom_in_value);
+  int normalize(const ObSrsItem *srs);
   int check_empty(bool &is_empty);
   int correct_lon_lat(const ObSrsItem *srs);
 private:
@@ -146,7 +146,7 @@ class ObGeo3DToWktVisitor : public ObGeo3DVisitor
 {
 public:
   ObGeo3DToWktVisitor(int64_t maxdecimaldigits = -1);
-  void set_wkt_buf(ObStringBuffer *wkt_buf) { wkt_buf_ = wkt_buf; }
+  void set_wkt_buf(ObGeoStringBuffer *wkt_buf) { wkt_buf_ = wkt_buf; }
   virtual int visit_header(ObGeoWkbByteOrder bo, ObGeoType geo_type, bool is_sub_type = false);
   // pointz
   virtual int visit_pointz_start(ObGeometry3D *geo, bool is_inner);
@@ -173,7 +173,7 @@ private:
   int append_comma();
   int append_paren(bool is_left);
 private:
-  ObStringBuffer *wkt_buf_;
+  ObGeoStringBuffer *wkt_buf_;
   bool is_oracle_mode_;
   bool is_mpt_visit_;
   bool has_scale_;
@@ -287,14 +287,11 @@ class ObGeo3DNormalizeVisitor : public ObGeo3DVisitor
 {
 public:
   explicit ObGeo3DNormalizeVisitor(const ObSrsItem *srs, bool no_srs = false)
-    : srs_(srs), no_srs_(no_srs), zoom_in_value_(0) {}
+    : srs_(srs), no_srs_(no_srs){}
   virtual int visit_pointz_start(ObGeometry3D *geo, bool is_inner = false);
-  uint32_t get_zoom_in_value() { return zoom_in_value_; }
 private:
-  static constexpr double ZOOM_IN_THRESHOLD = 0.00000001;
   const ObSrsItem *srs_;
   bool no_srs_; // for st_transform, only proj4text is given
-  uint32_t zoom_in_value_;
   DISALLOW_COPY_AND_ASSIGN(ObGeo3DNormalizeVisitor);
 };
 

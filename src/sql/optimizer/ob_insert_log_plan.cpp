@@ -679,6 +679,10 @@ int ObInsertLogPlan::allocate_insert_as_top(ObLogicalOperator *&top,
     insert_op->set_table_partition_info(table_partition_info);
     insert_op->set_lock_row_flag_expr(lock_row_flag_expr);
     insert_op->set_has_instead_of_trigger(insert_stmt->has_instead_of_trigger());
+    if (get_can_use_parallel_das_dml()) {
+      insert_op->set_das_dop(max_dml_parallel_);
+      LOG_TRACE("insert das dop", K(max_dml_parallel_));
+    }
     insert_op->set_is_partition_wise(is_partition_wise);
     if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
       insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
@@ -829,6 +833,9 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   } else if (0 == insert_table_part->get_phy_tbl_location_info().get_partition_cnt()) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table has no partition, force use multi part dml");
+  } else if (use_parallel_das_dml_) {
+    is_multi_part_dml = true;
+    OPT_TRACE("insert table use parallel das dml, force use multi part dml");
   } else if (insert_stmt->has_instead_of_trigger() ||
              index_dml_infos_.count() > 1 ||
              get_optimizer_context().is_batched_multi_stmt() ||

@@ -192,6 +192,7 @@ int ObRemoteLogWriter::foreach_ls_(const ObLSID &id)
           LOG_WARN("get sorted task failed", K(ret), K(id));
         }
       } else if (NULL == task) {
+        LOG_TRACE("task is null", K(id));
         break;
       } else if (OB_FAIL(submit_entries_(*task))) {
         if (OB_RESTORE_LOG_TO_END != ret) {

@@ -41,7 +41,7 @@ int ObHTableLockMgr::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(lock_map_.create(DEFAULT_BUCKET_NUM, ObModIds::TABLE_PROC, ObModIds::TABLE_PROC, MTL_ID()))) {
+  } else if (OB_FAIL(lock_map_.create(DEFAULT_BUCKET_NUM, "TbHLckBuc", "TbHLckNod", MTL_ID()))) {
     LOG_WARN("fail to create htable lock map", K(ret));
   } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
     LOG_WARN("fail to init allocator", K(ret));

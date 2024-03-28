@@ -537,6 +537,26 @@ public:
       const uint64_t *user_keys /* = NULL */,
       const int64_t users_size /* = 0 */);
 
+ int fetch_proxy_user_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys /* = NULL */,
+    const int64_t users_size /* = 0 */);
+
+ int fetch_proxy_role_info(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObUserInfo> &user_array,
+    const bool is_fetch_proxy,
+    const uint64_t *user_keys /* = NULL */,
+    const int64_t users_size /* = 0 */);
+
   virtual int get_core_version(common::ObISQLClient &sql_client,
                                const ObRefreshSchemaStatus &schema_status,
                                int64_t &core_schema_version);
@@ -783,18 +803,6 @@ public:
               const ObString &udt_name,
               uint64_t &udt_id) override;
 
-  virtual int get_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) override;
-
-  virtual int get_mock_fk_parent_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) override;
-
   virtual int get_audits_in_owner(
               common::ObISQLClient &sql_client,
               const uint64_t tenant_id,
@@ -815,6 +823,29 @@ public:
                const ObString &dst,
                const bool case_compare,
                const bool compare_with_collation) override;
+
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  virtual int get_##OBJECT_NAME##_schema_versions(common::ObISQLClient &sql_client, \
+                                                  const uint64_t tenant_id, \
+                                                  const common::ObIArray<uint64_t> &object_ids, \
+                                                  common::ObIArray<ObSchemaIdVersion> &versions) override;
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
+  virtual int get_obj_priv_with_obj_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t obj_id,
+              const uint64_t obj_type,
+              ObIArray<ObObjPriv> &obj_privs) override;
   /*----------- interfaces for latest schema end -------------*/
 
 private:

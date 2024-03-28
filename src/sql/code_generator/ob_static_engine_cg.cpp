@@ -61,7 +61,7 @@
 #include "sql/engine/basic/ob_count_op.h"
 #include "sql/engine/basic/ob_values_op.h"
 #include "sql/engine/sort/ob_sort_op.h"
-#include "sql/engine/recursive_cte/ob_recursive_union_all_op.h"
+#include "sql/engine/recursive_cte/ob_recursive_union_op.h"
 #include "sql/engine/set/ob_merge_union_op.h"
 #include "sql/engine/set/ob_merge_intersect_op.h"
 #include "sql/engine/set/ob_merge_except_op.h"
@@ -1405,7 +1405,7 @@ int ObStaticEngineCG::generate_spec(ObLogSet &op, ObMergeExceptSpec &spec, const
 }
 
 int ObStaticEngineCG::generate_cte_pseudo_column_row_desc(ObLogSet &op,
-                                                          ObRecursiveUnionAllSpec &phy_set_op)
+                                                          ObRecursiveUnionSpec &phy_set_op)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObRawExpr *> &output_raw_exprs = op.get_output_exprs();
@@ -1464,14 +1464,14 @@ int ObStaticEngineCG::generate_cte_pseudo_column_row_desc(ObLogSet &op,
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec,
+int ObStaticEngineCG::generate_spec(ObLogSet &op, ObRecursiveUnionSpec &spec,
                                     const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
-  LOG_DEBUG("static engine cg generate recursive union all", K(spec.get_left()->output_),
+  LOG_DEBUG("static engine cg generate recursive union", K(spec.get_left()->output_),
             K(spec.get_right()->output_), K(op.get_output_exprs()));
-  if (OB_FAIL(generate_recursive_union_all_spec(op, spec))) {
+  if (OB_FAIL(generate_recursive_union_spec(op, spec))) {
     LOG_WARN("failed to generate spec set", K(ret));
   }
   return ret;
@@ -1542,7 +1542,7 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
   return ret;
 }
 
-int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiveUnionAllSpec &spec)
+int ObStaticEngineCG::generate_recursive_union_spec(ObLogSet &op, ObRecursiveUnionSpec &spec)
 {
   int ret = OB_SUCCESS;
   uint64_t last_cte_table_id = OB_INVALID_ID;
@@ -1557,7 +1557,7 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
       || OB_UNLIKELY(left->get_output_count() + add_extra_column != right->get_output_count())
       || OB_UNLIKELY(op.get_output_exprs().count() < left->get_output_count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("recursive union all spec should have two children", K(ret), K(spec.get_child_cnt()));
+    LOG_WARN("recursive union spec should have two children", K(ret), K(spec.get_child_cnt()));
   } else {
     int64_t identify_seq_offset = -1;
     int64_t left_pos = 0, right_pos = 0;
@@ -1581,7 +1581,7 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
         LOG_WARN("left expr is nullptr", K(ret), K(left_pos), K(left_expr));
       } else if (left_expr->datum_meta_.type_ != right_expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("left and right of recursive union all should have same output data type", K(ret));
+        LOG_WARN("left and right of recursive union should have same output data type", K(ret));
       } else {
         left_pos++;
         right_pos++;
@@ -1608,18 +1608,20 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
     LOG_WARN("Last cte table spec cann't be null!", K(ret));
   } else {
     spec.set_fake_cte_table(static_cast<ObFakeCTETableSpec *>(cte_spec)->get_id());
+    static_cast<ObFakeCTETableSpec *>(cte_spec)->is_union_distinct_ = op.is_set_distinct();
     if (op.is_breadth_search() && bulk_search) {
       static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = true;
-      spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::BREADTH_FIRST_BULK);
+      spec.set_search_strategy(
+        ObRecursiveInnerDataOracleOp::SearchStrategyType::BREADTH_FIRST_BULK);
     } else if (op.is_breadth_search() && !bulk_search) {
       static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = false;
-      spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::BREADTH_FRIST);
+      spec.set_search_strategy(ObRecursiveInnerDataOracleOp::SearchStrategyType::BREADTH_FRIST);
     } else {
       static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = false;
-      spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::DEPTH_FRIST);
+      spec.set_search_strategy(ObRecursiveInnerDataOracleOp::SearchStrategyType::DEPTH_FRIST);
     }
 
-    //recursive union all的输出中的前n项一定是T_OP_UNION,与cte表的非伪列一一对应
+    //recursive union的输出中的前n项一定是T_OP_UNION,与cte表的非伪列一一对应
     ObSEArray<ObExpr *, 2> output_union_exprs;
     ObSEArray<uint64_t, 2> output_union_offsets;
     OZ(spec.output_union_exprs_.init(left->output_.count()));
@@ -1638,7 +1640,7 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
         LOG_WARN("output expr is null", K(ret), K(i));
       } else if (OB_UNLIKELY(T_OP_UNION != output_union_expr->type_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("recursive union all invalid output", K(i), K(*output_union_expr));
+        LOG_WARN("recursive union invalid output", K(i), K(*output_union_expr));
       } else if (OB_FAIL(mark_expr_self_produced(output_union_raw_expr))) { // set expr
         LOG_WARN("fail to mark expr self produced", K(ret));
       } else if (OB_FAIL(output_union_exprs.push_back(output_union_expr))) {
@@ -1698,6 +1700,63 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The cycle by expr must be cte table column raw expr", K(ret));
+      }
+    }
+  }
+
+  // init compare func和hash func
+  // for Recursive Union Distinct hash deduplication
+  spec.set_is_rcte_distinct(op.is_set_distinct());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(
+               spec.get_deduplicate_sort_collations().init(spec.output_union_exprs_.count()))) {
+    LOG_WARN("failed to init sort collations", K(ret));
+  } else if (OB_FAIL(spec.get_sort_cmp_funcs().init(spec.output_union_exprs_.count()))) {
+    LOG_WARN("failed to compare function", K(ret));
+  } else if (OB_FAIL(spec.get_hash_funcs().init(spec.output_union_exprs_.count()))) {
+    LOG_WARN("failed to compare function", K(ret));
+  } else {
+    for (int64_t i = 0; i < spec.output_union_exprs_.count() && OB_SUCC(ret); ++i) {
+      ObRawExpr *raw_expr = op.get_output_exprs().at(i);
+      ObExpr *expr = spec.output_union_exprs_.at(i);
+      ObOrderDirection order_direction = default_asc_direction();
+      bool is_ascending = is_ascending_direction(order_direction);
+      ObSortFieldCollation field_collation(
+        i, expr->datum_meta_.cs_type_, is_ascending,
+        (is_null_first(order_direction) ^ is_ascending) ? NULL_LAST : NULL_FIRST);
+      if (raw_expr->get_expr_type() != expr->type_
+          || !(T_OP_SET < expr->type_ && expr->type_ <= T_OP_EXCEPT)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: expr type is not match", K(raw_expr->get_expr_type()),
+                 K(expr->type_));
+      } else if (OB_ISNULL(expr->basic_funcs_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_)
+                 || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (OB_FAIL(spec.get_deduplicate_sort_collations().push_back(field_collation))) {
+        LOG_WARN("failed to push back sort collation", K(ret));
+      } else {
+        ObSortCmpFunc cmp_func;
+        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+          expr->datum_meta_.type_, expr->datum_meta_.type_, field_collation.null_pos_,
+          field_collation.cs_type_, expr->datum_meta_.scale_, lib::is_oracle_mode(),
+          expr->obj_meta_.has_lob_header());
+        ObHashFunc hash_func;
+        set_murmur_hash_func(hash_func, expr->basic_funcs_);
+        if (OB_ISNULL(cmp_func.cmp_func_) || OB_ISNULL(hash_func.hash_func_)
+            || OB_ISNULL(hash_func.batch_hash_func_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cmp_func or hash func is null, check datatype is valid", K(cmp_func.cmp_func_),
+                   K(hash_func.hash_func_), K(ret));
+        } else if (OB_FAIL(spec.get_sort_cmp_funcs().push_back(cmp_func))) {
+          LOG_WARN("failed to push back sort function", K(ret));
+        } else if (OB_FAIL(spec.get_hash_funcs().push_back(hash_func))) {
+          LOG_WARN("failed to push back hash funcs", K(ret));
+        }
       }
     }
   }
@@ -2162,6 +2221,9 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.table_location_uncertain_ = op.is_table_location_uncertain();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
 
     spec.merge_ctdefs_.set_capacity(modified_index_ids.count());
     // TODO those 2 line must fixed after remove old engine
@@ -2282,6 +2344,9 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
+      spec.is_pdml_ = op.is_pdml();
+      spec.das_dop_ = op.get_das_dop();
+      spec.plan_->set_das_dop(op.get_das_dop());
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -2363,6 +2428,9 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.del_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 delete_table_list.count()))) {
       LOG_WARN("allocate delete ctdef array failed", K(ret));
@@ -2441,6 +2509,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     spec.plan_->need_drive_dml_query_ = true;
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     phy_plan_->set_ignore(op.is_ignore());
 
     // todo @wenber.wb delete it after support trigger
@@ -2538,6 +2609,9 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     if (OB_FAIL(spec.upd_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 table_list.count()))) {
       LOG_WARN("allocate update ctdef array failed", K(ret), K(table_list));
@@ -2653,6 +2727,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     spec.plan_->need_drive_dml_query_ = true;
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
+    spec.is_pdml_ = op.is_pdml();
+    spec.plan_->set_das_dop(op.get_das_dop());
+    spec.das_dop_ = op.get_das_dop();
     phy_plan_->set_ignore(op.is_ignore());
 
     ObLogPlan *log_plan = op.get_plan();
@@ -2812,6 +2889,18 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   spec.set_filter_length(op.get_filter_length());
   spec.set_shared_filter_type(op.get_filter_type());
   spec.is_shuffle_ = op.is_use_filter_shuffle();
+
+  uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  if (min_ver >= CLUSTER_VERSION_4_2_3_0
+      || (min_ver >= MOCK_CLUSTER_VERSION_4_2_1_5 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
+    spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
+    spec.send_bloom_filter_size_ = GCONF._send_bloom_filter_size;
+  } else {
+    // for compatibility, if the cluseter is upgrading, set them as default value 0
+    spec.bloom_filter_ratio_ = 0;
+    spec.send_bloom_filter_size_ = 0;
+  }
+
   if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
@@ -4285,7 +4374,6 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret) && spec.report_col_checksum_) {
-    const bool is_oracle_mode = lib::is_oracle_mode();
     spec.ddl_output_cids_.assign(op.get_ddl_output_column_ids());
     for (int64_t i = 0; OB_SUCC(ret) && i < spec.ddl_output_cids_.count(); i++) {
       const ObColumnSchemaV2 *column_schema = NULL;
@@ -4296,7 +4384,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret));
       } else if (column_schema->get_meta_type().is_fixed_len_char_type() &&
-        (column_schema->is_virtual_generated_column() || is_oracle_mode)) {
+        (column_schema->is_virtual_generated_column() || !column_schema->get_orig_default_value().is_null())) {
         // add flag in ddl_output_cids_ in this special scene.
         uint64_t VIRTUAL_GEN_FIX_LEN_TAG = 1ULL << 63;
         spec.ddl_output_cids_.at(i) = spec.ddl_output_cids_.at(i) | VIRTUAL_GEN_FIX_LEN_TAG;
@@ -7346,6 +7434,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     if (OB_SUCC(ret)) {
       phy_plan_->set_contain_pl_udf_or_trigger(log_plan.get_stmt()->get_query_ctx()->has_pl_udf_);
       phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
+      phy_plan_->set_udf_has_dml_stmt(log_plan.get_stmt()->get_query_ctx()->udf_has_dml_stmt_);
     }
   }
   if (OB_SUCC(ret)) {

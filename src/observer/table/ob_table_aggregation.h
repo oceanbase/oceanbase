@@ -29,7 +29,7 @@ public:
   const static int64_t INVALID_PROJECT_ID = -1;
 public:
   ObTableAggCalculator(const ObTableQuery &query)
-      : allocator_(common::ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      : allocator_("TbAggCalc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         size_(query.get_aggregations().count()),
         query_aggs_(query.get_aggregations()),
         projs_(),

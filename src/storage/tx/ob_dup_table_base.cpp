@@ -1370,11 +1370,11 @@ int ObDupTableLeaseRequestP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->recive_lease_request(arg_)) {
-    DUP_TABLE_LOG(WARN, "recive_lease_request error", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->receive_lease_request(arg_))) {
+    DUP_TABLE_LOG(WARN, "receive_lease_request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive lease request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive lease request", K(ret), K(arg_));
   return ret;
 }
 
@@ -1393,11 +1393,11 @@ int ObDupTableTsSyncRequestP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_request(arg_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_request(arg_))) {
     DUP_TABLE_LOG(WARN, "handle ts sync request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive ts sync request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive ts sync request", K(ret), K(arg_));
 
   return ret;
 }
@@ -1417,11 +1417,11 @@ int ObDupTableTsSyncResponseP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_response(arg_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_response(arg_))) {
     DUP_TABLE_LOG(WARN, "handle ts sync request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive ts sync response", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive ts sync response", K(ret), K(arg_));
 
   return ret;
 }
@@ -1459,7 +1459,7 @@ int ObDupTableBeforePrepareRequestP::process()
     ls_handle.get_ls()->revert_tx_ctx(part_ctx);
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive before prepare request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive before prepare request", K(ret), K(arg_));
   return ret;
 }
 

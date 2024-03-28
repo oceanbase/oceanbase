@@ -1717,6 +1717,8 @@ protected:
   static int explain_print_partitions(const ObIArray<ObLogicalOperator::PartInfo> &part_infos,
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
+
+  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
@@ -1834,6 +1836,7 @@ private:
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
   virtual int get_card_without_filter(double &card);
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator

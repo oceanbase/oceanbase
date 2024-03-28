@@ -592,6 +592,14 @@ int ObDiagnoseSessionInfo::notify_wait_end(
           EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
           break;
         }
+        case ObWaitClassIds::SCHEDULER:{
+          EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::NETWORK:{
+          EVENT_ADD(ObStatEventIds::NETWORK_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
         default:
           break;
       }
@@ -607,26 +615,6 @@ int ObDiagnoseSessionInfo::notify_wait_end(
         ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
       }
 
-      switch (OB_WAIT_EVENTS[event_desc->event_no_].wait_class_) {
-        case ObWaitClassIds::CONCURRENCY:{
-          EVENT_ADD(ObStatEventIds::CCWAIT_TIME, event_desc->wait_time_);
-          break;
-        }
-        case ObWaitClassIds::USER_IO:{
-          EVENT_ADD(ObStatEventIds::USER_IO_WAIT_TIME, event_desc->wait_time_);
-          break;
-        }
-        case ObWaitClassIds::APPLICATION:{
-          EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
-          break;
-        }
-        case ObWaitClassIds::SCHEDULER:{
-          EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
-          break;
-        }
-        default:
-          break;
-      }
       ObActiveSessionGuard::get_stat().fixup_last_stat(*event_desc);
     }
   }
@@ -846,23 +834,7 @@ ObWaitEventGuard::~ObWaitEventGuard()
       if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
         tenant_event_stat->max_wait_ = wait_time;
       }
-      if (ObActiveSessionGuard::get_stat().event_no_ == event_no_) {
-        ObWaitEventDesc desc;
-        desc.event_no_ = event_no_;
-        desc.p1_ = ObActiveSessionGuard::get_stat().p1_;
-        desc.p2_ = ObActiveSessionGuard::get_stat().p2_;
-        desc.p3_ = ObActiveSessionGuard::get_stat().p3_;
-        ObActiveSessionGuard::get_stat().reset_event();
-        const int64_t cur_wait_time =
-            ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
-        ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
-        if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
-          ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
-        } else {
-          ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
-        }
-        ObActiveSessionGuard::get_stat().fixup_last_stat(desc);
-      }
+      reset_ash_stat(event_no_, OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE);
     }
   }
 }

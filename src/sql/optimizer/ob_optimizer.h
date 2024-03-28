@@ -209,6 +209,13 @@ namespace sql
     int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
+    int check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
+                                       ObSQLSessionInfo &session);
+    int check_parallel_das_dml_supported_feature(const ObDelUpdStmt &pdml_stmt,
+                                                 const ObSQLSessionInfo &session,
+                                                 bool &use_parallel_das_dml);
+
+    int check_dml_parallel_mode();
     int check_is_heap_table(const ObDMLStmt &stmt);
     int check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
                                                 const ObDMLStmt &stmt,
@@ -221,6 +228,7 @@ namespace sql
                              int64_t flag);
     int check_whether_contain_nested_sql(const ObDMLStmt &stmt);
     int check_force_default_stat();
+    int init_system_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
 
   private:

@@ -57,6 +57,10 @@
 #include "observer/mysql/obmp_reset_connection.h"
 #include "observer/mysql/obmp_set_option.h"
 #include "observer/mysql/obmp_auth_response.h"
+#include "observer/mysql/obmp_process_kill.h"
+#include "observer/mysql/obmp_process_info.h"
+#include "observer/mysql/obmp_debug.h"
+#include "observer/mysql/obmp_refresh.h"
 
 #include "observer/table/ob_table_rpc_processor.h"
 #include "observer/table/ob_table_execute_processor.h"
@@ -64,6 +68,7 @@
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
 #include "logservice/palf/log_rpc_processor.h"
+#include "sql/das/ob_das_parallel_handler.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -212,8 +217,32 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
         } else {
           processor = p;
         }
+      } else if (pkt.get_cmd() == obmysql::COM_PROCESS_INFO) {
+        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+        ObMPProcessInfo *p = new (buf) ObMPProcessInfo(gctx_);
+        if (OB_ISNULL(p)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else if (OB_FAIL(p->init())) {
+          SERVER_LOG(ERROR, "Init ObMPProcessInfo fail", K(ret));
+          p->~ObMPProcessInfo();
+        } else {
+          processor = p;
+        }
+      } else if (pkt.get_cmd() == obmysql::COM_PROCESS_KILL) {
+        char *buf = (&co_ep_rpcp_buf)->obmp_query_buffer_;
+        ObMPProcessKill *p = new (buf) ObMPProcessKill(gctx_);
+        if (OB_ISNULL(p)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else if (OB_FAIL(p->init())) {
+          SERVER_LOG(ERROR, "Init ObMPProcessKill fail", K(ret));
+          p->~ObMPProcessKill();
+        } else {
+          processor = p;
+        }
       } else {
         switch (pkt.get_cmd()) {
+          MYSQL_PROCESSOR(ObMPDebug, gctx_);
+          MYSQL_PROCESSOR(ObMPRefresh, gctx_);
           MYSQL_PROCESSOR(ObMPQuit, gctx_);
           MYSQL_PROCESSOR(ObMPPing, gctx_);
           MYSQL_PROCESSOR(ObMPInitDB, gctx_);
@@ -330,7 +359,8 @@ ObReqProcessor *ObSrvXlator::get_processor(ObRequest &req)
     }
   } else if (ObRequest::OB_TASK == req.get_type() ||
              ObRequest::OB_TS_TASK == req.get_type() ||
-             ObRequest::OB_SQL_TASK == req.get_type()) {
+             ObRequest::OB_SQL_TASK == req.get_type() ||
+             ObRequest::OB_DAS_PARALLEL_TASK == req.get_type()) {
     processor = &static_cast<ObSrvTask&>(req).get_processor();
   } else {
     LOG_WARN("can't translate packet", "type", req.get_type());
@@ -397,6 +427,9 @@ int ObSrvXlator::release(ObReqProcessor *processor)
       req = NULL;
     } else if (ObRequest::OB_SQL_TASK == req_type) {
       ObSqlTaskFactory::get_instance().free(static_cast<ObSqlTask *>(req));
+      req = NULL;
+    } else if (ObRequest::OB_DAS_PARALLEL_TASK == req_type) {
+      ObDASParallelTaskFactory::free(static_cast<ObDASParallelTask *>(req));
       req = NULL;
     } else {
       worker_allocator_delete(processor);

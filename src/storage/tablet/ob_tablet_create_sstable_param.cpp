@@ -248,7 +248,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObTabletMergeCt
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to init with merge res", K(ret), K(res.data_block_ids_));
-  } else if (is_major_merge_type(ctx.param_.merge_type_)) {
+  } else if (is_major_or_meta_merge_type(ctx.param_.merge_type_)) {
     if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
       LOG_WARN("fail to fill column checksum", K(ret), K(res));
     }

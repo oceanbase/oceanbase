@@ -1351,6 +1351,8 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
       select 1+1 from dual limit 0 -> not satisfy but limit will be checked later
     situation 2:
       select max(c1) from t1 ->always not empty
+    situation 3:
+      select * from (values row(1));
     */
 
     return  (0 == stmt.get_table_size()
@@ -1359,7 +1361,12 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
           || (0 == stmt.get_group_expr_size()
              && !stmt.has_rollup()
              && stmt.get_aggr_item_size() > 0
-             && !stmt.has_having());
+             && !stmt.has_having())
+          || (
+            stmt.is_values_table_query() &&
+            0 == stmt.get_having_expr_size() &&
+            0 == stmt.get_condition_size()
+          );
 }
 
 int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType op_type,
@@ -1976,8 +1983,7 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
   } else {
     //check children
     bool is_and_or_expr = (expr->get_expr_type() == T_OP_OR ||
-                           expr->get_expr_type() == T_OP_AND ||
-                           expr->get_expr_type() == T_OP_XOR);
+                           expr->get_expr_type() == T_OP_AND);
     bool child_is_bool_expr = lib::is_oracle_mode() ? is_and_or_expr
                               : is_bool_expr && is_and_or_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {

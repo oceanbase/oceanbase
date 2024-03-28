@@ -8496,7 +8496,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8568,7 +8568,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8637,7 +8637,7 @@ static int common_json_string(const ObObjType expect_type,
       ObString j_str;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -9580,15 +9580,15 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
         // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
         out.set_null();
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else
@@ -12490,11 +12490,16 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
       } else {
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round(scale))) {
-        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-          in_val.compare(out_val) != 0) {
-          ret = OB_OPERATE_OVERFLOW;
-          LOG_WARN("input value is out of range.", K(scale), K(in_val));
-        } else {
+        } else if (!in_val.is_equal(out_val)) {
+          if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+          } else if (lib::is_mysql_mode()) {
+            // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+            params.warning_ = OB_ERR_DATA_TOO_LONG;
+          }
+        }
+        if (OB_SUCC(ret)) {
           buf_obj.set_number(obj.get_type(), out_val);
         }
       }

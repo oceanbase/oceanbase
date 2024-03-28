@@ -75,6 +75,9 @@ int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
       pos = pos - 2;
     }
     OZ(BUF_PRINTF(")"));
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item. special_predicates_len_);
   }
@@ -167,7 +170,7 @@ int ObLogUpdate::inner_est_cost(double child_card, double &op_cost)
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     cost_info.constraint_count_ = update_dml_info->ck_cst_exprs_.count();
     if (OB_FAIL(ObOptEstCost::cost_update(cost_info, op_cost,
-                                          opt_ctx.get_cost_model_type()))) {
+                                          opt_ctx))) {
       LOG_WARN("failed to get update cost", K(ret));
     }
   }

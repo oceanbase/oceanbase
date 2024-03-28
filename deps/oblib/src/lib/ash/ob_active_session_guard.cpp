@@ -325,11 +325,14 @@ void ObActiveSessionGuard::set_bkgd_sess_inactive()
   get_stat().set_bkgd_sess_inactive();
 }
 
-ObRPCActiveGuard::ObRPCActiveGuard(int pcode) : prev_is_bkgd_active_(true)
+ObRPCActiveGuard::ObRPCActiveGuard(int pcode, int64_t tenant_id)
+    : prev_is_bkgd_active_(true)
 {
   prev_is_bkgd_active_ = ObActiveSessionGuard::get_stat().is_bkgd_active_;
-  ObActiveSessionGuard::set_bkgd_sess_active();
+  prev_tenant_id_ = ObActiveSessionGuard::get_stat().tenant_id_;
   ObActiveSessionGuard::get_stat().pcode_ = pcode;
+  ObActiveSessionGuard::get_stat().tenant_id_ = tenant_id;
+  ObActiveSessionGuard::set_bkgd_sess_active();
 }
 
 ObRPCActiveGuard::~ObRPCActiveGuard()
@@ -342,6 +345,7 @@ ObRPCActiveGuard::~ObRPCActiveGuard()
   }
   ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
   ObActiveSessionGuard::get_stat().pcode_ = 0;
+  ObActiveSessionGuard::get_stat().tenant_id_ = prev_tenant_id_;
 }
 
 ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {

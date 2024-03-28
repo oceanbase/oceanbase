@@ -1619,7 +1619,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OZ (session->get_tmp_table_size(size));
   OZ (new_cursor->prepare_spi_cursor(spi_cursor,
                                 session->get_effective_tenant_id(),
-                                size));
+                                size,
+                                false,
+                                session));
   OV (OB_NOT_NULL(spi_cursor));
 
   if OB_FAIL(ret) {
@@ -1628,7 +1630,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     // 2.* fill row store
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor));
+      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {

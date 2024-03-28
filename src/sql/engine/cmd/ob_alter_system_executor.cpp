@@ -1265,6 +1265,26 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 	return ret;
 }
 
+int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy *common_rpc = NULL;
+  if (OB_UNLIKELY(!stmt.get_rpc_arg().is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rpc args is invalid", KR(ret), K(stmt));
+  } else if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed", KR(ret));
+  } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", KR(ret), KP(task_exec_ctx));
+  } else if (OB_FAIL(common_rpc->group_id(share::OBCG_DBA_COMMAND).admin_alter_ls_replica(stmt.get_rpc_arg()))) {
+    LOG_WARN("add ls replica rpc failed", KR(ret), K(stmt.get_rpc_arg()));
+  }
+  return ret;
+}
+
 int ObAddArbitrationServiceExecutor::execute(ObExecContext &ctx, ObAddArbitrationServiceStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -1932,7 +1952,8 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     LOG_WARN("ptr is null", KR(ret));
   } else if (FALSE_IT(pre_effective_tenant_id = session_info->get_effective_tenant_id())) {
   } else if (FALSE_IT(login_tenant_id = session_info->get_login_tenant_id())) {
-  } else if (FALSE_IT(session_info->get_session_priv_info(session_priv))) {
+  } else if (OB_FAIL(session_info->get_session_priv_info(session_priv))) {
+    LOG_WARN("fail to get session priv info", K(ret));
   } else if (effective_tenant_id == pre_effective_tenant_id) {
     // do nothing
   } else if (OB_SYS_TENANT_ID != login_tenant_id) { //case 1

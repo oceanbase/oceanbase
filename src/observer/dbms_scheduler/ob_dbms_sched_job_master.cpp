@@ -312,16 +312,16 @@ int ObDBMSSchedJobMaster::scheduler()
         }
       }
       if (scheduler_task_.wait_vector().count() == 0) {
-        ob_usleep(MIN_SCHEDULER_INTERVAL);
+        ob_usleep(MIN_SCHEDULER_INTERVAL, true);
       } else if (OB_ISNULL(job_key = scheduler_task_.wait_vector()[0]) || !job_key->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected error, invalid job key found in ready queue!", K(ret), KPC(job_key));
       } else {
         int64_t delay = job_key->get_execute_at() - ObTimeUtility::current_time();
         if (delay > MIN_SCHEDULER_INTERVAL) {
-          ob_usleep(MIN_SCHEDULER_INTERVAL);
+          ob_usleep(MIN_SCHEDULER_INTERVAL, true);
         } else {
-          ob_usleep(max(0, delay));
+          ob_usleep(max(0, delay), true);
           if (OB_SUCCESS != (tmp_ret = scheduler_task_.wait_vector().remove(scheduler_task_.wait_vector().begin()))) {
             LOG_WARN("fail to remove job_id from sorted vector", K(ret));
           } else if (OB_SUCCESS != (tmp_ret = scheduler_job(job_key))) {

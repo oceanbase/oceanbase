@@ -366,7 +366,7 @@ protected:
                                                 ObIArray<ObRawExpr*> &and_exprs);
   int resolve_where_clause(const ParseNode *node);
   int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
-  int resolve_limit_clause(const ParseNode *node);
+  int resolve_limit_clause(const ParseNode *node, bool disable_offset = false);
   int resolve_into_clause(const ParseNode *node);
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
@@ -829,6 +829,7 @@ private:
   int resolve_eliminate_join_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
+  int resolve_coalesce_aggr_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
   int resolve_monitor_ids(const ParseNode &tracing_node, ObIArray<ObMonitorHint> &monitoring_ids);
   int resolve_tables_in_leading_hint(const ParseNode *tables_node, ObLeadingTable &leading_table);
@@ -865,11 +866,9 @@ private:
   bool check_expr_has_colref(ObRawExpr *expr);
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
-  int resolve_table_values_for_select(const ParseNode &table_node,
-                                      ObIArray<ObExprResType> &res_types,
+  int resolve_values_table_for_select(const ParseNode &table_node,
                                       ObValuesTableDef &table_values);
-  int resolve_table_values_for_insert(const ParseNode &table_node,
-                                      ObIArray<ObExprResType> &res_types,
+  int resolve_values_table_for_insert(const ParseNode &table_node,
                                       ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);

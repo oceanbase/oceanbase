@@ -371,6 +371,13 @@ private:
   int remove_nested_aggr_exprs(ObSelectStmt *stmt);
   int construct_column_items_from_exprs(const ObIArray<ObRawExpr*> &column_exprs,
                                         ObIArray<ColumnItem> &column_items);
+  int add_select_item_for_update(ObSelectStmt *view_stmt,
+                                 ObIArray<ObRawExpr*> &select_list);
+  int create_for_update_dml_info(ObSelectStmt *stmt, TableItem *view_table);
+  int pull_up_for_update_dml_info(ObSelectStmt *upper_stmt, TableItem *view_table);
+  int pull_up_part_exprs(ObDMLStmt *stmt, TableItem *table);
+  int clear_for_update_mark(TableItem *view_table);
+  int move_for_update_dml_info(ObSelectStmt *stmt, ObSelectStmt *hierarchical_stmt);
   /*
    * following functions are used to transform in_expr to or_expr
    */
@@ -639,6 +646,25 @@ private:
   int get_rowkey_for_single_table(ObSelectStmt* stmt,
                                   ObIArray<ObRawExpr*> &unique_keys,
                                   bool &is_valid);
+
+  int flatten_conditions(ObDMLStmt *stmt, bool &trans_happened);
+  int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
+  int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
+
+  int try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened);
+  int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
+                                                 ObIArray<TableItem*> &flattened_tables);
+  int check_pure_straight_join_table(TableItem* table_item, bool &is_pure_straight_join,
+                                     ObIArray<TableItem*> &flattened_tables);
+  int add_ordered_hint(ObDMLStmt* stmt, ObStmtHint &stmt_hint);
+  int add_leading_hint_by_flattened_tables(ObDMLStmt* stmt,
+                                           ObStmtHint &stmt_hint,
+                                           ObIArray<TableItem*> &flattened_tables);
+  int construct_leading_table(ObDMLStmt* stmt,
+                              ObIArray<TableItem*> &flattened_tables,
+                              ObLeadingTable &leading_table);
+  int construct_leaf_leading_table(ObDMLStmt *stmt, TableItem *table, ObLeadingTable *&leading_table);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

@@ -100,6 +100,7 @@ private:
         params_(params),
         use_in_optimization_(false),
         row_in_offsets_(),
+        index_prefix_(-1),
         is_oracle_char_gt_varchar_(false)
     {
     }
@@ -122,6 +123,7 @@ private:
     ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
     bool use_in_optimization_;
     ObSEArray<int64_t, 4> row_in_offsets_;
+    int64_t index_prefix_;
     bool is_oracle_char_gt_varchar_;
   };
 public:
@@ -377,7 +379,8 @@ public:
                                       ObExecContext *exec_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
-                                      const bool use_in_optimization = false);
+                                      const bool use_in_optimization = false,
+                                      const int64_t index_prefix = -1);
   /**
    * @brief
    * @param range_columns: columns used to extract range, index column or partition column
@@ -400,7 +403,8 @@ public:
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
                                       const bool ignore_calc_failure = true,
-                                      const bool use_in_optimization = false);
+                                      const bool use_in_optimization = false,
+                                      const int64_t index_prefix = -1);
 
   //  final_extract_query_range extracts the final query range of its physical plan.
   //  It will get the real-time value of some const which are unknown during physical plan generating.
@@ -457,6 +461,7 @@ public:
   common::ObGeoRelationType get_geo_relation(ObItemType type) const;
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
+  virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
   int check_graph_type(ObKeyPart &key_part_head);
   int check_skip_scan_range(ObKeyPart *key_part_head,
                             const bool is_standard_range,
@@ -522,7 +527,8 @@ private:
                            const ParamsIArray *params,
                            const bool phy_rowid_for_table_loc,
                            const bool ignore_calc_failure,
-                           const bool use_in_optimization);
+                           const bool use_in_optimization,
+                           const int64_t index_prefix);
   void destroy_query_range_ctx(common::ObIAllocator &allocator);
   int add_expr_offsets(ObIArray<int64_t> &cur_pos, const ObKeyPart *cur_key);
   int extract_valid_exprs(const ExprIArray &root_exprs,
@@ -900,6 +906,8 @@ private:
   int check_null_param_compare_in_row(const ObRawExpr *l_expr,
                                       const ObRawExpr *r_expr,
                                       ObKeyPart *&out_key_part);
+
+  virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;
@@ -924,6 +932,7 @@ private:
   //this flag used by optimizer, so don't need to serialize it
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> range_exprs_;
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ss_range_exprs_;
+  common::ObFixedArray<ObRawExpr*, common::ObIAllocator> unprecise_range_exprs_;
   MbrFilterArray mbr_filters_;
   bool has_exec_param_;
   bool is_equal_and_;

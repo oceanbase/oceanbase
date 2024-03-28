@@ -156,8 +156,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
     iter_ret = OB_SUCCESS;
     cur_ls_ptr = nullptr;
     while (OB_SUCCESS == (iter_ret = iter_ptr->get_next(cur_ls_ptr))) {
-
-      SCN min_start_scn;
+      SCN min_start_scn = SCN::invalid_scn();
+      SCN max_decided_scn = SCN::invalid_scn();
       MinStartScnStatus status = MinStartScnStatus::UNKOWN;
       common::ObRole role;
       int64_t base_proposal_id, proposal_id;
@@ -173,6 +173,16 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
         //
+
+        // ATTENTION : get_max_decided_scn must before iterating all trans ctx.
+        // set max_decided_scn as default value
+        if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
+          TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
+          max_decided_scn.set_invalid();
+        } else {
+          (void)cur_ls_ptr->update_min_start_scn_info(max_decided_scn);
+        }
+        min_start_scn = max_decided_scn;
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 
@@ -211,7 +221,7 @@ void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, const SCN &min_start_scn, MinS
 {
   int ret = OB_SUCCESS;
 
-  if (ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status)) {
+  if (OB_FAIL(ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] try submit keep alive log failed", K(ret));
   } else if (REACH_TIME_INTERVAL(KEEP_ALIVE_PRINT_INFO_INTERVAL)) {
     ls_ptr->get_keep_alive_ls_handler()->print_stat_info();
@@ -273,7 +283,7 @@ void ObTxLoopWorker::do_retain_ctx_gc_(ObLS *ls_ptr)
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr  is not inited", K(ret), K(MTL_ID()),
               K(*ls_ptr));
 
-  } else if (retain_ctx_mgr->try_gc_retain_ctx(ls_ptr)) {
+  } else if (OB_FAIL(retain_ctx_mgr->try_gc_retain_ctx(ls_ptr))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] retain_ctx_mgr try to gc retain ctx failed", K(ret),
               K(MTL_ID()), K(*ls_ptr));
   } else {

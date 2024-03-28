@@ -29,6 +29,8 @@ public:
 
   virtual int open_op() override;
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override;
+  virtual int assign_task_result(ObIDASTaskOp *other) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
@@ -44,6 +46,7 @@ public:
   void set_das_rtdef(ObDASUpdRtDef *upd_rtdef) { upd_rtdef_ = upd_rtdef; }
   virtual int dump_data() const override
   { return write_buffer_.dump_data(*upd_ctdef_); }
+  int64_t get_affected_rows() { return affected_rows_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(upd_ctdef),

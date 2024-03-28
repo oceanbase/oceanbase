@@ -1774,7 +1774,7 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
     COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
@@ -1811,7 +1811,7 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (params.use_memcpy_) {
     ret = databuff_memcpy(buffer, length, pos, jbuf.length(), jbuf.ptr());
@@ -1839,7 +1839,7 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s",
                                      static_cast<int>(MIN(jbuf.length(), buf_len - pos)),

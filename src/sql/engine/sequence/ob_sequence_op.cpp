@@ -143,11 +143,18 @@ int ObLocalSequenceExecutor::get_nextval(ObExecContext &ctx)
       ObSequenceValue seq_value;
       // 注意：这里 schema 的顺序和 ids 里面 id 的顺序是一一对应的
       //       所以可以直接用下标来寻址
-      if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx),
-                                            allocator,
-                                            seq_value))) {
-        LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
-      } else if (OB_FAIL(my_session->set_sequence_value(tenant_id, seq_id, seq_value))) {
+      ObAutoincrementService &auto_service = ObAutoincrementService::get_instance();
+      if (seq_schemas_.at(idx).get_order_flag()
+          && seq_schemas_.at(idx).get_cache_order_mode() == NEW_ACTION) {
+        if (OB_FAIL(auto_service.get_handle(seq_schemas_.at(idx), seq_value))) {
+          LOG_WARN("fail get nextval from rpc for seq", K(tenant_id), K(seq_id), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx), allocator, seq_value))) {
+          LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(my_session->set_sequence_value(tenant_id, seq_id, seq_value))) {
         LOG_WARN("save seq_value to session as currval for later read fail",
                  K(tenant_id), K(seq_id), K(seq_value), K(ret));
       }

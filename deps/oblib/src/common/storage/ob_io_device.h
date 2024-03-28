@@ -330,6 +330,8 @@ public:
   //file/dir interfaces
   virtual int open(const char *pathname, const int flags, const mode_t mode,
                     ObIOFd &fd, ObIODOpts *opts= NULL) = 0;
+  virtual int complete(const ObIOFd &fd) = 0;
+  virtual int abort(const ObIOFd &fd) = 0;
   virtual int close(const ObIOFd &fd) = 0;
   virtual int mkdir(const char *pathname, mode_t mode) = 0;
   virtual int rmdir(const char *pathname) = 0;
@@ -351,6 +353,11 @@ public:
   virtual int exist(const char *pathname, bool &is_exist) = 0;
   virtual int stat(const char *pathname, ObIODFileStat &statbuf) = 0;
   virtual int fstat(const ObIOFd &fd, ObIODFileStat &statbuf) = 0;
+  virtual int del_unmerged_parts(const char *pathname) = 0;
+  virtual int adaptive_exist(const char *pathname, bool &is_exist) = 0;
+  virtual int adaptive_stat(const char *pathname, ObIODFileStat &statbuf) = 0;
+  virtual int adaptive_unlink(const char *pathname) = 0;
+  virtual int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op) = 0;
 
   //block interfaces
   virtual int mark_blocks(ObIBlockIterator &block_iter) = 0;
@@ -431,6 +438,7 @@ public:
   virtual int64_t get_max_block_count(int64_t reserved_size) const = 0;
   virtual int64_t get_reserved_block_count() const = 0;
   virtual int check_space_full(const int64_t required_size) const = 0;
+  virtual int check_write_limited() const = 0;
 
 public:
   ObStorageType device_type_;

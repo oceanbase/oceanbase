@@ -221,11 +221,13 @@ public:
   ~ObTableApiSessGuard()
   {
     if (OB_NOT_NULL(sess_node_val_)) {
+      sess_node_val_->get_sess_info().get_trans_result().reset();
       sess_node_val_->reset_tx_desc();
       sess_node_val_->give_back_to_free_list();
       sess_node_val_ = nullptr;
     }
   }
+  TO_STRING_KV(KPC_(sess_node_val));
 public:
   ObTableApiSessNodeVal* get_sess_node_val() const { return sess_node_val_; }
   sql::ObSQLSessionInfo& get_sess_info() { return sess_node_val_->get_sess_info(); }

@@ -125,7 +125,6 @@ int ObDASInsertOp::insert_rows()
       LOG_WARN("insert rows to access service failed", K(ret));
     }
   } else {
-    ins_rtdef_->affected_rows_ += affected_rows;
     affected_rows_ = affected_rows;
   }
   return ret;
@@ -147,7 +146,7 @@ int ObDASInsertOp::insert_row_with_fetch()
   } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, op_alloc_, dml_param))) {
     LOG_WARN("init dml param failed", K(ret), KPC_(ins_ctdef), KPC_(ins_rtdef));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate ObDASConflictIterator", K(ret));
   } else {
     result_iter = new(buf) ObDASConflictIterator(ins_ctdef_->table_rowkey_types_,
@@ -179,7 +178,6 @@ int ObDASInsertOp::insert_row_with_fetch()
           LOG_WARN("fail to push duplicated_row iter", K(ret));
         } else {
           LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
-          ins_rtdef_->is_duplicated_ = true;
           is_duplicated_ = true;
         }
       }
@@ -235,7 +233,6 @@ int ObDASInsertOp::insert_row_with_fetch()
               LOG_WARN("fail to push duplicated_row iter", K(ret));
             } else {
               LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
-              ins_rtdef_->is_duplicated_ = true;
               is_duplicated_ = true;
             }
           } else {
@@ -296,6 +293,27 @@ int ObDASInsertOp::release_op()
   return ret;
 }
 
+int ObDASInsertOp::record_task_result_to_rtdef()
+{
+  int ret = OB_SUCCESS;
+  ins_rtdef_->affected_rows_ += affected_rows_;
+  ins_rtdef_->is_duplicated_ |= is_duplicated_;
+  return ret;
+}
+int ObDASInsertOp::assign_task_result(ObIDASTaskOp *other)
+{
+  int ret = OB_SUCCESS;
+  if (other->get_type() != get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), KPC(other));
+  } else {
+    ObDASInsertOp *ins_op = static_cast<ObDASInsertOp *>(other);
+    affected_rows_ = ins_op->get_affected_rows();
+    is_duplicated_ = ins_op->get_is_duplicated();
+  }
+  return ret;
+}
+
 int ObDASInsertOp::decode_task_result(ObIDASTaskResult *task_result)
 {
   int ret = OB_SUCCESS;
@@ -311,13 +329,13 @@ int ObDASInsertOp::decode_task_result(ObIDASTaskResult *task_result)
         LOG_WARN("init insert result iterator failed", K(ret));
       } else {
         result_ = insert_result;
-        ins_rtdef_->affected_rows_ += insert_result->get_affected_rows();
-        ins_rtdef_->is_duplicated_ |= insert_result->is_duplicated();
+        affected_rows_ = insert_result->get_affected_rows();
+        is_duplicated_ = insert_result->is_duplicated();
       }
     } else {
       result_ = insert_result;
-      ins_rtdef_->affected_rows_ += insert_result->get_affected_rows();
-      ins_rtdef_->is_duplicated_ |= insert_result->is_duplicated();
+      affected_rows_ = insert_result->get_affected_rows();
+      is_duplicated_ = insert_result->is_duplicated();
     }
   }
   return ret;
