@@ -431,5 +431,33 @@ drop table if exists tt1, tt2, tt3;
 drop table if exists cghldinf, puzdjypf, pujydypf;
 --enable_warnings
 
+## bug: https://aone.alibaba-inc.com/v2/project/81079/bug/55054131
+--disable_warnings
+DROP TABLE if exists t0,t1;
+--enable_warnings
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+alter system set _enable_static_typing_engine=false;
+connection default;
+
+CREATE TABLE IF NOT EXISTS t0(c0 int , c1 int  COMMENT 'asdf'  , c2 int  COMMENT 'asdf' , c3 int   COMMENT 'asdf' ) PARTITION BY HASH(c3)  SUBPARTITION BY KEY (c1, c0, c2) subpartitions 11 partitions 4;
+CREATE TABLE IF NOT EXISTS t1(c0 int , c1 int  COMMENT 'asdf'  , c2 int  COMMENT 'asdf' , c3 int   COMMENT 'asdf' ) PARTITION BY KEY (c2, c0, c1) partitions 6;
+CREATE TABLE IF NOT EXISTS t2(c0 int , c1 int  COMMENT 'asdf'  , c2 int  COMMENT 'asdf' , c3 int   COMMENT 'asdf' ) PARTITION BY HASH(c3)  partitions 20;
+
+explain (SELECT  t1.c1 AS AF2 FROM t1 WHERE (t1.c1,124) IN ((30,100)))
+        UNION ALL
+        (SELECT  MIN(t0.c1) AS AF2  FROM  t0 WHERE (t0.c1,124) IN ((30,100)));
+
+(SELECT  t1.c1 AS AF2 FROM t1 WHERE (t1.c1,124) IN ((30,100)))
+UNION ALL
+(SELECT  MIN(t0.c1) AS AF2  FROM  t0 WHERE (t0.c1,124) IN ((30,100)));
+
+drop table t0,t1;
+
+connection conn_admin;
+alter system set _enable_static_typing_engine=true;
+connection default;
+
 USE DB_PREDICATE_DEDUCE;
 drop database DB_PREDICATE_DEDUCE;

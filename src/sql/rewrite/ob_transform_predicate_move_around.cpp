@@ -512,7 +512,7 @@ int ObTransformPredicateMoveAround::compute_pullup_predicates(ObSelectStmt& view
       LOG_WARN("deduced predicate is null", K(ret));
     } else if ((!ObPredicateDeduce::is_simple_condition(deduced_preds.at(i)->get_expr_type()) &&
                    !ObPredicateDeduce::is_general_condition(deduced_preds.at(i)->get_expr_type())) ||
-               deduced_preds.at(i)->has_flag(IS_CONST)) {
+               deduced_preds.at(i)->has_flag(IS_CONST) || deduced_preds.at(i)->has_flag(IS_CONST_EXPR)) {
       // do nothing
     } else if (OB_FAIL(check_expr_pullup_validity(deduced_preds.at(i), select_exprs, can_be))) {
       LOG_WARN("failed to check pullup validity", K(ret));
