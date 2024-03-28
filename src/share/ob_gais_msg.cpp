@@ -33,7 +33,8 @@ OB_SERIALIZE_MEMBER(ObGAISNextAutoIncValReq,
 OB_SERIALIZE_MEMBER(ObGAISAutoIncKeyArg, autoinc_key_, sender_, autoinc_version_);
 
 // ObGAISPushAutoIncValReq
-OB_SERIALIZE_MEMBER(ObGAISPushAutoIncValReq, autoinc_key_, base_value_, max_value_, sender_, autoinc_version_);
+OB_SERIALIZE_MEMBER(ObGAISPushAutoIncValReq, autoinc_key_, base_value_, max_value_, sender_,
+                    autoinc_version_, cache_size_);
 
 int ObGAISNextAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t offset,
