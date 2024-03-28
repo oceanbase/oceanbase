@@ -1362,10 +1362,10 @@ int ObTabletMergeFinishTask::try_set_upper_trans_version(
       // all row committed, has set as max_merged_trans_version
     } else if (OB_TMP_FAIL(ls->check_ls_migration_status(ls_is_migration, new_rebuild_seq))) {
       LOG_WARN("failed to check ls migration status", K(tmp_ret), K(param), K(ls_is_migration), K(new_rebuild_seq));
+    } else if (ls_is_migration) {
     } else if (param.rebuild_seq_ != new_rebuild_seq) {
       ret = OB_EAGAIN;
       LOG_WARN("rebuild seq not same, need retry merge", K(ret), "ls_meta", ls->get_ls_meta(), K(new_rebuild_seq), K(param));
-    } else if (ls_is_migration) {
     } else if (OB_TMP_FAIL(ObGCUpperTransHelper::try_get_sstable_upper_trans_version(*ls, sstable, new_upper_trans_version))) {
       LOG_WARN("failed to get new upper_trans_version for sstable", K(tmp_ret), K(param));
     } else if (INT64_MAX != new_upper_trans_version
