@@ -1065,6 +1065,9 @@ bool ObTransService::need_fallback_(ObTxDesc &tx, int64_t &total_size)
   if (tx.with_temporary_table()) {
     TRANS_LOG(TRACE, "with tx level temp-table");
     fallback = true;
+  } else if (tx.is_xa_trans() && tx.is_xa_tightly_couple()) {
+    TRANS_LOG(TRACE, "need fallback for tightly coupled xa trans");
+    fallback = true;
   } else {
     total_size = OB_E(EventTable::EN_TX_FREE_ROUTE_STATE_SIZE, tx.tx_id_) tx.estimate_state_size();
     if (total_size > MAX_STATE_SIZE) {
