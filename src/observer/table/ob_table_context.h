@@ -211,6 +211,18 @@ public:
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    column_items_.set_attr(ObMemAttr(MTL_ID(), "KvColItm"));
+    assigns_.set_attr(ObMemAttr(MTL_ID(), "KvAssigns"));
+    select_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvSelExprs"));
+    rowkey_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvRowExprs"));
+    index_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvIdxExprs"));
+    filter_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvFilExprs"));
+    select_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvSelColIds"));
+    query_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvQryColIds"));
+    query_col_names_.set_attr(ObMemAttr(MTL_ID(), "KvQryColNams"));
+    index_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvIdxColIds"));
+    table_index_info_.set_attr(ObMemAttr(MTL_ID(), "KvIdxInfos"));
+    key_ranges_.set_attr(ObMemAttr(MTL_ID(), "KvRanges"));
   }
 
   void reset()
