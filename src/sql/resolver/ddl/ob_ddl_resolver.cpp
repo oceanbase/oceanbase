@@ -2859,7 +2859,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
           if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
             SQL_RESV_LOG(WARN, "fail to check text or blob column length", K(ret), K(column));
           }
-        } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode()))) {
+        } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode(), params_.is_prepare_stage_))) {
           SQL_RESV_LOG(WARN, "fail to check string column length", K(ret), K(column));
         }
       }
@@ -4491,7 +4491,7 @@ int ObDDLResolver::check_prefix_key(const int32_t prefix_len,
   return ret;
 }
 
-int ObDDLResolver::check_string_column_length(const ObColumnSchemaV2 &column, const bool is_oracle_mode)
+int ObDDLResolver::check_string_column_length(const ObColumnSchemaV2 &column, const bool is_oracle_mode, const bool is_prepare_stage)
 {
   int ret = OB_SUCCESS;
   if(ObStringTC != column.get_data_type_class()
@@ -4529,7 +4529,7 @@ int ObDDLResolver::check_string_column_length(const ObColumnSchemaV2 &column, co
       if (0 == mbmaxlen){
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(ERROR, "mbmaxlen can not be 0", K(ret));
-      } else if (data_len < 0 ||
+      } else if ((!is_prepare_stage && data_len < 0) ||
           (is_oracle_mode
             ? data_len > OB_MAX_ORACLE_VARCHAR_LENGTH
             : data_len * mbmaxlen > OB_MAX_VARCHAR_LENGTH)) {

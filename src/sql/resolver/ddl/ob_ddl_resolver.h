@@ -191,7 +191,8 @@ public:
       const common::ObCollationType table_collation_type);
   static int check_string_column_length(
       const share::schema::ObColumnSchemaV2 &column,
-      const bool is_oracle_mode);
+      const bool is_oracle_mode,
+      const bool is_prepare_stage=false);
   static int check_raw_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_urowid_column_length(
