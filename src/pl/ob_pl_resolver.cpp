@@ -5081,7 +5081,8 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         && sql_stmt->get_stmt_type() != stmt::T_INSERT
         && sql_stmt->get_stmt_type() != stmt::T_SELECT
         && sql_stmt->get_stmt_type() != stmt::T_DELETE
-        && sql_stmt->get_stmt_type() != stmt::T_UPDATE) {
+        && sql_stmt->get_stmt_type() != stmt::T_UPDATE
+        && sql_stmt->get_stmt_type() != stmt::T_MERGE) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("forall support dml sql only", K(ret), K(sql_stmt->get_stmt_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not dml sql in forall");
@@ -5101,6 +5102,9 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       }
       ObSEArray<int64_t, 16> need_modify_exprs;
       bool can_array_binding = true;
+      if (sql_stmt->get_stmt_type() == stmt::T_MERGE) {
+        can_array_binding = false;
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
         ObRawExpr* exec_param = func.get_expr(params.at(i));
         bool need_modify = false;
