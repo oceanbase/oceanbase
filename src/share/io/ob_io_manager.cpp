@@ -1316,22 +1316,24 @@ void ObTenantIOManager::print_io_status()
 
     // OTHER_GROUPS
     if (avg_size.at(0).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
-      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f",
+      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
                0L,
                "OTHER_GROUPS",
                avg_size.at(0).at(static_cast<int>(ObIOMode::READ)),
                avg_iops.at(0).at(static_cast<int>(ObIOMode::READ)),
-               avg_rt.at(0).at(static_cast<int>(ObIOMode::READ)));
+               avg_rt.at(0).at(static_cast<int>(ObIOMode::READ)),
+               throttled_time);
       LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
       need_print_io_config = true;
     }
     if (avg_size.at(0).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f",
+      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
                0L,
                "OTHER_GROUPS",
                avg_size.at(0).at(static_cast<int>(ObIOMode::WRITE)),
                avg_iops.at(0).at(static_cast<int>(ObIOMode::WRITE)),
-               avg_rt.at(0).at(static_cast<int>(ObIOMode::WRITE)));
+               avg_rt.at(0).at(static_cast<int>(ObIOMode::WRITE)),
+               throttled_time);
       LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
       need_print_io_config = true;
     }
