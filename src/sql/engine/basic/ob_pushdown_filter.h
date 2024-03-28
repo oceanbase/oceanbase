@@ -858,7 +858,7 @@ public:
   }
   TO_STRING_KV(K_(set), K_(hash_func), K_(cmp_func));
 private:
-  common::hash::ObHashSet<ObWhiteFilterParam> set_;
+  common::hash::ObHashSet<ObWhiteFilterParam, common::hash::NoPthreadDefendMode> set_;
   ObExprHashFuncType hash_func_;
   ObDatumCmpFuncType cmp_func_;
 };
