@@ -199,7 +199,8 @@ int ObJoinFilterOpInput::init_shared_msgs(
       } else if (OB_FAIL(msg_ptr->init(spec.rf_infos_.at(i).p2p_datahub_id_,
           px_sequence_id_, 0/*task_id*/, tenant_id, timeout_ts, register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
-      } else if (OB_FAIL(construct_msg_details(spec, sqc_proxy, config_, *msg_ptr, sqc_count))) {
+      } else if (OB_FAIL(construct_msg_details(spec, sqc_proxy, config_, *msg_ptr, sqc_count,
+                                               spec.filter_len_))) {
         LOG_WARN("fail to construct msg details", K(ret), K(tenant_id));
       }
     }
@@ -230,7 +231,8 @@ int ObJoinFilterOpInput::construct_msg_details(
     ObPxSQCProxy *sqc_proxy,
     ObJoinFilterRuntimeConfig &config,
     ObP2PDatahubMsgBase &msg,
-    int64_t sqc_count)
+    int64_t sqc_count,
+    int64_t estimated_rows)
 {
   int ret = OB_SUCCESS;
   switch(msg.get_msg_type()) {
@@ -238,7 +240,7 @@ int ObJoinFilterOpInput::construct_msg_details(
       ObSArray<ObAddr> *target_addrs = nullptr;
       ObRFBloomFilterMsg &bf_msg = static_cast<ObRFBloomFilterMsg &>(msg);
       ObPxSQCProxy::SQCP2PDhMap &dh_map = sqc_proxy->get_p2p_dh_map();
-      if (OB_FAIL(bf_msg.bloom_filter_.init(spec.filter_len_,
+      if (OB_FAIL(bf_msg.bloom_filter_.init(estimated_rows,
           bf_msg.get_allocator(),
           bf_msg.get_tenant_id(),
           config.bloom_filter_ratio_,
@@ -858,7 +860,7 @@ int ObJoinFilterOp::open_join_filter_create()
           filter_input->px_sequence_id_, filter_input->task_id_, tenant_id, timeout_ts, filter_input->register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
       } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC, sqc_proxy,
-          filter_input->config_, *msg_ptr, 1))) {
+          filter_input->config_, *msg_ptr, 1, filter_len))) {
         LOG_WARN("fail to construct msg details", K(ret));
       } else if (OB_FAIL(lucky_devil_champions_.push_back(false))) {
         LOG_WARN("fail to push back flag", K(ret));
@@ -977,8 +979,9 @@ int ObJoinFilterOp::init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg)
           msg.get_px_seq_id(), 0/*task_id*/, msg.get_tenant_id(),
           msg.get_timeout_ts(), filter_input->register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
-      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC,
-          sqc_proxy, filter_input->config_, *range_ptr, msg.get_msg_receive_expect_cnt()))) {
+      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(
+                     MY_SPEC, sqc_proxy, filter_input->config_, *range_ptr,
+                     msg.get_msg_receive_expect_cnt(), MY_SPEC.filter_len_))) {
         LOG_WARN("fail to construct msg details", K(ret));
       }
       break;
@@ -998,8 +1001,9 @@ int ObJoinFilterOp::init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg)
         msg.get_px_seq_id(), 0/*task_id*/, msg.get_tenant_id(),
         msg.get_timeout_ts(), filter_input->register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
-      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC,
-        sqc_proxy, filter_input->config_, *in_ptr, msg.get_msg_receive_expect_cnt()))) {
+      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(
+                     MY_SPEC, sqc_proxy, filter_input->config_, *in_ptr,
+                     msg.get_msg_receive_expect_cnt(), MY_SPEC.filter_len_))) {
         LOG_WARN("fail to construct msg details", K(ret));
       }
       break;

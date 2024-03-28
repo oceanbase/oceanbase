@@ -4815,6 +4815,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   ObLogJoinFilter *join_filter_create = NULL;
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
   CK(LOG_JOIN == get_type());
+  DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
     bool right_has_exchange = false;
@@ -4862,7 +4863,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       set_child(first_child, join_filter_create);
       join_filter_create->set_filter_length(info.sharding_->get_part_cnt() * 2);
       join_filter_create->set_is_use_filter_shuffle(right_has_exchange);
-      if (is_partition_wise_ && !right_has_exchange) {
+      if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
           join_filter_create->set_is_no_shared_partition_join_filter();
       } else {
           join_filter_create->set_is_shared_partition_join_filter();
@@ -4955,7 +4956,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
           }
-          if (is_partition_wise_ && !right_has_exchange) {
+          if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
             join_filter_create->set_is_non_shared_join_filter();
             join_filter_use->set_is_non_shared_join_filter();
           } else {
