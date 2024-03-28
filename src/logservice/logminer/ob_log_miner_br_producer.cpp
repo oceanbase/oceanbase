@@ -52,10 +52,12 @@ ObLogMinerBRProducer::ObLogMinerBRProducer():
     cdc_factory_(),
     cdc_instance_(nullptr),
     br_filter_(nullptr),
+    data_manager_(nullptr),
     err_handle_(nullptr) { }
 
 int ObLogMinerBRProducer::init(const AnalyzerArgs &args,
     ILogMinerBRFilter *filter,
+    ILogMinerDataManager *data_manager,
     ILogMinerErrorHandler *err_handle)
 {
   int ret = OB_SUCCESS;
@@ -72,6 +74,9 @@ int ObLogMinerBRProducer::init(const AnalyzerArgs &args,
   } else if (OB_ISNULL(br_filter_ = filter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("filter for br producer is null, unexpected", K(br_filter_), K(filter));
+  } else if (OB_ISNULL(data_manager_ = data_manager)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("data_manager_ for br producer is null, unexpected", K(data_manager_), K(data_manager));
   } else if (OB_FAIL(cdc_instance_->init_with_start_tstamp_usec(cdc_config,
       args.start_time_us_))) {
     LOG_ERROR("init cdc instance failed", K(args.start_time_us_), K(ObCdcConfigMapWrap(cdc_config)));
@@ -148,7 +153,7 @@ void ObLogMinerBRProducer::run1()
         }
       }
 
-      if (OB_SUCC(ret) && ! is_dispatch_end_) {
+      if (OB_SUCC(ret) && ! is_dispatch_end_ && !data_manager_->is_end()) {
         if (OB_FAIL(br_filter_->push(logminer_br))) {
           LOG_ERROR("push logminer_br into br_filter failed", K(logminer_br), K(br_filter_));
         } else {

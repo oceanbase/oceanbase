@@ -80,6 +80,14 @@ public:
     return is_filtered_;
   }
 
+  void mark_end() {
+    is_end_ = true;
+  }
+
+  bool is_end() const {
+    return is_end_;
+  }
+
   lib::Worker::CompatMode get_compat_mode() const {
     return compat_mode_;
   }
@@ -117,9 +125,10 @@ public:
     K(record_type_),
     K(trans_id_)
   );
-
+ 
 private:
   bool is_filtered_;
+  bool is_end_;
   lib::Worker::CompatMode compat_mode_;
   int64_t seq_no_;
   uint64_t tenant_id_;

@@ -50,6 +50,7 @@ public:
     KCSTRING(log_level_),
     KCSTRING(timezone_),
     KCSTRING(record_format_),
+    KCSTRING(trans_id_),
     K(verbose_),
     K(print_usage_)
   );
@@ -72,6 +73,7 @@ public:
   const char    *log_level_;
   const char    *timezone_;
   const char    *record_format_;
+  const char    *trans_id_;
   bool          verbose_;
   bool          print_usage_;
 private:
@@ -92,6 +94,7 @@ class AnalyzerArgs {
   static const char *END_TIME_US_KEY;
   static const char *TIMEZONE_KEY;
   static const char *RECORD_FORMAT_KEY;
+  static const char *TRANS_ID_KEY;
 public:
   AnalyzerArgs() { reset(); }
   int init(const ObLogMinerCmdArgs &args);
@@ -110,7 +113,8 @@ public:
     K(start_time_us_),
     K(end_time_us_),
     KCSTRING(timezone_),
-    K(record_format_)
+    K(record_format_),
+    KCSTRING(trans_id_)
   );
 
 public:
@@ -127,6 +131,7 @@ public:
   int64_t end_time_us_;
   char *timezone_;
   RecordFileFormat record_format_;
+  char *trans_id_;
 private:
   int validate_table_list_(const char *tenant_name, bool &validate) const;
 private:

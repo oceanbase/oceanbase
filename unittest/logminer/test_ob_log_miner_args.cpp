@@ -958,7 +958,7 @@ TEST(ObLogMinerArgs, test_log_miner_analyzer_args_serialize)
   EXPECT_EQ(OB_SUCCESS, analyzer_args.init(miner_args));
   int64_t pos = 0;
   const char *expect_buf = "cluster_addr=\nuser_name=\npassword=\narchive_dest=archive_dest\ntable_list=*.db1.table1\n"
-      "column_cond=\noperations=insert|delete|update\noutput_dest=output_dest\nlog_level=\n"
+      "column_cond=\ntrans_id=\noperations=insert|delete|update\noutput_dest=output_dest\nlog_level=\n"
       "start_time_us=11111\nend_time_us=22222\ntimezone=+8:00\nrecord_format=CSV\n";
   char tmp_buf[1000] = {0};
   EXPECT_EQ(OB_SUCCESS, analyzer_args.serialize(tmp_buf, 1000, pos));
@@ -1012,7 +1012,7 @@ TEST(ObLogMinerArgs, test_log_miner_args_serialize)
   EXPECT_EQ(OB_SUCCESS, miner_args.init(args->argc, args->argv));
   int64_t pos = 0;
   const char *expect_buf = "mode=ANALYSIS\ncluster_addr=\nuser_name=\npassword=\n"
-      "archive_dest=archive_dest\ntable_list=*.db1.table1\ncolumn_cond=\noperations=insert|delete|update\n"
+      "archive_dest=archive_dest\ntable_list=*.db1.table1\ncolumn_cond=\ntrans_id=\noperations=insert|delete|update\n"
       "output_dest=output_dest\nlog_level=ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN\nstart_time_us=11111\n"
       "end_time_us=22222\ntimezone=+8:00\nrecord_format=CSV\n";
   char tmp_buf[1000] = {0};

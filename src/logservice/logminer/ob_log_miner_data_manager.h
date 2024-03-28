@@ -46,6 +46,8 @@ public:
   virtual int64_t get_record_count() const = 0;
   virtual int increase_record_count(int64_t count) = 0;
   virtual bool reach_end_progress(const int64_t progress) const = 0;
+  virtual void set_end_commit_scn(int64_t commit_scn) = 0;
+  virtual bool is_end() = 0;
 };
 
 class LogMinerDataManagerStat
@@ -108,6 +110,14 @@ public:
   }
   virtual int increase_record_count(int64_t count);
   virtual bool reach_end_progress(const int64_t progress) const;
+  virtual void set_end_commit_scn(int64_t commit_scn) 
+  {
+    end_commit_scn_ = commit_scn;
+  }
+  virtual bool is_end()
+  {
+    return is_end_;
+  }
 
 public:
   virtual void run1();
@@ -135,6 +145,8 @@ private:
   int64_t end_progress_;
   int64_t output_progress_;
   int64_t record_count_;
+  int64_t end_commit_scn_;
+  int64_t is_end_;
   ILogMinerErrorHandler *err_handle_;
 };
 

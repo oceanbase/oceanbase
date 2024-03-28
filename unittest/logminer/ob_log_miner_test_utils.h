@@ -40,6 +40,15 @@ ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
               const char *encoding,
               const int arg_count, ...);
 
+ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
+              binlogBuf *old_bufs,
+              RecordType type,
+              lib::Worker::CompatMode compat_mode,
+              const char *db_name,
+              const char *table_name,
+              const int trans_id,
+              const int arg_count, ...);
+
 void destroy_miner_br(ObLogMinerBR *&br);
 
 ObLogMinerRecord *build_logminer_record(ObIAllocator &alloc,
