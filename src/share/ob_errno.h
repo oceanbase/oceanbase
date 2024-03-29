@@ -463,6 +463,14 @@ constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_LS_NOT_LEADER = -4767;
 constexpr int OB_CONFLICT_WITH_CLONE = -4770;
 constexpr int OB_BREAK_BY_TEST = -4771;
+constexpr int OB_TABLES_DIFFERENT_DEFINITIONS = -4772;
+constexpr int OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION = -4773;
+constexpr int OB_ERR_COLUMNS_NUMBER_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION = -4774;
+constexpr int OB_ERR_COLUMN_TYPE_OR_SIZE_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION = -4775;
+constexpr int OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION = -4776;
+constexpr int OB_ERR_CHECK_CONSTRAINT_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION = -4777;
+constexpr int OB_ERR_FOREIGN_KEY_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION = -4778;
+constexpr int OB_ERR_EXCHANGE_COMPOSITE_PARTITION = -4779;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1853,6 +1861,7 @@ constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
 constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_FT_COLUMN_NOT_INDEXED = -11014;
 constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
+constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2430,6 +2439,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_ROOT_KEY__USER_ERROR_MSG "%s"
 #define OB_CONFLICT_WITH_CLONE__USER_ERROR_MSG "Tenant (%ld) is in %s procedure, %s not allowed now"
 #define OB_BREAK_BY_TEST__USER_ERROR_MSG "process is breaked by test case"
+#define OB_TABLES_DIFFERENT_DEFINITIONS__USER_ERROR_MSG "Tables have different definitions"
+#define OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION__USER_ERROR_MSG "Non matching attribute '%s' between partition and table"
+#define OB_ERR_COLUMNS_NUMBER_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__USER_ERROR_MSG "tables in ALTER TABLE EXCHANGE PARTITION must have the same number of columns"
+#define OB_ERR_COLUMN_TYPE_OR_SIZE_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__USER_ERROR_MSG "column type or size mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__USER_ERROR_MSG "index mismatch for tables in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_CHECK_CONSTRAINT_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__USER_ERROR_MSG "CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_FOREIGN_KEY_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__USER_ERROR_MSG "FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_EXCHANGE_COMPOSITE_PARTITION__USER_ERROR_MSG "Subpartitioned table, use subpartition instead of partition"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4088,6 +4105,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__USER_ERROR_MSG "Can't find FULLTEXT index matching the column list"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
+#define OB_ERR_PARTITION_EXCHANGE_PART_TABLE__USER_ERROR_MSG "Table to exchange with partition is partitioned: \'%.*s\'"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4665,6 +4683,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_ROOT_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4769, %s"
 #define OB_CONFLICT_WITH_CLONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4770, Tenant (%ld) is in %s procedure, %s not allowed now"
 #define OB_BREAK_BY_TEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4771, process is breaked by test case"
+#define OB_TABLES_DIFFERENT_DEFINITIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4772, Tables have different definitions"
+#define OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4773, Non matching attribute '%s' between partition and table"
+#define OB_ERR_COLUMNS_NUMBER_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__ORA_USER_ERROR_MSG "ORA-14096: tables in ALTER TABLE EXCHANGE PARTITION must have the same number of columns"
+#define OB_ERR_COLUMN_TYPE_OR_SIZE_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__ORA_USER_ERROR_MSG "ORA-14097: column type or size mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__ORA_USER_ERROR_MSG "ORA-14098: index mismatch for tables in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_CHECK_CONSTRAINT_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__ORA_USER_ERROR_MSG "ORA-14118: CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_FOREIGN_KEY_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION__ORA_USER_ERROR_MSG "ORA-14128: FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION"
+#define OB_ERR_EXCHANGE_COMPOSITE_PARTITION__ORA_USER_ERROR_MSG "ORA-14291: cannot EXCHANGE a composite partition with a non-partitioned table"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -6323,6 +6349,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11014, Can't find FULLTEXT index matching the column list"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
+#define OB_ERR_PARTITION_EXCHANGE_PART_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11017, Table to exchange with partition is partitioned: \'%.*s\'"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6333,7 +6360,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2231];
+extern int g_all_ob_errnos[2240];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
