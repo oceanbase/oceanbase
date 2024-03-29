@@ -671,6 +671,10 @@ public:
     {
       reset();
     }
+    ~StmtSavedValue()
+    {
+      reset();
+    }
     inline void reset()
     {
       ObBasicSessionInfo::StmtSavedValue::reset();

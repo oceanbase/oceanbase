@@ -6077,7 +6077,8 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
       ob_free(saved_value.cur_query_);
     }
     int64_t len = MAX(MIN_CUR_QUERY_LEN, truncated_len + 1);
-    saved_value.cur_query_ = reinterpret_cast<char*>(ob_malloc(len, ObModIds::OB_SQL_SESSION_QUERY_SQL));
+    saved_value.cur_query_ = reinterpret_cast<char*>(ob_malloc(len, ObMemAttr(orig_tenant_id_,
+                                                                 ObModIds::OB_SQL_SESSION_QUERY_SQL)));
     if (OB_ISNULL(saved_value.cur_query_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -6170,7 +6171,7 @@ int ObBasicSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
   OZ (SMART_CALL(restore_basic_session(saved_value)));
-  OX (saved_value.destroy());
+  OX (saved_value.reset());
   return ret;
 }
 

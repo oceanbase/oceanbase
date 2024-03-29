@@ -303,16 +303,19 @@ public:
   class BaseSavedValue
   {
   public:
-    BaseSavedValue()
+    BaseSavedValue() : cur_query_(NULL)
     {
       reset();
     }
     ~BaseSavedValue()
     {
-      destroy();
+      reset();
     }
     inline void reset()
     {
+      if (cur_query_ != nullptr) {
+        ob_free(cur_query_);
+      }
       cur_phy_plan_ = NULL;
       cur_query_len_ = 0;
       cur_query_buf_len_ = 0;
@@ -322,13 +325,6 @@ public:
       read_uncommited_ = false;
       inc_autocommit_ = false;
       need_serial_exec_ = false;
-    }
-    inline void destroy()
-    {
-      if (cur_query_ != nullptr) {
-        ob_free(cur_query_);
-      }
-      reset();
     }
   public:
     // 原StmtSavedValue的属性
@@ -359,6 +355,10 @@ public:
     {
       reset();
     }
+    ~StmtSavedValue()
+    {
+      reset();
+    }
     inline void reset()
     {
       BaseSavedValue::reset();
@@ -366,11 +366,6 @@ public:
       cur_query_start_time_ = 0;
       in_transaction_ = false;
       stmt_type_ = sql::stmt::StmtType::T_NONE;
-    }
-    inline void destroy()
-    {
-      BaseSavedValue::destroy();
-      reset();
     }
   public:
     transaction::ObTxExecResult tx_result_;

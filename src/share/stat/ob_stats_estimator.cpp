@@ -460,6 +460,9 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
       LOG_WARN("failed to restore session", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
+    if (OB_NOT_NULL(session_value)) {
+      session_value->reset();
+    }
   }
   return ret;
 }
