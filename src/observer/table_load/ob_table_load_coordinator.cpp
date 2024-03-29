@@ -211,10 +211,10 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
         if (round % 10 == 0) {
           FLOG_WARN("retry too many times", K(round), K(running_cnt), K(fail_cnt), K(tries), KPC(next_round));
         }
-        std::swap(curr_round, next_round);
-        next_round->reuse();
         ob_usleep(WAIT_INTERVAL_US);
       }
+      std::swap(curr_round, next_round);
+      next_round->reuse();
     }
   }
   return ret;
