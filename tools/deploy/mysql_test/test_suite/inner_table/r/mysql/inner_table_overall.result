@@ -1034,6 +1034,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21502	CDB_OB_TRANSFER_PARTITION_TASKS	1	201001	1
 21503	DBA_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
 21504	CDB_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
+21580	EVENTS	1	201002	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;
