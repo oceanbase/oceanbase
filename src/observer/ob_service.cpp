@@ -1698,7 +1698,7 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       LOG_WARN("can not add ls which local ls is exist", KR(ret), K(arg), K(is_exist));
     } else {
       migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg.data_source_;
+      migration_op_arg.data_src_ = arg.force_data_source_;
       migration_op_arg.dst_ = arg.dst_;
       migration_op_arg.ls_id_ = arg.ls_id_;
       //TODO(muwei.ym) need check priority in 4.2 RC3
