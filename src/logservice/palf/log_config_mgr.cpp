@@ -2816,6 +2816,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
   int ret = OB_SUCCESS;
   LogCandidateList candidate_list;
   LogLearnerList retired_children;
+  LogLearnerList diff_region_children;
   RegisterReturn reg_ret = INVALID_REG_RET;
   common::ObMember learner_in_list;
   const int in_list_ret = all_learnerlist_.get_learner_by_addr(child.get_server(), learner_in_list);
@@ -2871,6 +2872,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     } else if (child.region_ != region_) {
       // follower will reject register req which region is different
       reg_ret = REGISTER_DIFF_REGION;
+    } else if (OB_FAIL(remove_diff_region_child_(diff_region_children))) {
+      PALF_LOG(WARN, "remove_diff_region_child_ failed", KR(ret), K_(palf_id), K_(self), K_(children), K(child));
     } else if (children_.get_member_number() < OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER) {
       // register to self
       LogLearner dst_child(child);
@@ -2908,6 +2911,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
         K(reg_ret), K_(children), "member_list", log_ms_meta_.curr_.config_.log_sync_memberlist_);
   }
   if (OB_FAIL(submit_retire_children_req_(retired_children, RetireChildReason::CHILDREN_LIST_FULL))) {
+    PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(retired_children));
+  } else if (OB_FAIL(submit_retire_children_req_(diff_region_children, RetireChildReason::DIFFERENT_REGION_WITH_PARENT))) {
     PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(retired_children));
   }
   return ret;
