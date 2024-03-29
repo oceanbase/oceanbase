@@ -7038,6 +7038,7 @@ void ObAlterTableResArg::reset()
   schema_type_ = OB_MAX_SCHEMA;
   schema_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
+  part_object_id_ = OB_INVALID_ID;
 }
 
 int ObDDLRes::assign(const ObDDLRes &other)
@@ -7080,7 +7081,7 @@ int ObDropDatabaseRes::assign(const ObDropDatabaseRes &other)
 }
 
 OB_SERIALIZE_MEMBER(ObDropDatabaseRes, ddl_res_, affected_row_);
-OB_SERIALIZE_MEMBER(ObAlterTableResArg, schema_type_, schema_id_, schema_version_);
+OB_SERIALIZE_MEMBER(ObAlterTableResArg, schema_type_, schema_id_, schema_version_, part_object_id_);
 OB_SERIALIZE_MEMBER(ObAlterTableRes, index_table_id_, constriant_id_, schema_version_,
 res_arg_array_, ddl_type_, task_id_, ddl_res_array_);
 OB_SERIALIZE_MEMBER(ObGetTenantSchemaVersionArg, tenant_id_);

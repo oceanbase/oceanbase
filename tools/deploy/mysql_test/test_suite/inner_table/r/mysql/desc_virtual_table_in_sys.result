@@ -2888,6 +2888,7 @@ source_partition_id	varchar(4096)	YES
 tablespace_id	bigint(20)	NO		-1	
 partition_type	bigint(20)	NO		0	
 tablet_id	bigint(20)	NO		0	
+external_location	varbinary(65536)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_part;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2924,6 +2925,7 @@ source_partition_id	varchar(4096)	YES
 tablespace_id	bigint(20)	YES		-1	
 partition_type	bigint(20)	YES		0	
 tablet_id	bigint(20)	YES		0	
+external_location	varbinary(65536)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_part_history;
 IF(count(*) >= 0, 1, 0)
 1

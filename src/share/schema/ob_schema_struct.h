@@ -145,7 +145,9 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 
 // table_flags stored in __all_table.table_flag
 #define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
-
+#define EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG (INT64_C(1) << 1)
+#define EXTERNAL_TABLE_AUTO_REFRESH_FLAG (INT64_C(1) << 2)
+#define EXTERNAL_TABLE_CREATE_ON_REFRESH_FLAG (INT64_C(1) << 3)
 // schema array size
 static const int64_t SCHEMA_SMALL_MALLOC_BLOCK_SIZE = 64;
 static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
@@ -2119,9 +2121,13 @@ public:
   // convert character set.
   int convert_character_for_range_columns_part(const ObCollationType &to_collation);
   int convert_character_for_list_columns_part(const ObCollationType &to_collation);
+  int set_external_location(common::ObString &location)
+  { return deep_copy_str(location, external_location_); }
+  const common::ObString &get_external_location() const
+  { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
-                       K_(is_empty_partition_name), K_(tablet_id));
+                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2149,6 +2155,7 @@ protected:
   PartitionType partition_type_;
   common::ObRowkey low_bound_val_;
   ObTabletID tablet_id_;
+  common::ObString external_location_;
 };
 
 class ObSubPartition;

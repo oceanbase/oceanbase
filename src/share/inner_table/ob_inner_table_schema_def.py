@@ -1106,7 +1106,8 @@ all_part_def = dict(
       ('source_partition_id', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
       ('tablespace_id', 'int', 'false', '-1'),
       ('partition_type', 'int', 'false', '0'),
-      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID')
+      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
+      ('external_location', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
     ],
 )
 

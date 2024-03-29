@@ -8566,7 +8566,8 @@ public:
   ObAlterTableResArg() :
   schema_type_(share::schema::OB_MAX_SCHEMA),
   schema_id_(common::OB_INVALID_ID),
-  schema_version_(common::OB_INVALID_VERSION)
+  schema_version_(common::OB_INVALID_VERSION),
+  part_object_id_(common::OB_INVALID_ID)
   {}
   ObAlterTableResArg(
       const share::schema::ObSchemaType schema_type,
@@ -8576,12 +8577,23 @@ public:
         schema_id_(schema_id),
         schema_version_(schema_version)
   {}
+    ObAlterTableResArg(
+      const share::schema::ObSchemaType schema_type,
+      const uint64_t schema_id,
+      const int64_t schema_version,
+      const int64_t part_object_id)
+      : schema_type_(schema_type),
+        schema_id_(schema_id),
+        schema_version_(schema_version),
+        part_object_id_(part_object_id)
+  {}
   void reset();
 public:
-  TO_STRING_KV(K_(schema_type), K_(schema_id), K_(schema_version));
+  TO_STRING_KV(K_(schema_type), K_(schema_id), K_(schema_version), K_(part_object_id));
   share::schema::ObSchemaType schema_type_;
   uint64_t schema_id_;
   int64_t schema_version_;
+  int64_t part_object_id_;
 };
 
 struct ObDDLRes final
