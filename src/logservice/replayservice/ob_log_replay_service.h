@@ -150,6 +150,7 @@ public:
                      bool &is_done);
   int is_submit_task_clear(const share::ObLSID &id, bool &is_clear);
   int get_max_replayed_scn(const share::ObLSID &id, share::SCN &scn);
+  int get_min_unreplayed_scn(const share::ObLSID &id, SCN &scn);
   int submit_task(ObReplayServiceTask *task);
   int update_replayable_point(const share::SCN &replayable_scn);
   int get_replayable_point(share::SCN &replayable_scn);

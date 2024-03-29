@@ -297,8 +297,14 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
         first_created_ctx_ = !tx_ctx_existed;
       }
     }
-    if (OB_SUCC(ret) && OB_NOT_NULL(ctx_) && is_tx_log_replay_queue()) {
-      ret = ctx_->push_replaying_log_ts(log_ts_ns_, replaying_log_entry_no_);
+    if (OB_SUCC(ret) && OB_NOT_NULL(ctx_)) {
+      if (is_tx_log_replay_queue()) {
+        ret = ctx_->push_replaying_log_ts(log_ts_ns_, replaying_log_entry_no_);
+      } else if (base_header_.need_pre_replay_barrier() && OB_UNLIKELY(ctx_->is_replay_complete_unknown())) {
+        // if a pre-barrier log will be replayed
+        // the txn can be confirmed to incomplete replayed
+        ret = ctx_->set_replay_incomplete();
+      }
     }
   }
   return ret;
