@@ -334,6 +334,24 @@ namespace share
   static const char* const OB_SV_INNODB_VERSION = "innodb_version";
   static const char* const OB_SV_MYISAM_MMAP_SIZE = "myisam_mmap_size";
   static const char* const OB_SV_TABLE_OPEN_CACHE_INSTANCES = "table_open_cache_instances";
+  static const char* const OB_SV_GTID_EXECUTED = "gtid_executed";
+  static const char* const OB_SV_GTID_OWNED = "gtid_owned";
+  static const char* const OB_SV_INNODB_ROLLBACK_ON_TIMEOUT = "innodb_rollback_on_timeout";
+  static const char* const OB_SV_COMPLETION_TYPE = "completion_type";
+  static const char* const OB_SV_ENFORCE_GTID_CONSISTENCY = "enforce_gtid_consistency";
+  static const char* const OB_SV_GTID_EXECUTED_COMPRESSION_PERIOD = "gtid_executed_compression_period";
+  static const char* const OB_SV_GTID_MODE = "gtid_mode";
+  static const char* const OB_SV_GTID_NEXT = "gtid_next";
+  static const char* const OB_SV_GTID_PURGED = "gtid_purged";
+  static const char* const OB_SV_INNODB_API_BK_COMMIT_INTERVAL = "innodb_api_bk_commit_interval";
+  static const char* const OB_SV_INNODB_API_TRX_LEVEL = "innodb_api_trx_level";
+  static const char* const OB_SV_INNODB_SUPPORT_XA = "innodb_support_xa";
+  static const char* const OB_SV_SESSION_TRACK_GTIDS = "session_track_gtids";
+  static const char* const OB_SV_SESSION_TRACK_TRANSACTION_INFO = "session_track_transaction_info";
+  static const char* const OB_SV_TRANSACTION_ALLOC_BLOCK_SIZE = "transaction_alloc_block_size";
+  static const char* const OB_SV_TRANSACTION_ALLOW_BATCHING = "transaction_allow_batching";
+  static const char* const OB_SV_TRANSACTION_PREALLOC_SIZE = "transaction_prealloc_size";
+  static const char* const OB_SV_TRANSACTION_WRITE_SET_EXTRACTION = "transaction_write_set_extraction";
 
 }
 }

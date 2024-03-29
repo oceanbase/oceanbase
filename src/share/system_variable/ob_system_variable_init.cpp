@@ -4500,13 +4500,264 @@ static struct VarsInit{
     ObSysVars[317].alias_ = "OB_SV_TABLE_OPEN_CACHE_INSTANCES" ;
     }();
 
+    [&] (){
+      ObSysVars[318].default_value_ = "" ;
+      ObSysVars[318].info_ = "When used with global scope, this variable contains a representation of the set of all transactions executed on the server and GTIDs that have been set by a SET gtid_purged statement" ;
+      ObSysVars[318].name_ = "gtid_executed" ;
+      ObSysVars[318].data_type_ = ObVarcharType ;
+      ObSysVars[318].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[318].id_ = SYS_VAR_GTID_EXECUTED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_EXECUTED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_EXECUTED] = 318 ;
+      ObSysVars[318].base_value_ = "" ;
+    ObSysVars[318].alias_ = "OB_SV_GTID_EXECUTED" ;
+    }();
+
+    [&] (){
+      ObSysVars[319].default_value_ = "" ;
+      ObSysVars[319].info_ = "When used with global scope, gtid_owned holds a list of all the GTIDs that are currently in use on the server, with the IDs of the threads that own them. When used with session scope, gtid_owned holds a single GTID that is currently in use by and owned by this session" ;
+      ObSysVars[319].name_ = "gtid_owned" ;
+      ObSysVars[319].data_type_ = ObVarcharType ;
+      ObSysVars[319].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[319].id_ = SYS_VAR_GTID_OWNED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_OWNED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_OWNED] = 319 ;
+      ObSysVars[319].base_value_ = "" ;
+    ObSysVars[319].alias_ = "OB_SV_GTID_OWNED" ;
+    }();
+
+    [&] (){
+      ObSysVars[320].default_value_ = "0" ;
+      ObSysVars[320].info_ = "InnoDB rolls back only the last statement on a transaction timeout by default. If --innodb-rollback-on-timeout is specified, a transaction timeout causes InnoDB to abort and roll back the entire transaction" ;
+      ObSysVars[320].name_ = "innodb_rollback_on_timeout" ;
+      ObSysVars[320].data_type_ = ObIntType ;
+      ObSysVars[320].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[320].id_ = SYS_VAR_INNODB_ROLLBACK_ON_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_ROLLBACK_ON_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_ROLLBACK_ON_TIMEOUT] = 320 ;
+      ObSysVars[320].base_value_ = "0" ;
+    ObSysVars[320].alias_ = "OB_SV_INNODB_ROLLBACK_ON_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[321].default_value_ = "0" ;
+      ObSysVars[321].info_ = "completion_type affects transactions that begin with START TRANSACTION or BEGIN and end with COMMIT or ROLLBACK. It does not apply for XA COMMIT, XA ROLLBACK, or when autocommit=1" ;
+      ObSysVars[321].name_ = "completion_type" ;
+      ObSysVars[321].data_type_ = ObIntType ;
+      ObSysVars[321].enum_names_ = "[u'NO_CHAIN', u'CHAIN', u'RELEASE']" ;
+      ObSysVars[321].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[321].id_ = SYS_VAR_COMPLETION_TYPE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_COMPLETION_TYPE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_COMPLETION_TYPE] = 321 ;
+      ObSysVars[321].base_value_ = "0" ;
+    ObSysVars[321].alias_ = "OB_SV_COMPLETION_TYPE" ;
+    }();
+
+    [&] (){
+      ObSysVars[322].default_value_ = "0" ;
+      ObSysVars[322].info_ = "Depending on the value of this variable, the server enforces GTID consistency by allowing execution of only statements that can be safely logged using a GTID. You must set this variable to ON before enabling GTID based replication" ;
+      ObSysVars[322].name_ = "enforce_gtid_consistency" ;
+      ObSysVars[322].data_type_ = ObIntType ;
+      ObSysVars[322].enum_names_ = "[u'OFF', u'ON', u'WARN']" ;
+      ObSysVars[322].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[322].id_ = SYS_VAR_ENFORCE_GTID_CONSISTENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENFORCE_GTID_CONSISTENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENFORCE_GTID_CONSISTENCY] = 322 ;
+      ObSysVars[322].base_value_ = "0" ;
+    ObSysVars[322].alias_ = "OB_SV_ENFORCE_GTID_CONSISTENCY" ;
+    }();
+
+    [&] (){
+      ObSysVars[323].default_value_ = "1000" ;
+      ObSysVars[323].info_ = "Compress the mysql.gtid_executed table each time this many transactions have been processed" ;
+      ObSysVars[323].name_ = "gtid_executed_compression_period" ;
+      ObSysVars[323].data_type_ = ObIntType ;
+      ObSysVars[323].min_val_ = "0" ;
+      ObSysVars[323].max_val_ = "4294967295" ;
+      ObSysVars[323].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[323].id_ = SYS_VAR_GTID_EXECUTED_COMPRESSION_PERIOD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_EXECUTED_COMPRESSION_PERIOD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_EXECUTED_COMPRESSION_PERIOD] = 323 ;
+      ObSysVars[323].base_value_ = "1000" ;
+    ObSysVars[323].alias_ = "OB_SV_GTID_EXECUTED_COMPRESSION_PERIOD" ;
+    }();
+
+    [&] (){
+      ObSysVars[324].default_value_ = "0" ;
+      ObSysVars[324].info_ = "Controls whether GTID based logging is enabled and what type of transactions the logs can contain" ;
+      ObSysVars[324].name_ = "gtid_mode" ;
+      ObSysVars[324].data_type_ = ObIntType ;
+      ObSysVars[324].enum_names_ = "[u'OFF', u'OFF_PERMISSIVE', u'ON_PERMISSIVE', u'ON']" ;
+      ObSysVars[324].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[324].id_ = SYS_VAR_GTID_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_MODE] = 324 ;
+      ObSysVars[324].base_value_ = "0" ;
+    ObSysVars[324].alias_ = "OB_SV_GTID_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[325].default_value_ = "0" ;
+      ObSysVars[325].info_ = "This variable is used to specify whether and how the next GTID is obtained" ;
+      ObSysVars[325].name_ = "gtid_next" ;
+      ObSysVars[325].data_type_ = ObIntType ;
+      ObSysVars[325].enum_names_ = "[u'AUTOMATIC', u'ANONYMOUS']" ;
+      ObSysVars[325].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[325].id_ = SYS_VAR_GTID_NEXT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_NEXT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_NEXT] = 325 ;
+      ObSysVars[325].base_value_ = "0" ;
+    ObSysVars[325].alias_ = "OB_SV_GTID_NEXT" ;
+    }();
+
+    [&] (){
+      ObSysVars[326].default_value_ = "" ;
+      ObSysVars[326].info_ = "The global value of the gtid_purged system variable is a GTID set consisting of the GTIDs of all the transactions that have been committed on the server, but do not exist in any binary log file on the server. gtid_purged is a subset of gtid_executed" ;
+      ObSysVars[326].name_ = "gtid_purged" ;
+      ObSysVars[326].data_type_ = ObVarcharType ;
+      ObSysVars[326].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[326].id_ = SYS_VAR_GTID_PURGED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GTID_PURGED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GTID_PURGED] = 326 ;
+      ObSysVars[326].base_value_ = "" ;
+    ObSysVars[326].alias_ = "OB_SV_GTID_PURGED" ;
+    }();
+
+    [&] (){
+      ObSysVars[327].default_value_ = "5" ;
+      ObSysVars[327].info_ = "How often to auto-commit idle connections that use the InnoDB memcached interface, in seconds" ;
+      ObSysVars[327].name_ = "innodb_api_bk_commit_interval" ;
+      ObSysVars[327].data_type_ = ObIntType ;
+      ObSysVars[327].min_val_ = "1" ;
+      ObSysVars[327].max_val_ = "1073741824" ;
+      ObSysVars[327].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[327].id_ = SYS_VAR_INNODB_API_BK_COMMIT_INTERVAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_API_BK_COMMIT_INTERVAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_API_BK_COMMIT_INTERVAL] = 327 ;
+      ObSysVars[327].base_value_ = "5" ;
+    ObSysVars[327].alias_ = "OB_SV_INNODB_API_BK_COMMIT_INTERVAL" ;
+    }();
+
+    [&] (){
+      ObSysVars[328].default_value_ = "0" ;
+      ObSysVars[328].info_ = "Controls the transaction isolation level on queries processed by the memcached interface" ;
+      ObSysVars[328].name_ = "innodb_api_trx_level" ;
+      ObSysVars[328].data_type_ = ObIntType ;
+      ObSysVars[328].min_val_ = "0" ;
+      ObSysVars[328].max_val_ = "3" ;
+      ObSysVars[328].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[328].id_ = SYS_VAR_INNODB_API_TRX_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_API_TRX_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_API_TRX_LEVEL] = 328 ;
+      ObSysVars[328].base_value_ = "0" ;
+    ObSysVars[328].alias_ = "OB_SV_INNODB_API_TRX_LEVEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[329].default_value_ = "1" ;
+      ObSysVars[329].info_ = "Enables InnoDB support for two-phase commit in XA transactions, causing an extra disk flush for transaction preparation" ;
+      ObSysVars[329].name_ = "innodb_support_xa" ;
+      ObSysVars[329].data_type_ = ObIntType ;
+      ObSysVars[329].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[329].id_ = SYS_VAR_INNODB_SUPPORT_XA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SUPPORT_XA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SUPPORT_XA] = 329 ;
+      ObSysVars[329].base_value_ = "1" ;
+    ObSysVars[329].alias_ = "OB_SV_INNODB_SUPPORT_XA" ;
+    }();
+
+    [&] (){
+      ObSysVars[330].default_value_ = "0" ;
+      ObSysVars[330].info_ = "Controls whether the server returns GTIDs to the client, enabling the client to use them to track the server state" ;
+      ObSysVars[330].name_ = "session_track_gtids" ;
+      ObSysVars[330].data_type_ = ObIntType ;
+      ObSysVars[330].enum_names_ = "[u'OFF', u'OWN_GTID', u'ALL_GTIDS']" ;
+      ObSysVars[330].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[330].id_ = SYS_VAR_SESSION_TRACK_GTIDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SESSION_TRACK_GTIDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SESSION_TRACK_GTIDS] = 330 ;
+      ObSysVars[330].base_value_ = "0" ;
+    ObSysVars[330].alias_ = "OB_SV_SESSION_TRACK_GTIDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[331].default_value_ = "0" ;
+      ObSysVars[331].info_ = "Controls whether the server tracks the state and characteristics of transactions within the current session and notifies the client to make this information available" ;
+      ObSysVars[331].name_ = "session_track_transaction_info" ;
+      ObSysVars[331].data_type_ = ObIntType ;
+      ObSysVars[331].enum_names_ = "[u'OFF', u'STATE', u'CHARACTERISTICS']" ;
+      ObSysVars[331].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[331].id_ = SYS_VAR_SESSION_TRACK_TRANSACTION_INFO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SESSION_TRACK_TRANSACTION_INFO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SESSION_TRACK_TRANSACTION_INFO] = 331 ;
+      ObSysVars[331].base_value_ = "0" ;
+    ObSysVars[331].alias_ = "OB_SV_SESSION_TRACK_TRANSACTION_INFO" ;
+    }();
+
+    [&] (){
+      ObSysVars[332].default_value_ = "8192" ;
+      ObSysVars[332].info_ = "The amount in bytes by which to increase a per-transaction memory pool which needs memory" ;
+      ObSysVars[332].name_ = "transaction_alloc_block_size" ;
+      ObSysVars[332].data_type_ = ObIntType ;
+      ObSysVars[332].min_val_ = "1024" ;
+      ObSysVars[332].max_val_ = "131072" ;
+      ObSysVars[332].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[332].id_ = SYS_VAR_TRANSACTION_ALLOC_BLOCK_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_ALLOC_BLOCK_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_ALLOC_BLOCK_SIZE] = 332 ;
+      ObSysVars[332].base_value_ = "8192" ;
+    ObSysVars[332].alias_ = "OB_SV_TRANSACTION_ALLOC_BLOCK_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[333].default_value_ = "0" ;
+      ObSysVars[333].info_ = "When set to 1 or ON, this variable enables batching of statements within the same transaction. To use this variable, autocommit must first be disabled by setting it to 0 or OFF; otherwise, setting transaction_allow_batching has no effect" ;
+      ObSysVars[333].name_ = "transaction_allow_batching" ;
+      ObSysVars[333].data_type_ = ObIntType ;
+      ObSysVars[333].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[333].id_ = SYS_VAR_TRANSACTION_ALLOW_BATCHING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_ALLOW_BATCHING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_ALLOW_BATCHING] = 333 ;
+      ObSysVars[333].base_value_ = "0" ;
+    ObSysVars[333].alias_ = "OB_SV_TRANSACTION_ALLOW_BATCHING" ;
+    }();
+
+    [&] (){
+      ObSysVars[334].default_value_ = "4096" ;
+      ObSysVars[334].info_ = "There is a per-transaction memory pool from which various transaction-related allocations take memory. The initial size of the pool in bytes is transaction_prealloc_size" ;
+      ObSysVars[334].name_ = "transaction_prealloc_size" ;
+      ObSysVars[334].data_type_ = ObIntType ;
+      ObSysVars[334].min_val_ = "1024" ;
+      ObSysVars[334].max_val_ = "131072" ;
+      ObSysVars[334].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[334].id_ = SYS_VAR_TRANSACTION_PREALLOC_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_PREALLOC_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_PREALLOC_SIZE] = 334 ;
+      ObSysVars[334].base_value_ = "4096" ;
+    ObSysVars[334].alias_ = "OB_SV_TRANSACTION_PREALLOC_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[335].default_value_ = "0" ;
+      ObSysVars[335].info_ = "Defines the algorithm used to generate a hash identifying the writes associated with a transaction" ;
+      ObSysVars[335].name_ = "transaction_write_set_extraction" ;
+      ObSysVars[335].data_type_ = ObIntType ;
+      ObSysVars[335].enum_names_ = "[u'OFF', u'MURMUR32', u'XXHASH64']" ;
+      ObSysVars[335].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[335].id_ = SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION] = 335 ;
+      ObSysVars[335].base_value_ = "0" ;
+    ObSysVars[335].alias_ = "OB_SV_TRANSACTION_WRITE_SET_EXTRACTION" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 318;
+static int64_t var_amount = 336;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

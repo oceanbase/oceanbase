@@ -4656,7 +4656,286 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+    "gtid_executed": {
+    "id": 10234,
+    "name": "gtid_executed",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "When used with global scope, this variable contains a representation of the set of all transactions executed on the server and GTIDs that have been set by a SET gtid_purged statement",
+    "flags": "GLOBAL | READONLY | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "gtid_owned": {
+    "id": 10235,
+    "name": "gtid_owned",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "When used with global scope, gtid_owned holds a list of all the GTIDs that are currently in use on the server, with the IDs of the threads that own them. When used with session scope, gtid_owned holds a single GTID that is currently in use by and owned by this session",
+    "flags": "GLOBAL | SESSION | READONLY | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_rollback_on_timeout": {
+    "id": 10236,
+    "name": "innodb_rollback_on_timeout",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "InnoDB rolls back only the last statement on a transaction timeout by default. If --innodb-rollback-on-timeout is specified, a transaction timeout causes InnoDB to abort and roll back the entire transaction",
+    "flags": "GLOBAL | READONLY | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "completion_type": {
+    "id": 10237,
+    "name": "completion_type",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "completion_type affects transactions that begin with START TRANSACTION or BEGIN and end with COMMIT or ROLLBACK. It does not apply for XA COMMIT, XA ROLLBACK, or when autocommit=1",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "NO_CHAIN",
+      "CHAIN",
+      "RELEASE"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "enforce_gtid_consistency": {
+    "id": 10238,
+    "name": "enforce_gtid_consistency",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Depending on the value of this variable, the server enforces GTID consistency by allowing execution of only statements that can be safely logged using a GTID. You must set this variable to ON before enabling GTID based replication",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "ON",
+      "WARN"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "gtid_executed_compression_period": {
+    "id": 10239,
+    "name": "gtid_executed_compression_period",
+    "default_value": "1000",
+    "base_value": "1000",
+    "data_type": "int",
+    "info": "Compress the mysql.gtid_executed table each time this many transactions have been processed",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "4294967295",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "gtid_mode": {
+    "id": 10240,
+    "name": "gtid_mode",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Controls whether GTID based logging is enabled and what type of transactions the logs can contain",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "OFF_PERMISSIVE",
+      "ON_PERMISSIVE",
+      "ON"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "gtid_next": {
+    "id": 10241,
+    "name": "gtid_next",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "This variable is used to specify whether and how the next GTID is obtained",
+    "flags": "SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "AUTOMATIC",
+      "ANONYMOUS"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "gtid_purged": {
+    "id": 10242,
+    "name": "gtid_purged",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "The global value of the gtid_purged system variable is a GTID set consisting of the GTIDs of all the transactions that have been committed on the server, but do not exist in any binary log file on the server. gtid_purged is a subset of gtid_executed",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_api_bk_commit_interval": {
+    "id": 10243,
+    "name": "innodb_api_bk_commit_interval",
+    "default_value": "5",
+    "base_value": "5",
+    "data_type": "int",
+    "info": "How often to auto-commit idle connections that use the InnoDB memcached interface, in seconds",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "min_val": "1",
+    "max_val": "1073741824",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_api_trx_level": {
+    "id": 10244,
+    "name": "innodb_api_trx_level",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "int",
+    "info": "Controls the transaction isolation level on queries processed by the memcached interface",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "3",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_support_xa": {
+    "id": 10245,
+    "name": "innodb_support_xa",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "Enables InnoDB support for two-phase commit in XA transactions, causing an extra disk flush for transaction preparation",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "session_track_gtids": {
+    "id": 10246,
+    "name": "session_track_gtids",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Controls whether the server returns GTIDs to the client, enabling the client to use them to track the server state",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "OWN_GTID",
+      "ALL_GTIDS"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "session_track_transaction_info": {
+    "id": 10247,
+    "name": "session_track_transaction_info",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Controls whether the server tracks the state and characteristics of transactions within the current session and notifies the client to make this information available",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "STATE",
+      "CHARACTERISTICS"
+    ],
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+
+  "transaction_alloc_block_size": {
+    "id": 10248,
+    "name": "transaction_alloc_block_size",
+    "default_value": "8192",
+    "base_value": "8192",
+    "data_type": "int",
+    "info": "The amount in bytes by which to increase a per-transaction memory pool which needs memory",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "min_val": "1024",
+    "max_val": "131072",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "transaction_allow_batching": {
+    "id": 10249,
+    "name": "transaction_allow_batching",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "When set to 1 or ON, this variable enables batching of statements within the same transaction. To use this variable, autocommit must first be disabled by setting it to 0 or OFF; otherwise, setting transaction_allow_batching has no effect",
+    "flags": "SESSION | MYSQL_ONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "transaction_prealloc_size": {
+    "id": 10250,
+    "name": "transaction_prealloc_size",
+    "default_value": "4096",
+    "base_value": "4096",
+    "data_type": "int",
+    "info": "There is a per-transaction memory pool from which various transaction-related allocations take memory. The initial size of the pool in bytes is transaction_prealloc_size",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "min_val": "1024",
+    "max_val": "131072",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "transaction_write_set_extraction": {
+    "id": 10251,
+    "name": "transaction_write_set_extraction",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "Defines the algorithm used to generate a hash identifying the writes associated with a transaction",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "MURMUR32",
+      "XXHASH64"
+    ],
+
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
-
-
 }
