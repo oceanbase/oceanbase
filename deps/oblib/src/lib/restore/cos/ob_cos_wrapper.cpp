@@ -912,21 +912,17 @@ int ObCosWrapper::pread(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to make cos headers, ret=%d\n", ret);
     } else {
-      if (is_range_read) {
-        // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
-        // But what we except is [10, 100) which does not include the end.
-        // So we subtract 1 from the end.
-        int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
-        if (0 >= n || COS_RANGE_SIZE <= n) {
-          ret = OB_SIZE_OVERFLOW;
-          cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
-        } else {
-          apr_table_set(headers, COS_RANGE_KEY, range_size);
-        }
+      // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
+      // But what we except is [10, 100) which does not include the end.
+      // So we subtract 1 from the end.
+      int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
+      if (0 >= n || COS_RANGE_SIZE <= n) {
+        ret = OB_SIZE_OVERFLOW;
+        cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
       } else {
-        // support crc checksum when reading entire object
-        ctx->options->ctl->options->enable_crc = true;
+        apr_table_set(headers, COS_RANGE_KEY, range_size);
       }
+      ctx->options->ctl->options->enable_crc = false;
 
       if (OB_SUCCESS != ret) {
       } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, nullptr, &buffer, &resp_headers)) ||

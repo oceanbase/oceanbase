@@ -1157,19 +1157,16 @@ int ObStorageOssReader::pread(
         ret = OB_OSS_ERROR;
         OB_LOG(WARN, "fail to make oss headers", K(ret));
       } else {
-        if (is_range_read) {
-          // oss read size is [10, 100] include the 10 and 100 bytes
-          // we except is [10, 100) not include the end, so we subtraction 1 to the end
-          if (OB_FAIL(databuff_printf(range_size, OSS_RANGE_SIZE, "bytes=%ld-%ld",
-                                      offset, offset + get_data_size - 1))) {
-            OB_LOG(WARN, "fail to get range size", K(ret),
-                K(offset), K(get_data_size), K(OSS_RANGE_SIZE));
-          } else {
-            apr_table_set(headers, OSS_RANGE_KEY, range_size);
-          }
+        // oss read size is [10, 100] include the 10 and 100 bytes
+        // we except is [10, 100) not include the end, so we subtraction 1 to the end
+        if (OB_FAIL(databuff_printf(range_size, OSS_RANGE_SIZE, "bytes=%ld-%ld",
+                                    offset, offset + get_data_size - 1))) {
+          OB_LOG(WARN, "fail to get range size", K(ret),
+              K(offset), K(get_data_size), K(OSS_RANGE_SIZE));
         } else {
-          oss_option->ctl->options->enable_crc = true;
+          apr_table_set(headers, OSS_RANGE_KEY, range_size);
         }
+        oss_option->ctl->options->enable_crc = false;
 
         if (OB_FAIL(ret)) {
         } else if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,
