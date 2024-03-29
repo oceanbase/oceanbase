@@ -1290,15 +1290,14 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
   ObSEArray<ObOptColumnStat *, 4> column_stats;
   bool succ_to_write_stats = false;
   if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+    LOG_WARN("fail to check lock stat", K(ret));
     if (ret == OB_ERR_DBMS_STATS_PL) {
       param.global_stat_param_.reset_gather_stat();
       param.part_stat_param_.reset_gather_stat();
       param.subpart_stat_param_.reset_gather_stat();
       ret = OB_SUCCESS; // ignore lock check error
     }
-    LOG_WARN("fail to check lock stat", K(ret));
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, saved_value) {
       int64_t nested_count = -1;
       ObSqlString old_db_name;

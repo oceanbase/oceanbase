@@ -65,13 +65,16 @@ int ObAccessPathEstimation::inner_estimate_rowcount(ObOptimizerContext &ctx,
                                                     const bool is_inner_path,
                                                     const ObIArray<ObRawExpr*> &filter_exprs,
                                                     ObBaseTableEstMethod &method)
-    {
+{
   int ret = OB_SUCCESS;
   ObBaseTableEstMethod valid_methods = 0;
+  ObBaseTableEstMethod hint_specify_methods = 0;
   method = EST_INVALID;
-  if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
+  if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods, hint_specify_methods))) {
     LOG_WARN("failed to get valid est methods", K(ret));
-  } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
+  } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs,
+                                            valid_methods & hint_specify_methods ? valid_methods & hint_specify_methods : valid_methods,
+                                            method))) {
     LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
   } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to do estimate rowcount", K(ret), K(method), K(valid_methods));
@@ -146,12 +149,13 @@ int ObAccessPathEstimation::get_valid_est_methods(ObOptimizerContext &ctx,
                                                   common::ObIArray<AccessPath*> &paths,
                                                   const ObIArray<ObRawExpr*> &filter_exprs,
                                                   bool is_inner_path,
-                                                  ObBaseTableEstMethod &valid_methods)
+                                                  ObBaseTableEstMethod &valid_methods,
+                                                  ObBaseTableEstMethod &hint_specify_methods)
 {
   int ret = OB_SUCCESS;
   valid_methods = EST_DEFAULT | EST_STAT | EST_STORAGE | EST_DS_BASIC | EST_DS_FULL;
+  hint_specify_methods = 0;
   const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
-  ObBaseTableEstMethod hint_specify_methods = 0;
   const ObLogPlan* log_plan = NULL;
   const OptTableMeta *table_meta = NULL;
   if (OB_UNLIKELY(paths.empty()) ||
@@ -216,13 +220,6 @@ int ObAccessPathEstimation::get_valid_est_methods(ObOptimizerContext &ctx,
       OB_FAIL(check_can_use_dynamic_sampling(
           ctx, *log_plan, *table_meta, filter_exprs, valid_methods, hint_specify_methods))) {
     LOG_WARN("failed to check dynamic sampling", K(ret));
-  }
-
-  // if there are any valid hint_specify_method, use it.
-  if (OB_SUCC(ret)) {
-    if (valid_methods & hint_specify_methods) {
-      valid_methods &= hint_specify_methods;
-    }
   }
 
   return ret;

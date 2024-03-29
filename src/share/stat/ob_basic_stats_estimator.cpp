@@ -242,14 +242,22 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
+  const int64_t MAX_RETRY_CNT = 10;
   do {
-    if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
-                                                      partition_ids, estimate_res))) {
-      DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
-      ++ retry_cnt;
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("failed to check status", K(ret));
+    } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
+                                                             partition_ids, estimate_res))) {
       LOG_WARN("failed to do estimate block count and row count", K(ret));
+      if (DAS_CTX(ctx).get_location_router().is_refresh_location_error(ret)) {
+        DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
+        ++ retry_cnt;
+        ob_usleep(1000L * 1000L); // retry interval 1s
+      } else {
+        retry_cnt = MAX_RETRY_CNT;
+      }
     }
-  } while (OB_FAIL(ret) && retry_cnt < 2);//retry one time if failed to estimate.
+  } while (OB_FAIL(ret) && retry_cnt < MAX_RETRY_CNT);
   return ret;
 }
 
