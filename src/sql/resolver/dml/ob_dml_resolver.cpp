@@ -8251,7 +8251,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
   } else if (OB_FAIL(resolve_dblink_name(node, tenant_id, dblink_name, is_reverse_link, has_dblink_node))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
-    LOG_WARN("resolve dblink name", K(has_dblink_node), K(dblink_name), K(is_reverse_link));
+    LOG_DEBUG("resolve dblink name", K(has_dblink_node), K(dblink_name), K(is_reverse_link));
     if (has_dblink_node) {
       query_ctx->set_has_dblink(true);
     }
