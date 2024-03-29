@@ -72,6 +72,10 @@ void ObServerResourceInfo::reset()
 
   disk_total_ = 0;
   disk_in_use_ = 0;
+
+  // placeholders
+  log_disk_in_use_ = 0;                  // not used
+  report_data_disk_assigned_ = 0;        // not used
 }
 
 bool ObServerResourceInfo::is_valid() const
@@ -144,7 +148,9 @@ OB_SERIALIZE_MEMBER(ObServerResourceInfo,
                     log_disk_total_,
                     report_log_disk_assigned_,
                     disk_total_,
-                    disk_in_use_);
+                    disk_in_use_,
+                    report_data_disk_assigned_,  // not used, only as placeholder
+                    log_disk_in_use_);           // not used, only as placeholder
 
 DEF_TO_STRING(ObServerResourceInfo)
 {

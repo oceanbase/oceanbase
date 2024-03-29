@@ -86,6 +86,7 @@ public:
   static const int64_t INVALID_LOG_DISK_SIZE = -1;
 
   ////////////////////////// DATA DISK ////////////////////////////
+  static const int64_t DEFAULT_DATA_DISK_SIZE = 0;
   static const int64_t INVALID_DATA_DISK_SIZE = -1;
 
   ////////////////////////// IOPS ////////////////////////////
