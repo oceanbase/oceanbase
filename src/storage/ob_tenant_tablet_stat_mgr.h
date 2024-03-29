@@ -139,12 +139,10 @@ public:
   ~ObTenantSysStat() = default;
   void reset();
   bool is_small_tenant() const;
-  bool is_full_cpu_usage() const;
-  TO_STRING_KV(K_(cpu_usage_percentage), K_(min_cpu_cnt), K_(max_cpu_cnt), K_(memory_hold), K_(memory_limit));
+  int refresh(const uint64_t tenant_id);
+  TO_STRING_KV(K_(min_cpu_cnt), K_(max_cpu_cnt), K_(memory_hold), K_(memory_limit));
 
 public:
-  static constexpr double EPS = 1e-9;
-  double cpu_usage_percentage_;
   double min_cpu_cnt_;
   double max_cpu_cnt_;
   int64_t memory_hold_;
@@ -377,11 +375,11 @@ public:
   int clear_tablet_stat(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
-  int get_sys_stat(ObTenantSysStat &sys_stat);
   void process_stats();
   void refresh_all(const int64_t step);
+  bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }
-  void refresh_sys_load() { load_shedder_.refresh_sys_load(); }
+  void refresh_sys_stat();
 private:
   class TabletStatUpdater : public common::ObTimerTask
   {
@@ -421,6 +419,7 @@ private:
   common::ObBucketLock bucket_lock_;
   ObTabletStat report_queue_[DEFAULT_MAX_PENDING_CNT]; // 12 * 8 * 40000 bytes
   ObTenantSysLoadShedder load_shedder_;
+  ObTenantSysStat sys_stat_;
   uint64_t report_cursor_;
   uint64_t pending_cursor_;
   int report_tg_id_;
