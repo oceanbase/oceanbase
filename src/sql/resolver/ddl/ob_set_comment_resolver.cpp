@@ -113,24 +113,13 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
         } else if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[0],
                                                        table_name,
                                                        database_name))) {
-          SQL_RESV_LOG(WARN, "failed to resolve table name.", K(table_name), K(database_name), K(ret));
-        } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
-                                                               database_name,
-                                                               table_name,
-                                                               false /*index*/,
-                                                               false/*is_hidden*/,
-                                                               is_exists))) {
-          SQL_RESV_LOG(WARN, "failed to check_table_exist", K(ret), K(tenant_id),
-                                                            K(database_name), K(table_name));
-        } else if (!is_exists) {
-          ret = OB_TABLE_NOT_EXIST;
-          SQL_RESV_LOG(WARN, "table not exist", K(ret), K(tenant_id), K(database_name), K(table_name));
-        } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
-                                                             database_name,
-                                                             table_name,
-                                                             false/*not index table*/,
-                                                             table_schema))) {
-          SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
+          LOG_WARN("failed to resolve table name.", K(table_name), K(database_name), K(ret));
+        } else if (OB_FAIL(get_table_schema(parse_tree.children_[0]->children_[0],
+                                            tenant_id,
+                                            database_name,
+                                            table_name,
+                                            table_schema))) {
+          SQL_RESV_LOG(WARN, "failed to get table schema", K(table_name), K(database_name), K(ret));
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
@@ -187,12 +176,12 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           }
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
-                                                               database_name,
-                                                               table_name,
-                                                               false/*not index table*/,
-                                                               table_schema))) {
-            SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
+          } else if (OB_FAIL(get_table_schema(column_ref_node->children_[0],
+                                              tenant_id,
+                                              database_name,
+                                              table_name,
+                                              table_schema))) {
+            SQL_RESV_LOG(WARN, "failed to get table schema", K(table_name), K(database_name), K(ret));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
@@ -281,6 +270,54 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObSetCommentResolver::get_table_schema(const ParseNode *db_node,
+                                           const uint64_t tenant_id,
+                                           ObString &database_name,
+                                           ObString &table_name,
+                                           const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool has_synonym = false;
+  ObString new_db_name;
+  ObString new_tbl_name;
+  if (OB_FAIL(schema_checker_->get_table_schema_with_synonym(tenant_id,
+                                                             database_name,
+                                                             table_name,
+                                                             false/*not index table*/,
+                                                             has_synonym,
+                                                             new_db_name,
+                                                             new_tbl_name,
+                                                             table_schema))) {
+    if (OB_ERR_BAD_DATABASE == ret) {
+      ret = OB_TABLE_NOT_EXIST; // oracle cmpt
+      LOG_WARN("database not exist", K(ret), K(database_name), K(table_name));
+    } else if (OB_TABLE_NOT_EXIST != ret) {
+      LOG_WARN("failed to get table schema", K(ret), K(database_name), K(table_name));
+    } else if (NULL == db_node && ObSQLUtils::is_oracle_sys_view(table_name)) {
+      if (OB_SUCCESS != (tmp_ret = ob_write_string(*allocator_,
+                                                   OB_ORA_SYS_SCHEMA_NAME,
+                                                   database_name))) {
+        LOG_WARN("fail to write db name", K(ret), K(tmp_ret));
+      } else if (OB_FAIL(schema_checker_->get_table_schema_with_synonym(tenant_id,
+                                                                        database_name,
+                                                                        table_name,
+                                                                        false/*not index table*/,
+                                                                        has_synonym,
+                                                                        new_db_name,
+                                                                        new_tbl_name,
+                                                                        table_schema))) {
+        LOG_WARN("failed to get sys view schema", K(ret), K(database_name), K(table_name));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && has_synonym) {
+    database_name = new_db_name;
+    table_name = new_tbl_name;
   }
   return ret;
 }
