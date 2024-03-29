@@ -11718,7 +11718,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
   if (OB_FAIL(ret)) {
   } else if (q_name.is_sys_func()) {
-    if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
+    if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
       LOG_WARN("sys func param number not match", K(ret));
     } else {
       expr = static_cast<ObRawExpr *>(q_name.access_idents_.at(0).sys_func_expr_);
@@ -14005,6 +14005,10 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   ObRawExpr* expr = NULL;
   const ObUserDefinedType *user_type = NULL;
   ObObjAccessIdx access_idx;
+  if (!access_ident.is_pl_udf()) {
+    ret = OB_ERR_UNDEFINED;
+    LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_ident));
+  }
   OV (access_ident.is_pl_udf(), OB_ERR_UNEXPECTED, K(access_ident));
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
@@ -14436,9 +14440,20 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     if (OB_FAIL(ret)) {
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
-      OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-        K(is_routine), K(is_resolve_rowtype), K(type),
-        K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
+      if (ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type) {
+        OZ (resolve_routine(access_ident, ns, access_idxs, func));
+        if (OB_FAIL(ret)) {
+          ret = OB_SUCCESS;
+          ob_reset_tsi_warning_buffer();
+          OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
+            K(is_routine), K(is_resolve_rowtype), K(type),
+            K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
+        }
+      } else {
+        OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
+          K(is_routine), K(is_resolve_rowtype), K(type),
+          K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
+      }
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
@@ -14461,8 +14476,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                                      access_ident.access_name_,
                                      pl_data_type,
                                      var_index);
-      if (ObPLExternalNS::PKG_VAR == type
-           && cnt > 0) {
+      if (ObPLExternalNS::PKG_VAR == type && cnt > 0) {
         if (ObObjAccessIdx::IS_PKG_NS == access_idxs.at(cnt - 1).access_type_
             && access_ident.has_brackets_
             && access_ident.params_.count() == 0) {
@@ -14472,7 +14486,6 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           ret = OB_ERR_NOT_FUNC_NAME;
           LOG_USER_ERROR(OB_ERR_NOT_FUNC_NAME, object_name.string().length(), object_name.string().ptr());
         }
-
       }
       OZ (build_access_idx_sys_func(parent_id, access_idx));
       OZ (access_idxs.push_back(access_idx), K(access_idx));
