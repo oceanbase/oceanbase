@@ -38,7 +38,10 @@ ObLogPartTransParser::ObLogPartTransParser() :
     inited_(false),
     br_pool_(NULL),
     meta_manager_(NULL),
-    cluster_id_(OB_INVALID_CLUSTER_ID)
+    cluster_id_(OB_INVALID_CLUSTER_ID),
+    total_log_size_(0),
+    remaining_log_size_(0),
+    last_stat_time_(OB_INVALID_TIMESTAMP)
 {}
 
 ObLogPartTransParser::~ObLogPartTransParser()
@@ -71,10 +74,34 @@ int ObLogPartTransParser::init(
   } else {
     cluster_id_ = cluster_id;
     inited_ = true;
-
+    last_stat_time_ = get_timestamp();
     LOG_INFO("init PartTransParser succ", K(cluster_id));
   }
   return ret;
+}
+
+void ObLogPartTransParser::print_stat_info()
+{
+  int64_t current_timestamp = get_timestamp();
+  int64_t local_last_stat_time = last_stat_time_;
+  int64_t delta_time = current_timestamp - local_last_stat_time;
+  double delta_second = static_cast<double>(delta_time) / static_cast<double>(_SEC_);
+  int64_t total_traffic = 0;
+  int64_t remaining_traffic = 0;
+  int64_t filtered_out_traffic = 0;
+  if (0 < delta_second) {
+    total_traffic = static_cast<int64_t>(static_cast<double>(total_log_size_) / delta_second);
+    remaining_traffic = static_cast<int64_t>(static_cast<double>(remaining_log_size_) / delta_second);
+    filtered_out_traffic = static_cast<int64_t>(static_cast<double>(total_log_size_ - remaining_log_size_) / delta_second);
+  }
+
+  // Update last statistic value
+  last_stat_time_ = current_timestamp;
+  total_log_size_ = 0;
+  remaining_log_size_ = 0;
+
+  _LOG_INFO("[STAT] [PARSER] TOTAL_TRAFFIC=%s/sec, REMAINING_TRAFFIC=%s/sec, FILTERED_OUT_TRAFFIC=%s/sec",
+      SIZE_TO_STR(total_traffic), SIZE_TO_STR(remaining_traffic), SIZE_TO_STR(filtered_out_traffic));
 }
 
 int ObLogPartTransParser::parse(PartTransTask &task, volatile bool &stop_flag)
@@ -156,6 +183,7 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
               task, *part_trans_task, row_index, stop_flag))) {
         LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index));
       } else {
+        ATOMIC_AAF(&total_log_size_, redo_node->get_data_len());
         LOG_DEBUG("[PARSE] LogEntryTask parse succ", K(task));
       }
     }
@@ -246,6 +274,7 @@ int ObLogPartTransParser::parse_stmts_(
     while (OB_SUCC(ret) && pos < redo_data_len) {
       bool need_filter_row = false;
       int32_t row_size = 0;
+      int64_t begin_pos = pos;
       MutatorType mutator_type = MutatorType::MUTATOR_ROW; // default type to mutator_row
       common::ObTabletID tablet_id;
 
@@ -304,6 +333,8 @@ int ObLogPartTransParser::parse_stmts_(
               redo_log_entry_task,
               task))) {
             LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index), K(*row), K(redo_log_entry_task), K(task));
+          } else {
+            ATOMIC_AAF(&remaining_log_size_, pos - begin_pos);
           }
 
           if (OB_SUCC(ret)) {

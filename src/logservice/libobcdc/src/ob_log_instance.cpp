@@ -2198,6 +2198,7 @@ void ObLogInstance::timer_routine()
         resource_collector_->print_stat_info();
         reader_->print_stat_info();
         lob_aux_meta_storager_.print_stat_info();
+        part_trans_parser_->print_stat_info();
       }
 
       // Periodic memory recycling

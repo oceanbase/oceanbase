@@ -37,6 +37,8 @@ public:
   virtual int parse(PartTransTask &task, volatile bool &stop_flag) = 0;
 
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag) = 0;
+
+  virtual void print_stat_info() = 0;
 };
 
 
@@ -62,6 +64,7 @@ public:
       IObLogMetaManager *meta_manager,
       const int64_t cluster_id);
   void destroy();
+  void print_stat_info();
 
 private:
   int check_row_need_rollback_(
@@ -159,6 +162,11 @@ private:
   // The cluster ID of this cluster
   // Set as the unique ID of the DDL
   int64_t           cluster_id_;
+
+  // Stat for White Black List
+  int64_t           total_log_size_;
+  int64_t           remaining_log_size_;
+  int64_t           last_stat_time_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogPartTransParser);
