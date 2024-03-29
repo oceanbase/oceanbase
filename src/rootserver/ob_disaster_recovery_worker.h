@@ -904,6 +904,7 @@ private:
       const int64_t &data_size,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
+      const ObReplicaMember &data_source,
       const int64_t &old_paxos_replica_number,
       const char* task_comment,
       int64_t &acc_dr_task);
@@ -991,6 +992,7 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t &data_size,
+      const ObReplicaMember &data_source,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
       const int64_t &old_paxos_replica_number,
@@ -1164,6 +1166,7 @@ private:
   // @params[in]  ls_id, which log stream's task
   // @params[in]  task_id, the id of this task
   // @params[in]  data_size, data_size of this replica
+  // @params[in]  data_source, data_source of this task
   // @params[in]  dst_replica, dest replica
   // @params[in]  src_member, source member
   // @params[in]  old_paxos_replica_number, previous number of F-replica count
@@ -1176,6 +1179,7 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t data_size,
+      const ObReplicaMember &data_source,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
       const int64_t old_paxos_replica_number,

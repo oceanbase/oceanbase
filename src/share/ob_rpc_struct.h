@@ -4027,6 +4027,7 @@ public:
            && ls_id_.is_valid()
            && src_.is_valid()
            && dst_.is_valid()
+           && data_source_.is_valid()
            && paxos_replica_number_ > 0;
   }
 public:
@@ -4036,6 +4037,7 @@ public:
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_source_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
   bool force_use_data_source_;
@@ -4089,6 +4091,7 @@ public:
            && common::OB_INVALID_ID != tenant_id_
            && ls_id_.is_valid()
            && dst_.is_valid()
+           && data_source_.is_valid()
            && orig_paxos_replica_number_ > 0
            && new_paxos_replica_number_ > 0;
   }
@@ -4098,6 +4101,7 @@ public:
   share::ObLSID ls_id_;
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_source_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
@@ -4151,6 +4155,7 @@ public:
            && ls_id_.is_valid()
            && src_.is_valid()
            && dst_.is_valid()
+           && data_source_.is_valid()
            && orig_paxos_replica_number_ > 0
            && new_paxos_replica_number_ > 0;
   }

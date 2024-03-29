@@ -2589,6 +2589,8 @@ int ObDRWorker::build_add_replica_task_(
     share::ObTaskId task_id;
     ObDstReplica dst_replica;
     ObReplicaMember data_source;
+    int64_t data_size = 0;
+    ObReplicaMember force_data_source;
     int64_t new_paxos_replica_number = 0;
     ObReplicaMember dst_member(arg.get_server_addr(),
                               ObTimeUtility::current_time(),
@@ -2596,7 +2598,9 @@ int ObDRWorker::build_add_replica_task_(
     if (FALSE_IT(task_id.init(self_addr_))) {
     } else if (OB_FAIL(dst_replica.assign(unit.unit_id_, unit.unit_group_id_, unit.zone_, dst_member))) {
       LOG_WARN("fail to assign dst replica", KR(ret), K(unit), K(dst_member));
-    } else if (OB_FAIL(check_data_source_available_and_init_(arg, arg.get_replica_type(), dr_ls_info, data_source))) {
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(check_data_source_available_and_init_(arg, arg.get_replica_type(), dr_ls_info, force_data_source))) {
       LOG_WARN("fail to check and get data source", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(check_and_generate_new_paxos_replica_num_(
                           arg, arg.get_replica_type(), dr_ls_info, new_paxos_replica_number))) {
@@ -2607,10 +2611,11 @@ int ObDRWorker::build_add_replica_task_(
                             task_id,
                             dst_replica,
                             data_source,
+                            force_data_source,
                             dr_ls_info.get_paxos_replica_number(),
                             new_paxos_replica_number))) {
       LOG_WARN("fail to build add replica task", KR(ret), K(arg), K(task_id),
-                K(dst_replica), K(data_source), K(dr_ls_info), K(new_paxos_replica_number));
+                K(dst_replica), K(data_source), K(force_data_source), K(dr_ls_info), K(new_paxos_replica_number));
     }
   }
   return ret;
@@ -2717,6 +2722,8 @@ int ObDRWorker::build_modify_replica_type_task_(
     int64_t new_paxos_replica_number = 0;
     share::ObTaskId task_id;
     ObDstReplica dst_replica;
+    int64_t data_size = 0;
+    ObReplicaMember data_source;
     ObReplicaMember src_member(ls_replica.get_server(),
                                ls_replica.get_member_time_us(),
                                replica_type,
@@ -2736,16 +2743,19 @@ int ObDRWorker::build_modify_replica_type_task_(
             && OB_FAIL(check_majority_for_remove_(arg.get_server_addr(), dr_ls_info, new_paxos_replica_number))) {
       LOG_WARN("check provided paxos_replica_num failed.", KR(ret),
                 K(arg), K(dr_ls_info), K(new_paxos_replica_number));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(modify_replica_task.simple_build(
                             arg.get_tenant_id(),
                             arg.get_ls_id(),
                             task_id,
                             dst_replica,
                             src_member,
+                            data_source,
                             dr_ls_info.get_paxos_replica_number(),
                             new_paxos_replica_number))) {
       LOG_WARN("fail to build type transform task", KR(ret), K(arg), K(task_id), K(dst_replica),
-                K(src_member), K(dr_ls_info), K(new_paxos_replica_number));
+                K(src_member), K(data_source), K(dr_ls_info), K(new_paxos_replica_number));
     }
   }
   return ret;
@@ -2803,6 +2813,8 @@ int ObDRWorker::build_migrate_replica_task_(
     share::ObTaskId task_id;
     ObDstReplica dst_replica;
     ObReplicaMember data_source;
+    int64_t data_size = 0;
+    ObReplicaMember force_data_source;
     ObReplicaMember src_member(source_ls_replica.get_server(),
                                source_ls_replica.get_member_time_us(),
                                replica_type,
@@ -2816,8 +2828,10 @@ int ObDRWorker::build_migrate_replica_task_(
                                           source_ls_replica.get_zone(), dst_member))) {
       LOG_WARN("fail to assign dst replica",
                 KR(ret), K(destination_unit), K(dst_member), K(source_ls_replica));
-    } else if (OB_FAIL(check_data_source_available_and_init_(arg, replica_type, dr_ls_info, data_source))) {
+    } else if (OB_FAIL(check_data_source_available_and_init_(arg, replica_type, dr_ls_info, force_data_source))) {
       LOG_WARN("fail to check and get data source", KR(ret), K(arg), K(replica_type), K(dr_ls_info));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(migrate_replica_task.simple_build(
                             arg.get_tenant_id(),
                             arg.get_ls_id(),
@@ -2825,9 +2839,10 @@ int ObDRWorker::build_migrate_replica_task_(
                             dst_replica,
                             src_member,
                             data_source,
+                            force_data_source,
                             dr_ls_info.get_paxos_replica_number()))) {
       LOG_WARN("fail to build migrate task", KR(ret), K(arg), K(task_id), K(dst_replica),
-                K(src_member), K(data_source), K(dr_ls_info));
+                K(src_member), K(data_source), K(force_data_source), K(dr_ls_info));
     }
   }
   return ret;
@@ -3673,6 +3688,7 @@ int ObDRWorker::generate_replicate_to_unit_and_push_into_task_manager(
     const int64_t &data_size,
     const ObDstReplica &dst_replica,
     const ObReplicaMember &src_member,
+    const ObReplicaMember &data_source,
     const int64_t &old_paxos_replica_number,
     const char* task_comment,
     int64_t &acc_dr_task)
@@ -3699,7 +3715,8 @@ int ObDRWorker::generate_replicate_to_unit_and_push_into_task_manager(
                          task_comment,
                          dst_replica,
                          src_member,
-                         ObReplicaMember()/*empty data_source*/,
+                         data_source,
+                         ObReplicaMember()/*empty force_data_source*/,
                          old_paxos_replica_number))) {
     LOG_WARN("fail to build migrate task", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_->add_task(migrate_task))) {
@@ -3786,6 +3803,7 @@ int ObDRWorker::generate_migrate_ls_task(
     uint64_t tenant_id = 0;
     share::ObLSID ls_id;
     share::ObTaskId task_id;
+    ObReplicaMember data_source;
     int64_t data_size = 0;
     ObDstReplica dst_replica;
     int64_t old_paxos_replica_number = 0;
@@ -3795,7 +3813,9 @@ int ObDRWorker::generate_migrate_ls_task(
     ObReplicaMember src_member(
         ls_replica.get_server(), ls_replica.get_member_time_us(),
         ls_replica.get_replica_type(), ls_replica.get_memstore_percent());
-    if (OB_FAIL(construct_extra_infos_to_build_migrate_task(
+    if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(construct_extra_infos_to_build_migrate_task(
             dr_ls_info, ls_replica, unit_stat_info, unit_in_group_stat_info,
             dst_member, tenant_id, ls_id, task_id,
             data_size, dst_replica,
@@ -3826,7 +3846,7 @@ int ObDRWorker::generate_migrate_ls_task(
     } else if (can_generate) {
       if (OB_FAIL(generate_replicate_to_unit_and_push_into_task_manager(
               task_key, tenant_id, ls_id, task_id, data_size,
-              dst_replica, src_member,
+              dst_replica, src_member, data_source,
               old_paxos_replica_number, task_comment, acc_dr_task))) {
         LOG_WARN("fail to generate replicate to unit task", KR(ret));
       }
@@ -3929,6 +3949,7 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
   } else {
     const AddReplicaLATask *my_task = reinterpret_cast<const AddReplicaLATask *>(task);
     int64_t data_size = 0;
+    ObReplicaMember data_source;
     ObDstReplica dst_replica;
     ObReplicaMember dst_member(my_task->dst_server_,
                                my_task->member_time_us_,
@@ -3953,6 +3974,8 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
             my_task->zone_,
             dst_member))) {
       LOG_WARN("fail to assign dst replica", KR(ret));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(add_replica_task.build(
             task_key,
             tenant_id,
@@ -3966,7 +3989,8 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
             ObDRTaskPriority::HIGH_PRI,
             comment_to_set,
             dst_replica,
-            ObReplicaMember()/*empty data_source*/,
+            data_source,
+            ObReplicaMember()/*empty force_data_source*/,
             my_task->orig_paxos_replica_number_,
             my_task->paxos_replica_number_))) {
       LOG_WARN("fail to build add replica task", KR(ret));
@@ -4000,6 +4024,7 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
     const TypeTransformLATask *my_task = reinterpret_cast<const TypeTransformLATask *>(task);
     bool has_leader = false;
     int64_t data_size = 0;
+    ObReplicaMember data_source;
     ObDstReplica dst_replica;
     ObReplicaMember src_member(my_task->dst_server_,
                                my_task->src_member_time_us_,
@@ -4026,6 +4051,8 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
             my_task->zone_,
             dst_member))) {
       LOG_WARN("fail to assign dst replica", KR(ret));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(type_transform_task.build(
             task_key,
             tenant_id,
@@ -4040,7 +4067,7 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
             ObString(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE),
             dst_replica,
             src_member,
-            ObReplicaMember()/*empty data_source*/,
+            data_source,
             my_task->orig_paxos_replica_number_,
             my_task->paxos_replica_number_))) {
       LOG_WARN("fail to build type transform task", KR(ret));
@@ -4199,6 +4226,7 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
   int64_t target_replica_paxos_replica_number = OB_INVALID_COUNT;
   int64_t data_size = 0;
   ObString comment = "";
+  ObReplicaMember data_source;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -4232,31 +4260,42 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
       }
       case AddReplica: {
         const AddReplicaLATask *my_task = reinterpret_cast<const AddReplicaLATask *>(task);
-        task_type = ObDRTaskType::LS_ADD_REPLICA;
-        target_replica_type = my_task->replica_type_;
-        task_priority = ObDRTaskPriority::HIGH_PRI;
-        target_svr = my_task->dst_server_;
-        execute_svr = my_task->dst_server_;
-        source_replica_paxos_replica_number = my_task->orig_paxos_replica_number_;
-        target_replica_paxos_replica_number = my_task->paxos_replica_number_;
-        if (ObReplicaTypeCheck::is_paxos_replica_V2(target_replica_type)) {
-          comment.assign_ptr(drtask::ADD_LOCALITY_PAXOS_REPLICA, strlen(drtask::ADD_LOCALITY_PAXOS_REPLICA));
+        if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+          LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
         } else {
-          comment.assign_ptr(drtask::ADD_LOCALITY_NON_PAXOS_REPLICA, strlen(drtask::ADD_LOCALITY_NON_PAXOS_REPLICA));
+          task_type = ObDRTaskType::LS_ADD_REPLICA;
+          source_replica_type = data_source.get_replica_type();
+          target_replica_type = my_task->replica_type_;
+          task_priority = ObDRTaskPriority::HIGH_PRI;
+          source_svr = data_source.get_server();
+          target_svr = my_task->dst_server_;
+          execute_svr = my_task->dst_server_;
+          source_replica_paxos_replica_number = my_task->orig_paxos_replica_number_;
+          target_replica_paxos_replica_number = my_task->paxos_replica_number_;
+          if (ObReplicaTypeCheck::is_paxos_replica_V2(target_replica_type)) {
+            comment.assign_ptr(drtask::ADD_LOCALITY_PAXOS_REPLICA, strlen(drtask::ADD_LOCALITY_PAXOS_REPLICA));
+          } else {
+            comment.assign_ptr(drtask::ADD_LOCALITY_NON_PAXOS_REPLICA, strlen(drtask::ADD_LOCALITY_NON_PAXOS_REPLICA));
+          }
         }
         break;
       }
       case TypeTransform: {
         const TypeTransformLATask *my_task = reinterpret_cast<const TypeTransformLATask *>(task);
-        task_type = ObDRTaskType::LS_TYPE_TRANSFORM;
-        source_replica_type = my_task->src_replica_type_;
-        target_replica_type = my_task->dst_replica_type_;
-        task_priority = ObDRTaskPriority::HIGH_PRI;
-        target_svr = my_task->dst_server_;
-        execute_svr = my_task->dst_server_;
-        source_replica_paxos_replica_number = my_task->orig_paxos_replica_number_;
-        target_replica_paxos_replica_number = my_task->paxos_replica_number_;
-        comment.assign_ptr(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE, strlen(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE));
+        if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+          LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+        } else {
+          task_type = ObDRTaskType::LS_TYPE_TRANSFORM;
+          source_replica_type = my_task->src_replica_type_;
+          target_replica_type = my_task->dst_replica_type_;
+          task_priority = ObDRTaskPriority::HIGH_PRI;
+          source_svr = data_source.get_server();
+          target_svr = my_task->dst_server_;
+          execute_svr = my_task->dst_server_;
+          source_replica_paxos_replica_number = my_task->orig_paxos_replica_number_;
+          target_replica_paxos_replica_number = my_task->paxos_replica_number_;
+          comment.assign_ptr(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE, strlen(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE));
+        }
         break;
       }
       case ModifyPaxosReplicaNumber: {
@@ -4749,6 +4788,7 @@ int ObDRWorker::try_gen_type_transform_task_(
     int64_t old_paxos_replica_number = 0;
     int64_t new_paxos_replica_number = 0;
     int64_t data_size = 0;
+    ObReplicaMember data_source;
     ObDstReplica dst_replica;
     bool can_generate  = false;
     ObReplicaMember src_member(target_replica.get_server(),
@@ -4759,7 +4799,9 @@ int ObDRWorker::try_gen_type_transform_task_(
                                target_replica.get_member_time_us(),
                                REPLICA_TYPE_FULL,
                                target_replica.get_memstore_percent());
-    if (OB_FAIL(construct_extra_info_to_build_type_transform_task_(
+    if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(construct_extra_info_to_build_type_transform_task_(
                          dr_ls_info,
                          ls_replica,
                          dst_member,
@@ -4786,13 +4828,13 @@ int ObDRWorker::try_gen_type_transform_task_(
                       target_replica.get_server(),
                       REPLICA_TYPE_FULL/*target_replica_type*/,
                       new_paxos_replica_number,
-                      ObAddr(),
+                      data_source.get_server(),
                       REPLICA_TYPE_READONLY/*source_replica_type*/,
                       old_paxos_replica_number,
                       leader_addr,
                       comment))) {
         LOG_WARN("fail to init a ObLSReplicaTaskDisplayInfo", KR(ret), K(tenant_id),
-                 K(ls_id), K(target_replica), K(new_paxos_replica_number),
+                 K(ls_id), K(target_replica), K(new_paxos_replica_number), K(data_source),
                  K(old_paxos_replica_number), K(leader_addr), K(comment));
       } else if (OB_FAIL(add_display_info(display_info))) {
         LOG_WARN("fail to add display info", KR(ret), K(display_info));
@@ -4817,6 +4859,7 @@ int ObDRWorker::try_gen_type_transform_task_(
                            ls_id,
                            task_id,
                            data_size,
+                           data_source,
                            dst_replica,
                            src_member,
                            old_paxos_replica_number,
@@ -4824,7 +4867,7 @@ int ObDRWorker::try_gen_type_transform_task_(
                            comment,
                            acc_dr_task))) {
       LOG_WARN("fail to generate type transform task", KR(ret), K(task_key),
-               K(tenant_id), K(ls_id), K(task_id), K(data_size), K(dst_replica),
+               K(tenant_id), K(ls_id), K(task_id), K(data_size), K(data_source), K(dst_replica),
                K(src_member), K(old_paxos_replica_number),
                K(new_paxos_replica_number), K(acc_dr_task));
     }
@@ -4995,6 +5038,7 @@ int ObDRWorker::generate_type_transform_task_(
     const share::ObLSID &ls_id,
     const share::ObTaskId &task_id,
     const int64_t data_size,
+    const ObReplicaMember &data_source,
     const ObDstReplica &dst_replica,
     const ObReplicaMember &src_member,
     const int64_t old_paxos_replica_number,
@@ -5021,7 +5065,7 @@ int ObDRWorker::generate_type_transform_task_(
                  comment,
                  dst_replica,
                  src_member,
-                 ObReplicaMember()/*empty data_source*/,
+                 data_source,
                  old_paxos_replica_number,
                  new_paxos_replica_number))) {
     LOG_WARN("fail to build type transform task", KR(ret), K(task_key), K(tenant_id), K(ls_id),
@@ -5413,6 +5457,7 @@ int ObDRWorker::generate_migrate_to_unit_task(
     const share::ObLSID &ls_id,
     const share::ObTaskId &task_id,
     const int64_t &data_size,
+    const ObReplicaMember &data_source,
     const ObDstReplica &dst_replica,
     const ObReplicaMember &src_member,
     const int64_t &old_paxos_replica_number,
@@ -5447,7 +5492,8 @@ int ObDRWorker::generate_migrate_to_unit_task(
                          comment_to_set,
                          dst_replica,
                          src_member,
-                         ObReplicaMember()/*empty data_source*/,
+                         data_source,
+                         ObReplicaMember()/*empty force_data_source*/,
                          old_paxos_replica_number))) {
     LOG_WARN("fail to build migrate task", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_->add_task(migrate_task))) {
@@ -5561,6 +5607,7 @@ int ObDRWorker::try_migrate_replica_for_migrate_to_unit_(
     share::ObLSID ls_id;
     share::ObTaskId task_id;
     int64_t data_size = 0;
+    ObReplicaMember data_source;
     ObDstReplica dst_replica;
     int64_t old_paxos_replica_number = 0;
     bool can_generate = false;
@@ -5585,7 +5632,9 @@ int ObDRWorker::try_migrate_replica_for_migrate_to_unit_(
       comment_to_set.assign_ptr(drtask::MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH,
                                 strlen(drtask::MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH));
     }
-    if (OB_FAIL(construct_extra_infos_for_generate_migrate_to_unit_task(
+    if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(construct_extra_infos_for_generate_migrate_to_unit_task(
                     dr_ls_info,
                     *ls_replica,
                     *unit_stat_info,
@@ -5640,6 +5689,7 @@ int ObDRWorker::try_migrate_replica_for_migrate_to_unit_(
                       ls_id,
                       task_id,
                       data_size,
+                      data_source,
                       dst_replica,
                       src_member,
                       old_paxos_replica_number,

@@ -324,7 +324,7 @@ public:
 
   int fill_dml_splicer_for_new_column(
       share::ObDMLSqlSplicer &dml_splicer,
-      const common::ObAddr &data_src) const;
+      const common::ObAddr &force_data_src) const;
   // to string
   virtual TO_STRING_KV(K_(task_key),
                        K_(tenant_id),
@@ -428,6 +428,7 @@ public:
                              dst_replica_(),
                              src_member_(),
                              data_src_member_(),
+                             force_data_src_member_(),
                              paxos_replica_number_(0) {}
   virtual ~ObMigrateLSReplicaTask() {}
 public:
@@ -446,6 +447,7 @@ public:
       const ObDstReplica &dst_replica,
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
+      const common::ObReplicaMember &force_data_src_member,
       const int64_t paxos_replica_number
       );
 
@@ -458,6 +460,7 @@ public:
       const ObDstReplica &dst_replica,
       const common::ObReplicaMember &src_member,
       const common::ObReplicaMember &data_src_member,
+      const common::ObReplicaMember &force_data_src_member,
       const int64_t paxos_replica_number);
   // build a ObMigrateLSReplicaTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
@@ -475,6 +478,7 @@ public:
                                K(dst_replica_),
                                K(src_member_),
                                K(data_src_member_),
+                               K(force_data_src_member_),
                                K(paxos_replica_number_));
 
   virtual int get_execute_transmit_size(
@@ -524,6 +528,8 @@ public:
   // operations of data_src_member_;
   void set_data_src_member(const common::ObReplicaMember &s) { data_src_member_ = s; }
   const common::ObReplicaMember &get_data_src_member() const { return data_src_member_; }
+  void set_force_data_src_member(const common::ObReplicaMember &s) { force_data_src_member_ = s; }
+  const common::ObReplicaMember &get_force_data_src_member() const { return force_data_src_member_; }
   // operations of paxos_replica_number_
   void set_paxos_replica_number(const int64_t paxos_replica_number) { paxos_replica_number_ = paxos_replica_number; }
   int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
@@ -539,6 +545,8 @@ private:
   ObDstReplica dst_replica_;
   common::ObReplicaMember src_member_;
   common::ObReplicaMember data_src_member_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
+  common::ObReplicaMember force_data_src_member_;
   int64_t paxos_replica_number_;
 };
 
@@ -548,6 +556,7 @@ public:
   ObAddLSReplicaTask() : ObDRTask(),
                          dst_replica_(),
                          data_src_member_(),
+                         force_data_src_member_(),
                          orig_paxos_replica_number_(0),
                          paxos_replica_number_(0) {}
   virtual ~ObAddLSReplicaTask() {}
@@ -566,6 +575,7 @@ public:
       const ObString &comment,
       const ObDstReplica &dst_replica_,
       const common::ObReplicaMember &data_src_member,
+      const common::ObReplicaMember &force_data_src_member,
       const int64_t orig_paxos_replica_number,
       const int64_t paxos_replica_number);
 
@@ -577,6 +587,7 @@ public:
       const share::ObTaskId &task_id,
       const ObDstReplica &dst_replica,
       const common::ObReplicaMember &data_src_member,
+      const common::ObReplicaMember &force_data_src_member,
       const int64_t orig_paxos_replica_number,
       const int64_t paxos_replica_number);
   // build a ObAddLSReplicaTask from sql result read from inner table
@@ -594,6 +605,7 @@ public:
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
                                K(dst_replica_),
                                K(data_src_member_),
+                               K(force_data_src_member_),
                                K(orig_paxos_replica_number_),
                                K(paxos_replica_number_));
   virtual int get_execute_transmit_size(
@@ -640,6 +652,8 @@ public:
   // operations of data_src_member_;
   void set_data_src_member(const common::ObReplicaMember &s) { data_src_member_ = s; }
   const common::ObReplicaMember &get_data_src_member() const { return data_src_member_; }
+  void set_force_data_src_member(const common::ObReplicaMember &s) { force_data_src_member_ = s; }
+  const common::ObReplicaMember &get_force_data_src_member() const { return force_data_src_member_; }
   // operations of orig_paxos_replica_number_
   void set_orig_paxos_replica_number(const int64_t paxos_replica_number) { orig_paxos_replica_number_ = paxos_replica_number; }
   int64_t get_orig_paxos_replica_number() const { return orig_paxos_replica_number_; }
@@ -657,6 +671,8 @@ private:
 private:
   ObDstReplica dst_replica_;
   common::ObReplicaMember data_src_member_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
+  common::ObReplicaMember force_data_src_member_;
   int64_t orig_paxos_replica_number_;
   int64_t paxos_replica_number_;
 };
@@ -698,6 +714,7 @@ public:
       const share::ObTaskId &task_id,
       const ObDstReplica &dst_replica,
       const common::ObReplicaMember &src_member,
+      const common::ObReplicaMember &data_src_member,
       const int64_t orig_paxos_replica_number,
       const int64_t paxos_replica_number);
   // build a ObLSTypeTransformTask from sql result read from inner table

@@ -217,6 +217,13 @@ public:
   int check_replica_exist_and_get_ls_replica(
       const common::ObAddr& server_addr,
       share::ObLSReplica& ls_replica) const;
+
+  // get data_source from leader replcia
+  // @param [out] data_source, leader replica
+  // @param [out] data_size, leader replica data_size
+  int get_default_data_source(
+      ObReplicaMember &data_source,
+      int64_t &data_size) const;
 private:
   int construct_filtered_ls_info_to_use_(
       const share::ObLSInfo &input_ls_info,
