@@ -1125,7 +1125,7 @@ int ObRecursiveInnerDataMysqlOp::handle_row_data(const common::ObIArray<ObExpr *
 {
   int ret = OB_SUCCESS;
   // 2. hash deduplication
-
+  is_duplicate = false;
   if (is_union_distinct_) {
     if (OB_ISNULL(hash_values_for_batch)) {
       ret = OB_ERR_UNEXPECTED;
