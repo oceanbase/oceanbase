@@ -446,6 +446,13 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
             }
+          } else if (compat_version < DATA_VERSION_4_2_3_0) {
+            if ((priv_set & OB_PRIV_CREATE_TABLESPACE) != 0 ||
+                (priv_set & OB_PRIV_SHUTDOWN) != 0 ||
+                (priv_set & OB_PRIV_RELOAD) != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            }
           }
           if (OB_FAIL(ret)) {
           } else {
