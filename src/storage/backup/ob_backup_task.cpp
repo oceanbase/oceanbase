@@ -410,19 +410,19 @@ int ObLSBackupMetaDagNet::start_running()
       LOG_WARN("failed to add dag", K(ret), KP(finish_dag));
     } else if (OB_FAIL(dag_scheduler->add_dag(prepare_dag))) {
       LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag, prepare_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
       } else {
         finish_dag = nullptr;
       }
     } else if (OB_FAIL(dag_scheduler->add_dag(backup_meta_dag))) {
       LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag, prepare_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
       } else {
         finish_dag = nullptr;
       }
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(prepare_dag, backup_meta_dag))) {
+      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(prepare_dag))) {
         LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(prepare_dag));
       } else {
         prepare_dag = nullptr;
