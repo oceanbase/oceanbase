@@ -5502,7 +5502,7 @@ int ObSQLUtils::check_sys_view_changed(const share::schema::ObTableSchema &old_v
       }
     }
   }
-  if (!changed) {
+  if (OB_SUCC(ret) && !changed) {
     if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue()
                 .add_consistent_sys_view_id_to_set(old_view_schema.get_tenant_id(),
                                                    old_view_schema.get_table_id()))) {
