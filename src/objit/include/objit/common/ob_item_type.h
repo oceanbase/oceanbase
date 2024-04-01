@@ -2458,6 +2458,7 @@ typedef enum ObItemType
   T_SHOW_OPEN_TABLES,
   T_REPAIR_TABLE,
   T_CHECKSUM_TABLE,
+  T_SERVICE_NAME,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
