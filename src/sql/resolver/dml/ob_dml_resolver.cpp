@@ -7037,14 +7037,15 @@ int ObDMLResolver::deduce_generated_exprs(ObIArray<ObRawExpr*> &exprs)
   return ret;
 }
 
-int ObDMLResolver::add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool error_with_exist)
+int ObDMLResolver::add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool is_db_expilicit)
 {
   int ret = OB_SUCCESS;
   if (synonym_checker.has_synonym()) {
     if (OB_FAIL(add_object_versions_to_dependency(DEPENDENCY_SYNONYM,
                                                  SYNONYM_SCHEMA,
                                                  synonym_checker.get_synonym_ids(),
-                                                 synonym_checker.get_database_ids()))) {
+                                                 synonym_checker.get_database_ids(),
+                                                 is_db_expilicit))) {
       LOG_WARN("add synonym version failed", K(ret));
     }
   }
@@ -7156,7 +7157,8 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
                                                     share::schema::ObSchemaType schema_type,
                                                     uint64_t object_id,
                                                     uint64_t database_id,
-                                                    uint64_t dep_obj_id)
+                                                    uint64_t dep_obj_id,
+                                                    bool is_db_expilicit)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(schema_checker_)) {
@@ -7188,6 +7190,7 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
       obj_version.object_id_ = object_id;
       obj_version.object_type_ = table_type,
       obj_version.version_ = schema_version;
+      obj_version.is_db_explicit_  = is_db_expilicit;
       uint64_t dep_db_id = database_id;
       if (OB_FAIL(get_stmt()->add_global_dependency_table(obj_version))) {
         LOG_WARN("add global dependency table failed",
@@ -7205,12 +7208,14 @@ int ObDMLResolver::add_object_version_to_dependency(share::schema::ObDependencyT
 int ObDMLResolver::add_object_versions_to_dependency(ObDependencyTableType table_type,
                                                     ObSchemaType schema_type,
                                                     const ObIArray<uint64_t> &object_ids,
-                                                    const ObIArray<uint64_t> &db_ids)
+                                                    const ObIArray<uint64_t> &db_ids,
+                                                    bool is_db_expilicit)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < object_ids.count(); ++i) {
     uint64_t real_dep_obj_id = (0 == i) ? view_ref_id_ : object_ids.at(i - 1);
-    if (OB_FAIL(add_object_version_to_dependency(table_type, schema_type, object_ids.at(i), db_ids.at(i), real_dep_obj_id))) {
+    if (OB_FAIL(add_object_version_to_dependency(table_type, schema_type, object_ids.at(i),
+                                                 db_ids.at(i), real_dep_obj_id, is_db_expilicit))) {
       LOG_WARN("add object versions to dependency failed");
     }
   }
@@ -7433,7 +7438,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     // stmt还未生成，因为还未生成从虚拟表select的语句，所以stmt为NULL
     //
     if (OB_NOT_NULL(stmt)) {
-      if (OB_FAIL(add_synonym_obj_id(synonym_checker, false/* error_with_exist */))) {
+      if (OB_FAIL(add_synonym_obj_id(synonym_checker, is_db_explicit/* is_db_expilicit */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
       }
     }

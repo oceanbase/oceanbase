@@ -1638,7 +1638,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
   }
 
   if (OB_SUCC(ret) && synonym_checker.has_synonym()) {
-    if (OB_FAIL(add_synonym_obj_id(synonym_checker, false/* error_with_exist */))) {
+    if (OB_FAIL(add_synonym_obj_id(synonym_checker, false/* is_db_expilicit */))) {
       LOG_WARN("add_synonym_obj_id failed", K(ret), K(synonym_checker.get_synonym_ids()));
     }
   }
