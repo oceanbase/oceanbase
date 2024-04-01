@@ -2145,9 +2145,6 @@ int ObServer::init_io()
 
         if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
-        } else if (OB_FAIL(ObServerUtils::check_slog_data_binding(storage_env_.sstable_dir_,
-            storage_env_.log_spec_.log_dir_))) {
-          LOG_ERROR("fail to check need reserved space", K(ret), K(storage_env_));
         } else if (OB_FAIL(ObServerUtils::cal_all_part_disk_size(config_.datafile_size,
                                                   config_.log_disk_size,
                                                   config_.datafile_disk_percentage,
