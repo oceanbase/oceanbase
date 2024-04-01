@@ -1109,7 +1109,8 @@ int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const b
 /* 将用户输入的dbname换成数据库内部存放的大小写 */
 int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                    const ObSQLSessionInfo *session,
-                                   common::ObString &name)
+                                   common::ObString &name,
+                                   ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode() && session != NULL && !session->is_inner()) {
@@ -1124,6 +1125,9 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
         LOG_WARN("fail to get database schema", K(name), K(ret));
       } else if (db_schema != NULL) {
         name = db_schema->get_database_name();
+        if (allocator != NULL) {
+          OZ(ob_write_string(*allocator, name, name));
+        }
       }
     }
   }

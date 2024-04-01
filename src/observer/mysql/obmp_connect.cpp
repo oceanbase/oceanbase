@@ -650,7 +650,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                       cs_type, perserve_lettercase, db_name))) {
             LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
-          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name))) {
+          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name, NULL))) {
             LOG_WARN("fail to convert db name to org");
           } else {
             login_info.db_ = db_name;

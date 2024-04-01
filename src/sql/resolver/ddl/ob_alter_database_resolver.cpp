@@ -40,7 +40,8 @@ int ObAlterDatabaseResolver::resolve(const ParseNode &parse_tree)
   if (OB_ISNULL(node)
       || OB_UNLIKELY(T_ALTER_DATABASE != node->type_)
       || OB_UNLIKELY(node->num_child_ != DATABASE_NODE_COUNT)
-      || OB_ISNULL(node->children_)) {
+      || OB_ISNULL(node->children_)
+      || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
   } else if (OB_ISNULL(session_info_)) {
@@ -86,7 +87,8 @@ int ObAlterDatabaseResolver::resolve(const ParseNode &parse_tree)
               CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
               OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                                  session_info_,
-                                                 database_name));
+                                                 database_name,
+                                                 allocator_));
             }
           }
         }

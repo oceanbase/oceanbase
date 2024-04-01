@@ -42,7 +42,8 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
   if (OB_ISNULL(node)
       || T_USE_DATABASE != node->type_
       || 1 != node->num_child_
-      || OB_ISNULL(node->children_)) {
+      || OB_ISNULL(node->children_)
+      || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node));
   } else if (OB_ISNULL(node->children_[0])
@@ -76,7 +77,8 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
         CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
         OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                            session_info_,
-                                           db_name));
+                                           db_name,
+                                           allocator_));
         use_database_stmt->set_db_name(db_name);
         uint64_t tenant_id = session_info_->get_effective_tenant_id();
         share::schema::ObSessionPrivInfo session_priv;

@@ -84,7 +84,8 @@ public:
       const common::ObString &session_db,
       common::ObString &db,
       common::ObString &table,
-      share::schema::ObPrivLevel &grant_level);
+      share::schema::ObPrivLevel &grant_level,
+      ObIAllocator &allocator);
 
   template<class T>
   static int resolve_priv_set(
