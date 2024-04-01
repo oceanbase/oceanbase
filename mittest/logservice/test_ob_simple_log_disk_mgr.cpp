@@ -68,7 +68,6 @@ int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
 {
   update_server_log_disk(10*1024*1024*1024ul);
-  update_disk_options(10*1024*1024*1024ul/palf::PALF_PHY_BLOCK_SIZE);
   SET_CASE_LOG_FILE(TEST_NAME, "out_of_disk_space");
   int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int server_idx = 0;
@@ -79,6 +78,7 @@ TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE + 2);
+  sleep(2);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 8*31+1, id, log_entry_size));
   LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
   while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
@@ -91,7 +91,6 @@ TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
   LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
   PALF_LOG(INFO, "out of disk max_lsn", K(max_lsn));
-  usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*10000);
   sleep(2);
   EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
   // shrinking 后继续停写
@@ -107,6 +106,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   // 将日志盘空间设置为10GB
   update_disk_options(10*1024*1024*1024ul/PALF_PHY_BLOCK_SIZE);
+  sleep(2);
   PALF_LOG(INFO, "start update_disk_options_basic", K(id));
   int64_t leader_idx = 0;
   PalfHandleImplGuard leader;
@@ -119,7 +119,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
 
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 20));
-  usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_,
@@ -127,7 +127,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
 
   // case1: 在上一次未缩容完成之前，可以继续缩容
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 10));
-  usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_,
@@ -140,7 +140,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
   }
   // case2: 在上一次未缩容完成之前，可以继续扩容, 同时由于扩容后日志盘依旧小于第一次缩容，因此依旧处于缩容状态.
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 11));
-  usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_,
@@ -151,7 +151,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
     EXPECT_EQ(opts.log_disk_usage_limit_size_, 10*1024*1024*1024ul);
   }
-  usleep(1000*1000+100+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_,
@@ -159,19 +159,18 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
   const LSN base_lsn(12*PALF_BLOCK_SIZE);
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(base_lsn));
-  usleep(1000);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1000));
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
   // wait until disk space enough
   EXPECT_EQ(OB_SUCCESS, wait_until_disk_space_to(leader_idx, (11*PALF_PHY_BLOCK_SIZE*80+100)/100));
-  usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::NORMAL_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_,
             11*PALF_PHY_BLOCK_SIZE);
   // 等待后台线程再次执行update_disk_options操作，预期本地持久化的disk_opts会变为11*PALF_PHY_BLOCK_SIZE
   {
-    usleep(2*ObLooper::INTERVAL_US);
+    sleep(2);
     PalfDiskOptions opts;
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
     EXPECT_EQ(opts.log_disk_usage_limit_size_, 11*PALF_PHY_BLOCK_SIZE);
@@ -216,7 +215,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)
   OB_LOGGER.set_log_level("INFO");
   // 扩容操作
   EXPECT_EQ(OB_SUCCESS, update_disk_options(10*1024*1024*1024ul/PALF_PHY_BLOCK_SIZE));
-  usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+  sleep(2);
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int64_t leader_idx = 0;
   PalfEnv *palf_env = NULL;
@@ -240,7 +239,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     // 最小的log_disk_size要求是存在8个日志文件
     EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 8));
-    usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
+    sleep(2);
     // 宕机前，缩容不会正式生效，因此不会导致停写
     EXPECT_EQ(true, palf_env->palf_env_impl_.diskspace_enough_);
     EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
@@ -263,7 +262,6 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)
     // 重启后继续缩容
     int64_t log_disk_usage, total_log_disk_size;
     EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
-    usleep(2*ObLooper::INTERVAL_US);
     usleep(2*1000*1000 + BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
     EXPECT_EQ(true, palf_env->palf_env_impl_.diskspace_enough_);
     EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
@@ -366,11 +364,10 @@ TEST_F(TestObSimpleLogDiskMgr, overshelling)
     EXPECT_EQ(OB_MACHINE_RESOURCE_NOT_ENOUGH, log_pool->create_tenant(MIN_DISK_SIZE_PER_PALF_INSTANCE));
     const LSN base_lsn(8*PALF_BLOCK_SIZE);
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(base_lsn));
-    usleep(1000);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1000));
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
     EXPECT_EQ(OB_SUCCESS, wait_until_disk_space_to(leader_idx, (10*PALF_PHY_BLOCK_SIZE*80+100)/100));
-    usleep(ObLooper::INTERVAL_US * 2);
+    sleep(2);
     EXPECT_EQ(PalfDiskOptionsWrapper::Status::NORMAL_STATUS,
               palf_env->palf_env_impl_.disk_options_wrapper_.status_);
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
@@ -421,8 +418,7 @@ TEST_F(TestObSimpleLogDiskMgr, hidden_sys)
   EXPECT_EQ(0, disk_opts.log_disk_usage_limit_size_);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
-  usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*100000);
-  usleep(ObLooper::INTERVAL_US * 2);
+  sleep(2);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::NORMAL_STATUS,
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
