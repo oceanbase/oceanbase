@@ -801,5 +801,17 @@ int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::Store
   return ret;
 }
 
+void ObTableApiModifyExecutor::reset_new_row_datum(const ObExprPtrIArray &new_row_exprs)
+{
+  // reset ptr in ObDatum to reserved buf
+  for (int64_t i = 0; i < new_row_exprs.count(); ++i) {
+    if (OB_NOT_NULL(new_row_exprs.at(i))) {
+      // locate expr datum && reset ptr_ to reserved buf
+      new_row_exprs.at(i)->locate_datum_for_write(eval_ctx_);
+      new_row_exprs.at(i)->clear_evaluated_flag(eval_ctx_);
+    }
+  }
+}
+
 }  // namespace table
 }  // namespace oceanbase

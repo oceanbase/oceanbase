@@ -579,6 +579,9 @@ int ObTableApiTTLExecutor::close()
     ret = OB_SUCCESS == ret ? close_ret : ret;
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
+    // reset the new row datum ptr
+    const ObExprPtrIArray &new_row_exprs = get_primary_table_insert_row();
+    reset_new_row_datum(new_row_exprs);
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;

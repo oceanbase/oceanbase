@@ -454,6 +454,12 @@ int ObTableApiReplaceExecutor::close()
     }
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
+    // reset the new_row expr datum ptr:
+    // each replace use the same spec in multi_replace and the new_row expr datum will
+    // be set to a temporally ObChunkDatumStore when meet conflict row, which will be release after current replace
+    // done, so need to reset the datum to its origin reserved buffer.Ohterwise, it may cause use after free in next replace
+    const ObExprPtrIArray &new_row_exprs = get_primary_table_new_row();
+    reset_new_row_datum(new_row_exprs);
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;
