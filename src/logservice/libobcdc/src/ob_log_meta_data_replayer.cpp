@@ -28,7 +28,8 @@ namespace libobcdc
 ObLogMetaDataReplayer::ObLogMetaDataReplayer() :
     is_inited_(false),
     queue_(),
-    schema_inc_replay_()
+    schema_inc_replay_(),
+    part_trans_parser_(NULL)
 {
 }
 
@@ -37,7 +38,7 @@ ObLogMetaDataReplayer::~ObLogMetaDataReplayer()
   destroy();
 }
 
-int ObLogMetaDataReplayer::init()
+int ObLogMetaDataReplayer::init(IObLogPartTransParser &part_trans_parser)
 {
   int ret = OB_SUCCESS;
 
@@ -47,6 +48,7 @@ int ObLogMetaDataReplayer::init()
   } else if (OB_FAIL(schema_inc_replay_.init(true/*is_start_progress*/))) {
     LOG_ERROR("schema_inc_replay_ init failed", KR(ret));
   } else {
+    part_trans_parser_ = &part_trans_parser;
     is_inited_ = true;
   }
 
@@ -58,6 +60,7 @@ void ObLogMetaDataReplayer::destroy()
   if (IS_INIT) {
     queue_.reset();
     schema_inc_replay_.destroy();
+    part_trans_parser_ = NULL;
     is_inited_ = false;
   }
 }
@@ -154,6 +157,7 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
     ReplayInfoStat &replay_info_stat)
 {
   int ret = OB_SUCCESS;
+  bool stop_flag = false;
 
   if (OB_UNLIKELY(! part_trans_task.is_ddl_trans())) {
     ret = OB_ERR_UNEXPECTED;
@@ -173,12 +177,57 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
         DictTenantArray &tenant_metas = part_trans_task.get_dict_tenant_array();
         DictDatabaseArray &database_metas = part_trans_task.get_dict_database_array();
         DictTableArray &table_metas = part_trans_task.get_dict_table_array();
+        const common::ObCompatibilityMode &compatible_mode = tenant_info.get_compatibility_mode();
+        lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
-        if (OB_FAIL(schema_inc_replay_.replay(part_trans_task, tenant_metas, database_metas, table_metas, tenant_info))) {
+        if (OB_FAIL(schema_inc_replay_.replay(part_trans_task, tenant_metas, database_metas,
+            table_metas, tenant_info))) {
           LOG_ERROR("schema_inc_replay_ replay failed", KR(ret), K(part_trans_task), K(tenant_info));
-        } else {}
-      }
+        } else if (OB_FAIL(convert_to_compat_mode(compatible_mode, compat_mode))) {
+          LOG_ERROR("convert to compat mode fail", KR(ret), K(compatible_mode));
+        } else {
+          lib::CompatModeGuard g(compat_mode);
+          bool is_build_baseline = true;
+          if (OB_FAIL(part_trans_parser_->parse(part_trans_task, is_build_baseline, stop_flag))) {
+            LOG_ERROR("parse DDL task fail", KR(ret), K(part_trans_task), K(is_build_baseline));
+          } else {
+            // Iterate through each statement of the DDL
+            IStmtTask *stmt_task = part_trans_task.get_stmt_list().head_;
+            while (NULL != stmt_task && OB_SUCCESS == ret) {
+              DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
+              if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt),
+                    "trans_id", part_trans_task.get_trans_id());
+              } else {
+                const ObSchemaOperationType op_type = (ObSchemaOperationType) ddl_stmt->get_operation_type();
+                const uint64_t op_table_id = ddl_stmt->get_op_table_id();
+                if (need_remove_by_op_type_(op_type)) {
+                  if (OB_FAIL(tenant_info.remove_table_meta(op_table_id))) {
+                    LOG_ERROR("ddl stmt is DROP_TABLE or DROP_INDEX and remove table meta failed", KR(ret),
+                        K(op_table_id), KPC(ddl_stmt), "trans_id", part_trans_task.get_trans_id());
+                  } else {
+                    ISTAT("remove table meta success",
+                        "ddl_op_tenant_id", ddl_stmt->get_op_tenant_id(),
+                        "ddl_op_databse_id", ddl_stmt->get_op_database_id(),
+                        "ddl_op_table_id", ddl_stmt->get_op_table_id(),
+                        "ddl_op_tablegroup_id", ddl_stmt->get_op_tablegroup_id(),
+                        "ddl_operation_type", ddl_stmt->get_operation_type(),
+                        "ddl_op_schema_version", ddl_stmt->get_op_schema_version(),
+                        "ddl_stmt_str", ddl_stmt->get_ddl_stmt_str(),
+                        "ddl_exec_tenant_id", ddl_stmt->get_exec_tenant_id(),
+                        "trans_id", part_trans_task.get_trans_id());
+                  }
+                }
 
+                if (OB_SUCC(ret)) {
+                  stmt_task = stmt_task->get_next();
+                }
+              }
+            } // while
+          }
+        } // else replay
+      }
     } else {
       ISTAT("ignore DDL_TRANS PartTransTask which trans commit verison is greater than start_timestamp_ns",
           "tenant_id", part_trans_task.get_tenant_id(),
