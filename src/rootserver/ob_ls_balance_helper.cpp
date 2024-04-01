@@ -1015,8 +1015,7 @@ int ObLSBalanceTaskHelper::add_ls_transfer_task(
       || !balance_job_id.is_valid()
       || OB_INVALID_ID == ls_group_id
       || !src_ls_id.is_valid()
-      || !dest_ls_id.is_valid()
-      || part_list.empty())) {
+      || !dest_ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(balance_job_id),
         K(ls_group_id), K(src_ls_id), K(dest_ls_id), K(part_list));
