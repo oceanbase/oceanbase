@@ -316,8 +316,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     raw_sql_(),
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator),
-    literal_stmt_type_(stmt::T_NONE),
-    erased_(false)
+    literal_stmt_type_(stmt::T_NONE)
 {
 }
 
@@ -463,7 +462,6 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     is_expired_ = other.is_expired_;
     is_expired_evicted_ = other.is_expired_evicted_;
     literal_stmt_type_ = other.literal_stmt_type_;
-    erased_ = other.erased_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
