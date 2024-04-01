@@ -1775,17 +1775,17 @@ int ObLogPartMgr::filter_table_(const ObSimpleTableSchemaV2 *table_schema,
     // 1. When manipulating a global index table/unique index table, the primary schema should be valid
     // 2. The global index table/unique index table is filtered based on the primary table, if the primary table matches, the global index table also matches
     if (OB_ISNULL(primary_table_schema)) {
-      LOG_ERROR("invalid argument", K(primary_table_schema), KPC(table_schema),
-          K(db_name), K(tenant_name));
       ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid argument", KR(ret), K(primary_table_schema), KPC(table_schema),
+          K(db_name), K(tenant_name));
     } else {
       target_table_schema = primary_table_schema;
     }
   } else if (table_schema->is_user_hidden_table()) {
     if (OB_ISNULL(primary_table_schema)) {
-      LOG_ERROR("invalid argument", K(primary_table_schema), KPC(table_schema),
-          K(db_name), K(tenant_name));
       ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid argument", KR(ret), K(primary_table_schema), KPC(table_schema),
+          K(db_name), K(tenant_name));
     } else {
       target_table_schema = primary_table_schema;
     }
@@ -2676,7 +2676,7 @@ int ObLogPartMgr::try_add_hbase_table_(const uint64_t table_id,
         if (OB_TIMEOUT != ret) {
           LOG_ERROR("get_schema_guard_and_full_table_schema failed", KR(ret), K(table_id), KPC(full_table_schema));
         }
-      } else if (try_add_hbase_table_(full_table_schema, table_name, timeout)) {
+      } else if (OB_FAIL(try_add_hbase_table_(full_table_schema, table_name, timeout))) {
         LOG_ERROR("inner try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
       } else {
         // succ
@@ -2692,7 +2692,7 @@ int ObLogPartMgr::try_add_hbase_table_(const uint64_t table_id,
         LOG_ERROR("tenant_info is nullptr", K_(tenant_id));
       } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
         LOG_ERROR("tenant_info get table_meta failed", KR(ret), K_(tenant_id));
-      } else if (try_add_hbase_table_(table_meta, table_name, timeout)) {
+      } else if (OB_FAIL(try_add_hbase_table_(table_meta, table_name, timeout))) {
         LOG_ERROR("inner try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
       } else {
         // succ
