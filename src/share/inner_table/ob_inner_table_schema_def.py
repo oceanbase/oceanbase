@@ -43851,6 +43851,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -43908,6 +43909,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -43965,6 +43967,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(

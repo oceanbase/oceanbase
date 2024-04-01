@@ -6114,6 +6114,24 @@ bool ObDropUDTArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !db_name_.empty() && !udt_name_.empty();
 }
 
+int ObDropUDTArg::assign(const ObDropUDTArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    db_name_ = other.db_name_;
+    udt_name_ = other.udt_name_;
+    if_exist_ = other.if_exist_;
+    is_type_body_ = other.is_type_body_;
+    force_or_validate_ = other.force_or_validate_;
+    exist_valid_udt_ = other.exist_valid_udt_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
