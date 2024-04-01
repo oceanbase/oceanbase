@@ -2268,8 +2268,8 @@ int ObLogPartMgr::get_schema_info_of_table_id_(const uint64_t table_id,
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("get schema_guard and table_schema failed", KR(ret), K(table_id), K(schema_version));
       }
-    } else if (inner_get_table_info_of_table_schema_(schema_guard, table_schema, tenant_name,
-        database_name, table_name, database_id, is_user_table, timeout)) {
+    } else if (OB_FAIL(inner_get_table_info_of_table_schema_(schema_guard, table_schema, tenant_name,
+        database_name, table_name, database_id, is_user_table, timeout))) {
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("inner get table info failed", KR(ret), KPC(table_schema));
       }
@@ -2286,8 +2286,11 @@ int ObLogPartMgr::get_schema_info_of_table_id_(const uint64_t table_id,
     } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant_info is nullptr", KR(ret), K_(tenant_id));
-    } else if (inner_get_table_info_of_table_meta_(tenant_info, table_meta, tenant_name,
-        database_name, table_name, database_id, is_user_table)) {
+    } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get table_meta failed", KR(ret), K_(tenant_id), K(table_id));
+    } else if (OB_FAIL(inner_get_table_info_of_table_meta_(tenant_info, table_meta, tenant_name,
+        database_name, table_name, database_id, is_user_table))) {
       LOG_ERROR("inner get table info failed", KR(ret), KPC(tenant_info));
     } else {
       // succ
