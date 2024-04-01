@@ -14,6 +14,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_common_utility.h"
+#include "lib/utility/utility.h"
 
 extern "C" {
 void right_to_die_or_duty_to_live_c()
@@ -51,7 +52,7 @@ void right_to_die_or_duty_to_live()
       throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
     }
   #endif
-    sleep(60);
+    ob_usleep(60 * 1000 * 1000); // sleep 60s
   }
 }
 
