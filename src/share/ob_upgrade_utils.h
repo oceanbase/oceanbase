@@ -168,6 +168,7 @@ class ObUpgradeChecker
 {
 public:
   static bool check_data_version_exist(const uint64_t version);
+  static bool check_data_version_valid_for_backup(const uint64_t data_version);
   static bool check_cluster_version_exist(const uint64_t version);
   static int get_data_version_by_cluster_version(
              const uint64_t cluster_version,
