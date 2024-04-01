@@ -1075,6 +1075,8 @@ Outputs & filters:
        4}, {'56', 56, 1}, {'44', 4.5, 4})
 insert into t72 values('11', 1.2, 1),('22', 2.3, 2),('33', 3.4, 3), ('44', 4.5, 4), ('55', 5.6, 5),
 ('12', 1.244, 4),('22', 2.3, 3),('3', 3.4, 2), ('44', 4.5, 4), ('56', 56, 1),('44', 4.5, 4);
+Warnings:
+Warning	1265	Data truncated for column '"union_sort_opt_db"."t72"."c2"' at row 6
 create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
 #4.4.1 两个表上索引升降序一致, 不一一对应但两侧分支匹配, 可以优化, 8 rows
 EXPLAIN select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 

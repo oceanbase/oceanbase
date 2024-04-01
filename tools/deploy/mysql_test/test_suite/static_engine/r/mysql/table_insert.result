@@ -17,8 +17,19 @@ create table t1 (c1 int primary key, c2 int unsigned,
     c21 varchar(30), c22 char(30));
 
 insert into t1 values(1, 1, 1, 1, -1, 6, 7, 8, 9, 10, -11, 12, -13.1, 14.2, -15.01, 16.10, 17.001, 18.002, '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
 insert into t1 values('2', '1', '1', '1', '-1', '6', '7', '8', '9', '10', '-11', '12', '-13.1', '14.2', '-15.01', '16.10', '17.001', '18.002', '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
 insert into t1 values('3', '1', '1', '1', '-1', '6', '7', '8', '9', '10', '-11', '12', '-13.1', '14.2', '-15.01', '16.10', '17.001', '18.002', '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char'), ('4', '1', '1', '1', '-1', '16', '17', '18', '19', '11', '-11', '121', '-13.11', '14.21', '-15.011', '16.101', '17.1001', '18.1002', '2019-10-10 10:00:00.00', '2019-10-10 10:00:00.000', '21varchar1', '22char1');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 2
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 2
 
 explain_protocol: 2
 EXPLAIN select * from t1;
@@ -78,9 +89,17 @@ create table t2(c1 decimal(10, 1), c2 int unsigned, c3 int);
 insert into t2 values(null, null, 1);
 insert into t2 select null, null, null from dual;
 insert into t2 select c1, c1, c1 from t1;
+Warnings:
+Warning	1265	Data truncated for column '"test"."t2"."c1"' at row 1
 insert into t2 select c2, c2, c2 from t1;
+Warnings:
+Warning	1265	Data truncated for column '"test"."t2"."c1"' at row 1
 insert into t2 select c3, c3, c3 from t1;
+Warnings:
+Warning	1265	Data truncated for column '"test"."t2"."c1"' at row 1
 insert into t2 select c4, c4, c4 from t1;
+Warnings:
+Warning	1265	Data truncated for column '"test"."t2"."c1"' at row 1
 select * from t2;
 +-------+------+------+
 | c1    | c2   | c3   |

@@ -29,6 +29,9 @@ insert into t1 values(1, 2,
     7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '9.5', '10.5', null);
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
 insert into t1 values(-1, 2, 
     -1, 2, 
     -1, 2, 
@@ -40,6 +43,9 @@ insert into t1 values(-1, 2,
     -7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '-9.5', '10.5', null);
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"test"."t1"."c18"' at row 1
 
 explain_protocol: 2
 EXPLAIN select nvl(c_null, c_null) from t1;
