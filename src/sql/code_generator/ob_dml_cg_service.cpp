@@ -71,6 +71,8 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
   LOG_TRACE("begin to generate insert ctdef", K(index_dml_info));
   ObArray<ObRawExpr*> old_row;
   ObArray<ObRawExpr*> new_row;
+  uint64_t dml_event = op.is_pdml_update_split() ?
+       ObTriggerEvents::get_update_event() : ObTriggerEvents::get_insert_event();
   if (OB_ISNULL(op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -78,7 +80,7 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
     LOG_WARN("convert insert new row exprs failed", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op, index_dml_info,
                                              ins_ctdef,
-                                             ObTriggerEvents::get_insert_event(),
+                                             dml_event,
                                              old_row,
                                              new_row))) {
     LOG_WARN("generate dml base ctdef failed", K(ret), K(index_dml_info));
@@ -276,12 +278,14 @@ int ObDmlCgService::generate_delete_ctdef(ObLogDelUpd &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
+  uint64_t dml_event = op.is_pdml_update_split() ?
+      ObTriggerEvents::get_update_event() : ObTriggerEvents::get_delete_event();
   if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
     LOG_WARN("fail to assign delete old row", K(ret));
   } else if (OB_FAIL(generate_dml_base_ctdef(op,
                                              index_dml_info,
                                              del_ctdef,
-                                             ObTriggerEvents::get_delete_event(),
+                                             dml_event,
                                              old_row,
                                              new_row))) {
     LOG_WARN("generate dml base ctdef failed", K(ret), K(index_dml_info));
