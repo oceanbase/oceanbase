@@ -171,7 +171,8 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(session_info));
   } else if (T_WHERE_SCOPE != scope || !is_root_condition || T_OP_IN != op_type ||
-             T_EXPR_LIST != in_list.type_ || is_need_print || is_prepare_protocol) {
+             T_EXPR_LIST != in_list.type_ || is_need_print || is_prepare_protocol ||
+             (NULL != stmt && stmt->is_select_stmt() && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
     LOG_TRACE("no need rewrite inlist", K(is_root_condition), K(scope), K(in_list.type_),
               K(op_type), K(is_need_print), K(is_prepare_protocol));
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
