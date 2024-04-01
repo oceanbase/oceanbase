@@ -3753,6 +3753,8 @@ def_table_schema(
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
     ('last_check_time', 'int', 'true', '0'),
+    ('max_iops', 'int', 'false', '0'),
+    ('max_bandwidth', 'int', 'false', '0'),
   ],
 )
 
@@ -5072,6 +5074,8 @@ def_table_schema(
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
     ('last_check_time', 'int', 'true', '0'),
+    ('max_iops', 'int', 'false', '0'),
+    ('max_bandwidth', 'int', 'false', '0'),
   ],
 )
 
