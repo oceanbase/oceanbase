@@ -206,7 +206,7 @@ int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
             LOG_WARN("remove path failed", K(sub_path));
         }
       }
-      if (OB_FAIL(remove_dir_(curr_path))) {
+      if (0 != strcmp(root_cgroup_, curr_path) && OB_FAIL(remove_dir_(curr_path))) {
         LOG_WARN("remove sub group directory failed", K(ret), K(curr_path));
       } else {
         LOG_INFO("remove sub group directory success", K(curr_path));
@@ -717,6 +717,7 @@ int ObCgroupCtrl::init_cgroup_root_dir_(const char *cgroup_path)
     //  cpu 可能是不连续的，自己探测很复杂。
     //  这里总是继承父级的设置，无需自己探测。
     //  后继 child cgroup 无需再设置 mems 和 cpus
+    recursion_remove_group_(cgroup_path);
     if (OB_SUCC(ret)) {
       snprintf(current_path, PATH_BUFSIZE, "%s/cgroup.clone_children", cgroup_path);
       snprintf(value_buf, VALUE_BUFSIZE, "1");

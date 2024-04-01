@@ -30,9 +30,6 @@ int ObResourcePlanManager::init()
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
   } else if (OB_FAIL(tenant_plan_map_.create(7, "TENANT_PLAN_MAP"))) {
     LOG_WARN("fail create tenant_plan_map", K(ret));
-  } else if (!GCONF.enable_global_background_resource_isolation &&
-             OB_FAIL(GCTX.cgroup_ctrl_->remove_cgroup(OB_INVALID_TENANT_ID, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
-    LOG_WARN("fail to remove background cgroup");
   } else {
     LOG_INFO("resource plan manager init ok");
   }
