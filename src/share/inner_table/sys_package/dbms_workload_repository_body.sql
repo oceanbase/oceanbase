@@ -43,8 +43,8 @@ FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
                          SQL_ID        IN VARCHAR2  DEFAULT NULL,
                          TRACE_ID      IN VARCHAR2  DEFAULT NULL,
                          WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
-                         SVR_IP        VARCHAR(64)  DEFAULT NULL,
-                         SVR_PORT      NUMBER       DEFAULT NULL
+                         SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                         SVR_PORT      IN NUMBER       DEFAULT NULL
                         )
 RETURN awrrpt_text_type_table
 IS
@@ -799,8 +799,8 @@ PROCEDURE ASH_REPORT(BTIME         IN DATE,
                      TRACE_ID      IN VARCHAR2  DEFAULT NULL,
                      WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
                      REPORT_TYPE   IN VARCHAR2  DEFAULT 'text',
-                     SVR_IP        VARCHAR(64)  DEFAULT NULL,
-                     SVR_PORT      NUMBER       DEFAULT NULL
+                     SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                     SVR_PORT      IN NUMBER       DEFAULT NULL
                    )
 IS
   -- REPORT_TYPE is reserved for 'text'/'html', currently only 'text' supported
