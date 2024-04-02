@@ -151,6 +151,8 @@ protected:
     return true;
   }
 
+  virtual bool replay_allow_tablet_not_exist_() { return false; }
+
 private:
   int check_src_transfer_tablet_(ObTabletHandle &tablet_handle);
 
@@ -642,6 +644,7 @@ protected:
   {
     return true;
   }
+  virtual bool replay_allow_tablet_not_exist_() { return false; }
 
 private:
   int check_dest_transfer_tablet_(ObTabletHandle &tablet_handle);
