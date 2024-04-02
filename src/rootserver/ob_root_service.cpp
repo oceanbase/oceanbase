@@ -10000,6 +10000,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_tx_share_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), MEMSTORE_LIMIT_PERCENTAGE)) {
       ret = check_memstore_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_WRITE_LIMIT_PERCENTAGE)) {
+      ret = check_data_disk_write_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), DATA_DISK_USAGE_LIMIT_PERCENTAGE)) {
+      ret = check_data_disk_usage_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), TENANT_MEMSTORE_LIMIT_PERCENTAGE)) {
       ret = check_tenant_memstore_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _TX_DATA_MEMORY_LIMIT_PERCENTAGE)) {
@@ -10191,6 +10195,52 @@ int ObRootService::check_write_throttle_trigger_percentage(obrpc::ObAdminSetConf
   const char *warn_log = "tenant writing_throttling_trigger_percentage "
                          "which should greater than freeze_trigger_percentage";
   CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigWriteThrottleTriggerIntChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const char *warn_log = "cluster config data_disk_write_limit_percentage. "
+    "It should greater than or equal with data_disk_usage_limit_percentage";
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (!is_valid) {
+    // invalid argument
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(value));
+  } else if (value == 0) {
+    // does not need check data disk write limit percentage
+  } else if (value < GCONF.data_disk_usage_limit_percentage) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const char *warn_log = "cluster config data_disk_usage_limit_percentage. "
+    "It should less than or equal with data_disk_write_limit_percentage";
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (!is_valid) {
+    // invalid argument
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(value));
+  } else if (0 == GCONF.data_disk_write_limit_percentage) {
+    // does not need check data disk write limit percentage
+  } else if (value > GCONF.data_disk_write_limit_percentage) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
   return ret;
 }
 
