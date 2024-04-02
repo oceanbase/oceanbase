@@ -54,8 +54,6 @@ public:
       ObIArray<int64_t> &schema_version_res);
   int wait_task_ready(const uint64_t tenant_id, const int64_t task_id, const int64_t wait_us);
   int remove_task(const uint64_t tenant_id, const int64_t task_id);
-  int check_enable_ddl_trans_new_lock(const uint64_t tenant_id, bool &res);
-  int set_enable_ddl_trans_new_lock(const uint64_t tenant_id);
   int broadcast_consensus_version(const int64_t tenant_id,
                                   const int64_t schema_version,
                                   const ObArray<ObAddr> &server_list);
@@ -71,9 +69,6 @@ private:
 
   common::hash::ObHashSet<uint64_t> tenants_;
 
-  // for compat
-  common::SpinRWLock lock_for_tenant_set_;
-  common::hash::ObHashSet<uint64_t> tenant_for_ddl_trans_new_lock_;
 
   common::ObCond wait_cond_;
 };
