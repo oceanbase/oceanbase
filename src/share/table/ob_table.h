@@ -1483,11 +1483,12 @@ public:
 
   TO_STRING_KV(K_(ls_id),
                K_(option_flag),
-               "tablet_ops_count_", tablet_ops_.count(),
                K_(table_name),
                K_(table_id),
                K_(rowkey_names),
-               K_(properties_names));
+               K_(properties_names),
+               "tablet_ops_count_", tablet_ops_.count(),
+               K_(tablet_ops));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLSOp);
   share::ObLSID ls_id_;

@@ -235,20 +235,24 @@ void ObTableLSExecuteEndTransCb::callback(int cb_param, const transaction::ObTra
 int ObTableLSExecuteEndTransCb::assign_ls_execute_result(const ObTableLSOpResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableSingleOpResult dest_single_result;
-  ObTableTabletOpResult dest_tablet_result;
+
+  int64_t tablet_result_cnt = result.count();
+  if (OB_FAIL(result_.prepare_allocate(tablet_result_cnt))) {
+    LOG_WARN("fail to prepare allocate tablet op result", K(ret), K(tablet_result_cnt));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < result.count(); i++) {
-    const ObTableTabletOpResult &tablet_src_result = result.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < result.at(i).count(); j++) {
-      const ObTableSingleOpResult &src_single_result = tablet_src_result.at(j);
-      if (OB_FAIL(dest_single_result.deep_copy(allocator_, entity_factory_, src_single_result))) {
-        LOG_WARN("failed to deep copy result", K(ret));
-      } else if (OB_FAIL(dest_tablet_result.push_back(dest_single_result))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
+    const ObTableTabletOpResult &src_tablet_result = result.at(i);
+    ObTableTabletOpResult &dst_tablet_result = result_.at(i);
+    int64_t single_res_cnt = src_tablet_result.count();
+    if (OB_FAIL(dst_tablet_result.prepare_allocate(single_res_cnt))) {
+      LOG_WARN("fail to prepare allocatate single op result", K(ret), K(i), K(single_res_cnt));
     }
-    if (OB_SUCC(ret) && result_.push_back(dest_tablet_result)) {
-      LOG_WARN("failed to push back tablet result", K(ret));
+    for (int64_t j = 0; OB_SUCC(ret) && j < single_res_cnt; j++) {
+      const ObTableSingleOpResult &src_single_result = src_tablet_result.at(j);
+      ObTableSingleOpResult &dst_single_result = dst_tablet_result.at(j);
+      if (OB_FAIL(dst_single_result.deep_copy(allocator_, entity_factory_, src_single_result))) {
+        LOG_WARN("failed to deep copy result", K(ret));
+      }
     }
   } // end for
   return ret;
