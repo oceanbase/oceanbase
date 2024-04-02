@@ -5364,7 +5364,8 @@ int ObDMLResolver::resolve_table_partition_expr(const TableItem &table_item, con
     if (OB_SUCC(ret)) {
       ObRawExpr *tmp_part_expr = part_expr;
       ObRawExpr *tmp_subpart_expr = subpart_expr;
-      if (session_info_->get_ddl_info().is_ddl() ) {
+      if (session_info_->get_ddl_info().is_ddl() && ObItemType::T_INSERT == params_.resolver_scope_stmt_type_) {
+        // Only insert into select stmt needs to replace the virtual column(aka, part key) with its' definition.
         const ObTableSchema *index_schema = NULL;
         const ObPartitionKeyInfo &partition_keys = table_schema.get_partition_key_info();
         const ObPartitionKeyInfo &subpartition_keys = table_schema.get_subpartition_key_info();
