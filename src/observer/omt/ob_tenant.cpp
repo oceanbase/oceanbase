@@ -1118,8 +1118,8 @@ void ObTenant::destroy()
     ctx_ = nullptr;
   }
   if (cgroup_ctrl_.is_valid() &&
-      OB_TMP_FAIL(cgroup_ctrl_.remove_tenant_cgroup(
-          id_, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
+          id_, OB_INVALID_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   group_map_.destroy_group();
@@ -1158,9 +1158,10 @@ void ObTenant::set_unit_max_cpu(double cpu)
   unit_max_cpu_ = cpu;
   if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
     // do nothing
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_tenant_cpu_cfs_quota(
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_cfs_quota(
                  id_,
                  is_sys_tenant(id_) ? -1 : cpu,
+                 OB_INVALID_ID,
                  GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id));
   }
@@ -1171,9 +1172,10 @@ void ObTenant::set_unit_min_cpu(double cpu)
   int tmp_ret = OB_SUCCESS;
   unit_min_cpu_ = cpu;
   if (cgroup_ctrl_.is_valid() &&
-      OB_TMP_FAIL(cgroup_ctrl_.set_tenant_cpu_shares(
+      OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_shares(
           id_,
           cpu,
+          OB_INVALID_ID,
           GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K(cpu));
   }

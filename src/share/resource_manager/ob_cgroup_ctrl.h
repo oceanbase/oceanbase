@@ -144,25 +144,31 @@ public:
   bool is_valid() { return valid_; }
 
   bool is_valid_group_name(common::ObString &group_name);
+  static int compare_cpu(const double cpu1, const double cpu2, int &compare_ret);
 
   // 删除租户cgroup规则
-  int remove_cgroup(const uint64_t tenant_id, uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int remove_tenant_cgroup(const uint64_t tenant_id, const char *base_path = "");
+  int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  int remove_both_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  static int remove_dir_(const char *curr_dir);
 
   int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
 
   // 从指定租户cgroup组移除指定tid
   int remove_self_from_cgroup(const uint64_t tenant_id);
 
-  int get_cgroup_config(const char *group_path, const char *config_name, char *config_value);
-  int set_cgroup_config(const char *group_path, const char *config_name, char *config_value);
+  static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   // 设定指定租户cgroup组的cpu.shares
   int set_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int set_tenant_cpu_shares(const uint64_t tenant_id, const double cpu, const char *base_path = "");
+  int set_both_cpu_shares(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int get_cpu_shares(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   // 设定指定租户cgroup组的cpu.cfs_quota_us
   int set_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  int set_tenant_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const char *base_path = "");
+  static int set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu);
+  static int get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu);
+  static int dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
+  int recursion_dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
+  int set_both_cpu_cfs_quota(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int get_cpu_cfs_quota(const uint64_t tenant_id, double &cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   // 获取某个cgroup组的cpuacct.usage, 即cpu time
   int get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
@@ -180,18 +186,17 @@ public:
   int delete_group_iops(const uint64_t tenant_id,
                         const common::ObString &consumer_group);
 
+  class DirProcessor
+  {
+  public:
+    DirProcessor() = default;
+    ~DirProcessor() = default;
+    virtual int handle_dir(const char *group_path) = 0;
+  };
+
 private:
   const char *root_cgroup_  = "cgroup";
   const char *other_cgroup_ = "cgroup/other";
-
-  // cgroup config name
-  const char *CPU_SHARES_FILE = "cpu.shares";
-  const int32_t DEFAULT_CPU_SHARES = 1024;
-  const char *TASKS_FILE = "tasks";
-  const char *CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
-  const char *CPU_CFS_PERIOD_FILE = "cpu.cfs_period_us";
-  const char *CPUACCT_USAGE_FILE = "cpuacct.usage";
-  const char *CPU_STAT_FILE = "cpu.stat";
   // 10:1, 确保系统满负载场景下 SYS 能有足够资源
   static const int32_t DEFAULT_SYS_SHARE = 1024;
   static const int32_t DEFAULT_USER_SHARE = 4096;
@@ -206,10 +211,10 @@ private:
 
 private:
   int init_cgroup_root_dir_(const char *cgroup_path);
-  int init_dir_(const char *curr_dir);
-  int init_full_dir_(const char *curr_path);
-  int write_string_to_file_(const char *filename, const char *content);
-  int get_string_from_file_(const char *filename, char content[VALUE_BUFSIZE]);
+  static int init_dir_(const char *curr_dir);
+  static int init_full_dir_(const char *curr_path);
+  static int write_string_to_file_(const char *filename, const char *content);
+  static int get_string_from_file_(const char *filename, char content[VALUE_BUFSIZE]);
   int get_group_path(
       char *group_path,
       int path_bufsize,
@@ -221,8 +226,8 @@ private:
                                  share::ObGroupName &group_name);
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
-  int remove_dir_(const char *curr_dir);
   int recursion_remove_group_(const char *curr_path);
+  int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr);
 };
 
 }  // share

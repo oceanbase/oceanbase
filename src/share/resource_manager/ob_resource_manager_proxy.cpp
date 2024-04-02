@@ -368,7 +368,7 @@ int ObResourceManagerProxy::delete_consumer_group(
       }
     } else if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, consumer_group))) {
       LOG_WARN("fail to stop cur iops isolation", K(ret), K(tenant_id), K(consumer_group));
-    } else if (OB_FAIL(GCTX.cgroup_ctrl_->remove_cgroup(
+    } else if (OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
                    tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
       LOG_WARN("fail to remove group cgroup", K(ret), K(tenant_id), K(consumer_group), K(group_id));
     }
