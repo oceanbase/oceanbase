@@ -731,6 +731,8 @@ int ObTableQueryAsyncP::before_process()
 int ObTableQueryAsyncP::try_process()
 {
   int ret = OB_SUCCESS;
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
   if (OB_FAIL(check_query_type())) {
     LOG_WARN("query type is invalid", K(ret), K(arg_.query_type_));
   } else if (OB_FAIL(get_session_id(query_session_id_, arg_.query_session_id_))) {
@@ -738,8 +740,6 @@ int ObTableQueryAsyncP::try_process()
   } else if (OB_FAIL(get_query_session(query_session_id_, query_session_))) {
     LOG_WARN("fail to get query session", K(ret), K(query_session_id_));
   } else if (FALSE_IT(timeout_ts_ = get_timeout_ts())) {
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else {
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
       if (ObQueryOperationType::QUERY_START == arg_.query_type_) {

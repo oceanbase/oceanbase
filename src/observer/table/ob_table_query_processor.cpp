@@ -271,7 +271,11 @@ int ObTableQueryP::try_process()
   ObTableApiExecutor *executor = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
-
+  // Tips: when table_name is tablegroup name
+  // Since we only have one table in a tablegroup now
+  // tableId and tabletId are correct, which are calculated by the client
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
   if (FALSE_IT(is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_))) {
   } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
@@ -284,11 +288,6 @@ int ObTableQueryP::try_process()
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-    // Tips: when table_name is tablegroup name
-    // Since we only have one table in a tablegroup now
-    // tableId and tabletId are correct, which are calculated by the client
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (OB_FAIL(start_trans(true,
                                  arg_.consistency_level_,
                                  tb_ctx_.get_ls_id(),

@@ -365,6 +365,8 @@ int ObTableApiExecuteP::try_process()
   int ret = OB_SUCCESS;
   const ObTableOperation &table_operation = arg_.table_operation_;
   stat_event_type_ = get_stat_event_type();
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
   if (is_group_trigger_) {
     if (OB_FAIL(ObTableGroupService::process_trigger())) {
       LOG_WARN("fail to process group commit trigger", K(ret));
@@ -372,8 +374,6 @@ int ObTableApiExecuteP::try_process()
     result_.set_err(ret);
   } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (is_group_commit_) {

@@ -171,6 +171,7 @@ int ObTableLSExecuteP::try_process()
   ObLSID ls_id = ls_op.get_ls_id();
   uint64_t table_id = ls_op.get_table_id();
   bool exist_global_index = false;
+  table_id_ = table_id;  // init move response need
   if (OB_FAIL(init_schema_info(table_id))) {
     LOG_WARN("fail to init schema info", K(ret), K(table_id));
   } else if (OB_FAIL(get_ls_id(ls_id))) {

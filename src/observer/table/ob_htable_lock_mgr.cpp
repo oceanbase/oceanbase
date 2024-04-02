@@ -413,10 +413,6 @@ int ObHTableLockMgr::release_node(ObHTableLockNode &lock_node)
     } else {
       LOG_ERROR("fail to erase lock", K(ret), "unlock_op_pred.ret_code_", unlock_op_pred.get_ret());
     }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
   } else if (OB_FAIL(unlock_op_pred.get_ret())) {
     LOG_ERROR("fail to unlock", K(ret));
   } else {
@@ -424,13 +420,12 @@ int ObHTableLockMgr::release_node(ObHTableLockNode &lock_node)
     if (OB_NOT_NULL(lock)) {
       allocator_.free(lock);
     }
-  }
-
-  if (OB_NOT_NULL(lock_key)) {
-    if (lock_key->is_valid()) {
-      allocator_.free(lock_key->key_.ptr());
+    if (OB_NOT_NULL(lock_key)) {
+      if (lock_key->is_valid()) {
+        allocator_.free(lock_key->key_.ptr());
+      }
+      allocator_.free(lock_key);
     }
-    allocator_.free(lock_key);
   }
   allocator_.free(&lock_node);
   return ret;
