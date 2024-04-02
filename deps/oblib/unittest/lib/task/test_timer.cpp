@@ -73,7 +73,7 @@ TEST(TestTimer, task_cancel)
   timer.cancel(task);
   ASSERT_FALSE(timer.task_exist(task));
 
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000, false));
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 100000, false));
   ASSERT_TRUE(timer.task_exist(task));
   ::usleep(1000000);
   ASSERT_FALSE(timer.task_exist(task));
