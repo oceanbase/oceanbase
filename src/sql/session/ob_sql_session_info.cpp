@@ -2514,6 +2514,7 @@ int ObSQLSessionInfo::get_sequence_value(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
       OB_INVALID_ID == seq_id)) {
+    ret = OB_ERR_SEQ_NOT_EXIST;
     LOG_WARN("invalid args", K(tenant_id), K(seq_id), K(ret));
   } else if (OB_FAIL(sequence_currval_map_.get_refactored(seq_id, value))) {
     LOG_WARN("fail get seq", K(tenant_id), K(seq_id), K(ret));
