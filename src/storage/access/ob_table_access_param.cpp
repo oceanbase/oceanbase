@@ -60,6 +60,11 @@ ObTableIterParam::ObTableIterParam()
 ObTableIterParam::~ObTableIterParam()
 {
   cg_read_info_handle_.reset();
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
 void ObTableIterParam::reset()
@@ -79,7 +84,10 @@ void ObTableIterParam::reset()
   need_trans_info_ = false;
   is_same_schema_column_ = false;
   pd_storage_flag_ = 0;
-  pushdown_filter_ = nullptr;
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
   ss_rowkey_prefix_cnt_ = 0;
   op_ = nullptr;
   output_exprs_ = nullptr;

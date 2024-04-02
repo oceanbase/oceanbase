@@ -2706,10 +2706,7 @@ void PushdownFilterInfo::reset()
     }
     allocator_ = nullptr;
   }
-  if (OB_NOT_NULL(filter_)) {
-    filter_->clear();
-    filter_ = nullptr;
-  }
+  filter_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
   is_inited_ = false;

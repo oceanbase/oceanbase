@@ -1110,7 +1110,9 @@ int ObDictColumnDecoder::datum_dict_val_in_op(
 
   bool hit_shortcut = false;
   int cmp_ret = 0;
-  if (is_sorted_dict) {
+  if (filter.null_param_contained()) {
+    hit_shortcut = true;
+  } else if (is_sorted_dict) {
     if (OB_FAIL(filter.cmp_func_(*min_it, filter.get_max_param(), cmp_ret))) {
       LOG_WARN("Failed to compare min dict value and max param", KR(ret), K(*min_it), K(filter.get_max_param()));
     } else if (cmp_ret > 0) {

@@ -903,7 +903,7 @@ public:
   virtual void clear_in_datums()
   {
     if (WHITE_OP_IN == filter_.get_op_type()) {
-      datum_params_.reset();
+      datum_params_.clear();
       param_set_.destroy();
     }
   }
