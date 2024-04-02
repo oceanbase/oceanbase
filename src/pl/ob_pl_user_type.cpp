@@ -1424,9 +1424,14 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
         OV (package_id != OB_INVALID_ID, OB_ERR_UNEXPECTED, KPC(this));
         OV (expr_idx != OB_INVALID_INDEX, OB_ERR_UNEXPECTED, KPC(this));
         OZ (sql::ObSPIService::spi_calc_package_expr_v1(resolve_ctx, exec_ctx, obj_allocator, package_id, expr_idx, &result));
-        if (OB_SUCC(ret) && result.is_pl_extend()) {
+        if (OB_FAIL(ret)) {
+        } else if (result.is_pl_extend()) {
           ObObj tmp;
           OZ (ObUserDefinedType::deep_copy_obj(obj_allocator, result, tmp));
+          OX (result = tmp);
+        } else {
+          ObObj tmp;
+          OZ (common::deep_copy_obj(obj_allocator, result, tmp));
           OX (result = tmp);
         }
         OX (*member = result);
