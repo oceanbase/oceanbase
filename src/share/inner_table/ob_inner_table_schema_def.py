@@ -13890,7 +13890,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_tenant_snapshot_ls_replica_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
-# 12465: __all_virtual_shared_storage_quota_assignment
+# 12465: __all_virtual_shared_storage_quota
 # 12466: enabled_roles
 # 12467: __all_virtual_ls_replica_task_history
 # 12468: __all_virtual_session_ps_info
@@ -14390,7 +14390,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
-# 15441: __all_virtual_shared_storage_quota_assignment
+# 15441: __all_virtual_shared_storage_quota
 # 15442: __all_virtual_column_group
 # 15443: __all_virtual_ls_replica_task_history
 # 15444: __all_virtual_session_ps_info
@@ -32371,8 +32371,8 @@ SELECT job_id AS CLONE_JOB_ID,
 FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 """.replace("\n", " ")
 )
-#21520: GV$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
-#21521: V$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
+#21520: GV$OB_SHARED_STORAGE_QUOTA
+#21521: V$OB_SHARED_STORAGE_QUOTA
 #21522: CDB_UNUSED_COL_TABS
 #21523: DBA_OB_LS_REPLICA_TASK_HISTORY
 #21524: CDB_OB_LS_REPLICA_TASK_HISTORY
@@ -60465,8 +60465,8 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 28217: GV$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
-# 28218: V$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
+# 28217: GV$OB_SHARED_STORAGE_QUOTA
+# 28218: V$OB_SHARED_STORAGE_QUOTA
 # 28219: GV$OB_SESSION_PS_INFO
 # 28220: V$OB_SESSION_PS_INFO
 # 28221: GV$OB_TRACEPOINT_INFO
