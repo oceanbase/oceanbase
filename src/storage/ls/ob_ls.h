@@ -380,6 +380,7 @@ public:
   int replay_get_tablet_no_check(
       const common::ObTabletID &tablet_id,
       const share::SCN &scn,
+      const bool replay_allow_tablet_not_exist,
       ObTabletHandle &tablet_handle) const;
 
   int flush_if_need(const bool need_flush);

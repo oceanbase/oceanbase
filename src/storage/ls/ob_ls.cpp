@@ -1694,6 +1694,7 @@ int ObLS::finish_slog_replay()
 int ObLS::replay_get_tablet_no_check(
     const common::ObTabletID &tablet_id,
     const SCN &scn,
+    const bool replay_allow_tablet_not_exist,
     ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
@@ -1727,9 +1728,10 @@ int ObLS::replay_get_tablet_no_check(
       } else if (!max_scn.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("max_scn is invalid", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-      } else if (scn > SCN::scn_inc(max_scn)) {
+      } else if (scn > SCN::scn_inc(max_scn) || !replay_allow_tablet_not_exist) {
         ret = OB_EAGAIN;
-        LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn), K(tablet_change_checkpoint_scn), K(max_scn));
+        LOG_INFO("tablet does not exist, but need retry", KR(ret), K(key), K(scn),
+            K(tablet_change_checkpoint_scn), K(max_scn), K(replay_allow_tablet_not_exist));
       } else {
         ret = OB_OBSOLETE_CLOG_NEED_SKIP;
         LOG_INFO("tablet already gc, but scn is more than tablet_change_checkpoint_scn", KR(ret),
@@ -1757,11 +1759,12 @@ int ObLS::replay_get_tablet(
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData data;
   bool is_committed = false;
+  const bool replay_allow_tablet_not_exist = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", KR(ret));
-  } else if (OB_FAIL(replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
+  } else if (OB_FAIL(replay_get_tablet_no_check(tablet_id, scn, replay_allow_tablet_not_exist, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id), K(scn));
   } else if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
