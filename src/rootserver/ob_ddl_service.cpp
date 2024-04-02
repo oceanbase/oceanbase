@@ -30042,12 +30042,14 @@ int ObDDLService::grant_revoke_user(
                   0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke execute/alter routine/create routine privilege");
     } else if (compat_version < DATA_VERSION_4_2_3_0 && !is_ora_mode
               && (0 != (priv_set & OB_PRIV_CREATE_TABLESPACE) ||
                   0 != (priv_set & OB_PRIV_SHUTDOWN) ||
                   0 != (priv_set & OB_PRIV_RELOAD))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create tablespace/shutdown/reload privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
