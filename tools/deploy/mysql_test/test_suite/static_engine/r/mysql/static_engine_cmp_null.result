@@ -238,7 +238,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.float_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, FLOAT(-1, -1)) = t.float_t]), filter(nil), rowset=16
       access([t.float_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -257,7 +257,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.ufloat_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, FLOAT UNSIGNED(-1, -1)) = t.ufloat_t]), filter(nil), rowset=16
       access([t.ufloat_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -276,7 +276,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.double_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, DOUBLE(-1, -1)) = t.double_t]), filter(nil), rowset=16
       access([t.double_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -295,7 +295,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.udouble_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, DOUBLE UNSIGNED(-1, -1)) = t.udouble_t]), filter(nil), rowset=16
       access([t.udouble_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -447,7 +447,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.varchar_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, VARCHAR(1048576)) = t.varchar_t]), filter(nil), rowset=16
       access([t.varchar_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -466,7 +466,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.char_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, CHAR(1048576)) = t.char_t]), filter(nil), rowset=16
       access([t.char_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -485,7 +485,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.tinytext_t]), filter(nil), rowset=16
+  0 - output([cast(NULL, TINYTEXT(256)) = t.tinytext_t]), filter(nil), rowset=16
       access([t.tinytext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -504,7 +504,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.mediumtext_t]), filter(nil)
+  0 - output([cast(NULL, MEDIUMTEXT(16777216)) = t.mediumtext_t]), filter(nil)
       access([t.mediumtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -523,7 +523,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([NULL = t.longtext_t]), filter(nil)
+  0 - output([cast(NULL, LONGTEXT(536870911)) = t.longtext_t]), filter(nil)
       access([t.longtext_t]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

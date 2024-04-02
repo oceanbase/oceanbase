@@ -187,7 +187,8 @@ public:
                                  const int64_t execution_id,
                                  const int64_t ddl_task_id,
                                  const int64_t *column_checksums,
-                                 const int64_t column_count);
+                                 const int64_t column_count,
+                                 const int64_t data_format_version);
   static int check_and_get_major_sstable(const share::ObLSID &ls_id,
                                          const ObTabletID &tablet_id,
                                          const blocksstable::ObSSTable *&first_major_sstable,

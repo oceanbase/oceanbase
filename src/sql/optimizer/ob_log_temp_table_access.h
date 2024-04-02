@@ -44,6 +44,7 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   int get_temp_table_plan(ObLogicalOperator *& insert_op);
+  virtual int get_card_without_filter(double &card) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableAccess);

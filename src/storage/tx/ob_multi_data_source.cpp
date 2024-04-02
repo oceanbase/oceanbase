@@ -42,7 +42,7 @@ namespace transaction
 // ObTxBufferNode
 //#####################################################
 
-OB_SERIALIZE_MEMBER(ObTxBufferNode, type_, data_);
+OB_SERIALIZE_MEMBER(ObTxBufferNode, type_, data_, register_no_);
 
 int ObTxBufferNode::init(const ObTxDataSourceType type,
                          const ObString &data,
@@ -60,6 +60,23 @@ int ObTxBufferNode::init(const ObTxDataSourceType type,
     mds_base_scn_ = base_scn;
     buffer_ctx_node_.set_ctx(ctx);
   }
+  return ret;
+}
+
+int ObTxBufferNode::set_mds_register_no(const uint64_t register_no)
+{
+  int ret = OB_SUCCESS;
+  if (register_no <= 0 || !is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(register_no), KPC(this));
+  } else if (register_no_ > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid register no", K(ret), K(register_no), KPC(this));
+  } else {
+    register_no_ = register_no;
+    // TRANS_LOG(INFO, "set register no in mds node", K(ret), KPC(this));
+  }
+
   return ret;
 }
 
@@ -141,6 +158,8 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
 {
   int ret = OB_SUCCESS;
   ObMemtableCtx *mt_ctx = nullptr;
+  const char *can_not_do_tx_end_reason = nullptr;
+  bool can_do_tx_end = true;
   ObMulSourceDataNotifyArg tmp_notify_arg = arg;
   if (OB_ISNULL(part_ctx)) {
     ret = OB_INVALID_ARGUMENT;
@@ -158,8 +177,21 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
       tmp_notify_arg.redo_submitted_ = node.is_submitted();
       tmp_notify_arg.redo_synced_ = node.is_synced();
 
+      if (i > 0) {
+        const ObTxBufferNode &prev_node = array.at(i - 1);
+        if (ObTxBufferNode::is_valid_register_no(prev_node.get_register_no())
+            && ObTxBufferNode::is_valid_register_no(node.get_register_no())
+            && prev_node.get_register_no() >= node.get_register_no()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "unexpected register no for the mds_node", K(ret), K(i), K(array.count()),
+                    K(arg), K(node), K(prev_node));
+        }
+      }
+
       OB_ASSERT(node.type_ != ObTxDataSourceType::BEFORE_VERSION_4_1);
-      if (node.type_ < ObTxDataSourceType::BEFORE_VERSION_4_1
+      if(OB_FAIL(ret)) {
+        //do nothing
+      } else if (node.type_ < ObTxDataSourceType::BEFORE_VERSION_4_1
           && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != node.type_
           && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != node.type_
           && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != node.type_) {
@@ -217,7 +249,27 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
               node.get_buffer_ctx_node().on_redo(arg.scn_);\
               break;\
               case NotifyType::TX_END:\
-              node.get_buffer_ctx_node().before_prepare();\
+              if (node.type_ == ObTxDataSourceType::TEST1 ||\
+                  node.type_ == ObTxDataSourceType::START_TRANSFER_IN ||\
+                  node.type_ == ObTxDataSourceType::TRANSFER_IN_ABORTED ||\
+                  node.type_ == ObTxDataSourceType::FINISH_TRANSFER_IN) {\
+                can_do_tx_end = common::meta::MdsCheckCanDoTxEndWrapper<HELPER_CLASS>::\
+                                check_can_do_tx_end(arg.willing_to_commit_,\
+                                                    arg.for_replay_,\
+                                                    arg.scn_,\
+                                                    buf,\
+                                                    len,\
+                                                    *const_cast<mds::BufferCtx*>(node.get_buffer_ctx_node().get_ctx()),\
+                                                    can_not_do_tx_end_reason);\
+              }\
+              if (!can_do_tx_end) {\
+                ret = OB_EAGAIN;\
+                MDS_ASSERT(OB_NOT_NULL(can_not_do_tx_end_reason));\
+                MDS_LOG(INFO, "check can do tx end return false", KR(ret), K(node), K(can_not_do_tx_end_reason));\
+              } else {\
+                node.get_buffer_ctx_node().before_prepare();\
+                MDS_LOG(INFO, "check can do tx end return true", KR(ret), K(node), K(can_not_do_tx_end_reason));\
+              }\
               break;\
               case NotifyType::ON_PREPARE:\
               node.get_buffer_ctx_node().on_prepare(arg.trans_version_);\

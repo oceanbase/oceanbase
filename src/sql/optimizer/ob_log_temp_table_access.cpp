@@ -132,8 +132,8 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
     }
     double per_dop_card = read_card / parallel;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx.get_cost_model_type()) +
-                ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx.get_cost_model_type());
+    cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx) +
+                ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx);
     op_cost = cost;
   }
   return ret;
@@ -205,6 +205,21 @@ int ObLogTempTableAccess::get_temp_table_plan(ObLogicalOperator *& insert_op)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("failed to find table plan", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogTempTableAccess::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_FAIL(get_temp_table_plan(child_op))) {
+    LOG_WARN("failed to get temp table plan", K(ret));
+  } else if (OB_ISNULL(child_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null operator", K(ret));
+  } else {
+    card = child_op->get_card();
   }
   return ret;
 }

@@ -735,6 +735,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
 
+      case T_GRANT_ROLE:
       case T_SYSTEM_GRANT:
       case T_GRANT: {
         REGISTER_STMT_RESOLVER(Grant);
@@ -1147,6 +1148,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_TABLE_TTL: {
         REGISTER_STMT_RESOLVER(TableTTL);
+        break;
+      }
+      case T_TRANSFER_PARTITION: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
       default: {

@@ -37,6 +37,7 @@
   {                                                                                        \
   namespace unittest                                                                       \
   {                                                                                        \
+  std::string ObMultiReplicaTestBase::TEST_CASE_BASE_NAME = STR_NAME(CUR_TEST_CASE_NAME); \
   std::string ObMultiReplicaTestBase::ZONE_TEST_CASE_NAME[MAX_ZONE_COUNT] = {              \
       GET_ZONE_TEST_CLASS_STR(1), GET_ZONE_TEST_CLASS_STR(2), GET_ZONE_TEST_CLASS_STR(3)}; \
                                                                                            \
@@ -62,21 +63,60 @@
   }                                                                                        \
   }
 
+
+#define RESTART_ZONE_TEST_CASE_CALSS_NAME_INNER(TEST_CASE_NAME, ZONE_ID, RESTART_NO) \
+  TEST_CASE_NAME##_RESTART_##RESTART_NO##_ZONE##ZONE_ID
+#define RESTART_ZONE_TEST_CASE_CALSS_NAME(TEST_CASE_NAME, ZONE_ID, RESTART_NO) \
+  RESTART_ZONE_TEST_CASE_CALSS_NAME_INNER(TEST_CASE_NAME, ZONE_ID, RESTART_NO)
+
+#define GET_RESTART_ZONE_TEST_CLASS_NAME(ZONE_ID, RESTART_NO) \
+  RESTART_ZONE_TEST_CASE_CALSS_NAME(CUR_TEST_CASE_NAME, ZONE_ID, RESTART_NO)
+
+#define GET_RESTART_ZONE_TEST_CLASS_STR(ZONE_ID, REGISTER_NO) \
+  STR_NAME(GET_RESTART_ZONE_TEST_CLASS_NAME(ZONE_ID, REGISTER_NO))
+
+#define APPEND_RESTART_TEST_CASE_CLASS(ZONE_ID, REGISTER_NO)                                   \
+  namespace oceanbase                                                                          \
+  {                                                                                            \
+  namespace unittest                                                                           \
+  {                                                                                            \
+  class GET_RESTART_ZONE_TEST_CLASS_NAME(ZONE_ID, REGISTER_NO) : public ObMultiReplicaTestBase \
+  {                                                                                            \
+  public:                                                                                      \
+    GET_RESTART_ZONE_TEST_CLASS_NAME(ZONE_ID, REGISTER_NO)() : ObMultiReplicaTestBase() {}             \
+  };                                                                                           \
+  TEST_F(GET_RESTART_ZONE_TEST_CLASS_NAME(ZONE_ID, REGISTER_NO), start_observer) {}            \
+  }                                                                                            \
+  }
 #define MULTI_REPLICA_TEST_MAIN_FUNCTION(TEST_DIR_PREFIX)                             \
   int main(int argc, char **argv)                                                     \
   {                                                                                   \
     int ret = OB_SUCCESS;                                                             \
+    int restart_zone_id = -1;                                                         \
+    int restart_zone_no = 0;                                                          \
+    if (argc < 1) {                                                                   \
+      abort();                                                                        \
+    }                                                                                 \
+    std::string app_name = argv[0];                                                   \
+    if (argc >= 3) {                                                                  \
+      std::string tmp_str;                                                            \
+      tmp_str = argv[1];                                                              \
+      restart_zone_id = std::stoi(tmp_str);                                           \
+      tmp_str = argv[2];                                                              \
+      restart_zone_no = std::stoi(tmp_str);                                           \
+    }                                                                                 \
     char *log_level = (char *)"INFO";                                                 \
-    oceanbase::unittest::init_log_and_gtest(argc, argv);                              \
     OB_LOGGER.set_log_level(log_level);                                               \
     ::testing::InitGoogleTest(&argc, argv);                                           \
     if (OB_FAIL(oceanbase::unittest::ObMultiReplicaTestBase::bootstrap_multi_replica( \
-            #TEST_DIR_PREFIX))) {                                                     \
+            app_name, restart_zone_id, restart_zone_no, #TEST_DIR_PREFIX))) {         \
       fprintf(stdout, "init test case failed. ret = %d", ret);                        \
       return ret;                                                                     \
     }                                                                                 \
     return RUN_ALL_TESTS();                                                           \
   }
+
+    // oceanbase::unittest::init_log_and_gtest(argc, argv);
 
 namespace oceanbase
 {
@@ -132,6 +172,23 @@ namespace unittest
     ASSERT_EQ(res_ret, OB_SUCCESS);                  \
   }
 
+#define RETRY_WRITE_SQL_UNTL_SUCC(conn, sql_str, timeout_us)                                      \
+  {                                                                                               \
+    int res_ret = OB_EAGAIN;                                                                      \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                      \
+    int64_t retry_cnt = 0;                                                                        \
+    while (OB_FAIL(res_ret)) {                                                                    \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                         \
+        ret = OB_TIMEOUT;                                                                         \
+        break;                                                                                    \
+      }                                                                                           \
+      WRITE_SQL_BY_CONN_INNER(conn, sql_str, res_ret);                                            \
+      retry_cnt++;                                                                                \
+    }                                                                                             \
+    SERVER_LOG(INFO, "retry to execute sql", K(ret), K(sql_str), K(retry_cnt),            \
+               K(start_time), K(timeout_us), K(ObTimeUtility::fast_current_time() - start_time)); \
+  }
+
 #define READ_SQL_BY_CONN(conn, result, sql_str)                                                \
   sqlclient::ObMySQLResult *result = nullptr;                                                  \
   ObISQLClient::ReadResult read_res_##result;                                                  \
@@ -143,6 +200,21 @@ namespace unittest
     result = read_res_##result.get_result();                                                   \
     ASSERT_EQ(true, OB_NOT_NULL(result));                                                      \
   }
+
+#define READ_SQL_BY_CONN_WITH_RET(conn, result, sql_str, ret)                 \
+  sqlclient::ObMySQLResult *result = nullptr;                                 \
+  ObISQLClient::ReadResult read_res_##result;                                 \
+  {                                                                           \
+    ObSqlString sql;                                                          \
+    ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                               \
+    SERVER_LOG(INFO, "TEST READ SQL: ", K(sql));                              \
+    ret = conn->execute_read(OB_SYS_TENANT_ID, sql.ptr(), read_res_##result); \
+    result = read_res_##result.get_result();                                  \
+    if(OB_SUCC(ret)) {\
+    ASSERT_EQ(true, OB_NOT_NULL(result));                                     \
+    }\
+  }
+
 
 #define GET_RUNNGING_TRX_ID(conn, tx_id)                                                \
   {                                                                                     \
@@ -187,18 +259,71 @@ namespace unittest
   WRITE_SQL_BY_CONN(connection, "set ob_query_timeout = 3000000000");    \
   WRITE_SQL_BY_CONN(connection, "set autocommit=0");
 
-#define RETRY_UNTIL_TIMEOUT(condition, timeout_us, retry_interval_us)               \
-  {                                                                                 \
-    int64_t start_time = ObTimeUtility::fast_current_time();                        \
-    while (!(condition)) {                                                          \
-      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {           \
-        ret = OB_TIMEOUT;                                                           \
-        break;                                                                      \
-      }                                                                             \
-      SERVER_LOG(INFO, "retry one time until timeout", K(condition), K(start_time), \
-                 K(timeout_us));                                                    \
-      ob_usleep(retry_interval_us);                                                 \
-    }                                                                               \
+#define RETRY_UNTIL_TIMEOUT(condition, timeout_us, retry_interval_us)                         \
+  {                                                                                           \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                  \
+    while (OB_SUCC(ret) && !(condition)) {                                                    \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                     \
+        ret = OB_TIMEOUT;                                                                     \
+        break;                                                                                \
+      }                                                                                       \
+      SERVER_LOG(INFO, "retry one time until timeout", K(condition), K(start_time),           \
+                 K(timeout_us));                                                              \
+      ob_usleep(retry_interval_us);                                                           \
+    }                                                                                         \
+    SERVER_LOG(INFO, "retry to wait one condition successfully", K(condition), K(start_time), \
+               K(timeout_us), K(ObTimeUtility::fast_current_time() - start_time));            \
+  }
+
+#define RETRY_OP_UNTIL_TIMEOUT(op, condition, timeout_us, retry_interval_us)                       \
+  {                                                                                                \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                       \
+    op; \
+    while (OB_SUCC(ret) && !(condition)) {                                                         \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                          \
+        ret = OB_TIMEOUT;                                                                          \
+        break;                                                                                     \
+      }                                                                                            \
+      SERVER_LOG(INFO, "retry opertion until timeout", K(condition), K(start_time),                \
+                 K(timeout_us));                                                                   \
+      ob_usleep(retry_interval_us);                                                                \
+      op;                                                                                          \
+    }                                                                                              \
+    SERVER_LOG(INFO, "retry to opertion successfully", K(condition), K(start_time), K(timeout_us), \
+               K(ObTimeUtility::fast_current_time() - start_time));                                \
+  }
+
+#define WAIT_START_SERVICE_SUCCC(timeout_us, retry_interval_us)                                  \
+  {                                                                                              \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                     \
+    bool svr_started = false;                                                                    \
+    ASSERT_EQ(OB_SUCCESS, SVR_TRACER.check_in_service(replica_->get_addr(), svr_started));       \
+    while (OB_SUCC(ret) && !(svr_started)) {                                                     \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                        \
+        ret = OB_TIMEOUT;                                                                        \
+        break;                                                                                   \
+      }                                                                                          \
+      SERVER_LOG(INFO, "retry to check service started until timeout", K(svr_started),           \
+                 K(start_time), K(timeout_us));                                                  \
+      ob_usleep(retry_interval_us);                                                              \
+      ASSERT_EQ(OB_SUCCESS, SVR_TRACER.refresh());                                               \
+      ASSERT_EQ(OB_SUCCESS, SVR_TRACER.check_in_service(replica_->get_addr(), svr_started));     \
+    }                                                                                            \
+    SERVER_LOG(INFO, "start service successfully", K(svr_started), K(start_time), K(timeout_us), \
+               K(ObTimeUtility::fast_current_time() - start_time));                              \
+  }
+
+#define MINOR_FREEZE_LS(ls)                                                             \
+  {                                                                                     \
+    TRANS_LOG(INFO, "minor freeze ls begin");                                           \
+    share::ObTenantSwitchGuard tenant_guard;                                            \
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(ls->get_tenant_id()));                 \
+    oceanbase::storage::checkpoint::ObCheckpointExecutor *checkpoint_executor =         \
+        ls->get_checkpoint_executor();                                                  \
+    ASSERT_NE(nullptr, checkpoint_executor);                                            \
+    ASSERT_EQ(OB_SUCCESS,                                                               \
+              checkpoint_executor->advance_checkpoint_by_flush(share::SCN::max_scn())); \
+    TRANS_LOG(INFO, "minor freeze ls end");                                             \
   }
 
 template <typename T>

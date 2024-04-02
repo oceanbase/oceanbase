@@ -47,6 +47,7 @@ public:
 private:
   static const int32_t PATH_BUFSIZE = 512;
   bool is_inited_;
+  bool is_config_cgroup_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char tname_[16];
   char wait_event_[64];
@@ -54,6 +55,7 @@ private:
   char locks_addr_[256];
   char trace_id_buf_[40];
   char cgroup_path_buf_[PATH_BUFSIZE];
+  int read_real_cgroup_path();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualThread);

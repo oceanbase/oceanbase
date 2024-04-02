@@ -49,10 +49,12 @@ int ObXmlElementBinHeader::serialize(ObStringBuffer& buffer)
 
     *reinterpret_cast<uint8_t*>(data + pos) = flags_;
     pos += sizeof(uint8_t);
-    buffer.set_length(pos);
+    if (OB_FAIL(buffer.set_length(pos))) {
+      LOG_WARN("failed to set length.", K(ret), K(pos));
+    }
 
     uint32_t left = header_len - sizeof(uint8_t);
-    if (is_prefix_) {
+    if (OB_SUCC(ret) && is_prefix_) {
       if (OB_FAIL(serialization::encode_vi64(data, pos + left, pos, prefix_len_))) {
         LOG_WARN("failed to serialize for str xml obj", K(ret), K(prefix_len_size_));
       } else if (OB_FAIL(buffer.set_length(pos))) {
@@ -61,7 +63,9 @@ int ObXmlElementBinHeader::serialize(ObStringBuffer& buffer)
         LOG_WARN("failed to append string obj value", K(ret));
       } else {
         pos += prefix_len_;
-        buffer.set_length(pos);
+        if (OB_FAIL(buffer.set_length(pos))) {
+          LOG_WARN("failed to set length.", K(ret), K(pos));
+        }
       }
     }
   }
@@ -138,7 +142,9 @@ int ObXmlAttrBinHeader::serialize(ObStringBuffer* buffer)
         LOG_WARN("failed to append string obj value", K(ret));
       }
     } else {
-      buffer->set_length(pos);
+      if (OB_FAIL(buffer->set_length(pos))) {
+        LOG_WARN("failed to set length.", K(ret), K(pos));
+      }
     }
   }
 
@@ -408,8 +414,8 @@ int ObXmlTextSerializer::serialize()
     LOG_WARN("failed to reserver serialize size for str obj", K(ret), K(ser_len));
   } else if (OB_FAIL(ObMulModeVar::set_var(type_, ObMulModeBinLenSize::MBL_UINT8, buffer_->ptr() + buffer_->length()))) {
     LOG_WARN("failed to set var", K(ret), K(type_));
-  } else {
-    buffer_->set_length(buffer_->length() + header_len);
+  } else if (OB_FAIL(buffer_->set_length(buffer_->length() + header_len))) {
+    LOG_WARN("failed to set length.", K(ret), K(buffer_->length()), K(header_len));
   }
 
   int64_t pos = buffer_->length();
@@ -542,21 +548,28 @@ ObXmlElementSerializer::ObXmlElementSerializer(ObIMulModeBase* root, ObStringBuf
   key_start_ = (value_entry_size_ + sizeof(uint8_t)) * size() + value_entry_start_;
 }
 
-void ObXmlElementSerializer::set_index_entry(int64_t origin_index, int64_t sort_index)
+int ObXmlElementSerializer::set_index_entry(int64_t origin_index, int64_t sort_index)
 {
+  INIT_SUCC(ret);
   int64_t offset = index_start_ + origin_index * header_.get_count_var_size();
   char* write_buf = header_.buffer()->ptr() + offset;
-  ObMulModeVar::set_var(sort_index, header_.get_count_var_size_type(), write_buf);
+  return ObMulModeVar::set_var(sort_index, header_.get_count_var_size_type(), write_buf);
 }
 
-void ObXmlElementSerializer::set_key_entry(int64_t entry_idx,  int64_t key_offset, int64_t key_len)
+int ObXmlElementSerializer::set_key_entry(int64_t entry_idx,  int64_t key_offset, int64_t key_len)
 {
+  INIT_SUCC(ret);
   int64_t offset = key_entry_start_ + entry_idx * (header_.get_entry_var_size() * 2);
   char* write_buf = header_.buffer()->ptr() + offset;
-  ObMulModeVar::set_var(key_offset, header_.get_entry_var_size_type(), write_buf);
-
-  write_buf += header_.get_entry_var_size();
-  ObMulModeVar::set_var(key_len, header_.get_entry_var_size_type(), write_buf);
+  if (OB_FAIL(ObMulModeVar::set_var(key_offset, header_.get_entry_var_size_type(), write_buf))) {
+    LOG_WARN("failed to set var.", K(ret), K(key_offset));
+  } else {
+    write_buf += header_.get_entry_var_size();
+    if (OB_FAIL(ObMulModeVar::set_var(key_len, header_.get_entry_var_size_type(), write_buf))) {
+      LOG_WARN("failed to set var.", K(ret), K(key_len));
+    }
+  }
+  return ret;
 }
 
 int ObXmlElementSerializer::reserve_meta()
@@ -568,18 +581,19 @@ int ObXmlElementSerializer::reserve_meta()
   uint32_t reserve_size = key_start_ - index_start_;
   if (OB_FAIL(buffer.reserve(reserve_size))) {
     LOG_WARN("failed to reserve buffer.", K(ret), K(reserve_size), K(header_.start()));
-  } else {
-    buffer.set_length(pos + reserve_size);
+  } else if (OB_FAIL(buffer.set_length(pos + reserve_size))) {
+    LOG_WARN("failed to set length.", K(ret), K(pos + reserve_size));
   }
   return ret;
 }
 
-void ObXmlElementSerializer::set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset)
+int ObXmlElementSerializer::set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset)
 {
+  INIT_SUCC(ret);
   int64_t offset = value_entry_start_ + entry_idx * (header_.get_entry_var_size() + sizeof(uint8_t));
   char* write_buf = header_.buffer()->ptr() + offset;
   *reinterpret_cast<uint8_t*>(write_buf) = type;
-  ObMulModeVar::set_var(value_offset, header_.get_entry_var_size_type(), write_buf + sizeof(uint8_t));
+  return ObMulModeVar::set_var(value_offset, header_.get_entry_var_size_type(), write_buf + sizeof(uint8_t));
 }
 
 int ObXmlElementSerializer::serialize_child_key(const ObString& key, int64_t idx)
@@ -590,9 +604,8 @@ int ObXmlElementSerializer::serialize_child_key(const ObString& key, int64_t idx
 
   if (OB_FAIL(buffer.append(key.ptr(), key.length()))) {
     LOG_WARN("failed to append key string.", K(ret), K(buffer.length()), K(key.length()));
-  } else {
-    // idx fill later
-    set_key_entry(idx, key_offset, key.length());
+  } else if (OB_FAIL(set_key_entry(idx, key_offset, key.length()))) {    // idx fill later
+    LOG_WARN("failed to set key entry", K(key_offset), K(key.length()));
   }
 
   return ret;
@@ -609,32 +622,37 @@ int ObXmlElementSerializer::serialize_key(int arr_idx, int64_t depth)
     ObStringBuffer& buffer = *header_.buffer();
     for (; OB_SUCC(ret) && iter < end ; ++iter, g_idx++) {
       ObXmlNode* cur = static_cast<ObXmlNode*>(*iter);
-      ObMulModeNodeType cur_type = cur->type();
-      switch (cur_type) {
-        case M_UNPARSED:
-        case M_UNPARESED_DOC:
-        case M_DOCUMENT:
-        case M_ELEMENT:
-        case M_CONTENT:
-        case M_ATTRIBUTE:
-        case M_NAMESPACE:
-        case M_INSTRUCT:
-        case M_TEXT:
-        case M_COMMENT:
-        case M_CDATA: {
-          if (OB_FAIL(serialize_child_key(cur->get_key(), g_idx))) {
-            LOG_WARN("failed to serialize key string.", K(ret), K(cur->get_key().length()), K(buffer.length()));
-          } else {
-            set_index_entry( cur->get_index() + child_arr_[arr_idx].g_start_, g_idx);
+      if (OB_ISNULL(cur)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get cur null", K(ret));
+      } else {
+        ObMulModeNodeType cur_type = cur->type();
+        switch (cur_type) {
+          case M_UNPARSED:
+          case M_UNPARESED_DOC:
+          case M_DOCUMENT:
+          case M_ELEMENT:
+          case M_CONTENT:
+          case M_ATTRIBUTE:
+          case M_NAMESPACE:
+          case M_INSTRUCT:
+          case M_TEXT:
+          case M_COMMENT:
+          case M_CDATA: {
+            if (OB_FAIL(serialize_child_key(cur->get_key(), g_idx))) {
+              LOG_WARN("failed to serialize key string.", K(ret), K(cur->get_key().length()), K(buffer.length()));
+            } else if (OB_FAIL(set_index_entry( cur->get_index() + child_arr_[arr_idx].g_start_, g_idx))) {
+              LOG_WARN("failed to set index entry.", K(ret));
+            }
+            break;
           }
-          break;
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to serialize key, current node type not correct.", K(ret), K(cur_type));
+            break;
+          }
         }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to serialize key, current node type not correct.", K(ret), K(cur_type));
-          break;
-        }
-      };
+      }
     }
   }
 
@@ -667,8 +685,8 @@ int ObXmlElementSerializer::serialize_value(int arr_idx, int64_t depth)
           ObXmlElementSerializer ele_serializer(cur, header_.buffer());
           if (OB_FAIL(ele_serializer.serialize(depth + 1))) {
             LOG_WARN("failed to serialize element child", K(ret), K(buffer.length()));
-          } else {
-            set_value_entry(g_idx, cur_type, value_start);
+          } else if (OB_FAIL(set_value_entry(g_idx, cur_type, value_start))) {
+            LOG_WARN("failed to set value entry.", K(ret), K(value_start));
           }
           break;
         }
@@ -678,8 +696,8 @@ int ObXmlElementSerializer::serialize_value(int arr_idx, int64_t depth)
           ObXmlAttributeSerializer attr_serializer(cur, buffer);
           if (OB_FAIL(attr_serializer.serialize())) {
             LOG_WARN("failed to serialize attribute.", K(ret), K(cur_type), K(buffer.length()));
-          } else {
-            set_value_entry(g_idx, cur_type, value_start);
+          } else if (OB_FAIL(set_value_entry(g_idx, cur_type, value_start))) {
+            LOG_WARN("failed to set value entry.", K(ret), K(value_start));
           }
           break;
         }
@@ -689,8 +707,8 @@ int ObXmlElementSerializer::serialize_value(int arr_idx, int64_t depth)
           ObXmlTextSerializer serializer(cur, buffer);
           if (OB_FAIL(serializer.serialize())) {
             LOG_WARN("failed to serialize text.", K(ret), K(cur_type), K(buffer.length()));
-          } else {
-            set_value_entry(g_idx, cur_type, value_start);
+          } else if (OB_FAIL(set_value_entry(g_idx, cur_type, value_start))) {
+            LOG_WARN("failed to set value entry.", K(ret), K(value_start));
           }
           break;
         }
@@ -944,11 +962,12 @@ int ObXmlElementSerializer::serialize(int64_t depth)
       if (serialize_try_time_ >= MAX_RETRY_TIME) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to serialize as meta info not match.", K(ret), K(total_size), K(children_num), K(header_));
+      } else if (OB_FAIL(buffer.set_length(start))) {
+        LOG_WARN("failed to set length.", K(ret), K(start));
       } else {
         int64_t delta = total_size - header_.get_obj_size();
         ele->set_delta_serialize_size(delta);
         serialize_try_time_++;
-        buffer.set_length(start);
         new (this) ObXmlElementSerializer(root_, &buffer);
         if (OB_FAIL(serialize(depth))) {
           LOG_WARN("failed to serialize.", K(ret), K(buffer.length()));
@@ -3139,8 +3158,8 @@ int ObXmlBinMerge::reserve_meta(ObMulBinHeaderSerializer& header)
     uint32_t reserve_size = merge_meta_.key_start_ - merge_meta_.index_start_;
     if (OB_FAIL(merge_meta_.header_->buffer_->reserve(reserve_size))) {
       LOG_WARN("failed to reserve buffer.", K(ret), K(reserve_size));
-    } else {
-      header.buffer_->set_length(pos + reserve_size);
+    } else if (OB_FAIL(header.buffer_->set_length(pos + reserve_size))) {
+      LOG_WARN("failed to set length.", K(ret), K(pos + reserve_size));
     }
   }
   return ret;

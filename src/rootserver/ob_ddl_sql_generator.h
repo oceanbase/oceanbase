@@ -91,9 +91,9 @@ public:
                                     const bool is_grant,
                                     common::ObSqlString &sql_string);
   static int gen_routine_priv_sql(const obrpc::ObAccountArg &account,
-                                          const ObNeedPriv &need_priv,
-                                          const bool is_grant,
-                                          ObSqlString &sql_string);
+                                  const share::schema::ObNeedPriv &need_priv,
+                                  const bool is_grant,
+                                  common::ObSqlString &sql_string);
   static int gen_audit_stmt_sql(const common::ObString &username,
                                 const share::schema::ObSAuditModifyType modify_type,
                                 const share::schema::ObSAuditSchema &audit_schema,
@@ -107,6 +107,10 @@ public:
                                   const share::schema::ObSAuditOperByType by_type,
                                   const share::schema::ObSAuditOperWhenType when_type,
                                   common::ObSqlString &sql_string);
+  static int gen_column_priv_sql(const obrpc::ObAccountArg &account,
+                                 const share::schema::ObNeedPriv &need_priv,
+                                 const bool is_grant,
+                                 ObSqlString &sql_string);
   
 private:
   static int get_priv_name(const int64_t priv, const char *&name);

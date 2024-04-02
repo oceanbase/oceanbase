@@ -102,14 +102,14 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_where_clause(parse_tree.children_[WHERE]))) {
+      if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
+        LOG_WARN("resolve hints failed", K(ret));
+      } else if (OB_FAIL(resolve_where_clause(parse_tree.children_[WHERE]))) {
         LOG_WARN("resolve delete where clause failed", K(ret));
       } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
         LOG_WARN("resolve delete order clause failed", K(ret));
       } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT]))) {
         LOG_WARN("resolve delete limit clause failed", K(ret));
-      } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
-        LOG_WARN("resolve hints failed", K(ret));
       } else if (OB_FAIL(resolve_returning(parse_tree.children_[RETURNING]))) {
         LOG_WARN("resolve returning failed", K(ret));
       } else if (is_oracle_mode() && NULL != parse_tree.children_[ERRORLOGGING] &&
@@ -263,10 +263,7 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
       //single table delete, delete list is same with from list
       CK(delete_stmt->get_table_size() == 1);
       OZ(delete_tables_.push_back(delete_stmt->get_table_item(0)));
-      if (OB_SUCC(ret) && delete_stmt->get_table_item(0)->is_view_table_ && is_oracle_mode()) {
-        OZ(has_need_fired_trigger_on_view(delete_stmt->get_table_item(0), has_tg));
-      }
-      OX(delete_stmt->set_has_instead_of_trigger(has_tg));
+      OZ (check_need_fired_trigger(table_item));
     } else {
       //multi table delete
       is_multi_table_delete = true;
@@ -289,6 +286,8 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
           ret = OB_ERR_NONUNIQ_TABLE;
           LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item->table_name_.length(),
                       table_item->table_name_.ptr());
+        } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+          LOG_WARN("failed to check need fired trigger", K(ret));
         } else if (OB_FAIL(delete_tables_.push_back(table_item))) {
           LOG_WARN("failed to push back table item", K(ret));
         }

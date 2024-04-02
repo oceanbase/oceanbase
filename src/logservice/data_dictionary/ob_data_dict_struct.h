@@ -115,7 +115,7 @@ private:
   ObDictMetaType meta_type_;
   ObDictMetaStorageType storage_type_;
   int64_t dict_serialized_length_;
-};
+}; // end of ObDictMetaHeader
 
 class ObDictTenantMeta
 {
@@ -189,7 +189,7 @@ private:
   int64_t drop_tenant_time_;
   bool in_recyclebin_;
   share::ObLSArray ls_arr_;
-};
+}; // end of ObDictTenantMeta
 
 class ObDictDatabaseMeta
 {
@@ -250,7 +250,7 @@ private:
   common::ObCollationType collation_type_;//default:utf8mb4_general_ci
   common::ObNameCaseMode name_case_mode_;
   bool in_recyclebin_;
-};
+}; // end of ObDictDatabaseMeta
 
 class ObDictColumnMeta
 {
@@ -360,7 +360,7 @@ private:
   common::ObSEArray<uint64_t, 2> column_ref_ids_;
   uint64_t udt_set_id_;
   uint64_t sub_type_;
-};
+}; // end of ObDictColumnMeta
 
 class ObDictTableMeta
 {
@@ -487,6 +487,10 @@ private:
   int build_column_info_(const ObDictTableMeta &src_table_meta);
   int build_column_id_arr_(const share::schema::ObTableSchema &table_schema);
 
+  void free_index_info_();
+  void free_rowkey_info_();
+  void free_column_info_();
+
 private:
   ObIAllocator *allocator_;
   // Won't serialize tenant_id in dict.
@@ -526,7 +530,7 @@ private:
   common::ObIndexColumn *index_cols_;
   uint64_t data_table_id_;
   uint64_t association_table_id_;
-};
+}; // end of ObDictTableMeta
 
 } // namespace datadict
 } // namespace oceanbase

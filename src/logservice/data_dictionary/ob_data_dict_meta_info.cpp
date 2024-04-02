@@ -43,19 +43,23 @@ ObDataDictMetaInfoItem::~ObDataDictMetaInfoItem()
 
 void ObDataDictMetaInfoItem::reset()
 {
+  version_ = 0;
   snapshot_scn_ = share::OB_INVALID_SCN_VAL;
   start_lsn_ = palf::LOG_INVALID_LSN_VAL;
   end_lsn_ = palf::LOG_INVALID_LSN_VAL;
+  end_scn_ = share::OB_INVALID_SCN_VAL;
 }
 
 void ObDataDictMetaInfoItem::reset(
     const uint64_t snapshot_scn,
     const uint64_t start_lsn,
-    const uint64_t end_lsn)
+    const uint64_t end_lsn,
+    const int64_t end_scn)
 {
   snapshot_scn_ = snapshot_scn;
   start_lsn_ = start_lsn;
   end_lsn_ = end_lsn;
+  end_scn_ = end_scn;
 }
 
 DEFINE_SERIALIZE(ObDataDictMetaInfoItem)
@@ -65,7 +69,8 @@ DEFINE_SERIALIZE(ObDataDictMetaInfoItem)
   LST_DO_CODE(OB_UNIS_ENCODE,
       snapshot_scn_,
       start_lsn_,
-      end_lsn_);
+      end_lsn_,
+      end_scn_);
 
   return ret;
 }
@@ -74,10 +79,26 @@ DEFINE_DESERIALIZE(ObDataDictMetaInfoItem)
 {
   int ret = OB_SUCCESS;
 
-  LST_DO_CODE(OB_UNIS_DECODE,
-      snapshot_scn_,
-      start_lsn_,
-      end_lsn_);
+  if (OB_UNLIKELY(version_ < 1)) {
+    ret = OB_VERSION_NOT_MATCH;
+    DDLOG(WARN, "expect valid version while deserializing DictMetaInfo", KR(ret), K_(version));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
+        snapshot_scn_,
+        start_lsn_,
+        end_lsn_);
+
+    if (OB_FAIL(ret)) {
+    } else {
+      // deserialize field added in version = 2
+      if (version_ > 1) {
+        if (OB_FAIL(common::serialization::decode(buf, data_len, pos, end_scn_))) {
+          DDLOG(WARN, "deserialize end_scn field failed", KR(ret), K(data_len), K(pos), K(version_));
+        }
+      }
+      // add deserialize logic here for newer version.
+    }
+  }
 
   return ret;
 }
@@ -89,7 +110,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataDictMetaInfoItem)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       snapshot_scn_,
       start_lsn_,
-      end_lsn_);
+      end_lsn_,
+      end_scn_);
 
   return len;
 }
@@ -332,6 +354,8 @@ DEFINE_DESERIALIZE(ObDataDictMetaInfo)
     }
     for (int32_t i = 0; OB_SUCC(ret) && i < item_cnt && pos < data_len; i++) {
       ObDataDictMetaInfoItem item;
+      item.set_version(header_.get_meta_version());
+
       if (OB_FAIL(item.deserialize(buf, data_len, pos))) {
         DDLOG(WARN, "datadict metainfo item deserialize failed", K(ret),
             K(buf), K(data_len), K(pos));
@@ -346,7 +370,7 @@ DEFINE_DESERIALIZE(ObDataDictMetaInfo)
 /////////////////////////////////// MetaInfoQueryHelper ///////////////////////////////////
 
 const char *MetaInfoQueryHelper::QUERY_META_INFO_SQL_STR =
-    "SELECT snapshot_scn, start_lsn, end_lsn FROM %s ORDER BY snapshot_scn DESC;";
+    "SELECT snapshot_scn, ora_rowscn as end_scn, start_lsn, end_lsn FROM %s ORDER BY snapshot_scn DESC;";
 const char *MetaInfoQueryHelper::DATA_DICT_META_TABLE_NAME =
     share::OB_ALL_DATA_DICTIONARY_IN_LOG_TNAME;
 
@@ -443,8 +467,8 @@ int MetaInfoQueryHelper::get_data_dict_meta_info_(const share::SCN &base_scn, Da
 
   SMART_VAR(ObISQLClient::ReadResult, result) {
     if (OB_FAIL(sql.assign_fmt(QUERY_META_INFO_SQL_STR, DATA_DICT_META_TABLE_NAME))) {
-      DDLOG(WARN, "assign format to sqlstring failed", K(ret), K(QUERY_META_INFO_SQL_STR),
-          K(DATA_DICT_META_TABLE_NAME));
+      DDLOG(WARN, "assign format to sqlstring failed", KR(ret), KCSTRING(QUERY_META_INFO_SQL_STR),
+          KCSTRING(DATA_DICT_META_TABLE_NAME));
     } else if (OB_FAIL(sql_proxy_.read(result, tenant_id_, sql.ptr()))) {
       DDLOG(WARN, "sql proxy failed to read result when querying datadict metainfo", K(ret),
           K(tenant_id_), "sql", sql.ptr());
@@ -484,10 +508,12 @@ int MetaInfoQueryHelper::parse_record_from_result_(
       // | Field        | Type                |
       // +--------------+---------------------+
       // | snapshot_scn | bigint(20) unsigned |
+      // | end_scn      | bigint(20) unsigned |
       // | start_lsn    | bigint(20) unsigned |
       // | end_lsn      | bigint(20) unsigned |
       // +--------------+---------------------+
       EXTRACT_UINT_FIELD_MYSQL(result, "snapshot_scn", item.snapshot_scn_, uint64_t);
+      EXTRACT_INT_FIELD_MYSQL(result, "end_scn", item.end_scn_, int64_t);
       EXTRACT_UINT_FIELD_MYSQL(result, "start_lsn", item.start_lsn_, uint64_t);
       EXTRACT_UINT_FIELD_MYSQL(result, "end_lsn", item.end_lsn_, uint64_t);
       // only use record generated after base_scn.

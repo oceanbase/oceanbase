@@ -28,7 +28,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
 #include "share/ob_index_builder_util.h"
 #include "share/object/ob_obj_cast.h"
@@ -712,11 +712,10 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       ObString database_name;
       uint64_t database_id = OB_INVALID_ID;
       const ObDatabaseSchema *database_schema = NULL;
-      int tmp_ret = 0;
-      if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
-        SQL_RESV_LOG(WARN, "fail to get database_id.", K(tmp_ret), K(database_name_), K(tenant_id));
-      } else if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
-        LOG_WARN("failed to get db schema", K(tmp_ret), K(database_id));
+      if (OB_FAIL(schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
+        SQL_RESV_LOG(WARN, "fail to get database_id.", K(ret), K(database_name_), K(tenant_id));
+      } else if (OB_FAIL(schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
+        LOG_WARN("failed to get db schema", K(ret), K(database_id));
       } else if (OB_ISNULL(database_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error. db schema is null", K(ret), K(database_schema));
@@ -2746,6 +2745,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             if (OB_ISNULL(ddl_arg)) {
             } else if (OB_FAIL(schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
               LOG_WARN("failed to get udt info", K(ret));
+            } else if (OB_ISNULL(udt_info)) {
+              ret = OB_ERR_OBJECT_NOT_EXIST;
+              LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
             } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id,
                                                                    UDT_SCHEMA,
                                                                    udt_info->get_schema_version(),
@@ -6083,34 +6085,38 @@ int ObDDLResolver::add_udt_default_dependency(ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
-  } else if (OB_ISNULL(schema_checker)) {
+  } else if (OB_ISNULL(schema_checker) || OB_ISNULL(schema_checker->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("need schema checker to validate udt dependency", K(ret));
   } else {
     bool need_dependency = false;
     ObSchemaObjVersion obj_version;
+    ObArray<ObSchemaObjVersion> obj_versions;
 
     if (expr->get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT) {
       ObObjectConstructRawExpr *obj_cons_expr = static_cast<ObObjectConstructRawExpr *>(expr);
       // refer to ObDMLResolver::resolve_external_name
       need_dependency = obj_cons_expr->need_add_dependency();
       if (need_dependency) {
-        ret = obj_cons_expr->get_schema_object_version(obj_version);
+        OZ(obj_cons_expr->get_schema_object_version(obj_version));
+        OZ(obj_versions.push_back(obj_version));
       }
     } else if (expr->get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT) {
       ObCollectionConstructRawExpr *obj_coll_expr = static_cast<ObCollectionConstructRawExpr *>(expr);
       need_dependency = obj_coll_expr->need_add_dependency();
       if (need_dependency) {
-        ret = obj_coll_expr->get_schema_object_version(obj_version);
+        OZ(obj_coll_expr->get_schema_object_version(obj_version));
+        OZ(obj_versions.push_back(obj_version));
       }
     } else if (expr->is_udf_expr()) {
       ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
       need_dependency = udf_expr->need_add_dependency();
       if (need_dependency) {
-        ret = udf_expr->get_schema_object_version(obj_version);
+        OZ(udf_expr->get_schema_object_version(*schema_checker->get_schema_guard(), obj_versions));
       }
     }
-    if (need_dependency && OB_SUCC(ret)) {
+    for (int64_t i = 0; need_dependency && OB_SUCC(ret) && i < obj_versions.count(); ++i) {
+      obj_version = obj_versions.at(i);
       uint64_t object_id = obj_version.get_object_id();
       uint64_t tenant_id = pl::get_tenant_id_by_object_id(object_id);
       ObSchemaType schema_type = obj_version.get_schema_type();
@@ -6174,7 +6180,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
   } else if (!(column.is_extend()) && !(lib::is_oracle_mode() && column.is_geometry())) {
     // do nothing
   } else if (column.is_identity_column() || column.is_generated_column()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE;
     LOG_WARN("udt columns cannot be generated column or identity column",
              K(ret), K(column), K(default_value));
   } else if (default_value.is_null()) {
@@ -9392,7 +9398,8 @@ int ObDDLResolver::resolve_partition_node(ObPartitionedStmt *stmt,
       partnum = table_schema.get_all_part_num();
     }
     if (partnum > (lib::is_oracle_mode()
-        ? common::OB_MAX_PARTITION_NUM_ORACLE : common::OB_MAX_PARTITION_NUM_MYSQL)) {
+        ? common::OB_MAX_PARTITION_NUM_ORACLE :
+          ObResolverUtils::get_mysql_max_partition_num(table_schema.get_tenant_id()))) {
       ret = common::OB_TOO_MANY_PARTITIONS_ERROR;
     }
   }
@@ -9707,7 +9714,8 @@ int ObDDLResolver::resolve_partition_hash_or_key(
       LOG_USER_ERROR(OB_NO_PARTS_ERROR);
     } else if (!common::is_virtual_table(table_id_) &&
                partition_num > (lib::is_oracle_mode()
-                  ? common::OB_MAX_PARTITION_NUM_ORACLE : common::OB_MAX_PARTITION_NUM_MYSQL)) {
+                  ? common::OB_MAX_PARTITION_NUM_ORACLE
+                  : sql::ObResolverUtils::get_mysql_max_partition_num(table_schema.get_tenant_id()))) {
       ret = common::OB_TOO_MANY_PARTITIONS_ERROR;
     } else if (is_subpartition) {
       if (NULL != node->children_[HASH_PARTITION_LIST_NODE]) {
@@ -11443,20 +11451,28 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
     LOG_WARN("not supported statement for TTL expression", K(ret), K(stmt_->get_stmt_type()));
   }
 
-  if (OB_SUCC(ret)) {
-    ObString ttl_definition(node->str_len_, node->str_value_);
-    ObSEArray<ObString, 8> ttl_columns;
-    if (OB_FAIL(get_ttl_columns(ttl_definition, ttl_columns))) {
-      LOG_WARN("fail to get ttl columns", K(ttl_definition));
-    }
-    for (int i = 0; i < OB_SUCC(ret) && ttl_columns.count(); i++) {
-      ObString column_name = ttl_columns.at(i);
-      if (NULL == (column_schema = tbl_schema->get_column_schema(column_name))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("ttl column is invalid", K(ret));
+  for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    if (OB_ISNULL(node->children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl expr is null", K(ret), K(i));
+    } else if (OB_ISNULL(node->children_[i]) || T_TTL_EXPR != node->children_[i]->type_ ||
+                node->children_[i]->num_child_ != 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child node of ttl definition is wrong", KR(ret), K(node->children_[i]));
+    } else if (OB_ISNULL(node->children_[i]->children_[0]) || T_COLUMN_REF != node->children_[i]->children_[0]->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child node of ttl expr is wrong", KR(ret), K(node->children_[i]->children_[0]));
+    } else {
+      ObString column_name(node->children_[i]->children_[0]->str_len_, node->children_[i]->children_[0]->str_value_);
+      if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(column_name))) {
+        ret = OB_TTL_COLUMN_NOT_EXIST;
+        LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, column_name.length(), column_name.ptr());
+        LOG_WARN("ttl column is not exists", K(ret), K(column_name));
       } else if ((!ob_is_datetime_tc(column_schema->get_data_type()))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp", K(ret), K(column_schema->get_data_type()));
+        ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, column_name.length(), column_name.ptr());
+        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp",
+                  K(ret), K(column_name), K(column_schema->get_data_type()));
       }
     }
   }

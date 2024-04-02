@@ -28,6 +28,7 @@ using namespace table;
 ObDirectLoadFastHeapTableContext::ObDirectLoadFastHeapTableContext()
   : allocator_("TLD_FHTableCtx"), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadFastHeapTableContext::~ObDirectLoadFastHeapTableContext()
@@ -56,7 +57,6 @@ int ObDirectLoadFastHeapTableContext::init(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(create_all_tablet_contexts(tenant_id, ls_partition_ids, target_ls_partition_ids, reserved_parallel))) {
       LOG_WARN("fail to create all tablet contexts", KR(ret));
     } else {

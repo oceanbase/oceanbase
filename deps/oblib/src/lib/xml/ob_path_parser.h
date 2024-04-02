@@ -165,6 +165,7 @@ public:
   static bool is_end_of_xpathkeyword(const char ch);
   static bool is_xpath_ident_terminator(const char ch);
   static bool check_is_legal_tagname(const char* name, int length);
+  static bool is_xpath_transform_terminator(const char ch);
   static bool is_left_brace(const char ch);
   static bool is_operator(const char ch);
   static bool is_nodetest_start_char(const char ch);

@@ -24,6 +24,7 @@ ob_set_subtarget(ob_rootserver backup
 
 ob_set_subtarget(ob_rootserver common
   ob_bootstrap.cpp
+  ob_admin_drtask_util.cpp
   ob_disaster_recovery_task_table_updater.cpp
   ob_balance_group_ls_stat_operator.cpp
   ob_disaster_recovery_info.cpp
@@ -82,6 +83,7 @@ ob_set_subtarget(ob_rootserver common
   ob_common_ls_service.cpp
   ob_ls_service_helper.cpp
   ob_tenant_transfer_service.cpp
+  ob_transfer_partition_task.cpp
   ob_tenant_balance_service.cpp
   ob_ls_balance_helper.cpp
   ob_balance_task_execute_service.cpp
@@ -95,6 +97,7 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
+  ob_transfer_partition_command.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -109,7 +112,6 @@ ob_set_subtarget(ob_rootserver balance
 ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_column_redefinition_task.cpp
   ddl_task/ob_constraint_task.cpp
-
   ddl_task/ob_ddl_retry_task.cpp
   ddl_task/ob_ddl_scheduler.cpp
   ddl_task/ob_ddl_single_replica_executor.cpp
@@ -120,6 +122,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
+  ddl_task/ob_ddl_tablet_scheduler.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl
@@ -128,6 +131,9 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_create_view_helper.cpp
   parallel_ddl/ob_index_name_checker.cpp
   parallel_ddl/ob_tablet_balance_allocator.cpp
+  parallel_ddl/ob_set_comment_helper.cpp
+  parallel_ddl/ob_create_index_helper.cpp
+  parallel_ddl/ob_update_index_status_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze

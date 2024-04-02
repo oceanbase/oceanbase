@@ -42,7 +42,7 @@ int ObDirectLoadIOCallback::inner_process(const char *data_buffer, const int64_t
   if (OB_UNLIKELY(size <= 0 || data_buffer == nullptr)) {
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid data buffer size", K(ret), K(size), KP(data_buffer));
-  } else if (OB_ISNULL(data_buf_ = static_cast<char *>(ob_malloc(size, "LoadIO")))) {
+  } else if (OB_ISNULL(data_buf_ = static_cast<char *>(ob_malloc(size, ObMemAttr(tenant_id_, "LoadIO"))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory, ", K(ret));
   } else {

@@ -141,6 +141,8 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
           // 需要检查当前用户是否有超级权限或者set user id的权限，如果权限ok，那么host为%
           if (session_info_->has_user_super_privilege()) {
             host_name.assign_ptr("%", 1);
+          } else if (user_name == cur_user_name) {
+            host_name = cur_host_name;
           } else {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("no privilege", K(ret));
@@ -148,7 +150,9 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
         } else {
           host_name.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_));
           // 显式指定host为%，需要当前用户有超级权限或者set user id的权限
-          if (0 == host_name.case_compare("%") && !session_info_->has_user_super_privilege()) {
+          if (user_name == cur_user_name && host_name == cur_host_name) {
+            // do nothing
+          } else if (0 == host_name.case_compare("%") && !session_info_->has_user_super_privilege()) {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("no privilege", K(ret));
           }
@@ -160,7 +164,6 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
                                                                          user_name,
                                                                          host_name,
                                                                          user_info))) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get_user_info", K(ret));
           } else if (OB_ISNULL(user_info)) {
             LOG_USER_WARN(OB_ERR_USER_NOT_EXIST);
@@ -234,12 +237,14 @@ int ObCreateRoutineResolver::collect_ref_obj_info(int64_t ref_obj_id, int64_t re
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(stmt_));
-  obrpc::ObCreateRoutineArg &crt_routine_arg =
-      static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
-  ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
-  OV (ObObjectType::INVALID != dep_obj_type);
-  OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
-                                         ref_obj_id, ref_timestamp, dependent_type));
+  if (OB_SUCC(ret)) {
+    obrpc::ObCreateRoutineArg &crt_routine_arg =
+        static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
+    ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
+    OV (ObObjectType::INVALID != dep_obj_type);
+    OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
+                                          ref_obj_id, ref_timestamp, dependent_type));
+  }
   return ret;
 }
 
@@ -886,24 +891,47 @@ int ObCreateRoutineResolver::resolve_aggregate_body(
   if (OB_ISNULL(udt_info) && ret != OB_ERR_NO_DB_SELECTED) { // try synonym
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
     uint64_t database_id = session_info_->get_database_id();
-    ObSEArray<uint64_t, 4> syn_id_array;
+    ObSynonymChecker synonym_checker;
+    uint64_t object_database_id = OB_INVALID_ID;
+    ObString object_name;
+    bool exist = false;
     if (!db_name.empty() // try database name synonym
         && (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))
             || OB_INVALID_ID == database_id)) {
       database_id = session_info_->get_database_id();
-      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
-        tenant_id, database_id, db_name, database_id, db_name, syn_id_array, true));
-      OZ (schema_checker_->get_udt_info(tenant_id, db_name, type_name, udt_info));
-    } else { // try type name synonym
-      OZ (schema_checker_->get_obj_info_recursively_with_synonym(
-        tenant_id, database_id, type_name, database_id, type_name, syn_id_array, true));
-      if (OB_SUCC(ret) && database_id != session_info_->get_database_id()) {
-        const share::schema::ObDatabaseSchema *database_schema = NULL;
-        OZ (schema_checker_->get_database_schema(tenant_id, database_id, database_schema));
-        CK (OB_NOT_NULL(database_schema));
-        OX (real_db_name = database_schema->get_database_name_str());
+      OZ (ObResolverUtils::resolve_synonym_object_recursively(*schema_checker_,
+                                                              synonym_checker,
+                                                              tenant_id,
+                                                              database_id,
+                                                              db_name,
+                                                              object_database_id,
+                                                              object_name,
+                                                              exist,
+                                                              true));
+      if (OB_SUCC(ret) && exist) {
+        OZ (schema_checker_->get_udt_info(tenant_id, object_name, type_name, udt_info));
       }
-      OZ (schema_checker_->get_udt_info(tenant_id, real_db_name, type_name, udt_info));
+    } else { // try type name synonym
+      OZ (ObResolverUtils::resolve_synonym_object_recursively(*schema_checker_,
+                                                              synonym_checker,
+                                                              tenant_id,
+                                                              database_id,
+                                                              type_name,
+                                                              object_database_id,
+                                                              object_name,
+                                                              exist,
+                                                              true));
+      if (OB_FAIL(ret) || !exist) {
+        // do nothing ...
+      } else {
+        if (object_database_id != session_info_->get_database_id()) {
+          const share::schema::ObDatabaseSchema *database_schema = NULL;
+          OZ (schema_checker_->get_database_schema(tenant_id, object_database_id, database_schema));
+          CK (OB_NOT_NULL(database_schema));
+          OX (real_db_name = database_schema->get_database_name_str());
+        }
+        OZ (schema_checker_->get_udt_info(tenant_id, real_db_name, object_name, udt_info));
+      }
     }
   }
 

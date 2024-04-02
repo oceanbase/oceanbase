@@ -401,9 +401,6 @@ def check_cluster_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
   if results[0][0] > 0 :
     fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-  if results[0][0] > 0 :
-    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -427,6 +424,15 @@ def check_tenant_status(query_cur):
     fail_list.append('has abnormal tenant info, should stop')
   else:
     logging.info('check tenant info success')
+
+  # check tenant lock status
+  (desc, results) = query_cur.exec_query("""select count(*) from DBA_OB_TENANTS where LOCKED = 'YES'""")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('results len not match')
+  elif 0 != results[0][0]:
+    fail_list.append('has locked tenant, should unlock')
+  else:
+    logging.info('check tenant lock status success')
 
 # 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):

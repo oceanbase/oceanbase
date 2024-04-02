@@ -13,7 +13,7 @@
 #include <iterator>
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/ob_sql_init.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"

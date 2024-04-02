@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/rewrite/ob_query_range_define.h"
 
 using oceanbase::common::ObString;
 namespace test
@@ -160,7 +161,8 @@ namespace sql
         force_no_mat_(false),
         prune_mj_(true),
         force_inner_nl_(false),
-        ignore_hint_(true) { }
+        ignore_hint_(true),
+        is_reverse_path_(false) { }
     virtual ~ValidPathInfo() {};
     void reset()
     {
@@ -173,6 +175,7 @@ namespace sql
       prune_mj_ = true;
       force_inner_nl_ = false;
       ignore_hint_ = true;
+      is_reverse_path_ = false;
     }
     TO_STRING_KV(K_(join_type),
                  K_(local_methods),
@@ -182,7 +185,8 @@ namespace sql
                  K_(force_no_mat),
                  K_(prune_mj),
                  K_(force_inner_nl),
-                 K_(ignore_hint));
+                 K_(ignore_hint),
+                 K_(is_reverse_path));
     ObJoinType join_type_;
     int64_t local_methods_;
     int64_t distributed_methods_;
@@ -192,6 +196,7 @@ namespace sql
     bool prune_mj_; // prune merge join path
     bool force_inner_nl_;
     bool ignore_hint_;
+    bool is_reverse_path_;
   };
 
   enum OptimizationMethod
@@ -586,6 +591,7 @@ struct EstimateCostInfo {
         table_partition_info_(NULL),
         index_keys_(),
         pre_query_range_(NULL),
+        pre_range_graph_(NULL),
         is_get_(false),
         order_direction_(direction),
         is_hash_index_(false),
@@ -652,7 +658,7 @@ struct EstimateCostInfo {
     static int re_estimate_cost(const EstimateCostInfo &param,
                                 ObCostTableScanInfo &est_cost_info,
                                 const SampleInfo &sample_info,
-                                const ObOptEstCost::MODEL_TYPE model_type,
+                                const ObOptimizerContext &opt_ctx,
                                 const double orign_phy_query_range_row_count,
                                 const double orign_query_range_row_count,
                                 double &card,
@@ -675,6 +681,20 @@ struct EstimateCostInfo {
       } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
       }
       return ret;
+    }
+    ObQueryRangeProvider *get_query_range_provider()
+    {
+      return pre_range_graph_ != nullptr ? static_cast<ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<ObQueryRangeProvider *>(pre_query_range_);
+    }
+    const ObQueryRangeProvider *get_query_range_provider() const
+    {
+      return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
+    }
+    inline bool is_false_range()
+    {
+      return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
     }
 
     TO_STRING_KV(K_(table_id),
@@ -709,6 +729,7 @@ struct EstimateCostInfo {
     ObTablePartitionInfo *table_partition_info_;
     common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> index_keys_; // index keys
     ObQueryRange* pre_query_range_; // pre_query_range for each access path
+    ObPreRangeGraph* pre_range_graph_; // pre_query_graph for each access path
     bool is_get_;
     ObOrderDirection order_direction_;//序的方向（升序or倒序）
     bool is_hash_index_;  // is hash index (virtual table and is index)
@@ -1174,10 +1195,12 @@ struct EstimateCostInfo {
   public:
     ValuesTablePath()
       : Path(NULL),
-        table_id_(OB_INVALID_ID) {}
+        table_id_(OB_INVALID_ID),
+        table_def_(NULL) {}
     virtual ~ValuesTablePath() { }
     int assign(const ValuesTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
+    virtual int estimate_row_count();
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
       int ret = OB_SUCCESS;
@@ -1188,6 +1211,7 @@ struct EstimateCostInfo {
     }
   public:
     uint64_t table_id_;
+    ObValuesTableDef *table_def_;
   private:
       DISALLOW_COPY_AND_ASSIGN(ValuesTablePath);
   };
@@ -1320,6 +1344,7 @@ struct NullAwareAntiJoinInfo {
       output_row_size_(-1.0),
       anti_or_semi_match_sel_(1.0),
       table_partition_info_(NULL),
+      sharding_info_(NULL),
       table_meta_info_(common::OB_INVALID_ID),
       join_info_(NULL),
       used_conflict_detectors_(),
@@ -1414,7 +1439,7 @@ struct NullAwareAntiJoinInfo {
      * @param path
      * @return
      */
-    int add_path(Path* path);
+    int add_path(ObLogPlan &plan, Path* path);
     int add_recycled_paths(Path* path);
     int compute_path_relationship(const Path &first_path,
                                   const Path &second_path,
@@ -1548,7 +1573,8 @@ struct NullAwareAntiJoinInfo {
     int create_access_paths(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             PathHelper &helper,
-                            ObIArray<AccessPath *> &access_paths);
+                            ObIArray<AccessPath *> &access_paths,
+                            ObIndexInfoCache &index_info_cache);
 
     int create_one_access_path(const uint64_t table_id,
                                const uint64_t ref_id,
@@ -1603,7 +1629,7 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
-                                        ObQueryRange* &range);
+                                        ObQueryRangeProvider* &range);
 
     int check_enable_better_inlist(int64_t table_id, bool &enable);
 
@@ -1634,7 +1660,7 @@ struct NullAwareAntiJoinInfo {
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                               const ObIArray<ObRawExpr*> &predicates,
                                               const ColumnIdInfoMap &column_schema_info,
-                                              ObQueryRange *&query_range);
+                                              ObQueryRangeProvider *&query_range);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
@@ -1658,6 +1684,9 @@ struct NullAwareAntiJoinInfo {
     int check_exprs_overlap_index(const common::ObIArray<ObRawExpr*>& quals,
                                   const common::ObIArray<ObRawExpr*>& keys,
                                   bool &match);
+    int check_exprs_overlap_gis_index(const ObIArray<ObRawExpr*>& quals,
+                                      const ObIArray<ObRawExpr*>& keys,
+                                      bool &match);
 
     /**
      * 判断连接条件是否匹配索引前缀
@@ -1708,6 +1737,7 @@ struct NullAwareAntiJoinInfo {
      * */
     int check_and_extract_query_range(const uint64_t table_id,
                                       const uint64_t index_table_id,
+                                      const IndexInfoEntry &index_info_entry,
                                       const ObIArray<ObRawExpr*> &index_keys,
                                       const ObIndexInfoCache &index_info_cache,
                                       bool &contain_always_false,
@@ -1760,6 +1790,7 @@ struct NullAwareAntiJoinInfo {
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
 
+    int estimate_size_and_width_for_fake_cte(uint64_t table_id, ObSelectLogPlan *nonrecursive_plan);
     int create_one_cte_table_path(const TableItem* table_item,
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();
@@ -1768,20 +1799,30 @@ struct NullAwareAntiJoinInfo {
     int generate_values_table_paths();
     int generate_temp_table_paths();
 
-    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
+    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths, ObIndexInfoCache &index_info_cache);
 
-    int compute_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+    int set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+                                            ObIndexInfoCache &index_info_cache,
                                             const int64_t cur_idx);
-    int get_sharding_info_from_available_access_paths(ObIArray<AccessPath *> &access_paths,
-                                                      const int64_t cur_idx,
+    int compute_sharding_info_with_part_info(ObTableLocationType location_type,
+                                            ObTablePartitionInfo* table_partition_info,
+                                            ObShardingInfo *&sharding_info);
+    int get_sharding_info_from_available_access_paths(const uint64_t table_id,
+                                                      const uint64_t ref_table_id,
+                                                      const uint64_t index_id,
+                                                      bool is_global_index,
                                                       ObShardingInfo *&sharding_info) const;
+    int get_table_partition_info_from_available_access_paths(const uint64_t table_id,
+                                                            const uint64_t ref_table_id,
+                                                            const uint64_t index_id,
+                                                            ObTablePartitionInfo *&table_part_info);
     int compute_base_table_path_plan_type(AccessPath *access_path);
     int compute_base_table_path_ordering(AccessPath *access_path);
     int compute_parallel_and_server_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
     int get_base_path_table_dop(uint64_t index_id, int64_t &parallel);
     int compute_access_path_parallel(ObIArray<AccessPath *> &access_paths,
                                      int64_t &parallel);
-    int get_random_parallel(const ObIArray<AccessPath *> &access_paths, int64_t &parallel);
+    int get_random_parallel(const int64_t parallel_degree_limit, int64_t &parallel);
     int get_parallel_from_available_access_paths(int64_t &parallel) const;
     int compute_base_table_parallel_and_server_info(const OpParallelRule op_parallel_rule,
                                                     const int64_t parallel,
@@ -2159,7 +2200,7 @@ struct NullAwareAntiJoinInfo {
   private:
     int add_access_filters(AccessPath *path,
                            const common::ObIArray<ObRawExpr*> &index_keys,
-                           const common::ObIArray<ObRawExpr*> &range_exprs,
+                           const common::ObIArray<ObRawExpr*> *range_exprs,
                            PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
@@ -2172,8 +2213,8 @@ struct NullAwareAntiJoinInfo {
                               ObCostTableScanInfo &est_cost_info,
                               bool use_skip_scan);
 
-    int compute_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
-                                         ObIArray<ObTablePartitionInfo*> &tbl_part_infos);
+    int set_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
+                                     ObIndexInfoCache &index_info_cache);
 
     int compute_table_location(const uint64_t table_id,
                                const uint64_t ref_id,
@@ -2186,15 +2227,10 @@ struct NullAwareAntiJoinInfo {
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(ObQueryRange &query_range,
+    int check_has_exec_param(const ObQueryRangeProvider &query_range,
                              bool &has_exec_param);
 
-    int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
-
-    void get_prefix_info(const ObKeyPart *key_part,
-                         int64_t &equal_prefix_count,
-                         int64_t &range_prefix_count,
-                         bool &contain_always_false);
+    int get_preliminary_prefix_info(ObQueryRangeProvider &query_range,QueryRangeInfo &range_info);
 
     // @brief  check if an index is relevant to the conditions
     int is_relevant_index(const uint64_t table_id,
@@ -2258,9 +2294,11 @@ struct NullAwareAntiJoinInfo {
                             const ObJoinType join_type,
                             const ObIArray<ObRawExpr*> &join_conditions,
                             const bool ignore_hint,
+                            const bool reverse_join_tree,
                             ValidPathInfo &path_info);
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
                                       bool both_access,
+                                      bool contain_fake_cte,
                                       ValidPathInfo &path_info);
 
     int check_depend_table(const ObJoinOrder &left_tree,
@@ -2314,8 +2352,6 @@ struct NullAwareAntiJoinInfo {
     int compute_fd_item_set_for_subquery(const uint64_t table_id,
                                          ObLogicalOperator *subplan_root);
 
-    int compute_one_row_info_for_table_scan(ObIArray<AccessPath *> &access_paths);
-
     int compute_one_row_info_for_join(const ObJoinOrder *left_tree,
                                       const ObJoinOrder *right_tree,
                                       const ObIArray<ObRawExpr*> &join_condition,
@@ -2335,7 +2371,7 @@ struct NullAwareAntiJoinInfo {
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
-                     const ObQueryRange* query_range,
+                     const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      bool &is_nl_with_extended_range,
                      bool is_link = false,
@@ -2474,12 +2510,12 @@ struct NullAwareAntiJoinInfo {
                                 ObRawExpr *escape_expr,
                                 const TableItem *table_item,
                                 ObItemType type,
-                                ObRawExpr *&new_expr,
+                                ObIArray<ObRawExpr*> &new_exprs,
                                 PathHelper &helper);
 
     int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                     const TableItem *table_item,
-                                    ObRawExpr *&new_expr,
+                                    ObIArray<ObRawExpr*> &new_exprs,
                                     PathHelper &helper);
 
     int deduce_common_gen_col_index_expr(ObRawExpr *qual,
@@ -2523,6 +2559,12 @@ struct NullAwareAntiJoinInfo {
     int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
                                                         common::ObIArray<ObRawExpr *> &new_filters);
     bool virtual_table_index_can_range_scan(uint64_t table_id);
+    int compute_table_location_for_index_info_entry(const uint64_t table_id,
+                                                    const uint64_t ref_table_id,
+                                                    IndexInfoEntry *index_info_entry);
+    int compute_sharding_info_for_index_info_entry(const uint64_t table_id,
+                                                   const uint64_t base_table_id,
+                                                   IndexInfoEntry *index_info_entry);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
@@ -2536,6 +2578,7 @@ struct NullAwareAntiJoinInfo {
     double output_row_size_;
     double anti_or_semi_match_sel_; //for anti/semi join
     ObTablePartitionInfo *table_partition_info_; // only for base table
+    ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
     JoinInfo* join_info_; //记录连接信息
     common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器

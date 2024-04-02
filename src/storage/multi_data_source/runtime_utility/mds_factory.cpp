@@ -131,12 +131,12 @@ int MdsFactory::deep_copy_buffer_ctx(const transaction::ObTransID &trans_id,
   return ret;
 }
 
-template <typename T, typename std::enable_if<std::is_same<T, MdsCtx>::value, bool>::type = true>
+template <typename T, typename std::enable_if<std::is_base_of<MdsCtx, T>::value, bool>::type = true>
 void try_set_writer(T &ctx, const transaction::ObTransID &trans_id) {
   ctx.set_writer(MdsWriter(trans_id));
 }
 
-template <typename T, typename std::enable_if<!std::is_same<T, MdsCtx>::value, bool>::type = true>
+template <typename T, typename std::enable_if<!std::is_base_of<MdsCtx, T>::value, bool>::type = true>
 void try_set_writer(T &ctx, const transaction::ObTransID &trans_id) {
   // do nothing
 }

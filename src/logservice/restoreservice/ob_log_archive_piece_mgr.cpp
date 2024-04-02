@@ -685,6 +685,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
       bret = true;
     }
   }
+  CLOG_LOG(INFO, "need_forward_round_", K(inner_piece_context_), K(lsn));
   return bret;
 }
 

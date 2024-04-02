@@ -239,31 +239,6 @@ void ObExecContext::reset_op_env()
     udf_ctx_mgr_->reset();
   }
 }
-
-int ObExecContext::get_fk_root_ctx(ObExecContext* &fk_root_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(this->get_parent_ctx())) {
-    fk_root_ctx = this;
-  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
-    fk_root_ctx = this;
-  } else if (OB_FAIL(SMART_CALL(get_parent_ctx()->get_fk_root_ctx(fk_root_ctx)))) {
-    LOG_WARN("failed to get fk root ctx", K(ret));
-  }
-  return ret;
-}
-
-bool ObExecContext::is_fk_root_ctx()
-{
-  bool ret = false;
-  if (OB_ISNULL(this->get_parent_ctx())) {
-    ret = true;
-  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
-    ret = true;
-  }
-  return ret;
-}
-
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
 {
   int ret = OB_SUCCESS;
@@ -647,6 +622,15 @@ void ObExecContext::try_reset_convert_charset_allocator()
   }
 }
 
+int64_t ObExecContext::get_convert_charset_allocator_usage()
+{
+  int64_t usage = 0;
+  if (OB_NOT_NULL(convert_allocator_)) {
+    usage = convert_allocator_->arena_hold();
+  }
+  return usage;
+}
+
 int ObExecContext::get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr)
 {
   int ret = OB_SUCCESS;
@@ -877,7 +861,7 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
-int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array)
+int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array)
 {
   int ret = OB_SUCCESS;
   var_array = NULL;

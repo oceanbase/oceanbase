@@ -230,6 +230,7 @@ public:
     }
   }
 
+  virtual void destroy();
   virtual int reuse() override;
   virtual int empty() override { return search_stack_.empty() && input_rows_.empty(); }
 
@@ -277,6 +278,7 @@ public:
   virtual ~ObBreadthFirstSearchOp() = default;
 
   virtual int reuse() override;
+  virtual void destroy();
   virtual int empty() override { return input_rows_.empty() && search_queue_.empty()
                                         && search_results_.empty(); }
 
@@ -332,6 +334,7 @@ public:
   int sort_result_output_nodes(int64_t rows_cnt);
   int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int init_mem_context();
+  void free_input_rows_mem();
   void free_last_iter_mem();
 
 private:

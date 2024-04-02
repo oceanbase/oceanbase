@@ -25,7 +25,12 @@ struct ObTableLoadSqlStatistics
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadSqlStatistics() : allocator_("TLD_Opstat") { allocator_.set_tenant_id(MTL_ID()); }
+  ObTableLoadSqlStatistics() : allocator_("TLD_Opstat")
+  {
+    table_stat_array_.set_tenant_id(MTL_ID());
+    col_stat_array_.set_tenant_id(MTL_ID());
+    allocator_.set_tenant_id(MTL_ID());
+  }
   ~ObTableLoadSqlStatistics() { reset(); }
   void reset();
   bool is_empty() const

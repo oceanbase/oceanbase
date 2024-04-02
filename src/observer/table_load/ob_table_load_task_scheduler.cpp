@@ -68,6 +68,7 @@ ObTableLoadTaskThreadPoolScheduler::ObTableLoadTaskThreadPoolScheduler(int64_t t
     state_(STATE_ZERO),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
   snprintf(name_, OB_THREAD_NAME_BUF_LEN, "TLD_%03ld_%s", table_id % 1000, label);
 }
 
@@ -112,7 +113,6 @@ int ObTableLoadTaskThreadPoolScheduler::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTaskThreadPoolScheduler init twice", KR(ret), KP(this));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     thread_pool_.set_thread_count(thread_count_);
     thread_pool_.set_run_wrapper(MTL_CTX());
     ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();

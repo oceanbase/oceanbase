@@ -105,6 +105,7 @@ public:
 public:
   virtual int inner_open() override;
   virtual void destroy() override;
+  virtual int inner_rescan() override;
   virtual int inner_close() override;
   virtual int inner_get_next_row() override;
 

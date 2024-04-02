@@ -77,6 +77,14 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
           LOG_WARN("nested table is null", K(ret));
         } else {
           param_info.udt_id_ = composite->get_id();
+          if (OB_INVALID_ID == param_info.udt_id_) { // anonymous array
+            if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
+              LOG_WARN("fail to get ext obj data type", K(ret));
+            } else {
+              param_info.ext_real_type_ = data_type.get_obj_type();
+              param_info.scale_ = data_type.get_scale();
+            }
+          }
         }
       } else {
         if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
@@ -108,7 +116,6 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
 
   stat.pl_schema_id_ = pc_ctx.key_.key_id_;
   stat.gen_time_ = ObTimeUtility::current_time();
-  stat.last_active_time_ = ObTimeUtility::current_time();
   stat.hit_count_ = 0;
   stat.schema_version_ = get_tenant_schema_version();
   MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
@@ -138,6 +145,9 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
     if (ObLibCacheNameSpace::NS_ANON == get_ns() && OB_INVALID_ID != pc_ctx.key_.key_id_) {
       stat.ps_stmt_id_ = pc_ctx.key_.key_id_;
     }
+    // Update last_active_time_ last, because last_active_time_ is used to
+    // indicate whether the cache stat has been updated.
+    stat.last_active_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }

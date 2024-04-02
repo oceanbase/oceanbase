@@ -195,6 +195,7 @@ class ObGlobalAutoIncService;
 class ObDagWarningHistoryManager;
 class ObTenantErrsimModuleMgr;
 class ObTenantErrsimEventMgr;
+class ObIndexUsageInfoMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -322,7 +323,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
       storage::checkpoint::ObCheckpointDiagnoseMgr*,\
-      storage::ObStorageHADiagMgr*                  \
+      storage::ObStorageHADiagMgr*,                 \
+      share::ObIndexUsageInfoMgr*                   \
   )
 
 
@@ -357,8 +359,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
-#define MTL_BIND(INIT, DESTROY) \
-  share::ObTenantBase::mtl_bind_func(nullptr, INIT, nullptr, nullptr, nullptr, DESTROY);
 #define MTL_BIND2(NEW, INIT, START, STOP, WAIT, DESTROY) \
   share::ObTenantBase::mtl_bind_func(NEW, INIT, START, STOP, WAIT, DESTROY);
 

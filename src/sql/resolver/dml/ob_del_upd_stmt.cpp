@@ -172,6 +172,8 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo &other)
     LOG_WARN("failed to assign part generated col dep cols", K(ret));
   } else if (OB_FAIL(assignments_.assign(other.assignments_))) {
     LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(column_in_values_vector_.assign(other.column_in_values_vector_))) {
+    LOG_WARN("failed to assign exprs", K(ret));
   } else {
     is_replace_ = other.is_replace_;
   }
@@ -187,6 +189,8 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (OB_FAIL(expr_copier.copy(other.values_desc_, values_desc_))) {
     LOG_WARN("failed to copy exprs", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.values_vector_, values_vector_))) {
+    LOG_WARN("failed to copy exprs", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.column_in_values_vector_, column_in_values_vector_))) {
     LOG_WARN("failed to copy exprs", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.column_conv_exprs_, column_conv_exprs_))) {
     LOG_WARN("failed to copy exprs", K(ret));
@@ -420,6 +424,7 @@ int ObDelUpdStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     ignore_ = other.ignore_;
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
+    pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;
 }
@@ -444,6 +449,7 @@ int ObDelUpdStmt::assign(const ObDelUpdStmt &other)
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
     ab_stmt_id_expr_ = other.ab_stmt_id_expr_;
+    pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;
 }
@@ -562,8 +568,7 @@ int ObDelUpdStmt::update_base_tid_cid()
 
         if (OB_SUCC(ret) && dml_table->loc_table_id_ != base_tid) {
           for (int64_t k = 0; OB_SUCC(ret) && k < part_expr_items_.count(); ++k) {
-            if (part_expr_items_.at(k).table_id_ == dml_table->loc_table_id_ &&
-                part_expr_items_.at(k).index_tid_ == dml_table->ref_table_id_) {
+            if (part_expr_items_.at(k).table_id_ == dml_table->loc_table_id_) {
               part_expr_items_.at(k).table_id_ = base_tid;
             }
           }
@@ -739,16 +744,22 @@ int ObDelUpdStmt::extract_need_filter_null_table(const JoinedTable *cur_table,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_PDML_WITH_TRANSFORMED_JOIN);
 int ObDelUpdStmt::check_dml_source_from_join()
 {
   int ret = OB_SUCCESS;
-  TableItem *dml_table = nullptr;
-  if (get_from_item_size() == 1 &&
-      nullptr != (dml_table = get_table_item(get_from_item(0))) &&
-      dml_table->is_basic_table()) {
-    // do nothing
+  if (ERRSIM_ENABLE_PDML_WITH_TRANSFORMED_JOIN) {
+    TableItem *dml_table = nullptr;
+    if (get_from_item_size() == 1 &&
+        nullptr != (dml_table = get_table_item(get_from_item(0))) &&
+        dml_table->is_basic_table()) {
+      // do nothing
+    } else {
+      set_dml_source_from_join(true);
+    }
   } else {
     set_dml_source_from_join(true);
   }
+
   return ret;
 }

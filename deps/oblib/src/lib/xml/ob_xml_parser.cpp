@@ -697,6 +697,11 @@ int ObXmlParserUtils::get_prefix_and_localname(const ObString& qname, ObString& 
     // no ns prefix
     localname = qname;
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_local_name_legality(localname))) {
+    LOG_WARN("localname is invalid", K(ret), K(qname), K(sep_pos), K(prefix), K(localname));
+  }
   return ret;
 }
 

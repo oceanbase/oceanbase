@@ -105,22 +105,15 @@ ObColumnSchemaV2::ObColumnSchemaV2(ObIAllocator *allocator)
   reset();
 }
 
-ObColumnSchemaV2::ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema)
-    : ObSchema(),
-    local_session_vars_(get_allocator())
-{
-  reset();
-  *this = src_schema;
-}
-
 ObColumnSchemaV2::~ObColumnSchemaV2()
 {
 }
 
-ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schema)
+int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &src_schema)
 {
+  int ret = OB_SUCCESS;
   if (this != &src_schema) {
-    reset();
+    ObColumnSchemaV2::reset();
     error_ret_ = src_schema.error_ret_;
     tenant_id_ = src_schema.tenant_id_;
     table_id_ = src_schema.table_id_;
@@ -180,13 +173,7 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     }
     LOG_DEBUG("operator =", K(src_schema), K(*this));
   }
-  return *this;
-}
-
-int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &other)
-{
-  *this = other;
-  return error_ret_;
+  return ret;
 }
 
 bool ObColumnSchemaV2::operator==(const ObColumnSchemaV2 &r) const

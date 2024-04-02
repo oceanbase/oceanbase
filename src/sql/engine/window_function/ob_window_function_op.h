@@ -229,8 +229,9 @@ public:
       rd_pby_sort_cnt_(0),
       role_type_(0),
       wf_aggr_status_expr_(NULL),
-      input_rows_mem_bound_ratio_(0.0),
-      estimated_part_cnt_(0.0)
+      input_rows_mem_bound_ratio_(0.5),
+      estimated_part_cnt_(1),
+      enable_hash_base_distinct_(false)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -293,7 +294,8 @@ public:
   ObExpr *wf_aggr_status_expr_;
   // The percentage of memory used by input_rows to the total memory used by input_rows and res_rows
   double input_rows_mem_bound_ratio_;
-  double estimated_part_cnt_;
+  int64_t estimated_part_cnt_;
+  bool enable_hash_base_distinct_;
 
 private:
   // disallow copy
@@ -349,7 +351,7 @@ public:
     void destroy() { ra_rs_.reset(); }
 
     template <bool IS_INPUT>
-    int process_dump();
+    int process_dump(const bool found_part_end = false);
 
     // for input
     inline int add_row(const common::ObIArray<ObExpr*> &exprs,
@@ -796,7 +798,7 @@ public:
       mem_context_(NULL),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_),
-      hp_infras_mgr_(),
+      hp_infras_mgr_(exec_ctx.get_my_session()->get_effective_tenant_id()),
       distinct_aggr_count_(0),
       global_mem_limit_version_(0),
       amm_periodic_cnt_(0)
@@ -911,7 +913,7 @@ protected:
       bool &is_result_datum_null, bool &is_pushdown_bypass);
 
   // For participator, add aggr result row to input rows
-  int found_part_end(const WinFuncCell *end, RowsStore *rows_store, bool add_row_cnt = true);
+  int found_part_end(const WinFuncCell *end, bool add_row_cnt = true);
   int found_new_part(const bool update_part_first_row_idx);
   int save_part_first_row_idx();
   int output_row();
@@ -1125,7 +1127,7 @@ int ObWindowFunctionOp::update_mem_limit_version_periodically()
                 need_inc_version, sql_mem_processor_.get_data_size()))) {
     LOG_WARN("fail to extend max memory size", K(ret), K(updated), K(need_dump()));
   } else if (need_inc_version) {
-    // use the mem_limit_version_ of wf op to trigger udpating mem_limit of each ra_rs_
+    // use the mem_limit_version_ of wf op to trigger updating mem_limit of each ra_rs_
     // using newest global mem bound while add_row to ra_rs_
     ++global_mem_limit_version_;
   }

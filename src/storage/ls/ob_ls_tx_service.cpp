@@ -82,6 +82,22 @@ int ObLSTxService::get_tx_ctx(const transaction::ObTransID &tx_id,
   return ret;
 }
 
+int ObLSTxService::get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                                           const bool for_replay,
+                                           transaction::ObPartTransCtx *&tx_ctx,
+                                           const int64_t lock_timeout) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ret = mgr_->get_tx_ctx_with_timeout(tx_id, for_replay, tx_ctx, lock_timeout);
+  }
+
+  return ret;
+}
+
 int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
                                     ObAddr &scheduler) const
 {
@@ -370,6 +386,20 @@ int ObLSTxService::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
+int ObLSTxService::iterate_tx_ctx(ObLSTxCtxIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(iter.set_ready(mgr_))) {
+    TRANS_LOG(WARN, "get tx obj lock op iter failed", K(ret), K_(ls_id));
+  } else {
+    TRANS_LOG(INFO, "iter set ready success", K(ret), K_(ls_id));
+  }
+  return ret;
+}
+
 int ObLSTxService::replay(const void *buffer,
                           const int64_t nbytes,
                           const palf::LSN &lsn,
@@ -527,7 +557,6 @@ int ObLSTxService::flush(SCN &recycle_scn)
         MTL(ObCheckpointDiagnoseMgr*)->acquire_trace_id(ls_id_, trace_id);
       }
       TRANS_LOG(INFO, "common_checkpoints flush", K(trace_id), K(ls_id_), K(has_gen_diagnose_trace), K(common_checkpoints_[i]));
-      //MTL(ObCheckpointDiagnoseMgr*)->update_start_time(trace_id, i);
       if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn, trace_id))) {
         TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(common_checkpoints_[i]));
       }
@@ -700,15 +729,15 @@ int ObLSTxService::offline()
   int ret = OB_SUCCESS;
   const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
   const bool graceful = false;
-  bool is_all_tx_clean_up = false;
+  bool unused_is_all_tx_clean_up = false;
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
-  } else if (OB_FAIL(mgr_->block_all(is_all_tx_clean_up))) {
+  } else if (OB_FAIL(mgr_->block_all(unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "block all failed", K_(ls_id));
-  } else if (OB_FAIL(mgr_->kill_all_tx(graceful, is_all_tx_clean_up))) {
+  } else if (OB_FAIL(mgr_->kill_all_tx(graceful, unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "kill_all_tx failed", K_(ls_id));
-  } else if (!is_all_tx_clean_up) {
+  } else if (mgr_->get_tx_ctx_count() > 0) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
       TRANS_LOG(WARN, "transaction not empty, try again", K(ret), KP(mgr_), K_(ls_id), K(mgr_->get_tx_ctx_count()));

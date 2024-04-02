@@ -23,9 +23,8 @@ class ObIGeoVisitor;
 class ObGeometry {
 public:
     // constructor
-    ObGeometry(uint32_t srid = 0, ObIAllocator *allocator = NULL)
+    ObGeometry(uint32_t srid = 0)
         : srid_(srid),
-          allocator_(allocator),
           version_(ENCODE_GEO_VERSION(GEO_VESION_1))  {}
     virtual ~ObGeometry() = default;
     ObGeometry(const ObGeometry& g) = default;
@@ -46,14 +45,11 @@ public:
     // srid
     uint32_t get_srid() const { return srid_; }
     void set_srid(uint32_t srid) { srid_ = srid; }
-    uint32_t get_zoom_in_value() { return zoom_in_value_; }
-    void set_zoom_in_value(uint32_t value) { zoom_in_value_ = value; }
     // version
     uint8_t get_version() { return version_; }
+    VIRTUAL_TO_STRING_KV(K_(srid));
 protected:
     uint32_t srid_;
-    uint32_t zoom_in_value_;
-    ObIAllocator* allocator_; // for write mode?
     uint8_t version_;
 };
 

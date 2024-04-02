@@ -63,11 +63,48 @@ TEST(TestPalfEnvLiteMgr, test_load_cluster_placeholder)
   }
 }
 
+TEST(TestPalfEnvLiteMgr, test_create_delete_palf)
+{
+  PalfEnvLiteMgr mgr;
+  std::string base_dir = "create_delete_palf";
+  strcpy(mgr.base_dir_, base_dir.c_str());
+  string mkdir_cmd = "mkdir " + base_dir;
+  string rmdir_cmd = "rmdir " + base_dir;
+  system(rmdir_cmd.c_str());
+  system(mkdir_cmd.c_str());
+  std::string log_dir = "runlin_test";
+  EXPECT_EQ(OB_SUCCESS, mgr.check_and_prepare_dir(log_dir.c_str()));
+  EXPECT_EQ(OB_SUCCESS, mgr.check_and_prepare_dir(log_dir.c_str()));
+  EXPECT_EQ(OB_SUCCESS, mgr.remove_dir(log_dir.c_str()));
+  EXPECT_EQ(OB_SUCCESS, mgr.remove_dir_while_exist(log_dir.c_str()));
+}
+
+TEST(TestPalfEnvLiteMgr, test_create_block)
+{
+  DummyBlockPool dbp;
+  int dir_fd = -1;
+  std::string test_dir = "test_create_block";
+  std::string mkdir_cmd = "mkdir -p " + test_dir;
+  std::string rmdir_cmd = "rm -rf " + test_dir;
+  system(rmdir_cmd.c_str());
+  const int64_t block_size = 2 * 1024 * 1024;
+  system(mkdir_cmd.c_str());
+  dir_fd = ::open(test_dir.c_str(), O_DIRECTORY | O_RDONLY);
+  EXPECT_NE(-1, dir_fd);
+  std::string block_path = "1";
+  EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
+  EXPECT_EQ(OB_SUCCESS, dbp.create_block_at(dir_fd, block_path.c_str(), block_size));
+  EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
+  // file has not exist, return OB_SUCCESS
+  EXPECT_EQ(OB_SUCCESS, dbp.remove_block_at(dir_fd, block_path.c_str()));
+}
+
 } // end of unittest
 } // end of oceanbase
 
 int main(int argc, char **argv)
 {
+  system("rm -rf test_palf_env_lite_mgr.log*");
   OB_LOGGER.set_file_name("test_palf_env_lite_mgr.log", true);
   OB_LOGGER.set_log_level("INFO");
   PALF_LOG(INFO, "begin unittest::test_palf_env_lite_mgr");

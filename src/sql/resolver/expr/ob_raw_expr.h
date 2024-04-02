@@ -68,6 +68,7 @@ class ObIRawExprCopier;
 class ObSelectStmt;
 class ObRTDatumArith;
 class ObLogicalOperator;
+class ObInListInfo;
 extern ObRawExpr *USELESS_POINTER;
 
 // If is_stack_overflow is true, the printing will not continue
@@ -169,7 +170,9 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_PRIV_ST_POINTONSURFACE) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOMETRYTYPE) \
     || ((op) == T_FUN_SYS_PRIV_ST_ASMVTGEOM) \
-    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID)) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOHASH) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKEPOINT)) \
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
 
@@ -1132,13 +1135,15 @@ public:
   int extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const;
   int replace_params(ObRawExpr *from, ObRawExpr *to);
 
+  int check_param_num() const;
+
   TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
 
   AccessNameType type_;
   common::ObString access_name_;
   int64_t access_index_;
   ObUDFInfo udf_info_;
-  ObSysFunRawExpr *sys_func_expr_;
+  ObRawExpr *sys_func_expr_;
   //a.f(x,y)(m,n)里的x、y、m、n都是f的参数，但是x、y的param_level_是0，m、n是1
   common::ObSEArray<std::pair<ObRawExpr*, int64_t>, 4, common::ModulePageAllocator, true> params_;
   bool has_brackets_; // may has empty (), record it.
@@ -1184,6 +1189,7 @@ public:
     return *this;
   }
 
+  void format_qualified_name();
   void format_qualified_name(common::ObNameCaseMode mode);
   inline bool is_unknown() const
   {
@@ -1199,6 +1205,10 @@ public:
   inline bool is_sys_func() const
   {
     return 1 == access_idents_.count() && access_idents_.at(0).is_sys_func();
+  }
+  inline bool is_col_ref_access() const
+  {
+    return 1 < access_idents_.count() && access_idents_.at(0).is_sys_func();
   }
   inline bool is_pl_udf() const
   {
@@ -1553,6 +1563,7 @@ class ObPseudoColumnRawExpr;
 class ObOpRawExpr;
 class ObWinFunRawExpr;
 class ObUserVarIdentRawExpr;
+class ObDMLResolver;
 struct ObUDFInfo;
 template <typename ExprFactoryT>
 struct ObResolveContext
@@ -1580,6 +1591,7 @@ struct ObResolveContext
     udf_info_(NULL),
     op_exprs_(NULL),
     user_var_exprs_(nullptr),
+    inlist_infos_(NULL),
     is_extract_param_type_(true),
     param_list_(NULL),
     prepare_param_count_(0),
@@ -1595,7 +1607,8 @@ struct ObResolveContext
     is_for_dbms_sql_(false),
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
-    is_variable_allowed_(true)
+    is_variable_allowed_(true),
+    is_need_print_(false)
   {
   }
 
@@ -1616,6 +1629,7 @@ struct ObResolveContext
   common::ObIArray<ObUDFInfo> *udf_info_;
   common::ObIArray<ObOpRawExpr*> *op_exprs_;
   common::ObIArray<ObUserVarIdentRawExpr*> *user_var_exprs_;
+  common::ObIArray<ObInListInfo> *inlist_infos_;
   //由于单测expr resolver中包含一些带？的表达式case，
   //所以为expr resolver ctx增添一个配置变量isextract_param_type
   //如果配置该参数为true，那么遇到？将为其填上真实的参数类型，
@@ -1641,6 +1655,7 @@ struct ObResolveContext
   TgTimingEvent tg_timing_event_; // for mysql trigger
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
+  bool is_need_print_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -3983,7 +3998,8 @@ public:
            || pkg_schema_version_ != common::OB_INVALID_VERSION;
   }
 
-  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+  int get_schema_object_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObIArray<share::schema::ObSchemaObjVersion> &obj_versions);
 
   inline void set_pkg_body_udf(bool v) { is_pkg_body_udf_ = v; }
   inline bool is_pkg_body_udf() const { return is_pkg_body_udf_; }

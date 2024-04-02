@@ -14,6 +14,7 @@
 #define DEV_SRC_PL_OB_PL_USER_TYPE_H_
 #include "pl/ob_pl_type.h"
 #include "rpc/obmysql/ob_mysql_util.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_array_index_hash_set.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/json_type/ob_json_tree.h"
@@ -64,7 +65,7 @@ public:
   virtual int64_t get_member_count() const;
   virtual const ObPLDataType *get_member(int64_t i) const;
   virtual int generate_assign_with_null(
-    ObPLCodeGenerator &generator, const ObPLBlockNS &ns,
+    ObPLCodeGenerator &generator, const ObPLINS &ns,
     jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(
     ObPLCodeGenerator &generator,const ObPLINS &ns,
@@ -144,7 +145,9 @@ public:
 
   static int deep_copy_obj(
     ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
-  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL, bool set_null = true);
+  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL);
+  static int alloc_sub_composite(ObObj &dest_element, ObIAllocator &allocator);
+  static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);
@@ -259,9 +262,10 @@ public:
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                      jit::ObLLVMValue &allocator,
-                                      jit::ObLLVMValue &dest) const
-  { UNUSED(generator); UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
+                                        ObPLINS &ns,
+                                        jit::ObLLVMValue &allocator,
+                                        jit::ObLLVMValue &dest) const
+  { UNUSED(generator); UNUSED(ns), UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
@@ -409,7 +413,7 @@ public:
   virtual const ObPLDataType *get_member(int64_t i) const { return get_record_member_type(i); }
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
 
@@ -567,13 +571,13 @@ public:
                                  jit::ObLLVMValue &value,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
-                                                const ObPLINS &ns,
-                                                jit::ObLLVMValue &value,
-                                                const pl::ObPLStmt *s = NULL) const;
+                           const ObPLINS &ns,
+                           jit::ObLLVMValue &value,
+                           const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
                      int64_t &ptr) const;
@@ -903,7 +907,7 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT; }
   void print() const;
 
-  TO_STRING_KV(K_(type), K_(count));
+  TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
   int32_t count_; //field count
@@ -1433,43 +1437,6 @@ public:
 
 private:
   ObObj *data_;
-};
-
-class ObPLJsonBaseType : public ObPLOpaque
-{
-public:
-  enum JSN_ERR_BEHAVIOR {
-    JSN_PL_NULL_ON_ERR,
-    JSN_PL_ERR_ON_ERR,
-    JSN_PL_ERR_ON_EMP,
-    JSN_PL_ERR_ON_MISMATCH,
-    JSN_PL_ERR_ON_INVALID = 7
-  };
-
-  ObPLJsonBaseType()
-    : ObPLOpaque(ObPLOpaqueType::PL_JSON_TYPE),
-      data_(NULL),
-      behavior_(0)
-      {}
-
-  virtual ~ObPLJsonBaseType()
-  {
-    data_ = NULL;
-    behavior_ = 0;
-  }
-
-public:
-  virtual int deep_copy(ObPLOpaque *dst);
-  void set_data(ObJsonNode *data) { data_ = data; }
-  void set_err_behavior(int behavior) { behavior_ = behavior; }
-  int get_err_behavior() { return behavior_ ; }
-  ObJsonNode* get_data() { return data_; }
-
-  TO_STRING_KV(KPC(data_), K_(behavior));
-
-private:
-  ObJsonNode *data_;
-  int behavior_;
 };
 
 #endif

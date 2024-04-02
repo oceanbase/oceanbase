@@ -1177,7 +1177,8 @@ public:
   static const int64_t END_TRANS_CB_TASK = 0;
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
-  static const int64_t MAX = 3;
+  static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
+  static const int64_t MAX = 4;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1649,6 +1650,7 @@ public:
     : participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PARTICIPANT")),
       incremental_participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "INC_PART`")),
       redo_lsns_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "REDO_LSNS")),
+      multi_data_source_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MDS_ARRAY")),
       prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO")) {}
 public:
   int generate_mds_buffer_ctx_array();
@@ -1734,6 +1736,8 @@ struct ObMulSourceDataNotifyArg
   bool redo_submitted_;
   bool redo_synced_;
 
+  bool willing_to_commit_;
+
   // force kill trans without abort scn
   bool is_force_kill_;
 
@@ -1748,6 +1752,7 @@ struct ObMulSourceDataNotifyArg
     notify_type_ = NotifyType::ON_ABORT;
     redo_submitted_ = false;
     redo_synced_ = false;
+    willing_to_commit_ = false;
     is_force_kill_ = false;
   }
 
@@ -1758,6 +1763,7 @@ struct ObMulSourceDataNotifyArg
                K_(notify_type),
                K_(redo_submitted),
                K_(redo_synced),
+               K_(willing_to_commit),
                K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;

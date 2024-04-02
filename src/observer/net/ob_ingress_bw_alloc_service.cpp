@@ -91,7 +91,7 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
   const int64_t current_time = ObTimeUtility::current_time();
   {
     ObSpinLockGuard guard(lock_);
-    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); iter != ingress_plan_map_.end(); ++iter) {
+    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); OB_SUCC(ret) && iter != ingress_plan_map_.end(); ++iter) {
       const ObNetEndpointKey &endpoint_key = iter->first;
       ObNetEndpointValue *endpoint_value = iter->second;
       if (endpoint_value->expire_time_ < current_time) {
@@ -110,11 +110,10 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
       }
     }
 
-    for (int64_t i = 0; i < delete_keys.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < delete_keys.count(); i++) {
       const ObNetEndpointKey &endpoint_key = delete_keys[i];
       if (OB_FAIL(ingress_plan_map_.erase_refactored(endpoint_key))) {
         LOG_ERROR("failed to erase endpoint", K(ret), K(endpoint_key));
-        ret = OB_SUCCESS;  // ignore error
       }
     }
   }

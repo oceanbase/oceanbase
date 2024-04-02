@@ -27,6 +27,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "observer/ob_inner_sql_connection.h"
+#include "src/observer/ob_server.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -1675,6 +1676,79 @@ int ObDbmsStatsExecutor::fetch_gather_task_addr(ObCommonSqlProxy *sql_proxy,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDbmsStatsExecutor::gather_system_stats(ObExecContext &ctx, int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(ctx);
+  int64_t cpu_mhz = OBSERVER.get_cpu_frequency_khz()/1000;
+  int64_t network_speed = OBSERVER.get_network_speed() / 1024.0 / 1024.0;
+  int64_t disk_seq_read_speed = 0;
+  int64_t disk_rnd_read_speed = 0;
+  OptSystemIoBenchmark &io_benchmark = OptSystemIoBenchmark::get_instance();
+  if (io_benchmark.is_init()) {
+    disk_seq_read_speed = io_benchmark.get_disk_seq_read_speed();
+    disk_rnd_read_speed = io_benchmark.get_disk_rnd_read_speed();
+  } else if (OB_FAIL(io_benchmark.run_benchmark(ctx.get_allocator()))) {
+    LOG_WARN("failed to run io benchmark", K(ret));
+  } else {
+    disk_seq_read_speed = io_benchmark.get_disk_seq_read_speed();
+    disk_rnd_read_speed = io_benchmark.get_disk_rnd_read_speed();
+  }
+  if (OB_SUCC(ret)) {
+    ObOptSystemStat system_stat;
+    ObOptStatManager &mgr = ObOptStatManager::get_instance();
+    int64_t current_time = ObTimeUtility::current_time();
+    system_stat.set_last_analyzed(current_time);
+    system_stat.set_cpu_speed(cpu_mhz);
+    system_stat.set_disk_seq_read_speed(disk_seq_read_speed);
+    system_stat.set_disk_rnd_read_speed(disk_rnd_read_speed);
+    system_stat.set_network_speed(network_speed);
+    if (OB_FAIL(mgr.update_system_stats(tenant_id,
+                                       &system_stat))) {
+      LOG_WARN("failed to update system stats", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsExecutor::delete_system_stats(ObExecContext &ctx, int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(ctx);
+  ObOptStatManager &mgr = ObOptStatManager::get_instance();
+  if (OB_FAIL(mgr.delete_system_stats(tenant_id))) {
+    LOG_WARN("failed to delete system stats", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsExecutor::set_system_stats(ObExecContext &ctx, const ObSetSystemStatParam &param)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(ctx);
+  ObOptSystemStat system_stat;
+  ObOptStatManager &mgr = ObOptStatManager::get_instance();
+  if (OB_FAIL(mgr.get_system_stat(param.tenant_id_, system_stat))) {
+    LOG_WARN("failed to get table stat", K(ret));
+  } else if (ObCharset::case_insensitive_equal(param.name_, "cpu_speed")) {
+    system_stat.set_cpu_speed(param.value_);
+  } else if (ObCharset::case_insensitive_equal(param.name_, "disk_seq_read_speed")) {
+    system_stat.set_disk_seq_read_speed(param.value_);
+  } else if (ObCharset::case_insensitive_equal(param.name_, "disk_rnd_read_speed")) {
+    system_stat.set_disk_rnd_read_speed(param.value_);
+  } else if (ObCharset::case_insensitive_equal(param.name_, "network_speed")) {
+    system_stat.set_network_speed(param.value_);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(mgr.update_system_stats(param.tenant_id_,
+                                            &system_stat))) {
+    LOG_WARN("failed to update system stats", K(ret));
+  } else {
+    LOG_TRACE("end set system stats", K(param), K(system_stat));
   }
   return ret;
 }

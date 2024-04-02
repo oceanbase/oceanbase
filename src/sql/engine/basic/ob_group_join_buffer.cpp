@@ -141,6 +141,9 @@ int ObGroupJoinBufffer::init(ObOperator *op,
   } else if (OB_UNLIKELY(op->get_child_cnt() < 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("op should have at least 2 children", KR(ret), K(op->get_child_cnt()));
+  } else if (max_group_size < group_scan_size) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("max group size is less than group scan size", K(max_group_size), K(group_scan_size));
   } else {
     op_ = op;
     spec_ = &op_->get_spec();

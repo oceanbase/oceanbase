@@ -380,6 +380,7 @@ public:
                                 const MethodOptSizeConf &size_conf);
 
   static int get_table_part_infos(const share::schema::ObTableSchema *table_schema,
+                                  ObIAllocator &allocator,
                                   common::ObIArray<PartInfo> &part_infos,
                                   common::ObIArray<PartInfo> &subpart_infos,
                                   OSGPartMap *part_map = NULL);
@@ -488,9 +489,6 @@ public:
                                       share::schema::ObPartitionLevel data_table_level
                                           = share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO);
 
-  static int get_table_partition_map(const ObTableSchema &table_schema,
-                                     OSGPartMap &part_map);
-
   static int init_gather_task_info(ObExecContext &ctx,
                                    ObOptStatGatherType type,
                                    int64_t start_time,
@@ -505,6 +503,24 @@ public:
                                       sql::ObExecContext &ctx,
                                       const share::schema::ObTableSchema *table_schema,
                                       CopyTableStatHelper &copy_stat_helper);
+
+  static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
+                                                const ObOptStatGatherStat *gather_stat);
+
+  static int gather_system_stats(sql::ObExecContext &ctx,
+                                sql::ParamStore &params,
+                                common::ObObj &result);
+
+  static int delete_system_stats(sql::ObExecContext &ctx,
+                                sql::ParamStore &params,
+                                common::ObObj &result);
+
+  static int set_system_stats(sql::ObExecContext &ctx,
+                              sql::ParamStore &params,
+                              common::ObObj &result);
+
+  static int update_system_stats_cache(const uint64_t rpc_tenant_id,
+                                      const uint64_t tenant_id);
 
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
@@ -562,6 +578,7 @@ private:
                                    ObIArray<ObAuxTableMetaInfo> &index_infos);
 
   static int get_table_partition_infos(const ObTableSchema &table_schema,
+                                       ObIAllocator &allocator,
                                        ObIArray<PartInfo> &partition_infos);
 
   static int get_index_schema(sql::ObExecContext &ctx,
@@ -594,6 +611,11 @@ private:
 
   static int refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id);
 
+  static int check_system_stats_name_valid(const ObString& name, bool &is_valid);
+
+  static int check_modify_system_stats_pri(const ObSQLSessionInfo& session);
+
+  static int check_system_stat_table_ready(int64_t tenant_id);
 };
 
 }

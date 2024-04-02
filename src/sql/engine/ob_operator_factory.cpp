@@ -161,6 +161,8 @@
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
+#include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
 {

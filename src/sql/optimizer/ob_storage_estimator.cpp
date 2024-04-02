@@ -17,6 +17,7 @@
 #include "storage/access/ob_table_scan_range.h"
 #include "share/ob_simple_batch.h"
 #include "storage/access/ob_dml_param.h"
+#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase {
 using namespace storage;
@@ -30,7 +31,13 @@ int ObStorageEstimator::estimate_row_count(const obrpc::ObEstPartArg &arg,
   int ret = OB_SUCCESS;
   //est path rows
   ObTableScanParam param;
-  param.schema_version_ = arg.schema_version_;
+  share::SCN max_readable_scn;
+  if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, max_readable_scn))) {
+    LOG_WARN("failed to get gts", K(ret));
+  } else {
+    param.frozen_version_ = static_cast<int64_t>(max_readable_scn.get_val_for_sql());
+    param.schema_version_ = arg.schema_version_;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_params_.count(); i++) {
     obrpc::ObEstPartResElement est_res;
     param.index_id_ = arg.index_params_.at(i).index_id_;
@@ -149,7 +156,7 @@ int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
         physical_row_count = rc_physical < 0 ? 1.0 : static_cast<double>(rc_physical);
     }
   }
-  
+
   return ret;
 }
 

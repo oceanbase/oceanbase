@@ -30,6 +30,8 @@
 #include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/privilege_check/ob_privilege_check.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -569,9 +571,12 @@ int ObSchemaChecker::get_user_info(const uint64_t tenant_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || user_name.empty())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(user_name), K(ret));
+  } else if (OB_UNLIKELY(user_name.empty())) {
+    ret = OB_USER_NOT_EXIST;
+    LOG_WARN("user is not exist", K(tenant_id), K(user_name), K(host_name), K(ret));
   } else if (OB_FAIL(schema_mgr_->get_user_id(tenant_id, user_name, host_name, user_id))) {
     LOG_WARN("get user id failed", K(tenant_id), K(user_name), K(host_name), K(ret));
   } else if (OB_FAIL(get_user_info(tenant_id, user_id, user_info))) {
@@ -2717,9 +2722,9 @@ int ObSchemaChecker::check_ora_grant_obj_priv(
     const uint64_t obj_id,
     const uint64_t obj_type,
     const share::ObRawObjPrivArray &table_priv_array,
-    const ObSEArray<uint64_t, 4> &ins_col_ids,
-    const ObSEArray<uint64_t, 4> &upd_col_ids,
-    const ObSEArray<uint64_t, 4> &ref_col_ids,
+    const ObIArray<uint64_t> &ins_col_ids,
+    const ObIArray<uint64_t> &upd_col_ids,
+    const ObIArray<uint64_t> &ref_col_ids,
     uint64_t &grantor_id_out,
     const ObIArray<uint64_t> &role_id_array)
 {
@@ -3132,6 +3137,97 @@ int ObSchemaChecker::remove_tmp_cte_schemas(const ObString& cte_table_name)
       }
     }
   }
+  return ret;
+}
+
+int ObSchemaChecker::check_mysql_grant_role_priv(
+    const ObSqlCtx &sql_ctx,
+    const ObIArray<uint64_t> &granting_role_ids)
+{
+  int ret = OB_SUCCESS;
+
+  //check SUPER or ROLE_ADMIN [TODO PRIV]
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SUPER, false);
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    int ret_bak = ret;
+    ret = OB_SUCCESS;
+    const ObUserInfo *user_info = NULL;
+    uint64_t user_id = sql_ctx.session_info_->get_priv_user_id();
+    OZ (get_user_info(sql_ctx.session_info_->get_effective_tenant_id(), user_id, user_info));
+    for (int i = 0; OB_SUCC(ret) && i < granting_role_ids.count(); i++) {
+      int64_t idx = -1;
+      if (!has_exist_in_array(user_info->get_role_id_array(), granting_role_ids.at(i), &idx)
+          || ADMIN_OPTION != user_info->get_admin_option(user_info->get_role_id_option_array().at(idx))) {
+        ret = ret_bak;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSchemaChecker::check_mysql_revoke_role_priv(
+    const ObSqlCtx &sql_ctx,
+    const ObIArray<uint64_t> &granting_role_ids)
+{
+  int ret = OB_SUCCESS;
+
+  //check SUPER or ROLE_ADMIN [TODO PRIV]
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_SUPER, false);
+
+  CK (OB_NOT_NULL(sql_ctx.session_info_));
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    if (sql_ctx.session_info_->is_read_only()) {
+      //SUPER or CONNECTION_ADMIN [TODO PRIV]
+    } else {
+      int ret_bak = ret;
+      ret = OB_SUCCESS;
+      const ObUserInfo *user_info = NULL;
+      uint64_t user_id = sql_ctx.session_info_->get_priv_user_id();
+      OZ (get_user_info(sql_ctx.session_info_->get_effective_tenant_id(), user_id, user_info));
+      for (int i = 0; OB_SUCC(ret) && i < granting_role_ids.count(); i++) {
+        int64_t idx = -1;
+        if (!has_exist_in_array(user_info->get_role_id_array(), granting_role_ids.at(i), &idx)
+            || ADMIN_OPTION != user_info->get_admin_option(user_info->get_role_id_option_array().at(idx))) {
+          ret = ret_bak;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSchemaChecker::check_set_default_role_priv(
+    const ObSqlCtx &sql_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  ObStmtNeedPrivs stmt_need_privs(alloc);
+  ObNeedPriv need_priv("mysql", "", OB_PRIV_DB_LEVEL, OB_PRIV_UPDATE, false);
+
+  OZ (stmt_need_privs.need_privs_.init(1));
+  OZ (stmt_need_privs.need_privs_.push_back(need_priv));
+
+  //check CREATE USER or UPDATE privilege on mysql
+  if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+    stmt_need_privs.need_privs_.at(0) =
+        ObNeedPriv("", "", OB_PRIV_USER_LEVEL, OB_PRIV_CREATE_USER, false);
+    if (OB_FAIL(ObPrivilegeCheck::check_privilege(sql_ctx, stmt_need_privs))) {
+      LOG_WARN("no priv", K(ret));
+    }
+  }
+
   return ret;
 }
 

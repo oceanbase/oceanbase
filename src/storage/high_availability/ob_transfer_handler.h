@@ -139,11 +139,13 @@ private:
   int inner_lock_ls_member_list_(
       const share::ObTransferTaskInfo &task_info,
       const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list);
+      const common::ObMemberList &member_list,
+      const ObTransferLockStatus &status);
   int inner_unlock_ls_member_list_(
       const share::ObTransferTaskInfo &task_info,
       const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list);
+      const common::ObMemberList &member_list,
+      const ObTransferLockStatus &status);
   int insert_lock_info_(const share::ObTransferTaskInfo &task_info);
   int check_ls_member_list_same_(
       const share::ObLSID &src_ls_id,
@@ -160,24 +162,34 @@ private:
       const share::ObLSID &ls_id,
       int64_t &active_trans_count);
   int check_start_status_transfer_tablets_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
   int get_ls_leader_(
       const share::ObLSID &ls_id,
       common::ObAddr &addr);
   int do_trans_transfer_start_(
       const share::ObTransferTaskInfo &task_info,
       const palf::LogConfigVersion &config_version,
+      const share::SCN &dest_max_desided_scn,
       ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
+      ObMySQLTransaction &trans,
+      bool &is_update_transfer_meta);
   int start_trans_(
+      const int64_t stmt_timeout,
+      const int32_t group_id,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int commit_trans_(
       const int32_t &result,
       ObMySQLTransaction &trans);
+  int get_start_trans_timeout_(
+      int64_t &stmt_timeout);
+  int get_abort_trans_timeout_(
+      int64_t &stmt_timeout);
 
   int do_tx_start_transfer_out_(
       const share::ObTransferTaskInfo &task_info,
+      const share::SCN &dest_max_desided_scn,
       common::ObMySQLTransaction &trans);
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
@@ -286,11 +298,36 @@ private:
   int check_config_version_(
       const palf::LogConfigVersion &config_version);
   int check_task_exist_(
-      const ObTransferStatus &status,
+      const share::ObTransferTaskInfo &task_info,
       const bool find_by_src_ls,
       bool &task_exist) const;
-  int get_src_ls_member_list_(
+  int wait_transfer_in_tablet_abort_(
+      const share::ObTransferTaskInfo &task_info,
+      const common::ObMemberList &member_list);
+  int do_trans_transfer_aborted_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      ObMySQLTransaction &trans);
+  int update_transfer_meta_info_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      ObTimeoutCtx &timeout_ctx,
+      bool &is_update_transfer_meta);
+  int build_transfer_meta_info_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      ObLSTransferMetaInfo &transfer_meta_info);
+  int get_dest_ls_max_desided_scn_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      share::SCN &dest_desided_scn);
+  int get_local_ls_member_list_(
       common::ObMemberList &member_list);
+  int check_transfer_in_tablet_abort_(
+      const share::ObTransferTaskInfo &task_info,
+      const common::ObIArray<ObAddr> &member_addr_list,
+      ObTimeoutCtx &timeout_ctx,
+      common::ObIArray<ObAddr> &finished_addr_list);
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
   void process_perf_diagnose_info_(
       const ObStorageHACostItemName name,
@@ -298,7 +335,17 @@ private:
       const int64_t start_ts,
       const int64_t round, const bool is_report) const;
   int do_clean_diagnose_info_();
+  int inner_do_with_abort_status_(const share::ObTransferTaskInfo &task_info);
 
+  int inner_do_with_abort_status_before_4230_(const share::ObTransferTaskInfo &task_info);
+  int inner_check_task_exist_(
+      const ObTransferStatus &status,
+      const bool find_by_src_ls,
+      bool &task_exist) const;
+  int inner_check_task_exist_before_4230_(
+      const ObTransferStatus &status,
+      const bool find_by_src_ls,
+      bool &task_exist) const;
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;

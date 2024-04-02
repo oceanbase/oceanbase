@@ -113,6 +113,8 @@ public:
   int clean_round_comment(common::ObISQLClient &proxy, const int64_t dest_no) const;
   int get_round_by_dest_id(common::ObISQLClient &proxy, const int64_t dest_id,
       const bool need_lock, ObTenantArchiveRoundAttr &round) const;
+  // Get stop archive time. Return OB_ENTRY_NOT_EXIST if no STOPPING round exist.
+  int get_round_stopping_ts(common::ObISQLClient &proxy, const int64_t dest_no, int64_t &ts) const;
   int del_round(common::ObISQLClient &proxy, const int64_t dest_no) const;
   int start_new_round(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &new_round) const;
   int switch_round_state_to(common::ObISQLClient &proxy, const ObTenantArchiveRoundAttr &round,

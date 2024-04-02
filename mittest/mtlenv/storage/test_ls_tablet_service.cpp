@@ -95,9 +95,6 @@ void TestLSTabletService::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ret);
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      TestSchemaUtils::TEST_TENANT_ID, ObTenantIOConfig::default_instance());
-
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(TestSchemaUtils::TEST_TENANT_ID, ObLSID(TEST_LS_ID), ls_handle);
@@ -120,7 +117,7 @@ void TestLSTabletService::SetUp()
   ls_tablet_service_ = ls->get_tablet_svr();
 
   while (true) {
-    if (nullptr != MTL(ObTenantMetaMemMgr*)->gc_head_) {
+    if (!MTL(ObTenantMetaMemMgr*)->tablet_gc_queue_.is_empty()) {
       LOG_INFO("wait t3m gc tablet clean");
       usleep(300 * 1000); // wait 300ms
     } else {
@@ -701,7 +698,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
 
   // gc empty tablet
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
-  ret = t3m->gc_tablet(empty_tablet);
+  ret = t3m->push_tablet_into_gc_queue(empty_tablet);
   ASSERT_EQ(OB_SUCCESS, ret);
   bool cleared = false;
   ret = t3m->gc_tablets_in_queue(cleared);
@@ -788,13 +785,13 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
   ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, test_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletCreateDeleteMdsUserData user_data;
-  ASSERT_EQ(OB_SUCCESS, test_tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), user_data));
+  ASSERT_EQ(OB_SUCCESS, test_tablet_handle.get_obj()->get_latest_committed(user_data));
   ASSERT_EQ(ObTabletStatus::DELETED, user_data.tablet_status_);
 
   ObTabletHandle tablet_handle;
   ret = ls_tablet_service_->create_transfer_in_tablet(ls_id_, tablet_meta, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), user_data));
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_latest_committed(user_data));
   ASSERT_EQ(ObTabletStatus::NORMAL, user_data.tablet_status_);
 
   ObTabletMapKey key(ls_id_, tablet_id);

@@ -33,6 +33,15 @@ public:
                                            const ParseNode *passwd_node,
                                            common::ObString &masked_sql,
                                            bool skip_enclosed_char = false);
+  int resolve_user_list_node(ParseNode *user_node,
+                             ParseNode *top_node,
+                             common::ObString &user_name,
+                             common::ObString &host_name);
+
+  int resolve_user_host(const ParseNode *user_pass,
+                        common::ObString &user_name,
+                        common::ObString &host_name);
+
 protected:
   int check_and_convert_name(common::ObString &db, common::ObString &table);
   int check_password_strength(common::ObString &password);
@@ -48,6 +57,7 @@ protected:
   int check_dcl_on_inner_user(const ObItemType &type,
                               const uint64_t &session_user_id,
                               const uint64_t &user_id);
+
   static int mask_password_for_single_user(ObIAllocator *allocator,
                                            const common::ObString &src,
                                            const ParseNode *user_node,

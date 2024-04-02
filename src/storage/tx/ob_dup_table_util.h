@@ -71,7 +71,6 @@ public:
   uint64_t hash() const { return tenant_id_; }
 
 private:
-  int execute_();
   int execute_for_dup_ls_();
   int refresh_dup_tablet_schema_(bool need_refresh,
                                  ObTenantDupTabletSchemaHelper::TabletIDSet &tenant_dup_tablet_set,
@@ -145,7 +144,7 @@ public:
                                bool is_dup_table,
                                int64_t refresh_time);
   // called by rpc thread
-  int recive_lease_request(const ObDupTableLeaseRequest &lease_req);
+  int receive_lease_request(const ObDupTableLeaseRequest &lease_req);
   int handle_ts_sync_response(const ObDupTableTsSyncResponse &ts_sync_reps);
   // called by part_ctx
   // int validate_dup_table_tablet(const ObTabletID &tablet_id, bool &is_dup_tablet);
@@ -231,7 +230,7 @@ private:
 
   int prepare_log_operator_();
   int get_min_lease_ts_info_(DupTableTsInfo &min_ts_info);
-  int leader_takeover_(const bool is_resume);
+  int leader_takeover_(const bool is_resume, const bool is_initing = false);
   int leader_revoke_(const bool is_forcedly);
 
   int try_to_confirm_tablets_(const share::SCN &confirm_ts);
@@ -242,6 +241,7 @@ private:
   share::ObLSID ls_id_;
 
   bool is_inited_;
+  SpinRWLock init_rw_lock_;
 
   // set these flag for a normal ls without dup_table
   ObDupTableLSRoleStateHelper ls_state_helper_;

@@ -59,6 +59,7 @@ protected:
   int add_new_indexkey_for_oracle_temp_table();
   int fill_session_info_into_arg(const sql::ObSQLSessionInfo *session,
                                  ObCreateIndexStmt *crt_idx_stmt);
+  int add_based_udt_info(const share::schema::ObTableSchema &tbl_schema);
 private:
   bool is_oracle_temp_table_; //是否创建oracle的临时表上索引
   bool is_spec_block_size; //是否指定block size

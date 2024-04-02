@@ -145,10 +145,11 @@ int ObMultipleSkipScanMerge::open_skip_scan(const blocksstable::ObDatumRange &ra
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
     } else if (OB_FAIL(scan_rowkey_range_.prepare_memtable_readable(*col_descs, rowkey_allocator_))) {
-      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rowkey_range_));
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret));
+    } else {
+      STORAGE_LOG(TRACE, "open skip scan", K(ret), K(schema_rowkey_cnt_), K(ss_rowkey_prefix_cnt_),
+        K(range), K(skip_scan_range));
     }
-    STORAGE_LOG(TRACE, "open skip scan", K(ret), K(schema_rowkey_cnt_), K(ss_rowkey_prefix_cnt_),
-        K(scan_rows_range_), K(range), K(skip_scan_range));
   }
   return ret;
 }
@@ -186,7 +187,6 @@ int ObMultipleSkipScanMerge::inner_get_next_row(blocksstable::ObDatumRow &row)
         } else if (should_retire_to_scan()) {
           state_ = RETIRED_TO_SCAN;
         } else {
-          STORAGE_LOG(DEBUG, "skip scan update scan rows range", K(row), K(scan_rows_range_));
           state_ = SCAN_ROWS;
         }
         break;
@@ -211,12 +211,11 @@ int ObMultipleSkipScanMerge::inner_get_next_row(blocksstable::ObDatumRow &row)
       case UPDATE_SCAN_ROWKEY_RANGE: {
         if (OB_FAIL(update_scan_rowkey_range())) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              STORAGE_LOG(WARN, "Fail to update scan rowkey range", K(ret), K(row));
+              STORAGE_LOG(WARN, "Fail to update scan rowkey range", K(ret));
           } else {
             state_ = SCAN_FINISHED;
           }
         } else {
-          STORAGE_LOG(DEBUG, "skip scan update scan rowkey range", K(row), K(scan_rowkey_range_));
           state_ = SCAN_ROWKEY;
         }
         break;
@@ -269,12 +268,11 @@ int ObMultipleSkipScanMerge::inner_get_next_rows()
               ret = OB_SUCCESS;
               state_ = UPDATE_SCAN_ROWKEY_RANGE;
             } else {
-               STORAGE_LOG(WARN, "Fail to update scan rows range", K(ret), K(unprojected_row_));
+               STORAGE_LOG(WARN, "Fail to update scan rows range", K(ret));
             }
           } else if (should_retire_to_scan()) {
             state_ = RETIRED_TO_SCAN;
           } else {
-            STORAGE_LOG(DEBUG, "skip scan update scan rows range", K(unprojected_row_), K(scan_rows_range_));
             state_ = SCAN_ROWS;
           }
           break;
@@ -302,12 +300,11 @@ int ObMultipleSkipScanMerge::inner_get_next_rows()
         case UPDATE_SCAN_ROWKEY_RANGE: {
           if (OB_FAIL(update_scan_rowkey_range())) {
             if (OB_UNLIKELY(OB_ITER_END != ret)) {
-                STORAGE_LOG(WARN, "Fail to update scan rowkey range", K(ret), K(unprojected_row_));
+                STORAGE_LOG(WARN, "Fail to update scan rowkey range", K(ret));
             } else {
               state_ = SCAN_FINISHED;
             }
           } else {
-            STORAGE_LOG(DEBUG, "skip scan update scan rowkey range", K(unprojected_row_), K(scan_rowkey_range_));
             state_ = SCAN_ROWKEY;
           }
           break;
@@ -385,7 +382,7 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
         start_key_of_scan_rows_range()[i];
       prefix_of_rows_key.reuse();
       if (OB_FAIL(prefix_of_rows_key.deep_copy(row.storage_datums_[i], range_allocator_))) {
-        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(row), K(scan_rows_range_));
+        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(row));
       }
     }
     if (OB_FAIL(ret)) {
@@ -396,7 +393,9 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
       scan_rows_range_.set_end_key(origin_range_->get_end_key());
       set_border_falg(false, *origin_range_, scan_rows_range_);
     }
-    STORAGE_LOG(TRACE, "should retire to normal scan", K(ret), K(scan_rows_range_));
+    if (OB_SUCC(ret)) {
+      STORAGE_LOG(TRACE, "should retire to normal scan", K(ret), K(scan_rows_range_));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_rowkey_prefix_cnt_; ++i) {
       ObStorageDatum &prefix_of_start_key = start_key_of_scan_rows_range()[i];
@@ -404,9 +403,9 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
       prefix_of_start_key.reuse();
       prefix_of_end_key.reuse();
       if (OB_FAIL(prefix_of_start_key.deep_copy(row.storage_datums_[i], range_allocator_))) {
-        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(row), K(scan_rows_range_));
+        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(row));
       } else if (OB_FAIL(prefix_of_end_key.deep_copy(row.storage_datums_[i], range_allocator_))) {
-        STORAGE_LOG(WARN, "Fail to deep copy end key's datum", K(ret), K(i), K(row), K(scan_rows_range_));
+        STORAGE_LOG(WARN, "Fail to deep copy end key's datum", K(ret), K(i), K(row));
       }
     }
   }
@@ -428,12 +427,14 @@ int ObMultipleSkipScanMerge::update_scan_rows_range(blocksstable::ObDatumRow &ro
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
     } else if (OB_FAIL(scan_rows_range_.prepare_memtable_readable(*col_descs, range_allocator_))) {
-      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rows_range_));
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret));
     } else if (OB_FAIL(ObMultipleScanMerge::open(scan_rows_range_))) {
       STORAGE_LOG(WARN, "Fail to open scan rows range", K(ret), K(scan_rows_range_));
     }
   }
-  STORAGE_LOG(TRACE, "Update and open scan rows range", K(ret), K(row), K(scan_rows_range_));
+  if (OB_SUCC(ret)) {
+    STORAGE_LOG(TRACE, "Update and open scan rows range", K(ret), K(scan_rows_range_));
+  }
   return ret;
 }
 
@@ -443,14 +444,14 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
   rowkey_allocator_.reuse();
   if (OB_UNLIKELY(!scan_rows_range_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected scan rows range", K(ret), K(scan_rows_range_));
+    STORAGE_LOG(WARN, "Unexpected scan rows range", K(ret));
   } else {
     ObStorageDatum *rowkey_datums = access_ctx_->query_flag_.is_reverse_scan() ?
         end_key_of_scan_rowkey_range() :
         start_key_of_scan_rowkey_range();
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_rowkey_prefix_cnt_; ++i) {
       if (OB_FAIL(rowkey_datums[i].deep_copy(scan_rows_range_.start_key_.get_datum(i), rowkey_allocator_))) {
-        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i), K(scan_rowkey_range_));
+        STORAGE_LOG(WARN, "Fail to deep copy start key's datum", K(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {
@@ -462,7 +463,7 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
       int cmp_ret = 0;
       const ObStorageDatumUtils &datum_utils = access_param_->iter_param_.get_read_info()->get_datum_utils();
       if (OB_FAIL(scan_rowkey_range_.start_key_.compare(scan_rowkey_range_.end_key_, datum_utils, cmp_ret))) {
-        STORAGE_LOG(WARN, "Fail to compare", K(ret), K(scan_rowkey_range_));
+        STORAGE_LOG(WARN, "Fail to compare", K(ret));
       } else if (cmp_ret >= 0) {
         ret = OB_ITER_END;
       } else {
@@ -472,14 +473,16 @@ int ObMultipleSkipScanMerge::update_scan_rowkey_range()
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
         } else if (OB_FAIL(scan_rowkey_range_.prepare_memtable_readable(*col_descs, rowkey_allocator_))) {
-          STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(scan_rowkey_range_));
+          STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret));
         } else if (OB_FAIL(ObMultipleScanMerge::open(scan_rowkey_range_))) {
           STORAGE_LOG(WARN, "Fail to open scan rowkey range", K(ret), K(scan_rowkey_range_));
         }
       }
     }
   }
-  STORAGE_LOG(TRACE, "Update and open scan rowkey range", K(ret), K(scan_rows_range_), K(scan_rowkey_range_));
+  if (OB_SUCC(ret)) {
+    STORAGE_LOG(TRACE, "Update and open scan rowkey range", K(ret), K(scan_rowkey_range_));
+  }
   return ret;
 }
 
@@ -509,7 +512,7 @@ int ObMultipleSkipScanMerge::shrink_scan_rows_range(bool &exceeded)
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(scan_rows_range_.start_key_.compare(scan_rows_range_.end_key_, datum_utils, cmp_ret))) {
-    STORAGE_LOG(WARN, "Fail to compare", K(ret), K(scan_rows_range_));
+    STORAGE_LOG(WARN, "Fail to compare", K(ret));
   } else if (cmp_ret > 0 || (0 == cmp_ret && (scan_rows_range_.is_left_open() || scan_rows_range_.is_right_open()))) {
     exceeded = true;
   }

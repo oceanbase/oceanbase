@@ -236,7 +236,8 @@ int ObPxOrderedCoordOp::inner_get_next_row()
   } else if (OB_UNLIKELY(OB_SUCCESS != ret)) {
     int ret_terminate = terminate_running_dfos(coord_info_.dfo_mgr_);
     LOG_WARN("QC get error code", K(ret), K(ret_terminate));
-    if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+    if ((OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+        || OB_GOT_SIGNAL_ABORTING == ret)
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }
@@ -279,6 +280,15 @@ int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg
   } else if (OB_SUCCESS == ret) {
     wait_next_msg = false;
   }
+  return ret;
+}
+
+int ObPxOrderedCoordOp::inner_rescan()
+{
+  finish_ch_cnt_ = 0;
+  all_rows_finish_ = false;
+  destroy_readers();
+  int ret = ObPxCoordOp::inner_rescan();
   return ret;
 }
 

@@ -32,6 +32,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -1500,6 +1501,28 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
 
 CAST_TO_TEXT_METHOD(int, ObIntTC);
 
+static int null_json(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+
+  ObJsonNull j_null;
+  ObIJsonBase *j_base = &j_null;
+  ObString raw_bin;
+  if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
+  } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
+    LOG_WARN("fail to fill json bin lob locator", K(ret));
+  } else {
+    ObLength res_length = -1;
+    res_length = out.get_val_len();
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  }
+
+  return ret;
+}
+
+
 static int int_json(const ObObjType expect_type, ObObjCastParams &params,
                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -1567,7 +1590,7 @@ static int common_build_geometry(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObGeoErrLogInfo log_info;
-  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info))) {
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     if (OB_ERR_GIS_INVALID_DATA == ret && OB_NOT_NULL(cast_name)) {
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
     } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(cast_name)) {
@@ -6015,14 +6038,18 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       j_base = &j_null;
     } else if (!is_oracle && CS_TYPE_BINARY == in.get_collation_type()) {
       j_base = &j_opaque;
-    } else if (!is_oracle
-                && CM_IS_IMPLICIT_CAST(cast_mode)
-                && !CM_IS_COLUMN_CONVERT(cast_mode)
-                && !CM_IS_JSON_VALUE(cast_mode)
-                && is_convert_jstr_type) {
+    } else if (!is_oracle  && (
+                (CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type))
+                || (CM_IS_IMPLICIT_CAST(cast_mode)
+                    && !CM_IS_COLUMN_CONVERT(cast_mode)
+                    && !CM_IS_JSON_VALUE(cast_mode)
+                    && is_convert_jstr_type))) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
       j_base = &j_string;
+      if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
+        j_base = &j_null;
+      }
     } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
       if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
@@ -6248,9 +6275,10 @@ static int string_geometry(const ObObjType expect_type, ObObjCastParams &params,
       ObString res_wkb;
       if (OB_FAIL(ObGeoTypeUtil::add_geo_version(temp_allocator, in_str, res_wkb))) {
         LOG_WARN("fail to add version", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(set_geo_res(&params, &out, res_wkb))) {
+        LOG_WARN("set geo result failed", K(ret));
       } else {
-        out.set_string(expect_type, res_wkb.ptr(), res_wkb.length());
-        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_wkb.length());
+        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, static_cast<ObLength>(out.get_string_len()));
       }
     } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
       LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
@@ -8468,7 +8496,7 @@ static int json_raw(const ObObjType expect_type, ObObjCastParams &params,
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8540,7 +8568,7 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -8609,7 +8637,7 @@ static int common_json_string(const ObObjType expect_type,
       ObString j_str;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -9552,15 +9580,15 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
         // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
         out.set_null();
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else
@@ -9649,7 +9677,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_identity,/*lob*/
-    cast_identity,/*json*/
+    null_json,    /*json*/
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_not_expected,/*decimalint*/
@@ -12630,11 +12658,16 @@ int datetime_scale_check_only(const ObAccuracy &accuracy, const ObObj &obj)
   if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
-  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+  } else {
     int64_t value = obj.get_datetime();
-    if (!ObTimeConverter::is_valid_datetime(value)) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("invalid datetime value", K(ret), K(value));
+    ObCastMode cast_mode = CM_ERROR_ON_SCALE_OVER;
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check usec scale fail.", K(ret), K(value), K(accuracy));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      if (!ObTimeConverter::is_valid_datetime(value)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid datetime value", K(ret), K(value));
+      }
     }
   }
   return ret;
@@ -13661,7 +13694,7 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
-const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
+const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null
 
 int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
@@ -13669,10 +13702,15 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   ObObjCastParams params; //构造一个空的cast_param对象，适配SET_RES_XXX宏定义
   ObCastMode cast_mode = CM_WARN_ON_FAIL;
   params.warning_ = 1; //将warning code设置为1，避免SET_RES_XXX宏将其当做真实的warning处理
-  if (ob_is_string_tc(expect_type) || ob_is_text_tc(expect_type)) {
+  if (ob_is_string_tc(expect_type)) {
     zero_obj.set_string(expect_type, "");
   } else if (ob_is_text_tc(expect_type)) {
-    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
+    if (ob_is_large_text(expect_type)) {
+      zero_obj.set_lob_value(expect_type, reinterpret_cast<const char *>(&ObLobManager::ZERO_LOB), sizeof(ObLobCommon));
+      zero_obj.set_has_lob_header();
+    } else { // tinytext
+      zero_obj.set_string(expect_type, "");
+    }
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);
@@ -13723,7 +13761,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("urowid with default value not supported");
   } else if (expect_type == ObJsonType) {
-    zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
+    zero_obj.set_json_value(expect_type, reinterpret_cast<const char *>(&OB_JSON_ZERO), ObJsonZeroVal::OB_JSON_ZERO_VAL_LENGTH);
+    zero_obj.set_has_lob_header();
   } else if (ob_is_user_defined_sql_type(expect_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("default value of udt, should be it's default constructor");

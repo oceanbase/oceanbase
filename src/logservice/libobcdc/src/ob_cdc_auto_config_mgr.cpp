@@ -92,7 +92,7 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
 
   const int64_t msg_sorter_queue_length = br_queue_length;
   REFRESH_NUM_FIELD_WITH_CONFIG(msg_sorter_task_count_upper_limit, msg_sorter_queue_length, config.msg_sorter_task_count_upper_limit.get());
-  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, MAX_QUEUE_LENGTH, config.sequencer_queue_length.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, MAX_QUEUE_LENGTH / 10, config.sequencer_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.storager_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(reader_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.reader_queue_length.get());
 }

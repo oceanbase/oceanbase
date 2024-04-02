@@ -129,7 +129,9 @@ private:
     NESTED_SQL_TOTAL,
     NESTED_SQL_DELTA,
     SOURCE_IP,
-    SOURCE_PORT
+    SOURCE_PORT,
+    ROUTE_MISS_TOTAL,
+    ROUTE_MISS_DELTA
   };
   int fill_row(const uint64_t tenant_id,
                const ObExecutedSqlStatRecord *sql_stat_record,

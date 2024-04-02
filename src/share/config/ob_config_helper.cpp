@@ -32,6 +32,7 @@
 #include "share/table/ob_table_config_util.h"
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/backup/ob_archive_persist_helper.h"
 namespace oceanbase
 {
 using namespace share;
@@ -207,9 +208,12 @@ bool ObConfigStaleTimeChecker::check(const ObConfigItem &t) const
 bool ObConfigCompressFuncChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
-  for (int i = 0; i < ARRAYSIZEOF(common::compress_funcs) && !is_valid; ++i) {
+  for (int i = 0; i < ARRAYSIZEOF(common::compress_funcs); ++i) {
     if (0 == ObString::make_string(compress_funcs[i]).case_compare(t.str())) {
-      is_valid = true;
+      if (i != DISABLED_ZLIB_1_COMPRESS_IDX) {
+        is_valid = true;
+      }
+      break;
     }
   }
   return is_valid;
@@ -231,6 +235,17 @@ bool ObConfigResourceLimitSpecChecker::check(const ObConfigItem &t) const
   ObResourceLimit rl;
   int ret = rl.load_config(t.str());
   return OB_SUCCESS == ret;
+}
+
+bool ObConfigTempStoreFormatChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(share::temp_store_format_options) && !is_valid; ++i) {
+    if (0 == ObString::make_string(temp_store_format_options[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 bool ObConfigPxBFGroupSizeChecker::check(const ObConfigItem &t) const
@@ -279,11 +294,58 @@ bool ObConfigCompressOptionChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigMaxSyslogFileCountChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t max_count = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    int64_t uncompressed_count = GCONF.syslog_file_uncompressed_count;
+    if (max_count == 0 || max_count >= uncompressed_count) {
+      is_valid = true;
+    } else {
+      is_valid = false;
+    }
+  }
+  return is_valid;
+}
+
+bool ObConfigSyslogCompressFuncChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(common::syslog_compress_funcs) && !is_valid; ++i) {
+    if (0 == ObString::make_string(syslog_compress_funcs[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
+bool ObConfigSyslogFileUncompressedCountChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t uncompressed_count = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    int64_t max_count = GCONF.max_syslog_file_count;
+    if (uncompressed_count >= 0 && (max_count == 0 || uncompressed_count <= max_count)) {
+      is_valid = true;
+    } else {
+      is_valid = false;
+    }
+  }
+  return is_valid;
+}
+
 bool ObConfigLogLevelChecker::check(const ObConfigItem &t) const
 {
   const ObString tmp_str(t.str());
   return ((0 == tmp_str.case_compare(ObLogger::PERF_LEVEL))
       || OB_SUCCESS == OB_LOGGER.parse_check(tmp_str.ptr(), tmp_str.length()));
+}
+
+bool ObConfigAlertLogLevelChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return OB_SUCCESS == OB_LOGGER.parse_check_alert(tmp_str.ptr(), tmp_str.length());
 }
 
 bool ObConfigAuditTrailChecker::check(const ObConfigItem &t) const
@@ -894,7 +956,7 @@ bool ObConfigSQLTlsVersionChecker::check(const ObConfigItem &t) const
          0 == tmp_str.case_compare("TLSV1.3");
 }
 
-int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value)
+int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(item)) {
@@ -903,7 +965,7 @@ int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString
   } else {
     // key
     char *save_ptr = NULL;
-    char *key_ptr = STRTOK_R(item, "=", &save_ptr);
+    char *key_ptr = STRTOK_R(item, delim, &save_ptr);
     ObString tmp_key(key_ptr);
     key = tmp_key.trim();
     // value
@@ -951,7 +1013,7 @@ int ObModeConfigParserUitl::format_mode_str(const char *src, int64_t src_len, ch
   return ret;
 }
 
-int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list)
+int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list, const char* delim)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str)) {
@@ -969,7 +1031,7 @@ int ObModeConfigParserUitl::get_kv_list(char *str, ObIArray<std::pair<ObString, 
       uint64_t len = strlen(token);
       while (len > 0 && token[len - 1] == ' ') token[--len] = '\0';
       // check and set mode
-      if (OB_FAIL(parse_item_to_kv(token, key, value))) {
+      if (OB_FAIL(parse_item_to_kv(token, key, value, delim))) {
         OB_LOG(WARN, "fail to check config item", K(ret));
       } else if (OB_FAIL(kv_list.push_back(std::make_pair(key, value)))) {
         OB_LOG(WARN, "fail to push back key and value pair", K(ret), K(key), K(value));
@@ -1092,6 +1154,101 @@ bool ObPrivControlParser::parse(const char *str, uint8_t *arr, int64_t len)
     }
   }
   return bret;
+}
+
+bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t len)
+{
+  bool bret = true;
+  ObParallelDDLControlMode ddl_mode;
+  if (OB_ISNULL(str) || OB_ISNULL(arr)) {
+    bret = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get config item failed", KP(str), KP(arr));
+  } else if (strlen(str) == 0) {
+    // do nothing
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<std::pair<ObString, ObString>, 1> kv_list;
+    int64_t str_len = strlen(str);
+    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    char buf[buf_len];
+    MEMSET(buf, 0, sizeof(buf));
+    MEMCPY(buf, str, str_len);
+    if (OB_TMP_FAIL(ObModeConfigParserUitl::format_mode_str(str, str_len, buf, buf_len))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to format mode str", K(str));
+    } else if (OB_TMP_FAIL(ObModeConfigParserUitl::get_kv_list(buf, kv_list, ":"))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
+    } else {
+      for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
+        uint8_t mode = MODE_ON;
+        if (kv_list.at(i).second.case_compare("on") == 0) {
+          mode = MODE_ON;
+        } else if (kv_list.at(i).second.case_compare("off") == 0) {
+          mode = MODE_OFF;
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode type", K(kv_list.at(i).second));
+        }
+        ObParallelDDLControlMode::ObParallelDDLType ddl_type = ObParallelDDLControlMode::MAX_TYPE;
+        if (!bret) {
+          // do nothing
+        } else if (OB_TMP_FAIL(ObParallelDDLControlMode::string_to_ddl_type(kv_list.at(i).first, ddl_type))) {
+          bret = false;
+          OB_LOG_RET(WARN, tmp_ret, "fail to trans string ddl_type", K(kv_list.at(i).first));
+        } else if (OB_TMP_FAIL(ddl_mode.set_parallel_ddl_mode(ddl_type, mode))) {
+          bret = false;
+          OB_LOG_RET(WARN, tmp_ret, "fail to set parallel ddl mode", K(ddl_type), K(mode));
+        }
+      }
+    }
+  }
+  if (bret) {
+    for (uint64_t i = 0; i < 8; ++i) {
+      arr[i] = static_cast<uint8_t>((ddl_mode.get_value() >> (i * 8)) & 0xFF);
+    }
+  }
+  return bret;
+}
+
+bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
+}
+
+bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int ret = OB_SUCCESS;
+  int64_t value = ObConfigTimeParser::get(t.value_.ptr(), is_valid);
+  ObArchivePersistHelper archive_op;
+  ObBackupPathString archive_dest_str;
+  ObBackupDest archive_dest;
+  ObStorageType device_type;
+  const int64_t dest_no = 0;
+  const bool lock = false;
+  if (is_valid) {
+    if (OB_FAIL(archive_op.init(tenant_id))) {
+      OB_LOG(WARN, "fail to init archive persist helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_op.get_archive_dest(*GCTX.sql_proxy_, lock, dest_no, archive_dest_str))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        OB_LOG(WARN, "failed to get archive dest", K(ret), K(tenant_id));
+      } else { // no dest exist, set archive_lag_target is disallowed
+        is_valid =  false;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "log_archive_dest has not been set, set archive_lag_target is");
+      }
+    } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
+      OB_LOG(WARN, "fail to set archive dest", K(ret), K(archive_dest_str));
+    } else if (archive_dest.is_storage_type_s3()) {
+      is_valid = MIN_LAG_TARGET_FOR_S3 <= value;
+      if (!is_valid) {
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set archive_lag_target smaller than 60s when log_archive_dest is S3 is");
+      }
+    } else {
+      is_valid = true;
+    }
+  }
+  return is_valid;
 }
 
 } // end of namepace common

@@ -19,6 +19,7 @@
 #include "lib/charset/ob_dtoa.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "rpc/obmysql/ob_mysql_global.h"
 
 
 namespace oceanbase {
@@ -156,8 +157,12 @@ int ObGeoToWktVisitor::appendInnerPoint(double x, double y)
   int16_t scale = static_cast<int16_t>(scale_);
   uint64_t len_x = 0;
   uint64_t len_y = 0;
-  char *buf_ptr = buffer_.ptr() + buffer_.length();
-  if (OB_FAIL(convert_double_to_str(buf_ptr, buffer_.remain(), x, has_scale_, scale, is_oracle_mode_, len_x))) {
+  char *buf_ptr = nullptr;
+  uint64_t  reserve_len = MAX_DIGITS_IN_DOUBLE * 2;
+  if (buffer_.remain() < reserve_len && OB_FAIL(buffer_.reserve(reserve_len))) {
+    LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
+  } else if (FALSE_IT(buf_ptr = buffer_.ptr() + buffer_.length())) {
+  } else if (OB_FAIL(convert_double_to_str(buf_ptr, buffer_.remain(), x, has_scale_, scale, is_oracle_mode_, len_x))) {
     LOG_WARN("fail to append x to buffer", K(ret), K(x));
   } else if (OB_FAIL(buffer_.set_length(buffer_.length() + len_x))) {
     LOG_WARN("fail to set buffer len", K(ret), K(buffer_.length()), K(len_x));
@@ -176,13 +181,15 @@ template<typename T_IBIN>
 int ObGeoToWktVisitor::appendPoint(T_IBIN *geo)
 {
   INIT_SUCC(ret);
-  const char *type_name = ObGeoTypeUtil::get_geo_name_by_type(geo->type());
-  uint64_t reserve_len = MAX_DIGITS_IN_DOUBLE * 2 + 3;
+  uint64_t reserve_len = PREPARE_DIGITS_IN_DOUBLE * 2 + 4; // two points + "(" ")" ","
+  if (in_multi_visit_) {
+    reserve_len += strlen("POINT");
+  }
   // [type_name][(][x][ ][y][)]
   if (OB_FAIL(buffer_.reserve(reserve_len))) {
     LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
   } else if (!in_multi_visit_ && OB_FAIL(appendTypeNameWithMode(geo))) {
-    LOG_WARN("fail to append buffer_", K(ret), K(in_multi_visit_), K(type_name));
+    LOG_WARN("fail to append buffer_", K(ret), K(in_multi_visit_));
   } else if (OB_FAIL(buffer_.append("("))) {
     LOG_WARN("fail to append buffer_", K(ret));
   } else if (OB_FAIL(appendInnerPoint(geo->x(), geo->y()))) {
@@ -200,14 +207,15 @@ int ObGeoToWktVisitor::appendLine(T_IBIN *geo)
 {
   INIT_SUCC(ret);
   uint64_t size = geo->size();
-  uint64_t reserve_len = (MAX_DIGITS_IN_DOUBLE * 2 + 1) * size;
-  const char *type_name = ObGeoTypeUtil::get_geo_name_by_type(geo->type());
-  reserve_len += in_multi_visit_ ? 0 : 2;
+  uint64_t reserve_len = 2 + (PREPARE_DIGITS_IN_DOUBLE + 1) * size;
+  if (in_multi_visit_) {
+    reserve_len += strlen("LINESTRING");
+  }
   // [type_name][(][x1][ ][y1][,][x2][ ][y2][)]
   if (OB_FAIL(buffer_.reserve(reserve_len))) {
     LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
   } else if (!in_multi_visit_ && OB_FAIL(appendTypeNameWithMode(geo))) {
-    LOG_WARN("fail to append buffer_", K(ret), K(in_multi_visit_), K(type_name));
+    LOG_WARN("fail to append buffer_", K(ret), K(in_multi_visit_));
   } else if (OB_FAIL(buffer_.append("("))) {
     LOG_WARN("fail to append buffer_", K(ret));
   } else {
@@ -232,13 +240,39 @@ int ObGeoToWktVisitor::appendLine(T_IBIN *geo)
   return ret;
 }
 
+// Assume that each number has a length of PREPARE_DIGITS_IN_DOUBLE
+//  to estimate polygon wkt lenth, not true length
+template<typename T_IBIN, typename T_BIN,
+         typename T_BIN_RING, typename T_BIN_INNER_RING>
+int ObGeoToWktVisitor::estimate_polygon_len(T_IBIN *geo)
+{
+  T_BIN& poly = *(T_BIN *)(geo->val());
+  uint32_t ring_sz = poly.size();
+  int reserve_len = ring_sz * 3; // "()," = 3
+  uint32_t point_num = 0;
+  if (in_multi_visit_) {
+    reserve_len += strlen("POLYGON");
+  }
+  if (ring_sz > 0) {
+    T_BIN_RING& exterior = poly.exterior_ring();
+    point_num += exterior.size();
+    T_BIN_INNER_RING& inner_rings = poly.inner_rings();
+    typename T_BIN_INNER_RING::iterator iterInnerRing = inner_rings.begin();
+    for (; iterInnerRing != inner_rings.end(); ++iterInnerRing) {
+      point_num += inner_rings.size();
+    }
+    reserve_len += point_num * (PREPARE_DIGITS_IN_DOUBLE + 1);
+  }
+  return reserve_len;
+}
+
 template<typename T_IBIN, typename T_BIN,
          typename T_BIN_RING, typename T_BIN_INNER_RING>
 int ObGeoToWktVisitor::appendPolygon(T_IBIN *geo)
 {
   INIT_SUCC(ret);
   const char *type_name = ObGeoTypeUtil::get_geo_name_by_type(geo->type());
-  uint64_t reserve_len = 2;
+  uint64_t reserve_len = estimate_polygon_len<T_IBIN, T_BIN, T_BIN_RING, T_BIN_INNER_RING>(geo);
   // [type_name][(][(][x1][ ][y1][,][x2][ ][y2][,][x3][ ][y3][)][)]
   if (geo->length() < WKB_COMMON_WKB_HEADER_LEN) {
     ret = OB_ERR_GIS_INVALID_DATA;
@@ -256,9 +290,7 @@ int ObGeoToWktVisitor::appendPolygon(T_IBIN *geo)
     if (poly.size() != 0) {
       typename T_BIN_RING::iterator iter = exterior.begin();
       // [(][x1][ ][y1][,][x2][ ][y2][,][x3][ ][y3][)]
-      if (OB_FAIL(buffer_.reserve(reserve_len))) {
-        LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
-      } else if (OB_FAIL(buffer_.append("("))) {
+      if (OB_FAIL(buffer_.append("("))) {
         LOG_WARN("fail to append buffer_", K(ret));
       }
       for (; OB_SUCC(ret) && iter != exterior.end(); ++iter) {
@@ -281,11 +313,8 @@ int ObGeoToWktVisitor::appendPolygon(T_IBIN *geo)
     typename T_BIN_INNER_RING::iterator iterInnerRing = inner_rings.begin();
     for (; OB_SUCC(ret) && iterInnerRing != inner_rings.end(); ++iterInnerRing) {
       uint32_t size = iterInnerRing->size();
-      uint64_t ring_len = 1 + (MAX_DIGITS_IN_DOUBLE * 2 + 1) * size + 1;
       typename T_BIN_RING::iterator iter = (*iterInnerRing).begin();
-      if (OB_FAIL(buffer_.reserve(ring_len))) {
-        LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
-      } else if (OB_FAIL(buffer_.append("("))) {
+      if (OB_FAIL(buffer_.append("("))) {
         LOG_WARN("fail to append buffer_", K(ret));
       }
       for (; OB_SUCC(ret) && iter != (*iterInnerRing).end(); ++iter) {
@@ -322,7 +351,7 @@ int ObGeoToWktVisitor::appendMultiPrefix(T_IBIN *geo)
 {
   INIT_SUCC(ret);
   const char *type_name = ObGeoTypeUtil::get_geo_name_by_type(geo->type());
-  uint64_t reserve_len = 2;
+  uint64_t reserve_len = 2 + strlen(type_name);
   // [type_name][(][x][ ][y][)]
   if (OB_FAIL(buffer_.reserve(reserve_len))) {
     LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
@@ -642,7 +671,9 @@ int ObGeoToWktVisitor::init(uint32_t srid, int64_t maxdecimaldigits)
       LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
     } else if (OB_FAIL(buffer_.append("SRID="))) {
       LOG_WARN("fail to append buffer_", K(ret));
-    } else if (OB_FAIL(buffer_.append(ffi.ptr(), ffi.length()))) {
+    } else if (srid == UINT32_MAX && OB_FAIL(buffer_.append("NULL"))) {
+      LOG_WARN("fail to append buffer_", K(ret));
+    } else if (srid != UINT32_MAX && OB_FAIL(buffer_.append(ffi.ptr(), ffi.length(), 0))) {
       LOG_WARN("fail to append buffer_", K(ret), K(ffi.length()));
     } else if (OB_FAIL(buffer_.append(";"))) {
       LOG_WARN("fail to append buffer_", K(ret));
@@ -663,9 +694,7 @@ int ObGeoToWktVisitor::appendCommaWithMode() {
   // oracle [,][ ]
   // mysql [,]
   uint64_t reserve_len = is_oracle_mode_ ? 2 : 1;
-  if (OB_FAIL(buffer_.reserve(reserve_len))) {
-    LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
-  } else if (OB_FAIL(buffer_.append(","))) {
+  if (OB_FAIL(buffer_.append(","))) {
     LOG_WARN("fail to append buffer_", K(ret), K(is_oracle_mode_));
   } else if (is_oracle_mode_ && OB_FAIL(buffer_.append(" "))) {
     LOG_WARN("fail to append buffer_", K(ret), K(is_oracle_mode_));
@@ -680,12 +709,8 @@ int ObGeoToWktVisitor::appendTypeNameWithMode(T_IBIN *geo) {
   // oracle [typename][ ]
   // mysql [typename]
   const char *type_name = ObGeoTypeUtil::get_geo_name_by_type(geo->type());
-  uint64_t reserve_len = strlen(type_name);
-  reserve_len += is_oracle_mode_ ? 1 : 0;
 
-  if (OB_FAIL(buffer_.reserve(reserve_len))) {
-    LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
-  } else if (OB_FAIL(buffer_.append(type_name))) {
+  if (OB_FAIL(buffer_.append(type_name))) {
     LOG_WARN("fail to append buffer_", K(ret), K(type_name));
   } else if (is_oracle_mode_ && OB_FAIL(buffer_.append(" "))) {
     LOG_WARN("fail to append buffer_", K(ret), K(is_oracle_mode_));

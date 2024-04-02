@@ -1,4 +1,4 @@
-static ObObjType ROUND_RESULT_TYPE[ObMaxType] =
+static constexpr ObObjType ROUND_RESULT_TYPE[ObMaxType] =
 {
     ObDoubleType,     /* NullType  */
     ObIntType,        /* TinyIntType  */
@@ -53,3 +53,5 @@ static ObObjType ROUND_RESULT_TYPE[ObMaxType] =
     ObDecimalIntType,  /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
 };
+
+static_assert(is_array_fully_initialized(ROUND_RESULT_TYPE), "ROUND_RESULT_TYPE is partially initlized");

@@ -63,7 +63,7 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
   (void)memset(is_null_lob_old_columns_, 0, sizeof(is_null_lob_old_columns_));
-  (void)memset(is_json_diff_, 0, sizeof(is_json_diff_));
+  (void)memset(is_diff_, 0, sizeof(is_diff_));
 }
 
 int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_old_column)
@@ -80,7 +80,7 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
     (void)memset(is_null_lob_old_columns_, 0, column_num * sizeof(is_null_lob_old_columns_[0]));
-    (void)memset(is_json_diff_, 0, column_num * sizeof(is_json_diff_[0]));
+    (void)memset(is_diff_, 0, column_num * sizeof(is_diff_[0]));
   }
 
   return OB_SUCCESS;
@@ -325,9 +325,10 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
-  } else if (OB_ISNULL(stmt_task)) {
+  } else if (OB_ISNULL(stmt_task) || OB_ISNULL(rv)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arguments", K(ret), KPC(stmt_task));
+    LOG_ERROR("invalid arguments", K(ret), KPC(stmt_task), KPC(rv));
+  } else if (FALSE_IT(rv->reset_column_num())) {
   } else if (OB_UNLIKELY(! stmt_task->is_dml_stmt()) || OB_ISNULL(dml_stmt_task)) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("stmt_task is not DML statement", KR(ret), "stmt_task", *stmt_task);
@@ -763,6 +764,11 @@ int ObLogFormatter::format_row_(
         dml_stmt_task.get_dml_flag(),
         &table_schema))) {
       LOG_ERROR("build_binlog_record_ fail", KR(ret), K(br), K(row_value), K(new_column_cnt), K(dml_stmt_task));
+    } else if (OB_UNLIKELY(!br.is_valid())) {
+      // 1. not found valid column(heap table with all column virtual generated)
+      // 2. dml_falg is DF_LOCK
+      // 3. tenant has been dropped
+      // 4. not user_table or table in recyclebin
     } else {
       if (OB_NOT_NULL(br.get_data())
           && OB_UNLIKELY(SRC_FULL_RECORDED != br.get_data()->getSrcCategory())) {
@@ -1304,7 +1310,7 @@ int ObLogFormatter::fill_normal_cols_(
               if (lob_data_get_ctx->is_ext_info_log()) {
                 if (cv->is_json()) {
                   rv->new_columns_[usr_column_idx] = new_col_str;
-                  rv->is_json_diff_[usr_column_idx] = true;
+                  rv->is_diff_[usr_column_idx] = true;
                 } else {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
@@ -1324,7 +1330,7 @@ int ObLogFormatter::fill_normal_cols_(
               }
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(new_col_str->ptr(), new_col_str->length()),
-                  "buf_len", new_col_str->length(), KPC(lob_data_get_ctx), "is_json_diff", rv->is_json_diff_[usr_column_idx]);
+                  "buf_len", new_col_str->length(), KPC(lob_data_get_ctx), "is_diff", rv->is_diff_[usr_column_idx]);
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->new_columns_[usr_column_idx] = nullptr;
@@ -1607,10 +1613,6 @@ int ObLogFormatter::build_binlog_record_(
   } else if (OB_ISNULL(br_data = br->get_data())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("binlog record data is invalid", KR(ret), K(br));
-  } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
-        K(rv->new_column_array_), K(rv->old_column_array_));
   } else if (OB_FAIL(is_hbase_mode_put_(table_id, dml_flag, rv->column_num_, new_column_cnt,
           rv->contain_old_column_, is_hbase_mode_put))) {
     LOG_ERROR("is_hbase_mode_put_ fail", KR(ret), K(table_id), K(dml_flag),
@@ -1625,10 +1627,14 @@ int ObLogFormatter::build_binlog_record_(
     br->set_is_valid(true);
 
     if (rv->column_num_ <= 0) {
-      LOG_INFO("ignore non-user-column table", "table_name", simple_table_schema->get_table_name(),
+      LOG_INFO("[IGNORE_DATA] ignore non-user-column table", "table_name", simple_table_schema->get_table_name(),
           "table_id", simple_table_schema->get_table_id());
       // ignore table with no columns
       br->set_is_valid(false);
+    } else if (OB_ISNULL(rv->new_column_array_) || OB_ISNULL(rv->old_column_array_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid row value, new_column_array or old_column_array is invalid",
+          K(rv->new_column_array_), K(rv->old_column_array_));
     } else {
       br_data->setNewColumn(rv->new_column_array_, static_cast<int>(rv->column_num_));
       br_data->setOldColumn(rv->old_column_array_, static_cast<int>(rv->column_num_));
@@ -1856,11 +1862,9 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
               "column_num", row_value->column_num_);
-        } else if (row_value->is_json_diff_[i]) {
-#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
-          br_data->putNewJsonDiff(str_val->ptr(), str_val->length());
-          LOG_DEBUG("putNewJsonDiff", K(i), KPC(str_val));
-#endif
+        } else if (row_value->is_diff_[i]) {
+          br_data->putNewDiff(str_val->ptr(), str_val->length());
+          LOG_DEBUG("putNewDiff", K(i), KPC(str_val));
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }

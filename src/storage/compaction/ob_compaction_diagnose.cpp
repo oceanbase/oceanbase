@@ -1377,7 +1377,7 @@ int ObCompactionDiagnoseMgr::diagnose_no_dag(
   int ret = OB_SUCCESS;
   ObScheduleSuspectInfo info;
   bool add_schedule_info = false;
-  ObSuspectInfoType suspect_type;
+  ObSuspectInfoType suspect_type = ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX;
 
   char tmp_str[common::OB_DIAGNOSE_INFO_LENGTH] = "\0";
   if (OB_FAIL(get_suspect_and_warning_info(dag, merge_type, ls_id, tablet_id, info, suspect_type, tmp_str, sizeof(tmp_str)))) {
@@ -1422,7 +1422,7 @@ int ObCompactionDiagnoseMgr::diagnose_no_dag(
     add_schedule_info = true;
   }
 
-  if (OB_SUCC(ret) && add_schedule_info && can_add_diagnose_info()) {
+  if (OB_SUCC(ret) && add_schedule_info && can_add_diagnose_info() && suspect_type < ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX) {
     if (suspect_tablet_count_[suspect_type] < DIAGNOSE_TABELT_MAX_COUNT) {
       if (OB_FAIL(SET_DIAGNOSE_INFO(
             info_array_[idx_++],

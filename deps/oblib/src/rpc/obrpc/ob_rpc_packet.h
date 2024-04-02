@@ -17,7 +17,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/checksum/ob_crc64.h"
-#include "lib/compress/ob_compressor_pool.h"
+#include "lib/compress/ob_compressor.h"
 #include "rpc/obrpc/ob_rpc_time.h"
 #include "rpc/ob_packet.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
@@ -26,6 +26,8 @@ namespace oceanbase
 {
 namespace obrpc
 {
+
+#define OB_LOG_LEVEL_MASK (0xf)
 
 enum ObRpcPriority
 {
@@ -154,6 +156,7 @@ public:
   static const uint16_t ENABLE_RATELIMIT_FLAG  = 1 << 8;
   static const uint16_t BACKGROUND_FLOW_FLAG   = 1 << 7;
   static const uint16_t TRACE_INFO_FLAG        = 1 << 6;
+  static const uint16_t IS_KV_REQUEST_FALG     = 1 << 5;
 
   uint64_t checksum_;
   ObRpcPacketCode pcode_;
@@ -190,7 +193,7 @@ public:
                K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time),
                K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_));
 
-  ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & 0x7); }
+  ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & OB_LOG_LEVEL_MASK); }
   static inline int64_t get_encoded_size()
   {
     return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */;
@@ -271,6 +274,8 @@ public:
   inline bool unneed_response() const;
   inline void set_require_rerouting();
   inline bool require_rerouting() const;
+  inline bool is_kv_request() const;
+  inline void set_kv_request();
 
   inline bool ratelimit_enabled() const;
   inline void enable_ratelimit();
@@ -494,6 +499,16 @@ bool ObRpcPacket::has_trace_info() const
   return hdr_.flags_ & ObRpcPacketHeader::TRACE_INFO_FLAG;
 }
 
+bool ObRpcPacket::is_kv_request() const
+{
+  return hdr_.flags_ & ObRpcPacketHeader::IS_KV_REQUEST_FALG;
+}
+
+void ObRpcPacket::set_kv_request()
+{
+  hdr_.flags_ |= ObRpcPacketHeader::IS_KV_REQUEST_FALG;
+}
+
 void ObRpcPacket::set_stream_next()
 {
   hdr_.flags_ &= static_cast<uint16_t>(~ObRpcPacketHeader::STREAM_LAST_FLAG);
@@ -694,7 +709,7 @@ const uint64_t *ObRpcPacket::get_trace_id() const
 
 int8_t ObRpcPacket::get_log_level() const
 {
-  return hdr_.flags_ & 0x7;
+  return hdr_.flags_ & OB_LOG_LEVEL_MASK;
 }
 
 void ObRpcPacket::set_trace_id(const uint64_t *trace_id)
@@ -709,7 +724,7 @@ void ObRpcPacket::set_trace_id(const uint64_t *trace_id)
 
 void ObRpcPacket::set_log_level(const int8_t log_level)
 {
-  hdr_.flags_ &= static_cast<uint16_t>(~0x7);   //must set zero first
+  hdr_.flags_ &= static_cast<uint16_t>(~OB_LOG_LEVEL_MASK);   //must set zero first
   hdr_.flags_ |= static_cast<uint16_t>(log_level);
 }
 

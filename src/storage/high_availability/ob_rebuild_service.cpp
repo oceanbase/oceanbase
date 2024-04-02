@@ -728,9 +728,20 @@ int ObRebuildService::check_can_rebuild_(
     if (ObLSRebuildType::CLOG == rebuild_ctx.type_
         && is_primary_tenant
         && member_list.contains(self_addr)) {
-      LOG_ERROR("paxos member lost clog, need rebuild", "ls_id", ls->get_ls_id(), K(role));
+      LOG_ERROR("paxos member lost clog, need rebuild", "tenant_id", ls->get_tenant_id(),
+          "ls_id", ls->get_ls_id(), K(role));
     }
   }
+
+#ifdef ERRSIM
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    if (tenant_config->ls_rebuild_without_check_limit) {
+      can_rebuild = true;
+    }
+  }
+#endif
+
   return ret;
 }
 
@@ -1043,11 +1054,8 @@ int ObLSRebuildMgr::generate_rebuild_task_()
   int ret = OB_SUCCESS;
   const int64_t timestamp = 0;
   common::ObMemberList member_list;
-  int64_t paxos_replica_num = 0;
-  ObLSInfo ls_info;
   int64_t cluster_id = GCONF.cluster_id;
   uint64_t tenant_id = MTL_ID();
-  ObAddr leader_addr;
   ObLS *ls = nullptr;
 
   if (!is_inited_) {
@@ -1057,27 +1065,6 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
-    if (OB_FAIL(get_ls_info_(cluster_id, tenant_id, ls->get_ls_id(), ls_info))) {
-      LOG_WARN("failed to get ls info", K(ret), K(cluster_id), K(tenant_id), KPC(ls));
-      //overwrite ret
-      if (OB_FAIL(ls->get_log_handler()->get_election_leader(leader_addr))) {
-        LOG_WARN("failed to get election leader", K(ret), KPC(ls), K(tenant_id));
-      } else {
-        paxos_replica_num = 1;
-      }
-    } else {
-      //TODO(muwei.ym) do not use leader as src in 4.3
-      const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
-      for (int64_t i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
-        const ObLSReplica &replica = replica_array.at(i);
-        if (replica.is_strong_leader()) {
-          leader_addr = replica.get_server();
-          paxos_replica_num = replica.get_paxos_replica_number();
-          break;
-        }
-      }
-    }
-
   #ifdef ERRSIM
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
@@ -1086,20 +1073,18 @@ int ObLSRebuildMgr::generate_rebuild_task_()
         }
       }
   #endif
-
     if (OB_FAIL(ret)) {
     } else {
       ObTaskId task_id;
       task_id.init(GCONF.self_addr_);
       ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp);
-      ObReplicaMember src_replica_member(leader_addr, timestamp);
+      ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp);
       ObMigrationOpArg arg;
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;
       arg.dst_ = dst_replica_member;
       arg.ls_id_ = ls->get_ls_id();
       arg.priority_ = ObMigrationOpPriority::PRIO_MID;
-      arg.paxos_replica_number_ = paxos_replica_num;
       arg.src_ = src_replica_member;
       arg.type_ = ObMigrationOpType::REBUILD_LS_OP;
 
@@ -1111,27 +1096,3 @@ int ObLSRebuildMgr::generate_rebuild_task_()
   return ret;
 }
 
-int ObLSRebuildMgr::get_ls_info_(
-    const int64_t cluster_id,
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    share::ObLSInfo &ls_info)
-{
-  int ret = OB_SUCCESS;
-  ls_info.reset();
-  share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls rebuild mgr do not init", K(ret));
-  } else if (cluster_id < 0 || OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get ls info get invalid argument", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else if (nullptr == lst_operator) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
-      ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  }
-  return ret;
-}

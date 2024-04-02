@@ -143,6 +143,12 @@ function do_clean
     find . -maxdepth 1 -type d -name 'build_*' | grep -v 'build_ccls' | xargs rm -rf
 }
 
+function build_package
+{
+   STATIC_LINK_LGPL_DEPS_OPTION=OFF
+    do_build "$@" -DOB_BUILD_PACKAGE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
+}
+
 # build - configurate project and prepare to compile, by calling make
 function build
 {
@@ -203,8 +209,14 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_DEBUG_LOG=ON -DENABLE_OBJ_LEAK_CHECK=ON -DOB_USE_LLD=$LLD_OPTION
         ;;
       xrpm)
-        STATIC_LINK_LGPL_DEPS_OPTION=OFF
-        do_build "$@" -DOB_BUILD_RPM=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
+        build_package "$@" -DCMAKE_BUILD_RPM=ON
+        ;;
+      xdeb)
+        build_package "$@" -DCMAKE_BUILD_DEB=ON
+        ;;
+      xpackage)
+        # automatic determination of packaging type
+        build_package "$@"
         ;;
       xenable_smart_var_check)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DENABLE_SMART_VAR_CHECK=ON -DOB_ENABLE_AVX2=ON

@@ -217,13 +217,14 @@ private:
     ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
     OZ(txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id_, ls_tx_ctx_mgr));
     int i = 0;
-    for (i = 0; i < 2000; ++i) {
-      if (0 == ls_tx_ctx_mgr->get_tx_ctx_count()) break;
+    int tx_count = ls_tx_ctx_mgr->get_tx_ctx_count();
+    for (i = 0; tx_count > 0 && i < 2000; ++i) {
+      tx_count = ls_tx_ctx_mgr->get_tx_ctx_count();
       usleep(500);
     }
     if (2000 == i) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_INFO("print all tx begin", K(ret));
+      LOG_INFO("wait all tx ctx destoryed fail, print all tx:", K(tx_count));
       const bool verbose = true;
       ls_tx_ctx_mgr->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
       LOG_INFO("print all tx end", K(ret));

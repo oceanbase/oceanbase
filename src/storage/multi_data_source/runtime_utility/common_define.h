@@ -22,7 +22,7 @@
 #include "src/share/scn.h"
 #include "src/share/ob_occam_time_guard.h"
 
-#ifdef OB_BUILD_RPM
+#ifdef OB_BUILD_PACKAGE
   #define MDS_ASSERT(x) (void)(x)
 #else
   #define MDS_ASSERT(x) \
@@ -42,6 +42,8 @@ namespace storage
 {
 namespace mds
 {
+class MdsTableBase;
+using MdsTableMap = common::ObLinearHashMap<common::ObTabletID, MdsTableBase*, UniqueMemMgrTag>;
 
 enum class NodePosition {
   MDS_TABLE,

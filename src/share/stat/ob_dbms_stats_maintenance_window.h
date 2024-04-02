@@ -57,6 +57,8 @@ public:
 
   static bool is_stats_job(const ObString &job_name);
 
+  static int reset_opt_stats_user_infos(ObIArray<const ObUserInfo *> &user_infos);
+
 private:
   static int get_window_job_info(const int64_t current_time,
                                  const int64_t nth_window,

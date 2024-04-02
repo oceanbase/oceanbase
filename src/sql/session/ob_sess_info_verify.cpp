@@ -421,7 +421,7 @@ int ObSessInfoVerify::compare_verify_session_info(sql::ObSQLSessionInfo &sess,
         LOG_WARN("info type is not consistent", K(ret), K(info_type1), K(info_type2));
       } else if (OB_FAIL(sess.get_sess_encoder(SessionSyncInfoType(info_type1), encoder))) {
         LOG_WARN("failed to get session encoder", K(ret));
-      } else if (OB_FAIL(encoder->compare_sess_info(buf1 + pos1, info_len1,
+      } else if (OB_FAIL(encoder->compare_sess_info(sess, buf1 + pos1, info_len1,
                                   buf2 + pos2, info_len2))) {
         LOG_ERROR("fail to compare session info", K(ret),
                     K(sess.get_sessid()),

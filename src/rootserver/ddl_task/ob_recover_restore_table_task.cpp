@@ -172,11 +172,18 @@ int ObRecoverRestoreTableTask::fail()
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObDDLRes drop_table_res;
   bool need_cleanup = true;
+  bool all_complement_dag_exit = true;
   {
     ObSchemaGetterGuard dst_tenant_schema_guard;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
+    } else if (OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
+      LOG_WARN("check and cancel complement data dag failed", K(ret));
+    } else if (!all_complement_dag_exit) {
+      if (REACH_COUNT_INTERVAL(1000L)) {
+        LOG_INFO("wait all complement data dag exit", K(dst_tenant_id_), K(task_id_));
+      }
     } else if (OB_ISNULL(root_service)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys, root service must not be nullptr", K(ret));

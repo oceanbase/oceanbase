@@ -63,10 +63,10 @@ class ObLockObjRequest;
 class ObLockTableRequest;
 class ObLockTabletRequest;
 class ObLockPartitionRequest;
-using ObUnLockObjRequest = ObLockObjRequest;
-using ObUnLockTableRequest = ObLockTableRequest;
-using ObUnLockPartitionRequest = ObLockPartitionRequest;
-using ObUnLockTabletRequest = ObLockTabletRequest;
+class ObUnLockObjRequest;
+class ObUnLockTableRequest;
+class ObUnLockPartitionRequest;
+class ObUnLockTabletRequest;
 }
 }
 namespace observer
@@ -143,7 +143,8 @@ public:
            ObRestoreSQLModifier *sql_modifer = NULL,
            const bool use_static_engine = false,
            const bool is_oracle_mode = false,
-           const int32_t group_id = 0);
+           const int32_t group_id = 0,
+           const bool is_resource_conn = false);
   int destroy(void);
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
@@ -231,7 +232,6 @@ public:
   bool is_in_trans() const { return is_in_trans_; }
   void set_is_in_trans(const bool is_in_trans) { is_in_trans_ = is_in_trans; }
   bool is_resource_conn() const { return is_resource_conn_; }
-  void set_is_resource_conn(const bool is_resource_conn) { is_resource_conn_ = is_resource_conn; }
   void set_resource_conn_id(uint64_t resource_conn_id) { resource_conn_id_ = resource_conn_id; }
   uint64_t get_resource_conn_id() const { return resource_conn_id_; }
   const common::ObAddr &get_resource_svr() const { return resource_svr_; }
@@ -256,7 +256,8 @@ public:
   int forward_request(const uint64_t tenant_id,
                       const int64_t op_type,
                       const ObString &sql,
-                      ObInnerSQLResult &res);
+                      ObInnerSQLResult &res,
+                      const int32_t group_id = 0);
 
 public:
   // nested session and sql execute for foreign key.
@@ -369,7 +370,8 @@ private:
   int forward_request_(const uint64_t tenant_id,
                        const int64_t op_type,
                        const ObString &sql,
-                       ObInnerSQLResult &res);
+                       ObInnerSQLResult &res,
+                       const int32_t group_id = 0);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
   int create_session_by_mgr();
   int create_default_session();
@@ -433,14 +435,19 @@ private:
 class ObInnerSqlWaitGuard
 {
 public:
-  ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
+  explicit ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
   ~ObInnerSqlWaitGuard();
 private:
   bool is_inner_session_;
-  sql::ObSQLSessionInfo *inner_session_;
+  int64_t inner_session_id_;
   ObSessionDIBuffer *di_buffer_;
   int64_t prev_tenant_id_;
   int64_t prev_session_id_;
+  ObActiveSessionStat *prev_stat_;
+  bool need_record_;
+  bool prev_is_bkgd_active_;
+  ObWaitEventDesc *prev_max_wait_;
+  ObWaitEventStat *prev_total_wait_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

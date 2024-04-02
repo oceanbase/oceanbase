@@ -361,10 +361,10 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
   return ret;
 }
 
-int ObSelectStmt::update_stmt_table_id(const ObSelectStmt &other)
+int ObSelectStmt::update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::update_stmt_table_id(other))) {
+  if (OB_FAIL(ObDMLStmt::update_stmt_table_id(allocator, other))) {
     LOG_WARN("failed to update stmt table id", K(ret));
   } else if (OB_UNLIKELY(set_query_.count() != other.set_query_.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -378,7 +378,7 @@ int ObSelectStmt::update_stmt_table_id(const ObSelectStmt &other)
           || OB_ISNULL(child_query = set_query_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null statement", K(ret), K(child_query), K(other_child_query));
-      } else if (OB_FAIL(SMART_CALL(child_query->update_stmt_table_id(*other_child_query)))) {
+      } else if (OB_FAIL(SMART_CALL(child_query->update_stmt_table_id(allocator, *other_child_query)))) {
         LOG_WARN("failed to update stmt table id", K(ret));
       } else { /* do nothing*/ }
     }
@@ -773,6 +773,18 @@ bool ObSelectStmt::has_for_update() const
   return bret;
 }
 
+bool ObSelectStmt::is_skip_locked() const
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < table_items_.count(); ++i) {
+    const TableItem *table_item = table_items_.at(i);
+    if (table_item != NULL && table_item->skip_locked_) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
 int ObSelectStmt::clear_sharable_expr_reference()
 {
   int ret = OB_SUCCESS;
@@ -800,13 +812,18 @@ int ObSelectStmt::clear_sharable_expr_reference()
   return ret;
 }
 
-int ObSelectStmt::remove_useless_sharable_expr()
+int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
+                                               ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr())) {
+  if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr(expr_factory, session_info))) {
     LOG_WARN("failed to remove useless sharable expr", K(ret));
   } else {
     ObRawExpr *expr = NULL;
+    const bool is_scala = is_scala_group_by();
     for (int64_t i = agg_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       if (OB_ISNULL(expr = agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -830,6 +847,17 @@ int ObSelectStmt::remove_useless_sharable_expr()
       } else {
         LOG_TRACE("succeed to remove win func exprs", K(*expr));
       }
+    }
+    if (OB_SUCC(ret) && is_scala && agg_items_.empty()) {
+      ObAggFunRawExpr *aggr_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_dummy_count_expr(*expr_factory, session_info, aggr_expr))) {
+        LOG_WARN("failed to build a dummy expr", K(ret));
+      } else if (OB_FAIL(agg_items_.push_back(aggr_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(set_sharable_expr_reference(*aggr_expr,
+                                                     ExplicitedRefType::REF_BY_NORMAL))) {
+        LOG_WARN("failed to set sharable exprs reference", K(ret));
+      } else {/* do nothing */}
     }
   }
   return ret;
@@ -1306,27 +1334,55 @@ ObRawExpr* ObSelectStmt::get_pure_set_expr(ObRawExpr *expr)
   return expr;
 }
 
-// add ref count to the last aggr item to maintain the scala group by
-int ObSelectStmt::maintain_scala_group_by_ref()
+int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const
 {
   int ret = OB_SUCCESS;
-  bool has_ref = false;
-  if (is_scala_group_by()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < agg_items_.count(); ++i) {
-      ObAggFunRawExpr *agg_expr = agg_items_.at(i);
-      if (OB_ISNULL(agg_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("agg expr is NULL", K(ret));
-      } else if (agg_expr->is_explicited_reference()) {
-        has_ref = true;
-        break;
+  if (OB_FAIL(append(group_by_exprs, group_exprs_))) {
+    LOG_WARN("failed to append group exprs");
+  } else if (OB_FAIL(append(group_by_exprs, rollup_exprs_))) {
+    LOG_WARN("failed to append rollup exprs");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &groupby_exprs = grouping_sets_items_.at(i).grouping_sets_exprs_;
+      const ObIArray<ObRollupItem> &rollup_items = grouping_sets_items_.at(i).rollup_items_;
+      const ObIArray<ObCubeItem> &cube_items = grouping_sets_items_.at(i).cube_items_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < groupby_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, groupby_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+        for (int64_t k = 0; OB_SUCC(ret) && k < rollup_items.at(j).rollup_list_exprs_.count(); ++k) {
+          if (OB_FAIL(append(group_by_exprs, rollup_items.at(j).rollup_list_exprs_.at(k).groupby_exprs_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+        for (int64_t k = 0; OB_SUCC(ret) && k < cube_items.at(j).cube_list_exprs_.count(); ++k) {
+          if (OB_FAIL(append(group_by_exprs, cube_items.at(j).cube_list_exprs_.at(k).groupby_exprs_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
       }
     }
-    if (OB_FAIL(ret) || has_ref) {
-      // do nothing
-    } else if (OB_FAIL(set_sharable_expr_reference(*agg_items_.at(0), ExplicitedRefType::REF_BY_NORMAL))) {
-      LOG_WARN("fail to set expr reference", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items_.at(i).rollup_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, rollup_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < cube_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items_.at(i).cube_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, cube_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
     }
   }
+  LOG_TRACE("succeed to get all group by exprs", K(group_by_exprs));
   return ret;
 }

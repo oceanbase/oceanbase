@@ -46,7 +46,7 @@ ObMPStmtSendLongData::ObMPStmtSendLongData(const ObGlobalContext &gctx)
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
       stmt_id_(0),
-      param_id_(-1),
+      param_id_(OB_MAX_PARAM_ID),
       buffer_len_(0),
       buffer_(),
       need_disconnect_(false)
@@ -71,18 +71,22 @@ int ObMPStmtSendLongData::before_process()
     const char* pos = pkt.get_cdata();
     // stmt_id
     ObMySQLUtil::get_int4(pos, stmt_id_);
-    ObMySQLUtil::get_int2(pos, param_id_);
-    if (stmt_id_ < 1 || param_id_ < 0) {
+    ObMySQLUtil::get_uint2(pos, param_id_);
+    if (OB_SUCC(ret) && stmt_id_ < 1) {
       ret = OB_ERR_PARAM_INVALID;
-      LOG_WARN("send long data get error info.", K(stmt_id_), K(param_id_));
-    } else {
-      buffer_len_ = pkt.get_clen()-7;
-      buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
-      LOG_INFO("get info success in send long data protocol.", 
-                  K(stmt_id_), K(param_id_), K(buffer_len_), K(buffer_));
+      LOG_WARN("send_long_data receive unexpected stmt_id_", K(ret), K(stmt_id_), K(param_id_));
+    } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
+      LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
     }
-    LOG_INFO("send long data get param",K(stmt_id_), K(param_id_), 
-                K(buffer_len_), K(buffer_.length()), K(buffer_));
+    if (OB_SUCC(ret)) {
+      buffer_len_ = pkt.get_clen() - 7;
+      buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
+      LOG_INFO("resolve send_long_data protocol packet successfully",
+               K(stmt_id_), K(param_id_), K(buffer_len_));
+      LOG_DEBUG("send_long_data packet content", K(buffer_));
+    }
+    LOG_INFO("resolve send_long_data protocol packet",
+             K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(buffer_.length()));
   }
   return ret;
 }
@@ -169,7 +173,7 @@ int ObMPStmtSendLongData::process()
 
       if (!need_disconnect_) {
         ObPiece *piece = NULL;
-        ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(false));
+        ObPieceCache *piece_cache = session.get_piece_cache(false);
         if (OB_ISNULL(piece_cache)) {
           need_disconnect_ = true;
           LOG_WARN("piece cache is null.", K(ret), K(stmt_id_), K(param_id_));
@@ -205,14 +209,9 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
 
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  const bool enable_trace_log = lib::is_trace_log_enabled();
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-  }
+  ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   ret = do_process(session);
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
 
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
@@ -327,7 +326,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
 int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     need_disconnect_ = true;
@@ -351,6 +350,8 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
       LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
     } else {
       // send long data do not response.
+      LOG_INFO("store piece successfully", K(ret), K(session.get_sessid()),
+                                           K(stmt_id_), K(param_id_));
     }
   }
   return ret;

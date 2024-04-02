@@ -27,6 +27,7 @@
 #include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
+//#include "share/resource_manager/ob_group_list.h"//group id
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "storage/tx/ob_trans_service.h" //ObTransService
@@ -245,6 +246,7 @@ int ObStandbyService::failover_to_primary(
   } else if (OB_FAIL(role_transition_service.init(
       tenant_id,
       switch_optype,
+      is_verify,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -254,8 +256,8 @@ int ObStandbyService::failover_to_primary(
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
     LOG_INFO("already is primary tenant, no need switch", K(tenant_info));
   } else {
-    if (OB_FAIL(role_transition_service.failover_to_primary(is_verify))) {
-      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id), K(is_verify));
+    if (OB_FAIL(role_transition_service.failover_to_primary())) {
+      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id));
     }
     switch_scn = tenant_info.get_sync_scn();
   }
@@ -342,7 +344,7 @@ int ObStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg)
   return ret;
 }
 
-int ObStandbyService::get_tenant_status_(
+int ObStandbyService::get_tenant_status(
     const uint64_t tenant_id,
     ObTenantStatus &status)
 {
@@ -398,7 +400,7 @@ int ObStandbyService::check_if_tenant_status_is_normal_(const uint64_t tenant_id
 {
   int ret = OB_SUCCESS;
   ObTenantStatus tenant_status = TENANT_STATUS_MAX;
-  if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(!is_tenant_normal(tenant_status))) {
     ret = OB_OP_NOT_ALLOW;
@@ -434,7 +436,7 @@ int ObStandbyService::do_recover_tenant(
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
@@ -520,6 +522,7 @@ int ObStandbyService::switch_to_primary(
   } else if (OB_FAIL(role_transition_service.init(
       tenant_id,
       switch_optype,
+      is_verify,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -528,8 +531,8 @@ int ObStandbyService::switch_to_primary(
         KP(sql_proxy_), KP(GCTX.srv_rpc_proxy_), K(cost_detail), K(all_ls));
   } else {
     (void)role_transition_service.set_switchover_epoch(tenant_info.get_switchover_epoch());
-    if (OB_FAIL(role_transition_service.failover_to_primary(is_verify))) {
-      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id), K(is_verify));
+    if (OB_FAIL(role_transition_service.failover_to_primary())) {
+      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id));
     }
     switch_scn = role_transition_service.get_so_scn();
   }
@@ -546,7 +549,8 @@ int ObStandbyService::switch_to_standby(
     ObTenantRoleTransAllLSInfo &all_ls)
 {
   int ret = OB_SUCCESS;
-  const int32_t group_id = 0;
+  const int32_t group_id = share::OBCG_DBA_COMMAND;
+
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
@@ -596,6 +600,7 @@ int ObStandbyService::switch_to_standby(
         } else if (OB_FAIL(role_transition_service.init(
             tenant_id,
             switch_optype,
+            is_verify,
             sql_proxy_,
             GCTX.srv_rpc_proxy_,
             &cost_detail,

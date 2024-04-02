@@ -69,7 +69,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
       LOG_USER_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL);
     } else if (ob_is_string_type(types_stack[JSN_QUE_PATH].get_type())) {
       if (types_stack[JSN_QUE_PATH].get_charset_type() != CHARSET_UTF8MB4) {
-        types_stack[JSN_QUE_PATH].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        types_stack[JSN_QUE_PATH].set_calc_collation_type(types_stack[JSN_QUE_PATH].get_collation_type());
       }
     } else {
       types_stack[JSN_QUE_PATH].set_calc_type(ObLongTextType);
@@ -109,12 +109,20 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
 {
   INIT_SUCC(ret);
   if (types_stack[JSN_QUE_RET].get_type() == ObNullType) {
-    const ObString j_path_text(types_stack[JSN_QUE_PATH].get_param().get_string().length(), types_stack[JSN_QUE_PATH].get_param().get_string().ptr());
+    ObString j_path_text(types_stack[JSN_QUE_PATH].get_param().get_string().length(), types_stack[JSN_QUE_PATH].get_param().get_string().ptr());
     ObJsonPath j_path(j_path_text, allocator);
+
     if (j_path_text.length() == 0) {
       dst_type.set_type(ObObjType::ObVarcharType);
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       dst_type.set_full_length(VARCHAR2_DEFAULT_LEN, 1);
+    } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(
+                                                types_stack[JSN_QUE_PATH].get_collation_type(),
+                                                CS_TYPE_UTF8MB4_BIN,
+                                                allocator,
+                                                j_path_text,
+                                                j_path_text))) {
+      LOG_WARN("convert string memory failed", K(ret), K(j_path_text));
     } else if (OB_FAIL(j_path.parse_path())) {
       ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
       LOG_USER_ERROR(OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR, j_path_text.length(), j_path_text.ptr());
@@ -173,7 +181,9 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   bool is_null_result = false;
   uint8_t is_type_mismatch = 0;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObIJsonBase *jb_empty = NULL;
@@ -191,7 +201,12 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }
-  if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(param_ctx, expr))) {
+
+  // add version protection, as lower version has handle input in a defference way
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json query raw expr number has change in 4.2.2 version", K(ret));
+  } else if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(param_ctx, expr))) {
     is_cover_by_error = false;
     LOG_WARN("fail to init param ctx", K(ret));
   } else if (OB_ISNULL(param_ctx->json_param_.json_path_)
@@ -341,6 +356,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
   size_t hit_size = hits.size();
   ObJsonBin *j_node = NULL;
   ObIJsonBase *jb_node = NULL;
+  ObStringBuffer value(allocator);
   ObBinAggSerializer bin_agg(allocator, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY));
   for (size_t i = 0; OB_SUCC(ret) && i < hit_size; i++) {
     bool is_null_res = false;
@@ -364,7 +380,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
       if (OB_ISNULL(j_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("json node input is null", K(ret), K(i), K(is_null_res), K(hits[i]));
-      } else if (OB_FAIL(bin_agg.append_key_and_value(key, j_node))) {
+      } else if (OB_FAIL(bin_agg.append_key_and_value(key, value, j_node))) {
         LOG_WARN("failed to append key and value", K(ret));
       }
     }

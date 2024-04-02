@@ -231,7 +231,8 @@ int ObLogConfig::load_from_file(const char *config_file,
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(config_file));
   } else if (0 != stat(config_file, &st)) {
-    LOG_ERROR("config_file is invalid", K(config_file), K(errno));
+    ret = OB_FILE_NOT_EXIST;
+    LOG_ERROR("config_file is invalid", KR(ret), K(config_file), K(errno));
   } else if (FALSE_IT(config_buf_len = st.st_size + 1)) {
   } else if (OB_ISNULL(config_file_buf = static_cast<char *>(ob_malloc(config_buf_len, "ConfigBuf")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -253,8 +254,8 @@ int ObLogConfig::load_from_file(const char *config_file,
     } else if (read_len <= 0) {
       LOG_WARN("config file is empty", KR(ret), K(config_file));
     } else if (read_len >= buffer_size) {
-      LOG_ERROR("fread buffer overflow", KR(ret), K(read_len), K(buffer_size));
       ret = OB_SIZE_OVERFLOW;
+      LOG_ERROR("fread buffer overflow", KR(ret), K(read_len), K(buffer_size));
     } else {
       // end with '\0'
       config_file_buf[read_len] = '\0';
@@ -284,8 +285,8 @@ int ObLogConfig::dump2file(const char *file) const {
   int ret = OB_SUCCESS;
   char tmp_file[MAX_PATH_SIZE] = "";
   if (OB_ISNULL(file)) {
-    LOG_ERROR("invalid argument", K(file));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(file));
   } else {
     snprintf(tmp_file, MAX_PATH_SIZE, "%s.tmp", file);
     FILE *fp = NULL;

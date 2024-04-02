@@ -139,4 +139,7 @@ enum OB_PRIV_SHIFT
 #define OB_PRIV_ROUTINE_ACC                                                     \
   (OB_PRIV_ALTER_ROUTINE | OB_PRIV_EXECUTE)
 
+#define OB_PRIV_COLUMN_ACC                                                    \
+  (OB_PRIV_INSERT | OB_PRIV_UPDATE | OB_PRIV_SELECT)
+
 #endif //ifndef OCEABASE_SHARE_SCHEMA_OB_PRIV_TYPE_H_

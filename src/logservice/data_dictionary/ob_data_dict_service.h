@@ -104,7 +104,8 @@ private:
       const ObIArray<uint64_t> &database_ids);
   int handle_table_metas_(
       const int64_t schema_version,
-      const ObIArray<uint64_t> &table_ids);
+      const ObIArray<uint64_t> &table_ids,
+      int64_t &filter_table_count);
   int filter_table_(const share::schema::ObTableSchema &table_schema, bool &is_filtered);
 private:
   static const int64_t TIMER_TASK_INTERVAL;

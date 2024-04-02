@@ -53,10 +53,6 @@ public:
     if (!in_acquire) {
       if (0 == rate_) {
         ret = common::OB_EAGAIN;
-      } else if (OB_LOG_LEVEL_ERROR == log_level
-                 || OB_LOG_LEVEL_DBA_WARN == log_level
-                 || OB_LOG_LEVEL_DBA_ERROR == log_level) {
-        // allow
       } else {
         in_acquire = 1;
         ret = do_acquire(permits, log_level, errcode);
@@ -117,9 +113,16 @@ public:
   void reset_force_allows() override { };
   int do_acquire(int64_t permits, int log_level, int errcode) override
   {
-    UNUSED(log_level);
     UNUSED(errcode);
-    return impl_.try_acquire(permits);
+    int ret = OB_SUCCESS;
+    if (OB_LOG_LEVEL_ERROR == log_level
+        || OB_LOG_LEVEL_DBA_WARN == log_level
+        || OB_LOG_LEVEL_DBA_ERROR == log_level) {
+      // allow
+    } else {
+      ret = impl_.try_acquire(permits);
+    }
+    return ret;
   }
 
 private:

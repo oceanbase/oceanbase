@@ -126,7 +126,7 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
  * - for tx which is a shadow copy of original tx (started on another server)
  *   release just free its memory used
  */
-int ObTransService::release_tx(ObTxDesc &tx)
+int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
 {
   /*
    * for compatible with cross tenant session usage
@@ -141,6 +141,9 @@ int ObTransService::release_tx(ObTxDesc &tx)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
+  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
@@ -179,12 +182,13 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
     // before we reuse it
 
     // if reuse come from commit_cb, assume current thread hold one reference
-    final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
+    int64_t cb_tid = ATOMIC_LOAD_ACQ(&tx.cb_tid_);
+    final_ref_cnt = cb_tid == GETTID() ? 2 : 1;
     while (tx.get_ref() > final_ref_cnt) {
       PAUSE();
       if (++spin_cnt > 2000) {
         TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
-                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()));
+                  "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()), K(cb_tid));
         tx.print_trace();
         usleep(2000000); // 2s
       } else if (spin_cnt > 200) {
@@ -192,11 +196,15 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
       } else if (spin_cnt > 100) {
         usleep(200);     // 200us
       }
+#ifdef ENABLE_DEBUG_LOG
+      if (spin_cnt > 2015) {
+        // at least wait 30s
+        ob_abort();
+      }
+#endif
     }
     // it is safe to operate tx without lock when not shared
-    uint32_t session_id = tx.sess_id_;
-    tx.reset();
-    init_tx_(tx, session_id);
+    reinit_tx_(tx, tx.sess_id_);
   }
   TRANS_LOG(DEBUG, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
@@ -208,6 +216,12 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
+}
+
+void ObTransService::reinit_tx_(ObTxDesc &tx, const uint32_t session_id)
+{
+  tx.reset();
+  init_tx_(tx, session_id);
 }
 
 int ObTransService::stop_tx(ObTxDesc &tx)
@@ -507,6 +521,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         tx.state_ == ObTxDesc::State::ACTIVE ||
         tx.state_ == ObTxDesc::State::IMPLICIT_ACTIVE)) {
       ObTxDesc::State state0 = tx.state_;
+      tx.commit_expire_ts_ = expire_ts;
       tx.state_ = ObTxDesc::State::IN_TERMINATE;
       // record trace_info
       if (OB_NOT_NULL(trace_info) &&
@@ -601,9 +616,17 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
       int64_t uncertain_bound = 0;
       if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
-      } else if (!tx.tx_id_.is_valid() && OB_FAIL(tx_desc_mgr_.add(tx))) {
-        TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
-      } else {
+      } else if (tx.access_mode_ != ObTxAccessMode::STANDBY_RD_ONLY &&
+                 !tx.tx_id_.is_valid()
+                 && OB_FAIL(tx_desc_mgr_.add(tx))) {
+        if (OB_STANDBY_READ_ONLY == ret) {
+          tx.access_mode_ = ObTxAccessMode::STANDBY_RD_ONLY;
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "add tx to mgr fail", K(ret), K(tx));
+        }
+      }
+      if (OB_SUCC(ret)) {
         tx.snapshot_version_ = version;
         tx.snapshot_uncertain_bound_ = uncertain_bound;
         tx.snapshot_scn_ = tx.get_tx_seq(ObSequence::get_max_seq_no() + 1);
@@ -626,6 +649,8 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
     snapshot.parts_.reset();
+    snapshot.snapshot_ls_role_ = common::ObRole::INVALID_ROLE;
+    snapshot.snapshot_acquire_addr_ = GCTX.self_addr();
     // If tx id is valid , record tx_id and scn
     if (tx.tx_id_.is_valid()) {
       snapshot.core_.tx_id_ = tx.tx_id_;
@@ -908,7 +933,7 @@ int ObTransService::create_implicit_savepoint(ObTxDesc &tx,
     // TODO: rework this interface, allow skip pass tx_param if not required
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "tx param invalid", K(ret), K(tx_param), K(tx));
-  } else if (OB_FAIL(tx_sanity_check_(tx))) {
+  } else if (OB_FAIL(tx_sanity_check_(tx, !release))) {
   } else if (tx.state_ >= ObTxDesc::State::IN_TERMINATE) {
     ret = OB_TRANS_INVALID_STATE;
     TRANS_LOG(WARN, "create implicit savepoint but tx terminated", K(ret), K(tx));
@@ -940,6 +965,7 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
                                                       const bool release)
 {
   int ret = OB_SUCCESS;
+  // tx is idle, update tx parameters
   if (tx.state_ == ObTxDesc::State::IDLE) {
     tx.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     tx.cluster_id_      = tx_param.cluster_id_;
@@ -1001,12 +1027,14 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
 int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
                                                    const ObTxSEQ savepoint,
                                                    const int64_t expire_ts,
-                                                   const share::ObLSArray *extra_touched_ls)
+                                                   const share::ObLSArray *extra_touched_ls,
+                                                   const int exec_errcode)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
-  if (OB_FAIL(tx_sanity_check_(tx))) {
-  } else if (tx.flags_.SHADOW_) {
+  if (OB_FAIL(tx_sanity_check_(tx, true))) {
+  } else if (savepoint.get_branch() // NOTE: branch savepoint only support local rollback
+             || tx.flags_.SHADOW_) {
     if (OB_NOT_NULL(extra_touched_ls)) {
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(WARN, "rollback on remote only suport collected tx parts",
@@ -1018,7 +1046,8 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
     ret = rollback_to_global_implicit_savepoint_(tx,
                                                  savepoint,
                                                  expire_ts,
-                                                 extra_touched_ls);
+                                                 extra_touched_ls,
+                                                 exec_errcode);
   }
   return ret;
 }
@@ -1071,12 +1100,13 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                                            const ObTxSEQ savepoint,
                                                            const int64_t expire_ts,
-                                                           const share::ObLSArray *extra_touched_ls)
+                                                           const share::ObLSArray *extra_touched_ls,
+                                                           const int exec_errcode)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
   tx.inc_op_sn();
-  bool reset_tx = false, normal_rollback = false;
+  bool reset_tx = false, normal_rollback = false, reset_active_scn = false;
   // merge extra touched ls
   if (OB_NOT_NULL(extra_touched_ls) && !extra_touched_ls->empty()) {
     if (OB_FAIL(tx.update_parts(*extra_touched_ls))) {
@@ -1103,12 +1133,15 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && !tx.has_implicit_savepoint() // to first savepoint
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
-        reset_tx = true;
         /*
-         * Avoid lock conflicts between first stmt retry and tx async abort(end first stmt caused)
-         * Add a sync rollback process before async abort tx.
+         * if sql execute error code don't need reset(abort) tx but need retry
+         * e.g. "lock conflict error"
+         * to ensure next retry can still recognize it is the first stmt in transaction
+         * we should reset tx's acitve_scn
          */
-        normal_rollback = true;
+        reset_tx = tx_need_reset_(exec_errcode);
+        reset_active_scn = !reset_tx;
+        normal_rollback = !reset_tx;
       } else {
         normal_rollback = true;
       }
@@ -1144,7 +1177,10 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       tx.inc_op_sn();
       abort_tx_(tx, ObTxAbortCause::SAVEPOINT_ROLLBACK_FAIL);
     } else {
-      /*
+      if (reset_active_scn) {
+        tx.active_scn_.reset();
+      }
+       /*
        * advance txn op_seqence to barrier duplicate rollback msg
        * otherwise, rollback may erase following write
        */
@@ -1193,10 +1229,9 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   bool blockable = expire_ts > 0;
-  const ObTxSEQ from_scn = savepoint.clone_with_seq(ObSequence::inc_and_get_max_seq_no());
   do {
-    ret = part_ctx->rollback_to_savepoint(op_sn, from_scn, savepoint);
-    if (OB_NEED_RETRY == ret && blockable) {
+    ret = part_ctx->rollback_to_savepoint(op_sn, savepoint);
+    if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;
         TRANS_LOG(WARN, "can not retry rollback_to because of timeout", K(ret), K(retry_cnt));
@@ -1208,7 +1243,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
         ob_usleep(50 * 1000);
       }
     }
-  } while (OB_NEED_RETRY == ret && blockable);
+  } while ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable);
 #ifndef NDEBUG
   TRANS_LOG(INFO, "rollback to savepoint sync", K(ret),
             K(part_ctx->get_trans_id()), K(part_ctx->get_ls_id()), K(retry_cnt),
@@ -1318,7 +1353,6 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
       }
     }
   }
-  tx.state_change_flags_.EXTRA_CHANGED_ = true;
   int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, rollback_explicit_savepoint, OB_Y(ret),
@@ -1363,7 +1397,6 @@ int ObTransService::release_explicit_savepoint(ObTxDesc &tx, const ObString &sav
       TRANS_LOG(TRACE, "release savepoint", K(savepoint), K(sp_id), K(session_id), K(tx));
     }
   }
-  tx.state_change_flags_.EXTRA_CHANGED_ = true;
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, release_explicit_savepoint, OB_Y(ret),
                       OB_ID(savepoint), savepoint,
@@ -1443,10 +1476,8 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
   if (OB_TIMEOUT == ret && ObTimeUtility::current_time() >= tx.get_expire_ts()) {
      ret = OB_TRANS_TIMEOUT;
   }
-  if (OB_SUCC(ret)) {
-    ARRAY_FOREACH(parts, i) {
-      parts[i].last_scn_ = savepoint;
-    }
+  if (OB_SUCC(ret) && parts.count() > 0) {
+    tx.post_rb_savepoint_(parts, savepoint);
   }
   return ret;
 }
@@ -1771,20 +1802,10 @@ int ObTransService::add_tx_exec_result(ObTxDesc &tx, const ObTxExecResult &exec_
 void ObTransService::tx_post_terminate_(ObTxDesc &tx)
 {
   // invalid registered snapshot
-  if (tx.state_ == ObTxDesc::State::ABORTED ||
-      tx.is_commit_unsucc()
-      // FIXME: (yunxing.cyx)
-      // bellow line is temproary, when storage layer support
-      // record txn-id in SSTable's MvccRow, we can remove this
-      // (the support was planed in v4.1)
-      || tx.state_ == ObTxDesc::State::COMMITTED
-      ) {
+  if (tx.state_ == ObTxDesc::State::ABORTED || tx.is_commit_unsucc()) {
     invalid_registered_snapshot_(tx);
   } else if (tx.state_ == ObTxDesc::State::COMMITTED) {
-    // cleanup snapshot's participant info, so that they will skip
-    // verify participant txn ctx, which cause false negative,
-    // because txn ctx has quit when txn committed.
-    registered_snapshot_clear_part_(tx);
+    process_registered_snapshot_on_commit_(tx);
   }
   // statistic
   if (tx.is_tx_end()) {
@@ -1864,7 +1885,7 @@ int ObTransService::release_tx_ref(ObTxDesc &tx)
   return tx_desc_mgr_.release_tx_ref(&tx);
 }
 
-OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
+OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx, const bool in_stmt)
 {
   int ret = OB_SUCCESS;
   if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
@@ -1879,8 +1900,14 @@ OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
     case ObTxDesc::State::ACTIVE:
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       if (tx.flags_.PART_ABORTED_) {
-        TRANS_LOG(WARN, "some participant was aborted, abort tx now");
-        abort_tx_(tx, tx.abort_cause_);
+        if (!in_stmt) {
+          // not inside of stmt(stmt has not began to execute), abort tx now
+          TRANS_LOG(WARN, "some participant was aborted, abort tx now");
+          abort_tx_(tx, tx.abort_cause_);
+        } else {
+          // abort tx after stmt has executed
+          TRANS_LOG(WARN, "some participant was aborted, but inside stmt, not abort tx now");
+        }
         // go through
       } else {
         break;
@@ -2002,6 +2029,24 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
       tx_desc_mgr_.remove(tx);
     }
     TRANS_LOG(INFO, "xa trans end stmt", K(ret), K_(tx.xid), K(xid));
+  }
+  return ret;
+}
+
+// error code whether need reset tx when rollback fisrt stmt
+// error codes do not need reset tx
+// 1. lock conflict error code
+bool ObTransService::tx_need_reset_(const int error_code) const
+{
+  bool ret = true;
+  switch (error_code) {
+    case OB_TRANSACTION_SET_VIOLATION:
+    case OB_TRY_LOCK_ROW_CONFLICT:
+      ret = false;
+      break;
+    default:
+      ret = true;
+      break;
   }
   return ret;
 }

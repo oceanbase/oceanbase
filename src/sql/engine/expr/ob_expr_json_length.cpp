@@ -63,7 +63,7 @@ int ObExprJsonLength::calc_result_typeN(ObExprResType& type,
 
 int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta meta1, bool has_lob_header1,
                            const ObDatum *data2, ObDatumMeta meta2, bool has_lob_header2,
-                           ObIAllocator *allocator, ObDatum &res,
+                           MultimodeAlloctor *allocator, ObDatum &res,
                            ObJsonPathCache* path_cache)
 {
   INIT_SUCC(ret);
@@ -88,6 +88,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data1, meta1, has_lob_header1, j_doc))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_doc));
+    } else if (OB_FALSE_IT(allocator->add_baseline_size(j_doc.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
         j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
@@ -97,7 +98,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
   // handle data2(path text)
   if (OB_SUCC(ret) && OB_LIKELY(!is_null)) {
     if (OB_ISNULL(data2)) { // have no path
-      res_len = j_base->element_count();
+      res_len = j_base->member_count();
     } else { // handle json path
       ObObjType type2 = meta2.type_;
       if (type2 == ObNullType) { // null should display "NULL"
@@ -116,7 +117,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         } else if (hit.size() != 1) { // not found node by path, display "NULL"
           is_null = true;
         } else {
-          res_len = hit[0]->element_count();
+          res_len = hit[0]->member_count();
         }
       }
     }
@@ -144,16 +145,18 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObDatum *datum0 = NULL;
   ObExpr *arg0 = expr.args_[0];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
 
-  if (OB_FAIL(arg0->eval(ctx, datum0))) { // json doc
+  if (OB_FAIL(tmp_allocator.eval_arg(arg0, ctx, datum0))) { // json doc
     LOG_WARN("fail to eval json arg", K(ret), K(arg0->datum_meta_));
   } else {
     if (expr.arg_cnt_ > 1) { // json path
       ObExpr *arg1 = expr.args_[1];
       meta1 = arg1->datum_meta_;
       has_lob_header1 = arg1->obj_meta_.has_lob_header();
-      if (OB_FAIL(arg1->eval(ctx, datum1))) {
+      if (OB_FAIL(tmp_allocator.eval_arg(arg1, ctx, datum1))) {
         LOG_WARN("fail to eval path arg", K(ret), K(meta1));
       }
     }

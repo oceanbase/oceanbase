@@ -85,6 +85,46 @@ lib::Worker::CompatMode get_worker_compat_mode(const ObCompatibilityMode &mode)
   return worker_mode;
 }
 
+int ObIndexSchemaInfo::init(
+    const ObString &index_name,
+    const uint64_t index_id,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(index_name.empty()
+      || OB_INVALID_ID == index_id
+      || schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index_name, index_id, schema_version invalid", KR(ret), K(index_name), K(index_id), K(schema_version));
+  } else {
+    index_name_ = index_name;
+    index_id_ = index_id;
+    schema_version_ = schema_version;
+  }
+  return ret;
+}
+
+void ObIndexSchemaInfo::reset()
+{
+  index_name_.reset();
+  index_id_ = OB_INVALID_ID;
+  schema_version_ = OB_INVALID_VERSION;
+}
+
+bool ObIndexSchemaInfo::is_valid() const
+{
+  return !index_name_.empty() && OB_INVALID_ID != index_id_ && schema_version_ > 0;
+}
+
+int ObIndexSchemaInfo::assign(const ObIndexSchemaInfo &other)
+{
+  int ret = OB_SUCCESS;
+  index_name_ = other.get_index_name();
+  index_id_ = other.get_index_id();
+  schema_version_ = other.get_schema_version();
+  return ret;
+}
+
 int ObSchemaIdVersion::init(
     const uint64_t schema_id,
     const int64_t schema_version)
@@ -814,22 +854,15 @@ ObSysVariableSchema::ObSysVariableSchema(ObIAllocator *allocator)
   reset();
 }
 
-ObSysVariableSchema::ObSysVariableSchema(const ObSysVariableSchema &src_schema)
-  : ObSchema()
-{
-  reset();
-  *this = src_schema;
-}
-
 ObSysVariableSchema::~ObSysVariableSchema()
 {
 }
 
-ObSysVariableSchema& ObSysVariableSchema::operator =(const ObSysVariableSchema &src_schema)
+int ObSysVariableSchema::assign(const ObSysVariableSchema &src_schema)
 {
+  int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
-    int ret = OB_SUCCESS;
     error_ret_ = src_schema.error_ret_;
     tenant_id_ = src_schema.tenant_id_;
     schema_version_ = src_schema.schema_version_;
@@ -848,14 +881,6 @@ ObSysVariableSchema& ObSysVariableSchema::operator =(const ObSysVariableSchema &
       error_ret_ = ret;
     }
   }
-  return *this;
-}
-
-int ObSysVariableSchema::assign(const ObSysVariableSchema &other)
-{
-  int ret = OB_SUCCESS;
-  *this = other;
-  ret = get_err_ret();
   return ret;
 }
 
@@ -984,7 +1009,9 @@ int ObSysVariableSchema::add_sysvar_schema(const ObSysVarSchema &sysvar_schema)
     LOG_WARN("alloc sysvar schema failed", K(sizeof(ObSysVarSchema)));
   } else {
     tmp_sysvar_schema = new(ptr) ObSysVarSchema(allocator_);
-    *tmp_sysvar_schema = sysvar_schema;
+    if (OB_FAIL(tmp_sysvar_schema->assign(sysvar_schema))) {
+      LOG_WARN("fail to assign sysvar", KR(ret), K(sysvar_schema));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(!tmp_sysvar_schema->is_valid())) {
@@ -2290,25 +2317,19 @@ int64_t ObSysVarSchema::get_convert_size() const
   return convert_size;
 }
 
-ObSysVarSchema::ObSysVarSchema(const ObSysVarSchema &src_schema)
-  : ObSchema()
-{
-  *this = src_schema;
-}
-
 ObSysVarSchema::ObSysVarSchema(ObIAllocator *allocator)
   : ObSchema(allocator)
 {
   reset();
 }
 
-ObSysVarSchema &ObSysVarSchema::operator=(const ObSysVarSchema &src_schema)
+int ObSysVarSchema::assign(const ObSysVarSchema &src_schema)
 {
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
     if (!src_schema.is_valid()) {
-      ret = src_schema.get_err_ret();
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("src schema is invalid", K(ret));
     } else if (OB_FAIL(set_name(src_schema.get_name()))) {
       LOG_WARN("set sysvar name failed", K(ret));
@@ -2328,16 +2349,8 @@ ObSysVarSchema &ObSysVarSchema::operator=(const ObSysVarSchema &src_schema)
       set_flags(src_schema.get_flags());
       set_tenant_id(src_schema.get_tenant_id());
     }
+    error_ret_ = ret;
   }
-  error_ret_ = ret;
-  return *this;
-}
-
-int ObSysVarSchema::assign(const ObSysVarSchema &other)
-{
-  int ret = OB_SUCCESS;
-  *this = other;
-  ret = get_err_ret();
   return ret;
 }
 
@@ -8926,6 +8939,94 @@ OB_DEF_SERIALIZE_SIZE(ObRoutinePriv)
   return len;
 }
 
+int ObColumnPriv::assign(const ObColumnPriv &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.db_, db_))) {
+      LOG_WARN("Fail to deep copy db", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.table_, table_))) {
+      LOG_WARN("Fail to deep copy table", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.column_, column_))) {
+      LOG_WARN("Fail to deep copy table", K(ret));
+    } else {
+      priv_id_ = other.priv_id_;
+      error_ret_ = other.error_ret_;
+    }
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
+  }
+  return ret;
+}
+
+bool ObColumnPriv::is_valid() const
+{
+  return ObSchema::is_valid() && ObPriv::is_valid() && priv_id_ != OB_INVALID_ID;
+}
+
+void ObColumnPriv::reset()
+{
+  db_.reset();
+  table_.reset();
+  column_.reset();
+  priv_id_ = 0;
+  ObPriv::reset();
+  ObSchema::reset();
+}
+
+int64_t ObColumnPriv::get_convert_size() const
+{
+  int64_t convert_size = 0;
+  convert_size += ObPriv::get_convert_size();
+  convert_size += sizeof(ObColumnPriv) - sizeof(ObPriv);
+  convert_size += db_.length() + 1;
+  convert_size += table_.length() + 1;
+  convert_size += column_.length() + 1;
+  return convert_size;
+}
+
+OB_DEF_SERIALIZE(ObColumnPriv)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_ENCODE, db_, table_, column_, priv_id_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObColumnPriv)
+{
+  int ret = OB_SUCCESS;
+  ObString db;
+  ObString table;
+  ObString column;
+  uint64_t priv_id;
+  BASE_DESER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_DECODE, db, table, column, priv_id);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to deserialize data", K(ret));
+  } else if (OB_FAIL(deep_copy_str(db, db_))) {
+    LOG_WARN("Fail to deep copy user_name", K(db), K(ret));
+  } else if (OB_FAIL(deep_copy_str(table, table_))) {
+    LOG_WARN("Fail to deep copy user_name", K(table), K(ret));
+  } else if (OB_FAIL(deep_copy_str(column, column_))) {
+    LOG_WARN("Fail to deep copy user_name", K(column), K(ret));
+  } else {
+    priv_id_ = priv_id;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObColumnPriv)
+{
+  int64_t len = ObPriv::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, db_, table_, column_, priv_id_);
+  return len;
+}
+
 //ObObjPriv
 ObObjPriv& ObObjPriv::operator=(const ObObjPriv &other)
 {
@@ -9068,10 +9169,20 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   is_for_update_ = other.is_for_update_;
   priv_check_type_ = other.priv_check_type_;
   obj_type_ = other.obj_type_;
+  check_any_column_priv_ = other.check_any_column_priv_;
   if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
     LOG_WARN("Fail to deep copy table", K_(table), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.columns_.count(); i++) {
+      ObString tmp_column;
+      if (OB_FAIL(ob_write_string(allocator, other.columns_.at(i), tmp_column))) {
+        LOG_WARN("ob write string failed", K(ret));
+      } else if (OB_FAIL(columns_.push_back(tmp_column))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -10220,7 +10331,6 @@ ObOutlineInfo &ObOutlineInfo::operator=(const ObOutlineInfo &src_info)
     compatible_ = src_info.compatible_;
     enabled_ = src_info.enabled_;
     format_ = src_info.format_;
-    format_outline_ = src_info.format_outline_;
     if (OB_FAIL(deep_copy_str(src_info.name_, name_))) {
       LOG_WARN("Fail to deep copy name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.signature_, signature_))) {
@@ -10231,10 +10341,6 @@ ObOutlineInfo &ObOutlineInfo::operator=(const ObOutlineInfo &src_info)
       LOG_WARN("Fail to deep copy outline_content", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.sql_text_, sql_text_))) {
       LOG_WARN("Fail to deep copy sql_text", K(ret));
-    } else if (OB_FAIL(deep_copy_str(src_info.format_sql_text_, format_sql_text_))) {
-      LOG_WARN("Fail to deep copy sql_text", K(ret));
-    } else if (OB_FAIL(deep_copy_str(src_info.format_sql_id_, format_sql_id_))) {
-      LOG_WARN("Fail to deep copy signature", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.outline_target_, outline_target_))) {
       LOG_WARN("Fail to deep copy outline target", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.owner_, owner_))) {
@@ -10267,8 +10373,6 @@ void ObOutlineInfo::reset()
   reset_string(name_);
   reset_string(signature_);
   reset_string(sql_id_);
-  reset_string(format_sql_id_);
-  reset_string(format_sql_text_);
   reset_string(outline_content_);
   reset_string(sql_text_);
   reset_string(outline_target_);
@@ -10279,7 +10383,6 @@ void ObOutlineInfo::reset()
   enabled_ = true;
   format_ = HINT_NORMAL;
   outline_params_wrapper_.destroy();
-  format_outline_ = false;
   ObSchema::reset();
 }
 
@@ -10307,15 +10410,10 @@ bool ObOutlineInfo::is_valid() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty()
+  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
+             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
              || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
-    valid_ret = false;
-  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-                  || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
-    valid_ret = false;
-  } else if (is_format() && !(((format_sql_text_.empty() && is_sql_id_valid(format_sql_id_))
-                  || (!format_sql_text_.empty() && format_sql_id_.empty())))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_ || OB_INVALID_ID == outline_id_) {
     valid_ret = false;
@@ -10330,14 +10428,10 @@ bool ObOutlineInfo::is_valid_for_replace() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || owner_.empty() || version_.empty()
+  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
+             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
+             || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
-    valid_ret = false;
-  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) ||
-                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
-    valid_ret = false;
-  } else if (is_format() && !((!signature_.empty() && !format_sql_text_.empty() && sql_id_.empty()) ||
-                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_
              || OB_INVALID_ID == outline_id_) {
@@ -10355,8 +10449,6 @@ int64_t ObOutlineInfo::get_convert_size() const
   convert_size += sql_id_.length() + 1;
   convert_size += outline_content_.length() + 1;
   convert_size += sql_text_.length() + 1;
-  convert_size += format_sql_text_.length() + 1;
-  convert_size += format_sql_id_.length() + 1;
   convert_size += outline_target_.length() + 1;
   convert_size += owner_.length() + 1;
   convert_size += version_.length() + 1;
@@ -10469,7 +10561,7 @@ OB_DEF_SERIALIZE(ObOutlineInfo)
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, outline_content_, sql_text_, outline_target_, owner_,
               used_, version_, compatible_, enabled_, format_, outline_params_wrapper_,
-              sql_id_, owner_id_, format_sql_text_, format_sql_id_, format_outline_);
+              sql_id_, owner_id_);
   return ret;
 }
 
@@ -10485,8 +10577,6 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
   ObString outline_target;
   ObString owner;
   ObString version;
-  ObString format_sql_id;
-  ObString format_sql_text;
 
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name, signature, outline_content, sql_text, outline_target, owner, used_,
@@ -10502,7 +10592,6 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
     LOG_WARN("Fail to deep copy outline_content", K(ret));
   } else if (OB_FAIL(deep_copy_str(sql_text, sql_text_))) {
     LOG_WARN("Fail to deep copy sql_text", K(ret));
-
   } else if (OB_FAIL(deep_copy_str(outline_target, outline_target_))) {
     LOG_WARN("Fail to deep copy outline target", K(ret));
   } else if (OB_FAIL(deep_copy_str(owner, owner_))) {
@@ -10521,14 +10610,7 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
         LOG_WARN("Fail to deep copy sql_id", K(ret));
       } else {
         if (pos < data_len) {
-          LST_DO_CODE(OB_UNIS_DECODE, owner_id_, format_sql_text, format_sql_id, format_outline_);
-          if (OB_FAIL(ret)){
-            // do nothing
-          }else if (OB_FAIL(deep_copy_str(format_sql_text, format_sql_text_))) {
-            LOG_WARN("Fail to deep copy sql_text", K(ret));
-          } else if (OB_FAIL(deep_copy_str(format_sql_id, format_sql_id_))) {
-            LOG_WARN("Fail to deep copy sql_id", K(ret));
-          }
+          LST_DO_CODE(OB_UNIS_DECODE, owner_id_);
         } else {
           owner_id_ = OB_INVALID_ID;
         }
@@ -10544,8 +10626,7 @@ OB_DEF_SERIALIZE_SIZE(ObOutlineInfo)
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, sql_id_, outline_content_, sql_text_, outline_target_, owner_,
-              used_, version_, compatible_, enabled_, format_, outline_params_wrapper_, owner_id_,
-              format_sql_text_, format_sql_id_, format_outline_);
+              used_, version_, compatible_, enabled_, format_, outline_params_wrapper_, owner_id_);
   return len;
 }
 

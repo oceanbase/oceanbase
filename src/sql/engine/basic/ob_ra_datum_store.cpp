@@ -876,6 +876,7 @@ int ObRADatumStore::switch_idx_block(bool finish_add /* = false */)
  * 从operator的ObExpr的ObDatum中写入到ObChunkDatumStore时，使用add_row
  * 理论上只有这两个接口
  */
+template<bool NEED_EVAL>
 int ObRADatumStore::add_row(const common::ObIArray<ObExpr*> &exprs,
     ObEvalCtx *ctx, StoredRow **stored_row)
 {
@@ -884,7 +885,7 @@ int ObRADatumStore::add_row(const common::ObIArray<ObExpr*> &exprs,
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(Block::row_store_size(exprs, *ctx, row_size, row_extend_size_))) {
+  } else if (OB_FAIL(Block::row_store_size<NEED_EVAL>(exprs, *ctx, row_size, row_extend_size_))) {
     // row store size确保exprs被计算过
     LOG_WARN("failed to calc store size");
   } else {
@@ -907,6 +908,13 @@ int ObRADatumStore::add_row(const common::ObIArray<ObExpr*> &exprs,
   }
   return ret;
 }
+
+template int ObRADatumStore::add_row<true>(const common::ObIArray<ObExpr*> &exprs,
+                                           ObEvalCtx *ctx,
+                                           StoredRow **stored_row);
+template int ObRADatumStore::add_row<false>(const common::ObIArray<ObExpr*> &exprs,
+                                           ObEvalCtx *ctx,
+                                           StoredRow **stored_row);
 
 int ObRADatumStore::add_row(const common::ObIArray<ObDatum> &datums,
     StoredRow **stored_row)

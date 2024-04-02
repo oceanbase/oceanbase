@@ -72,7 +72,8 @@ public:
       is_inited_(false),
       current_stage_cnt_(0),
       lazy_finished_(false),
-      lazy_better_(false)
+      lazy_better_(false),
+      is_mock_task_(false)
   {
   }
   void reset();
@@ -172,6 +173,7 @@ protected:
   int64_t current_stage_cnt_;
   bool lazy_finished_;
   bool lazy_better_;
+  bool is_mock_task_;
 };
 
 } //namespace sql end

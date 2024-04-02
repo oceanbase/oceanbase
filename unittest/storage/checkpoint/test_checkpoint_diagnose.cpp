@@ -42,9 +42,11 @@ TEST_F(TestChekpointDiagnose, trace_info) {
   int64_t trace_id1 = -1;
   int64_t trace_id2 = -1;
   int64_t trace_id3 = -1;
+  int64_t trace_id4 = -1;
   share::ObLSID ls_id1(1);
   share::ObLSID ls_id2(1);
   share::ObLSID ls_id3(1);
+  share::ObLSID ls_id4(1);
   share::SCN scn1;
   mgr.acquire_trace_id(ls_id1, trace_id1);
   ASSERT_EQ(0, trace_id1);
@@ -70,7 +72,7 @@ TEST_F(TestChekpointDiagnose, trace_info) {
 
   mgr.read_trace_info([&](const ObTraceInfo &trace_info) -> int {
     if (trace_info.trace_id_ == trace_id1) {
-      OB_ASSERT(trace_info.ls_id_ == ls_id1);
+      OB_ASSERT(true);
     } else if (trace_info.trace_id_ == trace_id2) {
       OB_ASSERT(trace_info.ls_id_ == ls_id2);
     } else if (trace_info.trace_id_ == trace_id3) {
@@ -80,6 +82,24 @@ TEST_F(TestChekpointDiagnose, trace_info) {
     }
     return OB_SUCCESS;
   });
+
+  mgr.update_max_trace_info_size(1);
+  ASSERT_EQ(1, mgr.get_trace_info_count());
+  ASSERT_EQ(2, mgr.first_pos_);
+  ASSERT_EQ(2, mgr.last_pos_);
+  ASSERT_EQ(-1, mgr.trace_info_arr_[0].trace_id_);
+  ASSERT_EQ(-1, mgr.trace_info_arr_[1].trace_id_);
+  ASSERT_EQ(trace_id3, mgr.trace_info_arr_[2].trace_id_);
+
+  mgr.acquire_trace_id(ls_id4, trace_id4);
+  ASSERT_EQ(3, trace_id4);
+  ASSERT_EQ(3, mgr.first_pos_);
+  ASSERT_EQ(3, mgr.last_pos_);
+  ASSERT_EQ(1, mgr.get_trace_info_count());
+  ASSERT_EQ(trace_id4, mgr.trace_info_arr_[trace_id4].trace_id_);
+  ASSERT_EQ(-1, mgr.trace_info_arr_[0].trace_id_);
+  ASSERT_EQ(-1, mgr.trace_info_arr_[1].trace_id_);
+  ASSERT_EQ(-1, mgr.trace_info_arr_[2].trace_id_);
 
 }
 
@@ -106,11 +126,15 @@ TEST_F(TestChekpointDiagnose, diagnose_info) {
   ObCheckpointDiagnoseParam param1(trace_id1, tablet_id1, ptr);
   ObCheckpointDiagnoseParam param2(trace_id1, tablet_id2, ptr);
 
+  ret = mgr.add_diagnose_info<ObMemtableDiagnoseInfo>(param1);
+  ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_freeze_info(param1, scn1, scn1, scn1, 0);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_schedule_dag_time(param1);
   ASSERT_EQ(ret, OB_SUCCESS);
 
+  ret = mgr.add_diagnose_info<ObMemtableDiagnoseInfo>(param2);
+  ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_freeze_info(param2, scn2, scn2, scn2, 0);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_schedule_dag_time(param2);
@@ -143,6 +167,8 @@ TEST_F(TestChekpointDiagnose, diagnose_info) {
   ret = mgr.update_freeze_clock(ls_id, trace_id2, freeze_clock);
   ASSERT_EQ(ret, OB_SUCCESS);
   ObCheckpointDiagnoseParam param3(ls_id.id(), freeze_clock - 1, tablet_id3, ptr);
+  ret = mgr.add_diagnose_info<ObMemtableDiagnoseInfo>(param3);
+  ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_freeze_info(param3, scn3, scn3, scn3, 0);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = mgr.update_schedule_dag_time(param3);

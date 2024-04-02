@@ -62,6 +62,7 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
     }
   }
   OX (type.set_type(ObExtendType));
+  OX (type.set_extend_type(pl::PL_RECORD_TYPE));
   OX (type.set_udt_id(udt_id_));
   return ret;
 }

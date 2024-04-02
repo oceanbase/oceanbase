@@ -100,10 +100,11 @@ int submit_commit_tx(ObTxDesc &tx,
  * this is the end of lifecycle of a transaction
  *
  * @tx:         the target transaction's descriptor
+ * @is_from_xa: whether xa ctx calls this interface
  *
  * Return: OB_SUCCESS - OK
  */
-int release_tx(ObTxDesc &tx);
+int release_tx(ObTxDesc &tx, const bool is_from_xa = false);
 
 /**
  * reuse_tx - reuse transaction descriptor
@@ -361,6 +362,7 @@ int create_explicit_savepoint(ObTxDesc &tx,
  *                                  the savepoint but not sensed by this
  *                                  transaction for some reason
  *                                  (eg. network partition, OutOfMemory)
+ * @exec_errcode:                   stmt execution error code
  *
  * Return:
  * OB_SUCCESS             - OK
@@ -372,7 +374,8 @@ int create_explicit_savepoint(ObTxDesc &tx,
 int rollback_to_implicit_savepoint(ObTxDesc &tx,
                                    const ObTxSEQ savepoint,
                                    const int64_t expire_ts,
-                                   const share::ObLSArray *extra_touched_ls);
+                                   const share::ObLSArray *extra_touched_ls,
+                                   const int exec_errcode = OB_SUCCESS);
 
 /**
  * rollback_to_explicit_savepoint - rollback to a explicit savepoint

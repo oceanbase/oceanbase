@@ -327,8 +327,8 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
     ObMigrationStatus &new_migration_status)
 {
   int ret = OB_SUCCESS;
-  bool is_valid_member = false;
-  bool is_ls_deleted = true;
+  bool is_valid_member = true;
+  bool is_ls_deleted = false;
   new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
     ret = OB_INVALID_ARGUMENT;
@@ -338,13 +338,20 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
-  } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
-    LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
-  } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
-    LOG_WARN("failed to get ls status from inner table", K(ret), K(ls));
-  } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
-      current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
-    LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
+      is_valid_member = true; // reset value if fail
+      LOG_WARN("failed to check self is valid member", K(ret), K(tmp_ret), K(ctx_));
+    }
+    if (OB_TMP_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
+      is_ls_deleted = false; // reset value if fail
+      LOG_WARN("failed to get ls status from inner table", K(ret), K(tmp_ret), K(ls));
+    }
+    if (FAILEDx(ObMigrationStatusHelper::trans_rebuild_fail_status(
+        current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
+      LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+    }
   }
   return ret;
 }
@@ -1281,6 +1288,7 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
     SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
                   "tenant_id", ctx_->tenant_id_,
                   "ls_id", ls->get_ls_id().id());
+
     ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
@@ -1956,7 +1964,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
-              "current_ts", current_ts);
+              "current_ts", current_ts,
+              "max_minor_end_scn", max_minor_end_scn_,
+              "current_replay_scn", current_replay_scn);
         }
 
         if (current_ts - wait_replay_start_ts < timeout) {

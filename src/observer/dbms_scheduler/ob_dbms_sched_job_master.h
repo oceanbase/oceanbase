@@ -51,16 +51,11 @@ class ObDBMSSchedJobKey : public common::ObLink
 {
 public:
   ObDBMSSchedJobKey(
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
-    uint64_t execute_at, uint64_t delay,
-    bool check_job)
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name)
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
-    job_name_(),
-    execute_at_(execute_at),
-    delay_(delay),
-    check_job_(check_job) {
+    job_name_() {
       job_name_.assign_buffer(job_name_buf_, JOB_NAME_MAX_SIZE);
       job_name_.write(job_name.ptr(), job_name.length());
     }
@@ -73,18 +68,9 @@ public:
   OB_INLINE uint64_t get_job_id() const { return job_id_; }
   OB_INLINE common::ObString &get_job_name() { return job_name_; }
   OB_INLINE uint64_t get_execute_at() const { return execute_at_;}
-  OB_INLINE uint64_t get_delay() const { return delay_; }
-
-  OB_INLINE bool is_check() { return check_job_; }
-
   OB_INLINE void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   OB_INLINE void set_job_id(uint64_t job_id) { job_id_ = job_id; }
-
   OB_INLINE void set_execute_at(uint64_t execute_at) { execute_at_ = execute_at; }
-  OB_INLINE void set_delay(uint64_t delay) { delay_ = delay; }
-
-  OB_INLINE void set_check_job(bool check_job) { check_job_ = check_job; }
-
   OB_INLINE uint64_t get_adjust_delay() const
   {
     uint64_t now = ObTimeUtility::current_time();
@@ -103,9 +89,7 @@ public:
     K_(is_oracle_tenant),
     K_(job_id),
     K_(job_name),
-    K_(execute_at),
-    K_(delay),
-    K_(check_job));
+    K_(execute_at));
 
 private:
   uint64_t tenant_id_;
@@ -114,9 +98,6 @@ private:
   char job_name_buf_[JOB_NAME_MAX_SIZE];
   common::ObString job_name_;
   uint64_t execute_at_;
-  uint64_t delay_;
-
-  bool check_job_; // for check job update ...
 };
 
 class ObDBMSSchedJobTask
@@ -128,8 +109,7 @@ public:
   ObDBMSSchedJobTask()
     : inited_(false),
       allocator_(NULL),
-      wait_vector_(0, NULL, ObModIds::VECTOR),
-      lock_(common::ObLatchIds::DBMS_SCHEDULER_TASK_LOCK) {}
+      wait_vector_(0, NULL, ObModIds::VECTOR) {}
 
   virtual ~ObDBMSSchedJobTask() {}
 
@@ -151,7 +131,6 @@ private:
   bool inited_;
   common::ObVSliceAlloc *allocator_;
   WaitVector wait_vector_;
-  ObSpinLock lock_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobTask);
 };
@@ -168,7 +147,6 @@ public:
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
       self_addr_(),
-      lock_(common::ObLatchIds::DBMS_SCHEDULER_MASTER_LOCK),
       allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "DbmsScheduler"), OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_),
       alive_jobs_() {}
 
@@ -232,23 +210,23 @@ public:
 
   int alloc_job_key(
     ObDBMSSchedJobKey *&job_key,
-    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
-    uint64_t execute_at, uint64_t delay,
-    bool check_job = false);
-
+    uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name);
+  void free_job_key(ObDBMSSchedJobKey *&job_key);
   int server_random_pick(int64_t tenant_id, common::ObString &pick_zone, ObAddr &server);
   int get_execute_addr(ObDBMSSchedJobInfo &job_info, common::ObAddr &execute_addr);
 
   int check_all_tenants();
   int check_new_jobs(uint64_t tenant_id, bool is_oracle_tenant);
   int register_new_jobs(uint64_t tenant_id, bool is_oracle_tenant, ObIArray<ObDBMSSchedJobInfo> &job_infos);
-  int register_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key = NULL, bool ignore_nextdate = false);
-
+  int register_job(ObDBMSSchedJobKey *job_key, int64_t next_date);
   int scheduler_job(ObDBMSSchedJobKey *job_key);
+  int64_t calc_next_date(ObDBMSSchedJobInfo &job_info);
+  int64_t run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key, int64_t next_date);
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
-  const static int MIN_SCHEDULER_INTERVAL = 20 * 1000 * 1000;
+  const static int MIN_SCHEDULER_INTERVAL = 1 * 1000 * 1000;
+  const static int CHECK_NEW_INTERVAL = 20 * 1000 * 1000;
 
   bool inited_;
   bool stoped_;
@@ -266,7 +244,6 @@ private:
   ObDBMSSchedJobThread scheduler_thread_;
   ObDBMSSchedTableOperator table_operator_;
 
-  common::ObSpinLock lock_;
   common::ObBlockAllocMgr block_alloc_;
   common::ObVSliceAlloc allocator_;
 

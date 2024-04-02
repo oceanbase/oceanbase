@@ -39,6 +39,7 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "share/ob_cluster_version.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_trans_event.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
 #include "observer/ob_server_struct.h"
@@ -834,12 +835,13 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
   return ret;
 }
 
-int ObResultSet::close(int &client_ret)
+int ObResultSet::do_close(int *client_ret)
 {
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
 
   FLTSpanGuard(close);
+  const bool is_tx_active = my_session_.is_in_transaction();
   int do_close_plan_ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
   if (OB_LIKELY(NULL != physical_plan_)) {
@@ -936,7 +938,7 @@ int ObResultSet::close(int &client_ret)
         }
       }
     }
-    ret = auto_end_plan_trans(*physical_plan_, ret, async);
+    ret = auto_end_plan_trans(*physical_plan_, ret, is_tx_active, async);
   }
 
   if (is_user_sql_ && my_session_.need_reset_package()) {
@@ -949,8 +951,9 @@ int ObResultSet::close(int &client_ret)
   }
   // notify close fail to listener
   int err = OB_SUCCESS != do_close_plan_ret ? do_close_plan_ret : ret;
-  if (OB_SUCCESS != err && err != errcode_ && close_fail_cb_.is_valid()) {
-    close_fail_cb_(err, client_ret);
+  if (client_ret != NULL
+      && OB_SUCCESS != err && err != errcode_ && close_fail_cb_.is_valid()) {
+    close_fail_cb_(err, *client_ret);
   }
   //Save the current execution state to determine whether to refresh location
   //and perform other necessary cleanup operations when the statement exits.
@@ -965,6 +968,7 @@ int ObResultSet::close(int &client_ret)
 // 2. TODO:对于commit/rollback这个cmd，后面也需要走这个路径。现在还是走同步Callback。
 OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
                                                int ret,
+                                               bool is_tx_active,
                                                bool &async)
 {
   NG_TRACE(auto_end_plan_begin);
@@ -1005,6 +1009,11 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
     } else {
       //bool is_rollback = (OB_FAIL(ret) || plan_ctx->is_force_rollback());
       is_rollback = need_rollback(OB_SUCCESS, ret, plan_ctx->is_error_ignored());
+      // if txn will be rollbacked and it may has been rollbacked in end-stmt phase
+      // we need account this for stat
+      if (is_rollback && !is_will_retry_() && is_tx_active && !in_trans) {
+        ObTransStatistic::get_instance().add_rollback_trans_count(MTL_ID(), 1);
+      }
       // 对于UPDATE等异步提交的语句，如果需要重试，那么中途的rollback也走同步接口
       if (OB_LIKELY(false == is_end_trans_async()) || OB_LIKELY(false == is_user_sql_)) {
         // 如果没有设置end_trans_cb，就走同步接口。这个主要是为了InnerSQL提供的。
@@ -1215,7 +1224,8 @@ bool ObResultSet::need_end_trans_callback() const
   } else if (is_returning_) {
     need = false;
   } else if (my_session_.get_has_temp_table_flag()
-             || my_session_.has_tx_level_temp_table()) {
+             || my_session_.has_tx_level_temp_table()
+             || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
     need = true;
@@ -1249,6 +1259,7 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
     }
     is_select_for_update_ = (static_cast<ObSelectStmt&>(stmt)).has_for_update();
     has_hidden_rowid_ = (static_cast<ObSelectStmt&>(stmt)).has_hidden_rowid();
+    is_skip_locked_ = (static_cast<ObSelectStmt&>(stmt)).is_skip_locked();
   } else if (stmt.is_insert_stmt() || stmt.is_update_stmt() || stmt.is_delete_stmt()) {
     ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(stmt);
     OZ (into_exprs_.assign(dml_stmt.get_returning_into_exprs()));
@@ -1312,7 +1323,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
 }
 
 int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
-  common::ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info)
 {
   int ret = OB_SUCCESS;
   int64_t current_position = INT64_MAX;
@@ -1329,7 +1340,7 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
   ObSEArray<ObConstRawExpr *, 4> recount_params;
   for (int64_t i = 0;
        current_position != INT64_MAX && OB_SUCC(ret) && i < param_info.count(); ++i) {
-    ObRawExpr *param = param_info.at(i).first;
+    ObRawExpr *param = param_info.at(i).element<0>();
     if (OB_NOT_NULL(param)
         && T_QUESTIONMARK == param->get_expr_type()
         && static_cast<ObConstRawExpr *>(param)->get_value().get_unknown() > current_position) {
@@ -1356,7 +1367,7 @@ int ObResultSet::ExternalRetrieveInfo::build(
   ObSQLSessionInfo &session_info,
   pl::ObPLBlockNS *ns,
   bool is_dynamic_sql,
-  common::ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info)
+  common::ObIArray<ExternalParamInfo> &param_info)
 {
   int ret = OB_SUCCESS;
   OZ (build_into_exprs(stmt, ns, is_dynamic_sql));
@@ -1390,23 +1401,34 @@ int ObResultSet::ExternalRetrieveInfo::build(
        * stmt里的？是按照表达式resolve的顺序编号的，这个顺序在prepare阶段需要依赖的
        * 但是route_sql里的？需要按照入参在符号表里的下标进行编号，这个编号是proxy做路由的时候依赖的，所以这里要改掉stmt里QUESTIONMARK的值
        */
-      external_params_.set_capacity(param_info.count());
+      int64_t cnt = 0;
+      for (int64_t i = param_info.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        if (0 == param_info.at(i).element<2>()) {
+          cnt++;
+        } else {
+          break;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
+        OX (param_info.pop_back());
+      }
+      OX (external_params_.set_capacity(param_info.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_info.count(); ++i) {
-        if (OB_ISNULL(param_info.at(i).first) || OB_ISNULL(param_info.at(i).second)) {
+        if (OB_ISNULL(param_info.at(i).element<0>()) || OB_ISNULL(param_info.at(i).element<1>())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param expr is NULL", K(i), K(param_info.at(i).first), K(param_info.at(i).second), K(ret));
-        } else if (OB_FAIL(external_params_.push_back(param_info.at(i).first))) {
-          LOG_WARN("push back error", K(i), K(param_info.at(i).first), K(ret));
-        } else if (T_QUESTIONMARK == param_info.at(i).first->get_expr_type()) {
-          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(param_info.at(i).first);
-          if (OB_FAIL(param_info.at(i).second->get_value().apply(const_expr->get_value()))) {
-            LOG_WARN("apply error", K(const_expr->get_value()), K(param_info.at(i).second->get_value()), K(ret));
+          LOG_WARN("param expr is NULL", K(i), K(param_info.at(i).element<0>()), K(param_info.at(i).element<1>()), K(param_info.at(i).element<2>()), K(ret));
+        } else if (OB_FAIL(external_params_.push_back(param_info.at(i).element<0>()))) {
+          LOG_WARN("push back error", K(i), K(param_info.at(i).element<0>()), K(ret));
+        } else if (T_QUESTIONMARK == param_info.at(i).element<0>()->get_expr_type()) {
+          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(param_info.at(i).element<0>());
+          if (OB_FAIL(param_info.at(i).element<1>()->get_value().apply(const_expr->get_value()))) {
+            LOG_WARN("apply error", K(const_expr->get_value()), K(param_info.at(i).element<1>()->get_value()), K(ret));
           }
         } else {
           //如果不是PL的local变量，需要把QUESTIONMARK的值改为无效值，以免使proxy混淆
-          param_info.at(i).second->get_value().set_unknown(OB_INVALID_INDEX);
-          param_info.at(i).second->set_expr_obj_meta(
-                              param_info.at(i).second->get_value().get_meta());
+          param_info.at(i).element<1>()->get_value().set_unknown(OB_INVALID_INDEX);
+          param_info.at(i).element<1>()->set_expr_obj_meta(
+                              param_info.at(i).element<1>()->get_value().get_meta());
           if (stmt_sql_.empty()) {
             OZ (ob_write_string(allocator_, stmt.get_query_ctx()->get_sql_stmt(), stmt_sql_));
           }
@@ -1930,7 +1952,8 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(MTL_ID()))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(
+                     OB_INVALID_TENANT_ID != MTL_ID() ? MTL_ID() : OB_SERVER_TENANT_ID))) {
         } else if (OB_FAIL(handle.get_more(*transmit_result))) {
           LOG_WARN("fail wait response", K(ret));
         } else {

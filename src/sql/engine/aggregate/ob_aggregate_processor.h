@@ -170,6 +170,7 @@ public:
     distinct_hash_funcs_.set_allocator(alloc);
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int assign(const ObAggrInfo &rhs);
 
   common::ObIAllocator *alloc_;
   ObExpr *expr_;
@@ -858,6 +859,7 @@ public:
   { hp_infras_mgr_ = hp_infras_mgr; }
   inline int64_t get_distinct_count() const { return distinct_count_; }
   inline void set_enable_hash_distinct() { enable_hash_distinct_ = true; }
+  bool has_listagg_non_const_separator() const;
 private:
   template <typename T>
   int inner_process_batch(GroupRow &group_rows, T &selector, int64_t start_idx, int64_t end_idx);
@@ -954,10 +956,11 @@ private:
 
   OB_INLINE int clone_number_cell(const number::ObNumber &src_cell,
                                   AggrCell &aggr_cell);
-
+  template <typename T>
   int init_group_extra_aggr_info(
         AggrCell &aggr_cell,
-        const ObAggrInfo &aggr_info);
+        const ObAggrInfo &aggr_info,
+        const T &selector);
   int max_calc(AggrCell &aggr_cell,
                ObDatum &base,
                const ObDatum &other,

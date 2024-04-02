@@ -130,7 +130,9 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   int64_t num_child = expr.arg_cnt_;
   ObString xml_target;
   ObString xpath_expr;
@@ -142,7 +144,6 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   ObUpdateXMLRetType res_origin = ObUpdateXMLRetType::ObRetMax;
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLCodeGen"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (num_child != 3) {
@@ -159,10 +160,12 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
     LOG_WARN("failed to get xml_target str from expr", K(ret));
   } else if (xml_target.empty()) {
     // do nothing
+  } else if (OB_FALSE_IT(allocator.add_baseline_size(xml_target.length()))) {
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("failed to get xpath expr.", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[2], ctx, new_xml, allocator))) {
     LOG_WARN("failed to get new xml.", K(ret));
+  } else if (OB_FALSE_IT(allocator.add_baseline_size(new_xml.length()))) {
   } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_DOCUMENT))) {
     ret = OB_SUCCESS;
     if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_CONTENT))) {
@@ -182,7 +185,9 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   } else if (return_null) {
     res.set_null();
   } else if (OB_ISNULL(xml_base)) {
-    res.set_string(xml_res);
+    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_res))) {
+      LOG_WARN("pack res origin failed.", K(ret), K(xml_res));
+    }
   } else if (res_origin == ObUpdateXMLRetType::ObRetInputStr) {
     if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_target))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_target));
@@ -227,7 +232,8 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObDatum *xml_datum = NULL;
   ObString namespace_str;
   ObIMulModeBase *xml_tree = NULL;
@@ -239,17 +245,14 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
   bool input_is_doc = false;
   ObMulModeNodeType node_type = M_MAX_TYPE;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
-  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get session failed.", K(ret));
-  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (num_child < 3) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(num_child));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     LOG_WARN("fail to get xmltype", K(ret));
   } else if (FALSE_IT(has_namespace_str = ((num_child - 1) % 2 != 0))) {
   } else if (has_namespace_str) {
@@ -498,6 +501,7 @@ int ObExprUpdateXml::update_xml_tree(ObMulModeMemCtx* xml_mem_ctx,
   int ret = OB_SUCCESS;
   ObPathExprIter xpath_iter((static_cast<ObXmlNode*>(xml_tree))->get_mem_ctx()->allocator_);
   ObIMulModeBase *node = NULL;
+  ObXmlUpdateNodeInfoArray *update_array = nullptr;
   if (OB_FAIL(xpath_iter.init((static_cast<ObXmlNode*>(xml_tree))->get_mem_ctx(), xpath_str, default_ns, xml_tree, prefix_ns))) {
     LOG_WARN("fail to init xpath iterator", K(xpath_str), K(default_ns), K(ret));
     ObXMLExprHelper::replace_xpath_ret_code(ret);
@@ -521,12 +525,22 @@ int ObExprUpdateXml::update_xml_tree(ObMulModeMemCtx* xml_mem_ctx,
     ret = OB_SUCCESS;
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObXMLExprHelper::mem_ctx_add_baseline(expr, ctx, xml_mem_ctx, res_array.size()))) {
+    LOG_WARN("failed to add baseline.", K(ret));
+  } else if (OB_ISNULL(update_array = static_cast<ObXmlUpdateNodeInfoArray*>(xml_mem_ctx->allocator_->alloc(sizeof(ObXmlUpdateNodeInfoArray))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc array.", K(ret));
+  } else { // todo
+    memset(update_array, 0, sizeof(ObXmlUpdateNodeInfoArray));
+  }
+
   for (int i = 0; i < res_array.size() && OB_SUCC(ret); ++i) {
     ObIMulModeBase* update_node = res_array[i];
     if (OB_ISNULL(update_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("xpath result node is null", K(ret));
-    } else if (OB_FAIL(update_xml_node(xml_mem_ctx, expr, ctx, update_node))) {
+    } else if (OB_FAIL(update_xml_node(xml_mem_ctx, expr, ctx, *update_array, update_node))) {
       LOG_WARN("fail to update xml node", K(ret), K(node));
     }
   }
@@ -542,6 +556,7 @@ int ObExprUpdateXml::update_xml_tree(ObMulModeMemCtx* xml_mem_ctx,
 int ObExprUpdateXml::update_xml_node(ObMulModeMemCtx* xml_mem_ctx,
                                      const ObExpr *expr,
                                      ObEvalCtx &ctx,
+                                     ObXmlUpdateNodeInfoArray &update_array,
                                      ObIMulModeBase *node)
 {
   int ret = OB_SUCCESS;
@@ -578,38 +593,38 @@ int ObExprUpdateXml::update_xml_node(ObMulModeMemCtx* xml_mem_ctx,
   if (!is_empty_content) {
     switch (xml_node->type()) {
       case M_TEXT: {
-        if (OB_FAIL(update_text_or_attribute_node(xml_mem_ctx, xml_node, expr, ctx, true))) {
+        if (OB_FAIL(update_text_or_attribute_node(xml_mem_ctx, xml_node, expr, ctx, true, update_array[ObUpdateTextType]))) {
           LOG_WARN("fail to update text node", K(ret), K(xml_type));
         }
         break;
       }
       case M_ATTRIBUTE: {
-        if (OB_FAIL(update_text_or_attribute_node(xml_mem_ctx, xml_node, expr, ctx, false))) {
+        if (OB_FAIL(update_text_or_attribute_node(xml_mem_ctx, xml_node, expr, ctx, false, update_array[ObUpdateAttributeType]))) {
           LOG_WARN("fail to update attribute node", K(ret));
         }
         break;
       }
       case M_NAMESPACE: {
-        if (OB_FAIL(update_namespace_node(xml_mem_ctx, xml_node, expr, ctx))) {
+        if (OB_FAIL(update_namespace_node(xml_mem_ctx, xml_node, expr, ctx, update_array[ObUpdateNamespaceType]))) {
           LOG_WARN("fail to update namespace node", K(ret));
         }
         break;
       }
       case M_COMMENT:
       case M_CDATA: {
-        if (OB_FAIL(update_cdata_and_comment_node(xml_mem_ctx, xml_node, expr, ctx))) {
+        if (OB_FAIL(update_cdata_and_comment_node(xml_mem_ctx, xml_node, expr, ctx, update_array[ObUpdateCdateCommentType]))) {
           LOG_WARN("fail to update cdata node", K(ret), K(xml_type));
         }
         break;
       }
       case M_ELEMENT: {
-        if (OB_FAIL(update_element_node(xml_mem_ctx, xml_node, expr, ctx))) {
+        if (OB_FAIL(update_element_node(xml_mem_ctx, xml_node, expr, ctx, update_array[ObUpdateElementType]))) {
           LOG_WARN("fail to update element node", K(ret), K(xml_type));
         }
         break;
       }
       case M_INSTRUCT: {
-        if (OB_FAIL(update_pi_node(xml_mem_ctx, xml_node, expr, ctx))) {
+        if (OB_FAIL(update_pi_node(xml_mem_ctx, xml_node, expr, ctx, update_array[ObUpdateInstructType]))) {
           LOG_WARN("fail to pi node", K(ret), K(xml_type));
         }
         break;
@@ -627,51 +642,53 @@ int ObExprUpdateXml::update_xml_node(ObMulModeMemCtx* xml_mem_ctx,
 int ObExprUpdateXml::update_pi_node(ObMulModeMemCtx* xml_mem_ctx,
                                     ObXmlNode *xml_node,
                                     const ObExpr *expr,
-                                    ObEvalCtx &ctx)
+                                    ObEvalCtx &ctx,
+                                    ObXmlUpdateNodeInfo *&update_info)
 {
   int ret = OB_SUCCESS;
   ObObjType val_type = expr->datum_meta_.type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
-  ObDatum *datum = NULL;
-  if (OB_FAIL(expr->eval(ctx, datum))) {
-    LOG_WARN("fail to eval datum", K(ret));
-  } else {
-    if (val_type == ObNullType) {
-     ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
-     LOG_WARN("XML nodes must be updated with valid nodes and of the same type", K(ret));
-    } else if (ob_is_string_type(val_type)) {
-      ObXmlDocument *xml_doc = NULL;
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret), K(value_str));
-      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, value_str, xml_doc))) {
+  ObXmlNode *clone_node = nullptr;
+  if (val_type == ObNullType) {
+   ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
+   LOG_WARN("XML nodes must be updated with valid nodes and of the same type", K(ret));
+  } else if (ob_is_string_type(val_type)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_parse_str_info(xml_mem_ctx, expr, ctx, update_info))) {
         if (ret == OB_ERR_PARSER_SYNTAX) {
           ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
         }
         LOG_WARN("fail to parse xml str", K(ret));
-      } else if (xml_doc->size() > 0 && xml_doc->at(0)->type() == M_INSTRUCT) {
-        if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, xml_doc))) {
-          LOG_WARN("fail to update pi node with content node", K(ret));
-        }
-      } else {
-        ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
-        LOG_WARN("update pi node with invalid node", K(ret), K(value_str));
       }
-    } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
-      ObIMulModeBase *update_node = NULL;
-      ObXmlNode *update_xml_node = NULL;
-      ObCollationType cs_type = CS_TYPE_INVALID;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
-        LOG_WARN("fail to get update xml node", K(ret));
-      } else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("update node is NULL", K(ret));
-      } else if (update_xml_node->size() == 0) {
-        ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
-        LOG_WARN("update pi node with invalid node", K(ret));
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml content node ", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (update_info->update_node->size() > 0 && update_info->update_node->at(0)->type() == M_INSTRUCT) {
+      if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+        LOG_WARN("failed to clone node.", K(ret));
+      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+        LOG_WARN("fail to update pi node with content node", K(ret));
       }
+    } else {
+      ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
+      LOG_WARN("update pi node with invalid node", K(ret), K(update_info->update_str));
+    }
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_xml_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to update xml info.", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(update_info->update_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else if (update_info->update_node->size() == 0) {
+      ret = OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
+      LOG_WARN("update pi node with invalid node", K(ret));
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml content node ", K(ret));
     }
   }
   return ret;
@@ -681,56 +698,66 @@ int ObExprUpdateXml::update_text_or_attribute_node(ObMulModeMemCtx* xml_mem_ctx,
                                                    ObXmlNode *xml_node,
                                                    const ObExpr *expr,
                                                    ObEvalCtx &ctx,
-                                                   bool is_text)
+                                                   bool is_text,
+                                                   ObXmlUpdateNodeInfo *&update_info)
 {
   int ret = OB_SUCCESS;
   ObObjType val_type = expr->datum_meta_.type_;
   ObCollationType cs_type = expr->datum_meta_.cs_type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
-  ObDatum *datum = NULL;
-  if (OB_FAIL(expr->eval(ctx, datum))) {
-    LOG_WARN("fail to eval datum", K(ret));
-  } else {
-    if (val_type == ObNullType) {
-      xml_node->set_value(ObString::make_empty_string());
-    } else if (is_text && ob_is_clob(val_type, cs_type)) {
-      ObXmlDocument *xml_doc = NULL;
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret), K(value_str));
-      } else if (value_str.empty()) {
+  ObXmlNode *clone_node = nullptr;
+  if (val_type == ObNullType) {
+    xml_node->set_value(ObString::make_empty_string());
+  } else if (is_text && ob_is_clob(val_type, cs_type)) {
+    if (OB_ISNULL(update_info)) {
+      ObXmlDocument *xml_doc = nullptr;
+      if (OB_FAIL(get_update_str_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("fail to get str info", K(ret));
+      } else if (update_info->update_str.empty()) {
         ret = OB_LOB_VALUE_NOT_EXIST;
-        LOG_WARN("LOB value is empty", K(ret), K(value_str));
-      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, value_str, xml_doc))) {
+        LOG_WARN("LOB value is empty", K(ret), K(update_info->update_str));
+      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, update_info->update_str, xml_doc))) {
         if (ret == OB_ERR_PARSER_SYNTAX) {
           ret = OB_ERR_XML_PARSE;
         }
         LOG_WARN("fail to parse xml str", K(ret));
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, xml_doc))) {
-        LOG_WARN("fail to update xml element node", K(ret));
-      }
-    } else if (ob_is_string_type(val_type)) {
-      ObStringBuffer buff(xml_mem_ctx->allocator_);
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret));
-      } else {
-        xml_node->set_value(value_str);
-      }
-    } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
-      ObIMulModeBase *update_node = NULL;
-      ObXmlNode *update_xml_node = NULL;
-      ObCollationType cs_type = CS_TYPE_INVALID;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
-        LOG_WARN("fail to get update xml node", K(ret));
-      } else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
+      } else if (OB_ISNULL(update_info->update_node = static_cast<ObXmlNode*>(xml_doc))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("update node is NULL", K(ret));
-      } else if (is_text && OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml node ", K(ret));
-      } else if (!is_text && OB_FAIL(update_attribute_xml_node(xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml node ", K(ret));
+        LOG_WARN("failed to cast to xml node.", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+        LOG_WARN("failed to clone node.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml element node", K(ret));
+    }
+  } else if (ob_is_string_type(val_type)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_str_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to get update info.", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      xml_node->set_value(update_info->update_str);
+    }
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_xml_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to update xml info.", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(update_info->update_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone.", K(ret));
+    } else if (is_text && OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml node ", K(ret));
+    } else if (!is_text && OB_FAIL(update_attribute_xml_node(xml_node, clone_node))) {
+      LOG_WARN("fail to update xml node ", K(ret));
     }
   }
   return ret;
@@ -739,38 +766,41 @@ int ObExprUpdateXml::update_text_or_attribute_node(ObMulModeMemCtx* xml_mem_ctx,
 int ObExprUpdateXml::update_namespace_node(ObMulModeMemCtx* xml_mem_ctx,
                                            ObXmlNode *xml_node,
                                            const ObExpr *expr,
-                                           ObEvalCtx &ctx)
+                                           ObEvalCtx &ctx,
+                                           ObXmlUpdateNodeInfo *&update_info)
 {
   int ret = OB_SUCCESS;
   ObObjType val_type = expr->datum_meta_.type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
   ObDatum *datum = NULL;
-  if (OB_FAIL(expr->eval(ctx, datum))) {
-    LOG_WARN("fail to eval datum", K(ret));
-  } else {
-    if (val_type == ObNullType) {
-      ret = OB_ERR_XML_PARSE;
-      LOG_WARN("update namespace node value to be NULL is unsupported", K(ret));
-    } else if (ob_is_string_type(val_type)) {
-      ObStringBuffer buff(xml_mem_ctx->allocator_);
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret));
-      } else if (OB_FAIL(update_namespace_value(*xml_mem_ctx->allocator_, xml_node, value_str))) {
-        LOG_WARN("fail to update namespace node value", K(ret), K(value_str));
+  ObXmlNode *clone_node = nullptr;
+  if (val_type == ObNullType) {
+    ret = OB_ERR_XML_PARSE;
+    LOG_WARN("update namespace node value to be NULL is unsupported", K(ret));
+  } else if (ob_is_string_type(val_type)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_str_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to get update info.", K(ret));
       }
-    } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
-      ObIMulModeBase *update_node = NULL;
-      ObXmlNode *update_xml_node = NULL;
-      ObCollationType cs_type = CS_TYPE_INVALID;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
-        LOG_WARN("fail to get update xml node", K(ret));
-      } else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("update node is NULL", K(ret));
-      } else if (OB_FAIL(update_namespace_xml_node(*xml_mem_ctx->allocator_, xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml node ", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(update_namespace_value(*xml_mem_ctx->allocator_, xml_node, update_info->update_str))) {
+      LOG_WARN("fail to update namespace node value", K(ret), K(update_info->update_str));
+    }
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_xml_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to update xml info.", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(update_info->update_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone.", K(ret));
+    } else if (OB_FAIL(update_namespace_xml_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml node ", K(ret));
     }
   }
   return ret;
@@ -779,54 +809,64 @@ int ObExprUpdateXml::update_namespace_node(ObMulModeMemCtx* xml_mem_ctx,
 int ObExprUpdateXml::update_element_node(ObMulModeMemCtx* xml_mem_ctx,
                                          ObXmlNode *xml_node,
                                          const ObExpr *expr,
-                                         ObEvalCtx &ctx)
+                                         ObEvalCtx &ctx,
+                                         ObXmlUpdateNodeInfo *&update_info)
 {
   int ret = OB_SUCCESS;
   ObObjType val_type = expr->datum_meta_.type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
-  ObDatum *datum = NULL;
-  if (OB_FAIL(expr->eval(ctx, datum))) {
-    LOG_WARN("fail to eval datum", K(ret));
-  } else {
-    ObXmlElement *ele = static_cast<ObXmlElement *>(xml_node);
-    if (val_type == ObNullType) {
-      ObMulModeNodeType node_type = ele->type();
-      if (OB_FAIL(clear_element_child_node(ele))) {
-        LOG_WARN("fail to clear child node", K(ret));
-      }
-    } else if (ob_is_string_type(val_type)) {
-      ObXmlDocument *xml_doc = NULL;
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret), K(value_str));
-      } else if (value_str.trim().empty()) {
-        if (OB_FAIL(clear_element_child_node(ele))) {
-          LOG_WARN("fail to clear child node", K(ret));
-        }
-      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, value_str, xml_doc))) {
+  ObXmlElement *ele = static_cast<ObXmlElement *>(xml_node);
+  ObXmlNode *clone_node = nullptr;
+  if (val_type == ObNullType) {
+    ObMulModeNodeType node_type = ele->type();
+    if (OB_FAIL(clear_element_child_node(ele))) {
+      LOG_WARN("fail to clear child node", K(ret));
+    }
+  } else if (ob_is_string_type(val_type)) {
+    if (OB_ISNULL(update_info)) {
+      ObXmlDocument *xml_doc = nullptr;
+      if (OB_FAIL(get_update_str_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to get update info.", K(ret));
+      } else if (update_info->update_str.trim().empty()) {
+        // do nothing
+      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, update_info->update_str, xml_doc))) {
         if (ret == OB_ERR_PARSER_SYNTAX) {
           ret = OB_ERR_XML_PARSE;
         }
         LOG_WARN("fail to parse xml str", K(ret));
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, ele, xml_doc))) {
-        LOG_WARN("fail to update xml element node", K(ret));
-      }
-    } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
-      ObIMulModeBase *update_node = NULL;
-      ObXmlNode *update_xml_node = NULL;
-      ObCollationType cs_type = CS_TYPE_INVALID;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
-        LOG_WARN("fail to get update xml node", K(ret));
-      } else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
+      } else if (OB_ISNULL(update_info->update_node = static_cast<ObXmlNode*>(xml_doc))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("update node is NULL", K(ret));
-      } else if (update_xml_node->count() == 0) {
-        if (OB_FAIL(clear_element_child_node(ele))) {
-          LOG_WARN("fail to clear child node", K(ret));
-        }
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml node ", K(ret));
+        LOG_WARN("failed to cast into xml node.", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (update_info->update_str.trim().empty()) {
+      if (OB_FAIL(clear_element_child_node(ele))) {
+        LOG_WARN("fail to clear child node", K(ret));
+      }
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone node.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, ele, clone_node))) {
+      LOG_WARN("fail to update xml element node", K(ret));
+    }
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_xml_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to update xml info.", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(update_info->update_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else if (update_info->update_node->count() == 0) {
+      if (OB_FAIL(clear_element_child_node(ele))) {
+        LOG_WARN("fail to clear child node", K(ret));
+      }
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml node ", K(ret));
     }
   }
   return ret;
@@ -835,42 +875,124 @@ int ObExprUpdateXml::update_element_node(ObMulModeMemCtx* xml_mem_ctx,
 int ObExprUpdateXml::update_cdata_and_comment_node(ObMulModeMemCtx* xml_mem_ctx,
                                                    ObXmlNode *xml_node,
                                                    const ObExpr *expr,
-                                                   ObEvalCtx &ctx)
+                                                   ObEvalCtx &ctx,
+                                                   ObXmlUpdateNodeInfo *&update_info)
 {
   int ret = OB_SUCCESS;
   ObObjType val_type = expr->datum_meta_.type_;
   uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
-  ObDatum *datum = NULL;
-  if (OB_FAIL(expr->eval(ctx, datum))) {
-    LOG_WARN("fail to eval datum", K(ret));
-  } else {
-    if (val_type == ObNullType) {
-      xml_node->set_value(ObString::make_empty_string());
-    } else if (ob_is_string_type(val_type)) {
-      ObXmlDocument *xml_doc = NULL;
-      ObString value_str;
-      if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
-        LOG_WARN("fail to get value str", K(ret), K(value_str));
-      } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, value_str, xml_doc))) {
+  ObXmlNode *clone_node = nullptr;
+  if (val_type == ObNullType) {
+    xml_node->set_value(ObString::make_empty_string());
+  } else if (ob_is_string_type(val_type)) {
+    if (OB_ISNULL(update_info)) {
+      ObXmlDocument *xml_doc = nullptr;
+      if (OB_FAIL(get_update_parse_str_info(xml_mem_ctx, expr, ctx, update_info))) {
         if (ret == OB_ERR_PARSER_SYNTAX) {
           ret = OB_ERR_XML_PARSE;
         }
         LOG_WARN("fail to parse xml str", K(ret));
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, xml_doc))) {
-        LOG_WARN("fail to update xml element node", K(ret));
       }
-    } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
-      ObIMulModeBase *update_node = NULL;
-      ObXmlNode *update_xml_node = NULL;
-      ObCollationType cs_type = CS_TYPE_INVALID;
-      if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
-        LOG_WARN("fail to get update xml node", K(ret));
-      }  else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("update node is NULL", K(ret));
-      } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, update_xml_node))) {
-        LOG_WARN("fail to update xml node ", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone node.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml element node", K(ret));
+    }
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    if (OB_ISNULL(update_info)) {
+      if (OB_FAIL(get_update_xml_info(xml_mem_ctx, expr, ctx, update_info))) {
+        LOG_WARN("failed to update xml info.", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to get update xml node", K(ret));
+    } else if (OB_ISNULL(update_info->update_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else if (OB_FAIL(update_info->update_node->clone(xml_mem_ctx, clone_node))) {
+      LOG_WARN("failed to clone.", K(ret));
+    } else if (OB_FAIL(update_xml_child_node(*xml_mem_ctx->allocator_, xml_node, clone_node))) {
+      LOG_WARN("fail to update xml node ", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprUpdateXml::get_update_str_info(ObMulModeMemCtx* xml_mem_ctx,
+                                          const ObExpr *expr,
+                                          ObEvalCtx &ctx,
+                                          ObXmlUpdateNodeInfo *&update_info)
+{
+  INIT_SUCC(ret);
+  ObDatum *datum = nullptr;
+  ObString value_str;
+  ObObjType val_type = expr->datum_meta_.type_;
+  uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
+  if (OB_ISNULL(update_info = static_cast<ObXmlUpdateNodeInfo*>(xml_mem_ctx->allocator_->alloc(sizeof(ObXmlUpdateNodeInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc update node info failed", K(ret));
+  } else if (OB_FAIL(expr->eval(ctx, datum))) {
+    LOG_WARN("fail to eval datum", K(ret), K(val_type));
+  } else if (ob_is_string_type(val_type)) {
+    update_info->update_type = val_type;
+    if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr, ctx, value_str, *xml_mem_ctx->allocator_))) {
+      LOG_WARN("fail to get value str", K(ret));
+    } else {
+      update_info->update_str = value_str;
+    }
+  }
+  return ret;
+}
+
+int ObExprUpdateXml::get_update_parse_str_info(ObMulModeMemCtx* xml_mem_ctx,
+                                                const ObExpr *expr,
+                                                ObEvalCtx &ctx,
+                                                ObXmlUpdateNodeInfo *&update_info)
+{
+  INIT_SUCC(ret);
+  ObXmlDocument *xml_doc = nullptr;
+  if (OB_FAIL(get_update_str_info(xml_mem_ctx, expr, ctx, update_info))) {
+    LOG_WARN("failed to get update str info.", K(ret));
+  } else if (OB_FAIL(ObXmlParserUtils::parse_content_text(xml_mem_ctx, update_info->update_str, xml_doc))) {
+    LOG_WARN("failed to farse content text", K(ret));
+  } else if (OB_ISNULL(update_info->update_node = static_cast<ObXmlNode*>(xml_doc))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to cast to xml node.", K(ret));
+  }
+
+  return ret;
+}
+
+int ObExprUpdateXml::get_update_xml_info(ObMulModeMemCtx* xml_mem_ctx,
+                                          const ObExpr *expr,
+                                          ObEvalCtx &ctx,
+                                          ObXmlUpdateNodeInfo *&update_info)
+{
+  INIT_SUCC(ret);
+  ObDatum *datum = nullptr;
+  ObString value_str;
+  ObXmlDocument *xml_doc = NULL;
+  ObObjType val_type = expr->datum_meta_.type_;
+  uint16_t sub_schema_id = expr->obj_meta_.get_subschema_id();
+  if (OB_ISNULL(update_info = static_cast<ObXmlUpdateNodeInfo*>(xml_mem_ctx->allocator_->alloc(sizeof(ObXmlUpdateNodeInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc update node info failed", K(ret));
+  } else if (OB_FAIL(expr->eval(ctx, datum))) {
+    LOG_WARN("fail to eval datum", K(ret), K(val_type));
+  } else if (ob_is_xml_sql_type(val_type, sub_schema_id)) {
+    ObIMulModeBase *update_node = NULL;
+    ObXmlNode *update_xml_node = NULL;
+    ObCollationType cs_type = CS_TYPE_INVALID;
+    update_info->update_type = ObUserDefinedSQLType;
+    if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, datum, cs_type, ObNodeMemType::TREE_TYPE, update_node))) {
+      LOG_WARN("fail to get update xml node", K(ret));
+    } else if (OB_ISNULL(update_xml_node = static_cast<ObXmlNode *>(update_node))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update node is NULL", K(ret));
+    } else {
+      update_info->update_node = update_xml_node;
     }
   }
   return ret;

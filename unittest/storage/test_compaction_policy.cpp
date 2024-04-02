@@ -193,6 +193,12 @@ void TestCompactionPolicy::TearDown()
   tablet_handle_.reset();
   major_tables_.reset();
   minor_tables_.reset();
+  for (int i = 0; i < memtables_.count(); i++) {
+    memtable::ObIMemtable *i_mt = nullptr;
+    ASSERT_EQ(OB_SUCCESS, memtables_[i].get_memtable(i_mt));
+    memtable::ObMemtable *mt = (memtable::ObMemtable *)(i_mt);
+    mt->memtable_mgr_handle_.reset();
+  }
   memtables_.reset();
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -781,6 +787,16 @@ TEST_F(TestCompactionPolicy, basic_create_memtable)
   ASSERT_EQ(2, mt_mgr->get_memtable_count_());
   ObMemtable *active_mt = static_cast<ObMemtable *>(active_memtable.get_table());
   ASSERT_EQ(false, active_mt->can_be_minor_merged());
+
+  memtable::ObIMemtable *i_mt = nullptr;
+  memtable::ObMemtable *mt = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, frozen_memtable.get_memtable(i_mt));
+  mt = (memtable::ObMemtable *)(i_mt);
+  mt->memtable_mgr_handle_.reset();
+  ASSERT_EQ(OB_SUCCESS, active_memtable.get_memtable(i_mt));
+  mt = (memtable::ObMemtable *)(i_mt);
+  mt->memtable_mgr_handle_.reset();
 }
 
 TEST_F(TestCompactionPolicy, basic_create_table_store)

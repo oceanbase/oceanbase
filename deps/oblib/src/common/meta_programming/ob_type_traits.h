@@ -132,6 +132,7 @@ REGISTER_FUNCTION_TRAIT(serialize)
 REGISTER_FUNCTION_TRAIT(deserialize)
 REGISTER_FUNCTION_TRAIT(get_serialize_size)
 REGISTER_FUNCTION_TRAIT(compare)
+REGISTER_FUNCTION_TRAIT(check_can_do_tx_end)
 REGISTER_FUNCTION_TRAIT(check_can_replay_commit)
 REGISTER_FUNCTION_TRAIT(on_commit_for_old_mds)
 
@@ -290,6 +291,13 @@ typename std::enable_if<OB_TRAIT_HAS_ON_ABORT(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_HAS_ON_ABORT(CLASS) \
 typename std::enable_if<!OB_TRAIT_HAS_ON_ABORT(CLASS), bool>::type = true
 
+#define OB_TRAIT_HAS_CHECK_CAN_DO_TX_END(CLASS) \
+::oceanbase::common::meta::has_check_can_do_tx_end<DECAY(CLASS), bool(const bool, const bool, const share::SCN &, const char *, const int64_t, storage::mds::BufferCtx &, const char *&)>::value
+#define ENABLE_IF_HAS_CHECK_CAN_DO_TX_END(CLASS) \
+typename std::enable_if<OB_TRAIT_HAS_CHECK_CAN_DO_TX_END(CLASS), bool>::type = true
+#define ENABLE_IF_NOT_HAS_CHECK_CAN_DO_TX_END(CLASS) \
+typename std::enable_if<!OB_TRAIT_HAS_CHECK_CAN_DO_TX_END(CLASS), bool>::type = true
+
 #define OB_TRAIT_HAS_CHECK_CAN_REPLAY_COMMIT(CLASS) \
 ::oceanbase::common::meta::has_check_can_replay_commit<DECAY(CLASS), bool(const char *, const int64_t, const share::SCN &, storage::mds::BufferCtx &)>::value
 #define ENABLE_IF_HAS_CHECK_CAN_REPLAY_COMMIT(CLASS) \
@@ -303,6 +311,30 @@ typename std::enable_if<!OB_TRAIT_HAS_CHECK_CAN_REPLAY_COMMIT(CLASS), bool>::typ
 typename std::enable_if<OB_TRAIT_MDS_COMMIT_FOR_OLD_MDS(CLASS), bool>::type = true
 #define ENABLE_IF_NOT_MDS_COMMIT_FOR_OLD_MDS(CLASS) \
 typename std::enable_if<!OB_TRAIT_MDS_COMMIT_FOR_OLD_MDS(CLASS), bool>::type = true
+
+template <typename T>
+struct MdsCheckCanDoTxEndWrapper {
+  template <typename CLASS = T, ENABLE_IF_HAS_CHECK_CAN_DO_TX_END(CLASS)>
+  static bool check_can_do_tx_end(const bool is_willing_to_commit,
+                                  const bool for_replay,
+                                  const share::SCN &log_scn,// maybe invalid on leader
+                                  const char *buf,
+                                  const int64_t buf_len,
+                                  storage::mds::BufferCtx &ctx,
+                                  const char *&can_not_do_reason) {
+    return T::check_can_do_tx_end(is_willing_to_commit, for_replay, log_scn, buf, buf_len, ctx, can_not_do_reason);
+  }
+  template <typename CLASS = T, ENABLE_IF_NOT_HAS_CHECK_CAN_DO_TX_END(CLASS)>
+  static bool check_can_do_tx_end(const bool,
+                                  const bool,
+                                  const share::SCN &,
+                                  const char *,
+                                  const int64_t,
+                                  storage::mds::BufferCtx &,
+                                  const char *&) {
+    return true;
+  }
+};
 
 template <typename T>
 struct MdsCheckCanReplayWrapper {

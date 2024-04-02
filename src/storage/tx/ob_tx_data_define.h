@@ -201,7 +201,8 @@ public:
                K_(end_scn));
 
 public:
-  enum : int32_t {
+  enum TxDataState : int32_t {
+    UNKOWN = -1,
     RUNNING = 0,
     COMMIT = 1,
     ELR_COMMIT = 2,

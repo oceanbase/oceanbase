@@ -28,7 +28,7 @@
 #include "share/config/ob_server_config.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/parser/ob_parser.h"
@@ -346,11 +346,17 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                       SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", KPC(col), K(buf), K(buf_len), K(pos), K(ret));
                     }
                   } else if (ob_is_string_tc(default_value.get_type())) {
-                    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
                     ObString out_str = default_value.get_string();
-                    if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
-                      SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
-                    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
+                    if (oceanbase::common::ObCharsetType::CHARSET_INVALID == charset_type ||
+                        oceanbase::common::ObCharsetType::CHARSET_BINARY == charset_type) {
+                      // observer perform no conversion of result sets or error messages, you can see more detail the official website of MySQL
+                    } else {
+                      ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
+                        SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
+                      }
+                    }
+                    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
@@ -638,8 +644,9 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             } else if (NULL == table_schema.get_column_schema(col->get_column_id())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get column schema from data table failed", K(ret));
+            } else if (OB_FAIL(last_col.assign(*table_schema.get_column_schema(col->get_column_id())))) {
+              LOG_WARN("fail to assign column", KR(ret));
             } else {
-              last_col = *table_schema.get_column_schema(col->get_column_id());
               is_valid_col = true;
             }
           } else {
@@ -3762,7 +3769,7 @@ int ObSchemaPrinter::print_udt_body_definition(const uint64_t tenant_id,
     // OZ (databuff_printf(buf, buf_len, pos, "%.*s",
     //                     udt_body_info->get_source().length(), udt_body_info->get_source().ptr()));
     OZ (databuff_printf(buf, buf_len, pos,
-                      "CREATE OR REPLACE%s TYPE BODY \"%.*s\".\"%.*s\" IS \n",
+                      "CREATE OR REPLACE%s TYPE BODY \"%.*s\".\"%.*s\" \n",
                       udt_info->is_noneditionable() ? " NONEDITIONABLE" : "",
                       db_schema->get_database_name_str().length(),
                       db_schema->get_database_name_str().ptr(),
@@ -3839,7 +3846,10 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
                                           param->get_type_owner(),
                                           database_schema));
       if (OB_SUCC(ret))  {
-        if (param->get_type_subname().empty()) {
+        if (OB_ISNULL(database_schema)) {
+          ret = OB_ERR_BAD_DATABASE;
+          LOG_WARN("database not exists", K(ret), KPC(param));
+        } else if (param->get_type_subname().empty()) {
           OZ (databuff_printf(buf, buf_len, pos, " \"%.*s\".\"%.*s\"",
                               database_schema->get_database_name_str().length(),
                               database_schema->get_database_name_str().ptr(),

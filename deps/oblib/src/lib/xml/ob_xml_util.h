@@ -535,6 +535,8 @@ public:
 
   static bool is_xml_doc_over_depth(uint64_t depth);
   static int revert_escape_character(ObIAllocator &allocator, ObString &input_str, ObString &output_str);
+  template <typename T, typename... Args>
+  static ObXmlNode* clone_new_node(ObIAllocator* allocator, Args &&... args);
 };
 
 class ObMulModeFactory

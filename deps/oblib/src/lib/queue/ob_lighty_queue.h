@@ -102,7 +102,7 @@ public:
   int pop(void *&data, const int64_t timeout = 0);
   int multi_pop(void **data, const int64_t data_count, int64_t &avail_count, const int64_t timeout = 0);
 private:
-  typedef ObFixedQueue<void> Queue;
+  typedef ObOrderedFixedQueue<void> Queue;
   Queue queue_;
   Cond cond_;
 private:

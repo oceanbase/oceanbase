@@ -54,7 +54,7 @@ public:
     TO_STRING_KV(K_(addr), KP_(partition_id_array_ptr));
   };
 public:
-  ObTableLoadPartitionLocation() : is_inited_(false) {}
+  ObTableLoadPartitionLocation() : is_inited_(false) { tablet_ids_.set_tenant_id(MTL_ID()); }
   int init(uint64_t tenant_id,
            const table::ObTableLoadArray<table::ObTableLoadPartitionId> &partition_ids,
            common::ObIAllocator &allocator);

@@ -213,6 +213,11 @@ public:
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   int get_tx_ctx(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
 
+  int get_tx_ctx_with_timeout(const ObTransID &tx_id,
+                              const bool for_replay,
+                              ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout);
+
   // Find specified TxCtx directly from the ObLSTxCtxMgr's hash_map
   // @param [in] tx_id: transaction ID
   // @param [out] tx_ctx: context found through ObLSTxCtxMgr's hash table
@@ -517,6 +522,9 @@ public:
   // check is blocked
   bool is_tx_blocked() const { return is_tx_blocked_(); }
 
+  // check all blocked
+  bool is_all_blocked() const { return is_all_blocked_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 
@@ -535,7 +543,6 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(active_tx_count),
-               K_(total_active_readonly_request_count),
                K_(ls_retain_ctx_mgr),
                K_(aggre_rec_scn),
                K_(prev_aggre_rec_scn),
@@ -551,7 +558,7 @@ private:
   static const int64_t RETRY_INTERVAL_US = 10 *1000;
 
 private:
-  int process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const;
+  int process_callback_(ObTxCommitCallback *&cb_list) const;
   void print_all_tx_ctx_(const int64_t max_print, const bool verbose);
   int64_t get_tx_ctx_count_() const { return ATOMIC_LOAD(&total_tx_ctx_count_); }
   int create_tx_ctx_(const ObTxCreateArg &arg,
@@ -1075,6 +1082,8 @@ public:
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
 
   int do_all_ls_standby_cleanup(ObTimeGuard &cleanup_timeguard);
+
+  int check_ls_status(const share::ObLSID &ls_id);
 private:
   int create_ls_(const int64_t tenant_id,
                  const share::ObLSID &ls_id,

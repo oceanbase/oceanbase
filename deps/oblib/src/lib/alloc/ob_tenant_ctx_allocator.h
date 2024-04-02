@@ -210,10 +210,6 @@ private:
 
 public:
   template <typename T>
-  static void* common_alloc(const int64_t size, const ObMemAttr &attr,
-                            ObTenantCtxAllocator& ta, T &allocator);
-
-  template <typename T>
   static void* common_realloc(const void *ptr, const int64_t size,
                               const ObMemAttr &attr, ObTenantCtxAllocator& ta,
                               T &allocator);

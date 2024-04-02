@@ -290,6 +290,9 @@ int ObWktParser::parse_geo_type(ObGeoType &geo_type)
 
   if (OB_FAIL(check_next_token_with_val(ObWktTokenType::W_WORD, tkn_val_1))) {
     LOG_WARN("fail to parse geometry type from wkt", K(ret));
+  } else if (0 == tkn_val_1.string_val_.case_compare("geomcollection")) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("wkt has extra character after parse", K(ret), K(cur_pos_));
   } else {
     geo_type = ObGeoTypeUtil::get_geo_type_by_name(tkn_val_1.string_val_);
   }
@@ -520,8 +523,9 @@ int ObWktParser::parse_linestring(bool is_ring)
             ret = OB_ERR_PARSER_SYNTAX;
           } else {
             uint8_t dim = dim_type_ == ObGeoDimType::IS_3D ? 3 : 2;
+            // 3D ring is legal as long as the X/Y axes are equal
             bool not_same_point = MEMCMP(wkb_buf_.ptr() + pos + sizeof(uint32_t),
-              wkb_buf_.ptr() + wkb_buf_.length() - dim * sizeof(double), dim * sizeof(double));
+              wkb_buf_.ptr() + wkb_buf_.length() - dim * sizeof(double), 2 * sizeof(double));
 
             if (not_same_point && !lib::is_oracle_mode()) {
               ret = OB_ERR_PARSER_SYNTAX;

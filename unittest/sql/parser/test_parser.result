@@ -5775,6 +5775,7 @@ question_mask_size: 0
             }
           ]
         },
+         { },
          { }
       ]
     }
@@ -5872,6 +5873,7 @@ question_mask_size: 0
             }
           ]
         },
+         { },
          { }
       ]
     }
@@ -5974,6 +5976,7 @@ question_mask_size: 0
             }
           ]
         },
+         { },
          { }
       ]
     }
@@ -17503,18 +17506,26 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_CHAR_CHARSET",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":6,
-          "str_val":"latin1"
-        },
-         { }
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_CHAR_CHARSET",
+              "int_val":9223372036854775807,
+              "str_len":6,
+              "str_val":"latin1"
+            },
+             { }
+          ]
+        }
       ]
     }
   ]
@@ -17529,18 +17540,26 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":6,
-          "str_val":"latin1"
-        },
-         { }
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":6,
+              "str_val":"latin1"
+            },
+             { }
+          ]
+        }
       ]
     }
   ]
@@ -17555,22 +17574,30 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_CHAR_CHARSET",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
-        },
-         {
-          "type":"T_COLLATION",
-          "int_val":9223372036854775807,
-          "str_len":15,
-          "str_val":"utf8_general_ci"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_CHAR_CHARSET",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            },
+             {
+              "type":"T_COLLATION",
+              "int_val":9223372036854775807,
+              "str_len":15,
+              "str_val":"utf8_general_ci"
+            }
+          ]
         }
       ]
     }
@@ -17586,22 +17613,30 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_CHAR_CHARSET",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
-        },
-         {
-          "type":"T_COLLATION",
-          "int_val":9223372036854775807,
-          "str_len":15,
-          "str_val":"utf8_general_ci"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_CHAR_CHARSET",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            },
+             {
+              "type":"T_COLLATION",
+              "int_val":9223372036854775807,
+              "str_len":15,
+              "str_val":"utf8_general_ci"
+            }
+          ]
         }
       ]
     }
@@ -17617,16 +17652,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_CHAR_CHARSET",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_CHAR_CHARSET",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -17642,16 +17685,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -17667,16 +17718,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_CHAR_CHARSET",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_CHAR_CHARSET",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -20044,13 +20103,7 @@ question_mask_size: 0
              { }
           ]
         },
-         { },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
-        }
+         { }
       ]
     }
   ]
@@ -20183,13 +20236,7 @@ question_mask_size: 0
              { }
           ]
         },
-         { },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
-        }
+         { }
       ]
     }
   ]
@@ -20317,13 +20364,7 @@ question_mask_size: 0
              { }
           ]
         },
-         { },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
-        }
+         { }
       ]
     }
   ]
@@ -20451,13 +20492,7 @@ question_mask_size: 0
              { }
           ]
         },
-         { },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
-        }
+         { }
       ]
     }
   ]
@@ -20670,12 +20705,6 @@ question_mask_size: 0
              { },
              { }
           ]
-        },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
         }
       ]
     }
@@ -20889,12 +20918,6 @@ question_mask_size: 0
              { },
              { }
           ]
-        },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
         }
       ]
     }
@@ -21114,12 +21137,6 @@ question_mask_size: 0
              { },
              { }
           ]
-        },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
         }
       ]
     }
@@ -21155,12 +21172,6 @@ question_mask_size: 0
             },
              { }
           ]
-        },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
         }
       ]
     }
@@ -21201,12 +21212,6 @@ question_mask_size: 0
             },
              { }
           ]
-        },
-         {
-          "type":"T_INT",
-          "int_val":0,
-          "str_len":0,
-          "str_val":""
         }
       ]
     }

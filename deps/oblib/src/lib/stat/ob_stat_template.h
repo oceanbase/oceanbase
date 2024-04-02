@@ -32,10 +32,13 @@ public:
   void wrlock();
   void wr2rdlock();
   void unlock();
-  inline uint32_t get_lock() {return lock_;}
+  inline uint32_t get_lock() const {return lock_;}
 private:
   static const uint32_t WRITE_MASK = 1<<30;
   volatile uint32_t lock_;
+#ifndef NDEBUG
+  int64_t wlock_tid_;  // record tid for thread that holds the lock.
+#endif
 };
 /**
  * ----------------------------------------------------template define---------------------------------------------------------
@@ -120,7 +123,7 @@ ObStatArray<T, N>::ObStatArray()
 }
 
 template<class T, int64_t N>
-int ObStatArray<T, N>::add(const ObStatArray &other)
+int ObStatArray<T, N>::add(const ObStatArray<T, N> &other)
 {
   int ret = common::OB_SUCCESS;
   int64_t i = 0;
@@ -164,7 +167,15 @@ template<class T, int64_t N>
 void ObStatArray<T, N>::reset()
 {
   if (min_item_idx_ < N) {
+#ifdef ENABLE_DEBUG_LOG
+    const int cnt = max_item_idx_ - min_item_idx_ + 1;
+    if (max_item_idx_ >= N || cnt + min_item_idx_ - 1 >= N || cnt < 0) {
+      abort();
+    }
+    memset(&(items_[min_item_idx_]), 0, sizeof(T) * cnt);
+#else
     memset(&(items_[min_item_idx_]), 0, sizeof(T) * (max_item_idx_ - min_item_idx_ + 1));
+#endif
     min_item_idx_ = N;
     max_item_idx_ = -1;
   }

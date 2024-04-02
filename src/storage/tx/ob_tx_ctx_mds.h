@@ -29,11 +29,16 @@ class ObTxMDSRange;
 class ObTxMDSCache
 {
 public:
-  ObTxMDSCache(TransModulePageAllocator &allocator) : mds_list_(allocator) { reset(); }
+  ObTxMDSCache(TransModulePageAllocator &allocator)
+      : mds_list_(allocator), final_notify_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator)
+  {
+    reset();
+  }
   void reset();
   void destroy();
 
-  int insert_mds_node(const ObTxBufferNode &buf_node);
+  int try_recover_max_register_no(const ObTxBufferNodeArray & node_array);
+  int insert_mds_node(ObTxBufferNode &buf_node);
   int rollback_last_mds_node();
   int fill_mds_log(ObPartTransCtx *ctx,
                    ObTxMultiDataSourceLog &mds_log,
@@ -44,7 +49,12 @@ public:
       const ObTxLogType state_log_type,
       logservice::ObReplayBarrierType &cache_final_barrier_type);
   int earse_from_cache(const ObTxBufferNode &node) { return mds_list_.erase(node); }
-  int copy_to(ObTxBufferNodeArray &tmp_array) const;
+
+  int reserve_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr);
+  int generate_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr,
+                                   bool need_merge_cache,
+                                   bool allow_log_overflow);
+  ObTxBufferNodeArray &get_final_notify_array() { return final_notify_array_; }
 
   int64_t get_unsubmitted_size() const { return unsubmitted_size_; }
   int64_t count() const { return mds_list_.size(); }
@@ -61,14 +71,20 @@ public:
   void set_need_retry_submit_mds(bool need_retry) { need_retry_submit_mds_ = need_retry; };
   bool need_retry_submit_mds() { return need_retry_submit_mds_; }
 
-  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()));
+  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()), K(max_register_no_));
+
+private:
+  int copy_to_(ObTxBufferNodeArray &tmp_array) const;
 
 private:
   // TransModulePageAllocator allocator_;
+  uint64_t max_register_no_;
   bool need_retry_submit_mds_;
   int64_t unsubmitted_size_;
   ObTxBufferNodeList mds_list_;
   ObTxBufferNodeList::iterator submitted_iterator_;
+
+  ObTxBufferNodeArray final_notify_array_;
 };
 
 class ObTxMDSRange

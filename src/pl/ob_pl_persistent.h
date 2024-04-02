@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "ob_pl_stmt.h"
+#include "pl/ob_pl_allocator.h"
 
 namespace oceanbase
 {
@@ -59,10 +60,11 @@ public:
     compile_db_id_(OB_INVALID_ID),
     key_id_(OB_INVALID_ID),
 #if defined(__aarch64__)
-    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE)
+    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE),
 #else
-    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE)
+    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE),
 #endif
+    allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT)))
   {}
   ObRoutinePersistentInfo(uint64_t tenant_id,
                       uint64_t database_id,
@@ -73,10 +75,11 @@ public:
     compile_db_id_(compile_db_id),
     key_id_(key_id),
 #if defined(__aarch64__)
-    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE)
+    arch_type_(ObPLArchType::OB_ARM_ARCH_TYPE),
 #else
-    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE)
+    arch_type_(ObPLArchType::OB_X86_ARCH_TYPE),
 #endif
+    allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT)))
   {}
 
   int64_t get_head_size() { return 1 + 1 + 2 + 2;/* 8bit flags + 8bit level + 8bit id + 8bit nums*/ }
@@ -138,6 +141,8 @@ private:
   uint64_t compile_db_id_;
   uint64_t key_id_;
   ObPLArchType arch_type_;
+
+  ObArenaAllocator allocator_;
 };
 
 }

@@ -167,6 +167,7 @@ int RegexStringComparator::compare_to(const ObString &b)
 {
   // @todo
   UNUSED(b);
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "regexstring comparator");
   LOG_WARN_RET(OB_NOT_SUPPORTED, "regexstring comparator not supported yet");
   return 0;
 }
@@ -820,6 +821,19 @@ bool SingleColumnValueFilter::filter_row()
   LOG_DEBUG("[yzfdebug] filter row", K_(found_column), K_(matched_column), K_(filter_if_missing));
   return found_column_ ? (!matched_column_) : (filter_if_missing_);
 }
+
+////////////////////////////////////////////////////////////////
+bool PageFilter::filter_row()
+{
+  rows_accepted_++;
+  return rows_accepted_ > page_size_;
+}
+
+bool PageFilter::filter_all_remaining()
+{
+  return rows_accepted_ >= page_size_;
+}
+
 ////////////////////////////////////////////////////////////////
 void ColumnCountGetFilter::reset()
 {

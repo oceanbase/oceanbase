@@ -178,7 +178,7 @@ private:
   {
     INIT_SUCC(ret);
 
-    CollType *res = OB_NEWx(CollType, context.get_allocator());
+    CollType *res = OB_NEWx(CollType, context.get_allocator(), g1->get_srid(), *context.get_allocator());
     MptType *mpt = NULL;
     MlsType *mls = NULL;
     MpyType *mpy = NULL;
@@ -198,7 +198,7 @@ private:
       } else if (OB_ISNULL(mpt) || OB_ISNULL(mls) || OB_ISNULL(mpy)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null geometry collection split", K(ret), KP(mpt), KP(mls), KP(mpy));
-      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*context.get_allocator(), *context.get_srs(), mpt, mls, mpy))) {
+      } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(context.get_mem_ctx(), *context.get_srs(), mpt, mls, mpy))) {
         LOG_WARN("failed to do geometry collection union", K(ret));
       } else if (OB_ISNULL(mpt) || OB_ISNULL(mls) || OB_ISNULL(mpy)) {
         ret = OB_ERR_UNEXPECTED;
@@ -254,7 +254,8 @@ private:
           MptType *mpt_res_tree = reinterpret_cast<MptType *>(mpt_res);
           typename MptType::iterator iter = mpt_res_tree->begin();
           for (; OB_SUCC(ret) && iter != mpt_res_tree->end(); iter++) {
-            typename CollType::sub_pt_type *pt = OB_NEWx(typename CollType::sub_pt_type, context.get_allocator());
+            typename CollType::sub_pt_type *pt = OB_NEWx(
+                  typename CollType::sub_pt_type, context.get_allocator(), mpt_res_tree->get_srid());
             if (OB_ISNULL(pt)) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("fail to alloc memotry for point", K(ret));
@@ -379,8 +380,7 @@ private:
                     allocator,
                     pt.template get<0>(),
                     pt.template get<1>(),
-                    g1->get_srid(),
-                    allocator);
+                    g1->get_srid());
                 if (OB_ISNULL(pt_tree)) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
                   LOG_WARN("fail to allocate memory", K(ret));
@@ -479,7 +479,7 @@ private:
               LOG_WARN("fail to do eval", K(ret));
             } else if (FALSE_IT(iter++)) {
             } else if (iter != geo2->end()) {
-              if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
+              if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
                 // should not do simplify in difference functor, it may affect
                 // ObGeoFuncUtils::ob_geo_gc_union
                 LOG_WARN("fail to simplify result", K(ret));

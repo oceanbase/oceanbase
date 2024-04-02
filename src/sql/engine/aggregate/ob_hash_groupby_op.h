@@ -117,13 +117,14 @@ struct LlcEstimate
 {
 public:
   LlcEstimate()
-    : avg_group_mem_(0), llc_map_(), est_cnt_(0), enabled_(false)
+    : avg_group_mem_(0), llc_map_(), est_cnt_(0), last_est_cnt_(0), enabled_(false)
   {}
   int init_llc_map(common::ObArenaAllocator &allocator);
   int reset();
   double avg_group_mem_;
   ObString llc_map_;
   uint64_t est_cnt_;
+  uint64_t last_est_cnt_;
   bool enabled_;
   static constexpr const int64_t ESTIMATE_MOD_NUM_ = 4096;
   static constexpr const double LLC_NDV_RATIO_ = 0.3;
@@ -325,8 +326,8 @@ public:
     ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
     ++llc_est_.est_cnt_;
   }
-  int bypass_add_llc_map(uint64_t hash_val);
-  int bypass_add_llc_map_batch();
+  int bypass_add_llc_map(uint64_t hash_val, bool ready_to_check_ndv);
+  int bypass_add_llc_map_batch(bool ready_to_check_ndv);
   int check_llc_ndv();
   int check_same_group(int64_t &diff_pos);
   int restore_groupby_datum(const int64_t diff_pos);

@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_TRANSACTION_OB_MULTI_DATA_SOURCE_
 #define OCEANBASE_TRANSACTION_OB_MULTI_DATA_SOURCE_
 
+#include "share/ob_cluster_version.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/list/ob_list.h"
 #include "lib/utility/ob_unify_serialize.h"
@@ -88,20 +89,30 @@ class ObTxBufferNode
 public:
   ObTxBufferNode() : type_(ObTxDataSourceType::UNKNOWN), data_() { reset(); }
   ~ObTxBufferNode() {}
-  int init(const ObTxDataSourceType type, const common::ObString &data, const share::SCN &base_scn, storage::mds::BufferCtx *ctx);
+  int init(const ObTxDataSourceType type,
+           const common::ObString &data,
+           const share::SCN &base_scn,
+           storage::mds::BufferCtx *ctx);
   bool is_valid() const
   {
-    return type_ > ObTxDataSourceType::UNKNOWN && type_ < ObTxDataSourceType::MAX_TYPE
-           && data_.length() > 0;
+    bool valid_member = false;
+    valid_member = type_ > ObTxDataSourceType::UNKNOWN && type_ < ObTxDataSourceType::MAX_TYPE
+                   && data_.length() > 0;
+    return valid_member;
   }
   void reset()
   {
+    register_no_ = 0;
     type_ = ObTxDataSourceType::UNKNOWN;
     data_.reset();
     has_submitted_ = false;
     has_synced_ = false;
     mds_base_scn_.reset();
   }
+
+  static bool is_valid_register_no(const int64_t register_no) { return register_no > 0; }
+  int set_mds_register_no(const uint64_t register_no);
+  uint64_t get_register_no() const { return register_no_; }
 
   // only for some mds types of CDC
   // can not be used by observer functions
@@ -122,7 +133,7 @@ public:
 
   const share::SCN &get_base_scn() { return mds_base_scn_; }
 
-  bool operator==(const ObTxBufferNode & buffer_node) const;
+  bool operator==(const ObTxBufferNode &buffer_node) const;
 
   void log_sync_fail()
   {
@@ -130,8 +141,10 @@ public:
     has_synced_ = false;
   }
   storage::mds::BufferCtxNode &get_buffer_ctx_node() const { return buffer_ctx_node_; }
-  TO_STRING_KV(K(has_submitted_), K(has_synced_), K_(type), K(data_.length()));
+  TO_STRING_KV(K(register_no_), K(has_submitted_), K(has_synced_), K_(type), K(data_.length()));
+
 private:
+  uint64_t register_no_;
   bool has_submitted_;
   bool has_synced_;
   share::SCN mds_base_scn_;

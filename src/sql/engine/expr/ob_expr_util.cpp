@@ -659,16 +659,85 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
   return ret;
 }
 
+int ObSolidifiedVarsContext::get_local_tz_info(const sql::ObBasicSessionInfo *session, const common::ObTimeZoneInfo *&tz_info)
+{
+  int ret = OB_SUCCESS;
+  tz_info = NULL;
+  if (NULL != local_session_var_ && NULL == local_tz_wrap_) {
+    ObSessionSysVar *local_var = NULL;
+    //init local tz_wrap
+    if (OB_FAIL(local_session_var_->get_local_var(SYS_VAR_TIME_ZONE, local_var))) {
+      LOG_WARN("get local var failed", K(ret));
+    } else if (NULL != local_var) {
+      const ObTZInfoMap *tz_info_map = NULL;
+      if (OB_ISNULL(tz_info_map = session->get_timezone_info()->get_tz_info_map())) {
+        ObTZMapWrap tz_map_wrap;
+        if (OB_SUCC(OTTZ_MGR.get_tenant_tz(session->get_effective_tenant_id(), tz_map_wrap))) {
+          tz_info_map = tz_map_wrap.get_tz_map();
+        } else {
+          LOG_WARN("get tz info map failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(local_tz_wrap_ = OB_NEWx(ObTimeZoneInfoWrap, alloc_))) {
+          LOG_WARN("alloc tz wrap failed", K(ret));
+        } else if (OB_FAIL(local_tz_wrap_->init_time_zone(local_var->val_.get_string(),
+                                        OB_INVALID_VERSION,
+                                        *(const_cast<ObTZInfoMap *>(tz_info_map))))) {
+          LOG_WARN("tz_wrap init_time_zone failed", K(ret), K(local_var->val_.get_string()));
+        }
+      }
+    }
+  }
+  if (NULL != local_tz_wrap_) {
+    tz_info = local_tz_wrap_->get_time_zone_info();
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObSolidifiedVarsContext)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != local_session_var_) {
+    OB_UNIS_ENCODE(*local_session_var_);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSolidifiedVarsContext)
+{
+  int64_t len = 0;
+  if (NULL != local_session_var_) {
+    OB_UNIS_ADD_LEN(*local_session_var_);
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObSolidifiedVarsContext)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != local_session_var_) {
+    OB_UNIS_DECODE(*local_session_var_);
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObSolidifiedVarsContext)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(local_session_var));
+  J_OBJ_END();
+  return pos;
+}
+
 ObSolidifiedVarsGetter::ObSolidifiedVarsGetter(const ObExpr &expr, const ObEvalCtx &ctx, const ObBasicSessionInfo *session)
-  :local_session_var_(NULL),
-  session_(session),
-  local_tz_wrap_()
+  : local_session_var_(NULL),
+  session_(session)
 {
   ObPhysicalPlanCtx * phy_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
   if (OB_NOT_NULL(phy_ctx)) {
-    const ObLocalSessionVar * local_var = NULL;
-    if (OB_SUCCESS == (phy_ctx->get_local_session_vars(expr.local_session_var_id_, local_var))) {
-      local_session_var_ = local_var;
+    if (OB_SUCCESS == (phy_ctx->get_local_session_vars(expr.local_session_var_id_, local_session_var_))) {
     }
   }
 }
@@ -684,7 +753,8 @@ int ObSolidifiedVarsGetter::get_dtc_params(ObDataTypeCastParams &dtc_params)
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_FAIL(get_time_zone_info(tz_info))) {
     LOG_WARN("get time zone info failed", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_dtc_params(local_session_var_,
+  } else if (NULL != local_session_var_
+             && OB_FAIL(ObSQLUtils::merge_solidified_var_into_dtc_params(local_session_var_->get_local_vars(),
                                                                   tz_info,
                                                                   dtc_params))) {
     LOG_WARN("fail to create local dtc params", K(ret));
@@ -697,34 +767,15 @@ int ObSolidifiedVarsGetter::get_time_zone_info(const common::ObTimeZoneInfo *&tz
   int ret = OB_SUCCESS;
   bool is_valid = false;
   ObSessionSysVar *local_var = NULL;
+  tz_info = NULL;
   if (OB_ISNULL(session_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (NULL == local_session_var_) {
+  } else if (NULL != local_session_var_
+             && OB_FAIL(const_cast<ObSolidifiedVarsContext *>(local_session_var_)->get_local_tz_info(session_, tz_info))) {
+    LOG_WARN("get local tz_info failed", K(ret));
+  } else if (NULL == tz_info) {
     tz_info = session_->get_timezone_info();
-  } else if (OB_FAIL(get_local_var(SYS_VAR_TIME_ZONE, local_var))) {
-    LOG_WARN("get local var failed", K(ret));
-  } else if (NULL == local_var) {
-    tz_info = session_->get_timezone_info();
-  } else {
-    const ObTZInfoMap * tz_info_map = NULL;
-    if (OB_ISNULL(tz_info_map = session_->get_timezone_info()->get_tz_info_map())) {
-      ObTZMapWrap tz_map_wrap;
-      if (OB_SUCC(OTTZ_MGR.get_tenant_tz(session_->get_effective_tenant_id(), tz_map_wrap))) {
-        tz_info_map = tz_map_wrap.get_tz_map();
-      } else {
-        LOG_WARN("get tz info map failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(local_tz_wrap_.init_time_zone(local_var->val_.get_string(),
-                                        OB_INVALID_VERSION,
-                                        *(const_cast<ObTZInfoMap *>(tz_info_map))))) {
-        LOG_WARN("tz_wrap init_time_zone failed", K(ret), K(local_var->val_.get_string()));
-      } else {
-        tz_info = local_tz_wrap_.get_time_zone_info();
-      }
-    }
   }
   return ret;
 }
@@ -737,8 +788,9 @@ int ObSolidifiedVarsGetter::get_sql_mode(ObSQLMode &sql_mode)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (FALSE_IT(sql_mode = session_->get_sql_mode())) {
-  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_session_var_,
-                                                                    sql_mode))) {
+  } else if (NULL != local_session_var_
+             && OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_session_var_->get_local_vars(),
+                                                                       sql_mode))) {
     LOG_WARN("try get local sql mode failed", K(ret));
   }
   return ret;
@@ -804,7 +856,8 @@ int ObSolidifiedVarsGetter::get_local_var(ObSysVarClassType var_type, ObSessionS
   int ret = OB_SUCCESS;
   sys_var = NULL;
   if (NULL != local_session_var_
-      && OB_FAIL(local_session_var_->get_local_var(var_type, sys_var))) {
+      && NULL != local_session_var_->get_local_vars()
+      && OB_FAIL(local_session_var_->get_local_vars()->get_local_var(var_type, sys_var))) {
     LOG_WARN("fail to get local var", K(ret));
   }
   return ret;
@@ -845,7 +898,8 @@ int ObSolidifiedVarsGetter::get_max_allowed_packet(int64_t &max_size)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (FALSE_IT(session_->get_max_allowed_packet(max_size))) {
-  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_max_allowed_packet(local_session_var_,
+  } else if (NULL != local_session_var_
+             && OB_FAIL(ObSQLUtils::merge_solidified_var_into_max_allowed_packet(local_session_var_->get_local_vars(),
                                                                               max_size))) {
     LOG_WARN("try get local max allowed packet failed", K(ret));
   }

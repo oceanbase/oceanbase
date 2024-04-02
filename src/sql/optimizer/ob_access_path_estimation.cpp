@@ -35,17 +35,45 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
                                               ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  ObBaseTableEstMethod valid_methods = 0;
-  method = EST_INVALID;
+  ObSEArray<AccessPath *, 4> normal_paths;
+  ObSEArray<AccessPath *, 4> geo_paths;
+  ObBaseTableEstMethod geo_method;
 
   if (OB_UNLIKELY(paths.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
+  } else if (is_inner_path) {
+    if (OB_FAIL(inner_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
+      LOG_WARN("failed to do estimate rowcount for paths", K(ret));
+    }
+  } else if (OB_FAIL(classify_paths(paths, normal_paths, geo_paths))) {
+    LOG_WARN("failed to classify paths", K(ret));
+  } else if (!normal_paths.empty() &&
+             OB_FAIL(inner_estimate_rowcount(ctx, normal_paths, is_inner_path, filter_exprs, method))) {
+    LOG_WARN("failed to do estimate rowcount for normal paths", K(ret));
+  } else if (!geo_paths.empty() &&
+             OB_FAIL(inner_estimate_rowcount(ctx, geo_paths, is_inner_path, filter_exprs, geo_method))) {
+    LOG_WARN("failed to do estimate rowcount for geo paths", K(ret));
+  } else if (normal_paths.empty() && !geo_paths.empty()) {
+    method = geo_method;
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                                    common::ObIArray<AccessPath *> &paths,
+                                                    const bool is_inner_path,
+                                                    const ObIArray<ObRawExpr*> &filter_exprs,
+                                                    ObBaseTableEstMethod &method)
+    {
+  int ret = OB_SUCCESS;
+  ObBaseTableEstMethod valid_methods = 0;
+  method = EST_INVALID;
+  if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
     LOG_WARN("failed to get valid est methods", K(ret));
   } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
-  } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
+  } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, valid_methods, method))) {
     LOG_WARN("failed to do estimate rowcount", K(ret), K(method), K(valid_methods));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); i ++) {
@@ -63,6 +91,7 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
                                                  common::ObIArray<AccessPath*> &paths,
                                                  const bool is_inner_path,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
+                                                 ObBaseTableEstMethod &valid_methods,
                                                  ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
@@ -82,9 +111,11 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
         ctx, paths, is_inner_path, filter_exprs, only_ds_basic_stat, is_success))) {
       LOG_WARN("failed to process statistics estimation", K(ret));
     } else if (!is_success) {
-      method &= ~EST_DS_BASIC;
-      method &= ~EST_DS_FULL;
-      method |= EST_DEFAULT;
+      valid_methods &= ~EST_DS_BASIC;
+      valid_methods &= ~EST_DS_FULL;
+      if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
+        LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
+      }
     }
   }
 
@@ -284,8 +315,8 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
     if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
-    } else if (paths.at(i)->pre_query_range_ != NULL &&
-               OB_FAIL(paths.at(i)->pre_query_range_->is_get(is_table_get))) {
+    } else if (paths.at(i)->get_query_range_provider() != NULL &&
+               OB_FAIL(paths.at(i)->get_query_range_provider()->is_get(is_table_get))) {
       LOG_WARN("check query range is table get", K(ret));
     }
   }
@@ -366,7 +397,7 @@ int ObAccessPathEstimation::is_storage_estimation_enabled(const ObLogPlan* log_p
              OB_UNLIKELY(OB_INVALID_ID == table_meta->get_ref_table_id())) {
     //not basic table
   } else if (OB_FAIL(log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
-             ObOptParamHint::STORAGE_CARD_ESTIMATION, is_hint_enabled, has_hint))) {
+             ObOptParamHint::_ENABLE_STORAGE_CARDINALITY_ESTIMATION, is_hint_enabled, has_hint))) {
     LOG_WARN("failed to check has opt param", K(ret));
   } else if (has_hint) {
     can_use = is_hint_enabled;
@@ -397,7 +428,7 @@ int ObAccessPathEstimation::check_path_can_use_storage_estimation(const AccessPa
       int64_t partition_count = part_info->get_phy_tbl_location_info().get_partition_cnt();
       if (partition_count > 1 ||
           scan_range_count <= 0 ||
-          scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
+          (!path->est_cost_info_.index_meta_info_.is_geo_index_ && scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM)) {
         can_use = false;
       } else {
         can_use = true;
@@ -653,9 +684,13 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       for (int64_t j = 0; OB_SUCC(ret) && j < task->paths_.count(); ++j) {
         const obrpc::ObEstPartResElement &res = task->res_.index_param_res_.at(j);
         AccessPath *path = task->paths_.at(j);
+        bool new_range_with_exec_param = (path->get_query_range_provider() != NULL &&
+                                          path->get_query_range_provider()->is_new_query_range() &&
+                                          path->get_query_range_provider()->has_exec_param());
         if (OB_FAIL(path->est_records_.assign(res.est_records_))) {
           LOG_WARN("failed to assign estimation records", K(ret));
         } else if (OB_FAIL(estimate_prefix_range_rowcount(res,
+                                                          new_range_with_exec_param,
                                                           path->est_cost_info_,
                                                           path->query_range_row_count_,
                                                           path->phy_query_range_row_count_))) {
@@ -736,6 +771,7 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
 
 int ObAccessPathEstimation::estimate_prefix_range_rowcount(
     const obrpc::ObEstPartResElement &result,
+    bool new_range_with_exec_param,
     ObCostTableScanInfo &est_cost_info,
     double &logical_row_count,
     double &physical_row_count)
@@ -759,6 +795,17 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   physical_row_count *= est_cost_info.index_meta_info_.index_part_count_;
 
   // NLJ or SPF push down prefix filters
+  if (new_range_with_exec_param) {
+    /**
+     * new query range extraction always get (min; max) for range graph with exec param.
+     * for NLJ push down path with expr (c1 = 1 and c2 = ?). old query range generate
+     * (1, min; 1, max), New query range generate (min, min; max, max). This behavior will
+     * cause row estimate with new query range get a larger result.Hence, we need multiple
+     * prefix_filter_sel for push down path with exec param to get a more accurate row count.
+    */
+    logical_row_count  *= est_cost_info.prefix_filter_sel_;
+    physical_row_count *= est_cost_info.prefix_filter_sel_;
+  }
   logical_row_count  *= est_cost_info.pushdown_prefix_filter_sel_;
   physical_row_count *= est_cost_info.pushdown_prefix_filter_sel_;
 
@@ -996,7 +1043,8 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
   ObJoinOrder *join_order = NULL;
   ObLogPlan *log_plan = NULL;
   const ObTableMetaInfo *table_meta_info = NULL;
-  if (OB_ISNULL(ap.pre_query_range_) || !ap.pre_query_range_->is_ss_range()
+  ObQueryRangeProvider *query_range_provider = ap.get_query_range_provider();
+  if (OB_ISNULL(query_range_provider) || !query_range_provider->is_ss_range()
       || OptSkipScanState::SS_DISABLE == ap.use_skip_scan_) {
     /* do nothing */
   } else if (OB_ISNULL(join_order = ap.parent_) || OB_ISNULL(log_plan = join_order->get_plan())
@@ -1014,7 +1062,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
       const double temp_rows = log_plan->get_selectivity_ctx().get_current_rows();
       log_plan->get_selectivity_ctx().init_op_ctx(&join_order->get_output_equal_sets(), prefix_range_row_count);
       if (OB_FAIL(get_skip_scan_prefix_exprs(ap.est_cost_info_.range_columns_,
-                                            ap.pre_query_range_->get_skip_scan_offset(),
+                                            query_range_provider->get_skip_scan_offset(),
                                             prefix_exprs))) {
         LOG_WARN("failed to get skip scan prefix expers", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::update_table_meta_info(log_plan->get_basic_table_metas(),
@@ -1022,7 +1070,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
                                                                   log_plan->get_selectivity_ctx(),
                                                                   ap.get_table_id(),
                                                                   prefix_range_row_count,
-                                                                  ap.pre_query_range_->get_range_exprs(),
+                                                                  query_range_provider->get_range_exprs(),
                                                                   log_plan->get_predicate_selectivities()))) {
         LOG_WARN("failed to update table meta info", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(tmp_metas,
@@ -1661,7 +1709,6 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("begin process dynamic sampling estimation", K(paths), K(is_inner_path));
-  OPT_TRACE("begin to process table dynamic sampling estimation");
   ObDSTableParam ds_table_param;
   ObSEArray<ObDSResultItem, 4> ds_result_items;
   is_success = true;
@@ -1682,12 +1729,12 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                 ds_table_param, specify_ds))) {
     LOG_WARN("failed to get ds table param", K(ret), K(ds_table_param));
   } else if (!ds_table_param.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid ds table param", K(ret), K(ds_table_param));
+    is_success = false;
   } else if (OB_FAIL(add_ds_result_items(paths, filter_exprs, specify_ds,
                                          ds_result_items, only_ds_basic_stat))) {
     LOG_WARN("failed to init ds result items", K(ret));
   } else {
+    OPT_TRACE("begin to process table dynamic sampling estimation");
     ObArenaAllocator allocator("ObOpTableDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
     ObDynamicSampling dynamic_sampling(ctx, allocator);
     int64_t start_time = ObTimeUtility::current_time();
@@ -1721,8 +1768,10 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       LOG_WARN("failed to estimate path rowcount by dynamic sampling", K(ret));
     }
     LOG_TRACE("finish dynamic sampling", K(only_ds_basic_stat), K(no_ds_data), K(is_success));
+    OPT_TRACE("end to process table dynamic sampling estimation");
+    OPT_TRACE_TITLE("DYNAMIC SAMPLE RESULT");
+    OPT_TRACE(ds_result_items);
   }
-  OPT_TRACE("end to process table dynamic sampling estimation");
   return ret;
 }
 
@@ -1970,6 +2019,20 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
           physical_row_count = logical_row_count;
         }
         if (is_inner_path) {
+          if (OB_NOT_NULL(paths.at(i)->get_query_range_provider()) &&
+              paths.at(i)->get_query_range_provider()->is_new_query_range()) {
+            if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
+                                                                *est_cost_info.sel_ctx_,
+                                                                est_cost_info.prefix_filters_,
+                                                                est_cost_info.prefix_filter_sel_,
+                                                                paths.at(i)->parent_->get_plan()->get_predicate_selectivities()))) {
+              LOG_WARN("failed to calculate selectivity", K(est_cost_info.prefix_filter_sel_), K(ret));
+            } else {
+              logical_row_count = logical_row_count * est_cost_info.prefix_filter_sel_;
+              physical_row_count = logical_row_count;
+              output_rowcnt = output_rowcnt * est_cost_info.prefix_filter_sel_;
+            }
+          }
           if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
                                                               *est_cost_info.sel_ctx_,
                                                               est_cost_info.pushdown_prefix_filters_,
@@ -2070,6 +2133,26 @@ bool ObAccessPathEstimation::is_retry_ret(int ret)
          ret == OB_NO_READABLE_REPLICA ||
          ret == OB_LS_NOT_EXIST ||
          ret == OB_TABLET_NOT_EXIST;
+}
+
+int ObAccessPathEstimation::classify_paths(ObIArray<AccessPath *> &paths,
+                                           ObIArray<AccessPath *> &normal_paths,
+                                           ObIArray<AccessPath *> &geo_paths)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+    if (OB_ISNULL(paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null path", K(ret));
+    } else if (paths.at(i)->est_cost_info_.index_meta_info_.is_geo_index_) {
+      if (OB_FAIL(geo_paths.push_back(paths.at(i)))) {
+        LOG_WARN("failed to push back geo path", K(ret));
+      }
+    } else if (OB_FAIL(normal_paths.push_back(paths.at(i)))) {
+      LOG_WARN("failed to push back normal path", K(ret));
+    }
+  }
+  return ret;
 }
 
 } // end of sql

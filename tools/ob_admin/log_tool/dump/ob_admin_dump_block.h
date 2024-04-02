@@ -21,6 +21,15 @@ namespace oceanbase
 {
 namespace tools
 {
+class ObGetFileSize
+{
+public :
+  ObGetFileSize(palf::LSN end_lsn)
+      : end_lsn_(end_lsn) {}
+  palf::LSN operator()() const {return end_lsn_;}
+private :
+  palf::LSN end_lsn_;
+};
 
 class ObAdminDumpBlockHelper {
 public:
@@ -56,6 +65,7 @@ private:
   typedef palf::MemPalfGroupBufferIterator ObAdminDumpIterator;
 
 private:
+  int dump_();
   int do_dump_(ObAdminDumpIterator &iter, const char *block_namt);
   int parse_single_group_entry_(const palf::LogGroupEntry &entry,
                                 const char *block_name,
@@ -65,7 +75,12 @@ private:
                               const char *block_name,
                               palf::LSN lsn);
 
-      private : const char *block_path_;
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  int decompress_();
+#endif
+
+private:
+  const char *block_path_;
   share::ObAdminMutatorStringArg str_arg_;
 };
 

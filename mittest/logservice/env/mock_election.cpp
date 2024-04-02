@@ -53,6 +53,13 @@ int MockElection::init(const int64_t id, const common::ObAddr &self)
   return ret;
 }
 
+int MockElection::can_set_memberlist(const palf::LogConfigVersion &new_config_version) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(new_config_version);
+  return ret;
+}
+
 int MockElection::set_memberlist(const MemberList &new_member_list)
 {
   int ret = OB_SUCCESS;
@@ -83,9 +90,10 @@ int MockElection::change_leader_to(const common::ObAddr &dest_addr)
   return ret;
 }
 
-int MockElection::revoke(const RoleChangeReason &reason)
+int MockElection::temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason)
 {
   int ret = OB_SUCCESS;
+  UNUSED(time_us);
   UNUSED(reason);
   return ret;
 }

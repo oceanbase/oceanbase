@@ -26,6 +26,7 @@
 #include "lib/geo/ob_geo_to_wkt_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_wkt_parser.h"
+#include "lib/geo/ob_geo_common.h"
 #undef private
 
 #include <sys/time.h>
@@ -229,7 +230,7 @@ TEST_F(TestGeoTree, ObGeomVector)
 TEST_F(TestGeoTree, point)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
-  ObCartesianPoint p(1.12, 2.32, 0, &allocator);
+  ObCartesianPoint p(1.12, 2.32, 0);
   ASSERT_EQ(1.12, p.get<0>());
   ASSERT_EQ(2.32, p.get<1>());
   ASSERT_EQ(ObGeoCRS::Cartesian, p.crs());
@@ -405,11 +406,11 @@ TEST_F(TestGeoTree, Geometrycollection)
   ASSERT_FALSE(cartesianGc->empty());
   ASSERT_TRUE(cartesianGc->is_empty());
 
-  cartesianGc->push_back(ObCartesianPoint(0.0, 0.0, 0, &allocator));
-  cartesianGc->push_back(ObCartesianPoint(10.0, 0.0, 0, &allocator));
-  cartesianGc->push_back(ObCartesianPoint(10.0, 10.0, 0, &allocator));
-  cartesianGc->push_back(ObCartesianPoint(0.0, 10.0, 0, &allocator));
-  cartesianGc->push_back(ObCartesianPoint(0.0, 0.0, 0, &allocator));
+  cartesianGc->push_back(ObCartesianPoint(0.0, 0.0, 0));
+  cartesianGc->push_back(ObCartesianPoint(10.0, 0.0, 0));
+  cartesianGc->push_back(ObCartesianPoint(10.0, 10.0, 0));
+  cartesianGc->push_back(ObCartesianPoint(0.0, 10.0, 0));
+  cartesianGc->push_back(ObCartesianPoint(0.0, 0.0, 0));
 
   ObCartesianLineString ls(0, allocator);
   ls.push_back(ObWkbGeomInnerPoint(0.0, 0.0));
@@ -661,7 +662,10 @@ void clip_visitor_test(const ObString &wkt, const ObString &wkt_res, ObGeogBox &
   wkt_to_tree_geo(wkt, allocator, geo_tree);
 
   ObGeometry *geo_res = nullptr;
-  ObGeoBoxClipVisitor clip_visitor(box, allocator);
+  lib::MemoryContext mem_context;
+  ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+      lib::ContextParam().set_label("GIS_UT")), OB_SUCCESS);
+  ObGeoBoxClipVisitor clip_visitor(box, mem_context);
   ASSERT_EQ(geo_tree->do_visit(clip_visitor), OB_SUCCESS);
   ASSERT_EQ(clip_visitor.get_geometry(geo_res), OB_SUCCESS);
   ASSERT_EQ(geo_res == nullptr, false);
@@ -910,6 +914,23 @@ TEST_F(TestGeoTree, simplify_visitor)
 	    "(20 20, 20 40, 40 40, 40 20, 20 20),"
 	    "(1 1, 1 5, 5 5, 5 1, 1 1)"
 	    ")", "EMPTY", 100, false);
+}
+
+TEST_F(TestGeoTree, ewkt_with_null)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObGeometry *geo_tree = nullptr;
+  wkt_to_tree_geo("POINT(1 1)", allocator, geo_tree);
+  geo_tree->set_srid(UINT32_MAX);
+  ObGeometry *geo_bin = NULL;
+  ASSERT_EQ(ObGeoTypeUtil::tree_to_bin(allocator, geo_tree, geo_bin, nullptr), OB_SUCCESS);
+  ObWkbBuffer buffer(allocator);
+  ASSERT_EQ(buffer.append(static_cast<uint32_t>(UINT32_MAX)), OB_SUCCESS);
+  ASSERT_EQ(buffer.append(geo_bin->val(), geo_bin->length()), OB_SUCCESS);
+  ObString wkt_cal;
+  ASSERT_EQ(ObGeoTypeUtil::geo_to_ewkt(buffer.string(), wkt_cal, allocator, 14), OB_SUCCESS);
+  ObString wkt_res = "SRID=NULL;POINT(1 1)";
+  ASSERT_EQ(wkt_cal == wkt_res, true);
 }
 
 } // namespace common

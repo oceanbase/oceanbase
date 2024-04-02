@@ -4345,8 +4345,8 @@ select routine_name,routine_schema from information_schema.routines where
 routine_schema like 'bug18344%'|
 routine_name	routine_schema
 bug18344	bug18344_012345678901
-bug18344_2	bug18344_012345678901
 bug18344	bug18344_0123456789012
+bug18344_2	bug18344_012345678901
 bug18344_2	bug18344_0123456789012
 drop database bug18344_012345678901|
 drop database bug18344_0123456789012|
@@ -4689,7 +4689,7 @@ CHARSET(p2)	COLLATION(p2)
 CHARSET(p3)	COLLATION(p3)
 utf8mb4	utf8mb4_general_ci
 utf8mb4	utf8mb4_general_ci
-binary	binary
+utf8mb4	utf8mb4_general_ci
 CALL bug16676_p2('a', @v2, @v3)|
 CHARSET(p1)	COLLATION(p1)
 CHARSET(p2)	COLLATION(p2)
@@ -5827,7 +5827,6 @@ $$
 show create procedure proc_25411_a;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_25411_a		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_a`()
-    READS SQL DATA
 begin
 /* real comment */
 select 1;
@@ -5855,7 +5854,6 @@ proc_25411_b		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_b`(
 /*!00000 p2 int */
 /*!99999 ,p3 int */
 )
-    READS SQL DATA
 begin
 select p1, p2;
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
@@ -5889,7 +5887,6 @@ ERROR 42000: Incorrect number of arguments
 show create procedure proc_25411_c;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_25411_c		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_25411_c`()
-    READS SQL DATA
 begin
 select 1/*!,2*//*!00000,3*//*!99999,4*/;
 select 1/*! ,2*//*!00000 ,3*//*!99999 ,4*/;
@@ -5917,7 +5914,6 @@ select 1 /* testing */;
 show create procedure proc_26302;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_26302		CREATE DEFINER = `admin`@`%` PROCEDURE `proc_26302`()
-    READS SQL DATA
 select 1 /* testing */	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select ROUTINE_NAME, ROUTINE_DEFINITION from information_schema.ROUTINES
 where ROUTINE_NAME = "proc_26302";

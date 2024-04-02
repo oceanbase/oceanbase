@@ -62,6 +62,18 @@ public:
   }
   ~ObDASCtx()
   {
+    // Destroy the hash set list used for checking duplicate rowkey for foreign key cascade delete
+    if (!del_ctx_list_.empty()) {
+      DASDelCtxList::iterator iter = del_ctx_list_.begin();
+      for (; iter != del_ctx_list_.end(); iter++) {
+        DmlRowkeyDistCtx& del_ctx = *iter;
+        if (del_ctx.deleted_rows_ != nullptr) {
+          del_ctx.deleted_rows_->destroy();
+          del_ctx.deleted_rows_ = nullptr;
+        }
+      }
+    }
+    del_ctx_list_.destroy();
   }
 
   int init(const ObPhysicalPlan &plan, ObExecContext &ctx);

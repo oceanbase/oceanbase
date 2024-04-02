@@ -77,7 +77,12 @@ private:
 private:
   ObILobApator* lob_adatper_;
   common::ObNewRowIterator *meta_iter_; // lob meta tablet scan iter
-  ObLobAccessParam param_;
+  int64_t byte_size_; // param.byte_size
+  uint64_t offset_; // param.offset
+  uint64_t len_; // param.len
+  ObCollationType coll_type_; // param.coll_type
+  bool scan_backward_; // param.scan_backward
+  ObIAllocator *allocator_;
   ObTableScanParam scan_param_;
   uint64_t cur_pos_;
   uint64_t cur_byte_pos_;
@@ -96,6 +101,7 @@ struct ObLobMetaWriteResult {
 class ObLobMetaWriteIter {
 public:
   ObLobMetaWriteIter(const ObString& data, ObIAllocator* allocator, uint32_t piece_block_size);
+  ~ObLobMetaWriteIter() { close(); }
   int open(ObLobAccessParam &param,
            uint64_t padding_size,
            ObString &post_data,
@@ -145,6 +151,7 @@ private:
   ObIAllocator* allocator_;
   ObLobMetaInfo last_info_;
   void *iter_; // ObLobQueryIter
+  uint64_t iter_fill_size_;
 };
  
 class ObLobMetaManager {

@@ -1060,14 +1060,13 @@ int ObExprOperator::aggregate_result_type_for_case(
     }
     nth = OB_INVALID_ID == nth ? 0 : nth;
     const ObExprResType &res_type = types[nth];
-    if (need_merge_type && lib::is_oracle_mode() && is_called_in_sql
+    if (need_merge_type && is_called_in_sql
         && ObTinyIntType == types[0].get_type()) {
       ret = OB_ERR_CALL_WRONG_ARG;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
     }
-    for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
-      if (need_merge_type && lib::is_oracle_mode() && is_called_in_sql
-          && ObTinyIntType == types[i].get_type()) {
+    for (int64_t i = 1; OB_SUCC(ret) && is_called_in_sql && i < param_num; ++i) {
+      if (need_merge_type && ObTinyIntType == types[i].get_type()) {
         ret = OB_ERR_CALL_WRONG_ARG;
         LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
       } else if (OB_FAIL(ObExprOperator::is_same_kind_type_for_case(res_type,
@@ -1152,8 +1151,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_extend(res_type)) {
         OZ (aggregate_extend_accuracy_for_merge(type, types, param_num));
       } else if (ob_is_json(res_type)) {
-        type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        type.set_collation_level(CS_LEVEL_IMPLICIT);
+        type.set_json();
       } else if (ob_is_geometry(res_type)) {
         type.set_geometry();
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
@@ -1883,6 +1881,9 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
   //内部比较（order by）,enum/set不需要转换。
   if (ob_is_enum_or_set_type(type1.get_type())
       && ob_is_enum_or_set_type(type2.get_type())) {
+    need_no_cast = false;
+  } else if ((type1.is_null() && ObDatumFuncs::is_null_aware_hash_type(type2.get_type())) ||
+               (type2.is_null() && ObDatumFuncs::is_null_aware_hash_type(type1.get_type()))) {
     need_no_cast = false;
   } else {
     if (ObDatumFuncs::is_string_type(type1.get_type())
@@ -2715,6 +2716,12 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not support udt compare with different elem type", K(ret), K(c1), K(c2));
+  } else if (c1->is_of_composite()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "comparison of composite types is");
+    LOG_WARN("comparison of composite types is not supported",
+              K(c1->get_element_type()),
+              K(c2->get_element_type()));
   } else if (!c1->is_inited() || !c2->is_inited()) {
     cmp_result = CollectionPredRes::COLL_PRED_NULL;
   } else if ((c1->get_actual_count() != c2->get_actual_count())) {

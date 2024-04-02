@@ -1306,12 +1306,11 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
                                            table_meta->get_ref_table_id(),
                                            ds_table_param.degree_))) {
       LOG_WARN("failed to get ds table degree", K(ret));
-    } else {
+    } else if ((ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx)) > 0) {
       ds_table_param.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
       ds_table_param.table_id_ = table_meta->get_ref_table_id();
       ds_table_param.ds_level_ = ds_level;
       ds_table_param.sample_block_cnt_ = sample_block_cnt;
-      ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx);
       ds_table_param.is_virtual_table_ = is_virtual_table(table_meta->get_ref_table_id()) &&
                                     !share::is_oracle_mapping_real_virtual_table(table_meta->get_ref_table_id());
       ds_table_param.db_name_ = table_item->database_name_;
@@ -1375,6 +1374,15 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
                real_expr->get_expr_type() == T_OP_BOOL) {
       no_use = true;
     } else {/*do nothing*/}
+  } else if (filter->is_column_ref_expr()) {
+    //Dynamic Sampling of columns with LOB-related types is prohibited, as projecting such type columns is particularly slow.
+    //bug:
+    if (!ObColumnStatParam::is_valid_opt_col_type(filter->get_data_type())) {
+      no_use = true;
+    } else if (ob_obj_type_class(filter->get_data_type()) == ColumnTypeClass::ObTextTC &&
+               filter->get_data_type() != ObTinyTextType) {
+      no_use = true;
+    }
   } else {/*do nothing*/}
   if (OB_SUCC(ret) && !no_use) {
     ++ total_expr_cnt;
@@ -1414,6 +1422,7 @@ int ObDynamicSamplingUtils::get_ds_table_part_info(ObOptimizerContext &ctx,
              (is_virtual_table(ref_table_id) && !share::is_oracle_mapping_real_virtual_table(ref_table_id))) {
     /*do nothing*/
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      ctx.get_allocator(),
                                                       tmp_part_infos,
                                                       tmp_subpart_infos,
                                                       tmp_part_ids,
@@ -1510,13 +1519,15 @@ const ObDSResultItem *ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemT
 
 int64_t ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx)
 {
-  int64_t max_ds_timeout = THIS_WORKER.get_timeout_remain();
-  max_ds_timeout = max_ds_timeout / 10;//default ds time can't exceed 10% of current sql remain timeout
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
-  if (tenant_config.is_valid()) {
-    int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
-    if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
-      max_ds_timeout = ds_maximum_time;
+  int64_t max_ds_timeout = 0;
+  if (THIS_WORKER.get_timeout_remain() / 10 >= OB_DS_MIN_QUERY_TIMEOUT) {
+    max_ds_timeout = THIS_WORKER.get_timeout_remain() / 10;//default ds time can't exceed 10% of current sql remain timeout
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
+      if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
+        max_ds_timeout = ds_maximum_time;
+      }
     }
   }
   return max_ds_timeout;

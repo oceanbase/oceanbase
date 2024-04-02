@@ -107,6 +107,7 @@ public:
       callback_scheduler_on_clear_(false),
       pending_callback_param_(common::OB_SUCCESS), p_mt_ctx_(NULL),
       is_exiting_(false), for_replay_(false),
+      need_retry_redo_sync_by_task_(false),
       has_pending_callback_(false),
       can_elr_(false),
       opid_(0) {}
@@ -121,6 +122,7 @@ public:
   bool is_readonly() const { return false; }
   void set_for_replay(const bool for_replay) { for_replay_ = for_replay; }
   bool is_for_replay() const { return for_replay_; }
+  void set_need_retry_redo_sync_by_task_() { need_retry_redo_sync_by_task_ = true; }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   int set_ls_tx_ctx_mgr(ObLSTxCtxMgr *ls_tx_ctx_mgr)
   {
@@ -161,15 +163,15 @@ public:
   const ObAddr &get_addr() const { return addr_; }
   virtual int64_t get_part_trans_action() const { return part_trans_action_; }
   int acquire_ctx_ref() { return acquire_ctx_ref_(); }
-
+  void release_ctx_ref();
   ObITransRpc *get_trans_rpc() const { return rpc_; }
   void test_lock(ObTxLogCb *log_cb);
 public:
   virtual bool is_inited() const = 0;
   virtual int handle_timeout(const int64_t delay) = 0;
-  virtual int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array) = 0;
+  virtual int kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list) = 0;
   // thread unsafe
-  VIRTUAL_TO_STRING_KV(KP(this),
+  VIRTUAL_TO_STRING_KV(KP(this), K_(ref),
                        K_(trans_id),
                        K_(tenant_id),
                        K_(is_exiting),
@@ -190,6 +192,7 @@ protected:
   ObITsMgr *get_ts_mgr_();
   bool has_callback_scheduler_();
   int defer_callback_scheduler_(const int ret, const share::SCN &commit_version);
+  int prepare_commit_cb_for_role_change_(const int cb_ret, ObTxCommitCallback *&cb_list);
   int64_t get_remaining_wait_interval_us_()
   {
     return trans_need_wait_wrap_.get_remaining_wait_interval_us();
@@ -211,7 +214,6 @@ protected:
     ObTransHashLink::dec_ref(1);
     TRANS_LOG(DEBUG, "dec tx ctx ref", KPC(this));
   }
-
   virtual int register_timeout_task_(const int64_t interval_us);
   virtual int unregister_timeout_task_();
   void generate_request_id_();
@@ -269,6 +271,7 @@ protected:
   memtable::ObMemtableCtx *p_mt_ctx_;
   bool is_exiting_;
   bool for_replay_;
+  bool need_retry_redo_sync_by_task_;
   bool has_pending_callback_;
   // whether the trans can release locks early
   bool can_elr_;

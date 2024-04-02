@@ -315,7 +315,6 @@ public:
       cur_stmt_tables_.reset();
       read_uncommited_ = false;
       inc_autocommit_ = false;
-      is_foreign_key_cascade_ = false;
       need_serial_exec_ = false;
     }
   public:
@@ -330,8 +329,6 @@ public:
 //  bool in_transaction_;                   // 对应TransSavedValue的trans_flags_，不放在基类中。
     bool read_uncommited_;
     bool inc_autocommit_;
-    bool is_foreign_key_cascade_;
-    bool is_foreign_key_check_exist_;
     bool need_serial_exec_;
   public:
     // 原TransSavedValue的属性
@@ -549,8 +546,8 @@ public:
   const common::ObLogIdLevelMap *get_log_id_level_map() const;
   const common::ObString &get_client_version() const { return client_version_; }
   const common::ObString &get_driver_version() const { return driver_version_; }
-
-
+  void destory_json_pl_mngr();
+  intptr_t get_json_pl_mngr();
   int get_tx_timeout(int64_t &tx_timeout) const
   {
     tx_timeout = sys_vars_cache_.get_ob_trx_timeout();
@@ -634,6 +631,7 @@ public:
     return common::OB_SUCCESS;
   }
   int get_nlj_batching_enabled(bool &v) const;
+  int get_optimizer_features_enable_version(uint64_t &version) const;
   int get_enable_parallel_dml(bool &v) const;
   int get_enable_parallel_query(bool &v) const;
   int get_enable_parallel_ddl(bool &v) const;
@@ -650,6 +648,7 @@ public:
   int get_sql_notes(bool &sql_notes) const;
   int get_regexp_stack_limit(int64_t &v) const;
   int get_regexp_time_limit(int64_t &v) const;
+  int get_activate_all_role_on_login(bool &v) const;
   int update_timezone_info();
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
@@ -758,7 +757,8 @@ public:
   void set_session_in_retry(ObSessionRetryStatus is_retry)
   {
     LockGuard lock_guard(thread_data_mutex_);
-    if (SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_) {
+    if (OB_LIKELY(SESS_NOT_IN_RETRY == is_retry ||
+                  SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_)) {
       thread_data_.is_in_retry_ = is_retry;
     } else {
       // if the last retry is for duplicate table
@@ -921,7 +921,7 @@ public:
   int load_all_sys_vars(const share::schema::ObSysVariableSchema &sys_var_schema, bool sys_var_created);
   int clean_all_sys_vars();
   SysVarIncInfo sys_var_inc_info_;
-
+  const ObString get_cur_sql_id() const { return ObString(sql_id_); }
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
@@ -965,7 +965,7 @@ public:
   ///@{ user variables related:
   sql::ObSessionValMap &get_user_var_val_map() {return user_var_val_map_;}
   const sql::ObSessionValMap &get_user_var_val_map() const {return user_var_val_map_;}
-  int replace_user_variable(const common::ObString &var, const ObSessionVariable &val);
+  int replace_user_variable(const common::ObString &var, const ObSessionVariable &val, bool need_track = true);
   int replace_user_variables(const ObSessionValMap &user_var_map);
   int remove_user_variable(const common::ObString &var);
   int get_user_variable(const common::ObString &var, ObSessionVariable &val) const;
@@ -1288,11 +1288,6 @@ public:
   void set_tenant_killed() { ATOMIC_STORE(&is_tenant_killed_, 1); }
   bool is_use_inner_allocator() const;
   int64_t get_reused_count() const { return reused_count_; }
-  bool is_foreign_key_cascade() const { return is_foreign_key_cascade_; }
-  void set_foreign_key_casecade(bool value) { is_foreign_key_cascade_ = value; }
-  bool is_foreign_key_check_exist() const { return is_foreign_key_check_exist_; }
-  void set_foreign_key_check_exist(bool value) { is_foreign_key_check_exist_ = value; }
-  bool reuse_cur_sql_no() const { return is_foreign_key_cascade() || is_foreign_key_check_exist(); }
   inline void set_first_need_txn_stmt_type(stmt::StmtType stmt_type)
   {
     if (stmt::T_NONE == first_need_txn_stmt_type_) {
@@ -2099,6 +2094,7 @@ protected:
   common::ObSmallBlockAllocator<> cursor_info_allocator_; // for alloc memory of PS CURSOR/SERVER REF CURSOR
   common::ObSmallBlockAllocator<> package_info_allocator_; // for alloc memory of session package state
   common::ObStringBuf name_pool_; // for variables names and statement names
+  intptr_t json_pl_mngr_; // for pl json manage
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
   bool need_reset_package_; // for dbms_session.reset_package
@@ -2207,8 +2203,6 @@ private:
   int64_t curr_trans_last_stmt_end_time_;
 
   bool check_sys_variable_;
-  bool is_foreign_key_cascade_;
-  bool is_foreign_key_check_exist_;
   bool acquire_from_pool_;
   // 在构造函数中初始化为true，在一些特定错误情况下被设为false，表示session不能释放回session pool。
   // 所以reset接口中不需要、并且也不能重置release_to_pool_。
@@ -2265,6 +2259,8 @@ private:
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
   int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
+  bool is_client_sessid_support_; //client session id support flag
+  bool use_rich_vector_format_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];
 };
 

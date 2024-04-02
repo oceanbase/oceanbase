@@ -138,7 +138,7 @@ int ObCreateTableHelper::execute()
   }
 
   if (OB_SUCC(ret)) {
-    auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     int64_t last_schema_version = OB_INVALID_VERSION;
     int64_t end_schema_version = OB_INVALID_VERSION;
     if (OB_UNLIKELY(new_tables_.count() <= 0)) {
@@ -148,7 +148,7 @@ int ObCreateTableHelper::execute()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tsi schema version generator is null", KR(ret));
     } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
-      LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
+      LOG_WARN("fail to get current version", KR(ret), K_(tenant_id), K_(arg));
     } else if (OB_FAIL(tsi_generator->get_end_version(end_schema_version))) {
       LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
     } else if (OB_UNLIKELY(last_schema_version != end_schema_version)) {
@@ -202,11 +202,11 @@ int ObCreateTableHelper::lock_objects_()
   DEBUG_SYNC(AFTER_PARALLEL_DDL_LOCK_OBJ_BY_NAME);
   // 3. prefetch schemas
   if (FAILEDx(prefetch_schemas_())) {
-    LOG_WARN("fail to prefech schemas", KR(ret), K_(tenant_id));
+    LOG_WARN("fail to prefetch schemas", KR(ret), K_(tenant_id));
   }
   // 4. lock objects by id
   if (FAILEDx(lock_objects_by_id_())) {
-    LOG_WARN("fail to lock objects by name", KR(ret), K_(tenant_id));
+    LOG_WARN("fail to lock objects by id", KR(ret), K_(tenant_id));
   }
   // 5. lock objects by id after related objects are locked.
   if (FAILEDx(post_lock_objects_by_id_())) {
@@ -353,13 +353,14 @@ int ObCreateTableHelper::lock_objects_by_name_()
 }
 
 // lock related objects' id for create table (`X` for EXCLUSIVE, `S` for SHARE):
-// 1. tablegroup          (S)
-// 2. audit               (S)
+// 1. database            (S)
+// 2. tablegroup          (S)
+// 3. audit               (S)
 // - add share lock for OB_AUDIT_MOCK_USER_ID
-// 3. tablespace          (S)
-// 4. parent table        (X)
-// 5. mock fk parent table(X)
-// 6. udt                 (S)
+// 4. tablespace          (S)
+// 5. parent table        (X)
+// 6. mock fk parent table(X)
+// 7. udt                 (S)
 
 // Specially, when table name is duplicated with existed mock fk parent table name,
 // we may replace mock fk parent table with new table and modified related foreign key/child table.
@@ -375,7 +376,13 @@ int ObCreateTableHelper::lock_objects_by_id_()
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   }
-  // 1. tablegroup
+
+  // 1. database
+  if (FAILEDx(add_lock_object_by_id_(arg_.schema_.get_database_id(),
+      share::schema::DATABASE_SCHEMA, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to lock database id", KR(ret), K(arg_.schema_.get_database_id()));
+  }
+  // 2. tablegroup
   const uint64_t tablegroup_id = table.get_tablegroup_id();
   if (OB_SUCC(ret) && OB_INVALID_ID != tablegroup_id) {
     if (OB_FAIL(add_lock_object_by_id_(tablegroup_id, // filled in set_tablegroup_id_()
@@ -383,14 +390,14 @@ int ObCreateTableHelper::lock_objects_by_id_()
       LOG_WARN("fail to lock tablegroup_id", KR(ret), K_(tenant_id), K(tablegroup_id));
     }
   }
-  // 2. audit (lock by user_id)
+  // 3. audit (lock by user_id)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(add_lock_object_by_id_(OB_AUDIT_MOCK_USER_ID,
         share::schema::USER_SCHEMA, transaction::tablelock::SHARE))) {
       LOG_WARN("fail to lock user_id", KR(ret), K_(tenant_id), "user_id", OB_AUDIT_MOCK_USER_ID);
     }
   }
-  // 3. tablespace
+  // 4. tablespace
   const uint64_t tablespace_id = arg_.schema_.get_tablespace_id();
   if (OB_SUCC(ret) && OB_INVALID_ID != tablespace_id) {
     if (OB_FAIL(add_lock_object_by_id_(tablespace_id,
@@ -398,7 +405,7 @@ int ObCreateTableHelper::lock_objects_by_id_()
       LOG_WARN("fail to lock tablespace_id", KR(ret), K_(tenant_id), K(tablespace_id));
     }
   }
-  // 4. parent table/mock fk parent table
+  // 5. parent table/mock fk parent table
   for (int64_t i = 0; OB_SUCC(ret) && i < arg_.foreign_key_arg_list_.count(); i++) {
     const obrpc::ObCreateForeignKeyArg &foreign_key_arg = arg_.foreign_key_arg_list_.at(i);
     if (OB_INVALID_ID != foreign_key_arg.parent_table_id_) { // filled in check_and_set_parent_table_id_()
@@ -409,7 +416,7 @@ int ObCreateTableHelper::lock_objects_by_id_()
       }
     }
   } // end for
-  // 5. lock mock fk parent table for replacement
+  // 6. lock mock fk parent table for replacement
   if (OB_SUCC(ret)) {
     const ObString &table_name = table.get_table_name();
     const uint64_t database_id = table.get_database_id();
@@ -427,36 +434,9 @@ int ObCreateTableHelper::lock_objects_by_id_()
       }
     }
   }
-  // 6. udt
-  if (OB_SUCC(ret)) {
-    ObTableSchema::const_column_iterator begin = table.column_begin();
-    ObTableSchema::const_column_iterator end = table.column_end();
-    ObSchemaGetterGuard guard;
-    if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-      LOG_WARN("fail to get schema guard", KR(ret));
-    }
-    for (; OB_SUCC(ret) && begin != end; begin++) {
-      ObColumnSchemaV2 *col = (*begin);
-      if (OB_ISNULL(col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
-        const uint64_t udt_id = col->get_sub_data_type();
-        if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
-          // can't add object lock across tenant, assumed that sys inner udt won't be changed.
-          const ObUDTTypeInfo *udt_info = NULL;
-          if (OB_FAIL(guard.get_udt_info(OB_SYS_TENANT_ID, udt_id, udt_info))) {
-            LOG_WARN("fail to get udt info", KR(ret), K(udt_id));
-          } else if (OB_ISNULL(udt_info)) {
-            ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-            LOG_WARN("inner udt not found", KR(ret), K(udt_id));
-          }
-        } else if (OB_FAIL(add_lock_object_by_id_(udt_id,
-                   share::schema::UDT_SCHEMA, transaction::tablelock::SHARE))) {
-          LOG_WARN("fail to lock udt id", KR(ret), K_(tenant_id), K(udt_id));
-        }
-      }
-    } // end for
+  // 7. udt
+  if (FAILEDx(add_lock_table_udt_id_(table))) {
+    LOG_WARN("fail to add lock table udt id", KR(ret));
   }
 
   if (FAILEDx(lock_existed_objects_by_id_())) {
@@ -535,8 +515,6 @@ int ObCreateTableHelper::check_ddl_conflict_()
   } else if (!arg_.is_need_check_based_schema_objects()) {
     // skip
   } else {
-    ObArray<uint64_t> parent_table_ids;
-    ObArray<uint64_t> mock_fk_parent_table_ids;
     // check schema object infos are all existed.
     for (int64_t i = 0; OB_SUCC(ret) && (i < arg_.based_schema_object_infos_.count()); ++i) {
       const ObBasedSchemaObjectInfo &info = arg_.based_schema_object_infos_.at(i);
@@ -560,86 +538,11 @@ int ObCreateTableHelper::check_ddl_conflict_()
           LOG_WARN("parent table may change, ddl need retry",
                    KR(ret), K_(tenant_id), K(info));
         }
-        if (OB_FAIL(ret)) {
-        } else if (MOCK_FK_PARENT_TABLE_SCHEMA == info.schema_type_) {
-          if (!has_exist_in_array(mock_fk_parent_table_ids, info.schema_id_)
-              && OB_FAIL(mock_fk_parent_table_ids.push_back(info.schema_id_))) {
-            LOG_WARN("fail to push back mock fk parent table id", KR(ret), K(info));
-          }
-        } else if (TABLE_SCHEMA == info.schema_type_) {
-          if (!has_exist_in_array(parent_table_ids, info.schema_id_)
-              && OB_FAIL(parent_table_ids.push_back(info.schema_id_))) {
-            LOG_WARN("fail to push back parent table id", KR(ret), K(info));
-          }
-        }
       }
     } // end for
 
-    ObArray<ObSchemaIdVersion> parent_table_versions;
-    if (OB_SUCC(ret) && parent_table_ids.count() > 0) {
-      if (OB_FAIL(parent_table_versions.reserve(parent_table_ids.count()))) {
-        LOG_WARN("fail to reserve array", KR(ret));
-      } else if (OB_FAIL(latest_schema_guard_.get_table_schema_versions(
-                 parent_table_ids, parent_table_versions))) {
-        LOG_WARN("fail to get table schema versions", KR(ret));
-      } else if (parent_table_ids.count() != parent_table_versions.count()) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("parent table may be deleted, ddl need retry",
-                 KR(ret), K_(tenant_id), "base_objs_cnt", parent_table_ids.count(),
-                 "fetch_cnt", parent_table_versions.count());
-      }
-    }
-
-    ObArray<ObSchemaIdVersion> mock_fk_parent_table_versions;
-    if (OB_SUCC(ret) && mock_fk_parent_table_ids.count() > 0) {
-      if (OB_FAIL(mock_fk_parent_table_versions.reserve(mock_fk_parent_table_ids.count()))) {
-        LOG_WARN("fail to reserve array", KR(ret));
-      } else if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_schema_versions(
-                 mock_fk_parent_table_ids, mock_fk_parent_table_versions))) {
-        LOG_WARN("fail to get table schema versions", KR(ret));
-      } else if (mock_fk_parent_table_ids.count() != mock_fk_parent_table_versions.count()) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("mock fk parent table may be deleted, ddl need retry",
-                 KR(ret), K_(tenant_id), "base_objs_cnt", mock_fk_parent_table_ids.count(),
-                 "fetch_cnt", mock_fk_parent_table_versions.count());
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && (i < arg_.based_schema_object_infos_.count()); ++i) {
-        const ObBasedSchemaObjectInfo &info = arg_.based_schema_object_infos_.at(i);
-        if (MOCK_FK_PARENT_TABLE_SCHEMA == info.schema_type_
-            || TABLE_SCHEMA == info.schema_type_) {
-          bool find = false;
-          for (int64_t j = 0; OB_SUCC(ret) && !find && j < parent_table_versions.count(); j++) {
-            const ObSchemaIdVersion &version = parent_table_versions.at(j);
-            if (version.get_schema_id() == info.schema_id_) {
-              find = true;
-              if (version.get_schema_version() != info.schema_version_) {
-                ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-                LOG_WARN("parent table may be changed, ddl need retry",
-                         KR(ret), K_(tenant_id), K(info), K(version));
-              }
-            }
-          } // end for
-          for (int64_t j = 0; OB_SUCC(ret) && !find && j < mock_fk_parent_table_versions.count(); j++) {
-            const ObSchemaIdVersion &version = mock_fk_parent_table_versions.at(j);
-            if (version.get_schema_id() == info.schema_id_) {
-              find = true;
-              if (version.get_schema_version() != info.schema_version_) {
-                ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-                LOG_WARN("mock fk parent table may be changed, ddl need retry",
-                         KR(ret), K_(tenant_id), K(info), K(version));
-              }
-            }
-          } // end for
-          if (OB_SUCC(ret) && !find) {
-            ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-            LOG_WARN("parent table may be deleted, ddl need retry",
-                     KR(ret), K_(tenant_id), K(info));
-          }
-        }
-      } // end for
+    if (FAILEDx(check_parallel_ddl_conflict_(arg_.based_schema_object_infos_))) {
+      LOG_WARN("fail to check parallel ddl conflict", KR(ret));
     }
 
     // for replace mock fk parent table:
@@ -669,25 +572,6 @@ int ObCreateTableHelper::check_ddl_conflict_()
       } // end for
     }
 
-    // check udt exist & not changed
-    for (int64_t i = 0; OB_SUCC(ret) && (i < arg_.based_schema_object_infos_.count()); ++i) {
-      const ObBasedSchemaObjectInfo &info = arg_.based_schema_object_infos_.at(i);
-      if (UDT_SCHEMA == info.schema_type_) {
-        const uint64_t udt_id = info.schema_id_;
-        const ObUDTTypeInfo *udt_info = NULL;
-        if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
-          // can't add object lock across tenant, assumed that sys inner udt won't be changed.
-        } else if (OB_FAIL(latest_schema_guard_.get_udt_info(udt_id, udt_info))) {
-          LOG_WARN("fail to get udt info", KR(ret), K_(tenant_id), K(udt_id), K(info));
-        } else if (OB_ISNULL(udt_info)) {
-          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-          LOG_WARN("udt doesn't exist", KR(ret), K_(tenant_id), K(udt_id));
-        } else if (udt_info->get_schema_version() != info.schema_version_) {
-          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-          LOG_WARN("udt changed", KR(ret), K(info), KPC(udt_info));
-        }
-      }
-    } // end for
   }
   const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
   LOG_INFO("check ddl confict", KR(ret), K_(tenant_id), K(cost_ts));
@@ -1029,37 +913,8 @@ int ObCreateTableHelper::generate_table_schema_()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    ObTableSchema::const_column_iterator begin = new_table.column_begin();
-    ObTableSchema::const_column_iterator end = new_table.column_end();
-    ObSchemaGetterGuard guard;
-    if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-      LOG_WARN("fail to get schema guard", KR(ret));
-    }
-    for (; OB_SUCC(ret) && begin != end; begin++) {
-      ObColumnSchemaV2 *col = (*begin);
-      if (OB_ISNULL(col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
-        const uint64_t udt_id = col->get_sub_data_type();
-        const ObUDTTypeInfo *udt_info = NULL;
-        if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
-          // can't add object lock across tenant, assumed that sys inner udt won't be changed.
-          if (OB_FAIL(guard.get_udt_info(OB_SYS_TENANT_ID, udt_id, udt_info))) {
-            LOG_WARN("fail to get udt info", KR(ret), K(udt_id));
-          } else if (OB_ISNULL(udt_info)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("inner udt not found", KR(ret), K(udt_id));
-          }
-        } else if (OB_FAIL(latest_schema_guard_.get_udt_info(udt_id, udt_info))) {
-          LOG_WARN("fail to get udt info", KR(ret), K_(tenant_id), K(udt_id));
-        } else if (OB_ISNULL(udt_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("udt doesn't exist", KR(ret), K_(tenant_id), K(udt_id));
-        }
-      }
-    } // end for
+  if (FAILEDx(check_table_udt_exist_(new_table))) {
+    LOG_WARN("fail to check table udt exist", KR(ret));
   }
 
   // check if constraint name duplicated
@@ -2344,7 +2199,7 @@ int ObCreateTableHelper::create_tablets_()
                               sql_proxy_,
                               true /*use parallel ddl*/);
     int64_t last_schema_version = OB_INVALID_VERSION;
-    auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+    ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {

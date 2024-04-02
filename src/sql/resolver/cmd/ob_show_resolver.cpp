@@ -20,6 +20,7 @@
 #include "sql/parser/ob_parser.h"
 #include "lib/charset/ob_charset.h"
 #include "observer/ob_server_struct.h"
+#include "sql/resolver/dcl/ob_grant_resolver.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -92,7 +93,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
   ObShowResolverContext show_resv_ctx;
   if (OB_UNLIKELY(NULL == session_info_
                   || NULL == params_.allocator_
-                  || NULL == schema_checker_)) {
+                  || NULL == schema_checker_
+                  || NULL == schema_checker_->get_schema_guard())) {
     ret = OB_NOT_INIT;
     LOG_WARN("data member is not init",
         K(ret),
@@ -394,33 +396,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
                 LOG_WARN("fail to init need privs array", K(ret));
               } else {
-                ObNeedPriv need_priv;
-                //Priv check: global select || db select || table acc
-                need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_SELECT;
-                stmt_need_privs.need_privs_.push_back(need_priv);
 
-                need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_SELECT;
-                need_priv.db_ = show_db_name;
-                stmt_need_privs.need_privs_.push_back(need_priv);
-
-                need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_TABLE_ACC;
-                need_priv.db_ = show_db_name;
-                need_priv.table_ = show_table_name;
-                stmt_need_privs.need_privs_.push_back(need_priv);
-
-                if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
-                  if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
-                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
-                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                   show_table_name.length(), show_table_name.ptr());
-                  } else {
-                    LOG_WARN("fail to check priv", K(ret));
-                  }
-                }
               }
             }
 
@@ -705,12 +681,18 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
 
                 if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
                   if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
-                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
-                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                   show_table_name.length(), show_table_name.ptr());
-                  } else {
-                    LOG_WARN("fail to check priv", K(ret));
+                    ret = OB_SUCCESS;
+                    bool pass = false;
+                    if (OB_FAIL(schema_checker_->get_schema_guard()->check_priv_any_column_priv(
+                                  session_priv, show_db_name, show_table_name, pass))) {
+                      LOG_WARN("fail to collect privs in roles", K(ret));
+                    } else if (!pass) {
+                      ret = OB_ERR_NO_TABLE_PRIVILEGE;
+                      LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                                    session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                    session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                                    show_table_name.length(), show_table_name.ptr());
+                    }
                   }
                 }
               }
@@ -800,7 +782,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       }
       case T_SHOW_GRANTS: {
         [&] {
-          if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+          if (OB_UNLIKELY(parse_tree.num_child_ != (lib::is_mysql_mode() ? 2 : 1)
+                          || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong",
                 K(ret),
@@ -810,6 +793,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_user_id = OB_INVALID_ID;
             ObString show_user_name;
             ObString show_host_name;
+            ObSqlString role_list_str;
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_GRANTS;
             if (NULL == parse_tree.children_[0]) {
               show_user_id = user_id;
@@ -843,9 +827,52 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                         K(user_name), K(ret));
               }
             }
+            if (OB_SUCC(ret)
+                && lib::is_mysql_mode()
+                && OB_NOT_NULL(parse_tree.children_[1])
+                && parse_tree.children_[1]->num_child_ > 0) {
+              ParseNode *role_list = parse_tree.children_[1];
+              ObGrantResolver dcl_resolver(params_);
+              const ObUserInfo *user_info = NULL;
+              OZ (role_list_str.append_fmt("%lu", show_user_id));
+              OZ (schema_checker_->get_user_info(real_tenant_id, show_user_id, user_info));
+              for (int i = 0; OB_SUCC(ret) && i < role_list->num_child_; i++) {
+                ObString user_name;
+                ObString host_name;
+                uint64_t role_id = OB_INVALID_ID;
+                OZ (dcl_resolver.resolve_user_host(role_list->children_[i], user_name, host_name));
+                OZ (schema_checker_->get_user_id(real_tenant_id, user_name, host_name, role_id));
+                if (OB_USER_NOT_EXIST == ret) {
+                  ret = OB_ERR_NO_GRANT_DEFINED_FOR_USER;
+                  LOG_USER_ERROR(OB_ERR_NO_GRANT_DEFINED_FOR_USER,
+                                 user_name.length(), user_name.ptr(), host_name.length(), host_name.ptr());
+                }
+                if (OB_SUCC(ret) && !has_exist_in_array(user_info->get_role_id_array(), role_id)) {
+                  ret = OB_ERR_ROLE_NOT_GRANTED_TO;
+                  LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_TO,
+                                 user_name.length(), user_name.ptr(),
+                                 host_name.length(), host_name.ptr(),
+                                 user_info->get_user_name_str().length(),
+                                 user_info->get_user_name_str().ptr(),
+                                 user_info->get_host_name_str().length(),
+                                 user_info->get_host_name_str().ptr());
+                }
+                OZ (role_list_str.append_fmt(",%lu", role_id));
+              }
+            }
             if (OB_SUCC(ret)) {
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_GRANTS, show_user_name.length(), show_user_name.ptr(), show_host_name.length(), show_host_name.ptr());
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME), show_user_id);
+              if (lib::is_mysql_mode() && role_list_str.length() > 0) {
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS_USING_ROLES,
+                               REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                               REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME),
+                               role_list_str.string().length(), role_list_str.string().ptr());
+              } else {
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS,
+                               REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                               REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME),
+                               show_user_id);
+              }
             }
           }
         }();
@@ -2777,25 +2804,25 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS,
 DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                        NULL,
                        "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding \
-                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu) \
+                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu AND t2.table_type in (0, 3, 6)) \
                         LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
-                        WHERE t1.tenant_id = %lu AND t2.table_type in (0, 3, 6) \
+                        WHERE t1.tenant_id = %lu \
                         ORDER BY t1.tablegroup_name, t2.table_name",
                         "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\", t1.SHARDING AS \"SHARDING\" \
-                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
+                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6)) \
                         LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
-                        WHERE T1.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6) \
+                        WHERE T1.TENANT_ID = %lu \
                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,
                        NULL,
-                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_GLOBAL_VARIABLES,
                        NULL,
-                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLUMNS,
                        NULL,
@@ -2892,6 +2919,11 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_GRANTS,
                        "SELECT grants AS `Grants for %.*s@%.*s` ",
                        "SELECT grants FROM %s.%s WHERE user_id = %ld",
                        R"(SELECT "GRANTS" AS "GRANTS" FROM %s.%s WHERE USER_ID = %ld)",
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_GRANTS_USING_ROLES,
+                       "SELECT grants AS `Grants for %.*s@%.*s` ",
+                       "SELECT grants FROM %s.%s WHERE user_id in (%.*s)",
+                       R"(SELECT "GRANTS" AS "GRANTS" FROM %s.%s WHERE USER_ID IN (%.*s))",
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCESSLIST,
                        NULL,

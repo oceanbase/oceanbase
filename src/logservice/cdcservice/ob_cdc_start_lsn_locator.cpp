@@ -141,7 +141,7 @@ int ObCdcStartLsnLocator::do_req_start_lsn_(const ObLocateLSNByTsReq &req,
       ret = OB_IN_STOP_STATE;
     }
 
-    EXTLOG_LOG(INFO, "locator req success", KR(ret), K(tenant_id_), K(req), K(resp), K(is_hurry_quit));
+    EXTLOG_LOG(INFO, "locator req done", KR(ret), K(tenant_id_), K(req), K(resp), K(is_hurry_quit));
   }
 
   return ret;
@@ -190,7 +190,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     need_seek_archive = true;
   } else {
     if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-      if (OB_LS_NOT_EXIST == ret) {
+      if (OB_LS_NOT_EXIST == ret && OB_SYS_TENANT_ID != tenant_id_) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
@@ -200,7 +200,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
     // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
     } else if (OB_FAIL(palf_handle_guard.seek(start_scn, group_iter))) {
-      if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      if (OB_ERR_OUT_OF_LOWER_BOUND == ret && OB_SYS_TENANT_ID != tenant_id_) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
@@ -212,10 +212,6 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       LOG_WARN("group_iter get_entry fail", KR(ret), K_(tenant_id), K(ls_id));
     } else {
       result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
-    }
-
-    if (OB_SYS_TENANT_ID == tenant_id_) {
-      need_seek_archive = false;
     }
   // Note: us
   }
@@ -240,39 +236,35 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     } else {
       result_ts_ns = start_ts_ns;
       // for RemoteLogIterator::init
-      logservice::GetSourceFunc get_source_func = [&](const ObLSID& ls_id, logservice::ObRemoteSourceGuard &guard) ->int {
-        int ret = OB_SUCCESS;
-        logservice::ObRemoteLogParent *source = logservice::ObResSrcAlloctor::alloc(share::ObLogRestoreSourceType::LOCATION, ls_id);
-        logservice::ObRemoteLocationParent *location_source = static_cast<logservice::ObRemoteLocationParent*>(source);
-        if (OB_ISNULL(location_source)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("source allocated is null", KR(ret), K(ls_id));
-        } else if (OB_FAIL(location_source->set(backup_dest, SCN::max_scn()))) {
-          LOG_WARN("set backup dest failed", KR(ret), K(backup_dest), K(ls_id));
-        } else if (OB_FAIL(guard.set_source(location_source))) {
-          LOG_WARN("remote source guard set source failed", KR(ret), K(ls_id));
-        }
-
-        if (OB_FAIL(ret) && OB_NOT_NULL(location_source)) {
-          logservice::ObResSrcAlloctor::free(location_source);
-          location_source = nullptr;
-        }
-        return ret;
-      };
-      logservice::ObRemoteLogGroupEntryIterator remote_group_iter(get_source_func);
+      ClientLSCtx ctx;
+      int64_t version = 0;
+      ObCdcGetSourceFunctor get_source_func(ctx, version);
+      ObCdcUpdateSourceFunctor update_source_func(ctx, version);
+      logservice::ObRemoteLogGroupEntryIterator remote_group_iter(get_source_func, update_source_func);
+      constexpr int64_t MAX_RETRY_COUNT = 4;
       // for RemoteLogIterator::next
       int64_t next_buf_size = 0;
       const char *next_buf = NULL;
       LSN lsn;
-
-      if (OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
-              result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_))) {
-        LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
-      } else if (OB_FAIL(remote_group_iter.next(log_group_entry, lsn, next_buf, next_buf_size))) {
-        LOG_WARN("iterate through archive log failed", KR(ret), K(ls_id), K(tenant_id_));
-      } else {
-        result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
-      }
+      int64_t retry_time = 0;
+      do {
+        if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
+          LOG_WARN("failed to init archive source", K(ctx), K(ls_id));
+        } else if (! remote_group_iter.is_init() && OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
+                result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_))) {
+          LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
+        } else if (OB_FAIL(remote_group_iter.next(log_group_entry, lsn, next_buf, next_buf_size))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("iterate through archive log failed", KR(ret), K(ls_id), K(tenant_id_));
+          } else {
+            remote_group_iter.update_source_cb();
+            remote_group_iter.reset();
+            LOG_INFO("get iter end from remote_group_iter, retry", K(result_lsn), K(retry_time), K(MAX_RETRY_COUNT));
+          }
+        } else {
+          result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
+        }
+      } while (OB_ITER_END == ret && ++retry_time < MAX_RETRY_COUNT);
     }
   }
   // Unconditional setting ret code

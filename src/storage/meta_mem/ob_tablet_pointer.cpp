@@ -45,10 +45,11 @@ ObTabletPointer::ObTabletPointer()
     initial_state_(true),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
-    old_version_chain_(nullptr)
+    old_version_chain_(nullptr),
+    space_usage_()
 {
 #if defined(__x86_64__)
-    static_assert(sizeof(ObTabletPointer) == 272, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+    static_assert(sizeof(ObTabletPointer) == 288, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -328,6 +329,11 @@ void ObTabletPointer::set_tablet_status_written()
   mds_table_handler_.set_tablet_status_written();
 }
 
+void ObTabletPointer::reset_tablet_status_written()
+{
+  mds_table_handler_.reset_tablet_status_written();
+}
+
 bool ObTabletPointer::is_tablet_status_written() const
 {
   return mds_table_handler_.is_tablet_status_written();
@@ -343,6 +349,7 @@ int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline()
   int ret = OB_SUCCESS;
   ObIMemtableMgr *memtable_mgr = memtable_mgr_handle_.get_memtable_mgr();
   mds::MdsTableHandle mds_table;
+  reset_tablet_status_written();
   if (OB_ISNULL(memtable_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("memtable mgr is null", K(ret));
@@ -456,7 +463,7 @@ int ObTabletPointer::release_obj(ObTablet *&t)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "object pool or allocator is nullptr", K(ret), K(obj_));
   } else if (nullptr == t->get_allocator()) {
-    obj_.t3m_->release_tablet(t);
+    obj_.t3m_->release_tablet_from_pool(t, true/*give_back_tablet_into_pool*/);
     t = nullptr;
   } else {
     t->~ObTablet();

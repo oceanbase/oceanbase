@@ -65,7 +65,7 @@ int ObPxMultiPartDeleteOp::inner_open()
     LOG_WARN("failed to inner open", K(ret));
   } else if (OB_FAIL(ObDMLService::init_del_rtdef(dml_rtctx_, del_rtdef_, MY_SPEC.del_ctdef_))) {
     LOG_WARN("init delete rtdef failed", K(ret));
-  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, this, false, MY_SPEC.with_barrier_))) {
+  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, false, MY_SPEC.with_barrier_))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (MY_SPEC.with_barrier_) {
     if (OB_ISNULL(input_)) {
@@ -78,24 +78,6 @@ int ObPxMultiPartDeleteOp::inner_open()
     }
   }
   LOG_TRACE("pdml static delete op", K(ret), K_(MY_SPEC.row_desc), K(MY_SPEC.del_ctdef_));
-  return ret;
-}
-
-int ObPxMultiPartDeleteOp::check_rowkey_distinct(const ObExprPtrIArray &row,
-                                                 bool &is_distinct)
-{
-  int ret = OB_SUCCESS;
-  if (DistinctType::T_DISTINCT_NONE != MY_SPEC.del_ctdef_.distinct_algo_) {
-    ret = ObDMLService::check_rowkey_whether_distinct(row,
-                                                      MY_SPEC.del_ctdef_.distinct_algo_,
-                                                      eval_ctx_,
-                                                      ctx_,
-                                                      del_rtdef_.table_rowkey_,
-                                                      del_rtdef_.se_rowkey_dist_ctx_,
-                                                      is_distinct);
-  } else {
-    is_distinct = true;
-  }
   return ret;
 }
 
@@ -149,7 +131,8 @@ int ObPxMultiPartDeleteOp::inner_close()
 //////////// pdml data interface implementation: reader & writer ////////////
 int ObPxMultiPartDeleteOp::read_row(ObExecContext &ctx,
                                     const ObExprPtrIArray *&row,
-                                    ObTabletID &tablet_id)
+                                    ObTabletID &tablet_id,
+                                    bool &is_skipped)
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
@@ -164,24 +147,28 @@ int ObPxMultiPartDeleteOp::read_row(ObExecContext &ctx,
   } else {
     // 每一次从child节点获得新的数据都需要进行清除计算标记
     clear_evaluated_flag();
-    // 通过partition id expr获得对应行对应的分区
-    const int64_t part_id_idx = MY_SPEC.row_desc_.get_part_id_index();
-    // 返回的值是child的output exprs
-    row = &child_->get_spec().output_;
-    if (NO_PARTITION_ID_FLAG == part_id_idx) {
-      // 如果row中没有partition id expr对应的cell，默认partition id为0
-      ObDASTableLoc *table_loc = del_rtdef_.das_rtdef_.table_loc_;
-      if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insert table location is invalid", K(ret), KPC(table_loc));
-      } else {
-        tablet_id = table_loc->get_first_tablet_loc()->tablet_id_;
+    if (OB_FAIL(ObDMLService::process_delete_row(MY_SPEC.del_ctdef_, del_rtdef_, is_skipped, *this))) {
+      LOG_WARN("process delete row failed", K(ret));
+    } else if (!is_skipped) {
+      // 通过partition id expr获得对应行对应的分区
+      const int64_t part_id_idx = MY_SPEC.row_desc_.get_part_id_index();
+      // 返回的值是child的output exprs
+      row = &child_->get_spec().output_;
+      if (NO_PARTITION_ID_FLAG == part_id_idx) {
+        // 如果row中没有partition id expr对应的cell，默认partition id为0
+        ObDASTableLoc *table_loc = del_rtdef_.das_rtdef_.table_loc_;
+        if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("insert table location is invalid", K(ret), KPC(table_loc));
+        } else {
+          tablet_id = table_loc->get_first_tablet_loc()->tablet_id_;
+        }
+      } else if (child_->get_spec().output_.count() > part_id_idx) {
+        ObExpr *expr = child_->get_spec().output_.at(part_id_idx);
+        ObDatum &expr_datum = expr->locate_expr_datum(get_eval_ctx());
+        tablet_id = expr_datum.get_int();
+        LOG_DEBUG("get the part id", K(ret), K(expr_datum));
       }
-    } else if (child_->get_spec().output_.count() > part_id_idx) {
-      ObExpr *expr = child_->get_spec().output_.at(part_id_idx);
-      ObDatum &expr_datum = expr->locate_expr_datum(get_eval_ctx());
-      tablet_id = expr_datum.get_int();
-      LOG_DEBUG("get the part id", K(ret), K(expr_datum));
     }
   }
   return ret;

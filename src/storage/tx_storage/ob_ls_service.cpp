@@ -57,6 +57,7 @@ static inline void prepare_palf_base_info(const obrpc::ObCreateLSArg &arg,
 ObLSService::ObLSService()
   : is_inited_(false),
     is_running_(false),
+    is_stopped_(false),
     tenant_id_(OB_INVALID_ID),
     ls_map_(),
     ls_allocator_(),
@@ -77,34 +78,34 @@ ObLSService::~ObLSService()
 void ObLSService::destroy()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("destroy ls service", K_(iter_cnt));
-  if (is_running_) {
-    if (OB_FAIL(stop())) {
-      LOG_WARN("stop ls service failed", K(ret));
-    }
+  LOG_INFO("destroy ls service", KP(this));
+  if (is_running_ || !is_stopped_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("should has been stopped before destroy", K(ret), K_(is_running), K_(is_stopped), KP(this));
   }
-  if (IS_INIT) {
-    tenant_id_ = OB_INVALID_ID;
-    ls_map_.reset();
-    ls_allocator_.destroy();
-    iter_allocator_.destroy();
-    rs_reporter_ = nullptr;
-    storage_svr_rpc_proxy_.destroy();
-    storage_rpc_.destroy();
+  if (ATOMIC_LOAD(&iter_cnt_) != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls iter cnt is not 0", K(ret), K_(iter_cnt), KP(this));
   }
+  tenant_id_ = OB_INVALID_ID;
+  ls_map_.reset();
+  ls_allocator_.destroy();
+  iter_allocator_.destroy();
+  rs_reporter_ = nullptr;
+  storage_svr_rpc_proxy_.destroy();
+  storage_rpc_.destroy();
   is_inited_ = false;
 }
 
-bool ObLSService::safe_to_destroy()
+bool ObLSService::is_empty()
 {
   bool is_safe = (ls_map_.is_empty() &&
-                  ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0 &&
-                  ATOMIC_LOAD(&iter_cnt_) == 0);
+                  ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0);
   if (!is_safe && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     bool is_t3m_meta_released = false;
     MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_t3m_meta_released, "ObLSService"); //just for debug
-    LOG_INFO("ls service is not safe to destroy", K(ls_map_.is_empty()),
-             K_(safe_ls_destroy_task_cnt), K_(iter_cnt), K(is_t3m_meta_released));
+    LOG_INFO("ls service is not empty and not safe to destroy", K(ls_map_.is_empty()),
+             K_(safe_ls_destroy_task_cnt), K(is_t3m_meta_released));
   }
   return is_safe;
 }
@@ -135,6 +136,8 @@ int ObLSService::stop()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ls service not inited, cannot stop.", K(ret));
+  } else if (!is_running_ || is_stopped_) {
+    // do nothing
   } else {
     // remove all the ls from ls map and push it into the
     // safe to destroy thread.
@@ -181,7 +184,7 @@ int ObLSService::stop()
                                         this))) {
             LOG_WARN("init safe destroy task failed", K(ret));
           } else {
-            remove_ls_(ls, remove_from_disk);
+            remove_ls_(ls, remove_from_disk, false/*write_slog*/);
             // try until success.
             while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
               if (REACH_TIME_INTERVAL(1_min)) { // every minute
@@ -200,16 +203,31 @@ int ObLSService::stop()
         ret = OB_SUCCESS;
       }
     }
-    LOG_INFO("stop ls service");
     is_running_ = false;
+    is_stopped_ = true;
   }
+  LOG_INFO("stop ls service");
   return ret;
 }
 
 int ObLSService::wait()
 {
   int ret = OB_SUCCESS;
-  while(!safe_to_destroy()) {
+  int64_t retry_times = 0;
+  int64_t begin_time = ObTimeUtility::current_time();
+  while(!is_empty()) {
+    ++retry_times;
+    if (retry_times % 100 == 0) {
+      LOG_WARN("ls service wait empty for too much time", K(retry_times), K(begin_time));
+    }
+    usleep(100 * 1000); // 100 ms
+  }
+  retry_times = 0;
+  while(ATOMIC_LOAD(&iter_cnt_) != 0) {
+    ++retry_times;
+    if (retry_times % 100 == 0) {
+      LOG_WARN("ls service wait ls iter for too much time", K(retry_times), K_(iter_cnt), K(begin_time));
+    }
     usleep(100 * 1000); // 100 ms
   }
   return ret;
@@ -736,9 +754,9 @@ int ObLSService::gc_ls_after_replay_slog()
               usleep(SLEEP_TS);
             }
           } while (tmp_ret != OB_SUCCESS);
-          remove_ls_(ls);
+          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
         } else if (ObInnerLSStatus::REMOVED == ls_status) {
-          remove_ls_(ls);
+          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
         }
       }
     }
@@ -979,16 +997,12 @@ int ObLSService::remove_ls(
         LOG_WARN("alloc memory failed", K(ret));
       } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
       } else if (FALSE_IT(ls->set_create_state(ObInnerLSStatus::REMOVED))) {
-        // set ls to remove state and prevent slog write
-      } else if(!is_replay &&
-                OB_FAIL(write_remove_ls_slog_(ls_id))) {
-        LOG_WARN("fail to write remove ls slog", K(ret));
       } else if (OB_FAIL(task->init(MTL_ID(),
                                     handle,
                                     this))) {
         LOG_WARN("init safe destroy task failed", K(ret));
       } else {
-        remove_ls_(ls);
+        remove_ls_(ls, true/*remove_from_disk*/, !is_replay);
         // try until success.
         while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
           if (REACH_TIME_INTERVAL(1_min)) { // every minute
@@ -1020,29 +1034,61 @@ int ObLSService::remove_ls(
   return ret;
 }
 
-void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk)
+void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls->get_ls_id();
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
   transaction::ObTransService *tx_svr = MTL(transaction::ObTransService*);
+  int64_t success_step = 0;
 
   do {
-    if (OB_FAIL(ls->prepare_for_safe_destroy())) {
-      LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
-    } else if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
-      LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
-    } else if (OB_FAIL(remove_ls_from_map_(ls_id))) {
-      LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
-    } else if (OB_FAIL(tx_svr->remove_tablet(ls_id))) {
-      LOG_WARN("remove tablet cache fail", K(ret), K(ls_id));
+    // We must do prepare_for_safe_destroy to remove tablets from ObLSTabletService before writing the remove_ls_slog,
+    // After removing tablets, no update_tablet_slog will be written. Otherwise, writing the update_tablet_slog will be
+    // concurrent with remove_ls_slog, causing the update_tablet_slog to fall behind remove_ls_slog, and causing replay
+    // creating an invalid tablet during restart.
+    ret = OB_SUCCESS;
+    if (success_step < 1) {
+      if (OB_FAIL(ls->prepare_for_safe_destroy())) {
+        LOG_WARN("prepare safe destroy failed", K(ret), KPC(ls));
+      } else {
+        success_step = 1;
+      }
+    }
+    if (success_step < 2 && OB_SUCC(ret)) {
+      if(write_slog && OB_FAIL(write_remove_ls_slog_(ls_id))) {
+        LOG_WARN("fail to write remove ls slog", K(ret));
+      } else {
+        success_step = 2;
+      }
+    }
+    if (success_step < 3 && OB_SUCC(ret)) {
+      if (remove_from_disk && OB_FAIL(ls->remove_ls())) {
+        LOG_WARN("remove ls from disk failed", K(ret), K(remove_from_disk), K(ls_id));
+      } else {
+        success_step = 3;
+      }
+    }
+    if (success_step < 4 && OB_SUCC(ret)) {
+      if (OB_FAIL(remove_ls_from_map_(ls_id))) {
+        LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
+      } else {
+        success_step = 4;
+      }
+    }
+    if (success_step < 5 && OB_SUCC(ret)) {
+      if (OB_FAIL(tx_svr->remove_tablet(ls_id))) {
+        LOG_WARN("tx service remove tablet fail", K(ret), K(ls_id));
+      } else {
+        success_step = 5;
+      }
     }
     if (OB_FAIL(ret)) {
       retry_cnt++;
       ob_usleep(SLEEP_TS);
       if (retry_cnt % 100 == 0) {
-        LOG_ERROR("remove_ls_ cost too much time", K(ret), KP(ls), K(ls_id));
+        LOG_ERROR("remove_ls_ cost too much time", K(ret), KP(ls), K(ls_id), K(success_step));
       }
     }
   } while (OB_FAIL(ret));
@@ -1257,6 +1303,7 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
   return ret;
 }
 
+ERRSIM_POINT_DEF(ALLOC_LS_ITER_GUARD_FAIL)
 int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod)
 {
   int ret = OB_SUCCESS;
@@ -1267,19 +1314,30 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (is_stopped_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ls service is stopped.", K(ret), KP(this));
   } else if (NULL == (buf = iter_allocator_.alloc(sizeof(ObLSIterator), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Fail to allocate memory for log stream iterator.", K(ret));
+    LOG_WARN("Fail to allocate memory for log stream iterator.", K(ret));
   } else {
     ls_iter = new (buf) ObLSIterator();
     ls_iter->set_ls_map(ls_map_, mod);
     inc_iter_cnt();
-    if (OB_FAIL(guard.assign(ls_iter, [&](ObLSIterator *iter) mutable {
-                                        iter->~ObLSIterator();
-                                        iter_allocator_.free(iter);
-                                        dec_iter_cnt();
-                                      }))) {
+    if (OB_FAIL(ALLOC_LS_ITER_GUARD_FAIL)) {
+      LOG_WARN("ALLOC_LS_ITER_GUARD_FAIL");
+    } else if (OB_FAIL(guard.assign(ls_iter, [&](ObLSIterator *iter) mutable {
+                                               iter->~ObLSIterator();
+                                               iter_allocator_.free(iter);
+                                               dec_iter_cnt();
+                                             }))) {
       LOG_WARN("create guard failed.", K(ret));
+    }
+    // if assign failed, we need free the memory we have allocated.
+    if (OB_FAIL(ret)) {
+      ls_iter->~ObLSIterator();
+      iter_allocator_.free(ls_iter);
+      dec_iter_cnt();
     }
   }
   return ret;
@@ -1386,8 +1444,6 @@ int ObLSService::dump_ls_info()
   }
   return ret;
 }
-
-
 
 } // storage
 } // oceanbase

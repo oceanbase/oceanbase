@@ -80,7 +80,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
         LOG_WARN("failed to create block", K(s.get_stmts()), K(ret));
       } else {
         ObLLVMBasicBlock null_start;
-        generator_.set_label(s.get_label(), s.get_level(), null_start, exit);
+        if (OB_FAIL(generator_.set_label(s, null_start, exit))) {
+          LOG_WARN("failed to set label", K(ret));
+        }
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_stmts().count(); ++i) {
@@ -415,7 +417,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
         LOG_WARN("a assign stmt must has expr", K(s), K(into_expr), K(ret));
       } else {
         int64_t result_idx = OB_INVALID_INDEX;
-        ObLLVMValue into_address;
         if (into_expr->is_const_raw_expr()) {
           const ObConstRawExpr* const_expr = static_cast<const ObConstRawExpr*>(into_expr);
           if (const_expr->get_value().is_unknown()) {
@@ -432,8 +433,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected const expr", K(const_expr->get_value()), K(ret));
           }
-        } else if (into_expr->is_obj_access_expr()) {
-          OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
         }
 
         if (OB_SUCC(ret)) {
@@ -610,7 +609,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                                                    s.get_block()->in_notfound(),
                                                    s.get_block()->in_warning()));
             } else if (into_expr->is_obj_access_expr()) { //ADT
+              ObLLVMValue into_address;
               ObPLDataType final_type;
+              OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
+              if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION
+                  && ObObjAccessIdx::has_same_collection_access(s.get_value_expr(i), static_cast<const ObObjAccessRawExpr *>(into_expr))) {
+                OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx, p_result_obj));
+              }
               OZ (static_cast<const ObObjAccessRawExpr*>(into_expr)->get_final_type(final_type));
               if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION) {
                 OZ (generator_.generate_check_not_null(s, final_type.get_not_null(), p_result_obj));
@@ -848,7 +853,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), while_begin, alter_while))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, while_begin, alter_while))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(while_begin))) {
       LOG_WARN("failed to create_br", K(ret));
@@ -941,7 +946,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForLoopStmt &s)
     OZ (generator_.get_helper().create_block(ObString("forloop_continue"), generator_.get_func(), forloop_continue));
     OZ (generator_.get_helper().create_block(ObString("forloop_end"), generator_.get_func(), forloop_end));
     if (s.has_label()) {
-      OZ (generator_.set_label(s.get_label(), s.get_level(), forloop_continue, forloop_end));
+      OZ (generator_.set_label(s, forloop_continue, forloop_end));
     }
     OZ (generator_.get_helper().create_br(forloop_begin));
     OZ (generator_.set_current(forloop_begin));
@@ -1060,7 +1065,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
       LOG_WARN("failed to craete block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("cursor_forloop_check_success"), generator_.get_func(), cursor_forloop_check_success))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), cursor_forloop_begin, cursor_forloop_end))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, cursor_forloop_fetch, cursor_forloop_end))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(cursor_forloop_begin))) {
       LOG_WARN("failed to create_br", K(ret));
@@ -1309,7 +1314,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLRepeatStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("after_repeat"), generator_.get_func(), alter_repeat))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), repeat, alter_repeat))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, repeat, alter_repeat))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
@@ -1382,7 +1387,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLLoopStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("after_loop"), generator_.get_func(), alter_loop))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), loop, alter_loop))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, loop, alter_loop))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
@@ -1594,7 +1599,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
                                     K(generator_.get_ast().get_cursor_table().get_count()),
                                     K(s.get_stmt_id()),
                                     K(generator_.get_ast().get_name()));
-      OZ (generator_.clean_for_loop_cursor(false));
+      OZ (generator_.generate_close_loop_cursor(false, 0));
 
       // close cursor
       for (int64_t i = 0; OB_SUCC(ret) && i < generator_.get_ast().get_cursor_table().get_count(); ++i) {
@@ -1625,8 +1630,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSqlStmt &s)
     LOG_WARN("failed to generate goto label", K(ret));
   } else {
     ObLLVMValue ret_err;
+    ObLLVMValue stack;
+    OZ (generator_.get_helper().stack_save(stack));
     OZ (generator_.generate_sql(s, ret_err));
     OZ (generator_.generate_after_sql(s, ret_err));
+    OZ (generator_.get_helper().stack_restore(stack));
   }
   return ret;
 }
@@ -4018,6 +4026,7 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int_pointer_type));//formal_param_idxs
     OZ (arg_types.push_back(int_pointer_type));//actual_param_exprs
     OZ (arg_types.push_back(int64_type));//cursor_param_count
+    OZ (arg_types.push_back(bool_type));//skip_locked
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_cursor_open_with_param_idx"), ft, spi_service_.spi_cursor_open_with_param_idx_));
   }
@@ -4869,10 +4878,11 @@ int ObPLCodeGenerator::generate_open(
     ObLLVMValue formal_params;
     ObLLVMValue actual_params;
     ObLLVMValue cursor_param_count;
+    ObLLVMValue skip_locked;
     ObLLVMValue ret_err;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
     OZ (generate_sql(cursor_sql, str, len, ps_sql, type, for_update, hidden_rowid, sql_params,
-                     sql_param_count));
+                     sql_param_count, skip_locked));
     OZ (args.push_back(str));
     OZ (args.push_back(ps_sql));
     OZ (args.push_back(type));
@@ -4904,6 +4914,7 @@ int ObPLCodeGenerator::generate_open(
     OZ (args.push_back(formal_params));
     OZ (args.push_back(actual_params));
     OZ (args.push_back(cursor_param_count));
+    OZ (args.push_back(skip_locked));
     OZ (get_helper().create_call(ObString("spi_cursor_open_with_param_idx"), get_spi_service().spi_cursor_open_with_param_idx_, args, ret_err));
     OZ (check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
   }
@@ -5528,8 +5539,9 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     ObLLVMValue hidden_rowid;
     ObLLVMValue params;
     ObLLVMValue count, is_type_record;
+    ObLLVMValue skip_locked;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
-    OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count));
+    OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count, skip_locked));
     if (OB_SUCC(ret)) {
       if (s.get_params().empty()) {
         OZ (args.push_back(str));
@@ -6610,42 +6622,33 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
   do { \
     if (OB_SUCC(ret)) { \
       ObLLVMBasicBlock do_control; \
-      ObLLVMBasicBlock after_control; \
       if (OB_INVALID_INDEX != control.get_cond()) { \
         ObLLVMValue p_result_obj; \
         ObLLVMValue result; \
         ObLLVMValue is_false; \
         if (OB_FAIL(helper_.create_block(ObString("do_control"), get_func(), do_control))) { \
           LOG_WARN("failed to create block", K(ret)); \
-        } else if (OB_FAIL(helper_.create_block(ObString("after_control"), \
-                                get_func(), after_control))) { \
+        } else if (OB_FAIL(helper_.create_block(ObString("after_control"), get_func(), after_control))) { \
           LOG_WARN("failed to create block", K(ret)); \
-        } else if (OB_FAIL(generate_expr(control.get_cond(), control, \
-                    OB_INVALID_INDEX, p_result_obj))) { \
+        } else if (OB_FAIL(generate_expr(control.get_cond(), control, OB_INVALID_INDEX, p_result_obj))) { \
           LOG_WARN("failed to generate calc_expr func", K(ret)); \
-        } else if (OB_FAIL(extract_value_from_objparam(p_result_obj, \
-                          control.get_cond_expr()->get_data_type(), result))) { \
+        } else if (OB_FAIL(extract_value_from_objparam(p_result_obj, control.get_cond_expr()->get_data_type(), result))) { \
           LOG_WARN("failed to extract_value_from_objparam", K(ret)); \
         } else if (OB_FAIL(helper_.create_icmp_eq(result, FALSE, is_false))) { \
           LOG_WARN("failed to create_icmp_eq", K(ret)); \
         } else if (OB_FAIL(helper_.create_cond_br(is_false, after_control, do_control))) { \
           LOG_WARN("failed to create_cond_br", K(ret)); \
-        } else if (OB_FAIL(set_current(after_control))) { \
-          LOG_WARN("failed to set insert point", K(ret)); \
-        } else if (OB_FAIL(helper_.set_insert_point(do_control))) { \
+        } else if (OB_FAIL(set_current(do_control))) { \
           LOG_WARN("failed to set insert point", K(ret)); \
         } else { } \
       } else { \
         if (OB_FAIL(helper_.create_block(ObString("do_control"), get_func(), do_control))) { \
           LOG_WARN("failed to create block", K(ret)); \
-        } else if (OB_FAIL(helper_.create_block(ObString("after_control"), \
-                       get_func(), after_control))) { \
+        } else if (OB_FAIL(helper_.create_block(ObString("after_control"), get_func(), after_control))) { \
           LOG_WARN("failed to create block", K(ret)); \
         } else if (OB_FAIL(helper_.create_br(do_control))) { \
           LOG_WARN("failed to create_cond_br", K(ret)); \
-        } else if (OB_FAIL(set_current(after_control))) { \
-          LOG_WARN("failed to set insert point", K(ret)); \
-        } else if (OB_FAIL(helper_.set_insert_point(do_control))) { \
+        } else if (OB_FAIL(set_current(do_control))) { \
           LOG_WARN("failed to set insert point", K(ret)); \
         } else { } \
       } \
@@ -6668,7 +6671,16 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
           ObPLCodeGenerator::LoopStack::LoopInfo &loop_info = get_loops()[i]; \
           LOG_DEBUG("loop info", K(i), K(loop_info.level_), K(control.get_level())); \
           if (loop_info.level_ <= control.get_level() && loop_info.level_ >= label_info->level_) { \
-            if (OB_FAIL(helper_.stack_restore(loop_info.loop_))) { \
+            if (OB_NOT_NULL(loop_info.cursor_) \
+                && loop_info.level_ != label_info->level_ \
+                && OB_FAIL(generate_close(*loop_info.cursor_, \
+                                          loop_info.cursor_->get_cursor()->get_package_id(), \
+                                          loop_info.cursor_->get_cursor()->get_routine_id(), \
+                                          loop_info.cursor_->get_index(), \
+                                          false, \
+                                          false))) { \
+              LOG_WARN("failed to generate close for loop cursor", K(ret)); \
+            } else if (OB_FAIL(helper_.stack_restore(loop_info.loop_))) { \
               LOG_WARN("failed to stack_restore", K(ret)); \
             } else { \
               LOG_DEBUG("success stack restore", K(i), K(loop_info.level_)); \
@@ -6691,6 +6703,7 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
   } else if (OB_FAIL(generate_goto_label(control))) {
     LOG_WARN("failed to generate goto label", K(ret));
   } else if (!control.get_next_label().empty()) {
+    ObLLVMBasicBlock after_control;
 
     CHECK_COND_CONTROL;
 
@@ -6704,12 +6717,13 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
       } else if (OB_FAIL(helper_.create_br(next))) {
         LOG_WARN("failed to create br", K(ret));
       } else {
-        if (OB_FAIL(set_current(get_current()))) { //设置CURRENT, 调整INSERT POINT点
+        if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
           LOG_WARN("failed to set current", K(ret));
         }
       }
     }
   } else {
+    ObLLVMBasicBlock after_control;
 
     CHECK_COND_CONTROL;
 
@@ -6728,7 +6742,7 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
         } else if (OB_FAIL(helper_.create_br(next))) {
           LOG_WARN("failed to create br", K(ret));
         } else {
-          if (OB_FAIL(set_current(get_current()))) { //设置CURRENT, 调整INSERT POINT点
+          if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
             LOG_WARN("failed to set current", K(ret));
           }
         }
@@ -6746,7 +6760,8 @@ int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
                                     jit::ObLLVMValue &for_update,
                                     jit::ObLLVMValue &hidden_rowid,
                                     jit::ObLLVMValue &params,
-                                    jit::ObLLVMValue &count)
+                                    jit::ObLLVMValue &count,
+                                    jit::ObLLVMValue &skip_locked)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue int_value;
@@ -6772,6 +6787,8 @@ int ObPLCodeGenerator::generate_sql(const ObPLSql &sql,
     } else if (OB_FAIL(generate_expression_array(
         sql.is_forall_sql() ? sql.get_array_binding_params() : sql.get_params(), params, count))) {
       LOG_WARN("get precalc expr array ir value failed", K(ret));
+    } else if (OB_FAIL(helper_.get_int8(sql.is_skip_locked(), skip_locked))) {
+      LOG_WARN("failed to get int8", K(ret));
     } else { /*do nothing*/ }
   }
   return ret;
@@ -7085,29 +7102,19 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
   return ret;
 }
 
-int ObPLCodeGenerator::clean_for_loop_cursor(bool is_from_exception)
+int ObPLCodeGenerator::generate_close_loop_cursor(bool is_from_exception, int64_t dest_level)
 {
   int ret = OB_SUCCESS;
-  /*
-    * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
-    * 如果 is_from_exception 为true 此时已经在exception过程中，只尝试关闭，不再check_success
-    */
-  int64_t dest_level = is_from_exception && get_current_exception() != NULL ? get_current_exception()->level_ : 0;
-  if (NULL != get_current_loop()
-      && get_current_loop()->level_ >= dest_level) {
-    for (int64_t i = get_loop_count(); OB_SUCC(ret) && i > 0; --i) {
-      if (get_loops()[i - 1].level_ >= dest_level
-          && NULL != get_loops()[i - 1].cursor_) {
-        LOG_INFO("close ForLoop Cursor while raising exception",
-                  K(*get_loops()[i - 1].cursor_->get_cursor()),
-                  K(ret));
-        OZ (generate_close(*get_loops()[i - 1].cursor_,
-                            get_loops()[i - 1].cursor_->get_cursor()->get_package_id(),
-                            get_loops()[i - 1].cursor_->get_cursor()->get_routine_id(),
-                            get_loops()[i - 1].cursor_->get_index(),
-                            false,/*cannot ignoe as must have been opened*/
-                            !is_from_exception/*此时已经在exception里，如果出错不能再抛exception了*/));
-      }
+  for (int64_t i = get_loop_count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    LoopStack::LoopInfo &loop_info = get_loops()[i];
+    if (loop_info.level_ >= dest_level && NULL != loop_info.cursor_) {
+      LOG_INFO("close ForLoop Cursor", KPC(loop_info.cursor_->get_cursor()), K(dest_level), K(is_from_exception), K(ret));
+      OZ (generate_close(*loop_info.cursor_,
+                          loop_info.cursor_->get_cursor()->get_package_id(),
+                          loop_info.cursor_->get_cursor()->get_routine_id(),
+                          loop_info.cursor_->get_index(),
+                          false,/*cannot ignoe as must have been opened*/
+                          !is_from_exception/*此时已经在exception里，如果出错不能再抛exception了*/));
     }
   }
   return ret;
@@ -7144,7 +7151,7 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
      * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
      * 因为此时已经在exception过程中，只尝试关闭，不再check_success
      */
-    OZ (clean_for_loop_cursor(true));
+    OZ (generate_close_loop_cursor(true, get_current_exception() != NULL ? get_current_exception()->level_ : 0));
     if (OB_ISNULL(get_current_exception())) {
       OZ (helper_.create_call(ObString("raise_exception"),
                               get_eh_service().eh_raise_exception_,
@@ -7993,7 +8000,7 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
       if (OB_HASH_NOT_EXIST == tmp_ret) {
         ObLLVMBasicBlock label_block;
         ObLLVMBasicBlock stack_save_block;
-        const ObString *lab = stmt.get_label();
+        const ObString *lab = stmt.get_goto_label();
         if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
                                                 label_block))) {
           LOG_WARN("create goto label failed", K(ret));

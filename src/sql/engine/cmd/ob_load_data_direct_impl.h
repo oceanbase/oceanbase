@@ -96,8 +96,7 @@ private:
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
     DataAccessParam data_access_param_;
-    common::ObSEArray<int64_t, 16>
-      store_column_idxs_; // Mapping of stored columns to source data columns
+    common::ObArray<int64_t> store_column_idxs_; // Mapping of stored columns to source data columns
   };
 
   struct LoadExecuteContext
@@ -166,7 +165,7 @@ private:
     int get_next_data_desc(DataDesc &data_desc, int64_t &pos);
     TO_STRING_KV(K_(data_descs), K_(pos));
   private:
-    common::ObSEArray<DataDesc, 64> data_descs_;
+    common::ObArray<DataDesc> data_descs_;
     int64_t pos_;
   };
 
@@ -215,6 +214,7 @@ private:
     int read_buffer(ObLoadFileBuffer &file_buffer);
 
   private:
+    ObArenaAllocator allocator_;
     LoadExecuteContext *execute_ctx_;
     ObCSVGeneralParser csv_parser_; // 用来计算完整行
     ObLoadFileDataTrimer data_trimer_; // 缓存不完整行的数据
@@ -358,7 +358,7 @@ private:
     // task ctrl
     ObParallelTaskController task_controller_;
     ObConcurrentFixedCircularArray<TaskHandle *> handle_reserve_queue_;
-    common::ObSEArray<TaskHandle *, 64> handle_resource_; // 用于释放资源
+    common::ObArray<TaskHandle *> handle_resource_; // 用于释放资源
     int64_t total_line_count_;
     bool is_inited_;
   private:
@@ -433,6 +433,7 @@ private:
 private:
   ObExecContext *ctx_;
   ObLoadDataStmt *load_stmt_;
+  ObPhysicalPlan plan_;
   LoadExecuteParam execute_param_;
   LoadExecuteContext execute_ctx_;
   observer::ObTableLoadInstance direct_loader_;

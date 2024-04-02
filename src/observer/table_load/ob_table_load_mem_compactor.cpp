@@ -51,7 +51,7 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    storage::ObDirectLoadMemSample sample(mem_ctx_);
+    storage::ObDirectLoadMemSample sample(ctx_, mem_ctx_);
     if (OB_FAIL(sample.do_sample())) {
       LOG_WARN("fail to do sample", KR(ret));
     }
@@ -240,6 +240,7 @@ ObTableLoadMemCompactor::ObTableLoadMemCompactor()
     task_scheduler_(nullptr),
     parallel_merge_cb_(this)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadMemCompactor::~ObTableLoadMemCompactor()
@@ -270,7 +271,6 @@ int ObTableLoadMemCompactor::inner_init()
   const uint64_t tenant_id = MTL_ID();
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &(store_ctx_->ctx_->param_);
-  allocator_.set_tenant_id(tenant_id);
   if (OB_FAIL(init_scheduler())) {
     LOG_WARN("fail to init_scheduler", KR(ret));
   } else {
@@ -333,7 +333,8 @@ int ObTableLoadMemCompactor::start()
 int ObTableLoadMemCompactor::construct_compactors()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTableLoadTransStore *, 64> trans_store_array;
+  ObArray<ObTableLoadTransStore *> trans_store_array;
+  trans_store_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   }
@@ -379,7 +380,7 @@ int ObTableLoadMemCompactor::create_mem_loader(ObDirectLoadMemLoader *&mem_loade
   int ret = OB_SUCCESS;
   mem_loader = nullptr;
   if (OB_ISNULL(mem_loader =
-                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), &mem_ctx_))) {
+                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), store_ctx_->ctx_, &mem_ctx_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObDirectLoadMemLoader", KR(ret));
   }
@@ -531,11 +532,11 @@ int ObTableLoadMemCompactor::start_compact()
 
 void ObTableLoadMemCompactor::stop()
 {
+  set_has_error(); //先设置为error，因为stop的场景就是error
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
     task_scheduler_->wait();
   }
-  set_has_error(); //先设置为error，因为stop的场景就是error
 }
 
 int64_t ObTableLoadMemCompactor::get_compact_task_count() const

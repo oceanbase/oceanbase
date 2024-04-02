@@ -583,6 +583,7 @@ int ObFreezer::ls_freeze_task()
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
+  int64_t last_submit_log_time = start;
   uint32_t freeze_clock = get_freeze_clock();
   TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ls_id), K(freeze_clock));
 
@@ -590,7 +591,12 @@ int ObFreezer::ls_freeze_task()
   // this means that all memtables can be dumped
   while (!get_ls_data_checkpoint()->ls_freeze_finished()) {
     if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      if (need_resubmit_log()) {
+      if (need_resubmit_log() ||
+          // In order to prevent the txn has already passed the try_submit test
+          // while failing to submit some logs due to an unexpected bug, we need
+          // retry to submit the log to go around the above case
+          (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
+        last_submit_log_time = ObTimeUtility::current_time();
         int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
         int64_t write_lock = 0;
         ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);

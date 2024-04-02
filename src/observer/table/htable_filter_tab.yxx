@@ -328,10 +328,18 @@ simple_filter:
                 }
         |       PageFilter '(' INT_VALUE ')'
                 {
-                    int &ret = parse_ctx->error_code_ = OB_NOT_SUPPORTED;
-                    UNUSED(ret);
-                    ob_hfilter_error(&(@$), parse_ctx, "PageFilter not supported");
-                    YYABORT;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::PageFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse PageFilter");
+                        YYABORT;
+                    }
                 }
         |       ColumnCountGetFilter '(' INT_VALUE ')'
                 {

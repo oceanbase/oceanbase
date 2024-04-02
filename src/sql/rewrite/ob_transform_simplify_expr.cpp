@@ -551,7 +551,7 @@ int ObTransformSimplifyExpr::replace_like_condition(ObDMLStmt *stmt, bool &trans
     }
     ObStmtExprGetter visitor(scopes);
     visitor.checker_ = &expr_checker;
-    if (OB_FAIL(stmt->iterate_stmt_expr(visitor))) {
+    if (FAILEDx(stmt->iterate_stmt_expr(visitor))) {
       LOG_WARN("get relation exprs failed", K(ret));
     }
     //collect like exprs which need to be replaced
@@ -1275,7 +1275,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
     }
 
     not_null_ctx.reset();
-    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))){
+    if (FAILEDx(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))){
       LOG_WARN("failed to generate not null context", K(ret));
     }
     if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
@@ -2309,12 +2309,18 @@ int ObTransformSimplifyExpr::remove_ora_decode(ObDMLStmt *stmt, bool &trans_happ
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 2> old_exprs;
   ObSEArray<ObRawExpr *, 2> new_exprs;
+  ObStmtExprGetter visitor;
+  visitor.remove_all();
+  visitor.add_scope(SCOPE_HAVING);
+  visitor.add_scope(SCOPE_WHERE);
+  visitor.add_scope(SCOPE_JOINED_TABLE);
+  visitor.add_scope(SCOPE_SEMI_INFO);
   ObSEArray<ObRawExpr *, 16> relation_exprs;
   trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(stmt));
-  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs, visitor))) {
     LOG_WARN("failed to get stmt's relation exprs");
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
@@ -2451,7 +2457,7 @@ int ObTransformSimplifyExpr::check_remove_ora_decode_valid(ObRawExpr *&expr,
                                                              decode_expr,
                                                              param_exprs))) {
       LOG_WARN("failed to build ora_decode expr", K(ret));
-    } else if (ObTransformUtils::calc_const_expr_result(decode_expr, ctx_, decode_obj, calc_happened)) {
+    } else if (OB_FAIL(ObTransformUtils::calc_const_expr_result(decode_expr, ctx_, decode_obj, calc_happened))) {
       LOG_WARN("failed to calc const expr result", K(ret), K(*decode_expr));
     } else if (!calc_happened) {
       is_valid = false;

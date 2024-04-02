@@ -26,7 +26,7 @@ int ObGeoInteriorPointVisitor::init(ObGeometry *geo)
   if (OB_FAIL(ObGeoTypeUtil::check_empty(geo, is_geo_empty_))) {
     LOG_WARN("fail to check geometry is empty", K(ret));
   } else {
-    ObGeoEvalCtx centroid_context(allocator_);
+    ObGeoEvalCtx centroid_context(mem_ctx_);
     ObGeometry *res_geo = nullptr;
     if (OB_FAIL(centroid_context.append_geo_arg(geo))) {
       LOG_WARN("build geo gis context failed", K(ret));
@@ -61,13 +61,29 @@ int ObGeoInteriorPointVisitor::assign_interior_point(double x, double y)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(interior_point_)) {
-    if (OB_ISNULL(interior_point_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_, allocator_))) {
+    if (OB_ISNULL(interior_point_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for collection", K(ret));
     }
   } else {
     interior_point_->x(x);
     interior_point_->y(y);
+  }
+
+  return ret;
+}
+
+int ObGeoInteriorPointVisitor::assign_interior_endpoint(double x, double y)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(interior_endpoint_)) {
+    if (OB_ISNULL(interior_endpoint_ = OB_NEWx(ObCartesianPoint, allocator_, x, y, srid_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory for collection", K(ret));
+    }
+  } else {
+    interior_endpoint_->x(x);
+    interior_endpoint_->y(y);
   }
 
   return ret;
@@ -135,12 +151,14 @@ int ObGeoInteriorPointVisitor::visit(ObIWkbGeomLineString *geo)
     ObWkbGeomLineString::const_iterator iter2 = line->begin();
     if (exist_centroid_) {
       if (line->size() <= 2) {
-        // interior point is first point
-        double dist = calculate_euclidean_distance(*centroid_pt_, *iter);
-        if (dist < min_dist_) {
-          min_dist_ = dist;
-          if (OB_FAIL(assign_interior_point(iter->get<0>(), iter->get<1>()))) {
-            LOG_WARN("fail to assign interior point", K(ret), K(iter->get<0>()), K(iter->get<1>()));
+        if (OB_ISNULL(interior_point_)) {
+          // interior point is first point
+          double dist = calculate_euclidean_distance(*centroid_pt_, *iter);
+          if (dist < min_endpoint_dist_) {
+            min_endpoint_dist_ = dist;
+            if (OB_FAIL(assign_interior_endpoint(iter->get<0>(), iter->get<1>()))) {
+              LOG_WARN("fail to assign interior point", K(ret), K(iter->get<0>()), K(iter->get<1>()));
+            }
           }
         }
       } else {
@@ -219,7 +237,7 @@ int ObGeoInteriorPointVisitor::inner_calculate_interior_y(
 int ObGeoInteriorPointVisitor::calculate_interior_y(ObIWkbGeomPolygon *geo, double &interior_y)
 {
   int ret = OB_SUCCESS;
-  ObGeoEvalCtx box_ctx(allocator_);
+  ObGeoEvalCtx box_ctx(mem_ctx_);
   ObGeogBox *gbox = nullptr;
   const ObWkbGeomPolygon *polygon = reinterpret_cast<const ObWkbGeomPolygon *>(geo->val());
   ObWkbGeomLinearRing::iterator iter = polygon->exterior_ring().begin();
@@ -405,7 +423,7 @@ int ObGeoInteriorPointVisitor::visit(ObIWkbGeomCollection *geo)
     if (OB_FAIL(ObGeoTypeUtil::get_coll_dimension(geo, dimension_))) {
       LOG_WARN("fail to calculate collection dimension_", K(ret));
     } else if (dimension_ == 0 || dimension_ == 1) {
-      ObGeoEvalCtx centroid_context(allocator_);
+      ObGeoEvalCtx centroid_context(mem_ctx_);
       ObGeometry *res_geo = nullptr;
       if (OB_FAIL(centroid_context.append_geo_arg(geo))) {
         LOG_WARN("build geo gis context failed", K(ret));
@@ -431,9 +449,14 @@ int ObGeoInteriorPointVisitor::get_interior_point(ObGeometry *&interior_point)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(interior_point_)) {
-    // return ObCartesianGeometrycollection EMPTY
-    if (OB_ISNULL(interior_point = OB_NEWx(ObCartesianGeometrycollection, allocator_, srid_, *allocator_))) {
-      LOG_WARN("fail to alloc memory for ObCartesianGeometrycollection", K(ret));
+    if (OB_ISNULL(interior_endpoint_)) {
+      // return ObCartesianGeometrycollection EMPTY
+      if (OB_ISNULL(interior_point = OB_NEWx(ObCartesianGeometrycollection, allocator_, srid_, *allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for ObCartesianGeometrycollection", K(ret));
+      }
+    } else {
+      interior_point = interior_endpoint_;
     }
   } else {
     interior_point = interior_point_;

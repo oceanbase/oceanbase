@@ -384,7 +384,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       dynamic_param_info_list_(allocator),
       tpl_sql_const_cons_(allocator),
       need_retry_add_plan_(true),
-      insert_batch_opt_info_(allocator)
+      insert_batch_opt_info_(allocator),
+      is_max_curr_limit_(false)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -457,7 +458,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_original_ps_mode_),
     K(new_raw_sql_),
     K(need_retry_add_plan_),
-    K(insert_batch_opt_info_)
+    K(insert_batch_opt_info_),
+    K(is_max_curr_limit_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -519,6 +521,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   // when schema version of cache node is old, whether remove this node and retry add cache obj.
   bool need_retry_add_plan_;
   ObInsertBatchOptInfo insert_batch_opt_info_;
+  bool is_max_curr_limit_;
 };
 
 struct ObPlanCacheStat

@@ -70,7 +70,6 @@ int ObLogHandler::init(const int64_t id,
                        ObLogApplyService *apply_service,
                        ObLogReplayService *replay_service,
                        ObRoleChangeService *rc_service,
-                       PalfHandle &palf_handle,
                        PalfEnv *palf_env,
                        PalfLocationCacheCb *lc_cb,
                        obrpc::ObLogServiceRpcProxy *rpc_proxy,
@@ -82,14 +81,13 @@ int ObLogHandler::init(const int64_t id,
   share::ObLSID ls_id(id);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (false == palf_handle.is_valid() ||
-             OB_ISNULL(palf_env) ||
+  } else if (OB_ISNULL(palf_env) ||
              OB_ISNULL(apply_service) ||
              OB_ISNULL(lc_cb) ||
              OB_ISNULL(rpc_proxy) ||
              OB_ISNULL(alloc_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arguments", K(palf_handle), KP(palf_env), KP(lc_cb), KP(rpc_proxy), KP(alloc_mgr));
+    CLOG_LOG(WARN, "invalid arguments", K(ls_id), KP(palf_env), KP(lc_cb), KP(rpc_proxy), KP(alloc_mgr));
   } else if (OB_FAIL(apply_service->get_apply_status(ls_id, guard))) {
     CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
   } else if (NULL == (apply_status_ = guard.get_apply_status())) {
@@ -99,6 +97,8 @@ int ObLogHandler::init(const int64_t id,
   } else if (OB_FAIL(compressor_wrapper_.init(id, alloc_mgr))) {
     CLOG_LOG(WARN, "failed to init compressor_wrapper_", K(id));
 #endif
+  } else if (OB_FAIL(palf_env->open(id, palf_handle_))) {
+    CLOG_LOG(WARN, "open palf failed", K(ret), K(id));
   } else {
     get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
@@ -109,7 +109,6 @@ int ObLogHandler::init(const int64_t id,
     append_cost_stat_.set_extra_info(EXTRA_INFOS);
     id_ = id;
     self_ = self;
-    palf_handle_ = palf_handle;
     palf_env_ = palf_env;
     role_ = FOLLOWER;
     lc_cb_ = lc_cb;
@@ -117,7 +116,10 @@ int ObLogHandler::init(const int64_t id,
     is_in_stop_state_ = false;
     is_offline_ = false;
     is_inited_ = true;
-    FLOG_INFO("ObLogHandler init success", K(id), K(palf_handle));
+    FLOG_INFO("ObLogHandler init success", K(id));
+  }
+  if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
+    destroy();
   }
   return ret;
 }
@@ -197,29 +199,28 @@ int ObLogHandler::safe_to_destroy(bool &is_safe_destroy)
 void ObLogHandler::destroy()
 {
   WLockGuard guard(lock_);
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    is_inited_ = false;
-    is_offline_ = false;
-    is_in_stop_state_ = true;
-    common::TCWLockGuard deps_guard(deps_lock_);
+  is_inited_ = false;
+  is_offline_ = false;
+  is_in_stop_state_ = true;
+  common::TCWLockGuard deps_guard(deps_lock_);
+  if (NULL != apply_service_ && NULL != apply_status_) {
     apply_service_->revert_apply_status(apply_status_);
-    apply_status_ = NULL;
-    apply_service_ = NULL;
-    replay_service_ = NULL;
-    if (true == palf_handle_.is_valid()) {
-      palf_env_->close(palf_handle_);
-    }
-    rc_service_ = NULL;
-    lc_cb_ = NULL;
-    rpc_proxy_ = NULL;
-    palf_env_ = NULL;
-    id_ = -1;
-    get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
+  }
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   compressor_wrapper_.reset();
 #endif
+  apply_status_ = NULL;
+  apply_service_ = NULL;
+  replay_service_ = NULL;
+  if (NULL != palf_env_ && true == palf_handle_.is_valid()) {
+    palf_env_->close(palf_handle_);
   }
+  rc_service_ = NULL;
+  lc_cb_ = NULL;
+  rpc_proxy_ = NULL;
+  palf_env_ = NULL;
+  id_ = -1;
+  get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObLogHandler::append(const void *buffer,
@@ -1403,7 +1404,7 @@ int ObLogHandler::append_(const void *buffer,
         ret = OB_NOT_RUNNING;
       } else if (LEADER != ATOMIC_LOAD(&role_)) {
         ret = OB_NOT_MASTER;
-      } else if (OB_FAIL(palf_handle_.append(opts, buffer, nbytes, ref_scn, lsn, scn))) {
+      } else if (OB_FAIL(palf_handle_.append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
         if (REACH_TIME_INTERVAL(1*1000*1000)) {
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
         }
@@ -1412,7 +1413,13 @@ int ObLogHandler::append_(const void *buffer,
         cb->__set_lsn(lsn);
         cb->__set_scn(scn);
         ret = apply_status_->push_append_cb(cb);
-        CLOG_LOG(TRACE, "palf_handle_ push_append_cb success", K(lsn), K(scn), K(ret), K(id_));
+        CLOG_LOG(TRACE, "palf_handle_ push_append_cb success", K(lsn), K(scn), K(log_compressed),
+                 K(nbytes), K(final_nbytes), K(id_));
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+        //add stat event
+        EVENT_ADD(LOG_STORAGE_COMPRESS_ORIGINAL_SIZE, nbytes);
+        EVENT_ADD(LOG_STORAGE_COMPRESS_COMPRESSED_SIZE, final_nbytes);
+#endif
       }
     } while (0);
     // check if need wait and retry append

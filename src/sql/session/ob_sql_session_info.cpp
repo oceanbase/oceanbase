@@ -64,6 +64,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::share;
 using namespace oceanbase::pl;
 using namespace oceanbase::obmysql;
+using namespace oceanbase::observer;
 
 static const int64_t DEFAULT_XA_END_TIMEOUT_SECONDS = 60;/*60s*/
 
@@ -256,6 +257,12 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
       is_inited_ = true;
       refresh_temp_tables_sess_active_time();
     }
+  }
+  if (OB_FAIL(ret)) {
+    package_state_map_.clear();
+    sequence_currval_map_.clear();
+    dblink_sequence_id_map_.clear();
+    contexts_map_.clear();
   }
   return ret;
 }
@@ -495,6 +502,17 @@ bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
   return bret;
 }
 
+int64_t ObSQLSessionInfo::get_inlist_rewrite_threshold() const
+{
+  int64_t thredhold = INT64_MAX;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    thredhold = tenant_config->_inlist_rewrite_threshold;
+  }
+  return thredhold;
+}
+
 int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
 {
   int ret = OB_SUCCESS;
@@ -516,6 +534,18 @@ bool ObSQLSessionInfo::is_pl_prepare_stage() const
   return bret;
 }
 
+int ObSQLSessionInfo::is_preserve_order_for_pagination_enabled(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_preserve_order_for_pagination;
+  }
+  return ret;
+}
+
 bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
 {
   bool bret = false;
@@ -523,6 +553,17 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
     bret = tenant_config->_optimizer_skip_scan_enabled;
+  }
+  return bret;
+}
+
+bool ObSQLSessionInfo::is_enable_new_query_range() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_new_query_range_extraction;
   }
   return bret;
 }
@@ -575,6 +616,18 @@ bool ObSQLSessionInfo::is_sqlstat_enabled() const
       bret = tenant_config->_ob_sqlstat_enable;
       // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
     }
+  }
+  return bret;
+}
+
+//to control subplan filter and multiple level join group rescan
+bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_spf_batch_rescan;
   }
   return bret;
 }
@@ -643,11 +696,10 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     }
 
     if (OB_SUCC(ret) && NULL != piece_cache_) {
-      if (OB_FAIL((static_cast<observer::ObPieceCache*>(piece_cache_))
-                      ->close_all(*this))) {
+      if (OB_FAIL(piece_cache_->close_all(*this))) {
         LOG_WARN("failed to close all piece", K(ret));
       }
-      static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
+      piece_cache_->~ObPieceCache();
       get_session_allocator().free(piece_cache_);
       piece_cache_ = NULL;
     }
@@ -903,12 +955,12 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
       if (OB_ISNULL(common_rpc_proxy)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rpc proxy is null", K(ret));
-      } else if (is_oracle_mode() && OB_FAIL(delete_from_oracle_temp_tables(drop_table_arg))) {
+      } else if (OB_FAIL(delete_from_oracle_temp_tables(drop_table_arg))) {
         LOG_WARN("failed to delete from oracle temporary table", K(drop_table_arg), K(ret));
-      } else if (!is_oracle_mode() && OB_FALSE_IT(drop_table_arg.compat_mode_ = lib::Worker::CompatMode::MYSQL)) {
+      }/* else if (!is_oracle_mode() && OB_FALSE_IT(drop_table_arg.compat_mode_ = lib::Worker::CompatMode::MYSQL)) {
       } else if (!is_oracle_mode() && OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg, res))) {
         LOG_WARN("failed to drop temporary table", K(drop_table_arg), K(ret));
-      } else {
+      }*/ else {
         LOG_INFO("temporary tables dropped due to connection disconnected", K(is_sess_disconn), K(drop_table_arg));
       }
     }
@@ -1044,7 +1096,7 @@ void ObSQLSessionInfo::update_show_warnings_buf()
 void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
 {
   session_priv.tenant_id_ = get_priv_tenant_id();
-  session_priv.user_id_ = get_user_id();
+  session_priv.user_id_ = get_priv_user_id();
   session_priv.user_name_ = get_user_name();
   session_priv.host_name_ = get_host_name();
   session_priv.db_ = get_database_name();
@@ -1902,6 +1954,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
 
     if (OB_FAIL(get_database_id(audit_record_.db_id_))) {
       LOG_WARN("fail to get database id", K(ret));
+    } else if (audit_record_.db_id_ == OB_INVALID_ID) {
+      audit_record_.db_id_ = OB_MOCK_DEFAULT_DATABASE_ID;
     }
   } else if (EXECUTE_REMOTE == mode || EXECUTE_DIST == mode) {
     audit_record_.tenant_name_ = NULL;
@@ -2271,6 +2325,7 @@ int ObSQLSessionInfo::replace_user_variable(
     // we should only reset_all_package, do not need set_user_variable
     OZ (reset_all_package_state_by_dbms_session(false));
   } else if (is_package_variable && OB_NOT_NULL(get_pl_engine())) {
+    OZ (ObBasicSessionInfo::replace_user_variable(name, value, false));
     OZ (set_package_variable(ctx, name, value.value_, true));
   } else {
     OZ (ObBasicSessionInfo::replace_user_variable(name, value));
@@ -2878,15 +2933,14 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return ret;
 }
 
-void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   if (NULL == piece_cache_ && need_init) {
-    void *buf = get_session_allocator().alloc(sizeof(observer::ObPieceCache));
+    void *buf = get_session_allocator().alloc(sizeof(ObPieceCache));
     if (NULL != buf) {
-      MEMSET(buf, 0, sizeof(observer::ObPieceCache));
-      piece_cache_ = new (buf) observer::ObPieceCache();
-      if (OB_SUCCESS != (static_cast<observer::ObPieceCache*>(piece_cache_))->init(
-                            get_effective_tenant_id())) {
-        static_cast<observer::ObPieceCache*>(piece_cache_)->~ObPieceCache();
+      MEMSET(buf, 0, sizeof(ObPieceCache));
+      piece_cache_ = new (buf) ObPieceCache();
+      if (OB_SUCCESS != piece_cache_->init(get_effective_tenant_id())) {
+        piece_cache_->~ObPieceCache();
         get_session_allocator().free(piece_cache_);
         piece_cache_ = NULL;
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "init piece cache fail");
@@ -3007,7 +3061,7 @@ bool ObSQLSessionInfo::can_txn_free_route() const
 int ObSQLSessionInfo::calc_txn_free_route()
 {
   int ret = OB_SUCCESS;
-  if (txn_free_route_ctx_.is_support_proxy() && !txn_free_route_ctx_.has_calculated()) {
+  if (!txn_free_route_ctx_.has_calculated()) {
     OZ (ObSqlTransControl::calc_txn_free_route(*this, txn_free_route_ctx_));
     if (OB_SUCC(ret)) {
       txn_static_info_encoder_.is_changed_ = txn_free_route_ctx_.is_static_changed();
@@ -3042,8 +3096,7 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
   int ret = common::OB_SUCCESS;
   if (OB_LIKELY(NULL == mem_context_)) {
     lib::ContextParam param;
-    param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
-      .set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION,
+    param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION,
                      common::ObCtxIds::WORK_AREA);
     if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
@@ -3248,10 +3301,13 @@ int64_t ObErrorSyncSysVarEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& ses
   return size;
 }
 
-int ObErrorSyncSysVarEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                          const char* last_sess_buf, int64_t last_sess_length)
+int ObErrorSyncSysVarEncoder::compare_sess_info(ObSQLSessionInfo &sess,
+                                                const char *current_sess_buf,
+                                                int64_t current_sess_length,
+                                                const char *last_sess_buf, int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sess);
   if (current_sess_length != last_sess_length) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
@@ -3420,10 +3476,12 @@ int64_t ObSysVarEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   return size;
 }
 
-int ObSysVarEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                          const char* last_sess_buf, int64_t last_sess_length)
+int ObSysVarEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                       int64_t current_sess_length, const char *last_sess_buf,
+                                       int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sess);
   if (current_sess_length != last_sess_length) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
@@ -3576,10 +3634,11 @@ int64_t ObAppInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   return len;
 }
 
-int ObAppInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+int ObAppInfoEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length,
                                           const char* last_sess_buf, int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sess);
   if (current_sess_length != last_sess_length) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
@@ -3740,10 +3799,12 @@ int64_t ObClientIdInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   return len;
 }
 
-int ObClientIdInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                            const char* last_sess_buf, int64_t last_sess_length)
+int ObClientIdInfoEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                             int64_t current_sess_length, const char *last_sess_buf,
+                                             int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sess);
   if (current_sess_length != last_sess_length) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
@@ -3872,10 +3933,12 @@ int64_t ObAppCtxInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   return len;
 }
 
-int ObAppCtxInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                           const char* last_sess_buf, int64_t last_sess_length)
+int ObAppCtxInfoEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                           int64_t current_sess_length, const char *last_sess_buf,
+                                           int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sess);
   if (current_sess_length != last_sess_length) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
@@ -4065,9 +4128,10 @@ int64_t ObSequenceCurrvalEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& ses
   return len;
 }
 
-int ObSequenceCurrvalEncoder::compare_sess_info(const char* current_sess_buf,
+int ObSequenceCurrvalEncoder::compare_sess_info(ObSQLSessionInfo &sess,
+                                                const char *current_sess_buf,
                                                 int64_t current_sess_length,
-                                                const char* last_sess_buf,
+                                                const char *last_sess_buf,
                                                 int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
@@ -4078,9 +4142,18 @@ int ObSequenceCurrvalEncoder::compare_sess_info(const char* current_sess_buf,
   } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
     LOG_TRACE("success to compare session info", K(ret));
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to compare buf session info", K(ret),
-      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+    bool found_mismatch = false;
+    if (OB_FAIL(cmp_display_sess_info_helper<false>(sess, current_sess_buf, current_sess_length,
+                                                   last_sess_buf, last_sess_length,
+                                                   found_mismatch))) {
+      LOG_WARN("cmp_display_sess_info_helper fail", K(ret));
+    } else if (!found_mismatch) {
+      LOG_TRACE("success to compare session info", K(ret));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to compare buf session info", K(ret),
+        KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+    }
   }
   return ret;
 }
@@ -4092,6 +4165,17 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
                                                 int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
+  bool found_mismatch = false;
+  return cmp_display_sess_info_helper<true>(sess, current_sess_buf, current_sess_length,
+                                             last_sess_buf, last_sess_length, found_mismatch);
+}
+
+template <bool display_seq_info>
+int ObSequenceCurrvalEncoder::cmp_display_sess_info_helper(
+  ObSQLSessionInfo &sess, const char *current_sess_buf, int64_t current_sess_length,
+  const char *last_sess_buf, int64_t last_sess_length, bool &found_mismatch)
+{
+  int ret = OB_SUCCESS;
   UNUSED(current_sess_buf);
   UNUSED(current_sess_length);
   const char *buf = last_sess_buf;
@@ -4099,13 +4183,14 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
   int64_t data_len = last_sess_length;
   int64_t map_size = 0;
   int64_t current_id = 0;
-  bool found_mismatch = false;
   OB_UNIS_DECODE(map_size);
   ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
   if (map_size != map.size()) {
-    share::ObTaskController::get().allow_next_syslog();
-    LOG_WARN("Sequence currval map size mismatch", K(ret), "current_map_size", map.size(),
-             "last_map_size", map_size);
+    if (display_seq_info) {
+      share::ObTaskController::get().allow_next_syslog();
+      LOG_WARN("Sequence currval map size mismatch", K(ret), "current_map_size", map.size(),
+              "last_map_size", map_size);
+    }
   } else {
     uint64_t seq_id = 0;
     ObSequenceValue seq_val_decode;
@@ -4117,17 +4202,21 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
         if (OB_FAIL(map.get_refactored(seq_id, seq_val_origin))) {
           if (ret == OB_HASH_NOT_EXIST) {
             found_mismatch = true;
-            share::ObTaskController::get().allow_next_syslog();
-            LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id));
+            if (display_seq_info) {
+              share::ObTaskController::get().allow_next_syslog();
+              LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id));
+            }
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("Fail to get refactored from map", K(ret), K(seq_id));
           }
         } else if (seq_val_decode.val() != seq_val_origin.val()) {
           found_mismatch = true;
-          share::ObTaskController::get().allow_next_syslog();
-          LOG_WARN("Sequence currval mismatch", K(ret), K(i), K(map_size), K(seq_id),
-                   "current_seq_val", seq_val_origin, "last_seq_val", seq_val_decode);
+          if (display_seq_info) {
+            share::ObTaskController::get().allow_next_syslog();
+            LOG_WARN("Sequence currval mismatch", K(ret), K(i), K(map_size), K(seq_id),
+                    "current_seq_val", seq_val_origin, "last_seq_val", seq_val_decode);
+          }
         }
       }
     }
@@ -4136,9 +4225,11 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
     OB_UNIS_DECODE(current_id);
     if (current_id != sess.get_current_dblink_sequence_id()) {
       found_mismatch = true;
-      share::ObTaskController::get().allow_next_syslog();
-            LOG_WARN("current dblink sequence id mismatch",
-                    "current_seq_id", current_id, "last_seq_id", sess.get_current_dblink_sequence_id());
+      if (display_seq_info) {
+        share::ObTaskController::get().allow_next_syslog();
+        LOG_WARN("current dblink sequence id mismatch", "current_seq_id", current_id, "last_seq_id",
+                sess.get_current_dblink_sequence_id());
+      }
     }
     OB_UNIS_DECODE(map_size);
     ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
@@ -4158,23 +4249,29 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
           if (OB_FAIL(id_map.get_refactored(key, seq_id_origin))) {
             if (ret == OB_HASH_NOT_EXIST) {
               found_mismatch = true;
-              share::ObTaskController::get().allow_next_syslog();
-              LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id_decode));
+              if (display_seq_info) {
+                share::ObTaskController::get().allow_next_syslog();
+                LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id_decode));
+              }
               ret = OB_SUCCESS;
             } else {
               LOG_WARN("Fail to get refactored from map", K(ret), K(seq_id_decode));
             }
           } else if (seq_id_decode != seq_id_origin) {
             found_mismatch = true;
-            share::ObTaskController::get().allow_next_syslog();
-            LOG_WARN("Sequence id mismatch", K(ret), K(i), K(map_size),
-                    "current_seq_id", seq_id_decode, "last_seq_id", seq_id_origin);
+            if (display_seq_info) {
+              share::ObTaskController::get().allow_next_syslog();
+              LOG_WARN("Sequence id mismatch", K(ret), K(i), K(map_size),
+                      "current_seq_id", seq_id_decode, "last_seq_id", seq_id_origin);
+            }
           }
         }
       }
       if (OB_SUCC(ret) && !found_mismatch) {
-        share::ObTaskController::get().allow_next_syslog();
-        LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
+        if (display_seq_info) {
+          share::ObTaskController::get().allow_next_syslog();
+          LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
+        }
       }
     }
   }
@@ -4351,8 +4448,9 @@ int64_t ObControlInfoEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
   return len;
 }
 
-int ObControlInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                            const char* last_sess_buf, int64_t last_sess_length)
+int ObControlInfoEncoder::compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                            int64_t current_sess_length, const char *last_sess_buf,
+                                            int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
   // todo The current control info does not meet the synchronization mechanism and cannot be verified
@@ -4478,8 +4576,9 @@ int64_t CLS::get_fetch_sess_info_size(ObSQLSessionInfo &sess)         \
 {                                                                       \
   return ObSqlTransControl::get_fetch_txn_##func##_state_size(sess); \
 }                                                                       \
-int CLS::compare_sess_info(const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) \
+int CLS::compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) \
 {                                                                       \
+  UNUSED(sess);                                                         \
   return ObSqlTransControl::cmp_txn_##func##_state(current_sess_buf, current_sess_length, last_sess_buf, last_sess_length); \
 }                                                                       \
 int CLS::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) \

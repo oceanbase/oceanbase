@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "share/object/ob_obj_cast_util.h"
@@ -63,7 +62,7 @@ int ObExprPrivSTClipByBox2D::calc_result_type2(ObExprResType &type, ObExprResTyp
   return ret;
 }
 
-int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
+int ObExprPrivSTClipByBox2D::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator,
     bool &is_null_res, ObGeometry *&geo1, ObGeometry *&geo2, const ObSrsItem *&srs1,
     const ObSrsItem *&srs2)
 {
@@ -77,26 +76,26 @@ int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCt
 
   if (ob_is_null(type1) || ob_is_null(type2)) {
     is_null_res = true;
-  } else if (OB_FAIL(arg1->eval(ctx, datum1)) || OB_FAIL(arg2->eval(ctx, datum2))) {
+  } else if (OB_FAIL(allocator.eval_arg(arg1, ctx, datum1)) || OB_FAIL(allocator.eval_arg(arg2, ctx, datum2))) {
     LOG_WARN("fail to eval args", K(ret));
   } else if (datum1->is_null() || datum2->is_null()) {
     is_null_res = true;
   } else {
     ObString wkb1 = datum1->get_string();
     ObString wkb2 = datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
 
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
             allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb1))) {
       LOG_WARN(
           "fail to read real string data", K(ret), K(arg1->obj_meta_.has_lob_header()), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(allocator,
                    *datum2,
                    arg2->datum_meta_,
                    arg2->obj_meta_.has_lob_header(),
                    wkb2))) {
       LOG_WARN(
           "fail to read real string data", K(ret), K(arg2->obj_meta_.has_lob_header()), K(wkb2));
+    } else if (FALSE_IT(allocator.set_baseline_size(wkb1.length() + wkb2.length()))) {
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
                    ctx, srs_guard, wkb1, srs1, true, N_PRIV_ST_CLIPBYBOX2D))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb1));
@@ -104,11 +103,21 @@ int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCt
                    ctx, srs_guard, wkb2, srs2, true, N_PRIV_ST_CLIPBYBOX2D))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb2));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(
-                   allocator, wkb1, geo1, nullptr, N_PRIV_ST_CLIPBYBOX2D))) {  // ObIWkbGeom
+                   allocator, wkb1, geo1, nullptr, N_PRIV_ST_CLIPBYBOX2D, GEO_DEFAULT | GEO_NOT_COPY_WKB))) {  // ObIWkbGeom
       LOG_WARN("fail to build geometry from wkb", K(ret), K(wkb1));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(
-                   allocator, wkb2, geo2, nullptr, N_PRIV_ST_CLIPBYBOX2D))) {  // ObIWkbGeom
+                   allocator, wkb2, geo2, nullptr, N_PRIV_ST_CLIPBYBOX2D, GEO_DEFAULT | GEO_NOT_COPY_WKB))) {  // ObIWkbGeom
       LOG_WARN("fail to build geometry from wkb", K(ret), K(wkb2));
+    } else if (OB_NOT_NULL(srs1) && srs1->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
+    } else if (OB_NOT_NULL(srs2) && srs2->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo2->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs2));
     }
   }
   return ret;
@@ -127,13 +136,17 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
   const ObSrsItem *srs1 = nullptr;
   const ObSrsItem *srs2 = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_CLIPBYBOX2D);
   ObString res_wkb;
+  omt::ObSrsCacheGuard srs_guard;
 
-  if (OB_FAIL(process_input_geometry(expr, ctx, temp_allocator, is_null_res, geo1, geo2, srs1, srs2))) {
+  if (OB_FAIL(process_input_geometry(srs_guard, expr, ctx, temp_allocator, is_null_res, geo1, geo2, srs1, srs2))) {
     LOG_WARN("fail to process input geometry", K(ret), K(geo1), K(geo2), K(is_null_res));
-  } else if (is_null_res) {
-    // do nothing
+  }
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+  if (OB_FAIL(ret) || is_null_res) {
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
              || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
     LOG_WARN("check geo empty failed", K(ret));
@@ -142,15 +155,21 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
   } else if (is_geo1_empty) {
     // return empty when first geo argument is empty
     res_geo = geo1;
+  } else if (OB_FAIL(guard.init())) {
+    LOG_WARN("fail to init geo allocator guard", K(ret));
+  } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("fail to get mem ctx", K(ret));
   } else {
-    ObGeoEvalCtx box_ctx(&temp_allocator);
+    ObGeoEvalCtx box_ctx(*mem_ctx);
+    box_ctx.set_is_called_in_pg_expr(true);
     ObGeogBox *gbox = nullptr;
     // calculate 2d box of geo2, then convert the box to a rectangle geo
     if (OB_FAIL(box_ctx.append_geo_arg(geo2))) {
       LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, gbox))) {
       LOG_WARN("failed to do box functor failed", K(ret));
-    } else if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*geo1, temp_allocator, *gbox, res_geo))) {
+    } else if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*geo1, *mem_ctx, *gbox, res_geo, true))) {
       LOG_WARN("fail to do clip by box", K(ret));
     } else if (OB_ISNULL(res_geo)) {
       is_null_res = true;
@@ -167,6 +186,9 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
         res.set_string(res_wkb);
       }
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }

@@ -559,7 +559,6 @@ struct ObPlanStat
   uint64_t  db_id_;
   common::ObString constructed_sql_;
   common::ObString sql_id_;
-  common::ObString format_sql_id_;
   ObEvolutionStat evolution_stat_; //baseline相关统计信息
   //******** for spm end ******
   // ***** for acs
@@ -661,7 +660,6 @@ struct ObPlanStat
       db_id_(common::OB_INVALID_ID),
       constructed_sql_(),
       sql_id_(),
-      format_sql_id_(),
       is_bind_sensitive_(false),
       is_bind_aware_(false),
       plan_sel_info_str_len_(0),
@@ -859,6 +857,11 @@ struct ObPlanStat
         fuse_row_cache_miss_cnt_ = 0;
       }
     }
+  }
+
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
   }
 
   /* XXX: support printing maxium 30 class members.

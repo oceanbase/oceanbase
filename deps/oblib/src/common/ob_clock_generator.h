@@ -45,7 +45,6 @@ public:
   static void destroy();
   static int64_t getClock();
   static int64_t getRealClock();
-  static int64_t getCurrentTime();
   static void msleep(const int64_t ms);
   static void usleep(const int64_t us);
   static void try_advance_cur_ts(const int64_t cur_ts);
@@ -80,25 +79,6 @@ inline int64_t ObClockGenerator::getClock()
 inline int64_t ObClockGenerator::getRealClock()
 {
   return clock_generator_.get_us();
-}
-
-inline int64_t ObClockGenerator::getCurrentTime()
-{
-  int64_t ret_val = ATOMIC_LOAD(&clock_generator_.last_used_time_);
-  while (true) {
-    const int64_t last = ATOMIC_LOAD(&clock_generator_.last_used_time_);
-    const int64_t now = ObTimeUtility::current_time();
-    if (now < last) {
-      ret_val = last;
-      break;
-    } else if (ATOMIC_BCAS(&clock_generator_.last_used_time_, last, now)) {
-      ret_val = now;
-      break;
-    } else {
-      PAUSE();
-    }
-  }
-  return ret_val;
 }
 
 inline void ObClockGenerator::msleep(const int64_t ms)

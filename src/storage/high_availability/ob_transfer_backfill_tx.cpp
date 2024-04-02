@@ -104,14 +104,18 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
+    bool is_committed = false;
+    mds::MdsWriter writer;// will be removed later
+    mds::TwoPhaseCommitState trans_stat;// will be removed later
+    share::SCN trans_version;// will be removed later
     ObTabletHAStatus src_tablet_ha_status;
     bool last_is_committed = false;
     while (OB_SUCC(ret)) {
       tablet_handle.reset();
       user_data.reset();
+      is_committed = false;
       tablet = nullptr;
       bool is_ready = false;
-      bool is_committed = false;
       ObTabletBackfillInfo tablet_info;
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
@@ -125,17 +129,23 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
         //do nothing
-      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+      } else if (OB_FAIL(tablet->get_latest(user_data,
+          writer, trans_stat, trans_version))) {
         if (OB_EMPTY_RESULT == ret) {
           LOG_INFO("tablet_status does not exist", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
           ret = OB_SUCCESS;
         } else {
          LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(user_data));
         }
+      } else if (FALSE_IT(is_committed = (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat))) {
       } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ && !in_migration) {
         // do nothing
       } else if (!tablet->get_tablet_meta().has_transfer_table()) {
         // do nothing
+      } else if (!tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+        LOG_INFO("[TRANSFER_BACKFILL]skip tablet which data status is incomplete",
+            "tablet_id", tablet->get_tablet_meta().tablet_id_,
+            "ha_status", tablet->get_tablet_meta().ha_status_);
       } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
         // Restore status is FULL when the tablet is created by transfer in. It can
         // turn into one of the following status.
@@ -184,7 +194,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                               "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
         if (OB_FAIL(tablet_info.init(tablet->get_tablet_meta().tablet_id_, is_committed))) {
-          LOG_WARN("failed to init ObTabletBackfillInfo", K(ret), "backfilled tablet id", tablet->get_tablet_meta().tablet_id_, K(is_committed));
+          LOG_WARN("failed to init tablet info", K(ret));
         } else if (OB_FAIL(param.tablet_infos_.push_back(tablet_info))) {
           LOG_WARN("failed to push tablet id into array", K(ret), KPC(tablet));
         } else if (src_ls_id.is_valid() && transfer_scn.is_valid()) {
@@ -327,21 +337,20 @@ int ObTransferWorkerMgr::process()
   int ret = OB_SUCCESS;
   bool is_exist = false;
   ObTransferBackfillTXParam param;
+  bool allow_transfer_backfill = true;
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_CHECK_TRANSFER_TASK_EXSIT) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_CHECK_TRANSFER_TASK_EXSIT", K(ret));
-        is_exist = true;
-        ret = OB_SUCCESS;
-      }
-    }
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    allow_transfer_backfill = tenant_config->allow_transfer_backfill;
+  }
 #endif
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));
+  } else if (!allow_transfer_backfill) {
+    LOG_INFO("do not allow transfer backfill, need check errsim config", K(allow_transfer_backfill));
   } else if (task_id_.is_valid() && OB_FAIL(check_task_exist_(task_id_, is_exist))) {
     LOG_WARN("failed to check task exist", K(ret), "ls_id", dest_ls_->get_ls_id(), K(*this));
   } else if (is_exist) {

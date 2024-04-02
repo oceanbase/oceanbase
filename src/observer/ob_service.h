@@ -129,6 +129,7 @@ public:
   int switch_schema(const obrpc::ObSwitchSchemaArg &arg, obrpc::ObSwitchSchemaResult &result);
   int calc_column_checksum_request(const obrpc::ObCalcColumnChecksumRequestArg &arg, obrpc::ObCalcColumnChecksumRequestRes &res);
   int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, obrpc::ObDDLBuildSingleReplicaRequestResult &res);
+  int check_and_cancel_ddl_complement_data_dag(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist);
   int stop_partition_write(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int check_partition_log(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int get_wrs_info(const obrpc::ObGetWRSArg &arg, obrpc::ObGetWRSResult &result);
@@ -198,6 +199,10 @@ public:
   int get_server_resource_info(const obrpc::ObGetServerResourceInfoArg &arg, obrpc::ObGetServerResourceInfoResult &result);
   int get_server_resource_info(share::ObServerResourceInfo &resource_info);
   static int get_build_version(share::ObServerInfoInTable::ObBuildVersion &build_version);
+  // log stream replica task related
+  static int do_remove_ls_paxos_replica(const obrpc::ObLSDropPaxosReplicaArg &arg);
+  static int do_remove_ls_nonpaxos_replica(const obrpc::ObLSDropNonPaxosReplicaArg &arg);
+  static int do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg);
   // ObRpcIsEmptyServerP @RS bootstrap
   int is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   // ObRpcCheckDeploymentModeP
@@ -260,6 +265,7 @@ public:
       share::ObHBResponse &hb_response);
   int ob_admin_unlock_member_list(
       const obrpc::ObAdminUnlockMemberListOpArg &arg);
+  int check_server_empty(bool &server_empty);
 
 private:
   int get_role_from_palf_(
@@ -276,7 +282,6 @@ private:
       const bool need_checksum);
 
   int register_self();
-  int check_server_empty(bool &server_empty);
 
   int handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);

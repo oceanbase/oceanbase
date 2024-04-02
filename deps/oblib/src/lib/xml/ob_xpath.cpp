@@ -2157,6 +2157,41 @@ ObIMulModeBase* ObPathExprIter::get_cur_res_parent()
   return path_ctx_.ancestor_record_.size() > 0 ? path_ctx_.ancestor_record_.top() : nullptr;
 }
 
+int ObPathExprIter::get_node_exists(bool &is_exists)
+{
+  INIT_SUCC(ret);
+  is_exists = false;
+  if (!is_inited_ || OB_ISNULL(path_node_)) {
+    ret = OB_INIT_FAIL;
+    LOG_WARN("should be inited", K(ret));
+  } else {
+    ObSeekResult path_res;
+    while (OB_SUCC(ret) && !is_exists) {
+      if (OB_FAIL(path_node_->eval_node(path_ctx_, path_res))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to seek", K(ret));
+        }
+      } else if (path_res.is_scalar_) {
+        if (OB_ISNULL(path_res.result_.scalar_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("xpath result scalar is null", K(ret));
+        } else if (path_res.result_.scalar_->node_type_.get_arg_type() == ObArgType::PN_BOOLEAN
+                    && !path_res.result_.scalar_->arg_.boolean_) {
+          // do nothing, keep seeking
+        } else {
+          is_exists = true;
+        }
+      } else {
+        is_exists = true;
+      }
+    }  // end while
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObPathExprIter::get_next_node(ObIMulModeBase*& res)
 {
   INIT_SUCC(ret);
@@ -2404,8 +2439,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
               ObString input_str("");
               if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &input_str, content))) {
                 LOG_WARN("alloc node content info failed", K(ret));
-              } else {
-                node_vec.push_back(content);
+              } else if (OB_FAIL(node_vec.push_back(content))){
+                LOG_WARN("failed to push back content.", K(ret));
               }
             }
           }
@@ -2420,8 +2455,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
                                                               arg_node->node_type_.get_arg_type(),
                                                               content))) {
         LOG_WARN("alloc node content info failed", K(ret));
-      } else {
-        node_vec.push_back(content);
+      } else if (OB_FAIL(node_vec.push_back(content))) {
+        LOG_WARN("failed to push back content.", K(ret));
       }
     } else {
       for (int i = 0; OB_SUCC(ret) && i < seek_vector.size(); i++) {
@@ -2442,8 +2477,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
             LOG_WARN("get value failed", K(ret));
           } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text_str, content))) {
             LOG_WARN("alloc node content info failed", K(ret), K(text_str));
-          } else {
-            node_vec.push_back(content);
+          } else if (OB_FAIL(node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
 		    } else if (OB_FAIL(ObXmlUtil::get_array_from_mode_base(base, node_array))) { // get children
 			    LOG_WARN("get child array failed", K(ret));
@@ -2451,8 +2486,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
           ObString text("");
           if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text, content))) {
             LOG_WARN("alloc node content info", K(ret));
-          } else {
-            node_vec.push_back(content);
+          } else if OB_FAIL((node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
         } else {
           ObString text;
@@ -2465,8 +2500,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
             LOG_WARN("dfs get text failed", K(ret));
           } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &text, content))) {
             LOG_WARN("alloc node content info failed", K(ret), K(text));
-          } else {
-            node_vec.push_back(content);
+          } else if (OB_FAIL(node_vec.push_back(content))) {
+            LOG_WARN("failed to push back content.", K(ret));
           }
         }
       }
@@ -2481,8 +2516,8 @@ int ObPathUtil::alloc_node_set_vector(ObPathCtx &ctx, ObPathNode *path_node, ObA
       LOG_WARN("scalar get null", K(ret));
     } else if (OB_FAIL(ObPathUtil::alloc_node_content_info(ctx.alloc_, &arg_node->arg_, node_type, content))) {
       LOG_WARN("alloc node content info failed", K(ret), K(node_type));
-    } else {
-      node_vec.push_back(content);
+    } else if (OB_FAIL(node_vec.push_back(content))) {
+      LOG_WARN("failed to push back content.", K(ret));
     }
   }
   return ret;
@@ -2945,11 +2980,15 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to eval right");
     } else {
-      ret = init_right_without_filter(ctx, res);
+      if (OB_NOT_NULL(right_)) {
+        right_->is_seeked_ = false;
+      }
+      ret = init_right_with_filter(ctx, res);
     }
   }
 
-  if (OB_SUCC(ret)) { // do nothing
+  if (OB_SUCC(ret)) {
+    is_seeked_ = true;
   } else if (ret == OB_ITER_END) {
     is_seeked_ = false; // reset
     left_->is_seeked_ = false;
@@ -3194,56 +3233,66 @@ int ObPathUtil::release_seek_vector(ObPathCtx &ctx, ObSeekVector& seek_vector)
 int ObPathUtil::collect_ancestor_ns(ObIMulModeBase* extend,
                                     ObStack<ObIMulModeBase*> &ancestor_record,
                                     ObXmlElement::NsMap &ns_map,
-                                    ObArray<ObXmlAttribute> &ns_vec)
+                                    ObArray<ObXmlAttribute*> &ns_vec,
+                                    common::ObIAllocator* tmp_alloc)
 {
   INIT_SUCC(ret);
-  int size = ancestor_record.size();
-  for (int64_t pos = -1; OB_SUCC(ret) && pos < size; ++pos) {
-    // get parent node
-    ObXmlBin* current = nullptr;
-    int64_t attribute_num = 0;
-    if (pos == -1) {
-      if (OB_ISNULL(extend)) { // normal, means without extend
+  if (OB_ISNULL(tmp_alloc)) {
+  } else {
+    int size = ancestor_record.size();
+    for (int64_t pos = -1; OB_SUCC(ret) && pos < size; ++pos) {
+      // get parent node
+      ObXmlBin* current = nullptr;
+      int64_t attribute_num = 0;
+      if (pos == -1) {
+        if (OB_ISNULL(extend)) { // normal, means without extend
+        } else {
+          current = static_cast<ObXmlBin*>(extend);
+          attribute_num = current->attribute_size();
+        }
       } else {
-        current = static_cast<ObXmlBin*>(extend);
+        current = static_cast<ObXmlBin*>(ancestor_record.at(pos));
         attribute_num = current->attribute_size();
       }
-    } else {
-      current = static_cast<ObXmlBin*>(ancestor_record.at(pos));
-      attribute_num = current->attribute_size();
-    }
-    bool found = false;
-    for (int pos = 0; OB_SUCC(ret) && pos < attribute_num; ++pos) {
-      ObXmlBin buff(*current);
-      ObXmlBin* tmp = &buff;
-      if (OB_FAIL(current->construct(tmp, nullptr))) {
-        LOG_WARN("failed to dup bin.", K(ret));
-      } else if (OB_FAIL(tmp->set_at(pos))) {
-        LOG_WARN("failed to set at child.", K(ret));
-      } else if (tmp->type() == M_NAMESPACE) {
-        // get ns info
-        ObXmlAttribute ns_node(ObMulModeNodeType::M_NAMESPACE, current->ctx_);
-        ObString key;
-        ObString value;
-        // init ns node
-        if (OB_FAIL(tmp->get_key(key))) {
-          LOG_WARN("failed to eval key.", K(ret));
-        } else if (OB_FAIL(tmp->get_value(value))) {
-          LOG_WARN("failed to eval value.", K(ret));
-        } else if (OB_SUCC(ns_vec.push_back(ns_node))) {
-          ns_vec[ns_vec.size() - 1].set_xml_key(key);
-          ns_vec[ns_vec.size() - 1].set_value(value);
+      bool not_att_or_ns = false;
+      for (int pos = 0; OB_SUCC(ret) && pos < attribute_num && !not_att_or_ns; ++pos) {
+        ObXmlBin buff(*current);
+        ObXmlBin* tmp = &buff;
+        if (OB_FAIL(current->construct(tmp, nullptr))) {
+          LOG_WARN("failed to dup bin.", K(ret));
+        } else if (OB_FAIL(tmp->set_at(pos))) {
+          LOG_WARN("failed to set at child.", K(ret));
+        } else if (tmp->type() == M_NAMESPACE) {
+          // get ns info
+          ObXmlAttribute* ns_node = nullptr;
+          ObString key;
+          ObString value;
+          // init ns node
+          if (OB_FAIL(tmp->get_key(key))) {
+            LOG_WARN("failed to eval key.", K(ret));
+          } else if (OB_FAIL(tmp->get_value(value))) {
+            LOG_WARN("failed to eval value.", K(ret));
+          } else if (OB_ISNULL(ns_node = static_cast<ObXmlAttribute*>(tmp_alloc->alloc(sizeof(ObXmlAttribute))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate attribute node.", K(ret));
+          } else {
+            ns_node = new(ns_node) ObXmlAttribute(ObMulModeNodeType::M_NAMESPACE, current->ctx_);
+            ns_node->set_xml_key(key);
+            ns_node->set_value(value);
+            ret = ns_vec.push_back(ns_node);
+          }
+
+          // if found duplicate key, overwrite
+          if (OB_FAIL(ret)) {
+          } else if (OB_NOT_NULL(ns_map.get(key)) && OB_FAIL(ns_map.erase_refactored(key))) {
+            LOG_WARN("fail to delete ns from map", K(ret), K(key));
+          } else if (OB_FAIL(ns_map.set_refactored(key, ns_vec[ns_vec.size() - 1]))) {
+            LOG_WARN("fail to add ns from map", K(ret), K(key));
+          }
+        } else if (tmp->type() == M_ATTRIBUTE) {
+        } else {
+          not_att_or_ns = true;  // neither ns nor attribute, stop searching
         }
-        // if found duplicate key, overwrite
-        if (OB_FAIL(ret)) {
-        } else if (OB_NOT_NULL(ns_map.get(key)) && OB_FAIL(ns_map.erase_refactored(key))) {
-          LOG_WARN("fail to delete ns from map", K(ret), K(key));
-        } else if (OB_FAIL(ns_map.set_refactored(key, &ns_vec[ns_vec.size() - 1]))) {
-          LOG_WARN("fail to add ns from map", K(ret), K(key));
-        }
-      } else if (tmp->type() == M_ATTRIBUTE) {
-      } else {
-        break;  // neither ns nor attribute, stop searching
       }
     }
   }
@@ -3262,11 +3311,12 @@ int ObPathUtil::add_ns_if_need(ObPathCtx &ctx, ObIMulModeBase*& res)
     ObXmlElement::NsMap ns_map;
     ObXmlElement::NsMap::iterator ns_map_iter;
     // be used as ns node buffer pool
-    ObArray<ObXmlAttribute> ns_vec;
+    ObArray<ObXmlAttribute*> ns_vec;
+    ns_vec.set_block_size(PATH_DEFAULT_PAGE_SIZE);
     int map_size = (ctx.ancestor_record_.size() > 0 ) ? 4 * ctx.ancestor_record_.size() : ctx.extend_->attribute_size();
     if (OB_FAIL(ns_map.create(map_size, "PATH_PARENT_NS"))) {
       LOG_WARN("ns map create failed", K(ret));
-    } else if (OB_FAIL(collect_ancestor_ns(ctx.extend_, ctx.ancestor_record_, ns_map, ns_vec))) {
+    } else if (OB_FAIL(collect_ancestor_ns(ctx.extend_, ctx.ancestor_record_, ns_map, ns_vec, ctx.get_tmp_alloc()))) {
       LOG_WARN("ns map init failed", K(ret));
     } else {
       ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx.doc_root_->get_mem_ctx());

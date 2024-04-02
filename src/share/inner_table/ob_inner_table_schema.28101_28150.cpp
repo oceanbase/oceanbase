@@ -160,7 +160,7 @@ int ObInnerTableSchema::v_ob_tenant_memory_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_TENANT_MEMORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID,            SVR_IP,            SVR_PORT,            HOLD,            FREE     FROM SYS.GV$OB_TENANT_MEMORY     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -260,7 +260,7 @@ int ObInnerTableSchema::v_ob_px_target_monitor_ora_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT *         FROM SYS.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP,           SVR_PORT,           TENANT_ID,           IS_LEADER,           VERSION,           PEER_IP,           PEER_PORT,           PEER_TARGET,           PEER_TARGET_USED,           LOCAL_TARGET_USED,           LOCAL_PARALLEL_SESSION_COUNT         FROM SYS.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::all_tab_stats_history_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     VARCHAR2(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         (SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 TABLE_ID AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE           FROM              SYS.ALL_VIRTUAL_CORE_ALL_TABLE         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     ) V     JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND (V.DATABASE_ID = USERENV('SCHEMAID')              OR USER_CAN_ACCESS_OBJ(1, V.TABLE_ID, V.DATABASE_ID) = 1)         AND V.TENANT_ID = EFFECTIVE_TENANT_ID()         AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     VARCHAR2(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         (SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 TABLE_ID AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE           FROM              SYS.ALL_VIRTUAL_CORE_ALL_TABLE         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)         AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     ) V     JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB         ON DB.TENANT_ID = V.TENANT_ID         AND DB.DATABASE_ID = V.DATABASE_ID         AND (V.DATABASE_ID = USERENV('SCHEMAID')              OR USER_CAN_ACCESS_OBJ(1, V.TABLE_ID, V.DATABASE_ID) = 1)         AND V.TENANT_ID = EFFECTIVE_TENANT_ID()         AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -360,7 +360,7 @@ int ObInnerTableSchema::dba_tab_stats_history_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     VARCHAR2(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         (SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 TABLE_ID AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE           FROM              SYS.ALL_VIRTUAL_CORE_ALL_TABLE         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     ) V     JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db         ON db.tenant_id = V.tenant_id         AND db.database_id = V.database_id         AND V.TENANT_ID = EFFECTIVE_TENANT_ID()         AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(DB.DATABASE_NAME AS     VARCHAR2(128)) AS OWNER,     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         (SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 TABLE_ID AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE           FROM              SYS.ALL_VIRTUAL_CORE_ALL_TABLE         UNION ALL         SELECT TENANT_ID,                DATABASE_ID,                TABLE_ID,                CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                TABLE_NAME,                NULL AS PARTITION_NAME,                NULL AS SUBPARTITION_NAME,                NULL AS PARTITION_POSITION,                NULL AS SUBPARTITION_POSITION,                'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)         AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1))     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)     ) V     JOIN         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db         ON db.tenant_id = V.tenant_id         AND db.database_id = V.database_id         AND V.TENANT_ID = EFFECTIVE_TENANT_ID()         AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -410,7 +410,7 @@ int ObInnerTableSchema::user_tab_stats_history_ora_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND t.database_id = USERENV('SCHEMAID')     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND t.database_id = USERENV('SCHEMAID')     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND t.database_id = USERENV('SCHEMAID')     ) V     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(V.TABLE_NAME       AS  VARCHAR2(128)) AS TABLE_NAME,     CAST(V.PARTITION_NAME   AS  VARCHAR2(128)) AS PARTITION_NAME,     CAST(V.SUBPARTITION_NAME  AS    VARCHAR2(128)) AS SUBPARTITION_NAME,     CAST(STAT.SAVTIME AS TIMESTAMP(6) WITH TIME ZONE) AS STATS_UPDATE_TIME     FROM     (         SELECT TENANT_ID,                 DATABASE_ID,                 TABLE_ID,                 CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,                 TABLE_NAME,                 NULL AS PARTITION_NAME,                 NULL AS SUBPARTITION_NAME,                 NULL AS PARTITION_POSITION,                 NULL AS SUBPARTITION_POSITION,                 'TABLE' AS OBJECT_TYPE         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)             AND t.database_id = USERENV('SCHEMAID')     UNION ALL         SELECT T.TENANT_ID,                 T.DATABASE_ID,                 T.TABLE_ID,                 P.PART_ID,                 T.TABLE_NAME,                 P.PART_NAME,                 NULL,                 P.PART_IDX + 1,                 NULL,                 'PARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T           JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND t.database_id = USERENV('SCHEMAID')     UNION ALL         SELECT T.TENANT_ID,                T.DATABASE_ID,                T.TABLE_ID,                SP.SUB_PART_ID AS PARTITION_ID,                T.TABLE_NAME,                  P.PART_NAME,                  SP.SUB_PART_NAME,                  P.PART_IDX + 1,                  SP.SUB_PART_IDX + 1,                  'SUBPARTITION'         FROM             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T         JOIN             SYS.ALL_VIRTUAL_PART_REAL_AGENT P             ON T.TENANT_ID = P.TENANT_ID             AND T.TABLE_ID = P.TABLE_ID             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)         JOIN             SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP             ON T.TENANT_ID = SP.TENANT_ID             AND T.TABLE_ID = SP.TABLE_ID             AND P.PART_ID = SP.PART_ID         WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)             AND t.database_id = USERENV('SCHEMAID')     ) V     LEFT JOIN         SYS.ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT STAT         ON V.TENANT_ID = STAT.TENANT_ID         AND V.TABLE_ID = STAT.TABLE_ID         AND V.PARTITION_ID = STAT.PARTITION_ID         AND STAT.INDEX_TYPE = 0; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -460,7 +460,7 @@ int ObInnerTableSchema::gv_dblink_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT   *   FROM   SYS.ALL_VIRTUAL_DBLINK_INFO where tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT   TENANT_ID, SVR_IP, SVR_PORT, LINK_ID, LOGGED_ON, HETEROGENEOUS, PROTOCOL, OPEN_CURSORS, IN_TRANSACTION, UPDATE_SENT, COMMIT_POINT_STRENGTH, LINK_TENANT_ID, OCI_CONN_OPENED, OCI_CONN_CLOSED, OCI_STMT_QUERIED, OCI_ENV_CHARSET, OCI_ENV_NCHARSET, EXTRA_INFO   FROM   SYS.ALL_VIRTUAL_DBLINK_INFO where tenant_id = effective_tenant_id() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -810,7 +810,7 @@ int ObInnerTableSchema::v_ob_units_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_UNITS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MIN_CPU,            MAX_CPU,            MEMORY_SIZE,            MIN_IOPS,            MAX_IOPS,            IOPS_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM SYS.GV$OB_UNITS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::v_ob_parameters_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_PARAMETERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,   SVR_PORT,   ZONE,   SCOPE,   TENANT_ID,   NAME,   DATA_TYPE,   VALUE,   INFO,   SECTION,   EDIT_LEVEL,   DEFAULT_VALUE,   ISDEFAULT     FROM SYS.GV$OB_PARAMETERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1010,7 +1010,7 @@ int ObInnerTableSchema::v_ob_processlist_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_PROCESSLIST     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP, SVR_PORT, SQL_PORT,   ID,   "USER",   HOST,   DB,   TENANT,   COMMAND,   TIME,   TOTAL_TIME,   STATE,   INFO,   PROXY_SESSID,   MASTER_SESSID,   USER_CLIENT_IP,   USER_HOST,   RETRY_CNT,   RETRY_INFO,   SQL_ID,   TRANS_ID,   THREAD_ID,   SSL_CIPHER,   TRACE_ID,   TRANS_STATE,   ACTION,   MODULE,   CLIENT_INFO,   "LEVEL",   SAMPLE_PERCENTAGE,   RECORD_POLICY,   LB_VID,   LB_VIP,   LB_VPORT,   IN_BYTES,   OUT_BYTES     FROM SYS.GV$OB_PROCESSLIST     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1110,7 +1110,7 @@ int ObInnerTableSchema::v_ob_kvcache_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_KVCACHE     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,   SVR_PORT,   TENANT_ID,   CACHE_NAME,   PRIORITY,   CACHE_SIZE,   HIT_RATIO,   TOTAL_PUT_CNT,   TOTAL_HIT_CNT,   TOTAL_MISS_CNT     FROM SYS.GV$OB_KVCACHE     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1210,7 +1210,7 @@ int ObInnerTableSchema::v_ob_transaction_participants_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT *     FROM SYS.GV$OB_TRANSACTION_PARTICIPANTS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT tenant_id, SVR_IP, SVR_PORT, SESSION_ID, SCHEDULER_ADDR, TX_TYPE, TX_ID, LS_ID, PARTICIPANTS, CTX_CREATE_TIME, TX_EXPIRED_TIME, STATE, ACTION, PENDING_LOG_SIZE, FLUSHED_LOG_SIZE, ROLE, COORD, LAST_REQUEST_TIME, FORMATID, GLOBALID, BRANCHID     FROM SYS.GV$OB_TRANSACTION_PARTICIPANTS     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1310,7 +1310,7 @@ int ObInnerTableSchema::v_ob_compaction_progress_ora_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_COMPACTION_PROGRESS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       ZONE,       COMPACTION_SCN,       STATUS,       TOTAL_TABLET_COUNT,       UNFINISHED_TABLET_COUNT,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       COMPRESSION_RATIO,       START_TIME,       ESTIMATED_FINISH_TIME,       COMMENTS     FROM SYS.GV$OB_COMPACTION_PROGRESS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::v_ob_tablet_compaction_progress_ora_schema(ObTableSchema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_TABLET_COMPACTION_PROGRESS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       COMPACTION_SCN,       TASK_ID,       STATUS,       DATA_SIZE,       UNFINISHED_DATA_SIZE,       PROGRESSIVE_COMPACTION_ROUND,       CREATE_TIME,       START_TIME,       ESTIMATED_FINISH_TIME     FROM SYS.GV$OB_TABLET_COMPACTION_PROGRESS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1510,7 +1510,7 @@ int ObInnerTableSchema::v_ob_tablet_compaction_history_ora_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       LS_ID,       TABLET_ID,       TYPE,       COMPACTION_SCN,       START_TIME,       FINISH_TIME,       TASK_ID,       OCCUPY_SIZE,       MACRO_BLOCK_COUNT,       MULTIPLEXED_MACRO_BLOCK_COUNT,       NEW_MICRO_COUNT_IN_NEW_MACRO,       MULTIPLEXED_MICRO_COUNT_IN_NEW_MACRO,       TOTAL_ROW_COUNT,       INCREMENTAL_ROW_COUNT,       COMPRESSION_RATIO,       NEW_FLUSH_DATA_RATE,       PROGRESSIVE_COMPACTION_ROUND,       PROGRESSIVE_COMPACTION_NUM,       PARALLEL_DEGREE,       PARALLEL_INFO,       PARTICIPANT_TABLE,       MACRO_ID_LIST,       COMMENTS     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1610,7 +1610,7 @@ int ObInnerTableSchema::v_ob_compaction_diagnose_info_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_COMPACTION_DIAGNOSE_INFO     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM SYS.GV$OB_COMPACTION_DIAGNOSE_INFO     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1710,7 +1710,7 @@ int ObInnerTableSchema::v_ob_compaction_suggestions_ora_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM SYS.GV$OB_COMPACTION_SUGGESTIONS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       START_TIME,       FINISH_TIME,       SUGGESTION     FROM SYS.GV$OB_COMPACTION_SUGGESTIONS     WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1810,7 +1810,7 @@ int ObInnerTableSchema::v_ob_dtl_interm_result_monitor_ora_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$OB_DTL_INTERM_RESULT_MONITOR     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,           SVR_PORT,           TENANT_ID,           TRACE_ID,           OWNER,           START_TIME,           EXPIRE_TIME,           HOLD_MEMORY,           DUMP_SIZE,           DUMP_COST,           DUMP_TIME,           DUMP_FD,           DUMP_DIR_ID,           CHANNEL_ID,           QC_ID,           DFO_ID,           SQC_ID,           BATCH_ID,           MAX_HOLD_MEMORY FROM SYS.GV$OB_DTL_INTERM_RESULT_MONITOR     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2010,7 +2010,7 @@ int ObInnerTableSchema::gv_active_session_history_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT SVR_IP, SVR_PORT, SAMPLE_ID, SAMPLE_TIME, CON_ID, USER_ID, SESSION_ID, SESSION_TYPE, SESSION_STATE, SQL_ID, PLAN_ID, TRACE_ID, EVENT, EVENT_NO, EVENT_ID, P1TEXT, P1, P2TEXT, P2, P3TEXT, P3, WAIT_CLASS, WAIT_CLASS_ID, TIME_WAITED, SQL_PLAN_LINE_ID, IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION, IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION, IN_FILTER_ROWS, PROGRAM, MODULE, ACTION, CLIENT_ID, BACKTRACE, TM_DELTA_TIME, TM_DELTA_CPU_TIME, TM_DELTA_DB_TIME, TOP_LEVEL_SQL_ID, IN_PLSQL_COMPILATION, IN_PLSQL_EXECUTION, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2060,7 +2060,7 @@ int ObInnerTableSchema::v_active_session_history_ora_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT       SVR_IP,       SVR_PORT,       SAMPLE_ID,       SAMPLE_TIME,       CON_ID,       USER_ID,       SESSION_ID,       SESSION_TYPE,       SESSION_STATE,       SQL_ID,       PLAN_ID,       TRACE_ID,       EVENT,       EVENT_NO,       EVENT_ID,       P1TEXT,       P1,       P2TEXT,       P2,       P3TEXT,       P3,       WAIT_CLASS,       WAIT_CLASS_ID,       TIME_WAITED,       SQL_PLAN_LINE_ID,       IN_PARSE,       IN_PL_PARSE,       IN_PLAN_CACHE,       IN_SQL_OPTIMIZE,       IN_SQL_EXECUTION,       IN_PX_EXECUTION,       IN_SEQUENCE_LOAD,       IN_COMMITTING,       IN_STORAGE_READ,       IN_STORAGE_WRITE,       IN_REMOTE_DAS_EXECUTION,       IN_FILTER_ROWS,       PROGRAM,       MODULE,       ACTION,       CLIENT_ID,       BACKTRACE,       TM_DELTA_TIME,       TM_DELTA_CPU_TIME,       TM_DELTA_DB_TIME,       TOP_LEVEL_SQL_ID,       IN_PLSQL_COMPILATION,       IN_PLSQL_EXECUTION,       PLSQL_ENTRY_OBJECT_ID,       PLSQL_ENTRY_SUBPROGRAM_ID,       PLSQL_ENTRY_SUBPROGRAM_NAME,       PLSQL_OBJECT_ID,       PLSQL_SUBPROGRAM_ID,       PLSQL_SUBPROGRAM_NAME FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2160,7 +2160,7 @@ int ObInnerTableSchema::v_dml_stats_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT * FROM SYS.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           SVR_IP,           SVR_PORT,           INST_ID,           OBJN,           INS,           UPD,           DEL,           DROPSEG,           CURROWS,           PAROBJN,           LASTUSED,           FLAGS,           CON_ID FROM SYS.GV$DML_STATS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2260,7 +2260,7 @@ int ObInnerTableSchema::dba_ob_outlines_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                           CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,                           CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,                           A.TENANT_ID,                           A.DATABASE_ID,                           A.OUTLINE_ID,                           A.DATABASE_NAME,                           A.OUTLINE_NAME,                           A.VISIBLE_SIGNATURE,                           A.SQL_TEXT,                           A.OUTLINE_TARGET,                           A.OUTLINE_SQL,                           A.SQL_ID,                           A.OUTLINE_CONTENT                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B                    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                           CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,                           CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,                           A.TENANT_ID,                           A.DATABASE_ID,                           A.OUTLINE_ID,                           A.DATABASE_NAME,                           A.OUTLINE_NAME,                           A.VISIBLE_SIGNATURE,                           A.SQL_TEXT,                           A.OUTLINE_TARGET,                           A.OUTLINE_SQL,                           A.SQL_ID,                           A.OUTLINE_CONTENT                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B                    WHERE A.OUTLINE_ID = B.OUTLINE_ID )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2460,7 +2460,7 @@ int ObInnerTableSchema::v_ob_log_stat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT *   FROM SYS.GV$OB_LOG_STAT   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,     LS_ID,     SVR_IP,     SVR_PORT,     ROLE,     PROPOSAL_ID,     CONFIG_VERSION,     ACCESS_MODE,     PAXOS_MEMBER_LIST,     PAXOS_REPLICA_NUM,     IN_SYNC,     BASE_LSN,     BEGIN_LSN,     BEGIN_SCN,     END_LSN,     END_SCN,     MAX_LSN,     MAX_SCN,     ARBITRATION_MEMBER,     DEGRADED_LIST,     LEARNER_LIST   FROM SYS.GV$OB_LOG_STAT   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

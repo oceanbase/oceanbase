@@ -30,7 +30,6 @@ public:
   {}
   ~ObCreateOutlineStmt() { }
   void set_replace() { create_outline_arg_.or_replace_ = true; }
-  void set_format_outline(bool is_format) { create_outline_arg_.outline_info_.set_format_outline(is_format); }
   void set_database_name(const common::ObString &database_name) { create_outline_arg_.db_name_ = database_name; }
   void set_owner(const common::ObString &user_name) { create_outline_arg_.outline_info_.set_owner(user_name); }
   void set_owner_id(const uint64_t owner_id) { create_outline_arg_.outline_info_.set_owner_id(owner_id); }
@@ -38,9 +37,7 @@ public:
   void set_outline_name(const common::ObString &outline_name) { create_outline_arg_.outline_info_.set_name(outline_name); }
   void set_outline_sql(const common::ObString &outline_sql) { create_outline_arg_.outline_info_.set_sql_text(outline_sql);}
   const common::ObString &get_outline_sql() const { return create_outline_arg_.outline_info_.get_sql_text_str(); }
-  const common::ObString &get_format_outline_sql() const { return create_outline_arg_.outline_info_.get_format_sql_text_str(); }
   common::ObString &get_outline_sql() { return create_outline_arg_.outline_info_.get_sql_text_str(); }
-  common::ObString &get_format_outline_sql() { return create_outline_arg_.outline_info_.get_format_sql_text_str(); }
   void set_outline_stmt(ObStmt *stmt) { outline_stmt_ = stmt; }
   void set_max_concurrent(int64_t max_concurrent) { max_concurrent_ = max_concurrent; }
   int64_t get_max_concurrent() { return max_concurrent_; }
@@ -51,14 +48,12 @@ public:
   obrpc::ObCreateOutlineArg &get_create_outline_arg() { return create_outline_arg_; }
   common::ObString &get_hint() { return hint_; }
   common::ObString &get_sql_id() { return sql_id_; }
-  common::ObString &get_format_sql_id() { return format_sql_id_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_outline_arg_; }
   TO_STRING_KV(K_(create_outline_arg),
                K_(outline_stmt));
 private:
   obrpc::ObCreateOutlineArg create_outline_arg_; //这个是需要在执行的过程中填充的，
   common::ObString sql_id_; //给定sql_id的情况
-  common::ObString format_sql_id_; //给定sql_id的情况
   common::ObString hint_; //给定的hint是什么
   int64_t max_concurrent_;
   ObStmt *outline_stmt_;//the stmt for outline, 通过这个值是否为null来判断是那种情况

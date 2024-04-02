@@ -25,6 +25,59 @@ namespace oceanbase
 {
 namespace table
 {
+struct ObTableIndexInfo
+{
+  typedef common::ObSEArray<common::ObTableID, 4, common::ModulePageAllocator, true> TableIDArray;
+  ObTableIndexInfo()
+      : data_table_id_(common::OB_INVALID_ID),
+        index_table_id_(common::OB_INVALID_ID),
+        index_schema_(nullptr),
+        is_primary_index_(false),
+        loc_meta_(nullptr),
+        lookup_part_id_expr_(nullptr),
+        old_part_id_expr_(nullptr),
+        new_part_id_expr_(nullptr),
+        related_index_ids_()
+  {}
+  TO_STRING_KV(K_(data_table_id),
+              K_(index_table_id),
+              K_(index_schema),
+              K_(is_primary_index),
+              K_(loc_meta),
+              K_(lookup_part_id_expr),
+              K_(old_part_id_expr),
+              K_(new_part_id_expr),
+              K_(related_index_ids));
+  void reset()
+  {
+    data_table_id_ = common::OB_INVALID_ID;
+    index_table_id_ = common::OB_INVALID_ID;
+    index_schema_ = nullptr;
+    is_primary_index_ = false;
+    loc_meta_ = nullptr;
+    lookup_part_id_expr_ = nullptr;
+    old_part_id_expr_ = nullptr;
+    new_part_id_expr_ = nullptr;
+    related_index_ids_.reset();
+  }
+
+  uint64_t data_table_id_;
+  // when is primary index, index_table_id == data_table_id
+  uint64_t index_table_id_;
+  const share::schema::ObTableSchema *index_schema_;
+  bool is_primary_index_;
+  // loc_meta is inited in init_das_context
+  ObDASTableLocMeta *loc_meta_;
+  // only use for global index lookup data table
+  sql::ObRawExpr *lookup_part_id_expr_;
+  sql::ObRawExpr *old_part_id_expr_;
+  sql::ObRawExpr *new_part_id_expr_;
+  // only primary table has related_index_ids, which contains local index table ids.
+  TableIDArray related_index_ids_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableIndexInfo);
+};
+
 struct ObTableColumnItem : public sql::ColumnItem
 {
   ObTableColumnItem()
@@ -34,7 +87,9 @@ struct ObTableColumnItem : public sql::ColumnItem
         is_stored_generated_column_(false),
         is_virtual_generated_column_(false),
         is_auto_increment_(false),
-        rowkey_position_(-1)
+        is_nullable_(true),
+        rowkey_position_(-1),
+        column_type_(ObMaxType)
   {}
   TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
                KPC_(raw_expr),
@@ -45,7 +100,9 @@ struct ObTableColumnItem : public sql::ColumnItem
                K_(generated_expr_str),
                K_(dependant_exprs),
                K_(is_auto_increment),
-               K_(rowkey_position));
+               K_(is_nullable),
+               K_(rowkey_position),
+               K_(column_type));
   sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
   bool is_generated_column_;
   bool is_stored_generated_column_;
@@ -56,7 +113,34 @@ struct ObTableColumnItem : public sql::ColumnItem
   common::ObString generated_expr_str_;
   common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
   bool is_auto_increment_;
+  bool is_nullable_;
   int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
+  common::ObObjType column_type_;
+};
+
+struct ObTableColumnInfo
+{
+  ObTableColumnInfo()
+      : type_(),
+        is_auto_inc_(false),
+        is_nullable_(true)
+  {
+  }
+  ObTableColumnInfo(sql::ObExprResType type, const common::ObString &column_name, bool is_auto_inc = false, bool is_nullable = true)
+      : type_(type),
+        column_name_(column_name),
+        is_auto_inc_(is_auto_inc),
+        is_nullable_(is_nullable)
+  {
+  }
+  sql::ObExprResType type_;
+  common::ObString column_name_;
+  bool is_auto_inc_;
+  bool is_nullable_;
+  TO_STRING_KV(K_(type),
+               K_(column_name),
+               K_(is_auto_inc),
+               K_(is_nullable));
 };
 
 struct ObTableAssignment : public sql::ObAssignment
@@ -115,9 +199,10 @@ public:
         exec_ctx_(allocator_),
         expr_factory_(allocator_),
         all_exprs_(false),
-        loc_meta_(allocator_),
         agg_cell_proj_(allocator_),
-        has_auto_inc_(false)
+        has_auto_inc_(false),
+        has_global_index_(false),
+        is_global_index_scan_(false)
   {
     // common
     is_init_ = false;
@@ -152,6 +237,8 @@ public:
     is_ttl_table_ = false;
     is_skip_scan_ = false;
     is_client_set_put_ = false;
+    binlog_row_image_type_ = ObBinlogRowImage::FULL;
+    is_full_table_scan_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -186,7 +273,8 @@ public:
                K_(cur_cluster_version),
                K_(is_ttl_table),
                K_(is_skip_scan),
-               K_(is_client_set_put));
+               K_(is_client_set_put),
+               K_(binlog_row_image_type));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -221,6 +309,9 @@ public:
   OB_INLINE ObIArray<ObTableColumnItem>& get_column_items() { return column_items_; }
   OB_INLINE const ObIArray<ObTableAssignment>& get_assignments() const { return assigns_; }
   OB_INLINE ObIArray<ObTableAssignment>& get_assignments() { return assigns_; }
+  OB_INLINE ObIArray<ObTableIndexInfo*>& get_table_index_info() { return table_index_info_; }
+  OB_INLINE const ObIArray<ObTableIndexInfo*>& get_table_index_info() const { return table_index_info_; }
+
   // for scan
   OB_INLINE bool is_scan() const { return is_scan_; }
   OB_INLINE bool is_index_scan() const { return is_index_scan_; }
@@ -231,7 +322,7 @@ public:
   OB_INLINE common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   OB_INLINE ObIArray<sql::ObRawExpr *>& get_filter_exprs() { return filter_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_filter_exprs() const { return filter_exprs_; }
-  OB_INLINE const ObIArray<sql::ObRawExpr *>& get_select_exprs() const { return select_exprs_; }
+  OB_INLINE const ObIArray<sql::ObColumnRefRawExpr *>& get_select_exprs() const { return select_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_rowkey_exprs() const { return rowkey_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_index_exprs() const { return index_exprs_; }
   OB_INLINE const share::schema::ObTableSchema* get_index_schema() const { return index_schema_; }
@@ -242,12 +333,22 @@ public:
   OB_INLINE const common::ObIArray<uint64_t>& get_select_col_ids() const { return select_col_ids_; }
   OB_INLINE const common::ObIArray<uint64_t>& get_query_col_ids() const { return query_col_ids_; }
   OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
+  OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImage::FULL; }
+  OB_INLINE bool is_full_table_scan() const { return is_full_table_scan_; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE bool is_inc_or_append() const
   {
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
+  }
+  OB_INLINE bool is_inc() const
+  {
+    return ObTableOperationType::Type::INCREMENT == operation_type_;
+  }
+  OB_INLINE bool is_append() const
+  {
+    return ObTableOperationType::Type::APPEND == operation_type_;
   }
   OB_INLINE bool is_dml() const
   {
@@ -274,6 +375,11 @@ public:
   OB_INLINE const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
   OB_INLINE ObPhysicalPlanCtx *get_physical_plan_ctx() { return exec_ctx_.get_physical_plan_ctx(); }
   OB_INLINE bool has_auto_inc() { return has_auto_inc_; }
+  // for global index
+  OB_INLINE bool has_global_index() { return has_global_index_; }
+  OB_INLINE bool is_global_index_scan() const { return is_global_index_scan_; }
+  OB_INLINE bool is_global_index_back() const { return is_global_index_scan_ && is_index_back_;}
+  OB_INLINE bool need_dist_das() { return has_global_index_ || (is_global_index_scan_ && is_index_back_); }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
@@ -303,6 +409,24 @@ public:
   OB_INLINE bool is_skip_scan() { return is_skip_scan_; }
   // for put
   OB_INLINE void set_client_use_put(bool is_client_use_put) { is_client_set_put_ = is_client_use_put; }
+  // for global index
+  OB_INLINE bool need_new_calc_tablet_id_expr()
+  {
+    return operation_type_ == ObTableOperationType::UPDATE ||
+           operation_type_ == ObTableOperationType::INSERT_OR_UPDATE ||
+           operation_type_ == ObTableOperationType::INCREMENT ||
+           operation_type_ == ObTableOperationType::APPEND ||
+           (operation_type_ == ObTableOperationType::INSERT && is_ttl_table_);
+  }
+  OB_INLINE bool need_lookup_calc_tablet_id_expr()
+  {
+    return operation_type_ == ObTableOperationType::INSERT_OR_UPDATE ||
+           operation_type_ == ObTableOperationType::INCREMENT ||
+           operation_type_ == ObTableOperationType::APPEND ||
+           operation_type_ == ObTableOperationType::REPLACE ||
+           (operation_type_ == ObTableOperationType::INSERT && is_ttl_table_) ||
+           (operation_type_ == ObTableOperationType::SCAN && is_global_index_back());
+  }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -319,7 +443,8 @@ public:
   int init_insert();
   // 初始化scan相关(不包括表达分类)
   int init_scan(const ObTableQuery &query,
-                const bool &is_wead_read);
+                const bool &is_wead_read,
+                const uint64_t arg_table_id);
   // 初始化update相关
   int init_update();
   // 初始化delete相关
@@ -342,7 +467,10 @@ public:
   int init_trans(transaction::ObTxDesc *trans_desc,
                  const transaction::ObTxReadSnapshot &tx_snapshot);
   int init_das_context(ObDASCtx &das_ctx);
+  int init_related_tablet_map(ObDASCtx &das_ctx);
   int init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema_version);
+  // init exec_ctx_.das_ctx_.sql_ctx_
+  int init_sql_ctx();
   // 更新全局自增值
   int update_auto_inc_value();
   // init table context for ttl operation
@@ -354,24 +482,31 @@ public:
   int get_column_item_by_expr(sql::ObRawExpr *raw_expr, const ObTableColumnItem *&item) const;
   int get_column_item_by_expr(sql::ObColumnRefRawExpr *expr, const ObTableColumnItem *&item) const;
   int get_expr_from_column_items(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
+  int get_expr_from_column_items(const common::ObString &col_name, sql::ObColumnRefRawExpr *&expr) const;
   int get_expr_from_assignments(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
   int check_insert_up_can_use_put(bool &use_put);
+  int get_assignment_by_column_id(uint64_t column_id, const ObTableAssignment *&assign) const;
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
   // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
+  int adjust_entity();
 private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
                            common::ObTabletID &tablet_id);
   int init_sess_info(ObTableApiCredential &credential);
   // for scan
-  int init_index_info(const common::ObString &index_name);
-  int generate_columns_type(common::ObIArray<sql::ObExprResType> &columns_type);
+  int generate_column_infos(common::ObIArray<ObTableColumnInfo> &columns_infos);
+  int init_index_info(const common::ObString &index_name, const uint64_t arg_table_id);
   int generate_key_range(const common::ObIArray<common::ObNewRange> &scan_ranges);
+  int init_scan_index_info();
+  int init_primary_index_info();
   // for dml
   int init_dml_related_tid();
+  int init_dml_index_info();
+  int check_if_skip_build_index_info(const share::schema::ObTableSchema *index_schema, bool &can_skip);
   // for update
   int init_assignments(const ObTableEntity &entity);
   int add_stored_generated_column_assignment(const ObTableAssignment &assign);
@@ -391,13 +526,12 @@ private:
 
 private:
   int construct_column_items();
-  int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
-                       sql::ObExprResType &column_type);
-  int adjust_column_type(const ObExprResType &column_type, ObObj &obj, bool is_autoincrement = false);
+  int cons_column_info(const share::schema::ObColumnSchemaV2 &column_schema,
+                       ObTableColumnInfo &column_info);
+  int adjust_column_type(const ObTableColumnInfo &column_info, ObObj &ob);
   int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();
-  int adjust_entity();
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
                             const common::ObString &name,
                             int64_t *idx = nullptr) const;
@@ -431,7 +565,6 @@ private:
   sql::ObRawExprFactory expr_factory_;
   sql::ObRawExprUniqueSet all_exprs_;
   ObTableApiSessGuard sess_guard_;
-  sql::ObDASTableLocMeta loc_meta_;
   int64_t tenant_schema_version_;
   common::ObSEArray<ObTableColumnItem, 8> column_items_;
   common::ObSEArray<ObTableAssignment, 8> assigns_;
@@ -443,7 +576,7 @@ private:
   bool is_get_;
   bool read_latest_; // default true, false in single get and multi get
   common::ObQueryFlag::ScanOrder scan_order_;
-  common::ObSEArray<sql::ObRawExpr*, 32> select_exprs_;
+  common::ObSEArray<sql::ObColumnRefRawExpr*, 32> select_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 16> rowkey_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 16> index_exprs_;
   common::ObSEArray<sql::ObRawExpr*, 8> filter_exprs_;
@@ -451,6 +584,7 @@ private:
   common::ObSEArray<uint64_t, 32> query_col_ids_; // 用户查询的select column id
   common::ObSEArray<common::ObString, 32> query_col_names_; // 用户查询的select column name，引用的是schema上的列名
   common::ObSEArray<uint64_t, 16> index_col_ids_;
+  common::ObSEArray<ObTableIndexInfo*, 4> table_index_info_; // 用于记录主表和全局索引表信息
   const share::schema::ObTableSchema *index_schema_;
   int64_t offset_;
   int64_t limit_;
@@ -479,6 +613,12 @@ private:
   bool is_skip_scan_;
   // for put
   bool is_client_set_put_;
+  int64_t binlog_row_image_type_;
+  // for audit
+  bool is_full_table_scan_;
+  // for global index
+  bool has_global_index_;
+  bool is_global_index_scan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };
@@ -489,16 +629,23 @@ public:
   virtual ~ObTableDmlBaseCtDef() = default;
   VIRTUAL_TO_STRING_KV(K_(column_ids),
                        K_(old_row),
-                       K_(new_row));
+                       K_(new_row),
+                       KPC_(old_part_id_expr),
+                       KPC_(new_part_id_expr));
 
   UIntFixedArray column_ids_;
   ExprFixedArray old_row_;
   ExprFixedArray new_row_;
+  // for global index
+  sql::ObExpr *old_part_id_expr_;
+  sql::ObExpr *new_part_id_expr_;
 protected:
   ObTableDmlBaseCtDef(common::ObIAllocator &alloc)
       : column_ids_(alloc),
         old_row_(alloc),
-        new_row_(alloc)
+        new_row_(alloc),
+        old_part_id_expr_(nullptr),
+        new_part_id_expr_(nullptr)
   {
   }
 };
@@ -512,6 +659,8 @@ public:
         lookup_loc_meta_(nullptr),
         output_exprs_(allocator),
         filter_exprs_(allocator),
+        calc_part_id_expr_(nullptr),
+        global_index_rowkey_exprs_(allocator),
         allocator_(allocator)
   {
   }
@@ -521,9 +670,12 @@ public:
   sql::ObDASScanCtDef scan_ctdef_;
   sql::ObDASScanCtDef *lookup_ctdef_;
   sql::ObDASTableLocMeta *lookup_loc_meta_;
-
   ExprFixedArray output_exprs_;
   ExprFixedArray filter_exprs_;
+  // Begin for Global Index Lookup
+  ObExpr *calc_part_id_expr_;
+  ExprFixedArray global_index_rowkey_exprs_;
+  // end for Global Index Lookup
   common::ObIAllocator &allocator_;
 };
 
@@ -562,7 +714,6 @@ public:
         column_infos_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -602,7 +753,6 @@ public:
         related_ins_ctdefs_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(full_row),
                K_(delta_row),
@@ -659,7 +809,6 @@ public:
         related_ctdefs_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -751,7 +900,6 @@ public:
         das_ctdef_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef));
   ObDASLockCtDef das_ctdef_;

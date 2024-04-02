@@ -33,19 +33,10 @@ class ObTabletEmptyShellHandler
 public:
   friend class ObEmptyShellTask;
 public:
-  ObTabletEmptyShellHandler()
-    : ls_(NULL),
-      is_trigger_(true),
-      stopped_(false),
-      is_inited_(false)
-  {}
-  ~ObTabletEmptyShellHandler() { reset(); }
-  void reset()
-  {
-    ls_ = NULL;
-    is_inited_ = false;
-  }
+  ObTabletEmptyShellHandler();
+  ~ObTabletEmptyShellHandler();
   int init(storage::ObLS *ls);
+  void reset();
 
   bool check_stop() { return ATOMIC_LOAD(&stopped_) == true; }
   int offline();
@@ -58,7 +49,8 @@ private:
   void set_stop() { ATOMIC_STORE(&stopped_, true); }
   void set_start() { ATOMIC_STORE(&stopped_, false); }
   bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
-  int check_tablet_deleted_(ObTablet *tablet, bool &is_deleted);
+  int check_candidate_tablet_(const ObTablet &tablet, bool &can_become_shell, bool &need_retry);
+  int check_tablet_from_aborted_tx_(const ObTablet &tablet, bool &can_become_shell, bool &need_retry);
   int get_empty_shell_tablet_ids(common::ObTabletIDArray &empty_shell_tablet_ids, bool &need_retry);
   int update_tablets_to_empty_shell(ObLS *ls, const common::ObIArray<common::ObTabletID> &tablet_ids);
   // Conditions for a tablet status is transfer_out_deleted to become an empty shell in standby database(1 or 2 or 3 or 4):
@@ -66,12 +58,10 @@ private:
   // 2. The node dest_ls where the tablet resides does not exist;
   // 3. The migration status of dest_ls is OB_MIGRATION_STATUS_MIGRATE;
   // 4. The replay decided scn of dest_ls is greater than the finish_scn of transfer_out_deleted tablet
-  int check_tablet_empty_shell_(
-      const ObTablet &tablet,
-      const ObTabletCreateDeleteMdsUserData &user_data,
-      bool &can, bool &need_retry);
-  int check_can_become_empty_shell_(const ObTablet &tablet, bool &can, bool &need_retry);
+  int check_tablet_from_deleted_tx_(const ObTablet &tablet, const ObTabletCreateDeleteMdsUserData &user_data, bool &can, bool &need_retry);
   int check_transfer_out_deleted_tablet_(const ObTablet &tablet, const ObTabletCreateDeleteMdsUserData &user_data, bool &can, bool &need_retry);
+
+  static int get_readable_scn(share::SCN &readable_scn);
 
 public:
   obsys::ObRWLock wait_lock_;
@@ -86,7 +76,6 @@ private:
 
 class ObEmptyShellTask : public common::ObTimerTask
 {
-
 public:
   static const int64_t GC_EMPTY_TABLET_SHELL_INTERVAL;
   static const int64_t GLOBAL_EMPTY_CHECK_INTERVAL_TIMES;
@@ -95,7 +84,6 @@ public:
   {}
   virtual ~ObEmptyShellTask() {}
   virtual void runTimerTask();
-
 private:
   ObTabletGCService &tablet_gc_service_;
 };

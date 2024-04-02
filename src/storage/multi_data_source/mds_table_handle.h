@@ -53,7 +53,13 @@ public:
   template <typename T>
   int replay(T &&data, MdsCtx &ctx, const share::SCN &scn);
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
-  int get_latest(OP &&read_op, bool &is_committed, const int64_t read_seq = 0) const;
+  int get_latest(OP &&read_op,
+                 MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 const int64_t read_seq = 0) const;
+  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
+  int get_latest_committed(OP &&read_op) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_snapshot(OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
@@ -79,7 +85,15 @@ public:
   template <typename Key, typename Value>
   int replay_remove(const Key &key, MdsCtx &ctx, share::SCN &scn);
   template <typename Key, typename Value, typename OP>
-  int get_latest(const Key &key, OP &&read_op, bool &is_committed, const int64_t read_seq = 0) const;
+  int get_latest(const Key &key,
+                 OP &&read_op,
+                 MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 const int64_t read_seq = 0) const;
+  template <typename Key, typename Value, typename OP>
+  int get_latest_committed(const Key &key,
+                           OP &&read_op) const;
   template <typename Key, typename Value, typename OP>
   int get_snapshot(const Key &key,
                    OP &&read_op,
@@ -102,7 +116,7 @@ public:
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
                                                                        const int64_t mds_construct_sequence,
                                                                        const bool for_flush) const;
-  int flush(share::SCN need_advanced_rec_scn_lower_limit);
+  int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn);
   int is_flushing(bool &is_flushing) const;
   void on_flush(const share::SCN &flush_scn, const int flush_ret);
   int try_recycle(const share::SCN &recycle_scn);// release nodes

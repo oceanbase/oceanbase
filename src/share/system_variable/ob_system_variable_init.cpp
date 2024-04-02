@@ -2367,7 +2367,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[166].default_value_ = "1" ;
+      ObSysVars[166].default_value_ = "0" ;
       ObSysVars[166].info_ = "enable batching of the RHS IO in NLJ" ;
       ObSysVars[166].name_ = "_nlj_batching_enabled" ;
       ObSysVars[166].data_type_ = ObIntType ;
@@ -3280,7 +3280,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[232].default_value_ = "" ;
+      ObSysVars[232].default_value_ = "4.2.3.0" ;
       ObSysVars[232].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[232].name_ = "optimizer_features_enable" ;
       ObSysVars[232].data_type_ = ObVarcharType ;
@@ -3420,7 +3420,7 @@ static struct VarsInit{
       ObSysVars[242].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
       ObSysVars[242].name_ = "lc_time_names" ;
       ObSysVars[242].data_type_ = ObVarcharType ;
-      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[242].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[242].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
       ObSysVars[242].id_ = SYS_VAR_LC_TIME_NAMES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
@@ -3429,13 +3429,26 @@ static struct VarsInit{
     ObSysVars[242].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
+    [&] (){
+      ObSysVars[243].default_value_ = "0" ;
+      ObSysVars[243].info_ = "whether to enable automatic activation of all granted roles when users log in to the server" ;
+      ObSysVars[243].name_ = "activate_all_roles_on_login" ;
+      ObSysVars[243].data_type_ = ObIntType ;
+      ObSysVars[243].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[243].id_ = SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN] = 243 ;
+      ObSysVars[243].base_value_ = "0" ;
+    ObSysVars[243].alias_ = "OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 243;
+static int64_t var_amount = 244;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -625,7 +625,7 @@ namespace sql
               jo_ptr->json_type() != ObJsonNodeType::J_ARRAY) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid json type", K(ret), K(jo_ptr->json_type()));
-    } else if (OB_FAIL(jo_ptr->print(j_buf, true, false, 0))) {
+    } else if (OB_FAIL(jo_ptr->print(j_buf, true, 0, false, 0))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("fail to convert json to string", K(ret));
     } else {

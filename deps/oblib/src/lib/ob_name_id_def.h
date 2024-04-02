@@ -840,6 +840,11 @@ DEF_NAME(id, "id")
     DEF_NAME(wait_ddl_trans, "wait_ddl_trans")
     DEF_NAME(end_ddl_trans, "end_ddl_trans")
     DEF_NAME_PAIR(create_view, "create view")
+    DEF_NAME(lock_common_ddl, "lock common ddl")
+    DEF_NAME(check_schemas, "check schemas")
+    DEF_NAME(alter_schemas, "alter schemas")
+    DEF_NAME_PAIR(parallel_ddl, "parallel ddl")
+    DEF_NAME(submit_task, "submit task")
 
     // location cache related
     DEF_NAME_PAIR(renew_loc_by_sql, "renew loc by sql")

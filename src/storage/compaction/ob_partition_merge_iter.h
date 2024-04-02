@@ -63,7 +63,7 @@ public:
   { UNUSEDx(other, cmp_ret); return OB_NOT_SUPPORTED;}
   virtual OB_INLINE const storage::ObITable *get_table() const { return table_; }
   virtual int exist(const blocksstable::ObDatumRow *row, bool &is_exist) { UNUSEDx(row, is_exist); return OB_NOT_SUPPORTED; }
-  virtual OB_INLINE bool is_rowkey_first_row_already_output() { return is_rowkey_first_row_reused_; }
+  virtual OB_INLINE bool is_rowkey_first_row_already_output() { return is_rowkey_first_row_already_output_; }
   virtual OB_INLINE bool is_rowkey_shadow_row_already_output() { return is_rowkey_shadow_row_reused_; }
 
   virtual OB_INLINE bool is_base_iter() const { return is_base_iter_; }
@@ -102,7 +102,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(K_(tablet_id), K_(iter_end), K_(schema_rowkey_column_cnt), K_(schema_version), K_(merge_range),
       KPC(curr_row_), K_(store_ctx), KPC(row_iter_), K_(iter_row_count), K_(is_inited),
-      K_(is_rowkey_first_row_reused), KPC(table_));
+      K_(is_rowkey_first_row_already_output), KPC(table_));
 protected:
   virtual bool inner_check(const ObMergeParameter &merge_param) = 0;
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;
@@ -136,7 +136,7 @@ protected:
   common::ObArenaAllocator stmt_allocator_;
   ObRowkeyReadInfo read_info_;
   bool is_inited_;
-  bool is_rowkey_first_row_reused_;
+  bool is_rowkey_first_row_already_output_;
   bool is_rowkey_shadow_row_reused_;
 };
 

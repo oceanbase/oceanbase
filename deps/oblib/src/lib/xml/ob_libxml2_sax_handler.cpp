@@ -581,21 +581,26 @@ int ObLibXml2SaxParser::push_namespace(ObXmlAttribute* ns)
     LOG_WARN("ns_cnt_stack_ not push init", K(ret), KP(ns));
   } else {
     ns_cnt_stack_[ns_cnt_stack_.size()-1]++;
-    ns_stack_.push_back(ns);
+    if (OB_FAIL(ns_stack_.push_back(ns))) {
+      LOG_WARN("failed to push back ns", K(ret), KP(ns));
+    }
   }
   return ret;
 }
 
 int ObLibXml2SaxParser::pop_namespace()
 {
+  INIT_SUCC(ret);
   int cur_ns_cnt = 0;
   if (ns_cnt_stack_.size() > 0) {
-    ns_cnt_stack_.pop_back(cur_ns_cnt);
-    for (int i = 0; i < cur_ns_cnt; ++i) {
+    if (OB_FAIL(ns_cnt_stack_.pop_back(cur_ns_cnt))) {
+      LOG_WARN("failed to pop back.", K(ret), K(cur_ns_cnt));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < cur_ns_cnt; ++i) {
       ns_stack_.pop_back();
     }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObLibXml2SaxParser::get_namespace(const ObString& name, bool use_default_ns, ObXmlAttribute*& ns)
@@ -832,8 +837,6 @@ int ObLibXml2SaxParser::add_element_attr(ObXmlElement& element, const char* src_
         qname.assign_ptr(attr_name, attr_name_length);
         if (OB_FAIL(ObXmlParserUtils::get_prefix_and_localname(qname, prefix, localname))) {
           LOG_WARN("get_prefix_and_localname failed", K(ret), K(attr_name_length), KCSTRING(src_attr_name));
-        } else if (OB_FAIL(ObXmlParserUtils::check_local_name_legality(localname))) {
-          LOG_WARN("ns is invalid", K(ret), KPC(attr), K(localname));
         } else {
           attr->set_prefix(prefix);
           attr->set_xml_key(localname);

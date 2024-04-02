@@ -304,7 +304,7 @@ int MdsUnit<K, V>::set(MdsTableBase *p_mds_table,
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   bool is_lvalue = std::is_lvalue_reference<decltype(value)>::value;
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   SetOP op(this, is_lvalue, p_mds_table, key, value, ctx, is_for_remove, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::WRITE>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -382,7 +382,7 @@ int MdsUnit<K, V>::get_snapshot(const K &key,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, key, read_op, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -427,7 +427,7 @@ int MdsUnit<K, V>::get_by_writer(const K &key,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetByWriterOp<typename std::remove_reference<OP>::type> op(this, key, read_op, writer, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -451,6 +451,32 @@ int MdsUnit<K, V>::get_latest(const K &key, OP &&read_op, const int64_t read_seq
     ret = OB_ENTRY_NOT_EXIST;
     MDS_LOG_GET(WARN, "row key not exist");
   } else if (MDS_FAIL(p_kv->v_.get_latest(std::forward<OP>(read_op), read_seq))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
+    } else {
+      MDS_LOG_GET(DEBUG, "MdsUnit get_latest failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsUnit get_latest success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename K, typename V>
+template <typename OP>
+int MdsUnit<K, V>::get_latest_committed(const K &key, OP &&read_op) const
+{
+  #define PRINT_WRAPPER KR(ret), K(key), K(typeid(OP).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(10_ms);
+  MdsRLockGuard lg(lock_);
+  CLICK();
+  KvPair<K, Row<K, V>> *p_kv = get_row_from_list_(key);
+  if (OB_ISNULL(p_kv)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    MDS_LOG_GET(WARN, "row key not exist");
+  } else if (MDS_FAIL(p_kv->v_.get_latest_committed(std::forward<OP>(read_op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }
@@ -678,7 +704,7 @@ int MdsUnit<DummyKey, V>::set(MdsTableBase *p_mds_table,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   bool is_lvalue = std::is_lvalue_reference<decltype(value)>::value;
   SetOP op(this, is_lvalue, value, ctx, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::WRITE>(lock_, retry_param, op))) {
@@ -738,7 +764,7 @@ int MdsUnit<DummyKey, V>::get_snapshot(OP &&read_op,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, read_op, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -778,7 +804,7 @@ int MdsUnit<DummyKey, V>::get_by_writer(OP &&read_op,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetByWriterOp<typename std::remove_reference<OP>::type> op(this, read_op, writer, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -798,6 +824,26 @@ int MdsUnit<DummyKey, V>::get_latest(OP &&read_op, const int64_t read_seq) const
   MdsRLockGuard lg(lock_);
   CLICK();
   if (MDS_FAIL(single_row_.v_.get_latest(std::forward<OP>(read_op), read_seq))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsUnit get_latest success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename V>
+template <typename OP>
+int MdsUnit<DummyKey, V>::get_latest_committed(OP &&op) const
+{
+  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(10_ms);
+  MdsRLockGuard lg(lock_);
+  CLICK();
+  if (MDS_FAIL(single_row_.v_.get_latest_committed(std::forward<OP>(op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }

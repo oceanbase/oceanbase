@@ -41,8 +41,9 @@ const char *ObLogTableScan::get_name() const
   const char *name = NULL;
   int ret = OB_SUCCESS;
   SampleInfo::SampleMethod sample_method = get_sample_info().method_;
-  if (NULL != pre_query_range_) {
-    if (OB_FAIL(get_pre_query_range()->is_get(is_get))) {
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
+  if (NULL != pre_range) {
+    if (OB_FAIL(pre_range->is_get(is_get))) {
       // is_get always return true
       LOG_WARN("failed to get is_get", K(ret));
     } else if (range_conds_.count() > 0) {
@@ -133,8 +134,9 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     param.need_row_count_ = std::min(param.need_row_count_, card);
     param.need_row_count_ += offset_count_double;
     if (OB_FAIL(AccessPath::re_estimate_cost(param, *est_cost_info_, sample_info_,
-                                             opt_ctx->get_cost_model_type(),
-                                             phy_query_range_row_count_, query_range_row_count_,
+                                             *opt_ctx,
+                                             phy_query_range_row_count_,
+                                             query_range_row_count_,
                                              card, index_back_cost, op_cost))) {
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
@@ -257,6 +259,16 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   } else if (OB_FAIL(dep_checker.check(exprs))) {
     LOG_WARN("failed to check op_exprs", K(ret));
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_output.count(); i++) {
+      if (OB_ISNULL(child_output.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (child_output.at(i)->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+        if (OB_FAIL(deps.del_member(i))) {
+          LOG_WARN("del member failed", K(ret));
+        }
+      }
+    }
     LOG_TRACE("succeed to check output exprs", K(exprs), K(type_), K(deps));
   }
   return ret;
@@ -268,7 +280,8 @@ int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+            || T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
     auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
     if (pseudo_col_expr->get_table_id() != table_id_) {
       //table id may be changed because of rewrite
@@ -432,6 +445,15 @@ int ObLogTableScan::generate_access_exprs()
         if (OB_FAIL(access_exprs_.push_back(expr))) {
           LOG_WARN("fail to push back expr", K(ret));
         }
+      } else if ((T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type())
+                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+        if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+         LOG_WARN("fail to push back expr", K(ret));
+        } else if (OB_FAIL(access_exprs_.push_back(expr))) { //add access expr temp
+          LOG_WARN("fail to push back expr", K(ret));
+        }
       }
     }
 
@@ -450,7 +472,7 @@ int ObLogTableScan::generate_access_exprs()
 int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (is_index_scan() && !(get_index_back())) {
+  if (!need_replace_gen_column()) {
     // do nothing.
   } else if (!replacer.empty()) {
     FOREACH_CNT_X(it, get_op_ordering(), OB_SUCC(ret)) {
@@ -1038,6 +1060,7 @@ int ObLogTableScan::pick_out_query_range_exprs()
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const share::schema::ObTableSchema *index_schema = NULL;
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
   /*
   * virtual table may have hash index,
   * for hash index, if it is a get, we should still extract the range condition
@@ -1056,8 +1079,8 @@ int ObLogTableScan::pick_out_query_range_exprs()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(is_table_get(is_get))) {
     LOG_WARN("failed to check is table get", K(ret));
-  } else if ((index_schema->is_ordered() || is_get) && NULL != pre_query_range_) {
-    const ObIArray<ObRawExpr *> &range_exprs = pre_query_range_->get_range_exprs();
+  } else if ((index_schema->is_ordered() || is_get) && NULL != pre_range) {
+    const ObIArray<ObRawExpr *> &range_exprs = pre_range->get_range_exprs();
     ObArray<ObRawExpr *> filter_exprs;
     if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
       LOG_WARN("assign filter exprs failed", K(ret));
@@ -1085,39 +1108,6 @@ int ObLogTableScan::pick_out_query_range_exprs()
       }
     } //end for
   } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObLogTableScan::pick_out_startup_filters()
-{
-  int ret = OB_SUCCESS;
-  ObLogPlan *plan = get_plan();
-  const ParamStore *params = NULL;
-  ObOptimizerContext *opt_ctx = NULL;
-  ObArray<ObRawExpr *> filter_exprs;
-  if (OB_ISNULL(plan)
-      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
-      || OB_ISNULL(params = opt_ctx->get_params())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
-  } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
-    LOG_WARN("assign filter exprs failed", K(ret));
-  } else {
-    filter_exprs_.reset();
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
-    ObRawExpr *qual = filter_exprs.at(i);
-    if (OB_ISNULL(qual)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (qual->is_static_const_expr()) {
-      if (OB_FAIL(startup_exprs_.push_back(qual))) {
-        LOG_WARN("add filter expr failed", K(i), K(ret));
-      } else { /* Do nothing */ }
-    } else if (OB_FAIL(filter_exprs_.push_back(qual))) {
-      LOG_WARN("add filter expr failed", K(i), K(ret));
-    } else { /* Do nothing */ }
-  }
   return ret;
 }
 
@@ -1751,7 +1741,7 @@ int ObLogTableScan::print_range_annotation(char *buf,
   }
 
   if (OB_SUCC(ret) && is_skip_scan()) {
-    int64_t skip_scan_offset = get_pre_query_range()->get_skip_scan_offset();
+    int64_t skip_scan_offset = get_pre_graph()->get_skip_scan_offset();
     if (OB_FAIL(BUF_PRINTF("\n      prefix_columns_cnt = %ld , skip_scan_range", skip_scan_offset))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (ss_ranges_.empty() && OB_FAIL(BUF_PRINTF("(MIN ; MAX)"))) {
@@ -2053,8 +2043,9 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
 int ObLogTableScan::is_table_get(bool &is_get) const
 {
   int ret = OB_SUCCESS;
-  if (pre_query_range_ != NULL) {
-    if (OB_FAIL(pre_query_range_->is_get(is_get))) {
+  const ObQueryRangeProvider *pre_range = get_pre_graph();
+  if (pre_range != NULL) {
+    if (OB_FAIL(pre_range->is_get(is_get))) {
       LOG_WARN("check query range is table get", K(ret));
     }
   }
@@ -2153,5 +2144,59 @@ ObRawExpr * ObLogTableScan::get_real_expr(const ObRawExpr *col) const
       break;
     }
   }
+  return ret;
+}
+
+int ObLogTableScan::copy_gen_col_range_exprs()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> columns;
+  bool need_copy = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!need_replace_gen_column()) {
+    //no need replace in index table non-return table scenario.
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_conds_.count(); ++i) {
+      columns.reuse();
+      if (OB_ISNULL(range_conds_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(range_conds_.at(i),
+                                                              columns, true))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else {
+        need_copy = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !need_copy && j < columns.count(); ++j) {
+          ObRawExpr *expr = columns.at(j);
+          if (OB_ISNULL(expr) ||
+              OB_UNLIKELY(!expr->is_column_ref_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (!static_cast<ObColumnRefRawExpr*>(expr)->is_generalized_column()) {
+            // do nothing
+          } else {
+            need_copy = true;
+          }
+        }
+        if (OB_SUCC(ret) && need_copy) {
+          ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+          ObRawExpr *old_expr = range_conds_.at(i);
+          if (OB_FAIL(copier.add_skipped_expr(columns))) {
+            LOG_WARN("failed to add skipper expr", K(ret));
+          } else if (OB_FAIL(copier.copy(old_expr, range_conds_.at(i)))) {
+            LOG_WARN("failed to copy expr node", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+int ObLogTableScan::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_query_range_row_count();
   return ret;
 }

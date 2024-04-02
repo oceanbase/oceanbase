@@ -193,6 +193,7 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     snapshot_lsid_,
                     parts_,
                     snapshot_ls_role_,
+                    committed_,
                     snapshot_acquire_addr_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
@@ -345,7 +346,7 @@ ObTxDesc::ObTxDesc()
     xa_tightly_couple_(true),
     xa_start_addr_(),
     isolation_(ObTxIsolationLevel::RC), // default is RC
-    access_mode_(ObTxAccessMode::RW),   // default is RW
+    access_mode_(ObTxAccessMode::INVL),   // default is INVL
     snapshot_version_(),
     snapshot_uncertain_bound_(0),
     snapshot_scn_(),
@@ -380,6 +381,7 @@ ObTxDesc::ObTxDesc()
     lock_(common::ObLatchIds::TX_DESC_LOCK),
     commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
     commit_cb_(NULL),
+    cb_tid_(-1),
     exec_info_reap_ts_(0),
     brpc_mask_set_(),
     rpc_cond_(),
@@ -425,6 +427,7 @@ int ObTxDesc::switch_to_idle()
   abort_cause_ = 0;
   can_elr_ = false;
   commit_cb_ = NULL;
+  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   commit_task_.reset();
   state_ = State::IDLE;
@@ -530,6 +533,7 @@ void ObTxDesc::reset()
   can_elr_ = false;
 
   commit_cb_ = NULL;
+  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   brpc_mask_set_.reset();
   rpc_cond_.reset();
@@ -676,6 +680,15 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       break;
     }
   }
+
+  if (ObTxDesc::State::IMPLICIT_ACTIVE == state_ && !active_scn_.is_valid()) {
+    /*
+     * it is a first stmt's retry, we should set active scn
+     * to enable recognizing it is first stmt
+     */
+    active_scn_ = get_tx_seq();
+  }
+
   if (!hit) {
     if (append) {
       a.last_touch_ts_ = exec_info_reap_ts_ + 1;
@@ -691,6 +704,14 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
   }
   state_change_flags_.PARTS_CHANGED_ = true;
   return ret;
+}
+
+void ObTxDesc::post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint)
+{
+  ARRAY_FOREACH_NORET(parts, i) {
+    parts[i].last_scn_ = savepoint;
+  }
+  state_change_flags_.PARTS_CHANGED_ = true;
 }
 
 int ObTxDesc::update_clean_part(const share::ObLSID &id,
@@ -904,15 +925,25 @@ bool ObTxDesc::execute_commit_cb()
         executed = true;
         cb = commit_cb_;
         commit_cb_ = NULL;
+        if (0 <= cb_tid_) {
+#ifdef ENABLE_DEBUG_LOG
+          ob_abort();
+#endif
+          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0",
+                    KP(this), K(tx_id), KP(cb_tid_));
+        }
+        ATOMIC_STORE_REL(&cb_tid_, GETTID());
         // NOTE: it is required add trace event before callback,
         // because txDesc may be released after callback called
         REC_TRANS_TRACE_EXT(&tlog_, exec_commit_cb,
                             OB_ID(arg), (void*)cb,
                             OB_ID(ref), get_ref(),
                             OB_ID(thread_id), GETTID());
+        commit_cb_lock_.unlock();
         cb->callback(commit_out_);
+      } else {
+        commit_cb_lock_.unlock();
       }
-      commit_cb_lock_.unlock();
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
@@ -1126,6 +1157,7 @@ ObTxSnapshot &ObTxSnapshot::operator=(const ObTxSnapshot &r)
 
 ObTxReadSnapshot::ObTxReadSnapshot()
   : valid_(false),
+    committed_(false),
     core_(),
     source_(SRC::INVL),
     snapshot_lsid_(),
@@ -1138,6 +1170,7 @@ ObTxReadSnapshot::ObTxReadSnapshot()
 ObTxReadSnapshot::~ObTxReadSnapshot()
 {
   valid_ = false;
+  committed_ = false;
   source_ = SRC::INVL;
   snapshot_ls_role_ = common::INVALID_ROLE;
   snapshot_acquire_addr_.reset();
@@ -1147,6 +1180,7 @@ ObTxReadSnapshot::~ObTxReadSnapshot()
 void ObTxReadSnapshot::reset()
 {
   valid_ = false;
+  committed_ = false;
   core_.reset();
   source_ = SRC::INVL;
   snapshot_lsid_.reset();
@@ -1160,6 +1194,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
 {
   int ret = OB_SUCCESS;
   valid_ = from.valid_;
+  committed_ = from.committed_;
   core_ = from.core_;
   source_ = from.source_;
   snapshot_lsid_ = from.snapshot_lsid_;
@@ -1217,10 +1252,52 @@ void ObTxReadSnapshot::wait_consistency()
     }
   }
 }
-ObString ObTxReadSnapshot::get_source_name() const
+
+const char* ObTxReadSnapshot::get_source_name() const
 {
   static const char* const SRC_NAME[] = { "INVALID", "GTS", "LOCAL", "WEAK_READ", "USER_SPECIFIED", "NONE" };
-  return ObString(SRC_NAME[(int)source_]);
+  return SRC_NAME[(int)source_];
+}
+
+/*
+ * format snapshot info for sql audit display
+ * contains: src, ls_id, ls_role, parts
+ * when shorter than 128 char like:
+ * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(id:1001,epoch:1111),(id:1002,epoch:12222)]"
+ * when longer than 128 char, with "..." in the end
+ * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(lsid:1001,epoch:1111),(lsid:1002,epoch:122..."
+*/
+int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(ERROR, "invaild arguments", K(ret), KPC(this), K(buf_len));
+  } else {
+    const char *snapshot_src = get_source_name();
+    const char *ls_role = role_to_string(snapshot_ls_role_);
+    uint64_t ls_id = snapshot_lsid_.id();
+    int n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:",
+                     snapshot_src, ls_id, ls_role);
+    if (n < 0){
+      ret = OB_UNEXPECT_INTERNAL_ERROR;
+      TRANS_LOG(WARN, "fail to fill snapshot source", K(ret), KPC(this), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      pos += parts_.to_string(buf + pos, buf_len - pos);
+      if (pos >= buf_len - 1) {
+        // buf full, parts fill not complete
+        // replace end 3 chars with ...
+        buf[pos - 2] = '.';
+        buf[pos - 3] = '.';
+        buf[pos - 4] = '.';
+      }
+      buf[pos - 1] = '\0';
+      TRANS_LOG(DEBUG, "succeed to generate snapshot source", KPC(this), K(pos), K(buf_len), K(ObString(buf)));
+    }
+  }
+  return ret;
 }
 
 ObTxExecResult::ObTxExecResult()

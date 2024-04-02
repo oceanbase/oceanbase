@@ -110,7 +110,7 @@ int ObInnerTableSchema::v_ob_sstables_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM OCEANBASE.GV$OB_SSTABLES WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT M.SVR_IP,  M.SVR_PORT,  M.TABLE_TYPE,  M.TENANT_ID,  M.LS_ID,  M.TABLET_ID,  M.START_LOG_SCN,  M.END_LOG_SCN,  M.SIZE,  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM OCEANBASE.GV$OB_SSTABLES M WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -310,7 +310,7 @@ int ObInnerTableSchema::v_ob_server_schema_info_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM   oceanbase.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   TENANT_ID,   REFRESHED_SCHEMA_VERSION,   RECEIVED_SCHEMA_VERSION,   SCHEMA_COUNT,   SCHEMA_SIZE,   MIN_SSTABLE_SCHEMA_VERSION FROM   oceanbase.GV$OB_SERVER_SCHEMA_INFO WHERE   SVR_IP=HOST_IP() AND   SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -460,7 +460,7 @@ int ObInnerTableSchema::v_ob_merge_info_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT *     FROM OCEANBASE.GV$OB_MERGE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT         SVR_IP,         SVR_PORT,         TENANT_ID,         LS_ID,         TABLET_ID,         ACTION,         COMPACTION_SCN,         START_TIME,         END_TIME,         MACRO_BLOCK_COUNT,         REUSE_PCT,         PARALLEL_DEGREE     FROM OCEANBASE.GV$OB_MERGE_INFO     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -510,7 +510,7 @@ int ObInnerTableSchema::v_ob_encrypted_tables_schema(ObTableSchema &table_schema
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.table_id AS TABLE_ID,       A.table_name AS TABLE_NAME,       B.tablespace_id AS TABLESPACE_ID,       B.encryption_name AS ENCRYPTIONALG,       CASE WHEN B.encryption_name != '' AND sum(encrypted_macro_block_count) = sum(macro_block_count) THEN 'YES'            ELSE 'NO' END AS ENCRYPTED,       hex(B.encrypt_key) AS ENCRYPTEDKEY,       B.master_key_id AS MASTERKEYID,       sum(encrypted_macro_block_count) AS BLOCKS_ENCRYPTED,       (sum(macro_block_count) - sum(encrypted_macro_block_count)) AS BLOCKS_DECRYPTED,       CASE WHEN (B.encryption_name != '' AND sum(encrypted_macro_block_count) < sum(macro_block_count)) THEN 'ENCRYPTING'            WHEN (B.encryption_name = '' AND sum(encrypted_macro_block_count) > 0) THEN 'DECRYPTING'            ELSE 'NORMAL' END AS STATUS,       A.tenant_id as CON_ID     FROM       (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id        FROM oceanbase.__all_table T where T.part_level = 0        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, P.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_part P        WHERE T.part_level = 1 and T.tenant_id = P.tenant_id and T.table_id = P.table_id        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, SP.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_sub_part SP        WHERE T.part_level = 2 and T.tenant_id = SP.tenant_id and T.table_id = SP.table_id       ) A       JOIN oceanbase.__all_tenant_tablespace B       ON A.tenant_id = B.tenant_id AND A.tablespace_id = B.tablespace_id       JOIN oceanbase.__all_virtual_tablet_encrypt_info E       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13     GROUP BY A.tenant_id, A.table_id   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.table_id AS TABLE_ID,       A.table_name AS TABLE_NAME,       B.tablespace_id AS TABLESPACE_ID,       B.encryption_name AS ENCRYPTIONALG,       CASE WHEN B.encryption_name != '' AND sum(encrypted_macro_block_count) = sum(macro_block_count) THEN 'YES'            ELSE 'NO' END AS ENCRYPTED,       hex(B.encrypt_key) AS ENCRYPTEDKEY,       B.master_key_id AS MASTERKEYID,       sum(encrypted_macro_block_count) AS BLOCKS_ENCRYPTED,       (sum(macro_block_count) - sum(encrypted_macro_block_count)) AS BLOCKS_DECRYPTED,       CASE WHEN (B.encryption_name != '' AND sum(encrypted_macro_block_count) < sum(macro_block_count)) THEN 'ENCRYPTING'            WHEN (B.encryption_name = '' AND sum(encrypted_macro_block_count) > 0) THEN 'DECRYPTING'            ELSE 'NORMAL' END AS STATUS,       A.tenant_id as CON_ID     FROM       (SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, T.tablet_id        FROM oceanbase.__all_table T where T.part_level = 0 and T.table_mode >> 12 & 15 in (0,1)        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, P.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_part P        WHERE T.part_level = 1 and T.tenant_id = P.tenant_id and T.table_id = P.table_id        UNION ALL        SELECT T.tenant_id, T.table_id, T.table_name, T.table_type, T.tablespace_id, SP.tablet_id        FROM oceanbase.__all_table T, oceanbase.__all_sub_part SP        WHERE T.part_level = 2 and T.tenant_id = SP.tenant_id and T.table_id = SP.table_id       ) A       JOIN oceanbase.__all_tenant_tablespace B       ON A.tenant_id = B.tenant_id AND A.tablespace_id = B.tablespace_id       JOIN oceanbase.__all_virtual_tablet_encrypt_info E       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13     GROUP BY A.tenant_id, A.table_id   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -810,7 +810,7 @@ int ObInnerTableSchema::v_ob_tenant_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT * FROM     oceanbase.GV$OB_TENANT_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT TENANT_ID,        SVR_IP,        SVR_PORT,        HOLD,        FREE FROM     oceanbase.GV$OB_TENANT_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::v_ob_px_target_monitor_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT *         FROM oceanbase.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT                           SVR_IP,                           SVR_PORT,                           TENANT_ID,                           IS_LEADER,                           VERSION,                           PEER_IP,                           PEER_PORT,                           PEER_TARGET,                           PEER_TARGET_USED,                           LOCAL_TARGET_USED,                           LOCAL_PARALLEL_SESSION_COUNT         FROM oceanbase.GV$OB_PX_TARGET_MONITOR         WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

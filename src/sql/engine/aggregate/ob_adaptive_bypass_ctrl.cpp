@@ -42,7 +42,13 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_MAX_MEM_INSERT == state_) {
-    //do nothing
+    if (row_cnt > scaled_llc_est_ndv_ &&
+        (static_cast<double>(row_cnt) / probe_cnt) > (1 / static_cast<double>(cut_ratio_))) {
+      state_ = STATE_PROCESS_HT;
+      set_max_rebuild_times();
+      int ret = OB_SUCCESS;//no use, just for LOG_TRACE.
+      LOG_TRACE("STATE_MAX_MEM_INSERT goto STATE_PROCESS_HT", K(ret), K(probe_cnt), K(row_cnt));
+    }
   } else if (STATE_ANALYZE == state_) {
     double ratio = MIN_RATIO_FOR_L3;
     probe_cnt_for_period_[round_times_ % MAX_REBUILD_TIMES] = probe_cnt;
@@ -53,7 +59,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
       // very good distinct rate, can expend hash map to l3 cache
       rebuild_times_ = 0;
-      if (rebacked_) {
+      if (scaled_llc_est_ndv_) {
         state_ = STATE_PROCESS_HT;
       } else if (in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
         state_ = STATE_L3_INSERT;
@@ -75,7 +81,7 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       if (new_ratio >= std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
         // very good distinct rate, can expend hash map to l3 cache
         rebuild_times_ = 0;
-        if (rebacked_) {
+        if (scaled_llc_est_ndv_) {
           state_ = STATE_PROCESS_HT;
         } else if (in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
           state_ = STATE_L3_INSERT;
@@ -91,6 +97,9 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
         // distinct rate is not good
         // prepare to release curr hash table
         state_ = STATE_PROCESS_HT;
+        if (scaled_llc_est_ndv_) {
+          set_max_rebuild_times();
+        }
       }
       //ObTaskController::get().allow_next_syslog();
       LOG_TRACE("adaptive groupby try redefine ratio", K(select_rows), K(rows), K(ndv),
@@ -104,6 +113,9 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       // distinct rate is not good
       // prepare to release curr hash table
       state_ = STATE_PROCESS_HT;
+      if (scaled_llc_est_ndv_) {
+        set_max_rebuild_times();
+      }
     }
     //ObTaskController::get().allow_next_syslog();
     LOG_TRACE("adaptive groupby generate new state", K(state_), K(rebuild_times_), K(cut_ratio_),

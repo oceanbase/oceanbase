@@ -186,6 +186,11 @@ int ObDepthFirstSearchOp::init()
   return ret;
 }
 
+void ObDepthFirstSearchOp::destroy()
+{
+  search_stack_.reset();
+}
+
 int ObDepthFirstSearchOp::reuse()
 {
   ObSearchMethodOp::reuse();
@@ -334,6 +339,11 @@ int ObDepthFirstSearchOp::get_next_nocycle_node(ObList<ObTreeNode,
     ret = OB_ITER_END;
   }
   return ret;
+}
+
+void ObBreadthFirstSearchOp::destroy()
+{
+  search_queue_.reset();
 }
 
 int ObBreadthFirstSearchOp::add_new_level()
@@ -516,6 +526,7 @@ int ObBreadthFirstSearchBulkOp::reuse()
 
 void ObBreadthFirstSearchBulkOp::destroy()
 {
+  free_input_rows_mem();
   free_last_iter_mem();
   if (OB_NOT_NULL(mem_context_)) {
     DESTROY_CONTEXT(mem_context_);
@@ -800,6 +811,22 @@ int ObBreadthFirstSearchBulkOp::init_mem_context()
     malloc_allocator_ = &mem_context_->get_malloc_allocator();
   }
   return ret;
+}
+
+//RCTE operator may encounter -4013 memory problem when it want to allocate a very large memory for a new round of iteration data
+//at that time, memory is stored in input_rows_, so we have to free them before reset allocator
+void ObBreadthFirstSearchBulkOp::free_input_rows_mem()
+{
+  if (OB_ISNULL(malloc_allocator_)) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; i < input_rows_.size(); ++i) {
+      if (OB_NOT_NULL(input_rows_.at(i))) {
+        malloc_allocator_->free(input_rows_.at(i));
+      }
+    }
+    input_rows_.reset();
+  }
 }
 
 void ObBreadthFirstSearchBulkOp::free_last_iter_mem()

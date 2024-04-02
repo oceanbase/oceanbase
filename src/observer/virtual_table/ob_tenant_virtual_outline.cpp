@@ -61,9 +61,9 @@ int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t databa
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameter is NULL", K(ret), K(schema_guard_), K(allocator_));
-  } else if (database_id == OB_OUTLINE_DEFAULT_DATABASE_ID) {
+  } else if (database_id == OB_MOCK_DEFAULT_DATABASE_ID) {
     // virtual outline database
-    if (OB_FAIL(ob_write_string(*allocator_, OB_OUTLINE_DEFAULT_DATABASE_NAME, db_name))) {
+    if (OB_FAIL(ob_write_string(*allocator_, OB_MOCK_DEFAULT_DATABASE_NAME, db_name))) {
       LOG_WARN("fail to write string", K(ret), K(db_schema->get_database_name_str()));
     } else if (FALSE_IT(db_info.db_name_ = db_name)) {
     } else if (FALSE_IT(db_info.is_recycle_ = false)) {
@@ -180,7 +180,7 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
         case DATABASE_NAME : {
           DBInfo db_info;
           if (is_outline_database_id(outline_info->get_database_id())) {
-            cells[cell_idx].set_varchar(OB_OUTLINE_DEFAULT_DATABASE_NAME);
+            cells[cell_idx].set_varchar(OB_MOCK_DEFAULT_DATABASE_NAME);
             cells[cell_idx].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else if (OB_FAIL(database_infos_.get_refactored(outline_info->get_database_id(),
@@ -265,35 +265,6 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
             cells[cell_idx].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
-          break;
-        }
-        case FORMAT_SQL_TEXT : {
-          ObString format_sql_text;
-          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_text_str(), format_sql_text))) {
-            LOG_WARN("fail to deep copy obstring", K(ret),
-                      K(outline_info->get_format_sql_text_str()), K(format_sql_text));
-          } else {
-            cells[cell_idx].set_lob_value(ObLongTextType, format_sql_text.ptr(),
-                                          static_cast<int32_t>(format_sql_text.length()));
-            cells[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          }
-          break;
-        }
-        case FORMAT_SQL_ID : {
-          ObString format_sql_id;
-          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_format_sql_id_str(), format_sql_id))) {
-            LOG_WARN("fail to deep copy obstring", K(ret),
-                      K(outline_info->get_format_sql_id_str()), K(format_sql_id));
-          } else {
-            cells[cell_idx].set_varchar(format_sql_id);
-            cells[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          }
-          break;
-        }
-        case FORMAT_OUTLINE : {
-          cells[cell_idx].set_int(static_cast<int64_t>(outline_info->is_format()));
           break;
         }
         default: {

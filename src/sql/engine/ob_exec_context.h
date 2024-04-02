@@ -161,6 +161,7 @@ public:
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
   void try_reset_convert_charset_allocator();
+  int64_t get_convert_charset_allocator_usage();
 
   void destroy_eval_allocator();
 
@@ -209,9 +210,6 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
-  //get the root execute context of foreign key in nested sql
-  int get_fk_root_ctx(ObExecContext* &root_ctx);
-  bool is_fk_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
@@ -485,7 +483,7 @@ public:
     }
     return ret;
   }
-  int get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array);
+  int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
   void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
 private:
@@ -610,7 +608,7 @@ protected:
   // expression evaluating allocator
   common::ObArenaAllocator eval_res_allocator_;
   common::ObArenaAllocator eval_tmp_allocator_;
-  ObSEArray<ObSqlTempTableCtx, 2> temp_ctx_;
+  ObTMArray<ObSqlTempTableCtx> temp_ctx_;
 
   // 用于 NLJ 场景下对右侧分区表 TSC 扫描做动态 pruning
   ObGIPruningInfo gi_pruning_info_;

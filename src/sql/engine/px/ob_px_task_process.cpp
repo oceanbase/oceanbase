@@ -138,13 +138,16 @@ int ObPxTaskProcess::process()
   ObSQLSessionInfo *session = (NULL == arg_.exec_ctx_
                                ? NULL
                                : arg_.exec_ctx_->get_my_session());
-  if (OB_ISNULL(session)) {
+  ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
+  if (OB_ISNULL(session)  || OB_ISNULL(sqc_handler)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("session is NULL", K(ret));
+    LOG_WARN("session or sqc_handler is NULL", K(ret));
   } else if (OB_FAIL(session->store_query_string(ObString::make_string("PX DFO EXECUTING")))) {
     LOG_WARN("store query string to session failed", K(ret));
   } else {
     // 设置诊断功能环境
+    ObPxRpcInitSqcArgs &arg = arg_.sqc_handler_->get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     const bool enable_perf_event = lib::is_diagnose_info_enabled();
     const bool enable_sql_audit =
         GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
@@ -345,6 +348,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_INTERRUPT_QC_FAILED)
 int ObPxTaskProcess::do_process()
 {
   LOG_TRACE("[CMD] run task", "task", arg_.task_);
@@ -496,7 +500,19 @@ int ObPxTaskProcess::do_process()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
-      (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS == ERRSIM_INTERRUPT_QC_FAILED) {
+        if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_))) {
+          LOG_WARN("interrupt_qc failed", K(tmp_ret));
+        }
+      }
+      // Regardless of whether interrupt_qc succeeds or not,
+      // always execute interrupt_tasks to ensure other threads in the current sqc terminate more quickly,
+      // thereby improving overall efficiency.
+      if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+                                              OB_GOT_SIGNAL_ABORTING))) {
+        LOG_WARN("interrupt_tasks failed", K(tmp_ret));
+      }
     }
   }
 

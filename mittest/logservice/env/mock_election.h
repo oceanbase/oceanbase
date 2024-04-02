@@ -25,6 +25,7 @@ public:
   virtual ~MockElection() { }
   int init(const int64_t id, const common::ObAddr &self);
   void stop() override final;
+  int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final;
   // 设置成员列表
   int set_memberlist(const MemberList &new_member_list) override final;
   // 获取选举当前的角色
@@ -34,7 +35,7 @@ public:
                                         int64_t &cur_leader_epoch) const override final;
   // 供role change service使用
   int change_leader_to(const common::ObAddr &dest_addr) override final;
-  int revoke(const RoleChangeReason &reason) override final;
+  int temporarily_downgrade_protocol_priority(const int64_t time_us, const char *reason) override final;
   // 拿本机地址
   const common::ObAddr &get_self_addr() const override final;
   // 打印日志

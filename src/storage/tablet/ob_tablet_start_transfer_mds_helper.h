@@ -107,6 +107,14 @@ public:
       const int64_t len,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
+  static bool check_can_do_tx_end(
+      const bool is_willing_to_commit,
+      const bool for_replay,
+      const share::SCN &log_scn,
+      const char *buf,
+      const int64_t buf_len,
+      mds::BufferCtx &ctx,
+      const char *&can_not_do_reason);
 private:
   static int on_register_success_(
       const ObTXStartTransferInInfo &tx_start_transfer_in_info,
@@ -128,6 +136,7 @@ private:
       const bool for_replay,
       const ObTXStartTransferInInfo &tx_start_transfer_in_info);
   static int check_transfer_src_tablet_(
+      const share::SCN &scn,
       const bool for_replay,
       const ObMigrationTabletParam &tablet_meta,
       ObLS *src_ls);
@@ -191,7 +200,17 @@ private:
       const ObMigrationTabletParam &tablet_meta,
       bool &can_skip);
   static int set_dest_ls_rebuild_(
-      const share::ObLSID &dest_ls_id);
+      const share::ObLSID &dest_ls_id,
+      const share::SCN &scn,
+      const bool for_replay);
+  static int do_tx_end_before_commit_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const share::SCN &scn,
+      const bool for_replay,
+      const char *&can_not_do_reason);
+  static int do_tx_end_before_abort_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const char *&can_not_do_reason);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);

@@ -43,11 +43,11 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   int ret = OB_SUCCESS;
   ObObjType obj_type1 = types_stack[0].get_type();  // geometry
   ObObjType obj_type2 = types_stack[1].get_type();  // geometry
-  if (!ob_is_string_type(obj_type1) && !ob_is_geometry(obj_type1) && !ob_is_null(obj_type1)) {
+  if (ObHexStringType != obj_type1 && !ob_is_geometry(obj_type1) && !ob_is_null(obj_type1)) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
     LOG_WARN("invalid type", K(ret), K(obj_type1));
-  } else if (!ob_is_string_type(obj_type2) && !ob_is_geometry(obj_type2)) {
+  } else if (ObHexStringType != obj_type1 && !ob_is_geometry(obj_type2)) {
     if (ob_is_null(obj_type2)) {
       ret = OB_ERR_NULL_INPUT;
       LOG_WARN("_ST_AsMVTGeom: Geometric bounds cannot be null", K(ret), K(obj_type2));
@@ -59,8 +59,8 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // integer extent
   if (OB_SUCC(ret) && param_num >= 3) {
     ObObjType extent_type = types_stack[2].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
-        && !ob_is_null(extent_type)) {
+    if (extent_type == ObTinyIntType
+        || (!ob_is_integer_type(extent_type) && extent_type != ObVarcharType && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -70,8 +70,8 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // integer buffer
   if (OB_SUCC(ret) && param_num >= 4) {
     ObObjType extent_type = types_stack[3].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
-        && !ob_is_null(extent_type)) {
+    if (extent_type == ObTinyIntType
+        || (!ob_is_integer_type(extent_type) && extent_type != ObVarcharType && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -81,7 +81,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // boolean clip_geom
   if (OB_SUCC(ret) && param_num >= 5) {
     ObObjType extent_type = types_stack[4].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
+    if (extent_type != ObTinyIntType && extent_type != ObVarcharType
         && !ob_is_null(extent_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
@@ -101,9 +101,31 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   return ret;
 }
 
+int ObExprPrivSTAsMVTGeom::get_bounds(lib::MemoryContext &mem_ctx, ObGeometry &geo, ObGeogBox *&bounds)
+{
+  int ret = OB_SUCCESS;
+  ObGeoEvalCtx box_ctx(mem_ctx);
+  box_ctx.set_is_called_in_pg_expr(true);
+  if (OB_FAIL(box_ctx.append_geo_arg(&geo))) {
+    LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
+  } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, bounds))) {
+    LOG_WARN("failed to do box functor failed", K(ret));
+  } else if ((bounds->xmax - bounds->xmin) <= 0 || ((bounds->ymax - bounds->ymin) <= 0)) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
+    LOG_WARN("_ST_AsMVTGeom: Geometric bounds are too small",
+        K(ret),
+        K(bounds->xmin),
+        K(bounds->ymin),
+        K(bounds->ymax),
+        K(bounds->xmax));
+  }
+  return ret;
+}
+
 int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
-    bool &is_null_res, ObGeometry *&geo1, ObGeogBox *&bounds, int32_t &extent, int32_t &buffer,
-    bool &clip_geom)
+    MultimodeAlloctor &allocator, bool &is_null_res, ObGeometry *&geo1, ObGeometry *&geo2,
+    int32_t &extent, int32_t &buffer, bool &clip_geom)
 {
   int ret = OB_SUCCESS;
   ObDatum *datum1 = nullptr;
@@ -112,12 +134,9 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   ObExpr *arg2 = expr.args_[1];
   ObObjType type1 = arg1->datum_meta_.type_;
   ObObjType type2 = arg2->datum_meta_.type_;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs1 = nullptr;
   const ObSrsItem *srs2 = nullptr;
-  ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
-  common::ObArenaAllocator &ctx_allocator = ctx_alloc_g.get_allocator();
-  // ObArenaAllocator tmp_allocator;
-  ObGeometry *geo2 = nullptr;
 
   // process two geometry
   if (ob_is_null(type1)) {
@@ -125,7 +144,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   } else if (ob_is_null(type2)) {
     ret = OB_ERR_NULL_INPUT;
     LOG_WARN("_ST_AsMVTGeom: Geometric bounds cannot be null", K(ret));
-  } else if (OB_FAIL(arg1->eval(ctx, datum1)) || OB_FAIL(arg2->eval(ctx, datum2))) {
+  } else if (OB_FAIL(allocator.eval_arg(arg1, ctx, datum1)) || OB_FAIL(allocator.eval_arg(arg2, ctx, datum2))) {
     LOG_WARN("fail to eval args", K(ret));
   } else if (datum1->is_null()) {
     is_null_res = true;
@@ -133,24 +152,21 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
     ret = OB_ERR_NULL_INPUT;
     LOG_WARN("_ST_AsMVTGeom: Geometric bounds cannot be null", K(ret));
   } else {
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObArenaAllocator &ctx_allocator = tmp_alloc_g.get_allocator();
     ObString wkb1 = datum1->get_string();
     ObString wkb2 = datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
-    ObGeoEvalCtx box_ctx(&ctx_allocator);
 
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-            ctx_allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb1))) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
+            allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb1))) {
       LOG_WARN(
           "fail to read real string data", K(ret), K(arg1->obj_meta_.has_lob_header()), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(ctx_allocator,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(allocator,
                    *datum2,
                    arg2->datum_meta_,
                    arg2->obj_meta_.has_lob_header(),
                    wkb2))) {
       LOG_WARN(
           "fail to read real string data", K(ret), K(arg2->obj_meta_.has_lob_header()), K(wkb2));
+    } else if (FALSE_IT(allocator.set_baseline_size(wkb1.length() + wkb2.length()))) {
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs1, true, N_PRIV_ST_ASMVTGEOM))
               || OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb2, srs2, true, N_PRIV_ST_ASMVTGEOM))) {
       if (ret == OB_ERR_SRS_NOT_FOUND) {
@@ -158,38 +174,30 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
       }
       LOG_WARN("fail to get srs item", K(ret), K(wkb1), K(wkb2));
-    } else if ((OB_NOT_NULL(srs1) && srs1->is_geographical_srs())
-               || (OB_NOT_NULL(srs2) && srs2->is_geographical_srs())) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
-      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1), K(srs2));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(ctx_allocator,
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
                    wkb1,
                    geo1,
                    srs1,
                    N_PRIV_ST_ASMVTGEOM,
-                   ObGeoBuildFlag::GEO_NORMALIZE | ObGeoBuildFlag::GEO_CHECK_RING))) {
+                   GEO_NORMALIZE | GEO_CHECK_RING | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(ctx_allocator,
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
                    wkb2,
                    geo2,
                    srs2,
                    N_PRIV_ST_ASMVTGEOM,
-                   ObGeoBuildFlag::GEO_DEFAULT))) {
+                   GEO_DEFAULT | GEO_CHECK_RING | GEO_NOT_COPY_WKB))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
-    } else if (OB_FAIL(box_ctx.append_geo_arg(geo2))) {
-      LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
-    } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, bounds))) {
-      LOG_WARN("failed to do box functor failed", K(ret));
-    } else if ((bounds->xmax - bounds->xmin) <= 0 || ((bounds->ymax - bounds->ymin) <= 0)) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
-      LOG_WARN("_ST_AsMVTGeom: Geometric bounds are too small",
-          K(ret),
-          K(bounds->xmin),
-          K(bounds->ymin),
-          K(bounds->ymax),
-          K(bounds->xmax));
+    } else if (OB_NOT_NULL(srs1) && srs1->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
+    } else if (OB_NOT_NULL(srs2) && srs2->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo2->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs2));
     }
   }
   // process extent
@@ -197,10 +205,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   extent = 4096;  // default
   if (OB_SUCC(ret) && num_args >= 3) {
     ObDatum *datum = nullptr;
-    if (expr.args_[2]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
+    if (OB_FAIL(allocator.eval_arg(expr.args_[2], ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
@@ -216,10 +221,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   buffer = 256;  // default
   if (OB_SUCC(ret) && num_args >= 4) {
     ObDatum *datum = nullptr;
-    if (expr.args_[3]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[3]->eval(ctx, datum))) {
+    if (OB_FAIL(allocator.eval_arg(expr.args_[3], ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
@@ -233,17 +235,16 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   }
   // process clip_geom
   clip_geom = true;  // default
+  int8_t clip_num = 0;
   if (OB_SUCC(ret) && num_args >= 5) {
     ObDatum *datum = nullptr;
-    if (!expr.args_[4]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[4]->eval(ctx, datum))) {
+    if (OB_FAIL(allocator.eval_arg(expr.args_[4], ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
+    } else if (FALSE_IT(clip_num = datum->get_tinyint())) {
     } else {
-      clip_geom = datum->get_bool();
+      clip_geom = datum->get_tinyint();
     }
   }
   return ret;
@@ -316,10 +317,22 @@ int ObExprPrivSTAsMVTGeom::affine_to_tile_space(
 }
 
 int ObExprPrivSTAsMVTGeom::split_geo_to_basic_type(
-    ObGeometry *&geo, ObIAllocator &allocator, ObGeoType basic_type, ObGeometry *&split_geo)
+    ObGeometry &in_geo, ObIAllocator &allocator, ObGeoType basic_type, ObGeometry *&split_geo)
 {
   int ret = OB_SUCCESS;
-  if (geo->type() == ObGeoType::GEOMETRYCOLLECTION) {
+  ObGeometry *geo = nullptr; // tree
+  if (!in_geo.is_tree()) {
+    ObGeoToTreeVisitor tree_visitor(&allocator);
+    if (OB_FAIL(in_geo.do_visit(tree_visitor))) {
+      LOG_WARN("failed to transform gc to tree", K(ret));
+    } else {
+      geo = tree_visitor.get_geometry();
+    }
+  } else {
+    geo = &in_geo;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (geo->type() == ObGeoType::GEOMETRYCOLLECTION) {
     ObCartesianMultipoint *mpt = NULL;
     ObCartesianMultilinestring *mls = NULL;
     ObCartesianMultipolygon *mpy = NULL;
@@ -342,7 +355,7 @@ int ObExprPrivSTAsMVTGeom::split_geo_to_basic_type(
     split_geo = geo;
   }
   if (OB_SUCC(ret)
-      && OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
+      && OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
                  split_geo, allocator)))) {
     LOG_WARN("fail to simplify multi geometry", K(ret));
   }
@@ -356,14 +369,14 @@ int ObExprPrivSTAsMVTGeom::snap_geometry_to_grid(
   ObGeoGrid grid = {0, 0, 0, 1, 1, 0};
   if (OB_FAIL(ObGeoMVTUtil::snap_to_grid(geo, grid, use_floor))) {
     LOG_WARN("fail to do snap to grid", K(ret));
-  } else if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
+  } else if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
                      geo, allocator)))) {
     LOG_WARN("fail to simplify multi geometry", K(ret));
   }
   return ret;
 }
 
-int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, ObIAllocator &allocator,
+int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, lib::MemoryContext &mem_ctx,
     ObGeoType basic_type, int32_t extent, int32_t buffer, bool clip_geom, bool &is_null_res,
     ObGeometry *&res_geo)
 {
@@ -371,7 +384,8 @@ int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, ObIAllocator &allocato
   ObGeometry *basic_geo = nullptr;
   ObGeogBox *clip_box = nullptr;
   bool is_geo_empty = false;
-  if (OB_FAIL(split_geo_to_basic_type(geo, allocator, ObGeoType::POLYGON, basic_geo))) {
+  ObArenaAllocator &allocator = mem_ctx->get_arena_allocator();
+  if (OB_FAIL(split_geo_to_basic_type(*geo, allocator, ObGeoType::POLYGON, basic_geo))) {
     LOG_WARN("fail to split geo to basic type", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(basic_geo, is_geo_empty))) {
     LOG_WARN("fail to check empty", K(ret));
@@ -388,7 +402,7 @@ int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, ObIAllocator &allocato
       } else {
         clip_box->xmax = clip_box->ymax = extent + static_cast<double>(buffer);
         clip_box->xmin = clip_box->ymin = -static_cast<double>(buffer);
-        if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*basic_geo, allocator, *clip_box, res_geo))) {
+        if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*basic_geo, mem_ctx, *clip_box, res_geo, true))) {
           LOG_WARN("fail to do clip by box", K(ret));
         } else if (OB_ISNULL(res_geo)) {
           is_null_res = true;
@@ -405,7 +419,7 @@ int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, ObIAllocator &allocato
     } else if (basic_geo->type() == ObGeoType::POLYGON
                || basic_geo->type() == ObGeoType::MULTIPOLYGON) {
       ObGeometry *valid_poly = nullptr;
-      if (OB_FAIL(ObGeoExprUtils::make_valid_polygon(res_geo, allocator, valid_poly))) {
+      if (OB_FAIL(ObGeoExprUtils::make_valid_polygon(res_geo, mem_ctx, valid_poly))) {
         LOG_WARN("fail to make polygon valid", K(ret));
       } else {
         res_geo = valid_poly;
@@ -425,25 +439,35 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
   int ret = OB_SUCCESS;
   bool is_null_res = false;
   ObGeometry *geo1 = nullptr;
+  ObGeometry *geo2 = nullptr;
   bool is_geo_empty = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_ASMVTGEOM);
   ObGeogBox *bounds = nullptr;
   int32_t extent = 4096;
   int32_t buffer = 256;
   bool clip_geom = true;
   ObGeometry *res_geo = nullptr;
   ObString res_wkb;
-
   if (OB_FAIL(process_input_geometry(
-          expr, ctx, is_null_res, geo1, bounds, extent, buffer, clip_geom))) {
+          expr, ctx, temp_allocator, is_null_res, geo1, geo2, extent, buffer, clip_geom))) {
     LOG_WARN("fail to process input geometry", K(ret), K(geo1), K(is_null_res));
-  } else if (is_null_res) {
-    // do nothing
+  }
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
+  if (OB_FAIL(ret) || is_null_res) {
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo_empty))) {
     LOG_WARN("check geo empty failed", K(ret));
   } else if (is_geo_empty) {
     is_null_res = true;
+  } else if (OB_FAIL(guard.init())) {
+    LOG_WARN("fail to init geo allocator guard", K(ret));
+  } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("fail to get mem ctx", K(ret));
+  } else if (OB_FAIL(get_bounds(*mem_ctx, *geo2, bounds))) {
+    LOG_WARN("fail to get bounds", K(ret));
   } else if (geo1->type() == ObGeoType::LINESTRING || geo1->type() == ObGeoType::MULTILINESTRING) {
     // pre-check
     ObGeogBox fast_box;
@@ -463,17 +487,12 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
 
   ObGeoType basic_type = ObGeoType::GEOTYPEMAX;  // POINT/LINE/POLYGON
   ObGeometry *split_geo = nullptr;
-  ObGeometry *geo_tree = nullptr;
-  ObGeoToTreeVisitor tree_visitor(&temp_allocator);
   if (OB_FAIL(ret) || is_null_res) {
     // do nothing
   } else if (OB_FAIL(get_basic_type(geo1, basic_type))) {
     LOG_WARN("fail to get basic type", K(ret));
-  } else if (OB_FAIL(geo1->do_visit(tree_visitor))) {
-    LOG_WARN("failed to transform gc to tree", K(ret));
-  } else if (FALSE_IT(geo_tree = tree_visitor.get_geometry())) {
   } else if (OB_FAIL(split_geo_to_basic_type(
-                 geo_tree, temp_allocator, basic_type, split_geo))) {  // split_geo: ObCartesian*
+                 *geo1, temp_allocator, basic_type, split_geo))) {  // split_geo: ObCartesian*
     LOG_WARN("fail to split geometry to basic type", K(ret), K(basic_type));
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(split_geo, is_geo_empty))) {
     LOG_WARN("check geo empty failed", K(ret));
@@ -490,7 +509,7 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
   } else if (is_geo_empty) {
     is_null_res = true;
   } else if (OB_FAIL(clip_geometry(split_geo,
-                 temp_allocator,
+                 *mem_ctx,
                  basic_type,
                  extent,
                  buffer,
@@ -498,6 +517,13 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
                  is_null_res,
                  res_geo))) {
     LOG_WARN("fail to clip geometry", K(ret));
+  } else if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
+              res_geo, temp_allocator)))) {
+    LOG_WARN("fail to simplify multi geometry", K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::check_empty(res_geo, is_geo_empty))) {
+    LOG_WARN("check geo empty failed", K(ret));
+  } else if (is_geo_empty) {
+    is_null_res = true;
   }
 
   if (OB_SUCC(ret)) {
@@ -505,10 +531,7 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
       res.set_null();
     } else {
       ObGeometry *res_bin = nullptr;
-      if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
-                  res_geo, temp_allocator)))) {
-        LOG_WARN("fail to simplify multi geometry", K(ret));
-      } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, res_geo, res_bin, nullptr))) {
+      if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, res_geo, res_bin, nullptr))) {
         LOG_WARN("fail to convert tree to bin", K(ret));
       } else if (FALSE_IT(res_bin->set_srid(geo1->get_srid()))) {
       } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(
@@ -518,6 +541,9 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
         res.set_string(res_wkb);
       }
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }

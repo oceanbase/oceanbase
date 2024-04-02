@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
 
@@ -34,7 +35,7 @@ public:
 
 private:
   static int process_input_geometry(
-    const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator, bool &is_null_res, ObGeometry *&geo1);
+    const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator, bool &is_null_res, ObGeometry *&geo1);
   DISALLOW_COPY_AND_ASSIGN(ObExprPrivSTPointOnSurface);
 };
 }  // namespace sql

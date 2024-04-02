@@ -152,7 +152,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     if (!result.is_pl_stmt(result.get_stmt_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Not SELECT, should not have any row!!!", K(ret));
-    } else if (!result.is_ps_protocol() && is_mysql_mode() && session_.client_non_standard()) {
+    } else if (is_mysql_mode() && session_.client_non_standard()) {
       // do nothing
     } else if (OB_FAIL(response_query_result(result))) {
       LOG_WARN("response query result fail", K(ret));
@@ -171,6 +171,11 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
   } else if (is_prexecute_) {
     if (OB_FAIL(response_query_header(result, false, false , // in prexecute , has_more_result and has_ps out is no matter, it will be recalc
                                       true))) {
+      // need close result set
+      int close_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (close_ret = result.close())) {
+        LOG_WARN("close result failed", K(close_ret));
+      }
       LOG_WARN("prexecute response query head fail. ", K(ret));
     }
   }
@@ -185,7 +190,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     } else if (!result.is_with_rows()
                 || (sender_.need_send_extra_ok_packet() && !result.has_more_result())
                 || is_prexecute_
-                || (!result.is_ps_protocol() && is_mysql_mode() && session_.client_non_standard())) {
+                || (is_mysql_mode() && session_.client_non_standard())) {
       process_ok = true;
       ObOKPParam ok_param;
       ok_param.message_ = const_cast<char*>(result.get_message());
@@ -333,7 +338,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
-      } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type()) &&
+      } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
                  OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
         LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
       }

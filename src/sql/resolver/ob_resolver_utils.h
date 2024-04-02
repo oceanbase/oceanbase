@@ -334,6 +334,7 @@ public:
                                          ObRawExpr *&expr);
 
   static int revert_external_param_info(ExternalParams &param_info,
+                                        ObRawExprFactory &expr_factory,
                                         ObRawExpr *expr);
 
    /**
@@ -761,7 +762,10 @@ public:
                                                      const ObExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
-  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs, int64_t table_id, int64_t column_idx);
+  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
+                                          int64_t table_id,
+                                          int64_t column_idx,
+                                          const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
   static int build_file_column_expr(ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo &session_info,
@@ -806,6 +810,8 @@ public:
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
+
+  static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

@@ -56,7 +56,7 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
   int64_t object_type;
   OZ (schema_guard.get_dblink_schema(tenant_id, dblink_name, dblink_schema), tenant_id, dblink_name);
   OV (OB_NOT_NULL(dblink_schema), OB_DBLINK_NOT_EXIST_TO_ACCESS, dblink_name);
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type));
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
@@ -183,7 +183,7 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
   common::ObDbLinkProxy *dblink_proxy = NULL;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   common::sqlclient::DblinkDriverProto link_type = DBLINK_UNKNOWN;
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type));
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   if (OB_SUCC(ret)) {
@@ -383,7 +383,13 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     BIND_BASIC_BY_POS(7, &part1_type, static_cast<int64_t>(sizeof(int)), oci_sql_int);
     if (FAILEDx(dblink_proxy->dblink_execute_proc(dblink_conn))) {
       const DblinkDriverProto link_type = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto());
-      LOG_WARN("read link failed", K(ret), K(ObString(call_proc)));
+      if (OB_ERR_ILL_OBJ_FLAG == ret) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_WARN("invalid identifier", K(ret), K(full_name_copy));
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, full_name_copy.length(), full_name_copy.ptr());
+      } else {
+        LOG_WARN("read link failed", K(ret), K(ObString(call_proc)));
+      }
     } else {
       switch (part1_type) {
         case OracleObjectType::ORA_PROCEUDRE:
@@ -516,7 +522,7 @@ int ObPLDbLinkGuard::get_dblink_info(const uint64_t dblink_id,
     if (OB_ISNULL(dblink_infos_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dblink_info is null", K(ret), K(i));
-    } else {
+    } else if (dblink_infos_.at(i)->get_dblink_id() == dblink_id) {
       dblink_info = dblink_infos_.at(i);
     }
   }

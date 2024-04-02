@@ -321,7 +321,7 @@ int ObDupTableLSTsSyncMgr::get_ts_info_cache_(const common::ObAddr &addr, DupTab
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ts_info_cache_.get_refactored(addr, ts_info))) {
-    DUP_TABLE_LOG(WARN, "get ts info cache failed");
+    DUP_TABLE_LOG(WARN, "get ts info cache failed", K(addr), K(ts_info));
   }
 
   return ret;

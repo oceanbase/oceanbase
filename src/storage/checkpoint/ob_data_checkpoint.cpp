@@ -241,11 +241,32 @@ SCN ObDataCheckpoint::get_rec_scn()
   return min_rec_scn;
 }
 
+SCN ObDataCheckpoint::get_active_rec_scn()
+{
+  RLOCK(NEW_CREATE | ACTIVE);
+  int ret = OB_SUCCESS;
+  SCN min_active_rec_scn = SCN::max_scn();
+  SCN tmp = SCN::max_scn();
+  if ((tmp = new_create_list_.get_min_rec_scn_in_list(false)) < min_active_rec_scn) {
+    min_active_rec_scn = tmp;
+  }
+  if ((tmp = active_list_.get_min_rec_scn_in_list()) < min_active_rec_scn) {
+    min_active_rec_scn = tmp;
+  }
+  return min_active_rec_scn;
+}
+
 int ObDataCheckpoint::flush(SCN recycle_scn, int64_t trace_id, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   if (need_freeze) {
-    if (OB_FAIL(freeze_base_on_needs_(trace_id, recycle_scn))) {
+    SCN active_rec_scn = get_active_rec_scn();
+    if (active_rec_scn > recycle_scn) {
+      STORAGE_LOG(INFO,
+                  "skip flush data checkpoint cause active_rec_scn is larger than recycle_scn",
+                  K(active_rec_scn),
+                  K(recycle_scn));
+    } else if (OB_FAIL(freeze_base_on_needs_(trace_id, recycle_scn))) {
       STORAGE_LOG(WARN, "freeze_base_on_needs failed",
                   K(ret), K(ls_->get_ls_id()), K(recycle_scn), K(trace_id));
     }
@@ -344,10 +365,13 @@ void ObDataCheckpoint::road_to_flush(SCN rec_scn)
       last = active_list_.get_first_greater(rec_scn);
     }
     pop_active_list_to_ls_frozen_(last);
-    last_time = common::ObTimeUtility::fast_current_time();
     STORAGE_LOG(INFO, "[Freezer] active_list to ls_frozen_list success",
                                                     K(ls_->get_ls_id()));
+    // add diagnose info
+    add_diagnose_info_for_ls_frozen_();
+
     // ls_frozen_list -> prepare_list
+    last_time = common::ObTimeUtility::fast_current_time();
     ls_frozen_to_prepare_(last_time);
     STORAGE_LOG(INFO, "[Freezer] road_to_flush end", K(ls_->get_ls_id()));
   }
@@ -869,7 +893,6 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
     share::SCN recycle_scn)
 {
   int ret = OB_SUCCESS;
-  if (get_rec_scn() <= recycle_scn) {
     if (is_tenant_freeze() || !is_flushing()) {
       int64_t wait_flush_num =
         new_create_list_.checkpoint_list_.get_size()
@@ -895,8 +918,20 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
                     K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
       }
     }
-  }
   return ret;
+}
+
+void ObDataCheckpoint::add_diagnose_info_for_ls_frozen_()
+{
+  ObCheckpointIterator iterator;
+  RLOCK(LS_FROZEN);
+  ls_frozen_list_.get_iterator(iterator);
+  while (iterator.has_next()) {
+    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable*>(iterator.get_next());
+    if (!memtable->is_active_checkpoint()) {
+      memtable->report_memtable_diagnose_info(memtable::ObMemtable::AddCheckpointDiagnoseInfoForMemtable());
+    }
+  }
 }
 
 }  // namespace checkpoint

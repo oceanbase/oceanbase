@@ -334,7 +334,9 @@ public:
                                         const ObSQLSessionInfo &session,
                                         const share::schema::ObTableSchema &table_schema,
                                         const share::schema::ObColumnSchemaV2 &gen_col_schema,
-                                        ObRawExpr *&expr);
+                                        ObRawExpr *&expr,
+                                        const ObLocalSessionVar *local_vars = NULL,
+                                        int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static int build_rls_predicate_expr(const common::ObString &expr_str,
                                       ObRawExprFactory &expr_factory,
                                       const ObSQLSessionInfo &session_info,
@@ -462,7 +464,9 @@ public:
                                      ObRawExpr &expr,
                                      const ObExprResType &dst_type,
                                      const ObCastMode &cm,
-                                     ObRawExpr *&new_expr);
+                                     ObRawExpr *&new_expr,
+                                     const ObLocalSessionVar *local_vars = NULL,
+                                     int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
   static int implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
@@ -482,7 +486,9 @@ public:
                               ObSysFunRawExpr *&func_expr,
                               const ObSQLSessionInfo *session_info,
                               bool use_def_cm = true,
-                              ObCastMode cm = CM_NONE);
+                              ObCastMode cm = CM_NONE,
+                              const ObLocalSessionVar *local_vars = NULL,
+                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static void need_extra_cast(const ObExprResType &src_type,
                               const ObExprResType &dst_type,
                               bool &need_extra_cast_for_src_type,
@@ -491,6 +497,7 @@ public:
                                         ObExprResType &utf8_type);
 
   static int erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
+  static int erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr);
 
   // erase implicit cast which added for operand casting.
   static int erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out);
@@ -556,22 +563,25 @@ public:
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,
                                    bool is_onetime = false);
-
-  static int create_exec_param_expr(ObQueryCtx *query_ctx,
-                                    ObRawExprFactory &expr_factory,
-                                    ObRawExpr *&src_expr,
-                                    std::pair<int64_t, ObRawExpr*> &init_expr);
+  static int create_new_exec_param(ObRawExprFactory &expr_factory,
+                                   ObRawExpr *ref_expr,
+                                   ObExecParamRawExpr *&exec_param,
+                                   bool is_onetime = false);
   static int create_param_expr(ObRawExprFactory &expr_factory, int64_t param_idx, ObRawExpr *&expr);
   static int build_trim_expr(const share::schema::ObColumnSchemaV2 *column_schema,
                              ObRawExprFactory &expr_factory,
                              const ObSQLSessionInfo *session_info,
-                             ObRawExpr *&expr);
+                             ObRawExpr *&expr,
+                             const ObLocalSessionVar *local_vars = NULL,
+                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
                             ObRawExpr *&expr,
-                            const sql::ObSQLSessionInfo *session_info);
+                            const sql::ObSQLSessionInfo *session_info,
+                            const ObLocalSessionVar *local_vars = NULL,
+                            int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
@@ -1003,6 +1013,8 @@ public:
                                ObRawExpr *param_expr2,
                                ObRawExpr *&is_not_expr);
 
+  static int extract_metadata_fileurl_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr);
+
   static int build_is_not_null_expr(ObRawExprFactory &expr_factory,
                                     ObRawExpr *param_expr,
                                     bool is_not_null,
@@ -1174,10 +1186,14 @@ public:
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
   static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+  static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
+                                    const ObSQLSessionInfo *session_info,
+                                    ObAggFunRawExpr *&expr);
 
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
+  static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
 
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,

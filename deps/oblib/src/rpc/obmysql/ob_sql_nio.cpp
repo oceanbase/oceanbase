@@ -15,6 +15,7 @@
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obmysql/ob_i_sql_sock_handler.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
+#include "lib/ob_running_mode.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/queue/ob_link_queue.h"
@@ -22,6 +23,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/profile/ob_trace_id.h"
+#include "lib/net/ob_net_util.h"
 #include "common/ob_clock_generator.h"
 #include <sys/epoll.h>
 #include <sys/types.h>
@@ -410,7 +412,13 @@ public:
 
   int peek_data(void* read_handle, int64_t limit, const char*& buf, int64_t& sz)
   {
-    ReadBuffer *read_buffer = (OB_ISNULL(read_handle)) ? &read_buffer_ : static_cast<ReadBuffer *>(read_handle);
+    ReadBuffer *read_buffer = &read_buffer_;
+    if (OB_UNLIKELY(OB_NOT_NULL(read_handle))) {
+      read_buffer = static_cast<ReadBuffer *>(read_handle);
+      // The application layer try to read packet but it may failed as the
+      // EAGAIN flag is set.
+      read_buffer->clear_EAGAIN();
+    }
     return read_buffer->peek_data(limit, buf, sz);
   }
 
@@ -606,16 +614,47 @@ int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
   return ret;
 }
 
-static struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event_flag, void* val) {
+// Why wrapping? The purpose is to distinguish the fd from the pointer.
+// See ObSqlNioImpl::handle_epoll_event() in this file for details.
+static uint64_t wrap_fd(int fd)
+{
+  return 0x8000000000000000 | fd;
+}
+
+static int unwrap_fd(uint64_t wrapped_fd)
+{
+  return (int)(wrapped_fd & 0xffffffff);
+}
+
+static bool is_wrapped_fd(uint64_t num64)
+{
+  bool wrapped = false;
+  if (0 != (0x8000000000000000 & num64)) {
+    wrapped = true;
+  }
+  return wrapped;
+}
+
+static struct epoll_event *__make_epoll_event(
+    struct epoll_event *event,
+    uint32_t event_flag,
+    int fd,
+    void* val)
+{
   event->events = event_flag;
-  event->data.ptr = val;
+  if (NULL == val) {
+    event->data.u64 = wrap_fd(fd);
+  } else {
+    event->data.ptr = val;
+  }
+
   return event;
 }
 
 static int epoll_regist(int epfd, int fd, uint32_t eflag, void* s) {
   int err = 0;
   struct epoll_event event;
-  if (0 != epoll_ctl(epfd, EPOLL_CTL_ADD, fd, __make_epoll_event(&event, eflag, s))) {
+  if (0 != epoll_ctl(epfd, EPOLL_CTL_ADD, fd, __make_epoll_event(&event, eflag, fd, s))) {
     err = -EIO;
     LOG_ERROR_RET(common::OB_ERR_SYS, "add fd to epoll failed", K(fd), K(epfd), K(errno));
   }
@@ -630,21 +669,28 @@ static int socket_set_opt(int fd, int option, int value)
 // need_monopolize is true means the first bind on mysql port should
 // detect whether the port has been used or not to prevent the same mysql port
 // been used by different observer processes
-static int listen_create(int port, bool need_monopolize)
+static int listen_create(int family, int port, bool need_monopolize)
 {
   int err = 0;
   int fd = 0;
-  struct sockaddr_in sin;
-  if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0)) < 0) {
+  struct sockaddr_storage addr;
+  memset(&addr, 0, sizeof(addr));
+  int ipv6_only_on = 1; /* Disable IPv4-mapped IPv6 addresses */
+  if ((fd = socket(family, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0)) < 0) {
     LOG_ERROR_RET(common::OB_ERR_SYS, "sql nio create socket for listen failed", K(errno));
     err = errno;
   } else if (socket_set_opt(fd, SO_REUSEADDR, 1) < 0) {
     LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
     err = errno;
+  } else if (AF_INET6 == family &&
+             setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &ipv6_only_on, sizeof(ipv6_only_on)) < 0) {
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt IPV6_V6ONLY failed", K(errno), K(fd));
+    err = errno;
   } else if ((false == need_monopolize) && (socket_set_opt(fd, SO_REUSEPORT, 1) < 0)) {
     LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEPORT failed", K(errno), K(fd));
     err = errno;
-  } else if (bind(fd, (sockaddr*)obrpc::make_unix_sockaddr(&sin, 0, port), sizeof(sin))) {
+  } else if (bind(fd, (sockaddr*)obsys::ObNetUtil::make_unix_sockaddr_any(AF_INET6 == family, port, &addr),
+                  sizeof(addr)) < 0) {
     LOG_ERROR_RET(OB_ERR_SYS, "sql nio bind listen fd failed", K(errno), K(fd));
     err = errno;
   } else if (listen(fd, 1024) < 0) {
@@ -767,16 +813,32 @@ public:
     if ((epfd_ = epoll_create1(EPOLL_CLOEXEC)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("epoll_create fail", K(ret), K(errno));
-    } else if ((lfd_ = listen_create(port, need_monopolize)) < 0) {
-      ret = OB_SERVER_LISTEN_ERROR;
-      LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
-    } else if (0 != epoll_regist(epfd_, lfd_, epflag, NULL)) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("regist listen fd fail", K(ret));
-    } else if (OB_FAIL(evfd_.create(epfd_))) {
-      LOG_WARN("evfd create fail", K(ret));
     } else {
-      LOG_INFO("sql_nio init listen succ", K(port));
+      int ret = OB_SUCCESS;
+      if ((lfd_ = listen_create(!oceanbase::lib::use_ipv6() ? AF_INET : AF_INET6, port, need_monopolize)) < 0) {
+        ret = OB_SERVER_LISTEN_ERROR;
+        LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
+      } else if (0 != epoll_regist(epfd_, lfd_, epflag, NULL)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("regist listen fd fail", K(ret));
+      } else {
+        LOG_INFO("sql_nio init listen succ", K(port), "fd", lfd_);
+      }
+      if (OB_SUCCESS != ret && lfd_ >= 0) {
+        close(lfd_);
+        lfd_ = -1;
+      }
+      if (OB_SUCCESS != ret)
+      {
+        ret = OB_SERVER_LISTEN_ERROR;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(evfd_.create(epfd_))) {
+        LOG_WARN("evfd create fail", K(ret));
+      } else {
+        LOG_INFO("sql_nio init listen succ", K(port));
+      }
     }
     return ret;
   }
@@ -876,13 +938,23 @@ private:
 
 
     for(int i = 0; i < cnt; i++) {
-      ObSqlSock* s = (ObSqlSock*)events[i].data.ptr;
-      if (OB_UNLIKELY(NULL == s)) {
-        do_accept_loop();
-      } else if (OB_UNLIKELY((void*)&evfd_ == (void*)s)) {
-        evfd_.consume();
+      uint64_t num64 = events[i].data.u64;
+      if (is_wrapped_fd(num64)) {
+        int lfd = unwrap_fd(num64);
+        if (lfd == lfd_) {
+          do_accept_loop(lfd);
+        } else {
+          // skip
+        }
       } else {
-        handle_sock_event(s, events[i].events);
+        ObSqlSock* s = (ObSqlSock*)events[i].data.ptr;
+        if (OB_UNLIKELY(NULL == s)) {
+          // skip
+        } else if (OB_UNLIKELY((void*)&evfd_ == (void*)s)) {
+          evfd_.consume();
+        } else {
+          handle_sock_event(s, events[i].events);
+        }
       }
     }
   }
@@ -984,14 +1056,14 @@ private:
     }
   }
 
-  void do_accept_loop() {
+  void do_accept_loop(int lfd) {
     while(1){
       int fd = -1;
-      if ((fd = accept4(lfd_, NULL, NULL, SOCK_NONBLOCK|SOCK_CLOEXEC)) < 0) {
+      if ((fd = accept4(lfd, NULL, NULL, SOCK_NONBLOCK|SOCK_CLOEXEC)) < 0) {
         if (EAGAIN == errno || EWOULDBLOCK == errno) {
           break;
         } else {
-          LOG_ERROR_RET(OB_ERR_SYS, "accept4 fail", K(lfd_), K(errno));
+          LOG_ERROR_RET(OB_ERR_SYS, "accept4 fail", K(lfd), K(errno));
           break;
         }
       } else {

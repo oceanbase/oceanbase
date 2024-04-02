@@ -96,6 +96,22 @@ int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRaw
 #undef GENERATE_CASE
 #undef GENERATE_DEFAULT
 
+void ObQualifiedName::format_qualified_name()
+{
+  if (access_idents_.count() == 1) {
+    col_name_ = access_idents_.at(0).access_name_;
+  }
+  if (access_idents_.count() == 2) {
+    tbl_name_ = access_idents_.at(0).access_name_;
+    col_name_ = access_idents_.at(1).access_name_;
+  }
+  if (access_idents_.count() == 3) {
+    database_name_ = access_idents_.at(0).access_name_;
+    tbl_name_ = access_idents_.at(1).access_name_;
+    col_name_ = access_idents_.at(2).access_name_;
+  }
+}
+
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
 {
   UNUSED(mode); //TODO: @ryan.ly @yuming.wyc
@@ -126,6 +142,13 @@ int ObQualifiedName::replace_access_ident_params(ObRawExpr *from, ObRawExpr *to)
     OZ (access_idents_.at(i).replace_params(from, to));
   }
   return ret;
+}
+
+int ObObjAccessIdent::check_param_num() const
+{
+  return (ObRawExpr::EXPR_SYS_FUNC == sys_func_expr_->get_expr_class())
+      ? static_cast<ObSysFunRawExpr*>(sys_func_expr_)->check_param_num()
+        : OB_SUCCESS;
 }
 
 int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const
@@ -402,7 +425,9 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info,
   ObRawExprDeduceType expr_deducer(session_info, solidify_session_vars, local_vars, local_var_id);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
-    if (session_info->is_varparams_sql_prepare()) {
+    if (session_info->is_varparams_sql_prepare() &&
+        OB_ERR_INVALID_COLUMN_NUM != ret &&
+        OB_ERR_TOO_MANY_VALUES != ret) {
       ret = OB_SUCCESS;
       LOG_TRACE("ps prepare phase ignores type deduce error");
     } else {
@@ -787,10 +812,16 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
+      || T_FUN_SYS_VALUES == type_
+      || T_OP_GET_PACKAGE_VAR == type_
+      || T_OP_GET_SUBPROGRAM_VAR == type_
+      || IS_LABEL_SE_POLICY_FUNC(type_)
       || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
+      || T_FUN_LABEL_SE_SESSION_LABEL == type_
+      || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
      is_const_inherit = false;
@@ -834,6 +865,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_USERENV == type_
           || T_FUN_SYS_REGEXP_REPLACE == type_
           || T_FUN_GET_TEMP_TABLE_SESSID == type_
+          || T_FUN_LABEL_SE_SESSION_LABEL == type_
+          || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
           || T_FUN_SYS_USER_CAN_ACCESS_OBJ == type_) {
       is_non_pure = true;
     } else if (T_FUN_SYS_TO_DATE == type_ || T_FUN_SYS_TO_TIMESTAMP == type_ ||
@@ -887,7 +920,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_LAST_INSERT_ID == type_
           || T_FUN_SYS_ROW_COUNT == type_
           || T_FUN_SYS_FOUND_ROWS == type_
-          || T_FUN_SYS_CURRENT_USER_PRIV == type_) {
+          || T_FUN_SYS_CURRENT_USER_PRIV == type_
+          || T_FUN_SYS_CURRENT_ROLE == type_) {
       is_non_pure = true;
     }
   }
@@ -4822,9 +4856,11 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
   return bool_ret;
 }
 
-int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                            ObIArray<share::schema::ObSchemaObjVersion> &obj_versions)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObSchemaObjVersion obj_version;
   /*!
    * schema_version will be set when call ObRawExprUtils::resolve_udf_common_info
    *
@@ -4858,6 +4894,27 @@ int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &o
   } else {
     CK (udf_schema_version_ == OB_INVALID_VERSION && pkg_schema_version_ == OB_INVALID_VERSION);
     // do nothing ...
+  }
+  if (OB_FAIL(ret)) {
+  } else if (common::OB_INVALID_ID != pkg_id_ && !is_udt_udf_) {
+    const ObPackageInfo *spec_info = NULL;
+    const ObPackageInfo *body_info = NULL;
+    ObSchemaObjVersion ver;
+    OZ (pl::ObPLPackageManager::get_package_schema_info(schema_guard, pkg_id_, spec_info, body_info));
+    if (OB_NOT_NULL(spec_info)) {
+      OX (ver.object_id_ = spec_info->get_package_id());
+      OX (ver.version_ = spec_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE);
+      OZ (obj_versions.push_back(ver));
+    }
+    if (OB_NOT_NULL(body_info)) {
+      OX (ver.object_id_ = body_info->get_package_id());
+      OX (ver.version_ = body_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE_BODY);
+      OZ (obj_versions.push_back(ver));
+    }
+  } else {
+    OZ (obj_versions.push_back(obj_version));
   }
   return ret;
 }
@@ -5730,6 +5787,7 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
         LOG_WARN("failed to print expr name", K(ret));
       }
       break;
+    case T_PSEUDO_EXTERNAL_FILE_URL:
     case T_PSEUDO_EXTERNAL_FILE_COL:
       if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
           LOG_WARN("failed to print table name", K(ret));

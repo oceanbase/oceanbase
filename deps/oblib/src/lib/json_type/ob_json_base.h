@@ -195,6 +195,11 @@ public:
   // @return json containner returns the capacity, json scalar return 1.
   virtual uint64_t element_count() const = 0;
 
+  // Get member count of json.
+  // scalar 1, array, object as child number
+  // @return json containner returns the capacity, json scalar return 1.
+  virtual uint64_t member_count() const = 0;
+
   // Get json node type.
   //
   // @return see ObJsonNodeType.
@@ -205,6 +210,10 @@ public:
   // @return see ObObjType.
   virtual ObObjType field_type() const = 0;
 
+  // for json binary, if need to get_parent, must set_seek_flag = false
+  // Otherwise, the parent stack will not be saved
+  // Currently only json patial update will use json bin get_parent,
+  // unify settings in this interface: ObJsonExprHelper::get_partial_json_bin
   virtual int get_parent(ObIJsonBase *& parent) const = 0;
 
   // Gey key by index from json node array.
@@ -302,7 +311,7 @@ public:
   // @param [in] is_pretty  Whether from JSON_PRETTY function or not.
   // @param [in]  depth      The depth of json tree.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  virtual int print(ObJsonBuffer &j_buf, bool is_quoted,
+  virtual int print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len = 0,
                     bool is_pretty = false, uint64_t depth = 0) const;
   
   // calculate json hash value
@@ -323,7 +332,7 @@ public:
   // Get depth of current json document.
   //
   // @return uint32_t.
-  virtual uint32_t depth();
+  virtual uint32_t depth() const = 0;
 
   // Returns a string in json path form from the root node to the current location.
   //

@@ -237,12 +237,41 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
 
   const ObTabletMapKey key(LS_ID, tablet_id);
   tablet_handle.reset();
-  // mode is READ_READABLE_COMMITED, can not get tablet
+  // mode is READ_READABLE_COMMITED, state is INIT, allow to get tablet
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
       ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
-  //ASSERT_EQ(OB_SCHEMA_EAGAIN, ret);
   ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
-  ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
+  ASSERT_FALSE(tablet->tablet_status_cache_.is_valid());
+
+  // mode is READ_READABLE_COMMITED, state is INIT
+  // snapshot is not MAX, allow to get tablet
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+      ObMDSGetTabletMode::READ_READABLE_COMMITED, 80/*snapshot*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(tablet->tablet_status_cache_.is_valid());
+
+  // mode is READ_READABLE_COMMITED, state is INIT
+  // snapshot is not MAX, allow to get tablet
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+      ObMDSGetTabletMode::READ_READABLE_COMMITED, 110/*snapshot*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(tablet->tablet_status_cache_.is_valid());
+
+  // disable cache
+  {
+    SpinWLockGuard guard(tablet->mds_cache_lock_);
+    tablet->tablet_status_cache_.reset();
+  }
+  ctx1.on_redo(share::SCN::plus(min_scn, 20));
+  ctx1.before_prepare();
+  ctx1.on_prepare(share::SCN::plus(min_scn, 30));
+
+  tablet_handle.reset();
+  // mode is READ_READABLE_COMMITED, state is ON_PREPARE, allow to get tablet
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+      ObMDSGetTabletMode::READ_READABLE_COMMITED, ObTransVersion::MAX_TRANS_VERSION/*snapshot*/);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  ASSERT_FALSE(tablet->tablet_status_cache_.is_valid());
 
   // mode is READ_ALL_COMMITED, allow to get TRANSFER_OUT status tablet
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
@@ -276,7 +305,7 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   // let transaction commit
   // commit scn: 120
   share::SCN commit_scn = share::SCN::plus(min_scn, 120);
-  ctx1.single_log_commit(commit_scn, commit_scn);
+  ctx1.on_commit(commit_scn, commit_scn);
 
   tablet_handle.reset();
   // mode is READ_READABLE_COMMITED, read snapshot is max scn, greater than transfer scn 100, not allow to get tablet
@@ -381,6 +410,10 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
       ObMDSGetTabletMode::READ_READABLE_COMMITED, 100/*snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
+
+  // transaction commit
+  commit_scn = share::SCN::plus(min_scn, 200);
+  ctx3.single_log_commit(commit_scn, commit_scn);
 
   ObLSHandle ls_handle;
   ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
@@ -498,7 +531,7 @@ TEST_F(TestTabletStatusCache, get_transfer_out_deleted)
   user_data.data_type_ = ObTabletMdsUserDataType::FINISH_TRANSFER_OUT;
   user_data.create_commit_scn_ = share::SCN::plus(min_scn, 50);
   user_data.create_commit_version_ = 50;
-  user_data.transfer_out_commit_version_ = 200;
+  user_data.start_transfer_commit_version_ = 200;
 
   mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(789)));
   ret = tablet->set(user_data, ctx);
@@ -527,6 +560,86 @@ TEST_F(TestTabletStatusCache, get_transfer_out_deleted)
       ObMDSGetTabletMode::READ_READABLE_COMMITED, INT64_MAX/*snapshot*/);
   ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
+}
+
+TEST_F(TestTabletStatusCache, finish_transfer_in_tx_query_between_redo_and_before_prepare)
+{
+  int ret = OB_SUCCESS;
+
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  ObTabletHandle tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle, ObTabletStatus::MAX);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+
+  // write data to mds table
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+    user_data.create_commit_scn_ = share::SCN::plus(share::SCN::min_scn(), 100);
+    user_data.create_commit_version_ = 100;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(111)));
+    ret = tablet->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 100);
+    ctx.single_log_commit(commit_scn, commit_scn);
+  }
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::TRANSFER_IN;
+    user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_IN;
+    user_data.create_commit_scn_ = share::SCN::plus(share::SCN::min_scn(), 100);
+    user_data.create_commit_version_ = 100;
+    user_data.start_transfer_commit_version_ = 200;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(222)));
+    ret = tablet->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 200);
+    ctx.single_log_commit(commit_scn, commit_scn);
+  }
+
+  {
+    // finish transfer in
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::FINISH_TRANSFER_IN;
+    user_data.create_commit_scn_ = share::SCN::plus(share::SCN::min_scn(), 100);
+    user_data.create_commit_version_ = 100;
+    user_data.start_transfer_commit_version_ = 200;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(333)));
+    ret = tablet->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ctx.on_redo(share::SCN::plus(share::SCN::min_scn(), 310));
+
+    // get tablet
+    // disable cache
+    {
+      SpinWLockGuard guard(tablet->mds_cache_lock_);
+      tablet->tablet_status_cache_.reset();
+    }
+    const ObTabletMapKey key(LS_ID, tablet_id);
+    ObTabletHandle handle;
+    ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, 1_s/*timeout_us*/, ObMDSGetTabletMode::READ_READABLE_COMMITED, 333);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    // disable cache
+    {
+      SpinWLockGuard guard(tablet->mds_cache_lock_);
+      tablet->tablet_status_cache_.reset();
+    }
+    ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, 1_s/*timeout_us*/, ObMDSGetTabletMode::READ_READABLE_COMMITED, 10);
+    ASSERT_EQ(OB_SNAPSHOT_DISCARDED, ret);
+  }
 }
 
 TEST_F(TestTabletStatusCache, get_empty_result_tablet)
@@ -630,8 +743,14 @@ TEST_F(TestTabletStatusCache, get_read_all_committed_tablet)
 
   // get tablet
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
-    ObMDSGetTabletMode::READ_READABLE_COMMITED, 100/*snapshot*/);
+    ObMDSGetTabletMode::READ_READABLE_COMMITED, 301/*snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
+
+  // get tablet
+  ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
+    ObMDSGetTabletMode::READ_READABLE_COMMITED, 100/*snapshot*/);
+  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
   // get tablet
@@ -786,7 +905,7 @@ TEST_F(TestTabletStatusCache, transfer_dst_ls_read_readable_committed)
 int main(int argc, char **argv)
 {
   system("rm -f test_tablet_status_cache.log*");
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_tablet_status_cache.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

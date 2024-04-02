@@ -165,6 +165,8 @@ private:
   int wait_replay_service_replay_done_(const share::ObLSID &ls_id,
                                        const palf::LSN &end_lsn,
                                        const int64_t timeout_us);
+
+  int wait_replay_service_submit_task_clear_(const share::ObLSID &ls_id);
   int wait_apply_service_apply_done_(const share::ObLSID &ls_id,
                                      palf::LSN &end_lsn);
   int wait_apply_service_apply_done_when_change_leader_(const ObLogHandler *log_handler,

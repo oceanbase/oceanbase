@@ -149,9 +149,7 @@ void ObRecoveryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    ObLSRecoveryStatOperator ls_recovery;
     palf::PalfBufferIterator iterator;//can not use without palf_guard
-    int tmp_ret = OB_SUCCESS;
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
@@ -177,67 +175,97 @@ void ObRecoveryLSService::do_work()
         restore_status_.reset();
       } else if (0 == thread_idx) {
         idle_time_us = 10 * 1000 * 1000L;
-        DEBUG_SYNC(STOP_RECOVERY_LS_THREAD0);
-        //adjust primary zone and balance ls group
-        if (OB_TMP_FAIL(do_standby_balance_())) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN("do standby balance", KR(ret), KR(tmp_ret));
-        }
-
-        if (OB_TMP_FAIL(do_ls_balance_task_())) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN("failed to process ls balance task", KR(ret), KR(tmp_ret));
-        }
-
-        (void)try_tenant_upgrade_end_();
-        if (tenant_info.is_standby()) {
-          if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
-            (void)try_update_primary_ip_list();
-          }
+        if (OB_FAIL(process_thread0_(tenant_info))) {
+          LOG_WARN("failed to process thread0", KR(ret));
         }
       } else {
-        DEBUG_SYNC(STOP_RECOVERY_LS_THREAD1);
-        palf::PalfHandleGuard palf_handle_guard;
-        if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
-          LOG_WARN("failed to init palf handle guard", KR(ret));
-        } else if (!start_scn.is_valid()) {
-          ObLSRecoveryStat ls_recovery_stat;
-          if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
-                  SYS_LS, false, ls_recovery_stat, *proxy_))) {
-            LOG_WARN("failed to load sys recovery stat", KR(ret), K(tenant_id_));
-          } else if (OB_FAIL(report_sys_ls_recovery_stat_(ls_recovery_stat.get_sync_scn(), true,
-                  "report readable_scn while start_scn is invalid"))) {
-            //may recovery end, but readable scn need report
-            LOG_WARN("failed to report ls recovery stat", KR(ret), K(ls_recovery_stat));
-          } else if (tenant_info.get_recovery_until_scn() <= ls_recovery_stat.get_sync_scn()) {
-            ret = OB_EAGAIN;
-            if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
-              LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
-            }
-          } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), palf_handle_guard, iterator))) {
-            LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
-          } else {
-            start_scn = ls_recovery_stat.get_sync_scn();
-            LOG_INFO("start to seek at", K(start_scn));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (start_scn.is_valid() && OB_FAIL(process_ls_log_(tenant_info, start_scn, iterator))) {
-          if (OB_ITER_STOP != ret) {
-            LOG_WARN("failed to process ls log", KR(ret), K(start_scn), K(tenant_info));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          start_scn.reset();
+        if (OB_FAIL(process_thread1_(tenant_info, start_scn, iterator))) {
+          LOG_WARN("failed to process thread1", KR(ret));
         }
       }//end thread1
-      LOG_INFO("[LS_RECOVERY] finish one round", KR(ret), KR(tmp_ret),
-               K(start_scn), K(thread_idx), K(tenant_info), K(idle_time_us), K_(restore_status));
+      LOG_INFO("[LS_RECOVERY] finish one round", KR(ret), K(idle_time_us),
+               K(start_scn), K(thread_idx), K(tenant_info), K(idle_time_us));
       idle(idle_time_us);
       ret = OB_SUCCESS;
     }//end while
     restore_status_.reset();
   }
+}
+
+int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  DEBUG_SYNC(STOP_RECOVERY_LS_THREAD0);
+  //adjust primary zone and balance ls group
+  if (OB_TMP_FAIL(do_standby_balance_())) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+    LOG_WARN("do standby balance", KR(ret), KR(tmp_ret));
+  }
+
+  if (OB_TMP_FAIL(do_ls_balance_task_())) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+    LOG_WARN("failed to process ls balance task", KR(ret), KR(tmp_ret));
+  }
+
+  (void)try_tenant_upgrade_end_();
+
+  if (tenant_info.is_standby()) {
+    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+      (void)try_update_primary_ip_list();
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
+    share::SCN &start_scn, palf::PalfBufferIterator &iterator)
+{
+  int ret = OB_SUCCESS;
+  DEBUG_SYNC(STOP_RECOVERY_LS_THREAD1);
+  if (OB_UNLIKELY(!tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant info is invalid", KR(ret), K(tenant_info));
+  } else if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
+  } else {
+    palf::PalfHandleGuard palf_handle_guard;
+    ObLSRecoveryStat ls_recovery_stat;
+    ObLSRecoveryStatOperator ls_recovery;
+    if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
+      LOG_WARN("failed to init palf handle guard", KR(ret));
+    } else if (!start_scn.is_valid()) {
+      if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
+              SYS_LS, false, ls_recovery_stat, *proxy_))) {
+        LOG_WARN("failed to load sys recovery stat", KR(ret), K(tenant_id_));
+      } else if (OB_FAIL(report_sys_ls_recovery_stat_(ls_recovery_stat.get_sync_scn(), true,
+              "report readable_scn while start_scn is invalid"))) {
+        //may recovery end, but readable scn need report
+        LOG_WARN("failed to report ls recovery stat", KR(ret), K(ls_recovery_stat));
+      } else if (tenant_info.get_recovery_until_scn() <= ls_recovery_stat.get_sync_scn()) {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
+          LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
+        }
+      } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), palf_handle_guard, iterator))) {
+        LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
+      } else {
+        start_scn = ls_recovery_stat.get_sync_scn();
+        LOG_INFO("start to seek at", K(start_scn));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (start_scn.is_valid() && OB_FAIL(process_ls_log_(tenant_info, start_scn, iterator))) {
+      if (OB_ITER_STOP != ret) {
+        LOG_WARN("failed to process ls log", KR(ret), K(start_scn), K(tenant_info));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      start_scn.reset();
+    }
+  }
+  return ret;
 }
 
 int ObRecoveryLSService::init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard)
@@ -336,6 +364,8 @@ int ObRecoveryLSService::process_ls_log_(
           start_scn.reset();
           restore_status_.reset(); // need to reset restore status if iterate to recovery end
         }
+        //防止sync_scn - 1被汇报上去
+        sync_scn.reset();
       } else if (OB_FAIL(header.deserialize(log_buf, HEADER_SIZE, log_pos))) {
         LOG_WARN("failed to deserialize", KR(ret), K(HEADER_SIZE));
       } else if (OB_UNLIKELY(log_pos >= log_length)) {
@@ -382,15 +412,20 @@ int ObRecoveryLSService::process_ls_log_(
 
       if (OB_SUCC(ret)) {
         last_sync_scn = sync_scn;
+      } else if (sync_scn.is_valid()) {
+        //如果本条日志不可用，至少汇报sync_scn - 1，
+        //防止拉日志齐步走和系统日志流的汇报参考其他日志流出现的死锁问题
+        last_sync_scn = SCN::scn_dec(sync_scn);
       }
 
       if (last_sync_scn.is_valid() && (OB_FAIL(ret) || OB_INVALID_TIMESTAMP == last_report_ts_
             || ObTimeUtility::current_time() - last_report_ts_ > 100 * 1000)) {
         //if ls_operator can not process, need to report last sync scn
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(report_sys_ls_recovery_stat_(last_sync_scn, false,
-                "regular report when iterate log"))) {
-          LOG_WARN("failed to report ls recovery stat", KR(ret), KR(tmp_ret), K(last_sync_scn));
+        const char* comment = OB_SUCC(ret) ? "regular report when iterate log" :
+                              "report sync_scn -1 when not valid to process";
+        if (OB_TMP_FAIL(report_sys_ls_recovery_stat_(last_sync_scn, false, comment))) {
+          LOG_WARN("failed to report ls recovery stat", KR(ret), KR(tmp_ret), K(last_sync_scn), K(comment));
         }
       }
     }
@@ -465,7 +500,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         const ObTxBufferNodeArray &source_data =
             commit_log.get_multi_source_data();
         const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-        START_TRANSACTION(proxy_, exec_tenant_id)
+        ObMySQLTransaction trans;
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
           if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
@@ -475,6 +510,8 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
           } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
                      && ObTxDataSourceType::TRANSFER_TASK != node.get_data_source_type()) {
             // nothing
+          } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
+            LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
           } else if (FALSE_IT(has_operation = true)) {
             //can not be there;
           } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
@@ -1112,10 +1149,9 @@ int ObRecoveryLSService::do_standby_balance_()
 int ObRecoveryLSService::do_ls_balance_task_()
 {
   int ret = OB_SUCCESS;
-  ObBalanceTaskHelper ls_balance_task;
+  ObArray<ObBalanceTaskHelper> ls_balance_tasks;
   ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   ObAllTenantInfo tenant_info;
-  bool has_next_task = true;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -1125,79 +1161,134 @@ int ObRecoveryLSService::do_ls_balance_task_()
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  }
-  while (OB_SUCC(ret) && has_next_task) {
-    ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
-          *proxy_, ls_balance_task);
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("get_tenant_info failed", K(ret));
+  } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
+          tenant_id_, *proxy_, tenant_info.get_readable_scn(),
+          ls_balance_tasks))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      has_next_task = false;
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("failed to get balance task", KR(ret), K(tenant_id_));
-    } else if (has_set_stop()) {
-      ret = OB_IN_STOP_STATE;
-      LOG_WARN("thread is in stop state", KR(ret));
-    } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-      LOG_WARN("get_tenant_info failed", K(ret));
-    } else if (tenant_info.get_standby_scn() >= ls_balance_task.get_operation_scn()) {
-      const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-      START_TRANSACTION(proxy_, exec_tenant_id)
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to start trans", KR(ret));
-      } else if (ls_balance_task.get_task_op().is_ls_alter()) {
-        if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
-          LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
-        }
-      } else if (ls_balance_task.get_task_op().is_transfer_end()) {
-      } else if (ls_balance_task.get_task_op().is_transfer_begin()) {
-        //find transfer end, or tenant is in flashback
-        ObBalanceTaskHelper transfer_end_task;
-        ret = ObBalanceTaskHelperTableOperator::try_find_transfer_end(tenant_id_,
-            ls_balance_task.get_operation_scn(), ls_balance_task.get_src_ls(),
-            ls_balance_task.get_dest_ls(), trans, transfer_end_task);
-        if (OB_SUCC(ret)) {
-          //if has transfer end, can remove transfer begin
-          LOG_INFO("has transfer end task, can remove transfer begin", KR(ret),
-              K(ls_balance_task), K(transfer_end_task));
-        } else if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("failed to find transfer end task", KR(ret), K(tenant_id_), K(ls_balance_task));
-        } else if (tenant_info.is_prepare_flashback_for_switch_to_primary_status()
-              || tenant_info.is_prepare_flashback_for_failover_to_primary_status()) {
-          //check tenant_info status and check wait readable_scn is equal to sync_scn
-          ret = OB_SUCCESS;
-          if (tenant_info.get_sync_scn() != tenant_info.get_standby_scn()) {
-            ret = OB_NEED_WAIT;
-            LOG_WARN("must wait repay to newest", KR(ret), K(tenant_id_), K(tenant_info),
-                K(ls_balance_task));
-          } else {
-            LOG_INFO("repay to newest, can remove transfer begin before failover", K(tenant_info), K(ls_balance_task));
-          }
-        } else {
-          ret = OB_NEED_RETRY;
-          LOG_WARN("can not find transfer end task, can not end transfer begin task", KR(ret), K(tenant_info), K(ls_balance_task));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls balance task op is unexpected", KR(ret), K(ls_balance_task));
-      }
-      if (FAILEDx(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
-              ls_balance_task.get_operation_scn(), trans))) {
-        LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
-      } else {
-        LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
-      }
-      END_TRANSACTION(trans)
+      LOG_INFO("no need process balance task", K(tenant_info));
     } else {
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
-        LOG_INFO("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
-      }
-      has_next_task = false;
+      LOG_WARN("failed to load task", KR(ret), K(tenant_id_), K(tenant_info));
     }
-  }//end while
+  } else {
+    //使用接口保证获取到的ls_balance_task都是可读点越过，可以处理的task,task是按照顺序删除的，
+    //这个是必须要保证的
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_balance_tasks.count() && !has_set_stop(); ++i) {
+      const ObBalanceTaskHelper &ls_balance_task = ls_balance_tasks.at(i);
+      //按顺序梳理task，不能如果一个task处理失败就失败掉
+      if (OB_FAIL(try_do_ls_balance_task_(ls_balance_task, tenant_info))) {
+        LOG_WARN("failed to ls balance task", KR(ret), K(ls_balance_task), K(tenant_info));
+      }
+    }//end for
+  }//end else
   return ret;
 }
 
-int ObRecoveryLSService::do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
+int ObRecoveryLSService::try_do_ls_balance_task_(
+    const share::ObBalanceTaskHelper &ls_balance_task,
+    const share::ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!ls_balance_task.is_valid() || !tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_balance_task), K(tenant_info));
+  } else if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql is null", KR(ret), KP(proxy_));
+  } else {
+    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+    bool can_remove = false;
+    START_TRANSACTION(proxy_, exec_tenant_id)
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to start trans", KR(ret));
+    } else if (ls_balance_task.get_task_op().is_ls_alter()) {
+      can_remove = true;
+      if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
+        LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
+      }
+    } else if (ls_balance_task.get_task_op().is_transfer_end()) {
+      can_remove = true;
+    } else if (ls_balance_task.get_task_op().is_transfer_begin()) {
+      if (OB_FAIL(check_transfer_begin_can_remove_(ls_balance_task, tenant_info, can_remove))) {
+        LOG_WARN("failed to check transfer begin can remove", KR(ret),
+            K(ls_balance_task), K(tenant_info));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls balance task op is unexpected", KR(ret), K(ls_balance_task));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!can_remove) {
+      LOG_INFO("balance task helper can not remove", K(ls_balance_task), K(tenant_info));
+    } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
+            ls_balance_task.get_operation_scn(), trans))) {
+      LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
+    } else {
+      LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
+    }
+    END_TRANSACTION(trans)
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_transfer_begin_can_remove_(
+    const share::ObBalanceTaskHelper &ls_balance_task,
+    const share::ObAllTenantInfo &tenant_info,
+    bool &can_remove)
+{
+  int ret = OB_SUCCESS;
+  can_remove = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!ls_balance_task.is_valid()
+        || !ls_balance_task.get_task_op().is_transfer_begin())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_balance_task));
+  } else if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql can't null", K(ret), K(proxy_));
+  } else {
+    //find transfer end, or tenant is in flashback
+    ObBalanceTaskHelper transfer_end_task;
+    ret = ObBalanceTaskHelperTableOperator::try_find_transfer_end(tenant_id_,
+        ls_balance_task.get_operation_scn(), ls_balance_task.get_src_ls(),
+        ls_balance_task.get_dest_ls(), *proxy_, transfer_end_task);
+    if (OB_SUCC(ret)) {
+      //if has transfer end, can remove transfer begin
+      LOG_INFO("has transfer end task, can remove transfer begin", KR(ret),
+          K(ls_balance_task), K(transfer_end_task));
+    } else if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to find transfer end task", KR(ret), K(tenant_id_), K(ls_balance_task));
+    } else if (tenant_info.is_prepare_flashback_for_switch_to_primary_status()
+        || tenant_info.is_prepare_flashback_for_failover_to_primary_status()) {
+      //check tenant_info status and check wait readable_scn is equal to sync_scn
+      ret = OB_SUCCESS;
+      if (tenant_info.get_sync_scn() != tenant_info.get_readable_scn()) {
+        can_remove = false;
+        LOG_WARN("There are transfer tasks in progress. Must wait for replay to newest",
+            KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));
+      } else {
+        LOG_INFO("replay to newest, can remove transfer begin before switchover/failover to primary",
+            K(tenant_info), K(ls_balance_task));
+      }
+    } else {
+      ret = OB_SUCCESS;
+      can_remove = false;
+      LOG_WARN("can not find transfer end task, can not end transfer begin task", KR(ret), K(tenant_info), K(ls_balance_task));
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::do_ls_balance_alter_task_(
+    const share::ObBalanceTaskHelper &ls_balance_task,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1481,7 +1572,7 @@ int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64
       && NULL == (decompress_buf = static_cast<char *>(mtl_malloc(decompress_buf_len, attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory");
-  } else if (OB_FAIL(logservice::decompress(NULL, in_buf, in_buf_len, decompress_buf,
+  } else if (OB_FAIL(logservice::decompress(in_buf, in_buf_len, decompress_buf,
                                             decompress_buf_len, decompressed_len))) {
     LOG_WARN("failed to decompress");
   } else {/*do nothing*/}
@@ -1490,5 +1581,3 @@ int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64
 #endif
 }//end of namespace rootserver
 }//end of namespace oceanbase
-
-

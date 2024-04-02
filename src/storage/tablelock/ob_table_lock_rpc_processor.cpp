@@ -56,7 +56,9 @@ int check_exist(const ObLockTaskBatchRequest &arg,
   ObTabletHandle tablet_handle;
   ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
   ObTabletCreateDeleteMdsUserData data;
-  bool is_commited = false;
+  mds::MdsWriter unused_writer;// will be removed later
+  mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
+  share::SCN unused_trans_version;// will be removed later
   if (ObTableLockTaskType::LOCK_ALONE_TABLET == arg.task_type_ ||
       ObTableLockTaskType::UNLOCK_ALONE_TABLET == arg.task_type_) {
     // alone tablet does not check exist
@@ -67,10 +69,15 @@ int check_exist(const ObLockTaskBatchRequest &arg,
                                     tablet_handle,
                                     0,
                                     ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    LOG_WARN("get tablet with timeout failed", K(ret), K(ls->get_ls_id()), K(tablet_id));
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
-      data, is_commited))) {
-    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
+    LOG_WARN("get tablet with timeout failed", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_latest(
+      data, unused_writer, unused_trans_stat, unused_trans_version))) {
+    if (OB_EMPTY_RESULT == ret) {
+      // tablet is creating
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to get latest tablet status", KR(ret), "ls_id", ls->get_ls_id(), K(tablet_id));
+    }
   } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
   } else if (ObTabletStatus::NORMAL == tablet_status
              || ObTabletStatus::TRANSFER_OUT == tablet_status
@@ -80,7 +87,7 @@ int check_exist(const ObLockTaskBatchRequest &arg,
              || ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status) {
     // tablet shell
     ret = OB_TABLET_NOT_EXIST;
-    LOG_INFO("tablet is already deleted", KR(ret), K(tablet_id));
+    LOG_INFO("tablet is already deleted", KR(ret), "ls_id", ls->get_ls_id(), K(tablet_id));
   } else {
     // do nothing
   }

@@ -17,6 +17,7 @@
 #include "sql/resolver/ob_stmt.h"
 #include "pl/ob_pl.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "observer/ob_server_struct.h"
 #include "observer/mysql/obmp_query.h"
@@ -944,6 +945,13 @@ void ObQueryRetryCtrl::after_func(ObRetryParam &v)
   if (OB_UNLIKELY(OB_SUCCESS == v.client_ret_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "no matter need retry or not, v.client_ret_ should not be OB_SUCCESS", K(v));
   }
+  // bug fix:
+  if (RETRY_TYPE_LOCAL == v.retry_type_) {
+    rpc::ObLockWaitNode* node = MTL(memtable::ObLockWaitMgr*)->get_thread_node();
+    if (NULL != node) {
+      node->reset_need_wait();
+    }
+  }
 }
 
 int ObQueryRetryCtrl::init()
@@ -1043,6 +1051,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("TRX",      OB_GTS_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_GTI_NOT_READY,                   short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
   ERR_RETRY_FUNC("TRX",      OB_TRANS_WEAK_READ_VERSION_NOT_READY, short_wait_retry_proc,    short_wait_retry_proc,                                nullptr);
+  ERR_RETRY_FUNC("TRX",      OB_SEQ_NO_REORDER_UNDER_PDML,       short_wait_retry_proc,      short_wait_retry_proc,                                nullptr);
 
   /* sql */
   ERR_RETRY_FUNC("SQL",      OB_ERR_INSUFFICIENT_PX_WORKER,      px_thread_not_enough_proc,  short_wait_retry_proc,                                nullptr);

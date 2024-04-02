@@ -47,6 +47,7 @@
       && common::OB_ENTRY_NOT_EXIST != ret) {   \
     ARCHIVE_LOG(WARN, "check and get record failed", K(ret));    \
   } else if (common::OB_SUCCESS == ret   \
+      && record_context.last_record_round_ == key.round_ \
       && common::ObTimeUtility::current_time_ns() - record_context.last_record_scn_.convert_to_ts()*1000L < interval) {   \
   } else if (OB_FAIL(t.get_ls_array(array))) {   \
     ARCHIVE_LOG(WARN, "get ls array failed", K(ret), K(task_type)); \

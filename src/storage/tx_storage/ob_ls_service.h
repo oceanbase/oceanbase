@@ -60,7 +60,7 @@ public:
   int stop();
   int wait();
   void destroy();
-  bool safe_to_destroy();
+  bool is_empty();
   void inc_ls_safe_destroy_task_cnt();
   void dec_ls_safe_destroy_task_cnt();
   void inc_iter_cnt();
@@ -171,7 +171,7 @@ private:
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk = true);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
   int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
@@ -186,7 +186,8 @@ private:
 
 private:
   bool is_inited_;
-  bool is_running_;
+  bool is_running_; // used by create/remove, only can be used after start and before stop.
+  bool is_stopped_; // only for ls iter, get ls iter will cause OB_NOT_RUNNING after stop.
   uint64_t tenant_id_;
   // a map from ls id to ls
   ObLSMap ls_map_;

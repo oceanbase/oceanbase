@@ -696,7 +696,9 @@ int ObPhysicalPlan::inc_concurrent_num()
   } else {
     while(OB_SUCC(ret) && false == is_succ) {
       concurrent_num = ATOMIC_LOAD(&concurrent_num_);
-      if (concurrent_num >= max_concurrent_num_) {
+      if (0 == max_concurrent_num_) {
+        ret = OB_REACH_MAX_CONCURRENT_NUM;
+      } else if (concurrent_num >= max_concurrent_num_) {
         ret = OB_REACH_MAX_CONCURRENT_NUM;
       } else {
         new_num = concurrent_num + 1;
@@ -786,8 +788,7 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    subschema_ctx_,
-                    stat_.format_sql_id_);
+                    subschema_ctx_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1172,7 +1173,6 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.plan_hash_value_ = get_signature();
     stat_.gen_time_ = ObTimeUtility::current_time();
     stat_.schema_version_ = get_tenant_schema_version();
-    stat_.last_active_time_ = stat_.gen_time_;
     stat_.hit_count_ = 0;
     stat_.mem_used_ = get_mem_size();
     stat_.slow_count_ = 0;
@@ -1269,6 +1269,11 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         pos += 1;
         stat_.plan_tmp_tbl_name_str_len_ = static_cast<int32_t>(pos);
       }
+    }
+    if (OB_SUCC(ret)) {
+      // Update last_active_time_ last, because last_active_time_ is used to
+      // indicate whether the cache stat has been updated.
+      stat_.last_active_time_ = stat_.gen_time_;
     }
   }
   return ret;

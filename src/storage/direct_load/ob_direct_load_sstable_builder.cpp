@@ -53,8 +53,6 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
   } else {
     const uint64_t tenant_id = MTL_ID();
     param_ = param;
-    allocator_.set_tenant_id(tenant_id);
-    rowkey_allocator_.set_tenant_id(tenant_id);
     start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     int64_t dir_id = -1;
@@ -269,6 +267,7 @@ ObDirectLoadDataBlockWriter2::ObDirectLoadDataBlockWriter2()
     is_inited_(false),
     is_closed_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadDataBlockWriter2::~ObDirectLoadDataBlockWriter2() { reset(); }
@@ -305,7 +304,6 @@ int ObDirectLoadDataBlockWriter2::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
@@ -343,7 +341,8 @@ int ObDirectLoadDataBlockWriter2::write_large_item(const ObDirectLoadExternalRow
   int ret = OB_SUCCESS;
   char *new_buf;
   const int64_t align_buf_size = upper_align(new_buf_size, DIO_ALIGN_SIZE);
-  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size, ObModIds::OB_SQL_LOAD_DATA)))) {
+  ObMemAttr attr(MTL_ID(), "TLD_LargeBuf");
+  if (OB_ISNULL(new_buf = static_cast<char *>(ob_malloc(align_buf_size, attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer", KR(ret), K(align_buf_size));
   } else {
@@ -410,10 +409,10 @@ int ObDirectLoadDataBlockWriter2::close()
     LOG_WARN("ObDirectLoadDataBlockWriter2 is closed", KR(ret));
   } else if (buf_pos_ > header_length_ && OB_FAIL(flush_buffer(buf_size_, buf_))) {
     LOG_WARN("fail to flush buffer", KR(ret));
+  } else if (OB_FAIL(file_io_handle_.wait())) {
+    LOG_WARN("fail to wait io finish", KR(ret));
   } else {
     reset();
-  }
-  if (OB_SUCC(ret)) {
     is_closed_ = true;
   }
   return ret;
@@ -428,8 +427,8 @@ int ObDirectLoadDataBlockWriter2::flush_buffer(int64_t buf_size, char *buf)
   if (OB_FAIL(header_.serialize(buf, buf_size, pos))) {
     LOG_WARN("fail to serialize data block header", KR(ret), K(buf_size), KP(buf_), K(pos));
   } else {
-    if (OB_FAIL(file_io_handle_.aio_write(buf, buf_size))) {
-      LOG_WARN("fail to do aio write data file", KR(ret));
+    if (OB_FAIL(file_io_handle_.write(buf, buf_size))) {
+      LOG_WARN("fail to do write data file", KR(ret));
     } else {
       ObDirectLoadIndexBlockItem item;
       assign(header_length_, buf_size_, buf_);
@@ -463,6 +462,7 @@ ObDirectLoadIndexBlockWriter::ObDirectLoadIndexBlockWriter()
     is_inited_(false),
     is_closed_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadIndexBlockWriter::~ObDirectLoadIndexBlockWriter() { reset(); }
@@ -498,7 +498,6 @@ int ObDirectLoadIndexBlockWriter::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
@@ -560,8 +559,8 @@ int ObDirectLoadIndexBlockWriter::flush_buffer()
   if (OB_FAIL(header_.serialize(buf_, buf_size_, pos))) {
     LOG_WARN("fail to serialize data block header", KR(ret), K(buf_size_), K(pos), KP(buf_));
   } else {
-    if (OB_FAIL(file_io_handle_.aio_write(buf_, buf_size_))) {
-      LOG_WARN("fail to do aio write index file", KR(ret));
+    if (OB_FAIL(file_io_handle_.write(buf_, buf_size_))) {
+      LOG_WARN("fail to do write index file", KR(ret));
     } else {
       header_.start_offset_ = offset_;
       total_index_size_ += item_size_;
@@ -584,10 +583,10 @@ int ObDirectLoadIndexBlockWriter::close()
     LOG_WARN("ObDirectLoadIndexBlockWriter is closed", KR(ret));
   } else if (buf_pos_ > header_length_ && OB_FAIL(flush_buffer())) {
     LOG_WARN("fail to flush buffer", KR(ret));
+  } else if (OB_FAIL(file_io_handle_.wait())) {
+    LOG_WARN("fail to wait io finish", KR(ret));
   } else {
     reset();
-  }
-  if (OB_SUCC(ret)) {
     is_closed_ = true;
   }
   return ret;
@@ -604,10 +603,10 @@ ObDirectLoadIndexBlockReader::ObDirectLoadIndexBlockReader()
     header_length_(0),
     item_size_(0),
     index_item_num_per_block_(0),
-    io_timeout_ms_(0),
     allocator_("TLD_IBReader"),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 int ObDirectLoadIndexBlockReader::init(uint64_t tenant_id, int64_t buf_size,
@@ -623,7 +622,6 @@ int ObDirectLoadIndexBlockReader::init(uint64_t tenant_id, int64_t buf_size,
   } else if (OB_FAIL(file_io_handle_.open(file_handle))) {
     LOG_WARN("fail to open file handle", KR(ret));
   } else {
-    allocator_.set_tenant_id(tenant_id);
     if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate buffer", KR(ret), K(buf_size));
@@ -638,7 +636,6 @@ int ObDirectLoadIndexBlockReader::init(uint64_t tenant_id, int64_t buf_size,
         index_item_num_per_block_ = ObDirectLoadIndexBlock::get_item_num_per_block(buf_size);
         assign(buf_size, buf_);
         tenant_id_ = tenant_id;
-        io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
         is_inited_ = true;
       }
     }
@@ -667,13 +664,9 @@ int ObDirectLoadIndexBlockReader::read_buffer(int64_t idx)
   int ret = OB_SUCCESS;
   uint64_t offset = 0;
   offset = buf_size_ * idx;
-  if (OB_FAIL(file_io_handle_.aio_pread(buf_, buf_size_, offset))) {
+  if (OB_FAIL(file_io_handle_.pread(buf_, buf_size_, offset))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to do aio read from index file", KR(ret));
-    }
-  } else {
-    if (OB_FAIL(file_io_handle_.wait(io_timeout_ms_))) {
-      LOG_WARN("fail to wait io finish", KR(ret), K(io_timeout_ms_));
+      LOG_WARN("fail to do pread from index file", KR(ret));
     }
   }
   return ret;

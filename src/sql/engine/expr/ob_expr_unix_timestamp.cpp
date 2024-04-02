@@ -71,6 +71,7 @@ int ObExprUnixTimestamp::calc_result_typeN(ObExprResType &type,
       ret = calc_result_type_column(type, date_type);
     }
     date_type.set_calc_type(ObTimestampType);
+    date_type.set_calc_scale(type.get_scale());
   }
   ret = OB_SUCCESS;//just let it go if error happened
   return ret;
@@ -115,7 +116,8 @@ int ObExprUnixTimestamp::calc_result_type_literal(ObExprResType &type,
     if (!type1.is_string_type()) {
       type.set_scale(type1.get_scale());
     }
-    type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH + type.get_scale()));
+    type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH +
+                                        easy_max(0, type.get_scale())));
 
   } else {
     type.set_int();
@@ -132,7 +134,8 @@ int ObExprUnixTimestamp::calc_result_type_column(ObExprResType &type,
   if (type1.is_string_type() || type1.is_double()) {
     type.set_number();
     type.set_scale(MAX_SCALE_FOR_TEMPORAL);
-    type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH + type.get_scale()));
+    type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH +
+                                          easy_max(0, type.get_scale())));
   } else {
     if (DEFAULT_SCALE_FOR_INTEGER == type1.get_scale()) {
       type.set_int();
@@ -141,7 +144,8 @@ int ObExprUnixTimestamp::calc_result_type_column(ObExprResType &type,
     } else {
       type.set_number();
       type.set_scale(type1.get_scale());
-      type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH + type.get_scale()));
+      type.set_precision(static_cast<ObPrecision>(TIMESTAMP_VALUE_LENGTH +
+                                          easy_max(0, type.get_scale())));
     }
   }
   return ret;

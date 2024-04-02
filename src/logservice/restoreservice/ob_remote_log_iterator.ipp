@@ -52,7 +52,7 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObRemoteLogParent *source = NULL;
-  const int64_t DEFAULT_BUF_SIZE = 64 * 1024 * 1024L;
+  const int64_t BUF_SIZE = single_read_size + archive::ARCHIVE_FILE_HEADER_SIZE;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObRemoteLogIterator already init", K(ret), K(inited_), K(id_));
@@ -75,11 +75,11 @@ int ObRemoteLogIterator<LogEntryType>::init(const uint64_t tenant_id,
         && ! share::is_raw_path_log_source_type(source->get_source_type()))) {
     ret = OB_NOT_SUPPORTED;
     CLOG_LOG(WARN, "source type not support", K(ret), K(id), KPC(source));
-  } else if (OB_ISNULL(buf_ = buffer_pool_->acquire(DEFAULT_BUF_SIZE))) {
+  } else if (OB_ISNULL(buf_ = buffer_pool_->acquire(BUF_SIZE))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "acquire buf failed", K(ret));
   } else {
-    buf_size_ = DEFAULT_BUF_SIZE;
+    buf_size_ = BUF_SIZE;
     tenant_id_ = tenant_id;
     id_ = id;
     start_lsn_ = start_lsn;
@@ -277,11 +277,6 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 
   } while (OB_SUCCESS == ret && ! done);
 
-  if (OB_NEED_RETRY == ret) {
-    ret = OB_ITER_END;
-    CLOG_LOG(WARN, "read data from archive not atomic, rewrite ret_code", KPC(this));
-  }
-
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {
     mark_source_error_(ret);
   }
@@ -291,7 +286,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 template<class LogEntryType>
 bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
 {
-  return OB_BUF_NOT_ENOUGH == ret_code;
+  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
 }
 
 template<class LogEntryType>

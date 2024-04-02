@@ -71,6 +71,8 @@
 #define FETCH_ALL_SYS_PRIV_HISTORY_SQL          COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_TABLE_PRIV_HISTORY_SQL        COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_ROUTINE_PRIV_HISTORY_SQL      COMMON_SQL_WITH_TENANT
+
+#define FETCH_ALL_COLUMN_PRIV_HISTORY_SQL       COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OBJ_PRIV_HISTORY_SQL          COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OUTLINE_HISTORY_SQL           COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_SYNONYM_HISTORY_SQL           COMMON_SQL_WITH_TENANT
@@ -1389,6 +1391,23 @@ int ObSchemaServiceSQLImpl::get_all_routine_privs(ObISQLClient &client,
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_all_column_privs(ObISQLClient &client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObColumnPriv> &schema_array)
+{
+  int ret = OB_SUCCESS;
+  schema_array.reset();
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail");
+  } else if (OB_FAIL(fetch_column_privs(client, schema_status, schema_version, tenant_id, schema_array))) {
+    LOG_WARN("fetch tenants failed", K(ret));
+  }
+  return ret;
+}
+
 int ObSchemaServiceSQLImpl::get_sys_variable_schema(
     ObISQLClient &sql_client,
     const ObRefreshSchemaStatus &schema_status,
@@ -2447,6 +2466,28 @@ int ObSchemaServiceSQLImpl::fetch_all_tenant_info(
     ret; \
   })
 
+#define SQL_APPEND_COLUMN_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
+  ({                                                                 \
+    int ret = OB_SUCCESS; \
+    if (OB_FAIL(sql.append("("))) { \
+      LOG_WARN("append sql failed", K(ret)); \
+    } else { \
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; ++i) {  \
+        if (OB_FAIL(sql.append_fmt("%s(%lu, %lu) ", 0 == i ? "" : ", ", \
+                                   fill_extract_tenant_id(schema_status, tenant_id), \
+                                   schema_keys[i].column_priv_id_))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+      if (OB_SUCC(ret)) { \
+        if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+    } \
+    ret; \
+  })
+
 #define SQL_APPEND_OBJ_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
   ({                                                                 \
     int ret = OB_SUCCESS; \
@@ -2806,6 +2847,13 @@ FETCH_NEW_SCHEMA_ID(RLS_GROUP, rls_group);
 FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 
 #undef FETCH_NEW_SCHEMA_ID
+
+int ObSchemaServiceSQLImpl::fetch_new_priv_id(
+    const uint64_t tenant_id,
+    uint64_t &new_priv_id)
+{
+  return fetch_new_schema_id_(tenant_id, OB_MAX_USED_OBJECT_ID_TYPE, new_priv_id);
+}
 
 int ObSchemaServiceSQLImpl::fetch_new_normal_rowid_table_tablet_ids_(
     const uint64_t tenant_id,
@@ -3180,6 +3228,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(db_priv, ObDBPriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(table_priv, ObTablePriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(routine_priv, ObRoutinePriv);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(column_priv, ObColumnPriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(outline, ObSimpleOutlineSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
@@ -4460,6 +4509,7 @@ int ObSchemaServiceSQLImpl::fetch_role_grantee_map_info(
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     ObSqlString sql;
+    bool is_oracle_mode = false;
     const bool is_full_schema = (NULL != user_keys && users_size > 0) ? false : true;
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
@@ -4467,6 +4517,8 @@ int ObSchemaServiceSQLImpl::fetch_role_grantee_map_info(
     if (OB_FAIL(sql.append_fmt(FETCH_ALL_ROLE_GRANTEE_MAP_HISTORY_SQL, OB_ALL_TENANT_ROLE_GRANTEE_MAP_HISTORY_TNAME,
                                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("failed to get oracle mode", K(ret));
     } else if (!is_full_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < users_size; ++i) {
         const uint64_t user_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_keys[i]);
@@ -4481,7 +4533,7 @@ int ObSchemaServiceSQLImpl::fetch_role_grantee_map_info(
             LOG_WARN("append sql failed", K(ret), K(i), K(user_id));
           }
         } else {
-          if (!user_array.at(i).is_role()) {
+          if (!user_array.at(i).is_role() && is_oracle_mode) {
             // skip, user_array.at(i) is user, it's no need to fetch grantee ids
           } else {
             if (!is_need_inc_fetch) {
@@ -5293,6 +5345,50 @@ int ObSchemaServiceSQLImpl::fetch_udfs(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::fetch_column_privs(
+    ObISQLClient &sql_client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObColumnPriv> &schema_array,
+    const SchemaKey *schema_keys,
+    const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_COLUMN_PRIV_HISTORY_SQL, OB_ALL_COLUMN_PRIVILEGE_HISTORY_TNAME,
+                               fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != schema_keys && schema_key_size > 0) {
+      // database_name/routine_name is case sensitive
+      if (OB_FAIL(sql.append_fmt(" AND (tenant_id, priv_id) in"))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(SQL_APPEND_COLUMN_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql))) {
+        LOG_WARN("sql append column priv id failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, priv_id desc, schema_version desc"))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_column_priv_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to retrieve column priv schema", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 int ObSchemaServiceSQLImpl::fetch_rls_policys(
     ObISQLClient &sql_client,
     const ObRefreshSchemaStatus &schema_status,
@@ -9387,7 +9483,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
           EXTRACT_INT_FIELD_MYSQL(*result, id_col_name, tmp_schema_id, uint64_t);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, name_col_name, tmp_schema_name);
           if (OB_FAIL(ret)) {
-          } else if (schema_name_is_equal_(
+          } else if (schema_name_is_equal(
                      schema_name, tmp_schema_name,
                      case_compare, compare_with_collation)) {
             schema_id = tmp_schema_id;
@@ -9400,7 +9496,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
   return ret;
 }
 
-bool ObSchemaServiceSQLImpl::schema_name_is_equal_(
+bool ObSchemaServiceSQLImpl::schema_name_is_equal(
        const ObString &src,
        const ObString &dst,
        const bool case_compare,
@@ -9647,7 +9743,7 @@ int ObSchemaServiceSQLImpl::get_table_id(
             // try fetch inner table id
             if (is_system_table && OB_INVALID_ID == candidate_inner_table_id) { // case 3.3
               bool tmp_case_compare = is_mysql_sys_database_id(database_id) ? true : case_compare;
-              if (schema_name_is_equal_(
+              if (schema_name_is_equal(
                   table_name, tmp_table_name,
                   case_compare, compare_with_collation)
                   && 0 == tmp_session_id) {
@@ -9657,7 +9753,7 @@ int ObSchemaServiceSQLImpl::get_table_id(
               }
             }
 
-            if (schema_name_is_equal_(
+            if (schema_name_is_equal(
                 table_name, tmp_table_name,
                 case_compare, compare_with_collation)) {
               table_id = tmp_table_id;
@@ -9701,6 +9797,9 @@ int ObSchemaServiceSQLImpl::get_index_id(
   bool case_compare = false;
   const bool compare_with_collation = true;
   index_id = OB_INVALID_ID;
+  #define GET_INDEX_ID_SQL "SELECT table_id, table_name FROM %s " \
+                           "WHERE tenant_id = %lu AND database_id = %lu AND table_name = '%s' " \
+                           "AND table_type = %d "
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -9717,14 +9816,28 @@ int ObSchemaServiceSQLImpl::get_index_id(
     LOG_WARN("fail to check oracle mode", KR(ret), K(tenant_id));
   } else if (FALSE_IT(case_compare = (!is_oracle_mode
              || is_mysql_sys_database_id(database_id)))) {
-  } else if (OB_FAIL(sql.assign_fmt(
-             "SELECT table_id, table_name FROM %s "
-             "WHERE tenant_id = 0 AND database_id = %lu AND table_name = '%s' "
-             "AND table_type = %d ",
-             OB_ALL_TABLE_TNAME, database_id, idx_name, USER_INDEX))) {
-    LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
-             K(index_name), "idx_name", idx_name);
-  } else if (OB_FAIL(retrieve_schema_id_with_name_(
+  } else if (is_oceanbase_sys_database_id(database_id)) {
+    if (OB_FAIL(sql.assign_fmt(
+              "SELECT * FROM "
+              "( "
+              GET_INDEX_ID_SQL
+              "UNION ALL "
+              GET_INDEX_ID_SQL
+              ") ",
+              OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id, database_id, idx_name, USER_INDEX,
+              OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, idx_name, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
+              K(index_name), "idx_name", idx_name);
+    }
+  } else {
+    if (OB_FAIL(sql.assign_fmt(
+              GET_INDEX_ID_SQL,
+              OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, idx_name, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
+              K(index_name), "idx_name", idx_name);
+    }
+  }
+  if (FAILEDx(retrieve_schema_id_with_name_(
              sql_client, tenant_id, sql,
              "table_id", "table_name",
              index_name, case_compare,
@@ -9912,7 +10025,7 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
           // skip
           // (TODO):for mysql tmp table, it may has risk that constraint name duplicated in one table?
           // here just make the logic same with int ObSchemaMgr::add_constraints_in_table().
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    constraint_name, tmp_constraint_name,
                    case_compare, compare_with_collation)) {
           constraint_id = tmp_constraint_id;
@@ -10001,7 +10114,7 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
                    || is_index_table(tmp_table_type)
                    || is_aux_lob_table(tmp_table_type)) {
           // skip
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    foreign_key_name, tmp_foreign_key_name,
                    case_compare, compare_with_collation)) {
           foreign_key_id = tmp_foreign_key_id;
@@ -10078,7 +10191,7 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sequence_name", tmp_sequence_name);
         EXTRACT_BOOL_FIELD_MYSQL(*result, "is_system_generated", tmp_is_system_generated);
         if (OB_FAIL(ret)) {
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    sequence_name, tmp_sequence_name,
                    case_compare, compare_with_collation)) {
           sequence_id = tmp_sequence_id;
@@ -10225,7 +10338,7 @@ int ObSchemaServiceSQLImpl::get_routine_id(
           EXTRACT_INT_FIELD_MYSQL(*result, "routine_type", tmp_routine_type, ObRoutineType);
 
           if (OB_FAIL(ret)) {
-          } else if (schema_name_is_equal_(
+          } else if (schema_name_is_equal(
                      routine_name, tmp_routine_name,
                      case_compare, compare_with_collation)) {
             if (OB_FAIL(routine_pairs.push_back(
@@ -10509,6 +10622,89 @@ int ObSchemaServiceSQLImpl::get_audits_in_owner(
   }
   return ret;
 }
+
+int ObSchemaServiceSQLImpl::get_table_index_infos(
+    common::ObIAllocator &allocator,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const uint64_t data_table_id,
+    common::ObIArray<ObIndexSchemaInfo> &index_infos)
+{
+  int ret = OB_SUCCESS;
+  index_infos.reset();
+  ObSqlString sql;
+  #define GET_INDEX_INFO_SQL "SELECT table_name, table_id, schema_version FROM %s " \
+                             "WHERE tenant_id = %lu AND database_id = %lu AND data_table_id = %lu " \
+                             "AND table_type = %d "
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+             || OB_INVALID_ID == database_id
+             || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+  } else if (is_oceanbase_sys_database_id(database_id)) {
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT * FROM "
+                "( "
+                GET_INDEX_INFO_SQL
+                "UNION ALL "
+                GET_INDEX_INFO_SQL
+                ") ",
+                OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id, database_id, data_table_id, USER_INDEX,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, data_table_id, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+    }
+  } else {
+    if (OB_FAIL(sql.assign_fmt(
+                GET_INDEX_INFO_SQL,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, data_table_id, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret), K(tenant_id));
+    }
+    ObString tmp_schema_name;
+    uint64_t tmp_index_id = OB_INVALID_ID;
+    int64_t tmp_schema_version = OB_INVALID_VERSION;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next", KR(ret));
+        }
+      } else {
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", tmp_schema_name);
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_id", tmp_index_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", tmp_schema_version, int64_t);
+        ObIndexSchemaInfo tmp_index_info;
+        ObString tmp_index_name;
+        if (FAILEDx(ob_write_string(allocator, tmp_schema_name, tmp_index_name, true/*c_style*/))) {
+          LOG_WARN("fail to write string", KR(ret));
+        } else if (OB_FAIL(tmp_index_info.init(tmp_index_name, tmp_index_id, tmp_schema_version))) {
+          LOG_WARN("fail to init tmp index info", KR(ret), K(tmp_schema_name), K(tmp_index_id), K(tmp_schema_version));
+        } else if (OB_FAIL(index_infos.push_back(tmp_index_info))) {
+          LOG_WARN("fail to push back tmp schema name", KR(ret), K(tenant_id), K(tmp_schema_name));
+        }
+      }
+    }// end while
+    }// end smart_var
+  }
+  LOG_TRACE("get table index name", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+  return ret;
+}
+
 
 }//namespace schema
 }//namespace share

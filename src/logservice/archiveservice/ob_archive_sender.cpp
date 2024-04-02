@@ -421,6 +421,7 @@ bool ObArchiveSender::in_normal_status_(const ArchiveKey &key) const
   return round_mgr_->is_in_archive_status(key) || round_mgr_->is_in_suspend_status(key);
 }
 
+ERRSIM_POINT_DEF(ERRSIM_OB_BACKUP_PERMISSION_DENIED);
 // 仅有需要重试的任务返回错误码
 void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume_status)
 {
@@ -464,6 +465,10 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
         ARCHIVE_LOG(INFO, "archive log succ", K(id));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_OB_BACKUP_PERMISSION_DENIED)) {
+    ret = ERRSIM_OB_BACKUP_PERMISSION_DENIED;
   }
 
   if (OB_FAIL(ret)) {
@@ -583,6 +588,7 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   char *filled_data = NULL;
   int64_t filled_data_len = 0;
   const bool is_full_file = (task.get_end_lsn() - task.get_start_lsn()) == MAX_ARCHIVE_FILE_SIZE;
+  const bool is_can_seal = 0 == task.get_end_lsn().val_ % MAX_ARCHIVE_FILE_SIZE;
   const int64_t start_ts = common::ObTimeUtility::current_time();
   // 1. decide archive file
   if (OB_FAIL(decide_archive_file_(task, arg.cur_file_id_, arg.cur_file_offset_,
@@ -612,8 +618,8 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
     ARCHIVE_LOG(WARN, "fill file header if needed failed", K(ret));
   }
   // 6. push log
-  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), is_full_file, new_file ?
-          file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
+  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), is_full_file,
+          is_can_seal, new_file ? file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
           new_file ? filled_data : origin_data, new_file ? filled_data_len : origin_data_len))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret), K(task));
   // 7. 更新日志流归档任务archive file info
@@ -723,6 +729,7 @@ int ObArchiveSender::push_log_(const ObLSID &id,
     const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
     const bool is_full_file,
+    const bool is_can_seal,
     const int64_t offset,
     char *data,
     const int64_t data_len)
@@ -730,7 +737,7 @@ int ObArchiveSender::push_log_(const ObLSID &id,
   int ret = OB_SUCCESS;
   ObArchiveIO archive_io;
 
-  if (OB_FAIL(archive_io.push_log(uri, storage_info, data, data_len, offset, is_full_file))) {
+  if (OB_FAIL(archive_io.push_log(uri, storage_info, data, data_len, offset, is_full_file, is_can_seal))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret));
   } else {
     ARCHIVE_LOG(INFO, "push log succ", K(id));
@@ -773,6 +780,12 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_BACKUP_PERMISSION_DENIED == ret_code) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_DBA_ERROR(OB_BACKUP_PERMISSION_DENIED, "msg", "archive dest permission denied", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (is_ignore_ret_code_(ret_code)) {
   } else {
     ARCHIVE_LOG(ERROR, "archive sender encounter fatal error", K(ret), K(id), K(key), K(ret_code));
@@ -789,7 +802,8 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_ALLOCATE_MEMORY_FAILED == ret_code
     || OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code
     || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code
-    || OB_IO_LIMIT == ret_code;
+    || OB_IO_LIMIT == ret_code
+    || OB_BACKUP_PERMISSION_DENIED == ret_code;
 }
 
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const

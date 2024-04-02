@@ -67,7 +67,6 @@ void ObTabletMemtableMgr::destroy()
       STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(imemtable), K(pos));
     } else if (imemtable->is_data_memtable()) {
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->remove_from_data_checkpoint();
       memtable->set_frozen();
     }
@@ -262,23 +261,29 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
         int64_t write_ref = last_frozen_memtable->get_write_ref();
         int64_t unsubmitted_cnt = last_frozen_memtable->get_unsubmitted_cnt();
         int64_t unsynced_cnt = last_frozen_memtable->get_unsynced_cnt();
-        if (write_ref > 0 || unsubmitted_cnt > 0) {
-          memtable->set_logging_blocked();
-          TRANS_LOG(INFO, "set logging_block", KPC(last_frozen_memtable), KPC(memtable));
-        }
-        if (write_ref > 0 || unsynced_cnt > 0) {
-          last_frozen_memtable->set_resolve_active_memtable_left_boundary(false);
-        }
-        // for follower, must decide the boundary of frozen memtable
-        // for leader, decide the boundary of frozen memtable that meets ready_for_flush
-        if (for_replay || (0 == write_ref &&
-                           0 == unsubmitted_cnt &&
-                           0 == unsynced_cnt)) {
-          last_frozen_memtable->resolve_right_boundary();
-          TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
-          if (memtable != last_frozen_memtable) {
-            const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
-            memtable->resolve_left_boundary(new_start_scn);
+        if (write_ref > 0 && !for_replay) {
+          ret = OB_EAGAIN;
+          TRANS_LOG(WARN, "create memtable when last frozen one has write ref",
+                    KPC(last_frozen_memtable), KPC(memtable));
+        } else {
+          if (write_ref > 0 || unsubmitted_cnt > 0) {
+            memtable->set_logging_blocked();
+            TRANS_LOG(INFO, "set logging_block", KPC(last_frozen_memtable), KPC(memtable));
+          }
+          if (write_ref > 0 || unsynced_cnt > 0) {
+            last_frozen_memtable->set_resolve_active_memtable_left_boundary(false);
+          }
+          // for follower, must decide the boundary of frozen memtable
+          // for leader, decide the boundary of frozen memtable that meets ready_for_flush
+          if (for_replay || (0 == write_ref &&
+                             0 == unsubmitted_cnt &&
+                             0 == unsynced_cnt)) {
+            last_frozen_memtable->resolve_right_boundary();
+            TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
+            if (memtable != last_frozen_memtable) {
+              const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
+              memtable->resolve_left_boundary(new_start_scn);
+            }
           }
         }
       // there is no frozen memtable and new sstable will not be generated,
@@ -672,12 +677,11 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       if (!memtable->is_empty()) {
         memtable->set_read_barrier();
       }
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       memtable->set_frozen();
-      memtable->report_checkpoint_diagnose_info(UpdateReleaseTime());
+      memtable->report_memtable_diagnose_info(UpdateReleaseTime());
       release_head_memtable();
       memtable::ObMemtable *active_memtable = get_active_memtable_();
       if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {
@@ -690,36 +694,6 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
   }
 
   return ret;
-}
-
-void ObTabletMemtableMgr::unlink_memtable_mgr_and_memtable_(memtable::ObMemtable *memtable)
-{
-  // unlink memtable_mgr and memtable
-  // and wait the running ops about memtable_mgr in the memtable
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(memtable)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("memtable is null", K(ret), KPC(this));
-  } else {
-    memtable->clear_memtable_mgr();
-    wait_memtable_mgr_op_cnt_(memtable);
-  }
-}
-
-void ObTabletMemtableMgr::wait_memtable_mgr_op_cnt_(memtable::ObMemtable *memtable)
-{
-  if (OB_NOT_NULL(memtable)) {
-    const int64_t start = ObTimeUtility::current_time();
-    int ret = OB_SUCCESS;
-    while (0 != memtable->get_memtable_mgr_op_cnt()) {
-      const int64_t cost_time = ObTimeUtility::current_time() - start;
-      if (cost_time > 1000 * 1000) {
-        if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
-          LOG_WARN("wait_memtable_mgr_op_cnt costs too much time", KPC(memtable));
-        }
-      }
-    }
-  }
 }
 
 int ObTabletMemtableMgr::get_first_frozen_memtable(ObTableHandleV2 &handle) const
@@ -795,7 +769,6 @@ void ObTabletMemtableMgr::clean_tail_memtable_()
   if (memtable_tail_ > memtable_head_) {
     ObMemtable *memtable = get_memtable_(memtable_tail_ - 1);
     if (OB_NOT_NULL(memtable)) {
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->set_frozen();
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "memtable is null when clean_tail_memtable_", KPC(this));

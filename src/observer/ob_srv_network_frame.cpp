@@ -155,15 +155,11 @@ int ObSrvNetworkFrame::init()
     LOG_ERROR("net keepalive register fail", K(ret));
   } else if (hp_io_cnt > 0 && OB_FAIL(net_.high_prio_rpc_net_register(rpc_handler_, high_prio_rpc_transport_))) {
     LOG_ERROR("high prio rpc net register fail", K(ret));
-  } else if (ingress_service_.init(GCONF.cluster_id)) {
+  } else if (OB_FAIL(ingress_service_.init(GCONF.cluster_id))) {
     LOG_ERROR("endpoint ingress service init fail", K(ret));
-  }
-#ifdef OB_USE_BABASSL
-  else if (OB_FAIL(net_.add_rpc_unix_listen(rpc_unix_path, rpc_handler_))) {
+  } else if (OB_FAIL(net_.add_rpc_unix_listen(rpc_unix_path, rpc_handler_))) {
     LOG_ERROR("listen rpc unix path fail");
-  }
-#endif
-  else {
+  } else {
     if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
       LOG_ERROR("poc rpc server start fail", K(ret));
     } else {

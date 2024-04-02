@@ -140,6 +140,7 @@ private:
   int revert_log_entry_task_(ObLogEntryTask *log_entry_task);
   int del_store_service_data_(const uint64_t tenant_id,
       std::string &key);
+  int recycle_stored_redo_(PartTransTask &task);
   int revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task);
 
   void do_stat_(PartTransTask &task,

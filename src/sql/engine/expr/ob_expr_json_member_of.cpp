@@ -90,16 +90,20 @@ int ObExprJsonMemberOf::eval_json_member_of(const ObExpr &expr, ObEvalCtx &ctx, 
   ObIJsonBase *json_a = NULL;
   ObIJsonBase *json_b = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   bool is_null_result = (expr.args_[0]->datum_meta_.type_ == ObNullType);
   if (!is_null_result) {
     ObDatum *json_datum = NULL;
     ObExpr *json_arg = expr.args_[0];
     ObObjType type2 = expr.args_[1]->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (json_datum->is_null()) {
       is_null_result = true; 
+    } else if (OB_FAIL(temp_allocator.add_baseline_size(json_datum,  json_arg->obj_meta_.has_lob_header()))) {
+      LOG_WARN("failed to add baselien size", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, 0, json_a))) {
       LOG_WARN("get_json_value failed", K(ret));
     } else if (!ObJsonExprHelper::is_convertible_to_json(type2)) {

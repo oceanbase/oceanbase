@@ -643,9 +643,9 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SCALAR GROUP BY                    |    |1       |209         |
-|1 |└─HASH JOIN                        |    |1       |209         |
-|2 |  ├─HASH JOIN                      |    |2       |183         |
+|0 |SCALAR GROUP BY                    |    |1       |212         |
+|1 |└─HASH JOIN                        |    |1       |212         |
+|2 |  ├─HASH JOIN                      |    |10      |183         |
 |3 |  │ ├─TABLE FULL SCAN              |t1  |11      |5           |
 |4 |  │ └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |51          |
 |5 |  │   ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
@@ -719,7 +719,7 @@ Query Plan
 |ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
 |0 |SCALAR GROUP BY                  |    |1       |183         |
-|1 |└─HASH JOIN                      |    |2       |183         |
+|1 |└─HASH JOIN                      |    |10      |183         |
 |2 |  ├─TABLE FULL SCAN              |t1  |11      |5           |
 |3 |  └─NESTED-LOOP JOIN CARTESIAN   |    |1331    |51          |
 |4 |    ├─NESTED-LOOP JOIN CARTESIAN |    |121     |12          |
@@ -774,7 +774,7 @@ Query Plan
 |ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
 |0 |SCALAR GROUP BY                |    |1       |33          |
-|1 |└─HASH JOIN                    |    |3       |33          |
+|1 |└─HASH JOIN                    |    |2       |33          |
 |2 |  ├─TABLE FULL SCAN            |t1  |11      |5           |
 |3 |  └─NESTED-LOOP JOIN CARTESIAN |    |121     |13          |
 |4 |    ├─TABLE FULL SCAN          |t2  |11      |5           |
@@ -1028,21 +1028,21 @@ Query Plan
 =============================================================
 |ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1       |51          |
-|1 |└─HASH JOIN                  |    |1       |51          |
-|2 |  ├─HASH JOIN                |    |1       |46          |
-|3 |  │ ├─HASH JOIN              |    |1       |36          |
+|0 |SCALAR GROUP BY              |    |1       |58          |
+|1 |└─HASH JOIN                  |    |1       |58          |
+|2 |  ├─HASH JOIN                |    |1       |54          |
+|3 |  │ ├─HASH JOIN              |    |1       |43          |
 |4 |  │ │ ├─TABLE FULL SCAN      |t9  |11      |5           |
-|5 |  │ │ └─HASH JOIN            |    |1       |30          |
-|6 |  │ │   ├─HASH JOIN          |    |1       |24          |
-|7 |  │ │   │ ├─HASH JOIN        |    |1       |12          |
+|5 |  │ │ └─HASH JOIN            |    |1       |36          |
+|6 |  │ │   ├─HASH JOIN          |    |1       |31          |
+|7 |  │ │   │ ├─HASH JOIN        |    |18      |13          |
 |8 |  │ │   │ │ ├─TABLE FULL SCAN|t8  |11      |5           |
 |9 |  │ │   │ │ └─TABLE FULL SCAN|t7  |11      |5           |
-|10|  │ │   │ └─HASH JOIN        |    |1       |12          |
+|10|  │ │   │ └─HASH JOIN        |    |11      |12          |
 |11|  │ │   │   ├─TABLE FULL SCAN|t6  |11      |5           |
 |12|  │ │   │   └─TABLE FULL SCAN|t5  |3       |5           |
 |13|  │ │   └─TABLE FULL SCAN    |t4  |11      |5           |
-|14|  │ └─HASH JOIN              |    |1       |11          |
+|14|  │ └─HASH JOIN              |    |4       |11          |
 |15|  │   ├─TABLE FULL SCAN      |t3  |4       |5           |
 |16|  │   └─TABLE FULL SCAN      |t1  |3       |5           |
 |17|  └─TABLE FULL SCAN          |t2  |3       |5           |
@@ -1100,7 +1100,7 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
- 17 - output([t2.d2], [t2.d1], [t2.d2 % 2], [t2.d1 % 5]), filter([t2.d2 % 2 = t2.d2 % 7], [t2.d2 % 2 = t2.d1 % 3], [t2.d1 % 5 = t2.d1 % 4]), rowset=16
+ 17 - output([t2.d2], [t2.d1], [t2.d2 % 2], [t2.d1 % 5]), filter([t2.d2 % 2 = t2.d1 % 3], [t2.d1 % 5 = t2.d1 % 4], [t2.d2 % 2 = t2.d2 % 7]), rowset=16
       access([t2.d2], [t2.d1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
@@ -2705,7 +2705,7 @@ Query Plan
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |SCALAR GROUP BY      |    |1       |29          |
-|1 |└─HASH JOIN          |    |2       |28          |
+|1 |└─HASH JOIN          |    |9       |29          |
 |2 |  ├─HASH JOIN        |    |15      |12          |
 |3 |  │ ├─TABLE FULL SCAN|t1  |11      |5           |
 |4 |  │ └─TABLE FULL SCAN|t2  |11      |5           |

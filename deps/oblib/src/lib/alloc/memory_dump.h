@@ -96,12 +96,13 @@ struct LabelItem
     MEMSET(this, 0 , sizeof(*this));
   }
   char str_[lib::AOBJECT_LABEL_SIZE + 1];
-  int str_len_;
+  int32_t str_len_;
+
+  int32_t count_;
+  int32_t block_cnt_;
+  int32_t chunk_cnt_;
   int64_t hold_;
   int64_t used_;
-  int64_t count_;
-  int64_t block_cnt_;
-  int64_t chunk_cnt_;
   LabelItem &operator +=(const LabelItem &item)
   {
     hold_ += item.hold_;
@@ -141,7 +142,7 @@ static const int PRINT_BUF_LEN = 1L << 20;
 static const int64_t MAX_MEMORY = 1L << 40; // 1T
 static const int MAX_CHUNK_CNT = MAX_MEMORY / (2L << 20);
 static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
-static const int MAX_LABEL_ITEM_CNT = 16L << 10;
+static const int MAX_LABEL_ITEM_CNT = 64L << 10;
 static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
 static const int64_t LOG_BUF_LEN = 64L << 10;
 

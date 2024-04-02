@@ -87,7 +87,9 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   ObDatum *xml_datum = NULL;
   ObIMulModeBase *xml_tree = NULL;
   ObXmlDocument *xml_doc = NULL;
@@ -100,7 +102,6 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   bool should_reparse = false;
 
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 3)) {
@@ -109,7 +110,7 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   } else if (ObNullType == expr.args_[1]->datum_meta_.type_) {
     ret = OB_ERR_INVALID_XPATH_EXPRESSION;
     LOG_WARN("invalid xpath expression", K(ret));
-  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum))) {
+  } else if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[0], ctx, xml_datum, allocator))) {
     LOG_WARN("fail to get xmltype value", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_str, allocator))) {
     LOG_WARN("fail to get xpath str", K(ret));

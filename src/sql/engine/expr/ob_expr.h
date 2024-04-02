@@ -278,6 +278,10 @@ typedef void (*ObBatchDatumHashFunc)(uint64_t *hash_values,
                                      const bool is_batch_seed);
 
 typedef int (*ObExprCmpFuncType)(const common::ObDatum &datum1, const common::ObDatum &datum2, int& cmp_ret);
+typedef int (*NullSafeRowCmpFunc) (const ObObjMeta &l_meta, const ObObjMeta &r_meta,
+                                   const void *l_data, const int32_t l_len, const bool l_null,
+                                   const void *r_data, const int32_t r_len, const bool r_null,
+                                   int &cmp_ret);
 struct ObExprBasicFuncs
 {
   // Default hash method:
@@ -1139,7 +1143,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   return buffer;
 }
 
-#define PRINT_VECTORIZED_ROWS(parMod, level, eval_ctx, exprs, batch_size, args...)       \
+#define PRINT_VECTORIZED_ROWS(parMod, level, eval_ctx, exprs, batch_size, skip, args...)       \
     do { if (IS_LOG_ENABLED(level)) {                                                            \
     [&](const char *_fun_name_) __attribute__((GET_LOG_FUNC_ATTR(level))) {                      \
     if (OB_UNLIKELY(OB_LOGGER.need_to_print(::oceanbase::common::OB_LOG_ROOT::M_##parMod,        \
@@ -1149,6 +1153,9 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
       ObEvalCtx::BatchInfoScopeGuard _batch_info_guard(eval_ctx);                                \
       _batch_info_guard.set_batch_size(_batch_size);                                             \
       for (int64_t i = 0; i < _batch_size; ++i) {                                                \
+        if (NULL != skip && skip->at(i)) {                                                       \
+          continue;                                                                              \
+        }                                                                                        \
         _batch_info_guard.set_batch_idx(i);                                                      \
         ::oceanbase::common::OB_PRINT("["#parMod"] ", OB_LOG_LEVEL(level),                       \
                                       get_vectorized_row_str(eval_ctx, exprs, i),                \

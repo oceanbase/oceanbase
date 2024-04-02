@@ -27,16 +27,19 @@ public:
   int init(const int64_t total_limit,
            const int64_t hold_limit,
            const int64_t page_size);
-
   int init(const int64_t page_size,
            const lib::ObLabel &label,
            const uint64_t tenant_id,
+           const int64_t total_limit);
+  int init(const int64_t page_size,
+           const lib::ObMemAttr &attr,
            const int64_t total_limit);
   void destroy();
 public:
   void set_label(const lib::ObLabel &label);
   void set_attr(const lib::ObMemAttr &attr);
   void set_tenant_id(const uint64_t tenant_id);
+  void set_nway(int nway) { inner_allocator_.set_nway(nway); }
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);
   void free(void *ptr);

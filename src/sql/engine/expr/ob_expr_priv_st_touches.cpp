@@ -19,7 +19,6 @@
 #include "ob_expr_priv_st_touches.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -59,7 +58,7 @@ int ObExprPrivSTTouches::calc_result_type2(ObExprResType &type, ObExprResType &t
   }
   // an invalid type and a nullptr type will return nullptr
   // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
+  if (unexpected_types > 0) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_TOUCHES);
     LOG_WARN("invalid type", K(ret));
@@ -72,45 +71,37 @@ int ObExprPrivSTTouches::calc_result_type2(ObExprResType &type, ObExprResType &t
   return ret;
 }
 
-int ObExprPrivSTTouches::get_input_geometry(ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
-    bool &is_null_geo, const ObSrsItem *&srs, ObGeometry *&geo, bool &is_geo_empty)
+int ObExprPrivSTTouches::get_input_geometry(omt::ObSrsCacheGuard &srs_guard, MultimodeAlloctor &temp_allocator, ObEvalCtx &ctx, ObExpr *gis_arg,
+    ObDatum *gis_datum, const ObSrsItem *&srs, ObGeometry *&geo, bool &is_geo_empty)
 {
   int ret = OB_SUCCESS;
-  ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = ctx_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg->eval(ctx, gis_datum))) {
-    LOG_WARN("eval geo args failed", K(ret));
-  } else if (gis_datum->is_null()) {
-    is_null_geo = true;
-  } else {
-    ObString wkb = gis_datum->get_string();
-    ObGeoType type = ObGeoType::GEOTYPEMAX;
-    uint32_t srid = -1;
-    omt::ObSrsCacheGuard srs_guard;
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
-            *gis_datum,
-            gis_arg->datum_meta_,
-            gis_arg->obj_meta_.has_lob_header(),
-            wkb))) {
-      LOG_WARN("fail to get real string data", K(ret), K(wkb));
-    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb, type, srid))) {
-      if (ret == OB_ERR_GIS_INVALID_DATA) {
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_TOUCHES);
-      }
-      LOG_WARN("get type and srid from wkb failed", K(wkb), K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
-                   ctx, srs_guard, wkb, srs, true, N_PRIV_ST_TOUCHES))) {
-      LOG_WARN("fail to get srs item", K(ret), K(wkb));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
-                   wkb,
-                   geo,
-                   srs,
-                   N_PRIV_ST_TOUCHES,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
-      LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo, is_geo_empty))) {
-      LOG_WARN("check geo empty failed", K(ret));
+  ObString wkb = gis_datum->get_string();
+  ObGeoType type = ObGeoType::GEOTYPEMAX;
+  uint32_t srid = -1;
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator,
+          *gis_datum,
+          gis_arg->datum_meta_,
+          gis_arg->obj_meta_.has_lob_header(),
+          wkb))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb));
+  } else if (FALSE_IT(temp_allocator.add_baseline_size(wkb.length()))) {
+  } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb, type, srid))) {
+    if (ret == OB_ERR_GIS_INVALID_DATA) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_TOUCHES);
     }
+    LOG_WARN("get type and srid from wkb failed", K(wkb), K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
+                  ctx, srs_guard, wkb, srs, true, N_PRIV_ST_TOUCHES))) {
+    LOG_WARN("fail to get srs item", K(ret), K(wkb));
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator,
+                  wkb,
+                  geo,
+                  srs,
+                  N_PRIV_ST_TOUCHES,
+                  GEO_ALLOW_3D_DEFAULT | GEO_NOT_COPY_WKB))) {
+    LOG_WARN("get first geo by wkb failed", K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo, is_geo_empty))) {
+    LOG_WARN("check geo empty failed", K(ret));
   }
   return ret;
 }
@@ -126,10 +117,12 @@ int ObExprPrivSTTouches::eval_priv_st_touches(const ObExpr &expr, ObEvalCtx &ctx
   bool is_geo2_null = false;
   ObGeometry *geo1 = nullptr;
   ObGeometry *geo2 = nullptr;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs1 = nullptr;
   const ObSrsItem *srs2 = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_TOUCHES);
   ObDatum *gis_datum1 = nullptr;
   ObDatum *gis_datum2 = nullptr;
   if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
@@ -137,25 +130,34 @@ int ObExprPrivSTTouches::eval_priv_st_touches(const ObExpr &expr, ObEvalCtx &ctx
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
   } else if (OB_FAIL(get_input_geometry(
-                 gis_datum1, ctx, gis_arg1, is_geo1_null, srs1, geo1, is_geo1_empty))) {
+                 srs_guard, temp_allocator, ctx, gis_arg1, gis_datum1, srs1, geo1, is_geo1_empty))) {
     LOG_WARN("fail to get input geometry", K(ret));
-  } else if (OB_FAIL(get_input_geometry(
-                 gis_datum2, ctx, gis_arg2, is_geo2_null, srs2, geo2, is_geo2_empty))) {
+  } else if (!is_geo1_null && OB_FAIL(get_input_geometry(
+                 srs_guard, temp_allocator, ctx, gis_arg2, gis_datum2, srs2, geo2, is_geo2_empty))) {
     LOG_WARN("fail to get input geometry", K(ret));
+  } else if (is_geo1_null || is_geo2_null) {
+    res.set_null();
   } else {
     uint32_t srid1 = srs1 == nullptr ? 0 : srs1->get_srid();
     uint32_t srid2 = srs2 == nullptr ? 0 : srs2->get_srid();
+    ObGeoBoostAllocGuard guard(tenant_id);
+    lib::MemoryContext *mem_ctx = nullptr;
     if (srid1 != srid2) {
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
       LOG_WARN("srid not the same", K(ret), K(srid1), K(srid2));
       LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_PRIV_ST_TOUCHES, srid1, srid2);
     } else if (is_geo1_empty || is_geo2_empty) {
-      res.set_bool(is_geo1_empty && is_geo2_empty);
-    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
+      res.set_bool(false);
+    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs1, *geo1, *geo2))) {
       LOG_WARN("zoom in geos failed", K(ret));
+    } else if (OB_FAIL(guard.init())) {
+      LOG_WARN("fail to init geo allocator guard", K(ret));
+    } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("fail to get mem ctx", K(ret));
     } else {
       bool result = false;
-      ObGeoEvalCtx gis_context(&temp_allocator, srs1);
+      ObGeoEvalCtx gis_context(*mem_ctx, srs1);
       if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
         LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
       } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Touches>::geo_func::eval(gis_context, result))) {
@@ -164,6 +166,9 @@ int ObExprPrivSTTouches::eval_priv_st_touches(const ObExpr &expr, ObEvalCtx &ctx
       } else {
         res.set_bool(result);
       }
+    }
+    if (mem_ctx != nullptr) {
+      temp_allocator.add_ext_used((*mem_ctx)->arena_used());
     }
   }
   return ret;

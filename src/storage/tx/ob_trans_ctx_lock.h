@@ -42,14 +42,16 @@ typedef common::ObDList<LocalTask> LocalTaskList;
 class CtxLockArg
 {
 public:
-  CtxLockArg() : trans_id_(), task_list_(), commit_cb_(),
-      has_pending_callback_(false),
+  CtxLockArg() : ls_id_(), trans_id_(), task_list_(), commit_cb_(),
+      has_pending_callback_(false), need_retry_redo_sync_(false),
       p_mt_ctx_(NULL) {}
 public:
+  share::ObLSID ls_id_;
   ObTransID trans_id_;
   LocalTaskList task_list_;
   ObTxCommitCallback commit_cb_;
   bool has_pending_callback_;
+  bool need_retry_redo_sync_;
   // It is used to wake up lock queue after submitting the log for elr transaction
   memtable::ObIMemtableCtx *p_mt_ctx_;
 };
@@ -57,7 +59,7 @@ public:
 class CtxLock
 {
 public:
-  CtxLock() : lock_(), ctx_(NULL), lock_start_ts_(0) {}
+  CtxLock() : lock_(), ctx_(NULL), lock_start_ts_(0), waiting_lock_cnt_(0) {}
   ~CtxLock() {}
   int init(ObTransCtx *ctx);
   void reset();
@@ -69,6 +71,7 @@ public:
   void after_unlock(CtxLockArg &arg);
   ObTransCtx *get_ctx() { return ctx_; }
   bool is_locked_by_self() const { return lock_.is_wrlocked_by(); }
+  int64_t get_waiting_lock_cnt() const { return ATOMIC_LOAD(&waiting_lock_cnt_); }
 private:
   static const int64_t WARN_LOCK_TS = 1 * 1000 * 1000;
   DISALLOW_COPY_AND_ASSIGN(CtxLock);
@@ -76,6 +79,7 @@ private:
   common::ObLatch lock_;
   ObTransCtx *ctx_;
   int64_t lock_start_ts_;
+  int64_t waiting_lock_cnt_;
 };
 
 class CtxLockGuard

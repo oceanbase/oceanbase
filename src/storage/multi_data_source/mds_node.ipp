@@ -115,6 +115,22 @@ MdsNodeType UserMdsNode<K, V>::get_node_type() const
 }
 
 template <typename K, typename V>
+void UserMdsNode<K, V>::advance_mds_table_max_aborted_scn_(const share::SCN &scn)
+{
+  MdsTableBase *p_mds_table = nullptr;
+  if (!p_mds_row_ || !(p_mds_row_->p_mds_unit_)) {
+    MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected NULL row or unit ptr", K(*this));
+  } else {
+    p_mds_table = p_mds_row_->p_mds_unit_->p_mds_table_;
+    if (OB_ISNULL(p_mds_table)) {
+       MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected NULL table ptr", K(*this));
+    } else {
+      p_mds_table->try_advance_max_aborted_scn(scn);
+    }
+  }
+}
+
+template <typename K, typename V>
 bool UserMdsNode<K, V>::try_on_redo(const share::SCN &redo_scn)
 {
   MDS_TG(1_ms);
@@ -253,8 +269,11 @@ bool UserMdsNode<K, V>::try_on_abort(const share::SCN &abort_scn)// CAUTIONS: no
     end_scn_ = abort_scn;
     on_user_data_abort_(abort_scn);
     MDS_LOG(INFO, "mds node on_abort", K(*this), K(abort_scn));
-    if (is_valid_scn_(redo_scn_) && is_valid_scn_(abort_scn)) {
-      if (end_scn_ < redo_scn_) {
+    advance_mds_table_max_aborted_scn_(abort_scn);
+    if (is_valid_scn_(redo_scn_)) {
+      if (!is_valid_scn_(abort_scn)) {
+        MDS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds node has valid redo_scn, but aborted with invalid end_scn", K(*this), K(abort_scn));
+      } else if (end_scn_ < redo_scn_) {
         MDS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "end scn lower than redo scn", K(*this), K(abort_scn));
       }
     } else {
@@ -372,6 +391,7 @@ int UserMdsNode<K, V>::fill_event_(observer::MdsEvent &event,
     event.record_thread_info_();
     event.event_ = event_str;
     if (OB_LIKELY(has_valid_link_back_ptr_())) {
+      event.ptr_ = p_mds_row_->p_mds_unit_->p_mds_table_;
       event.unit_id_ = p_mds_row_->p_mds_unit_->unit_id_;
     }
     event.writer_type_ = status_.union_.field_.writer_type_;

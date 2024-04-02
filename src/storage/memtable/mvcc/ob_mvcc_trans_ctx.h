@@ -202,6 +202,7 @@ public:
         callback_remove_for_remove_memtable_count_(0),
         callback_remove_for_fast_commit_count_(0),
         callback_remove_for_rollback_to_count_(0),
+        callback_ext_info_log_count_(0),
         pending_log_size_(0),
         flushed_log_size_(0),
         cb_allocator_(cb_allocator),
@@ -293,6 +294,8 @@ public:
   { return callback_remove_for_fast_commit_count_; }
   int64_t get_callback_remove_for_rollback_to_count() const
   { return callback_remove_for_rollback_to_count_; }
+  int64_t get_callback_ext_info_log_count() const
+  { return callback_ext_info_log_count_; }
   void add_main_list_append_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_main_list_append_count_, cnt); }
   void add_slave_list_append_cnt(int64_t cnt = 1)
@@ -307,6 +310,8 @@ public:
   { ATOMIC_AAF(&callback_remove_for_fast_commit_count_, cnt); }
   void add_rollback_to_callback_remove_cnt(int64_t cnt = 1)
   { ATOMIC_AAF(&callback_remove_for_rollback_to_count_, cnt); }
+  void add_callback_ext_info_log_count(int64_t cnt = 1)
+  { ATOMIC_AAF(&callback_ext_info_log_count_, cnt); }
   int64_t get_checksum() const { return callback_list_.get_checksum(); }
   int64_t get_tmp_checksum() const { return callback_list_.get_tmp_checksum(); }
   share::SCN get_checksum_scn() const { return callback_list_.get_checksum_scn(); }
@@ -337,6 +342,7 @@ private:
   int64_t callback_remove_for_remove_memtable_count_;
   int64_t callback_remove_for_fast_commit_count_;
   int64_t callback_remove_for_rollback_to_count_;
+  int64_t callback_ext_info_log_count_;
   // current log size in leader participant
   int64_t pending_log_size_;
   // current flushed log size in leader participant

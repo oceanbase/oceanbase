@@ -61,6 +61,7 @@ public:
   static int get_memory_limit(int64_t &memory_limit);
   static int add_assigned_task(ObDirectLoadResourceApplyArg &arg);
   static int assign_memory(bool is_sort, int64_t assign_memory);
+  static int recycle_memory(bool is_sort, int64_t assign_memory);
 	static int get_sort_memory(int64_t &sort_memory);
   static int refresh_and_check_resource(ObDirectLoadResourceCheckArg &arg, ObDirectLoadResourceOpRes &res);
 public:

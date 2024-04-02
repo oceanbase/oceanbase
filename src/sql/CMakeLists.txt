@@ -9,16 +9,10 @@ ob_set_subtarget(ob_sql code_generator
 )
 
 ob_set_subtarget(ob_sql common
-  ob_delete_stmt_printer.cpp
-  ob_dml_stmt_printer.cpp
   ob_end_trans_callback.cpp
   ob_end_trans_cb_packet_param.cpp
-  ob_insert_all_stmt_printer.cpp
-  ob_insert_stmt_printer.cpp
-  ob_merge_stmt_printer.cpp
   ob_phy_table_location.cpp
   ob_result_set.cpp
-  ob_select_stmt_printer.cpp
   ob_spi.cpp
   ob_sql.cpp
   ob_sql_context.cpp
@@ -28,7 +22,6 @@ ob_set_subtarget(ob_sql common
   ob_sql_temp_table.cpp
   ob_sql_trans_control.cpp
   ob_sql_utils.cpp
-  ob_update_stmt_printer.cpp
   ob_optimizer_trace_impl.cpp
 )
 
@@ -168,7 +161,14 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_topk_op.cpp
   engine/basic/ob_values_op.cpp
   engine/basic/ob_stat_collector_op.cpp
+  engine/basic/ob_values_table_access_op.cpp
   engine/basic/ob_hp_infrastructure_manager.ipp
+  engine/basic/chunk_store/ob_compact_store.cpp
+  engine/basic/chunk_store/ob_store_row_convertor.cpp
+  engine/basic/chunk_store/ob_chunk_block_compressor.cpp
+  engine/basic/ob_temp_block_store.cpp
+  engine/basic/ob_temp_row_store.cpp
+  engine/basic/ob_compact_row.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -357,6 +357,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_in.cpp
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_initcap.cpp
+  engine/expr/ob_expr_inner_decode_like.cpp
   engine/expr/ob_expr_inner_trim.cpp
   engine/expr/ob_expr_insert.cpp
   engine/expr/ob_expr_instr.cpp
@@ -645,13 +646,17 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp
+  engine/expr/ob_expr_multi_mode_func_helper.cpp
   engine/expr/ob_expr_xmlparse.cpp
   engine/expr/ob_expr_xml_element.cpp
+  engine/expr/ob_expr_xml_concat.cpp
+  engine/expr/ob_expr_xml_forest.cpp
   engine/expr/ob_expr_xml_attributes.cpp
   engine/expr/ob_expr_xml_serialize.cpp
   engine/expr/ob_expr_priv_xml_binary.cpp
   engine/expr/ob_expr_extract_value.cpp
   engine/expr/ob_expr_extract_xml.cpp
+  engine/expr/ob_expr_existsnode_xml.cpp
   engine/expr/ob_expr_xmlcast.cpp
   engine/expr/ob_expr_update_xml.cpp
   engine/expr/ob_expr_sql_udt_utils.cpp
@@ -682,6 +687,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_xml_sequence.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_priv_st_geohash.cpp
+  engine/expr/ob_expr_priv_st_makepoint.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join
@@ -767,6 +774,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/p2p_datahub/ob_p2p_dh_msg.cpp
   engine/px/p2p_datahub/ob_p2p_dh_rpc_process.cpp
   engine/px/p2p_datahub/ob_runtime_filter_msg.cpp
+  engine/px/p2p_datahub/ob_runtime_filter_query_range.cpp
 )
 
 ob_set_subtarget(ob_sql engine_set
@@ -907,6 +915,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_opt_est_cost.cpp
   optimizer/ob_opt_est_cost_model.cpp
   optimizer/ob_opt_est_cost_model_vector.cpp
+  optimizer/ob_opt_cost_model_parameter.cpp
   optimizer/ob_opt_est_utils.cpp
   optimizer/ob_opt_selectivity.cpp
   optimizer/ob_optimizer.cpp
@@ -930,6 +939,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_stat_collector.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
+  optimizer/ob_log_values_table_access.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -957,6 +967,17 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_lib_cache_node_factory.cpp
   plan_cache/ob_plan_match_helper.cpp
   plan_cache/ob_values_table_compression.cpp
+)
+
+ob_set_subtarget(ob_sql printer
+  printer/ob_delete_stmt_printer.cpp
+  printer/ob_dml_stmt_printer.cpp
+  printer/ob_insert_all_stmt_printer.cpp
+  printer/ob_insert_stmt_printer.cpp
+  printer/ob_merge_stmt_printer.cpp
+  printer/ob_raw_expr_printer.cpp
+  printer/ob_select_stmt_printer.cpp
+  printer/ob_update_stmt_printer.cpp
 )
 
 ob_set_subtarget(ob_sql resolver
@@ -1129,6 +1150,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_delete_resolver.cpp
   resolver/dml/ob_delete_stmt.cpp
   resolver/dml/ob_dml_resolver.cpp
+  resolver/dml/ob_multi_mode_dml_resolver.cpp
   resolver/dml/ob_dml_stmt.cpp
   resolver/dml/ob_group_by_checker.cpp
   resolver/dml/ob_insert_resolver.cpp
@@ -1148,6 +1170,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
+  resolver/dml/ob_inlist_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr
@@ -1161,7 +1184,6 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_part_expr_checker.cpp
   resolver/expr/ob_raw_expr_part_func_checker.cpp
   resolver/expr/ob_raw_expr_print_visitor.cpp
-  resolver/expr/ob_raw_expr_printer.cpp
   resolver/expr/ob_raw_expr_replacer.cpp
   resolver/expr/ob_raw_expr_resolver_impl.cpp
   resolver/expr/ob_raw_expr_util.cpp
@@ -1185,6 +1207,10 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_key_part.cpp
   rewrite/ob_predicate_deduce.cpp
   rewrite/ob_query_range.cpp
+  rewrite/ob_expr_range_converter.cpp
+  rewrite/ob_query_range_define.cpp
+  rewrite/ob_range_generator.cpp
+  rewrite/ob_range_graph_generator.cpp
   rewrite/ob_stmt_comparer.cpp
   rewrite/ob_transform_count_to_exists.cpp
   rewrite/ob_transform_aggr_subquery.cpp

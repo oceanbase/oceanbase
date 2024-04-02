@@ -100,7 +100,7 @@ struct UserDataWithCallBack
 TEST_F(TestMdsNode, call_user_method) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
   MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, 0));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
   ctx.on_prepare(mock_scn(2));
@@ -114,7 +114,7 @@ TEST_F(TestMdsNode, call_user_method) {
 TEST_F(TestMdsNode, release_node_while_node_in_ctx) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
   MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, 0));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
   row.~MdsRow();
@@ -131,11 +131,11 @@ TEST_F(TestMdsNode, release_node_while_node_in_ctx_concurrent) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
   MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)));// commit finally
   // 提交这些node将会耗时50ms
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, 0));
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(2), ctx, 0));
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(3), ctx, 0));
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(4), ctx, 0));
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(5), ctx, 0));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(2), ctx, {share::ObLSID(0), 0}));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(3), ctx, {share::ObLSID(0), 0}));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(4), ctx, {share::ObLSID(0), 0}));
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(5), ctx, {share::ObLSID(0), 0}));
 
   std::thread t1([&ctx]() {
     OCCAM_LOG(DEBUG, "t1 start");

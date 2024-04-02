@@ -30,6 +30,7 @@
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
+#include "sql/rewrite/ob_query_range_provider.h"
 namespace oceanbase
 {
 namespace share {
@@ -388,6 +389,7 @@ public:
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
   static int get_cast_mode_for_replace(const ObRawExpr *expr,
+                                       const ObExprResType &dst_type,
                                        const ObSQLSessionInfo *session,
                                        ObCastMode &cast_mode);
   static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
@@ -435,7 +437,7 @@ public:
                            common::ObExprCtx &expr_ctx);
 
   // use get_tablet_ranges instead.
-  static int extract_pre_query_range(const ObQueryRange &pre_query_range,
+  static int extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
@@ -445,7 +447,7 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
-  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+  static int extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
                                        ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
@@ -691,6 +693,8 @@ public:
   }
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
+
+  static int compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   struct SessionInfoCtx

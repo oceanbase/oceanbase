@@ -494,7 +494,7 @@ int ObLLVMSwitch::add_case(const ObLLVMValue &value, ObLLVMBasicBlock &block)
 
 ObLLVMHelper::~ObLLVMHelper()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   final();
   if (nullptr != jit_) {
     jit_->~ObOrcJit();
@@ -505,7 +505,7 @@ ObLLVMHelper::~ObLLVMHelper()
 int ObLLVMHelper::init()
 {
   int ret = OB_SUCCESS;
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
 
   if (nullptr == (jc_ = OB_NEWx(core::JitContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -526,7 +526,7 @@ int ObLLVMHelper::init()
 
 void ObLLVMHelper::final()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   if (nullptr != jc_) {
     jc_->~JitContext();
     allocator_.free(jc_);
@@ -559,8 +559,8 @@ int ObLLVMHelper::initialize()
 int ObLLVMHelper::init_llvm() {
   int ret = OB_SUCCESS;
 
-  OB_LLVM_MALLOC_GUARD("PlJit");
-  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+  ObArenaAllocator alloc(GET_PL_MOD_STRING(pl::OB_PL_JIT), OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
   ObLLVMHelper helper(alloc);
   ObLLVMDIHelper di_helper(alloc);
   static char init_func_name[] = "pl_init_func";
@@ -598,7 +598,7 @@ void ObLLVMHelper::compile_module(bool optimization)
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
   }
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   jc_->compile();
 }
 
@@ -660,7 +660,7 @@ int ObLLVMHelper::verify_module()
 
 uint64_t ObLLVMHelper::get_function_address(const ObString &name)
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   return jc_->TheJIT->get_function_address(std::string(name.ptr(), name.length()));
 }
 
@@ -2003,6 +2003,7 @@ int ObLLVMHelper::check_insert_point(bool &is_valid)
 int ObDWARFHelper::init()
 {
   int ret = OB_SUCCESS;
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD));
   std::string s;
   llvm::raw_string_ostream Out(s);
   if (nullptr == (Context = OB_NEWx(core::ObDWARFContext, (&Allocator), DebugBuf, DebugLen))) {
@@ -2024,7 +2025,12 @@ int ObDWARFHelper::init()
     DumpOpts.ShowForm = true;
     DumpOpts.SummarizeTypes = true;
     DumpOpts.Verbose = true; 
-    Context->Context->dump(Out, DumpOpts);
+    {
+      // dump uses static memory, record as SYS tenant
+      lib::ObMallocHookAttrGuard malloc_guard(
+          ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
+      Context->Context->dump(Out, DumpOpts);
+    }
     Out.flush();
     LOG_INFO("success to init ObDWARFHelper!", K(ret), K(Out.str().c_str()));
   }
@@ -2036,8 +2042,7 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
   int ret = OB_SUCCESS;
   std::string s;
   llvm::raw_string_ostream Out(s);
-  core::StringMemoryBuffer MemoryBuf(DebugBuf, DebugLen);
-  MemoryBufferRef MemoryRef(MemoryBuf);
+  MemoryBufferRef MemoryRef(ObStringRef(DebugBuf, DebugLen), "");
   auto BinOrErr = llvm::object::createBinary(MemoryRef);
   if (!BinOrErr) {
     ret = OB_ERR_UNEXPECTED;
@@ -2055,7 +2060,12 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
       DumpOpts.SummarizeTypes = true;
       DumpOpts.Verbose = true;
       Context->verify(Out);
-      Context->dump(Out, DumpOpts);
+      {
+        // dump uses static memory, record as SYS tenant
+        lib::ObMallocHookAttrGuard malloc_guard(
+            ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
+        Context->dump(Out, DumpOpts);
+      }
       Out.flush();
     }
   }
@@ -2227,5 +2237,13 @@ const ObString& ObLLVMHelper::get_compiled_object()
   return jit_->get_compiled_object();
 }
 
-} // namespace jit
+ObDWARFHelper::~ObDWARFHelper() {
+  if (nullptr != Context) {
+    Context->~ObDWARFContext();
+    Allocator.free(Context);
+    Context = nullptr;
+  }
 }
+
+} // namespace jit
+} // namespace oceanbase

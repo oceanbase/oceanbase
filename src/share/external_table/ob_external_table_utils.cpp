@@ -22,6 +22,8 @@
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "share/backup/ob_backup_io_adapter.h"
+#include "deps/oblib/src/lib/net/ob_addr.h"
 
 namespace oceanbase
 {
@@ -280,12 +282,23 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSEArray<ObExternalFileInfo, 16> file_urls;
   ObSEArray<ObNewRange *, 4> tmp_ranges;
-  if (OB_FAIL(tmp_ranges.assign(ranges))) {
+  ObSEArray<ObAddr, 16> all_locations;
+  if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_FAIL(tmp_ranges.assign(ranges))) {
     LOG_WARN("failed to assign array", K(ret));
   } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(tenant_id,
                                   table_id, is_file_on_disk, range_allocator, file_urls,
                                   tmp_ranges.empty() ? NULL : &tmp_ranges))) {
     LOG_WARN("get external table file error", K(ret));
+  } else if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
+      LOG_WARN("fail to get external table location", K(ret));
+  } else if (is_file_on_disk
+            && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
+                                                                       all_locations))) {
+      //For recovered cluster, the file addr may not in the cluster. Then igore it.
+      LOG_WARN("filter files in location failed", K(ret));
   } else {
     new_range.reset();
   }
@@ -419,6 +432,27 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
     assigned_idx.at(sorted_files.at(i).file_idx_) = cur_min_set.sqc_idx_;
     OZ (heap.pop());
     OZ (heap.push(cur_min_set));
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
+                                    common::ObIArray<common::ObAddr> &locations)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
+    ObExternalFileInfo &table_info = files.at(i);
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < locations.count(); j++) {
+      if (table_info.file_addr_ == locations.at(j)) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      std::swap(files.at(i), files.at(files.count() - 1));
+      files.pop_back();
+      i--;
+    }
   }
   return ret;
 }

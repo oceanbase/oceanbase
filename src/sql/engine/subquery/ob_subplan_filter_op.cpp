@@ -24,7 +24,7 @@ namespace sql
 
 bool DatumRow::operator==(const DatumRow &other) const
 {
-  bool cmp = false;
+  bool cmp = true;
   if (cnt_ != other.cnt_) {
     cmp = false;
   } else {
@@ -665,7 +665,8 @@ int ObSubPlanFilterOp::inner_open()
             MY_SPEC.enable_px_batch_rescans_.at(i)) {
           enable_left_px_batch_ = true;
         }
-        if (!MY_SPEC.exec_param_idxs_inited_) {
+        if (!MY_SPEC.exec_param_idxs_inited_ || MY_SPEC.enable_das_group_rescan_) {
+          // spf group rescan can't use hash-map optimize, it will induces skip-scan, which will induces correctness problem
           //unittest or old version, do not init hashmap
         } else if (OB_FAIL(iter->init_mem_entity())) {
           LOG_WARN("failed to init mem_entity", K(ret));
@@ -686,7 +687,9 @@ int ObSubPlanFilterOp::inner_open()
 
   //BATCH SUBPLAN FILTER {
   if (OB_SUCC(ret) && MY_SPEC.enable_das_group_rescan_) {
-    max_group_size_ = OB_MAX_BULK_JOIN_ROWS;
+    int64_t simulate_group_size = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_GROUP_SIZE);
+    max_group_size_ = simulate_group_size > 0 ? simulate_group_size: OB_MAX_BULK_JOIN_ROWS;
+    LOG_TRACE("max group size of SPF is", K(max_group_size_));
     if(OB_FAIL(alloc_das_batch_params(max_group_size_+MY_SPEC.max_batch_size_))) {
       LOG_WARN("Fail to alloc das batch params.", K(ret));
     }

@@ -86,7 +86,8 @@ public:
       const int64_t blacklist_history_overdue_time_min = 30,
       const int64_t blacklist_history_clear_interval_min = 20,
       const bool is_tenant_mode = false,
-      const uint64_t tenant_id = OB_INVALID_TENANT_ID);
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID,
+      const uint64_t self_tenant_id = OB_SERVER_TENANT_ID);
   int start();
   void stop();
   void wait();
@@ -375,6 +376,7 @@ private:
   int64_t cluster_id_;
   bool is_tenant_mode_;
   int64_t source_tenant_id_;
+  uint64_t self_tenant_id_;
   volatile bool is_stopped_ CACHE_ALIGNED;
   LSRouteKeySet ls_route_key_set_;
   LSRouterMap ls_router_map_;

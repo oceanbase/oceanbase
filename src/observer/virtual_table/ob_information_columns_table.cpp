@@ -219,7 +219,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "table_schema should not be NULL", K(ret));
     } else {
-      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view();
+      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view() && (table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_NORMAL || table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
       //  不显示索引表
       if (table_schema->is_aux_table()
          || table_schema->is_tmp_table()
@@ -235,7 +235,10 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       }
       // for system view, its column info depend on hard code, so its valid by default, but do not have column meta
       // status default value is valid, old version also work whether what status it read because its column count = 0
-      bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
+      bool view_is_invalid = (0 == table_schema->get_object_status()
+                              || 0 == table_schema->get_column_count()
+                              || (table_schema->is_sys_view()
+                                  && table_schema->get_schema_version() <= GCTX.start_time_));
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
         mem_context_->reset_remain_one_page();
@@ -942,11 +945,11 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
         K(ret),
         K(cur_row_.count_),
         K(col_count));
-  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, select_stmt,
+  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, *table_schema, select_stmt,
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes))) {
+                                                              column_attributes, *allocator_))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {

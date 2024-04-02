@@ -75,13 +75,13 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform pre_precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
     LOG_WARN("failed to formalize query ref exprs");
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
     LOG_WARN("failed to do transform", K(ret));
   } else if (OB_FAIL(do_transform_dblink_read(stmt))) {
     LOG_WARN("failed to do transform dblink read", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_after_transform(stmt))) {
     LOG_WARN("failed deal after transform", K(ret));
@@ -160,6 +160,8 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt)
     LOG_WARN("failed to add pre calc constraints", K(ret));
   } else if (OB_FAIL(adjust_global_dependency_tables(stmt))) {
     LOG_WARN("failed to adjust global depency", K(ret));
+  } else if (OB_FAIL(verify_all_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify all stmt exprs", K(ret));
   }
   return ret;
 }
@@ -303,7 +305,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         need_next_iteration = false;
       } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
         LOG_WARN("failed to formalize subquery exprs", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt expr", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
@@ -430,9 +432,10 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
       ObTransformRule::add_trans_type(disable_list, NL_FULL_OUTER_JOIN);
       ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
+      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
+      ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
     }
     if (func.update_global_index_) {
-      ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }
     if (func.contain_link_table_) {
@@ -661,6 +664,44 @@ int ObTransformerImpl::adjust_global_dependency_tables(ObDMLStmt *stmt)
           global_tables->at(i).is_existed_ = false;
         } else { /* do nothing. */ }
       } else { /* do nothing. */ }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::verify_all_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(verify_stmt_exprs(stmt))) {
+    LOG_WARN("failed to verify stmt exprs", K(ret));
+  } else {
+    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
+    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
+      if (OB_FAIL(verify_stmt_exprs(temp_table_infos.at(i).temp_table_query_))) {
+        LOG_WARN("failed to verify temp table query exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::verify_stmt_exprs(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else {
+    ObStmtExprChecker checker;
+    checker.set_relation_scope();
+    if (OB_FAIL(stmt->iterate_stmt_expr(checker))) {
+      LOG_WARN("failed to check stmt expr", K(ret), KPC(stmt));
     }
   }
   return ret;

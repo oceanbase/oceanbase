@@ -270,6 +270,49 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_cluster)
   EXPECT_FALSE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
 }
 
+TEST_F(TestObSimpleMutilArbServer, restart_arb)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "restart_arb");
+  OB_LOGGER.set_log_level("TRACE");
+  ObISimpleLogServer *iserver = get_cluster()[0];
+  EXPECT_EQ(true, iserver->is_arb_server());
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
+  palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
+  std::vector<int64_t> cluster_ids = {2, 3, 4, 5, 6, 7};
+  arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
+
+  // test add tenant without cluster, generate placeholder
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->create_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1)));
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+
+  palflite::PalfEnvLite *palf_env_lite = NULL;
+  IPalfHandleImpl *ipalf_handle_impl = NULL;
+  {
+    PalfBaseInfo info; info.generate_by_default();
+    AccessMode mode(palf::AccessMode::APPEND);
+    EXPECT_EQ(OB_SUCCESS, palf_env_mgr->get_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1), palf_env_lite));
+    EXPECT_EQ(OB_SUCCESS, palf_env_lite->create_palf_handle_impl(1, mode, info, ipalf_handle_impl));
+    palflite::PalfHandleLite *palf_handle_lite = dynamic_cast<palflite::PalfHandleLite*>(ipalf_handle_impl);
+    ASSERT_NE(nullptr, palf_handle_lite);
+    LogEngine *log_engine = &palf_handle_lite->log_engine_;
+    LogMeta log_meta = log_engine->log_meta_;
+    int count = (2 * 1024 * 1024 - log_engine->log_meta_storage_.log_tail_.val_) / 4096;
+    while (count > 0) {
+      EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_meta));
+      count --;
+    }
+    while (log_engine->log_meta_storage_.log_tail_ != LSN(2*1024*1024)) {
+      sleep(1);
+    }
+    sleep(1);
+    EXPECT_EQ(2*1024*1024, log_engine->log_meta_storage_.log_tail_);
+    EXPECT_EQ(OB_SUCCESS, log_engine->log_meta_storage_.block_mgr_.switch_next_block(1));
+  }
+  palf_env_lite->revert_palf_handle_impl(ipalf_handle_impl);
+  palf_env_mgr->revert_palf_env_lite(palf_env_lite);
+  EXPECT_EQ(OB_SUCCESS, restart_server(0));
+}
+
 } // end unittest
 } // end oceanbase
 

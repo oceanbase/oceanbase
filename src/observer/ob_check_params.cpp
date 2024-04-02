@@ -21,40 +21,23 @@ namespace observer
 int CheckAllParams::check_all_params(bool strict_check = true)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(ret) && OB_FAIL(check_max_map_count(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check max_map_count failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_max_map_count(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_vm_min_free_kbytes(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check vm_min_free_kbytes failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_min_free_kbytes(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_vm_overcommit_memory(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check vm_overcommit_memory failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_overcommit_memory(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_fs_file_max(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check fs_file_max failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_fs_file_max(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_open_files(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit_open_files failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_open_files(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_process_limit(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit_process_limit failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_max_user_processes(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_core_file_size(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit_core_file_size failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_core_file_size(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_stack_size(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit_stack_size failed");
-  }
-  if (OB_SUCC(ret) && OB_FAIL(check_current_clocksource(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check current_clocksource failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_stack_size(strict_check))) {}
+
+  if (OB_SUCC(ret) && OB_FAIL(check_current_clocksource(strict_check))) {}
   return ret;
 }
 
@@ -80,7 +63,7 @@ bool CheckAllParams::is_path_valid(const char *file_name)
   return (access(file_name, F_OK) != -1);
 }
 
-int CheckAllParams::check_max_map_count(bool strict_check)
+int CheckAllParams::check_vm_max_map_count(bool strict_check)
 {
   int ret = OB_SUCCESS;
   const char *file_path = "/proc/sys/vm/max_map_count";
@@ -193,42 +176,44 @@ int CheckAllParams::check_ulimit_open_files(bool strict_check)
         ret = OB_IMPROPER_OS_PARAM;
         LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM,
             "msg",
-            "[check OS params]:open files limit's soft nofile or hard nofile is less than 655300",
+            "[check OS params]:open files limit's soft nofile or hard nofile is less than 655300, please run 'ulimit -n' to confirm the current limit and find a way to set it to the proper value",
             K(rlim.rlim_cur),
             K(rlim.rlim_max));
       } else {
         LOG_WARN(
-            "[check OS params]:open files limit's soft nofile or hard nofile is less than 655300", K(rlim.rlim_cur), K(rlim.rlim_max));
+            "[check OS params]:open files limit's soft nofile or hard nofile is less than 655300, please run 'ulimit -n' to confirm the current limit and find a way to set it to the proper value", K(rlim.rlim_cur), K(rlim.rlim_max));
       }
     }
   } else {
-    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit_open_file file failed");
+    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit.open_file_limit file failed");
   }
   return ret;
 }
 
-int CheckAllParams::check_ulimit_process_limit(bool strict_check)
+int CheckAllParams::check_ulimit_max_user_processes(bool strict_check)
 {
   int ret = OB_SUCCESS;
   struct rlimit rlim;
   // Check process limit
   if (getrlimit(RLIMIT_NPROC, &rlim) == 0) {
     if (rlim.rlim_cur >= 655300 && rlim.rlim_max >= 655300) {
-      LOG_INFO("[check OS params]:process limit is greater than or equal to 655300", K(rlim.rlim_cur), K(rlim.rlim_max));
+      LOG_INFO("[check OS params]:ulimit.max_user_processes is greater than or equal to 655300", K(rlim.rlim_cur), K(rlim.rlim_max));
     } else {
       if (strict_check) {
         ret = OB_IMPROPER_OS_PARAM;
         LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM,
             "msg",
-            "[check OS params]:process limit's soft nofile or hard nofile is less than 655300",
+            "[check OS params]:ulimit.max_user_processes's soft nofile or hard nofile is less than 655300, please run 'ulimit -u' to confirm the current limit and find a way to set it to the proper value",
             K(rlim.rlim_cur),
             K(rlim.rlim_max));
       } else {
-        LOG_WARN("[check OS params]:process limit's soft nofile or hard nofile is less than 655300", K(rlim.rlim_cur), K(rlim.rlim_max));
+        LOG_WARN("[check OS params]:ulimit.max_user_processes's soft nofile or hard nofile is less than 655300, please run 'ulimit -u' to confirm the current limit and find a way to set it to the proper value",
+            K(rlim.rlim_cur),
+            K(rlim.rlim_max));
       }
     }
   } else {
-    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit_process_limit file failed");
+    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit.max_user_processes file failed");
   }
   return ret;
 }
@@ -242,10 +227,10 @@ int CheckAllParams::check_ulimit_core_file_size(bool strict_check)
       LOG_INFO("[check OS params]:core file size limit is unlimited");
     } else {
       // Violations of the recommended range will only trigger a warning, regardless of strict or non-strict checking.
-      LOG_WARN("[check OS params]:core file size limit's soft nofile or hard nofile is limited", K(rlim.rlim_cur), K(rlim.rlim_max));
+      LOG_WARN("[check OS params]:ulimit.core_file_size limit's soft nofile or hard nofile is limited", K(rlim.rlim_cur), K(rlim.rlim_max));
     }
   } else {
-    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit_core_file_size file failed");
+    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit.core_file_size file failed");
   }
   return ret;
 }
@@ -263,16 +248,16 @@ int CheckAllParams::check_ulimit_stack_size(bool strict_check)
         ret = OB_IMPROPER_OS_PARAM;
         LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM,
             "msg",
-            "[check OS params]:stack size limit's soft nofile or hard nofile is smaller than 1M",
+            "[check OS params]: ulimit.stack_size limit's soft nofile or hard nofile is smaller than 1M, please run 'ulimit -s' to confirm the current limit and find a way to set it to the proper value",
             K(rlim.rlim_cur),
             K(rlim.rlim_max));
       } else {
         LOG_WARN(
-            "[check OS params]:stack size limit's soft nofile or hard nofile is smaller than 1M", K(rlim.rlim_cur), K(rlim.rlim_max));
+            "[check OS params]: ulimit.stack_size limit's soft nofile or hard nofile is smaller than 1M, please run 'ulimit -s' to confirm the current limit and find a way to set it to the proper value", K(rlim.rlim_cur), K(rlim.rlim_max));
       }
     }
   } else {
-    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit_stack_size file failed");
+    LOG_DBA_ERROR(OB_FILE_NOT_EXIST, "msg", "read ulimit.stack_size file failed");
   }
   return ret;
 }
@@ -306,13 +291,13 @@ int CheckAllParams::check_current_clocksource(bool strict_check)
       if (clocksource[strlen(clocksource) - 1] == '\n') {
         clocksource[strlen(clocksource) - 1] = '\0';
       }
-      if (strcmp(clocksource, "tsc") == 0) {
-        LOG_INFO("[check OS params]:current_clocksource is [tsc]", K(clocksource), K(ret));
+      if (strcmp(clocksource, "tsc") == 0 || strcmp(clocksource, "kvm-clock") == 0 || strcmp(clocksource, "arch_sys_counter") == 0) {
+        LOG_INFO("[check OS params]:current_clocksource is in proper range", K(clocksource), K(ret));
       } else if (strict_check) {
         ret = OB_IMPROPER_OS_PARAM;
-        LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:current_clocksource is not [tsc]", K(clocksource));
+        LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:current_clocksource is not [tsc], [kvm-clock], [arch_sys_counter]", K(clocksource),  K(ret));
       } else {
-        LOG_WARN("[check OS params]:current_clocksource is not [tsc]", K(clocksource), K(ret));
+        LOG_WARN("[check OS params]:current_clocksource is not [tsc], [kvm-clock], [arch_sys_counter]", K(clocksource), K(ret));
       }
     }
   } else {

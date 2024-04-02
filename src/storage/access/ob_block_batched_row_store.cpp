@@ -263,9 +263,9 @@ int ObBlockBatchedRowStore::get_row_ids(
           start = min(context_.limit_param_->offset_ - context_.out_cnt_, row_count);
         }
         if (context_.limit_param_->limit_ >= 0 &&
-            context_.out_cnt_ + row_count >= context_.limit_param_->offset_ + context_.limit_param_->limit_) {
+            context_.out_cnt_ + row_count - context_.limit_param_->offset_ >= context_.limit_param_->limit_) {
           iter_end_flag_ = IterEndState::LIMIT_ITER_END;
-          end = context_.limit_param_->offset_ + context_.limit_param_->limit_ - context_.out_cnt_;
+          end = context_.limit_param_->limit_ - context_.out_cnt_ + context_.limit_param_->offset_;
         }
         context_.out_cnt_ += end;
         row_count = end - start;

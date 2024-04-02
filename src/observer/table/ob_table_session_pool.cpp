@@ -33,7 +33,7 @@ int ObTableApiSessPoolMgr::mtl_init(ObTableApiSessPoolMgr *&mgr)
 
 /*
   start tableapi retired session task
-  - 60 second interval
+  - 5 second interval
   - repeated
 */
 int ObTableApiSessPoolMgr::start()
@@ -45,7 +45,7 @@ int ObTableApiSessPoolMgr::start()
     LOG_WARN("table api session pool mgr isn't inited", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
                                  elimination_task_,
-                                 ELIMINATE_SESSION_DELAY/* 60s */,
+                                 ELIMINATE_SESSION_DELAY/* 5s */,
                                  true/* repeat */))) {
     LOG_WARN("failed to schedule tableapi retired session task", K(ret));
   } else {
@@ -97,8 +97,9 @@ void ObTableApiSessPoolMgr::destroy()
       pool_->destroy();
       pool_ = nullptr;
     }
-    allocator_.reset();
+    allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
     is_inited_ = false;
+    LOG_INFO("ObTableApiSessPoolMgr destroy successfully");
   }
 }
 
@@ -128,6 +129,7 @@ int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTab
 
   if (credential.tenant_id_ != MTL_ID()) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "access wrong tenant");
     LOG_WARN("access wrong tenant", K(ret), K(credential.tenant_id_), K(MTL_ID()));
   } else if (OB_UNLIKELY(OB_ISNULL(pool_)) && OB_FAIL(create_session_pool_safe())) {
     LOG_WARN("fail to create session pool", K(ret), K(credential));
@@ -315,8 +317,9 @@ void ObTableApiSessPool::destroy()
 
   retired_nodes_.clear();
   key_node_map_.destroy();
-  allocator_.reset();
+  allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
   is_inited_ = false;
+  LOG_INFO("ObTableApiSessPool destroy successfully", K(MTL_ID()));
 }
 
 /*
@@ -357,7 +360,7 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
 {
   int ret = OB_SUCCESS;
 
-  ObLockGuard<ObSpinLock> guard(lock_);
+  ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session node is null", K(ret));
@@ -374,28 +377,37 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
   1. remove session val in free_list.
   2. remove session node from retired_nodes_ when node is empty.
   3. free node memory.
-  4. delete 1000 session nodes per times
+  4. delete 2000 session nodes per times
 */
 int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
-  int64 delete_count = 0;
+  int64_t delete_count = 0;
+  int64_t cur_time = ObTimeUtility::current_time();
+  ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
-    if (OB_FAIL(node->remove_unused_sess())) {
+    if (cur_time - node->get_last_active_ts() < SESS_UPDATE_TIME_INTERVAL) {
+      // do nothing, this node maybe is from ObTableApiSessNodeReplaceOp, some threads maybe is using it.
+      // we remove it next retire task.
+    } else if (OB_FAIL(node->remove_unused_sess())) {
       LOG_WARN("fail to remove unused sess", K(ret), K(*node));
     } else {
-      ObLockGuard<ObSpinLock> guard(lock_);
       if (node->is_empty()) {
         ObTableApiSessNode *rm_node = retired_nodes_.remove(node);
         if (OB_NOT_NULL(rm_node)) {
           rm_node->~ObTableApiSessNode();
+          ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
           allocator_.free(rm_node);
           rm_node = nullptr;
           delete_count++;
         }
       }
     }
+  }
+
+  if (delete_count != 0) {
+    LOG_INFO("evict retired session node", K(delete_count), K(retired_nodes_.get_size()));
   }
 
   return ret;
@@ -491,7 +503,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
 int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> guard(lock_);
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   ObTableApiSessNode *tmp_node = nullptr;
   void *buf = nullptr;
 
@@ -521,7 +533,7 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
       ret = OB_SUCCESS; // replace error code
     }
     // this node has been set by other thread, free it
-    ObLockGuard<ObSpinLock> guard(lock_);
+    ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
     node->~ObTableApiSessNode();
     allocator_.free(node);
     node = nullptr;
@@ -533,23 +545,31 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
 /*
   1. only call in login
   2. move old to retired list when node exist, create new node otherwise.
+  3. if the update interval is less than 5 seconds, ignore this update.
 */
 int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
 {
   int ret = OB_SUCCESS;
-
   ObTableApiSessNode *node = nullptr;
   const uint64_t key = credential.hash_val_;
+  int64_t cur_time = ObTimeUtility::current_time();
+
   if (OB_FAIL(get_sess_node(key, node))) {
     if (OB_HASH_NOT_EXIST == ret) { // not exist, create
       if (OB_FAIL(create_and_add_node_safe(credential))) {
         LOG_WARN("fail to create and add node", K(ret), K(credential));
+      } else {
+        ATOMIC_STORE(&last_update_ts_, cur_time);
       }
     } else {
       LOG_WARN("fail to get session node", K(ret), K(key));
     }
+  } else if (cur_time - last_update_ts_ < SESS_UPDATE_TIME_INTERVAL) {
+    // if the update interval is less than 5 seconds, ignore this update.
   } else if (OB_FAIL(replace_sess_node_safe(credential))) { // exist, create and replace old node
     LOG_WARN("fail to replace session node", K(ret), K(credential));
+  } else {
+    ATOMIC_STORE(&last_update_ts_, cur_time);
   }
 
   return ret;
@@ -573,6 +593,7 @@ void ObTableApiSessNodeVal::destroy()
   sess_info_.~ObSQLSessionInfo();
   is_inited_ = false;
   owner_node_ = nullptr;
+  tenant_id_ = OB_INVALID;
 }
 
 int ObTableApiSessNodeVal::init_sess_info()
@@ -582,18 +603,18 @@ int ObTableApiSessNodeVal::init_sess_info()
   if (!is_inited_) {
     share::schema::ObSchemaGetterGuard schema_guard;
     const ObTenantSchema *tenant_schema = nullptr;
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-      LOG_WARN("fail to get schema guard", K(ret), K(MTL_ID()));
-    } else if (OB_FAIL(schema_guard.get_tenant_info(MTL_ID(), tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(MTL_ID()));
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+      LOG_WARN("fail to get tenant schema", K(ret), K_(tenant_id));
     } else if (OB_ISNULL(tenant_schema)) {
       ret = OB_SCHEMA_ERROR;
       LOG_WARN("tenant schema is null", K(ret));
-    } else if (OB_FAIL(ObTableApiSessUtil::init_sess_info(MTL_ID(),
+    } else if (OB_FAIL(ObTableApiSessUtil::init_sess_info(tenant_id_,
                                                           tenant_schema->get_tenant_name_str(),
                                                           schema_guard,
                                                           sess_info_))) {
-      LOG_WARN("fail to init sess info", K(ret), K(MTL_ID()));
+      LOG_WARN("fail to init sess info", K(ret), K_(tenant_id));
     } else {
       is_inited_ = true;
     }
@@ -640,6 +661,7 @@ void ObTableApiSessNode::destroy()
       rm_sess->destroy();
     }
   }
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   allocator_.reset();
 }
 
@@ -656,6 +678,7 @@ int ObTableApiSessNode::remove_unused_sess()
       ObTableApiSessNodeVal *rm_sess = free_list.remove(sess);
       if (OB_NOT_NULL(rm_sess)) {
         rm_sess->~ObTableApiSessNodeVal();
+        ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
         allocator_.free(rm_sess);
         rm_sess = nullptr;
       }
@@ -701,14 +724,14 @@ int ObTableApiSessNode::get_sess_node_val(ObTableApiSessNodeVal *&val)
 int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
-
-  ObLockGuard<ObSpinLock> alloc_guard(lock_); // avoid concurrent allocator_.alloc
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   void *buf = nullptr;
+
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNodeVal)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc mem for ObTableApiSessNodeVal", K(ret), K(sizeof(ObTableApiSessNodeVal)));
   } else {
-    ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(this);
+    ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(this, credential_.tenant_id_);
     if (OB_FAIL(val->init_sess_info())) {
       LOG_WARN("fail to init sess info", K(ret), K(*val));
     } else {

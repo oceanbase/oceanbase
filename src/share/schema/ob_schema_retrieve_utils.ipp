@@ -1947,6 +1947,33 @@ int ObSchemaRetrieveUtils::fill_routine_priv_schema(
 }
 
 template<typename T>
+int ObSchemaRetrieveUtils::fill_column_priv_schema(
+    const uint64_t tenant_id, T &result, ObColumnPriv &column_priv, bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  column_priv.reset();
+  is_deleted = false;
+  column_priv.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, priv_id, column_priv, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, user_id, column_priv, tenant_id);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, database_name, column_priv);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, table_name, column_priv);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, column_name, column_priv);
+    int64_t all_priv = 0;
+    EXTRACT_INT_FIELD_MYSQL(result, "all_priv", all_priv, int64_t);
+    if ((all_priv & 1) != 0) { column_priv.set_priv(OB_PRIV_SELECT); }
+    if ((all_priv & 2) != 0) { column_priv.set_priv(OB_PRIV_INSERT); }
+    if ((all_priv & 4) != 0) { column_priv.set_priv(OB_PRIV_UPDATE); }
+    if ((all_priv & 8) != 0) { column_priv.set_priv(OB_PRIV_REFERENCES); }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, column_priv, int64_t);
+  }
+
+  return ret;
+}
+
+template<typename T>
 int ObSchemaRetrieveUtils::fill_obj_priv_schema(
     const uint64_t tenant_id,
     T &result,
@@ -1985,7 +2012,6 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
   is_deleted  = false;
   int ret = common::OB_SUCCESS;
   outline_info.set_tenant_id(tenant_id);
-  bool ignore_column_error = true;
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, outline_id, outline_info, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -2005,12 +2031,6 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, format, outline_info, ObHintFormat);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_params, outline_info);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, outline_target, outline_info);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-        result, format_sql_text, outline_info, true, ignore_column_error, ObString::make_string(""));
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-        result, format_sql_id, outline_info, true, ignore_column_error, ObString::make_string(""));
-    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-        result, format_outline, outline_info, bool, true, ignore_column_error, 0);
   }
   return ret;
 }
@@ -3608,6 +3628,42 @@ int ObSchemaRetrieveUtils::retrieve_routine_priv_schema(
 }
 
 template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_column_priv_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObIArray<S> &column_priv_array)
+{
+  int ret = common::OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  S column_priv(&allocator);
+  ObColumnPrivIdKey pre_column_id_key;
+  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    column_priv.reset();
+    allocator.reuse();
+    bool is_deleted = false;
+    if (OB_FAIL(fill_column_priv_schema(tenant_id, result, column_priv, is_deleted))) {
+      LOG_WARN("Fail to fill column_priv", K(ret));
+    } else if (column_priv.get_id_key() == pre_column_id_key) {
+      // ignore it
+      ret = common::OB_SUCCESS;
+    } else if (is_deleted) {
+      LOG_TRACE("column_priv is is_deleted", K(column_priv));
+    } else if (OB_FAIL(column_priv_array.push_back(column_priv))) {
+      LOG_WARN("Failed to push back", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      pre_column_id_key = column_priv.get_id_key();
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    LOG_WARN("Fail to get column privileges. iter quit", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T, typename S>
 int ObSchemaRetrieveUtils::retrieve_obj_priv_schema(
     const uint64_t tenant_id,
     T &result,
@@ -4125,7 +4181,6 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     bool &is_deleted)
 {
   int ret = common::OB_SUCCESS;
-  bool ignore_column_error = true;
   outline_schema.reset();
   is_deleted = false;
 
@@ -4139,10 +4194,6 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, signature, outline_schema);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, sql_id, outline_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, ObString::make_string(""));
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, format_sql_id, outline_schema, true, ignore_column_error, ObString::make_string(""));
-    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-        result, format_outline, outline_schema, bool, true, ignore_column_error, false);
   }
   return ret;
 }

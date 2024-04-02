@@ -279,7 +279,7 @@ int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonB
     }
     
     if (OB_SUCC(ret)) {
-      if (this_arr->consume(allocator, other_arr)) {
+      if (OB_FAIL(this_arr->consume(allocator, other_arr))) {
         LOG_WARN("fail to consume array", K(ret), K(*this_arr), K(*other_arr));
       } else {
         result = this_arr;
@@ -579,7 +579,8 @@ ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator, bool is_deep_copy) cons
     for (uint64_t i = 0; i < len && OB_SUCC(ret); i++) {
       if (is_deep_copy) {
         char* str_buf = NULL;
-        if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(object_array_[i].get_key().length())))) {
+        bool is_key_empty = object_array_[i].get_key().length() == 0;
+        if (!is_key_empty && OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(object_array_[i].get_key().length())))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret), K(object_array_[i].get_key().length()));
         } else {

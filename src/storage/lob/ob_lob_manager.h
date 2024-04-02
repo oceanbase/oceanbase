@@ -90,16 +90,24 @@ private:
   ObString data_buffer_;
 };
 
+struct ObLobRemoteQueryCtx
+{
+  ObLobRemoteQueryCtx() : handle_(), rpc_buffer_(), query_arg_(), remote_reader_() {}
+  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle_;
+  common::ObDataBuffer rpc_buffer_;
+  ObLobQueryArg query_arg_;
+  ObLobQueryRemoteReader remote_reader_;
+};
+
 class ObLobQueryIter
 {
 public:
   ObLobQueryIter() : is_reverse_(false), cs_type_(CS_TYPE_BINARY), is_end_(false),
                      meta_iter_(), lob_ctx_(), param_(), last_data_(), last_data_ptr_(nullptr), last_data_buf_len_(0),
                      inner_data_(), cur_pos_(0), is_in_row_(false), is_inited_(false),
-                     is_remote_(false), handle_(), rpc_buffer_(), query_arg_(), remote_reader_() {}
-  int open(ObLobAccessParam &param, ObLobCtx& lob_ctx); // outrow open
+                     is_remote_(false), remote_query_ctx_(nullptr) {}
   int open(ObString &data, uint32_t byte_offset, uint32_t byte_len, ObCollationType cs, bool is_reverse = false); // inrow open
-  int open(ObLobAccessParam &param, common::ObAddr dst_addr); // remote open
+  int open(ObLobAccessParam &param, ObLobCtx& lob_ctx, common::ObAddr& dst_addr, bool &is_remote); // open with retry inner
   int get_next_row(ObString& data);
   int get_next_row(ObLobQueryResult &result); // for test
   uint64_t get_cur_pos() { return meta_iter_.get_cur_pos(); }
@@ -127,10 +135,7 @@ private:
   bool is_inited_;
   // remote ctx
   bool is_remote_;
-  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle_;
-  common::ObDataBuffer rpc_buffer_;
-  ObLobQueryArg query_arg_;
-  ObLobQueryRemoteReader remote_reader_;
+  void* remote_query_ctx_;
 };
 
 class ObLobCursor : public ObILobCursor
@@ -211,7 +216,8 @@ public:
   static const int64_t LOB_WITH_OUTROW_CTX_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx);
   static const int64_t LOB_OUTROW_FULL_SIZE = ObLobLocatorV2::DISK_LOB_OUTROW_FULL_SIZE;
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
-  static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
+  static const uint64_t LOB_QUERY_RETRY_MAX = 100L; // 100 times
+  static const ObLobCommon ZERO_LOB; // static empty lob for zero val
 private:
   explicit ObLobManager(const uint64_t tenant_id)
     : tenant_id_(tenant_id),
@@ -254,6 +260,17 @@ public:
                                         const ObString &data,
                                         common::ObCollationType coll_type,
                                         ObLobLocatorV2 &out);
+  int lob_query_with_retry(ObLobAccessParam &param,
+                           ObAddr &dst_addr,
+                           bool &remote_bret,
+                           ObLobMetaScanIter& iter,
+                           ObLobQueryArg::QueryType qtype,
+                           void *&ctx);
+  int lob_remote_query_init_ctx(ObLobAccessParam &param,
+                                ObLobQueryArg::QueryType qtype,
+                                void *&ctx);
+  int lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr, bool &remote_bret, int last_err, int retry_cnt);
+  int lob_check_tablet_not_exist(ObLobAccessParam &param, uint64_t table_id);
   int lob_remote_query_with_retry(
     ObLobAccessParam &param,
     common::ObAddr& dst_addr,
@@ -396,7 +413,7 @@ private:
   int get_inrow_data(ObLobAccessParam& param, ObString& data);
   int get_ls_leader(ObLobAccessParam& param, const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   int is_remote(ObLobAccessParam& param, bool& is_remote, common::ObAddr& dst_addr);
-  int query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, ObString& data);
+  int query_remote(ObLobAccessParam& param, ObString& data);
   int getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, uint64_t &len);
   int do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult &result, ObString &tmp_buff);
   int prepare_erase_buffer(ObLobAccessParam& param, ObString &tmp_buff);
@@ -409,7 +426,7 @@ private:
               ObLobAccessParam& param_right,
               int64_t& result);
   int load_all(ObLobAccessParam &param, ObLobPartialData &partial_data);
-
+  void transform_lob_id(uint64_t src, uint64_t &dst);
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K

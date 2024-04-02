@@ -141,7 +141,7 @@ private:
       const share::SCN &scn,
       mds::BufferCtx &ctx,
       common::ObIArray<common::ObTabletID> &tablet_id_array);
-  static int roll_back_remove_tablets(
+  static int rollback_remove_tablets(
       const share::ObLSID &ls_id,
       const common::ObIArray<common::ObTabletID> &tablet_id_array);
   static int get_ls(

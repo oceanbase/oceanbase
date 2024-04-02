@@ -34,12 +34,20 @@ public:
   const common::ObString &get_role_name() const { return role_name_; }
   virtual bool cause_implicit_commit() const override { return true; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_role_arg_; }
+  common::ObIArray<common::ObString> &get_user_names() { return user_names_; }
+  common::ObIArray<common::ObString> &get_host_names() { return host_names_; }
+  void set_if_exists() { if_exists_ = true; }
+  bool get_if_exists() const { return if_exists_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
   uint64_t tenant_id_;
   common::ObString role_name_; 
   obrpc::ObDropUserArg drop_role_arg_;
+  // mysql role
+  common::ObArray<common::ObString, common::ModulePageAllocator, true /*auto_free*/> user_names_;
+  common::ObArray<common::ObString, common::ModulePageAllocator, true /*auto_free*/> host_names_;
+  bool if_exists_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropRoleStmt);
 };

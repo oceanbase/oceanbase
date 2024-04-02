@@ -92,7 +92,7 @@ int ObSelectLogPlan::candi_allocate_group_by()
              OB_FAIL(append(candi_subquery_exprs, stmt->get_rollup_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_aggr_items()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
   } else if (stmt->is_scala_group_by()) {
     if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(stmt->get_having_exprs(),
@@ -1372,7 +1372,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_distinct_exprs(best_plan, reduce_exprs, distinct_exprs))) {
     LOG_WARN("failed to get select columns", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(distinct_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(distinct_exprs))) {
         LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
   } else if (distinct_exprs.empty()) {
     // if all the distinct exprs are const, we add limit operator instead of distinct operator
@@ -1748,6 +1748,7 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     ObSEArray<ObRawExpr *, 8> child_remain_filters;
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
+    ObSelectLogPlan *nonrecursive_plan = NULL;
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
       child_rename_filters.reuse();
@@ -1774,10 +1775,13 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
         LOG_WARN("get remain filters failed", K(ret));
       } else if (OB_FAIL(generate_child_plan_for_set(child_stmt, child_plan,
                                                      child_rename_filters, i,
-                                                     select_stmt->is_set_distinct()))) {
+                                                     select_stmt->is_set_distinct(),
+                                                     nonrecursive_plan))) {
         LOG_WARN("failed to generate left subquery plan", K(ret));
       } else if (OB_FAIL(child_plans.push_back(child_plan))) {
         LOG_WARN("failed to push back", K(ret));
+      } else if (0 == i && select_stmt->is_recursive_union()) {
+        nonrecursive_plan = child_plan;
       }
     }
   }
@@ -2380,14 +2384,14 @@ int ObSelectLogPlan::check_sharding_inherit_from_access_all(ObLogicalOperator* o
       is_inherit_from_access_all = true;
     }
   }
-  if (OB_SUCC(ret) &&
-      !is_inherit_from_access_all &&
-      op->get_inherit_sharding_index() != -1) {
-    int64_t idx = op->get_inherit_sharding_index();
-    if (idx < 0 || idx >= op->get_num_of_child()) {
+  for (int64_t i = 0; OB_SUCC(ret) && !is_inherit_from_access_all && i < op->get_num_of_child(); ++i) {
+    ObLogicalOperator *child = op->get_child(i);
+    if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect inherit sharding index", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_sharding_inherit_from_access_all(op->get_child(idx),
+      LOG_WARN("unexpect null child", K(ret), K(i));
+    } else if (LOG_EXCHANGE == child->get_type()) {
+      //do nothing
+    } else if (OB_FAIL(SMART_CALL(check_sharding_inherit_from_access_all(child,
                                                                          is_inherit_from_access_all)))) {
       LOG_WARN("failed to check sharding inherit from bc2host", K(ret));
     }
@@ -2522,7 +2526,7 @@ int ObSelectLogPlan::allocate_set_distinct_as_top(ObLogicalOperator *&top)
                                                        top->get_card(),
                                                        top->get_width(),
                                                        distinct_exprs,
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
       distinct->set_cost(top->get_cost() + distinct_cost);
       distinct->set_op_cost(distinct_cost);
       top = distinct_op;
@@ -3449,7 +3453,7 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
                                                        right_need_sort,
                                                        right_prefix_pos,
                                                        right_path_cost,
-                                                       get_optimizer_context().get_cost_model_type()))) {
+                                                       get_optimizer_context()))) {
         LOG_WARN("failed to compute cost for merge join style op", K(ret));
       } else if (NULL == best_plan || right_path_cost < best_cost) {
         if (OB_FAIL(best_order_items.assign(right_order_items))) {
@@ -4530,8 +4534,11 @@ int ObSelectLogPlan::allocate_plan_top()
 
     // allocate root exchange
     if (OB_SUCC(ret) && is_final_root_plan()) {
-      // allocate material if there is for update.
-      if (optimizer_context_.has_for_update() && OB_FAIL(candi_allocate_for_update_material())) {
+      // allocate material if there is for update without skip locked.
+      // FOR UPDATE SKIP LOCKED does not need SQL-level retry, hence we don't need a MATERIAL to
+      // block the output.
+      if (optimizer_context_.has_no_skip_for_update()
+          && OB_FAIL(candi_allocate_for_update_material())) {
         LOG_WARN("failed to allocate material", K(ret));
         //allocate temp-table transformation if needed.
       } else if (!get_optimizer_context().get_temp_table_infos().empty() &&
@@ -4616,13 +4623,8 @@ int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item()
     LOG_WARN("null stmt", K(select_stmt), K(ret));
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(select_exprs,
-                                                         subquery_exprs))) {
-    LOG_WARN("failed to get subquery exprs", K(ret));
-  } else if (subquery_exprs.empty()) {
-    /*do nothing*/
-  } else if (OB_FAIL(candi_allocate_subplan_filter(subquery_exprs))) {
-    LOG_WARN("failed to allocate subplan filter for select item", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter(select_exprs))) {
+    LOG_WARN("failed to candi allocate subplan filter for exprs", K(ret));
   } else {
     LOG_TRACE("succeed to allocate subplan filter for select item", K(select_stmt->get_stmt_id()));
   }
@@ -4633,7 +4635,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                  ObSelectLogPlan *&sub_plan,
                                                  ObIArray<ObRawExpr*> &pushdown_filters,
                                                  const uint64_t child_offset,
-                                                 const bool is_set_distinct)
+                                                 const bool is_set_distinct,
+                                                 ObSelectLogPlan *nonrecursive_plan)
 {
   int ret = OB_SUCCESS;
   sub_plan = NULL;
@@ -4647,7 +4650,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                                          *sub_stmt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Failed to create logical plan", K(sub_plan), K(ret));
-  } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct))) {
+  } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
+             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))) {
     // do nothing
   } else if (OB_FAIL(sub_plan->add_pushdown_filters(pushdown_filters))) {
     LOG_WARN("failed to add pushdown filters", K(ret));
@@ -4733,7 +4737,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
     LOG_WARN("unexpected params", K(ret), K(stmt), K(stmt->has_window_function()));
   } else if (OB_FAIL(append(candi_subquery_exprs, stmt->get_window_func_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
     LOG_WARN("failed to do allocate subplan filter", K(ret));
   } else if (OB_FAIL(candi_allocate_window_function_with_hint(stmt->get_window_func_exprs(),
                                                               win_func_plans))) {
@@ -6939,37 +6943,59 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params =
             ObBasicSessionInfo::create_dtc_params(optimizer_context_.get_session_info());
-      ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
       const ParamStore *params = get_optimizer_context().get_params();
-      if (OB_ISNULL(query_range)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for query range", K(ret));
-      } else if (OB_ISNULL(params)) {
+      if (OB_ISNULL(params)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else {
-        query_range = new(query_range)ObQueryRange(get_allocator());
-        bool is_in_range_optimization_enabled = false;
-        if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(optimizer_context_.get_global_hint(),
-                                                                      optimizer_context_.get_session_info(),
-                                                                      is_in_range_optimization_enabled))) {
-          LOG_WARN("failed to check in range optimization enabled", K(ret));
-        } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
-                                                                 join_conditions,
-                                                                 dtc_params,
-                                                                 optimizer_context_.get_exec_ctx(),
-                                                                 NULL,
-                                                                 params,
-                                                                 false,
-                                                                 true,
-                                                                 is_in_range_optimization_enabled))) {
-          LOG_WARN("failed to preliminary extract query range", K(ret));
-        } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
-          LOG_WARN("failed to set range columns", K(ret));
+      } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
+        LOG_WARN("failed to set range columns", K(ret));
+      } else if (optimizer_context_.enable_new_query_range()) {
+        ObPreRangeGraph *pre_range_graph = static_cast<ObPreRangeGraph*>(get_allocator().alloc(sizeof(ObPreRangeGraph)));
+        if (OB_ISNULL(pre_range_graph)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for pre range graph", K(ret));
         } else {
-          table_scan->set_pre_query_range(query_range);
+          pre_range_graph = new(pre_range_graph)ObPreRangeGraph(get_allocator());
+          if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns,
+                                                                       join_conditions,
+                                                                       optimizer_context_.get_exec_ctx(),
+                                                                       NULL,
+                                                                       params,
+                                                                       false,
+                                                                       true))) {
+            LOG_WARN("failed to preliminary extract query range", K(ret));
+          } else {
+            table_scan->set_pre_range_graph(pre_range_graph);
+          }
+        }
+      } else {
+        ObQueryRange *query_range = static_cast<ObQueryRange*>(get_allocator().alloc(sizeof(ObQueryRange)));
+        if (OB_ISNULL(query_range)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for query range", K(ret));
+        } else {
+          query_range = new(query_range)ObQueryRange(get_allocator());
+          bool is_in_range_optimization_enabled = false;
+          if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(optimizer_context_.get_global_hint(),
+                                                                        optimizer_context_.get_session_info(),
+                                                                        is_in_range_optimization_enabled))) {
+            LOG_WARN("failed to check in range optimization enabled", K(ret));
+          } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
+                                                                  join_conditions,
+                                                                  dtc_params,
+                                                                  optimizer_context_.get_exec_ctx(),
+                                                                  NULL,
+                                                                  params,
+                                                                  false,
+                                                                  true,
+                                                                  is_in_range_optimization_enabled))) {
+            LOG_WARN("failed to preliminary extract query range", K(ret));
+          } else {
+            table_scan->set_pre_query_range(query_range);
+          }
         }
       }
+
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(table_scan->set_table_scan_filters(join_conditions))) {
@@ -7065,7 +7091,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     // set card and cost
     table_scan->set_card(1.0);
     table_scan->set_op_cost(ObOptEstCost::cost_late_materialization_table_get(stmt->get_column_size(),
-                                                                              get_optimizer_context().get_cost_model_type()));
+                                                                              get_optimizer_context()));
     table_scan->set_cost(table_scan->get_op_cost());
     table_scan->set_table_row_count(index_scan->get_table_row_count());
     table_scan->set_output_row_count(1.0);
@@ -7170,7 +7196,7 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
                                                        right_child->get_cost(),
                                                        join->get_op_cost(),
                                                        join->get_cost(),
-                                                       get_optimizer_context().get_cost_model_type());
+                                                       get_optimizer_context());
     if (OB_FAIL(join->set_op_ordering(left_child->get_op_ordering()))) {
       LOG_WARN("failed to set op ordering", K(ret));
     } else {
@@ -7227,8 +7253,8 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
       } else if (OB_FAIL(append(temp_exprs, table_scan->get_filter_exprs())) ||
                  OB_FAIL(append(temp_exprs, table_keys))) {
         LOG_WARN("failed to append exprs", K(ret));
-      } else if (NULL != table_scan->get_pre_query_range() &&
-                 OB_FAIL(append(temp_exprs, table_scan->get_pre_query_range()->get_range_exprs()))) {
+      } else if (NULL != table_scan->get_pre_graph() &&
+                 OB_FAIL(append(temp_exprs, table_scan->get_pre_graph()->get_range_exprs()))) {
         LOG_WARN("failed to append exprs", K(ret));
       } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
@@ -7284,7 +7310,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                              phy_query_range_row_count,
                                              op_cost,
                                              index_back_cost,
-                                             get_optimizer_context().get_cost_model_type()))) {
+                                             get_optimizer_context()))) {
           LOG_WARN("failed to get index access info", K(ret));
         } else {
           table_scan->set_cost(op_cost);
@@ -7330,7 +7356,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
                                                   top->get_cost(),
                                                   stmt->get_column_size(),
                                                   late_mater_cost,
-                                                  get_optimizer_context().get_cost_model_type());
+                                                  get_optimizer_context());
 
           OPT_TRACE("late materialization plan cost:", late_mater_cost);
         }

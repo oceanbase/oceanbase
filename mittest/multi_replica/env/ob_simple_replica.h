@@ -33,11 +33,13 @@ public:
 
   static int64_t get_rpc_port(int &server_fd);
 public:
-  ObSimpleServerReplica(const std::string &env_prefix,
+  ObSimpleServerReplica(const std::string &app_name,
+                        const std::string &env_prefix,
                         const int zone_id,
                         const int rpc_port,
                         const string &rs_list,
                         const ObServerInfoList &server_list,
+                        bool is_restart,
                         ObServer &server = ObServer::get_instance(),
                         const std::string &dir_prefix = "./store",
                         const char *log_disk_size = "10G",
@@ -77,6 +79,7 @@ private:
   int mysql_port_;
   std::string rs_list_;
   ObServerInfoList server_info_list_;
+  std::string app_name_;
   std::string data_dir_;
   std::string optstr_;
   std::string run_dir_;
@@ -90,6 +93,8 @@ private:
   common::ObMySQLProxy sql_proxy_with_short_wait_;
   int server_fd_;
   bool set_bootstrap_warn_log_;
+
+  bool is_restart_;
 
   obrpc::ObNetClient bootstrap_client_;
   obrpc::ObSrvRpcProxy bootstrap_srv_proxy_;

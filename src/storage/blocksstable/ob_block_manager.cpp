@@ -194,6 +194,9 @@ int ObBlockManager::start(const int64_t reserved_size)
   opts.opt_cnt_ = 1;
   opts.opts_ = &(opt);
   opt.set("reserved size", reserved_size);
+  LOG_DBA_INFO_V2(OB_SERVER_BLOCK_MANAGER_START_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "block manager start begin.");
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -242,6 +245,17 @@ int ObBlockManager::start(const int64_t reserved_size)
       LOG_INFO("start block manager", K(need_format));
     }
   }
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_SERVER_BLOCK_MANAGER_START_FAIL, ret,
+                     DBA_STEP_INC_INFO(server_start),
+                     "block manager start fail. ",
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_SERVER_BLOCK_MANAGER_START_SUCCESS,
+                    DBA_STEP_INC_INFO(server_start),
+                    "block manager start success.");
+  }
+
   return ret;
 }
 
@@ -497,10 +511,12 @@ int64_t ObBlockManager::get_used_macro_block_count() const
 }
 
 int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
-                                         ObMacroBlockInfo &macro_block_info) const
+                                         ObMacroBlockInfo &macro_block_info,
+                                         ObMacroBlockHandle &macro_block_handle)
 {
   int ret = OB_SUCCESS;
   BlockInfo block_info;
+  bool has_inc_ref = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -508,14 +524,44 @@ int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
   } else if (OB_UNLIKELY(!macro_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), K(macro_id));
-  } else if (OB_FAIL(block_map_.get(macro_id, block_info))) {
-    //BUG, should not happen
-    LOG_ERROR("fatal error, this block should be in block map", K(ret), K(macro_id));
   } else {
-    macro_block_info.is_free_ = 0 == block_info.ref_cnt_;
-    macro_block_info.ref_cnt_ = block_info.ref_cnt_;
-    macro_block_info.access_time_ = block_info.last_write_time_;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
+    if (OB_FAIL(block_map_.get(macro_id, block_info)) && ret != OB_HASH_NOT_EXIST) {
+      // BUG, should not happen
+      LOG_ERROR("fatal error, this block should be in block map", K(ret), K(macro_id));
+    } else if (OB_UNLIKELY(OB_SUCCESS == ret && block_info.ref_cnt_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fatal error, invalid refcnt", K(ret), K(macro_id), K(block_info));
+    } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret || 0 == block_info.ref_cnt_)) {
+      // set `is_free_` to true, skip this MacroBlock in upper layer.
+      ret = OB_SUCCESS;
+      macro_block_info.is_free_ = true;
+    } else {
+      macro_block_info.is_free_ = false;
+      macro_block_info.ref_cnt_ = block_info.ref_cnt_;
+      macro_block_info.access_time_ = block_info.last_write_time_;
+      block_info.access_time_ = ObTimeUtility::fast_current_time();
+      block_info.ref_cnt_++;
+      if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
+        LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
+      } else {
+        has_inc_ref = true;
+        LOG_DEBUG("debug ref_cnt: inc_ref in memory", K(ret), K(macro_id), K(block_info), K(lbt()));
+      }
+    }
   }
+  if (OB_SUCC(ret) && !macro_block_info.is_free_) {
+    if (OB_FAIL(macro_block_handle.set_macro_block_id(macro_id))) {
+      LOG_ERROR("fatal error, fail to set macro block id", K(ret), K(macro_id), K(macro_block_info));
+    }
+  }
+  if (has_inc_ref) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(dec_ref(macro_id))) {
+      LOG_ERROR("fail to decrease reference count", K(ret), K(macro_id));
+    }
+  }
+
   return ret;
 }
 
@@ -696,9 +742,9 @@ int ObBlockManager::inc_ref(const MacroBlockId &macro_id)
       } else {
         LOG_ERROR("get block_info fail", K(ret), K(macro_id));
       }
-    } else if (OB_UNLIKELY(0 == block_info.ref_cnt_ && is_mark_sweep_enabled())) {
+    } else if (OB_UNLIKELY(block_info.ref_cnt_ < 0 || (0 == block_info.ref_cnt_ && is_mark_sweep_enabled()))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("ref cnt shouldn't be 0", K(ret), K(macro_id), K(block_info));
+      LOG_ERROR("un-expected MacroBlock refcnt", K(ret), K(macro_id), K(block_info));
     }
 
     if (OB_SUCC(ret)) {
@@ -818,7 +864,7 @@ bool ObBlockManager::GetOldestHoldBlockFunctor::operator()(
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_HASH_NOT_EXIST == ret) {
-      // TODO zhouxinlan.zxl : add new solutions to find leaked macro blocks
+      // TODO yunshan.tys : add new solutions to find leaked macro blocks
       if (0 != value.ref_cnt_ // not wash tablet block
           && (!oldest_hold_block_info_.macro_id_.is_valid()
               || value.access_time_ < oldest_hold_block_info_.last_access_time_)) {
@@ -844,6 +890,8 @@ bool ObBlockManager::GetPendingFreeBlockFunctor::operator()(const MacroBlockId &
   } else if (OB_UNLIKELY(value.ref_cnt_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fatal error, macro block ref cnt less than 0", K(ret), K(key), K(value));
+  } else if (OB_UNLIKELY(blk_map_.count() >= max_free_blk_cnt_)) {
+    // skip inserting more free block
   } else if (OB_FAIL(blk_map_.insert(key, true))) {
     LOG_WARN("push back block id fail", K(ret), K(key));
   }
@@ -865,18 +913,21 @@ bool ObBlockManager::GetAllMacroBlockIdFunctor::operator()(const MacroBlockId &k
   return OB_SUCCESS == ret;
 }
 
-bool ObBlockManager::CopyBlockToArrayFunctor::operator()(const MacroBlockId &macro_id,
-                                                         const bool can_free)
+bool ObBlockManager::DoBlockSweepFunctor::operator()(
+  const MacroBlockId &macro_id,
+  const bool can_free)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!can_free)) {
     // ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, this block cannot be freed", K(macro_id), K(can_free));
-  } else if (OB_FAIL(block_ids_.push_back(macro_id))) {
-    LOG_WARN("fail to push back block id into array", K(ret), K(macro_id));
+  } else if (OB_FAIL(block_manager_.sweep_one_block(macro_id))) {
+    LOG_WARN("fail to sweep one block", K(ret), K(macro_id));
   }
-  ret_code_ = ret;
-  return OB_SUCCESS == ret;
+  // record last failure ret
+  ret_code_ = OB_SUCCESS == ret ? ret_code_ : ret;
+  // ignore ret to sweep all blocks
+  return true;
 }
 
 bool ObBlockManager::is_bad_block(const MacroBlockId &macro_block_id)
@@ -895,34 +946,33 @@ bool ObBlockManager::is_bad_block(const MacroBlockId &macro_block_id)
 int ObBlockManager::do_sweep(MacroBlkIdMap &mark_info)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<blocksstable::MacroBlockId, 256> blocks;
-  CopyBlockToArrayFunctor functor(blocks);
+  DoBlockSweepFunctor functor(*this);
   if (0 == mark_info.count()) {
     // do nothing
   } else if (OB_FAIL(mark_info.for_each(functor))) {
     ret = functor.get_ret_code();
-    LOG_WARN("fail to copy block into pending free list", K(ret));
+    LOG_WARN("fail to do block sweep", K(ret));
+  }
+  return ret;
+}
+
+int ObBlockManager::sweep_one_block(const MacroBlockId& macro_id)
+{
+  int ret = OB_SUCCESS;
+  ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
+  BlockInfo block_info;
+  ObIOFd io_fd;
+  io_fd.first_id_ = macro_id.first_id();
+  io_fd.second_id_ = macro_id.second_id();
+  if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+    LOG_WARN("fail to get block info from block map", K(ret), K(macro_id));
+  } else if (OB_UNLIKELY(block_info.ref_cnt_ > 0)) {
+    // skip using block.
+  } else if (OB_FAIL(block_map_.erase(macro_id))) {
+    LOG_WARN("fail to erase block info from block map", K(ret), K(macro_id));
   } else {
-    // ignore ret to sweep all blocks
-    for (int64_t i = 0; i < blocks.count(); i++) {
-      const MacroBlockId &macro_id = blocks.at(i);
-      ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
-      BlockInfo block_info;
-      ObIOFd io_fd;
-      io_fd.first_id_ = macro_id.first_id();
-      io_fd.second_id_ = macro_id.second_id();
-      if (OB_FAIL(block_map_.get(macro_id, block_info))) {
-        LOG_WARN("fail to get block info from block map", K(ret), K(macro_id));
-      } else if (OB_UNLIKELY(block_info.ref_cnt_ > 0)) {
-        // skip using block.
-        continue;
-      } else if (OB_FAIL(block_map_.erase(macro_id))) {
-        LOG_WARN("fail to erase block info from block map", K(ret), K(macro_id));
-      } else {
-        io_device_->free_block(io_fd);
-        FLOG_INFO("block manager free block", K(macro_id), K(io_fd));
-      }
-    }
+    io_device_->free_block(io_fd);
+    FLOG_INFO("block manager free block", K(macro_id), K(io_fd));
   }
   return ret;
 }
@@ -936,6 +986,8 @@ void ObBlockManager::mark_and_sweep()
   bool skip_mark = false;
   // we must assign alloc_num_ before mark_macro_blocks, because it will be set to 0 in this func
   int64_t alloc_num = 0;
+  // recycle maximum 200 GB space, but no more than 6MB memory consumption for mark_info
+  const int64_t MAX_FREE_BLOCK_COUNT_PER_ROUND = 100000;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -949,16 +1001,27 @@ void ObBlockManager::mark_and_sweep()
   } else {
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to init mark info, ", K(ret));
-    } else if (OB_FAIL(macro_id_set.create(MAX(2, block_map_.count()), "BlkIdSetBkt", "BlkIdSetNode",
+    } else if (OB_FAIL(macro_id_set.create(MAX(2, block_map_.get_bkt_cnt()), "BlkIdSetBkt", "BlkIdSetNode",
             OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to create macro id set", K(ret));
     } else {
-      GetPendingFreeBlockFunctor pending_free_functor(mark_info, tmp_status.hold_count_);
+      GetPendingFreeBlockFunctor pending_free_functor(
+        MAX_FREE_BLOCK_COUNT_PER_ROUND, mark_info, tmp_status.hold_count_);
       tmp_status.start_time_ = ObTimeUtility::fast_current_time();
       if (OB_FAIL(block_map_.for_each(pending_free_functor))) {
         ret = pending_free_functor.get_ret_code();
         LOG_WARN("fail to get pending free blocks", K(ret));
-      } else if (0 == (alloc_num = ATOMIC_SET(&alloc_num_, 0)) && 0 == mark_info.count()) {
+      } else if ((mark_info.count() < MAX_FREE_BLOCK_COUNT_PER_ROUND)) {
+        // Only try to set alloc_num_ to 0 when macro info is complete, else do mark and sweep again.
+        if (0 != (alloc_num = ATOMIC_SET(&alloc_num_, 0))) {
+          // Some one alloc block after GetPendingFreeBlockFunctor concurrently.
+          // let mark and sweep do again next round whatever mark_info is empty or not
+          ATOMIC_SET(&alloc_num_, alloc_num);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (0 == mark_info.count()) {
         skip_mark = true;
         LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
       } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
@@ -1507,15 +1570,16 @@ void ObBlockManager::InspectBadBlockTask::runTimerTask()
   }
 }
 
-int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_id)
+int ObBlockManager::InspectBadBlockTask::check_block(ObMacroBlockHandle &macro_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!macro_id.is_valid())) {
+  if (OB_UNLIKELY(!macro_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(macro_id));
+    LOG_WARN("invalid arguments", K(ret), K(macro_handle));
   } else {
+    MacroBlockId macro_id = macro_handle.get_macro_id();
     ObMacroBlockReadInfo read_info;
-    ObMacroBlockHandle macro_handle;
+    // ObMacroBlockHandle macro_handle;
     common::ObArenaAllocator allocator(ObModIds::OB_SSTABLE_BLOCK_FILE);
     const int64_t io_timeout_ms =
       std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
@@ -1699,8 +1763,11 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
 
       const MacroBlockId &macro_id = macro_ids.at(last_macro_idx_);
       ObMacroBlockInfo block_info;
-      if (OB_FAIL(blk_mgr_.get_macro_block_info(macro_id, block_info))) {
+      ObMacroBlockHandle macro_block_handle;
+      if (OB_FAIL(blk_mgr_.get_macro_block_info(macro_id, block_info, macro_block_handle))) {
         LOG_WARN("fail to get macro block info", K(ret), K(macro_id), K(last_macro_idx_));
+      } else if (OB_UNLIKELY(block_info.is_free_)) {
+        // do nothing, this MacroBlock has been released. skip this MacroBlock and continue.
       } else if (!block_info.is_free_ && block_info.ref_cnt_ > 0
       #ifdef ERRSIM
                 && (begin_time - block_info.access_time_) > static_cast<int64_t>(10_s)) {
@@ -1710,7 +1777,7 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
       #endif
         ++check_count;
         LOG_INFO("check macro block", K(block_info), "time_interval", begin_time - block_info.access_time_);
-        if (OB_FAIL(check_block(macro_id))) {
+        if (OB_FAIL(check_block(macro_block_handle))) {
           LOG_WARN("found a bad block", K(ret), K(macro_id));
         }
       }

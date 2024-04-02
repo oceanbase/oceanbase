@@ -925,7 +925,7 @@ void ObDDLScheduler::run1()
       }
       if (do_idle) {
         first_retry_task = nullptr;
-        idler_.idle(10 * 1000L);
+        idler_.idle(ObDDLTask::DEFAULT_TASK_IDLE_TIME_US);
       }
     }
   }
@@ -944,6 +944,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   uint64_t tenant_id = param.tenant_id_;
   uint64_t compat_version = 0;
   LOG_INFO("create ddl task", K(param));
+  const int64_t real_parallelism = std::max(1L, param.parallelism_);
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_1_0_0 && GCONF.in_upgrade_mode()) {
@@ -961,15 +962,17 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   } else {
     switch (param.type_) {
       case DDL_CREATE_INDEX:
+      case DDL_CREATE_PARTITIONED_LOCAL_INDEX:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_index_task(proxy,
                                             param.src_table_schema_,
                                             param.dest_table_schema_,
-                                            param.parallelism_,
+                                            real_parallelism,
                                             param.parent_task_id_,
                                             param.consumer_group_id_,
                                             param.sub_task_trace_id_,
                                             create_index_arg,
+                                            param.type_,
                                             *param.allocator_,
                                             task_record))) {
           LOG_WARN("fail to create build index task", K(ret));
@@ -1001,7 +1004,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    param.type_,
                                                    param.src_table_schema_,
                                                    param.dest_table_schema_,
-                                                   param.parallelism_,
+                                                   real_parallelism,
                                                    param.consumer_group_id_,
                                                    param.task_id_,
                                                    param.sub_task_trace_id_,
@@ -1016,7 +1019,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    param.type_,
                                                    param.src_table_schema_,
                                                    param.dest_table_schema_,
-                                                   param.parallelism_,
+                                                   real_parallelism,
                                                    param.consumer_group_id_,
                                                    param.task_id_,
                                                    param.sub_task_trace_id_,
@@ -1032,7 +1035,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                  param.type_,
                                                  param.src_table_schema_,
                                                  param.dest_table_schema_,
-                                                 param.parallelism_,
+                                                 real_parallelism,
                                                  param.consumer_group_id_,
                                                  param.task_id_,
                                                  param.sub_task_trace_id_,
@@ -1066,7 +1069,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                     param.type_,
                                                     param.src_table_schema_,
                                                     param.dest_table_schema_,
-                                                    param.parallelism_,
+                                                    real_parallelism,
                                                     param.consumer_group_id_,
                                                     param.task_id_,
                                                     param.sub_task_trace_id_,
@@ -1460,6 +1463,7 @@ int ObDDLScheduler::create_build_index_task(
     const int64_t consumer_group_id,
     const int32_t sub_task_trace_id,
     const obrpc::ObCreateIndexArg *create_index_arg,
+    const share::ObDDLType task_type,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -1483,6 +1487,7 @@ int ObDDLScheduler::create_build_index_task(
                                       consumer_group_id,
                                       sub_task_trace_id,
                                       *create_index_arg,
+                                      task_type,
                                       parent_task_id))) {
       LOG_WARN("init global index task failed", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
@@ -1986,6 +1991,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
   } else {
     switch (record.ddl_type_) {
       case ObDDLType::DDL_CREATE_INDEX:
+      case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
         ret = schedule_build_index_task(record);
         break;
       case ObDDLType::DDL_DROP_INDEX:
@@ -2395,6 +2401,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
       longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));
     }
+    ddl_task->disable_schedule();
     if (OB_FAIL(task_queue_.push_task(ddl_task))) {
       if (OB_ENTRY_EXIST != ret) {
         LOG_WARN("push back task to task queue failed", K(ret));
@@ -2408,6 +2415,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
       if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
         LOG_WARN("add sys task failed", K(tmp_ret));
       }
+      ddl_task->enable_schedule();
       idler_.wakeup();
     }
   }
@@ -2428,7 +2436,7 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
     LOG_WARN("invalid argument", K(ret), K(task_key), K(tablet_id), K(ret_code));
   } else if (OB_FAIL(task_queue_.modify_task(task_key, [&tablet_id, &ret_code](ObDDLTask &task) -> int {
         int ret = OB_SUCCESS;
-        if (OB_UNLIKELY(ObDDLType::DDL_CREATE_INDEX != task.get_task_type())) {
+        if (OB_UNLIKELY(!is_create_index(task.get_task_type()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ddl task type not global index", K(ret), K(task));
         } else if (OB_FAIL(DDL_SIM(task.get_tenant_id(), task.get_task_id(), ON_COLUMN_CHECKSUM_REPLY_FAILED))) {
@@ -2482,6 +2490,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
         const int64_t task_type = task.get_task_type();
         switch (task_type) {
           case ObDDLType::DDL_CREATE_INDEX:
+          case ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX:
             if (OB_FAIL(static_cast<ObIndexBuildTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status failed", K(ret));
             }

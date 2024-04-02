@@ -71,9 +71,9 @@ int ObTransformProjectPruning::transform_table_items(ObDMLStmt *&stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
-  } else if (stmt->is_insert_stmt()) {
+  } else if (stmt->is_insert_stmt() || stmt->is_values_table_query()) {
     //do nothing
-    OPT_TRACE("insert stmt can not transform");
+    OPT_TRACE("insert stmt or values stmt can not transform");
   } else {
     //traverse table items(all table items are in from items)
     ObIArray<TableItem*> &table_items = stmt->get_table_items();

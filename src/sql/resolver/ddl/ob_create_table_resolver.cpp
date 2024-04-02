@@ -33,7 +33,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
@@ -752,7 +752,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
-          } else if (OB_FAIL(add_inner_index_for_heap_gtt())) {
+          } else if (!is_create_as_sel && OB_FAIL(add_inner_index_for_heap_gtt())) {
             SQL_RESV_LOG(WARN, "failed to add_inner_index_for_heap_gtt", K(ret));
           }
         }
@@ -837,6 +837,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)){
       if (OB_FAIL(deep_copy_string_in_part_expr(create_table_stmt))) {
         LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
+    if (OB_SUCC(ret) && is_create_as_sel) {
+      if (OB_FAIL(resolve_hints(create_table_node->children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1],
+                               *create_table_stmt,
+                               create_table_stmt->get_create_table_arg().schema_))) {
+        LOG_WARN("fail to resolve hint", K(ret));
       }
     }
   }
@@ -1737,7 +1744,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
   const ObTableSchema *base_table_schema = NULL;
-  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
+  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 2];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
   select_resolver.params_.is_from_create_table_ = true;
@@ -2010,11 +2017,16 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
             if (OB_NOT_NULL(org_column)) {
               //同名列存在, 为了和mysql保持一致, 需要调整原列的顺序
-              ObColumnSchemaV2 new_column(*org_column);
-              new_column.set_column_id(gen_column_id());
-              new_column.set_prev_column_id(UINT64_MAX);
-              new_column.set_next_column_id(UINT64_MAX);
-              if (1 == table_schema.get_column_count()) {
+              ObColumnSchemaV2 new_column;
+              if (OB_FAIL(new_column.assign(*org_column))) {
+                LOG_WARN("fail to assign column", KR(ret), KPC(org_column));
+              } else {
+                new_column.set_column_id(gen_column_id());
+                new_column.set_prev_column_id(UINT64_MAX);
+                new_column.set_next_column_id(UINT64_MAX);
+              }
+              if (OB_FAIL(ret)) {
+              } else if (1 == table_schema.get_column_count()) {
                 //do nothing, 只有一列就不用调整了
                 if (OB_FAIL(set_nullable_for_cta_column(select_stmt, *org_column, expr, table_name_, *allocator_, stmt_))) {
                   LOG_WARN("failed to check and set nullable for cta.", K(ret));
@@ -3038,11 +3050,10 @@ int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
       ObString database_name;
       uint64_t database_id = OB_INVALID_ID;
       const ObDatabaseSchema *database_schema = NULL;
-      int tmp_ret = 0;
-      if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
-        SQL_RESV_LOG(WARN, "fail to get database_id.", K(tmp_ret), K(database_name_), K(tenant_id));
-      } else if (OB_SUCCESS != (tmp_ret = schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
-        LOG_WARN("failed to get db schema", K(tmp_ret), K(database_id));
+      if (OB_FAIL(schema_checker_->get_database_id(tenant_id, database_name_, database_id)))  {
+        SQL_RESV_LOG(WARN, "fail to get database_id.", K(ret), K(database_name_), K(tenant_id));
+      } else if (OB_FAIL(schema_checker_->get_database_schema(tenant_id, database_id, database_schema))) {
+        LOG_WARN("failed to get db schema", K(ret), K(database_id));
       } else if (OB_ISNULL(database_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error. db schema is null", K(ret), K(database_schema));

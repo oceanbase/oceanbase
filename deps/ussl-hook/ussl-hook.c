@@ -40,6 +40,9 @@ static int global_send_negotiation_arr[USSL_MAX_FD_NUM];
 int is_ussl_bg_thread_started = 0;
 static int ussl_is_stopped = 0;
 
+extern int sockaddr_compare_c(struct sockaddr_storage *left, struct sockaddr_storage *right);
+extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
+
 static __attribute__((constructor(102))) void init_global_array()
 {
   for (int i = 0; i < USSL_MAX_FD_NUM; ++i) {
@@ -64,29 +67,26 @@ static int ussl_is_pipe(int fd)
   return 0 == fstat(fd, &st) && S_ISFIFO(st.st_mode);
 }
 
-int ussl_connect(int sockfd, const struct sockaddr *address, socklen_t address_len)
+int ussl_connect(int sockfd, struct sockaddr_storage *address, socklen_t address_len)
 {
   int ret = 0;
-  if ((ret = libc_connect(sockfd, address, address_len)) < 0) {
+  if ((ret = libc_connect(sockfd, (struct sockaddr*)address, address_len)) < 0) {
     if (EINPROGRESS != errno) {
       ussl_clear_client_opt(sockfd);
     }
   } else {
-    if (AF_INET == address->sa_family) {
-      struct sockaddr_in self_addr;
-      socklen_t len = sizeof(self_addr);
-      if (0 == getsockname(sockfd, (struct sockaddr *)&self_addr, &len)) {
-        struct sockaddr_in *dst_addr = (struct sockaddr_in *)address;
-        if (self_addr.sin_port == dst_addr->sin_port && self_addr.sin_addr.s_addr == dst_addr->sin_addr.s_addr) {
-          ret = -1;
-          errno = EIO;
-          char str[INET_ADDRSTRLEN];
-          ussl_log_warn("connection to %s failed, self connect self", inet_ntop(AF_INET, (const void*)(address), str, sizeof(str)));
-        }
-      } else {
+    struct sockaddr_storage self_addr;
+    socklen_t len = sizeof(self_addr);
+    if (0 == getsockname(sockfd, (struct sockaddr *)&self_addr, &len)) {
+      if (sockaddr_compare_c(address, &self_addr) != 0) {
         ret = -1;
-        ussl_log_warn("getsockname failed, fd:%d, error:%s", sockfd, strerror(errno));
+        errno = EIO;
+        char str[128];
+        ussl_log_warn("connection to %s failed, self connect self", sockaddr_to_str_c(address, str, sizeof(str)));
       }
+    } else {
+      ret = -1;
+      ussl_log_warn("getsockname failed, fd:%d, error:%s", sockfd, strerror(errno));
     }
     /* if gid has been set and connect return success, we also let the ret to be -1 and errno to be
      * EINPROGRESS */
@@ -215,7 +215,7 @@ int ussl_listen(int socket, int backlog)
     "fd is expected to be a non-negative integer and less than %d, but currently fd is %d",
     USSL_MAX_FD_NUM, socket);
   } else {
-    if (0 != ussl_loop_add_listen_once(socket, backlog)) {
+    if (0 != ussl_loop_add_listen(socket, backlog)) {
       ret = -1;
       ussl_log_error("add listen filed, fd:%d", socket);
     }

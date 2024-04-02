@@ -18,11 +18,14 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 #include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TRANSFER_TASK_TNAME
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSCache
+#include "share/schema/ob_schema_utils.h" // ObSchemaUtils
+#include "observer/ob_server_struct.h" // GCTX
 
 namespace oceanbase
 {
 using namespace common;
 using namespace palf;
+using namespace share::schema;
 using namespace transaction::tablelock;
 
 namespace share
@@ -50,7 +53,7 @@ int ObTransferTaskOperator::get(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(construct_transfer_task_(*result.get_result(), task))) {
+      } else if (OB_FAIL(construct_transfer_task_(sql_proxy, tenant_id, *result.get_result(), task))) {
         LOG_WARN("construct transfer task failed", KR(ret), K(tenant_id), K(task_id), K(sql), K(task));
       }
     }
@@ -76,8 +79,8 @@ int ObTransferTaskOperator::get_task_with_time(
       ObSqlString sql;
       common::sqlclient::ObMySQLResult *res = NULL;
       const bool with_time = true;
-      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, "
-          "time_to_usec(gmt_modified) AS finish_time, * FROM %s WHERE task_id = %ld%s",
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time_int64, "
+          "time_to_usec(gmt_modified) AS finish_time_int64, * FROM %s WHERE task_id = %ld%s",
           OB_ALL_TRANSFER_TASK_TNAME, task_id.id(), for_update ? " FOR UPDATE" : ""))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id), K(for_update));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -91,7 +94,7 @@ int ObTransferTaskOperator::get_task_with_time(
         } else {
           LOG_WARN("get next result failed", KR(ret), K(sql), K(tenant_id), K(task_id));
         }
-      } else if (OB_FAIL(parse_sql_result_(*res, with_time, task, create_time, finish_time))) {
+      } else if (OB_FAIL(parse_sql_result_(sql_proxy, tenant_id, *res, with_time, task, create_time, finish_time))) {
         LOG_WARN("parse sql result failed", KR(ret), K(tenant_id), K(task_id), K(task));
       } else if (OB_FAIL(res->next())) {
         if (OB_ITER_END == ret) {
@@ -129,7 +132,7 @@ int ObTransferTaskOperator::get_by_status(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(construct_transfer_tasks_(*result.get_result(), tasks))) {
+      } else if (OB_FAIL(construct_transfer_tasks_(sql_proxy, tenant_id, *result.get_result(), tasks))) {
         LOG_WARN("construct transfer task failed", KR(ret), K(tenant_id), K(sql), K(tasks));
       } else if (tasks.empty()) {
         ret = OB_ENTRY_NOT_EXIST;
@@ -265,6 +268,23 @@ int ObTransferTaskOperator::fill_dml_splicer_(
       || OB_FAIL(dml_splicer.add_column("balance_task_id", task.get_balance_task_id().id()))
       || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", task.get_table_lock_owner_id().id()))) {
     LOG_WARN("fail to add column", KR(ret), K(task));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (task.get_data_version() < DATA_VERSION_4_2_3_0) {
+    // do nothing
+  } else {
+    char version_buf[common::OB_CLUSTER_VERSION_LENGTH] = {'\0'};
+    int64_t len = ObClusterVersion::print_version_str(
+        version_buf,
+        common::OB_CLUSTER_VERSION_LENGTH,
+        task.get_data_version());
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(len < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid version", KR(ret), K(task));
+    } else if (OB_FAIL(dml_splicer.add_column("data_version", version_buf))) {
+      LOG_WARN("add column failed", KR(ret), K(task));
+    }
   }
   return ret;
 }
@@ -726,7 +746,7 @@ int ObTransferTaskOperator::get_by_ls_id_(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(construct_transfer_task_(*result.get_result(), task))) {
+      } else if (OB_FAIL(construct_transfer_task_(sql_proxy, tenant_id, *result.get_result(), task))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("construct transfer task failed", KR(ret), K(tenant_id), K(ls_id), K(sql));
         } else {
@@ -740,6 +760,8 @@ int ObTransferTaskOperator::get_by_ls_id_(
 }
 
 int ObTransferTaskOperator::construct_transfer_tasks_(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
     common::sqlclient::ObMySQLResult &res,
     ObIArray<ObTransferTask> &tasks)
 {
@@ -758,7 +780,14 @@ int ObTransferTaskOperator::construct_transfer_tasks_(
       } else {
         LOG_WARN("get next result failed", KR(ret));
       }
-    } else if (OB_FAIL(parse_sql_result_(res, with_time, task, create_time, finish_time))) {
+    } else if (OB_FAIL(parse_sql_result_(
+        sql_proxy,
+        tenant_id,
+        res,
+        with_time,
+        task,
+        create_time,
+        finish_time))) {
       LOG_WARN("parse sql result failed", KR(ret), K(task));
     } else if (OB_FAIL(tasks.push_back(task))) {
       LOG_WARN("fail to push back", KR(ret), K(task), K(tasks));
@@ -768,6 +797,8 @@ int ObTransferTaskOperator::construct_transfer_tasks_(
 }
 
 int ObTransferTaskOperator::construct_transfer_task_(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
     common::sqlclient::ObMySQLResult &res,
     ObTransferTask &task)
 {
@@ -781,7 +812,14 @@ int ObTransferTaskOperator::construct_transfer_task_(
     } else {
       LOG_WARN("get next result failed", KR(ret));
     }
-  } else if (OB_FAIL(parse_sql_result_(res, with_time, task, create_time, finish_time))) {
+  } else if (OB_FAIL(parse_sql_result_(
+      sql_proxy,
+      tenant_id,
+      res,
+      with_time,
+      task,
+      create_time,
+      finish_time))) {
     LOG_WARN("parse sql result failed", KR(ret), K(task));
   } else if (OB_FAIL(res.next())) {
     if (OB_ITER_END == ret) {
@@ -797,6 +835,8 @@ int ObTransferTaskOperator::construct_transfer_task_(
 }
 
 int ObTransferTaskOperator::parse_sql_result_(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
     common::sqlclient::ObMySQLResult &res,
     const bool with_time,
     ObTransferTask &task,
@@ -828,10 +868,14 @@ int ObTransferTaskOperator::parse_sql_result_(
   SCN start_scn;
   SCN finish_scn;
   common::ObCurTraceId::TraceId trace_id;
+  uint64_t data_version = 0;
+  ObString data_version_str;
+  bool data_version_is_null = false;
+  bool data_version_not_exist = false;
 
   if (with_time) {
-    (void)GET_COL_IGNORE_NULL(res.get_int, "create_time", create_time);
-    (void)GET_COL_IGNORE_NULL(res.get_int, "finish_time", finish_time);
+    (void)GET_COL_IGNORE_NULL(res.get_int, "create_time_int64", create_time);
+    (void)GET_COL_IGNORE_NULL(res.get_int, "finish_time_int64", finish_time);
   }
   (void)GET_COL_IGNORE_NULL(res.get_int, "task_id", task_id);
   (void)GET_COL_IGNORE_NULL(res.get_int, "src_ls", src_ls);
@@ -849,6 +893,21 @@ int ObTransferTaskOperator::parse_sql_result_(
   (void)GET_COL_IGNORE_NULL(res.get_int, "balance_task_id", balance_task_id);
   (void)GET_COL_IGNORE_NULL(res.get_int, "table_lock_owner_id", table_lock_owner_id);
   EXTRACT_STRBUF_FIELD_MYSQL(res, "trace_id", trace_id_buf, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET_WITH_COLUMN_INFO(res, "data_version", data_version_str,
+      data_version_is_null, data_version_not_exist);
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(data_version_is_null)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_version can not be null", KR(ret), K(data_version_is_null));
+  } else if (OB_FAIL(convert_data_version_(
+      tenant_id,
+      with_time,
+      data_version_not_exist,
+      data_version_str,
+      data_version))) {
+    LOG_WARN("convert data_version failed", KR(ret), K(tenant_id),
+        K(with_time), K(data_version_not_exist), K(data_version_str));
+  }
 
   if (OB_FAIL(ret)) {
   } else if (start_scn_val != OB_INVALID_SCN_VAL
@@ -877,10 +936,11 @@ int ObTransferTaskOperator::parse_sql_result_(
       static_cast<int32_t>(result),
       str_to_transfer_task_comment(comment),
       ObBalanceTaskID(balance_task_id),
-      ObTableLockOwnerID(table_lock_owner_id)))) {
+      ObTableLockOwnerID(table_lock_owner_id),
+      data_version))) {
     LOG_WARN("fail to init transfer task", KR(ret), K(task_id), K(src_ls), K(dest_ls), K(part_list_str),
         K(not_exist_part_list_str), K(lock_conflict_part_list_str), K(table_lock_tablet_list_str), K(tablet_list_str), K(start_scn),
-        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(table_lock_owner_id));
+        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(table_lock_owner_id), K(data_version));
   }
 
   return ret;
@@ -981,8 +1041,8 @@ int ObTransferTaskOperator::get_history_task(
       ObSqlString sql;
       bool with_time = true;
       common::sqlclient::ObMySQLResult *res = NULL;
-      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(gmt_create) AS create_time, "
-          "time_to_usec(gmt_modified) AS finish_time, * FROM %s WHERE task_id = %ld",
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
+          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s WHERE task_id = %ld",
           OB_ALL_TRANSFER_TASK_HISTORY_TNAME, task_id.id()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(task_id));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
@@ -997,7 +1057,14 @@ int ObTransferTaskOperator::get_history_task(
         } else {
           LOG_WARN("next failed", KR(ret), K(sql));
         }
-      } else if (OB_FAIL(parse_sql_result_(*res, with_time, task, create_time, finish_time))) {
+      } else if (OB_FAIL(parse_sql_result_(
+          sql_proxy,
+          tenant_id,
+          *res,
+          with_time,
+          task,
+          create_time,
+          finish_time))) {
         LOG_WARN("parse sql result failed", KR(ret));
       } else {
         LOG_TRACE("get history task status success", KR(ret), K(tenant_id), K(task_id), K(task));
@@ -1043,6 +1110,55 @@ int ObTransferTaskOperator::get_max_task_id_from_history(
       } else {
         max_task_id = max_task_id_int64;
         LOG_TRACE("get max transfer task_id from history success", KR(ret), K(tenant_id), K(max_task_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::get_last_task_by_balance_task_id(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObBalanceTaskID &balance_task_id,
+    ObTransferTask &last_task,
+    int64_t &finish_time)
+{
+  int ret = OB_SUCCESS;
+  last_task.reset();
+  finish_time = OB_INVALID_TIMESTAMP;
+  int64_t create_time = OB_INVALID_TIMESTAMP;
+  const bool with_time = true;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !balance_task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_task_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(create_time) AS create_time_int64, "
+          "time_to_usec(finish_time) AS finish_time_int64, * FROM %s "
+          "WHERE balance_task_id = %ld order by task_id desc limit 1",
+          OB_ALL_TRANSFER_TASK_HISTORY_TNAME,
+          balance_task_id.id()))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(balance_task_id));
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_TRACE("task not found", KR(ret), K(tenant_id), K(balance_task_id));
+        } else {
+          LOG_WARN("next failed", KR(ret), K(sql));
+        }
+      } else if (OB_FAIL(parse_sql_result_(sql_proxy, tenant_id, *res, with_time,
+          last_task, create_time, finish_time))) {
+        LOG_WARN("parse sql result failed", KR(ret), K(with_time), K(sql));
+      } else {
+        LOG_TRACE("get last task by balance task id from history", KR(ret),
+            K(tenant_id), K(balance_task_id), K(last_task), K(create_time), K(finish_time));
       }
     }
   }
@@ -1396,6 +1512,48 @@ int ObTransferTaskOperator::batch_get_tablet_ls_cache(
     }
 
     } // end SMART_VAR
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::convert_data_version_(
+    const uint64_t tenant_id,
+    const bool is_history,
+    const bool column_not_exist,
+    const ObString &data_version_str,
+    uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  data_version = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(is_history), K(data_version_str));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret));
+  } else if (column_not_exist) {
+    bool column_exist_double_check = false;
+    const ObString column_name("data_version");
+    const uint64_t table_id = is_history ? OB_ALL_TRANSFER_TASK_HISTORY_TID : OB_ALL_TRANSFER_TASK_TID;
+    if (OB_FAIL(ObSchemaUtils::check_whether_column_exist(
+        *GCTX.sql_proxy_,
+        tenant_id,
+        table_id,
+        column_name,
+        column_exist_double_check))) {
+      LOG_WARN("check column exist failed", KR(ret), K(tenant_id), K(table_id), K(column_name));
+    } else if (!column_exist_double_check) {
+      // 1. tenant data_version is old, column does not exist
+      data_version = DEFAULT_MIN_DATA_VERSION;
+    } else { // 2. column exists but schema is old
+      ret = OB_NEED_RETRY;
+      LOG_WARN("schema is old, can not read column data_version",
+          KR(ret), K(tenant_id), K(table_id), K(column_name));
+    }
+  } else if (data_version_str.empty()) {
+    data_version = DEFAULT_MIN_DATA_VERSION;
+  } else if (OB_FAIL(ObClusterVersion::get_version(data_version_str, data_version))) {
+    LOG_WARN("get version failed", KR(ret), K(data_version_str), K(data_version));
   }
   return ret;
 }

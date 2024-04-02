@@ -46,7 +46,7 @@ public:
                          const share::ObPhysicalRestoreJob &job_info);
   static int recycle_restore_job(common::ObMySQLProxy &sql_proxy,
                                  const share::ObPhysicalRestoreJob &job_info,
-                                const share::ObHisRestoreJobPersistInfo &history_info);
+                                 const share::ObHisRestoreJobPersistInfo &history_info);
   static int check_has_physical_restore_job(
              common::ObISQLClient &sql_client,
              const common::ObString &tenant_name,
@@ -148,6 +148,40 @@ private:
       const obrpc::ObPhysicalRestoreTenantArg &arg,
       share::ObPhysicalRestoreJob &job);
   DISALLOW_COPY_AND_ASSIGN(ObRestoreUtil);
+};
+
+class ObRestoreFailureChecker final
+{
+public:
+  ObRestoreFailureChecker();
+  ~ObRestoreFailureChecker();
+  int init(const share::ObPhysicalRestoreJob &job);
+  int check_is_concurrent_with_clean(bool &is_clean_concurrency);
+
+private:
+  int loop_path_list_(const share::ObPhysicalRestoreJob &job, bool &has_been_cleaned);
+  int check_tenant_backup_set_infos_path_exist_(
+      const share::ObBackupDest &backup_tenant_dest,
+      bool &is_exist);
+  int check_tenant_archive_piece_infos_path_exist_(
+      const share::ObBackupDest &backup_tenant_dest,
+      bool &is_exist);
+  int check_checkpoint_dir_emtpy_(
+      const share::ObBackupDest &backup_tenant_dest,
+      bool &is_empty);
+  int check_path_exist_(
+      const share::ObBackupPath &backup_path,
+      const share::ObBackupStorageInfo *storage_info,
+      bool &is_exist);
+  int check_dir_empty_(
+      const share::ObBackupPath &backup_path,
+      const share::ObBackupStorageInfo *storage_info,
+      bool &is_exist);
+
+private:
+  bool is_inited_;
+  share::ObPhysicalRestoreJob job_;
+  DISALLOW_COPY_AND_ASSIGN(ObRestoreFailureChecker);
 };
 
 }

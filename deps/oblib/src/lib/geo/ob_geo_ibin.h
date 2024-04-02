@@ -26,8 +26,8 @@ class ObIGeoVisitor;
 class ObIWkbGeometry : public ObGeometry
 {
 public:
-  ObIWkbGeometry(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObGeometry(srid, allocator) {}
+  ObIWkbGeometry(uint32_t srid = 0)
+    : ObGeometry(srid) {}
   ~ObIWkbGeometry() = default;
   ObIWkbGeometry(const ObIWkbGeometry& g) = default;
   ObIWkbGeometry& operator=(const ObIWkbGeometry& g) = default;
@@ -53,8 +53,8 @@ protected:
 class ObIWkbPoint : public ObIWkbGeometry
 {
 public:
-  ObIWkbPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbPoint(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbPoint() = default;
   // point interface
   virtual double x() const = 0;
@@ -80,8 +80,8 @@ public:
   typedef ObWkbGeomPoint value_type;
 public:
   // constructor
-  ObIWkbGeomPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbPoint(srid, allocator) {}
+  ObIWkbGeomPoint(uint32_t srid = 0)
+    : ObIWkbPoint(srid) {}
   ~ObIWkbGeomPoint() = default;
   ObIWkbGeomPoint(const ObIWkbGeomPoint& g) = default;
   ObIWkbGeomPoint& operator=(const ObIWkbGeomPoint& g) = default;
@@ -101,8 +101,8 @@ public:
   typedef ObWkbGeomLineString value_type;
 public:
   // constructor
-  ObIWkbGeomLineString(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomLineString(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomLineString() = default;
   ObIWkbGeomLineString(const ObIWkbGeomLineString& g) = default;
   ObIWkbGeomLineString& operator=(const ObIWkbGeomLineString& g) = default;
@@ -124,8 +124,8 @@ public:
   typedef ObWkbGeomPolygon value_type;
 public:
   // constructor
-  ObIWkbGeomPolygon(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomPolygon(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomPolygon() = default;
   ObIWkbGeomPolygon(const ObIWkbGeomPolygon& g) = default;
   ObIWkbGeomPolygon& operator=(const ObIWkbGeomPolygon& g) = default;
@@ -144,8 +144,8 @@ private:
 class ObIWkbGeomMultiPoint : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeomMultiPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomMultiPoint(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomMultiPoint() = default;
   ObIWkbGeomMultiPoint(const ObIWkbGeomMultiPoint& g) = default;
   ObIWkbGeomMultiPoint& operator=(const ObIWkbGeomMultiPoint& g) = default;
@@ -164,8 +164,8 @@ public:
 class ObIWkbGeomMultiLineString : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeomMultiLineString(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomMultiLineString(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomMultiLineString() = default;
   ObIWkbGeomMultiLineString(const ObIWkbGeomMultiLineString& g) = default;
   ObIWkbGeomMultiLineString& operator=(const ObIWkbGeomMultiLineString& g) = default;
@@ -185,8 +185,8 @@ private:
 class ObIWkbGeomLinearRing : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeomLinearRing(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomLinearRing(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomLinearRing() = default;
   ObIWkbGeomLinearRing(const ObIWkbGeomLinearRing& g) = default;
   ObIWkbGeomLinearRing& operator=(const ObIWkbGeomLinearRing& g) = default;
@@ -206,8 +206,8 @@ private:
 class ObIWkbGeomMultiPolygon : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeomMultiPolygon(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomMultiPolygon(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomMultiPolygon() = default;
   ObIWkbGeomMultiPolygon(const ObIWkbGeomMultiPolygon& g) = default;
   ObIWkbGeomMultiPolygon& operator=(const ObIWkbGeomMultiPolygon& g) = default;
@@ -230,8 +230,8 @@ private:
 class ObIWkbGeomCollection : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeomCollection(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeomCollection(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeomCollection() = default;
   ObIWkbGeomCollection(const ObIWkbGeomCollection& g) = default;
   ObIWkbGeomCollection& operator=(const ObIWkbGeomCollection& g) = default;
@@ -239,7 +239,8 @@ public:
   ObGeoType type() const override { return ObGeoType::GEOMETRYCOLLECTION; }
   ObGeoCRS crs() const override { return ObGeoCRS::Cartesian; }
   // iter interface
-  int get_sub(uint32_t idx, ObGeometry*& geo) const;
+  // no use currently
+  int get_sub(ObIAllocator *allocator, uint32_t idx, ObGeometry*& geo) const;
   int do_visit(ObIGeoVisitor &visitor);
   uint32_t size() const
   { return reinterpret_cast<const ObWkbGeomCollection*>(val())->size(); }
@@ -262,8 +263,8 @@ public:
   typedef ObWkbGeogPoint value_type;
 public:
   // constructor
-  ObIWkbGeogPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbPoint(srid, allocator) {}
+  ObIWkbGeogPoint(uint32_t srid = 0)
+    : ObIWkbPoint(srid) {}
   ~ObIWkbGeogPoint() = default;
   ObIWkbGeogPoint(const ObIWkbGeogPoint& g) = default;
   ObIWkbGeogPoint& operator=(const ObIWkbGeogPoint& g) = default;
@@ -283,8 +284,8 @@ public:
   typedef ObWkbGeogLineString value_type;
 public:
   // constructor
-  ObIWkbGeogLineString(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogLineString(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogLineString() = default;
   ObIWkbGeogLineString(const ObIWkbGeogLineString& g) = default;
   ObIWkbGeogLineString& operator=(const ObIWkbGeogLineString& g) = default;
@@ -305,8 +306,8 @@ private:
 class ObIWkbGeogLinearRing : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeogLinearRing(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogLinearRing(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogLinearRing() = default;
   ObIWkbGeogLinearRing(const ObIWkbGeogLinearRing& g) = default;
   ObIWkbGeogLinearRing& operator=(const ObIWkbGeogLinearRing& g) = default;
@@ -328,8 +329,8 @@ public:
   typedef ObWkbGeogPolygon value_type;
 public:
   // constructor
-  ObIWkbGeogPolygon(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogPolygon(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogPolygon() = default;
   ObIWkbGeogPolygon(const ObIWkbGeogPolygon& g) = default;
   ObIWkbGeogPolygon& operator=(const ObIWkbGeogPolygon& g) = default;
@@ -348,8 +349,8 @@ private:
 class ObIWkbGeogMultiPoint : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeogMultiPoint(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogMultiPoint(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogMultiPoint() = default;
   ObIWkbGeogMultiPoint(const ObIWkbGeogMultiPoint& g) = default;
   ObIWkbGeogMultiPoint& operator=(const ObIWkbGeogMultiPoint& g) = default;
@@ -369,8 +370,8 @@ private:
 class ObIWkbGeogMultiLineString : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeogMultiLineString(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogMultiLineString(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogMultiLineString() = default;
   ObIWkbGeogMultiLineString(const ObIWkbGeogMultiLineString& g) = default;
   ObIWkbGeogMultiLineString& operator=(const ObIWkbGeogMultiLineString& g) = default;
@@ -390,8 +391,8 @@ private:
 class ObIWkbGeogMultiPolygon : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeogMultiPolygon(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogMultiPolygon(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogMultiPolygon() = default;
   ObIWkbGeogMultiPolygon(const ObIWkbGeogMultiPolygon& g) = default;
   ObIWkbGeogMultiPolygon& operator=(const ObIWkbGeogMultiPolygon& g) = default;
@@ -411,8 +412,8 @@ private:
 class ObIWkbGeogCollection : public ObIWkbGeometry {
 public:
   // constructor
-  ObIWkbGeogCollection(uint32_t srid = 0, ObIAllocator *allocator = NULL)
-    : ObIWkbGeometry(srid, allocator) {}
+  ObIWkbGeogCollection(uint32_t srid = 0)
+    : ObIWkbGeometry(srid) {}
   ~ObIWkbGeogCollection() = default;
   ObIWkbGeogCollection(const ObIWkbGeogCollection& g) = default;
   ObIWkbGeogCollection& operator=(const ObIWkbGeogCollection& g) = default;
@@ -420,7 +421,8 @@ public:
   ObGeoType type() const override { return ObGeoType::GEOMETRYCOLLECTION; }
   ObGeoCRS crs() const override { return ObGeoCRS::Geographic; }
   // iter interface
-  int get_sub(uint32_t idx, ObGeometry*& geo) const;
+  // no use currently
+  int get_sub(ObIAllocator *allocator, uint32_t idx, ObGeometry*& geo) const;
   int do_visit(ObIGeoVisitor &visitor);
   uint32_t size() const
   { return reinterpret_cast<const ObWkbGeogCollection*>(val())->size(); }

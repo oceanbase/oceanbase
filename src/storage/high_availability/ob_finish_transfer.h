@@ -203,7 +203,6 @@ private:
   int report_result_(const share::ObTransferTaskID &task_id, const int64_t result, obrpc::ObSrvRpcProxy *rs_rpc_proxy);
 
 private:
-
   // check self is leader
   // @param[in]: ls_id
   // @param[out]: is_leader
@@ -294,6 +293,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   int64_t round_;
   share::ObStorageHACostItemName diagnose_result_msg_;
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTxFinishTransfer);
 };
 

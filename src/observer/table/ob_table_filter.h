@@ -131,7 +131,7 @@ class ObTableQueryResultIterator
 public:
   ObTableQueryResultIterator(const ObTableQuery *query = nullptr)
       : query_(query),
-        is_query_sync_(false)
+        is_query_async_(false)
   {
   }
   virtual ~ObTableQueryResultIterator() {}
@@ -141,10 +141,10 @@ public:
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) = 0;
   virtual ObTableQueryResult *get_one_result() { return nullptr; }
   virtual void set_query(const ObTableQuery *query) { query_ = query; };
-  virtual void set_query_sync() { is_query_sync_ = true; }
+  virtual void set_query_async() { is_query_async_ = true; }
 protected:
   const ObTableQuery *query_;
-  bool is_query_sync_;
+  bool is_query_async_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryResultIterator);
 };
@@ -162,6 +162,9 @@ public:
         scan_result_(NULL),
         is_first_result_(true),
         has_more_rows_(true),
+        limit_(-1),
+        offset_(0),
+        row_idx_(0),
         agg_calculator_(query)
   {
   }
@@ -179,6 +182,8 @@ public:
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
+  inline void set_limit(int32_t limit) { limit_ = limit; }
+  inline void set_offset(int32_t offset) { offset_ = offset; }
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
@@ -187,6 +192,9 @@ private:
   table::ObTableApiScanRowIterator *scan_result_;
   bool is_first_result_;
   bool has_more_rows_;
+  int32_t limit_;
+  int32_t offset_;
+  int64_t row_idx_; // count actual row
   ObTableAggCalculator agg_calculator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNormalTableQueryResultIterator);
@@ -207,9 +215,12 @@ public:
       is_first_result_(true),
       has_more_rows_(true),
       row_idx_(0),
-      agg_calculator_(query)
+      agg_calculator_(query),
+      full_column_name_()
   {}
-  virtual ~ObTableFilterOperator() {}
+  virtual ~ObTableFilterOperator() {
+    full_column_name_.reset();
+  }
   virtual int get_next_result(ObTableQueryResult *&next_result) override;
   virtual bool has_more_result() const override { return has_more_rows_; }
   virtual void set_one_result(ObTableQueryResult *result) override { one_result_ = result; }
@@ -220,6 +231,8 @@ public:
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
+  int add_row(table::ObTableQueryResult *next_result, ObNewRow *row);
+  int init_full_column_name(const ObIArray<ObString>& col_arr);
 private:
   int check_limit_param();
 private:
@@ -234,6 +247,7 @@ private:
   bool has_more_rows_;
   int64_t row_idx_; // not filtered row index
   ObTableAggCalculator agg_calculator_;
+  ObSEArray<ObString, 64> full_column_name_;
 };
 
 } // end namespace table

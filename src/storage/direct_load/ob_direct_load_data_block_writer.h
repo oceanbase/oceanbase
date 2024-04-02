@@ -48,13 +48,11 @@ protected:
   virtual int pre_write_item() { return common::OB_SUCCESS; }
   virtual int pre_flush_buffer() { return common::OB_SUCCESS; }
   int flush_buffer();
-  int flush_extra_buffer(const T &item);
 protected:
   int64_t data_block_size_;
   char *extra_buf_;
   int64_t extra_buf_size_;
   ObDirectLoadDataBlockEncoder<Header> data_block_writer_;
-  int64_t io_timeout_ms_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;
   int64_t offset_;
   int64_t block_count_;
@@ -70,7 +68,6 @@ ObDirectLoadDataBlockWriter<Header, T>::ObDirectLoadDataBlockWriter()
   : data_block_size_(0),
     extra_buf_(nullptr),
     extra_buf_size_(0),
-    io_timeout_ms_(0),
     offset_(0),
     block_count_(0),
     max_block_size_(0),
@@ -103,7 +100,6 @@ void ObDirectLoadDataBlockWriter<Header, T>::reset()
   extra_buf_ = nullptr;
   extra_buf_size_ = 0;
   data_block_writer_.reset();
-  io_timeout_ms_ = 0;
   file_io_handle_.reset();
   offset_ = 0;
   block_count_ = 0;
@@ -134,7 +130,6 @@ int ObDirectLoadDataBlockWriter<Header, T>::init(int64_t data_block_size,
       data_block_size_ = data_block_size;
       extra_buf_ = extra_buf;
       extra_buf_size_ = extra_buf_size;
-      io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       callback_ = callback;
       is_inited_ = true;
     }
@@ -188,14 +183,6 @@ int ObDirectLoadDataBlockWriter<Header, T>::write_item(const T &item)
         } else if (OB_FAIL(data_block_writer_.write_item(item))) {
           STORAGE_LOG(WARN, "fail to write item", KR(ret));
         }
-      } else if (common::OB_SIZE_OVERFLOW == ret && nullptr != extra_buf_) {
-        if (data_block_writer_.has_item() && OB_FAIL(flush_buffer())) {
-          STORAGE_LOG(WARN, "fail to flush buffer", KR(ret));
-        } else if (OB_FAIL(pre_write_item())) {
-          STORAGE_LOG(WARN, "fail to pre write item", KR(ret));
-        } else if (OB_FAIL(flush_extra_buffer(item))) {
-          STORAGE_LOG(WARN, "fail to flush extra buffer", KR(ret));
-        }
       } else {
         STORAGE_LOG(WARN, "fail to write item", KR(ret));
       }
@@ -214,48 +201,20 @@ int ObDirectLoadDataBlockWriter<Header, T>::flush_buffer()
   } else {
     char *buf = nullptr;
     int64_t buf_size = 0;
+    int64_t align_buf_size = 0;
     if (OB_FAIL(data_block_writer_.build_data_block(buf, buf_size))) {
       STORAGE_LOG(WARN, "fail to build data block", KR(ret));
-    } else if (OB_FAIL(file_io_handle_.aio_write(buf, data_block_size_))) {
+    } else if (FALSE_IT(align_buf_size = ALIGN_UP(buf_size, DIO_ALIGN_SIZE))) {
+    } else if (OB_FAIL(file_io_handle_.aio_write(buf, align_buf_size))) {
       STORAGE_LOG(WARN, "fail to do aio write tmp file", KR(ret));
-    } else if (nullptr != callback_ && OB_FAIL(callback_->write(buf, data_block_size_, offset_))) {
+    } else if (nullptr != callback_ && OB_FAIL(callback_->write(buf, align_buf_size, offset_))) {
       STORAGE_LOG(WARN, "fail to callback write", KR(ret));
     } else {
-      OB_TABLE_LOAD_STATISTICS_INC(external_write_bytes, data_block_size_);
+      OB_TABLE_LOAD_STATISTICS_INC(external_write_bytes, align_buf_size);
       data_block_writer_.reuse();
-      offset_ += data_block_size_;
+      offset_ += align_buf_size;
       ++block_count_;
-      max_block_size_ = MAX(max_block_size_, data_block_size_);
-    }
-  }
-  return ret;
-}
-
-template <typename Header, typename T>
-int ObDirectLoadDataBlockWriter<Header, T>::flush_extra_buffer(const T &item)
-{
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, external_flush_buffer_time_us);
-  int ret = common::OB_SUCCESS;
-  if (OB_FAIL(pre_flush_buffer())) {
-    STORAGE_LOG(WARN, "fail to pre flush buffer", KR(ret));
-  } else {
-    int64_t data_size = 0;
-    int64_t data_block_size = 0;
-    if (OB_FAIL(
-          data_block_writer_.build_data_block(item, extra_buf_, extra_buf_size_, data_size))) {
-      STORAGE_LOG(WARN, "fail to build data block", KR(ret));
-    } else if (FALSE_IT(data_block_size = ALIGN_UP(data_size, DIO_ALIGN_SIZE))) {
-    } else if (OB_FAIL(file_io_handle_.aio_write(extra_buf_, data_block_size))) {
-      STORAGE_LOG(WARN, "fail to do aio write tmp file", KR(ret));
-    } else if (nullptr != callback_ &&
-               OB_FAIL(callback_->write(extra_buf_, data_block_size, offset_))) {
-      STORAGE_LOG(WARN, "fail to callback write", KR(ret));
-    } else {
-      OB_TABLE_LOAD_STATISTICS_INC(external_write_bytes, data_block_size);
-      data_block_writer_.reuse();
-      offset_ += data_block_size;
-      ++block_count_;
-      max_block_size_ = MAX(max_block_size_, data_block_size);
+      max_block_size_ = MAX(max_block_size_, align_buf_size);
     }
   }
   return ret;
@@ -274,8 +233,8 @@ int ObDirectLoadDataBlockWriter<Header, T>::close()
   } else {
     if (data_block_writer_.has_item() && OB_FAIL(flush_buffer())) {
       STORAGE_LOG(WARN, "fail to flush buffer", KR(ret));
-    } else if (OB_FAIL(file_io_handle_.wait(io_timeout_ms_))) {
-      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret), K(io_timeout_ms_));
+    } else if (OB_FAIL(file_io_handle_.wait())) {
+      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret));
     } else {
       is_opened_ = false;
     }

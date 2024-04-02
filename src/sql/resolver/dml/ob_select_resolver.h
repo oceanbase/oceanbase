@@ -19,6 +19,8 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "common/ob_smart_call.h"
 
+# define SYNTHETIC_FIELD_NAME "Name_exp_"
+
 namespace oceanbase
 {
 namespace sql
@@ -89,12 +91,17 @@ public:
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
   void set_is_top_stmt(bool is_top_stmt) { is_top_stmt_ = is_top_stmt; }
   bool is_top_stmt() const { return is_top_stmt_; }
+  void set_has_resolved_field_list(bool has_resolved_field_list) { has_resolved_field_list_ = has_resolved_field_list; }
+  bool has_resolved_field_list() const { return has_resolved_field_list_; }
+  int check_auto_gen_column_names();
+
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
                K_(has_top_limit),
                K_(in_set_query),
                K_(is_sub_stmt),
-               K_(is_top_stmt));
+               K_(is_top_stmt),
+               K_(has_resolved_field_list));
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
@@ -341,13 +348,13 @@ private:
   int check_cube_items_valid(const common::ObIArray<ObCubeItem> &cube_items);
   int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr);
 
-  int add_name_for_anonymous_view();
-  int add_name_for_anonymous_view_recursive(TableItem *table_item);
-
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
   int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
+  int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
+  int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
+  int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
 protected:
   // data members
   /*these member is only for with clause*/
@@ -375,6 +382,8 @@ protected:
   bool has_nested_aggr_;
   //当前query是否为最外层select, 仅用于star expansion
   bool is_top_stmt_;
+  //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
+  bool has_resolved_field_list_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);

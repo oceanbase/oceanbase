@@ -698,6 +698,30 @@
     } \
   }
 
+#define EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET_WITH_COLUMN_INFO(result, column_name, field, column_is_null, column_not_exist) \
+  if (OB_SUCC(ret)) \
+  { \
+    column_is_null = false; \
+    column_not_exist = false; \
+    if (OB_SUCCESS != (ret = (result).get_varchar(column_name, field))) \
+    { \
+      if (OB_ERR_NULL_VALUE == ret) \
+			{ \
+				column_is_null = true; \
+        ret = OB_SUCCESS; \
+			} \
+      else if (OB_ERR_COLUMN_NOT_FOUND == ret) \
+      { \
+				column_not_exist = true; \
+        ret = OB_SUCCESS; \
+      } \
+      else \
+      { \
+        SQL_LOG(WARN, "get varchar failed", KR(ret)); \
+      } \
+    } \
+  }
+
 // Macro with default value
 // 1. skip_null_error: indicates whether to ignore NULL values
 // 2. skip_column_error: indicates whether to ignore column errors, and pass in ObSchemaService::g_ignore_column_retrieve_error_

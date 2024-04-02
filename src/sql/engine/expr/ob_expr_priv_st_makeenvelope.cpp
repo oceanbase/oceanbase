@@ -14,10 +14,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "share/object/ob_obj_cast_util.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
@@ -79,36 +77,7 @@ int ObExprPrivSTMakeEnvelope::calc_result_typeN(
   return ret;
 }
 
-// ob_obj_cast.cpp string_double does not return error
-// when empty string is converted to double in mysql mode
-int ObExprPrivSTMakeEnvelope::string_to_double(const common::ObString &in_str, ObCollationType cs_type, double &res)
-{
-  int ret = OB_SUCCESS;
-
-  if (in_str.empty()) {
-    ret = OB_ERR_DOUBLE_TRUNCATED;
-    LOG_WARN("input string is empty", K(ret), K(in_str));
-  } else {
-    int err = 0;
-    char *endptr = NULL;
-    double out_val = ObCharset::strntodv2(in_str.ptr(), in_str.length(), &endptr, &err);
-    if (EOVERFLOW == err && (-DBL_MAX == out_val || DBL_MAX == out_val)) {
-      ret = OB_DATA_OUT_OF_RANGE;
-      LOG_WARN("value is out of range", K(ret), K(out_val));
-    } else {
-      if (OB_FAIL(check_convert_str_err(in_str.ptr(), endptr, in_str.length(), err, cs_type))) {
-        LOG_WARN("fail to check convert str err", K(ret), K(in_str), K(out_val), K(err));
-        ret = OB_ERR_DOUBLE_TRUNCATED;
-      } else {
-        res = out_val;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSEArray<double, 4> &coords,
+int ObExprPrivSTMakeEnvelope::read_args(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObSEArray<double, 4> &coords,
     ObGeoSrid &srid, bool &is_null_result, const ObSrsItem *&srs_item)
 {
   int ret = OB_SUCCESS;
@@ -131,8 +100,8 @@ int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSE
     } else if (datum->is_null()) {
       is_null_result = true;
     } else if (!ob_is_string_type(type)) {
-      coord = datum->get_double();
-    } else if (OB_FAIL(string_to_double(datum->get_string(), arg->datum_meta_.cs_type_, coord))) {
+      coord = type == ObTinyIntType ? datum->get_tinyint() : datum->get_double();
+    } else if (OB_FAIL(ObGeoExprUtils::string_to_double(datum->get_string(), arg->datum_meta_.cs_type_, coord))) {
       LOG_WARN("fail to get x", K(ret), K(datum->get_string()), K(arg->datum_meta_.cs_type_));
     }
 
@@ -143,7 +112,6 @@ int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSE
     }
   }
 
-  omt::ObSrsCacheGuard srs_guard;
   bool is_geog = false;
   if (expr.arg_cnt_ == 5 && !is_null_result && OB_SUCC(ret)) {
     if (expr.args_[4]->is_boolean_) {
@@ -182,9 +150,10 @@ int ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope(const ObExpr &expr, ObEv
   ObWkbBuffer wkb_buf(tmp_allocator);
   ObWkbBuffer res_wkb_buf(tmp_allocator);
   ObGeometry *geo = NULL;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs_item = NULL;
   // rectangle point -> polygon ewkb
-  if (OB_FAIL(read_args(expr, ctx, coords, srid, is_null_result, srs_item))) {
+  if (OB_FAIL(read_args(srs_guard, expr, ctx, coords, srid, is_null_result, srs_item))) {
     LOG_WARN("fail to read args", K(ret));
   } else if (is_null_result) {
     res.set_null();

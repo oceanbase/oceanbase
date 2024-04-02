@@ -31,7 +31,6 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
 
-
 namespace oceanbase
 {
 
@@ -56,6 +55,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   failures_ = other.failures_;
   flag_ = other.flag_;
   scheduler_flags_ = other.scheduler_flags_;
+  start_date_ = other.start_date_;
   end_date_ = other.end_date_;
   enabled_ = other.enabled_;
   auto_drop_ = other.auto_drop_;
@@ -77,6 +77,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.job_name_, job_name_));
   OZ (ob_write_string(allocator, other.job_class_, job_class_));
   OZ (ob_write_string(allocator, other.program_name_, program_name_));
+  OZ (ob_write_string(allocator, other.state_, state_));
   return ret;
 }
 

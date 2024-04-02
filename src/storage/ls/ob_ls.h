@@ -353,7 +353,12 @@ public:
   bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
 
-  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle() const;
+  void set_delay_resource_recycle();
+  void clear_delay_resource_recycle();
+
+  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info), K_(need_delay_resource_recycle));
 private:
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
@@ -699,6 +704,7 @@ public:
   // @return OB_NOT_MASTER, if the LogStream is follower replica
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_with_timeout, int);
 
   // Decrease the specified tx_ctx's reference count
   // @param [in] tx_ctx: the TxCtx will be revert
@@ -760,6 +766,7 @@ public:
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_ctx, int);
 
   DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, get_active_tx_count, int);
@@ -844,6 +851,11 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
+
+  DELEGATE_WITH_RET(ls_meta_, set_transfer_meta_info, int);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta_info, int);
+  DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
+
   int set_ls_migration_gc(bool &allow_gc);
 
 private:
@@ -930,6 +942,8 @@ private:
   // Record the dependent transfer information when restarting
   ObLSTransferInfo startup_transfer_info_;
 
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle_;
 };
 
 }

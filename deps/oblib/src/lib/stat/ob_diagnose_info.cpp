@@ -235,6 +235,8 @@ int ObWaitEventHistory::push(const int64_t event_no, const uint64_t timeout_ms, 
   int ret = OB_SUCCESS;
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (nest_cnt_ >= 1) {
+    ret = OB_ARRAY_OUT_OF_RANGE;
   } else if (nest_cnt_ >= SESSION_WAIT_HISTORY_CNT) {
     ++nest_cnt_;
   } else {
@@ -369,6 +371,7 @@ int ObWaitEventHistory::get_last_wait(ObWaitEventDesc *&item)
       item = &items_[(curr_pos_ - cnt - 1 + N) % N];
     } else {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get last wait failed", K(cnt), K_(item_cnt), K_(curr_pos), K_(nest_cnt), K_(current_wait));
     }
   }
   return ret;
@@ -508,21 +511,17 @@ int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint6
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (is_atomic) {
-      // time model only record physical wait(including idle and non-idle wait)
-      if (OB_UNLIKELY(ObActiveSessionGuard::get_stat().event_no_ != 0 &&
-                      OB_WAIT_EVENTS[ObActiveSessionGuard::get_stat().event_no_].is_phy_ &&
-                      ObWaitEventIds::ASYNC_COMMITTING_WAIT != event_no &&
-                      ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
-        LOG_WARN("nested physical wait event! ", "prev event no",
-            ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
-            K(ObActiveSessionGuard::get_stat()));
-      }
-      // backgorund wait event is dummy stat.
-      // if (OB_UNLIKELY(&ObActiveSessionGuard::get_stat() == &ObActiveSessionGuard::dummy_stat_)) {
-      //   LOG_INFO("failed to setup ash in this case");
-      // }
-    }
+    // if (is_atomic) {
+    //   // time model only record physical wait(including idle and non-idle wait)
+    //   if (OB_UNLIKELY(ObActiveSessionGuard::get_stat().event_no_ != 0 &&
+    //                   OB_WAIT_EVENTS[ObActiveSessionGuard::get_stat().event_no_].is_phy_ &&
+    //                   ObWaitEventIds::ASYNC_COMMITTING_WAIT != event_no &&
+    //                   ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
+    //     LOG_WARN("nested physical wait event! ", "prev event no",
+    //         ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
+    //         K(ObActiveSessionGuard::get_stat()), K(lbt()));
+    //   }
+    // }
     // ash only sample first wait event.
     if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {
       ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
@@ -607,6 +606,27 @@ int ObDiagnoseSessionInfo::notify_wait_end(
       } else {
         ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
       }
+
+      switch (OB_WAIT_EVENTS[event_desc->event_no_].wait_class_) {
+        case ObWaitClassIds::CONCURRENCY:{
+          EVENT_ADD(ObStatEventIds::CCWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::USER_IO:{
+          EVENT_ADD(ObStatEventIds::USER_IO_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::APPLICATION:{
+          EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::SCHEDULER:{
+          EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        default:
+          break;
+      }
       ObActiveSessionGuard::get_stat().fixup_last_stat(*event_desc);
     }
   }
@@ -638,18 +658,6 @@ int ObDiagnoseSessionInfo::update_stat(const int16_t stat_no, const int64_t delt
     stat->stat_value_ += delta;
   }
   return ret;
-}
-
-inline int ObDiagnoseSessionInfo::set_max_wait(ObWaitEventDesc *max_wait)
-{
-  max_wait_ = max_wait;
-  return OB_SUCCESS;
-}
-
-inline int ObDiagnoseSessionInfo::set_total_wait(ObWaitEventStat *total_wait)
-{
-  total_wait_ = total_wait;
-  return OB_SUCCESS;
 }
 
 inline int ObDiagnoseSessionInfo::set_tenant_id(uint64_t tenant_id)
@@ -804,10 +812,16 @@ ObWaitEventGuard::ObWaitEventGuard(
     event_no_ = event_no;
     di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
     if (NULL != di_) {
-      di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3, is_atomic);
+      if (OB_SUCCESS != (di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3, is_atomic))) {
+        need_record_ = false;
+      }
     } else {
       wait_begin_time_ = ObTimeUtility::current_time();
       timeout_ms_ = timeout_ms;
+      if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {
+        ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
+        ObActiveSessionGuard::get_stat().set_event(event_no, p1, p2, p3);
+      }
     }
   } else {
     need_record_ = false;
@@ -832,13 +846,61 @@ ObWaitEventGuard::~ObWaitEventGuard()
       if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
         tenant_event_stat->max_wait_ = wait_time;
       }
+      if (ObActiveSessionGuard::get_stat().event_no_ == event_no_) {
+        ObWaitEventDesc desc;
+        desc.event_no_ = event_no_;
+        desc.p1_ = ObActiveSessionGuard::get_stat().p1_;
+        desc.p2_ = ObActiveSessionGuard::get_stat().p2_;
+        desc.p3_ = ObActiveSessionGuard::get_stat().p3_;
+        ObActiveSessionGuard::get_stat().reset_event();
+        const int64_t cur_wait_time =
+            ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
+        ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
+        if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
+          ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
+        } else {
+          ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
+        }
+        ObActiveSessionGuard::get_stat().fixup_last_stat(desc);
+      }
     }
+  }
+}
+
+void set_ash_stat(const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  if (ObActiveSessionGuard::get_stat().event_no_ == 0 &&
+      ObActiveSessionGuard::get_stat().is_bkgd_active_) {
+    ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
+    ObActiveSessionGuard::get_stat().set_event(event_no, p1, p2, p3);
+  }
+}
+
+void reset_ash_stat(const int64_t event_no, bool is_idle)
+{
+  if (ObActiveSessionGuard::get_stat().event_no_ == event_no) {
+    ObWaitEventDesc desc;
+    desc.event_no_ = event_no;
+    desc.p1_ = ObActiveSessionGuard::get_stat().p1_;
+    desc.p2_ = ObActiveSessionGuard::get_stat().p2_;
+    desc.p3_ = ObActiveSessionGuard::get_stat().p3_;
+    ObActiveSessionGuard::get_stat().reset_event();
+    const int64_t cur_wait_time =
+        ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
+    ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
+    if (!is_idle) {
+      ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
+    } else {
+      ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
+    }
+    ObActiveSessionGuard::get_stat().fixup_last_stat(desc);
   }
 }
 
 ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di)
   : prev_wait_(NULL), di_(di)
 {
+  max_wait_ = max_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != max_wait)) {
@@ -859,16 +921,30 @@ ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo 
 ObMaxWaitGuard::~ObMaxWaitGuard()
 {
   if (need_record_ && OB_LIKELY(NULL != di_)) {
-    if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventDesc *max_wait = di_->get_max_wait();
-      if (NULL != max_wait) {
-        if (max_wait->wait_time_ > prev_wait_->wait_time_) {
-          *prev_wait_ = *max_wait;
+    ObDiagnoseSessionInfo *current_di = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    if (OB_NOT_NULL(current_di)) {
+      if (OB_NOT_NULL(current_di->get_max_wait())) {
+        if (OB_UNLIKELY(current_di != di_)) {
+          if (max_wait_ != current_di->get_max_wait()) {
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this),
+                K(current_di));
+          }
+          di_ = current_di;
         }
-        di_->set_max_wait(prev_wait_);
+      } else {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", KPC(this), K(current_di));
       }
-    } else {
-      di_->reset_max_wait();
+      if (OB_LIKELY(NULL != prev_wait_)) {
+        ObWaitEventDesc *max_wait = di_->get_max_wait();
+        if (NULL != max_wait) {
+          if (max_wait->wait_time_ > prev_wait_->wait_time_) {
+            *prev_wait_ = *max_wait;
+          }
+          di_->set_max_wait(prev_wait_);
+        }
+      } else {
+        di_->reset_max_wait();
+      }
     }
   }
 }
@@ -876,6 +952,7 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
 ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di)
   : prev_wait_(NULL), di_(di)
 {
+  total_wait_ = total_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != total_wait)) {
@@ -896,15 +973,30 @@ ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessio
 ObTotalWaitGuard::~ObTotalWaitGuard()
 {
   if (need_record_ && OB_LIKELY(NULL != di_)) {
-    if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventStat *total_wait = di_->get_total_wait();
-      if (NULL != total_wait) {
-        prev_wait_->total_waits_ += total_wait->total_waits_;
-        prev_wait_->time_waited_ += total_wait->time_waited_;
-        di_->set_total_wait(prev_wait_);
+    ObDiagnoseSessionInfo *current_di = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    if (OB_NOT_NULL(current_di)) {
+      if (OB_NOT_NULL(current_di->get_total_wait())) {
+        if (OB_UNLIKELY(current_di != di_)) {
+          if (total_wait_ != current_di->get_total_wait()) {
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this),
+                K(current_di));
+          }
+          di_ = current_di;
+        }
+      } else {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", KPC(this), K(current_di));
       }
-    } else {
-      di_->reset_total_wait();
+
+      if (OB_LIKELY(NULL != prev_wait_)) {
+        ObWaitEventStat *total_wait = di_->get_total_wait();
+        if (NULL != total_wait) {
+          prev_wait_->total_waits_ += total_wait->total_waits_;
+          prev_wait_->time_waited_ += total_wait->time_waited_;
+          di_->set_total_wait(prev_wait_);
+        }
+      } else {
+        di_->reset_total_wait();
+      }
     }
   }
 }

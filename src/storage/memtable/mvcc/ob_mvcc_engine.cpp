@@ -223,6 +223,7 @@ int ObMvccEngine::estimate_scan_row_count(
               part_est.logical_row_count_, part_est.physical_row_count_))) {
     TRANS_LOG(WARN, "query engine estimate row count fail", K(ret));
   }
+
   return ret;
 }
 

@@ -191,6 +191,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigResourceLimitSpecChecker);
 };
 
+class ObConfigTempStoreFormatChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigTempStoreFormatChecker() {}
+  virtual ~ObConfigTempStoreFormatChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTempStoreFormatChecker);
+};
+
 class ObConfigPxBFGroupSizeChecker
   : public ObConfigChecker
 {
@@ -224,6 +235,39 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCompressOptionChecker);
 };
 
+class ObConfigMaxSyslogFileCountChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigMaxSyslogFileCountChecker() {}
+  virtual ~ObConfigMaxSyslogFileCountChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMaxSyslogFileCountChecker);
+};
+
+class ObConfigSyslogCompressFuncChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSyslogCompressFuncChecker() {}
+  virtual ~ObConfigSyslogCompressFuncChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogCompressFuncChecker);
+};
+
+class ObConfigSyslogFileUncompressedCountChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSyslogFileUncompressedCountChecker() {}
+  virtual ~ObConfigSyslogFileUncompressedCountChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogFileUncompressedCountChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {
@@ -245,6 +289,18 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogLevelChecker);
+};
+
+class ObConfigAlertLogLevelChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAlertLogLevelChecker() {}
+  virtual ~ObConfigAlertLogLevelChecker() {};
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAlertLogLevelChecker);
 };
 
 class ObConfigAuditTrailChecker
@@ -661,9 +717,9 @@ private:
 class ObModeConfigParserUitl
 {
 public:
-  // parse config item like: "xxx=yyy"
-  static int parse_item_to_kv(char *item, ObString &key, ObString &value);
-  static int get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list);
+  // parse config item like: "xxx=yyy", "xxx:yyy"
+  static int parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim = "=");
+  static int get_kv_list(char *str, ObIArray<std::pair<ObString, ObString>> &kv_list, const char* delim = "=");
   // format str for split config item
   static int format_mode_str(const char *src, int64_t src_len, char *dst, int64_t dst_len);
 };
@@ -702,6 +758,36 @@ public:
   static const int8_t MODE_ON = 0b01;
   static const int8_t MODE_OFF = 0b10;
   DISALLOW_COPY_AND_ASSIGN(ObPrivControlParser);
+};
+
+class ObParallelDDLControlParser : public ObConfigParser
+{
+public:
+  ObParallelDDLControlParser() {}
+  virtual ~ObParallelDDLControlParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+public:
+  static const uint8_t MODE_ON = 0b00;
+  static const uint8_t MODE_OFF = 0b01;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
+};
+
+class ObConfigIndexStatsModeChecker : public ObConfigChecker {
+public:
+  ObConfigIndexStatsModeChecker(){}
+  virtual ~ObConfigIndexStatsModeChecker(){}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigIndexStatsModeChecker);
+};
+class ObConfigArchiveLagTargetChecker {
+public:
+  ObConfigArchiveLagTargetChecker(){}
+  virtual ~ObConfigArchiveLagTargetChecker(){}
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigArchiveLagTargetChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

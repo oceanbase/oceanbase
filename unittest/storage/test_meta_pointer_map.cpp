@@ -243,9 +243,11 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   handle.reset();
 
-  ObTablet *old_tablet = new ObTablet();
   ObMetaObj<ObTablet> old_tablet_obj;
-  old_tablet_obj.ptr_ = old_tablet;
+  ObTenantMetaMemMgr::ObNormalTabletBuffer *tablet_buffer = nullptr;
+  MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_.acquire(tablet_buffer);
+  ASSERT_NE(nullptr, tablet_buffer);
+  ObMetaObjBufferHelper::new_meta_obj(tablet_buffer, old_tablet_obj.ptr_);
   old_tablet_obj.pool_ = &MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_;
   handle.set_obj(old_tablet_obj);
 
@@ -259,24 +261,29 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   phy_addr.offset_ = 0;
   phy_addr.size_ = 4096;
   phy_addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
+  ObTabletHandle new_tablet_handle;
+  new_tablet_handle.reset();
+  new_tablet_handle.set_obj(old_tablet_obj);
+  new_tablet_handle.get_obj()->set_tablet_addr(phy_addr);
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, new_tablet_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ObTablet *tablet = new ObTablet();
-  tablet->tablet_addr_ = phy_addr;
   ObMetaObj<ObTablet> tablet_obj;
-  tablet_obj.ptr_ = tablet;
+  MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_.acquire(tablet_buffer);
+  ASSERT_NE(nullptr, tablet_buffer);
+  ObMetaObjBufferHelper::new_meta_obj(tablet_buffer, tablet_obj.ptr_);
+  tablet_obj.ptr_->tablet_addr_ = phy_addr;
   tablet_obj.pool_ = &MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_;
   ObTabletHandle tablet_handle;
   tablet_handle.set_obj(tablet_obj);
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, tablet_handle);
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, tablet_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet_map_.map_.size());
 
   ret = tablet_map_.get_meta_obj(key, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(handle.is_valid());
-  ASSERT_EQ(tablet, handle.get_obj());
+  ASSERT_EQ(tablet_obj.ptr_, handle.get_obj());
 
   ObTabletHandle tmp_handle;
   ret = tablet_map_.erase(key, tmp_handle);
@@ -327,9 +334,11 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 
   handle.reset();
 
-  ObTablet *old_tablet = new ObTablet();
+  ObTenantMetaMemMgr::ObNormalTabletBuffer *tablet_buffer = nullptr;
   ObMetaObj<ObTablet> old_tablet_obj;
-  old_tablet_obj.ptr_ = old_tablet;
+  MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_.acquire(tablet_buffer);
+  ASSERT_NE(nullptr, tablet_buffer);
+  ObMetaObjBufferHelper::new_meta_obj(tablet_buffer, old_tablet_obj.ptr_);
   old_tablet_obj.pool_ = &MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_;
   handle.set_obj(old_tablet_obj);
 
@@ -343,7 +352,11 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
   phy_addr.offset_ = 0;
   phy_addr.size_ = 4096;
   phy_addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
+  ObTabletHandle new_tablet_handle;
+  new_tablet_handle.reset();
+  new_tablet_handle.set_obj(old_tablet_obj);
+  new_tablet_handle.get_obj()->set_tablet_addr(phy_addr);
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, new_tablet_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMetaPointerHandle<ObTabletMapKey, ObTablet> ptr_hdl(tablet_map_);

@@ -47,7 +47,14 @@ int CopyTableStatHelper::copy_part_stat(ObIArray<ObOptTableStat *> &table_stats)
     dst_part_stat->set_tablet_id(src_part_stat_->get_tablet_id());
     dst_part_stat->set_stat_expired_time(src_part_stat_->get_stat_expired_time());
     //TODO:set stale_stats to true for hash/list partitions
-    if (OB_FAIL(table_stats.push_back(dst_part_stat))) {
+    if (dst_part_stat->get_row_count() < 0
+        || dst_part_stat->get_sstable_row_count() < 0
+        || dst_part_stat->get_memtable_row_count() < 0
+        || dst_part_stat->get_macro_block_num() < 0
+        || dst_part_stat->get_micro_block_num() < 0) {
+      ret = OB_DATA_OUT_OF_RANGE;
+      LOG_WARN("data of dst_part_stat out of range", K(ret), K(scale_factor_), KPC(dst_part_stat));
+    } else if (OB_FAIL(table_stats.push_back(dst_part_stat))) {
       LOG_WARN("failed to push back table stats", K(ret));
     } else {
       LOG_TRACE("succeed to copy part stat", KPC(dst_part_stat), K(scale_factor_));

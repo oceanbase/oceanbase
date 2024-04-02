@@ -880,7 +880,7 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
     if (OB_FAIL(ddl_ctx_mgr.finish_table_context(ddl_ctrl_.context_id_, need_commit))) {
       LOG_WARN("ddl manager finish contex failed", K(ret), K(ddl_ctrl_));
     }
-    LOG_INFO("end ddl sstable", K(ret), K(need_commit));
+    FLOG_INFO("end ddl", "context_id", ddl_ctrl_.context_id_, K(ret), K(need_commit));
     DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   }
   if (OB_EAGAIN == ret) {

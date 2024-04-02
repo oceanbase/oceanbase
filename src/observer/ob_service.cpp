@@ -1544,14 +1544,15 @@ int ObService::check_server_for_adding_server(
         KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
   } else {
     bool server_empty = false;
+    char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
     if (OB_FAIL(check_server_empty(server_empty))) {
       LOG_WARN("check_server_empty failed", KR(ret));
+    } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", KR(ret));
     } else {
-      char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
       ObServerInfoInTable::ObBuildVersion build_version_string;
       ObZone zone;
       int64_t sql_port = GCONF.mysql_port;
-      get_package_and_svn(build_version, sizeof(build_version));
 
       if (OB_SUCC(ret) && server_empty) {
         uint64_t server_id = arg.get_server_id();
@@ -1649,8 +1650,9 @@ int ObService::get_build_version(share::ObServerInfoInTable::ObBuildVersion &bui
   int ret = OB_SUCCESS;
   char build_version_char_array[common::OB_SERVER_VERSION_LENGTH] = {0};
   build_version.reset();
-  get_package_and_svn(build_version_char_array, sizeof(build_version));
-  if (OB_FAIL(build_version.assign(build_version_char_array))) {
+  if (OB_FAIL(get_package_and_svn(build_version_char_array, sizeof(build_version_char_array)))) {
+    LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(build_version.assign(build_version_char_array))) {
     LOG_WARN("fail to assign build_version", KR(ret), K(build_version_char_array));
   }
   return ret;
@@ -1667,6 +1669,130 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
   // } else if (OB_FAIL(gctx_.par_ser_->get_partition_count(result.partition_count_))) {
   //   LOG_WARN("failed to get partition count", K(ret));
   // }
+  return ret;
+}
+
+int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  ObLSService *ls_service = nullptr;
+  bool is_exist = false;
+  ObMigrationOpArg migration_op_arg;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", KR(ret), K(tenant_id));
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "data_src", arg.data_source_.get_server(), "dest", arg.dst_.get_server());
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->check_ls_exist(arg.ls_id_, is_exist))) {
+      LOG_WARN("failed to check ls exist", KR(ret), K(arg));
+    } else if (is_exist) {
+      ret = OB_LS_EXIST;
+      LOG_WARN("can not add ls which local ls is exist", KR(ret), K(arg), K(is_exist));
+    } else {
+      migration_op_arg.cluster_id_ = GCONF.cluster_id;
+      migration_op_arg.data_src_ = arg.data_source_;
+      migration_op_arg.dst_ = arg.dst_;
+      migration_op_arg.ls_id_ = arg.ls_id_;
+      //TODO(muwei.ym) need check priority in 4.2 RC3
+      migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
+      migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
+      migration_op_arg.src_ = arg.data_source_;
+      migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
+      if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
+        LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add failed", "tenant_id", arg.tenant_id_,
+        "ls_id", arg.ls_id_, "result", ret);
+  }
+  return ret;
+}
+
+int ObService::do_remove_ls_paxos_replica(const obrpc::ObLSDropPaxosReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "dest", arg.remove_member_.get_server());
+    LOG_INFO("start do remove ls paxos member", K(arg));
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls->get_ls_remove_member_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls remove handler should not be NULL", KR(ret), K(arg));
+    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_paxos_member(arg))) {
+      LOG_WARN("failed to remove paxos member", KR(ret), K(arg));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member failed", "tenant_id",
+        arg.tenant_id_, "ls_id", arg.ls_id_.id(), "result", ret);
+  }
+  return ret;
+}
+
+int ObService::do_remove_ls_nonpaxos_replica(const obrpc::ObLSDropNonPaxosReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "dest", arg.remove_member_.get_server());
+    LOG_INFO("start do remove ls learner member", K(arg));
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls->get_ls_remove_member_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls remove handler should not be NULL", KR(ret), K(arg));
+    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_learner_member(arg))) {
+      LOG_WARN("failed to remove paxos member", KR(ret), K(arg));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member failed", "tenant_id",
+        arg.tenant_id_, "ls_id", arg.ls_id_.id(), "result", ret);
+  }
   return ret;
 }
 
@@ -2358,10 +2484,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else {
-    if (DDL_DROP_COLUMN == arg.ddl_type_
-        || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
-        || DDL_COLUMN_REDEFINITION == arg.ddl_type_
-        || DDL_TABLE_RESTORE == arg.ddl_type_) {
+    if (is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_))) {
       int saved_ret = OB_SUCCESS;
       ObTenantDagScheduler *dag_scheduler = nullptr;
       ObComplementDataDag *dag = nullptr;
@@ -2402,6 +2525,47 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       LOG_WARN("not supported ddl type", K(ret), K(arg));
     }
 
+  }
+  return ret;
+}
+
+int ObService::check_and_cancel_ddl_complement_data_dag(const ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist)
+{
+  int ret = OB_SUCCESS;
+  is_dag_exist = true;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_UNLIKELY(!is_complement_data_relying_on_dag(ObDDLType(arg.ddl_type_)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ddl type", K(ret), K(arg));
+  } else {
+    ObTenantDagScheduler *dag_scheduler = nullptr;
+    ObComplementDataDag *dag = nullptr;
+    if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dag scheduler is null", K(ret));
+    } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+      LOG_WARN("fail to alloc dag", K(ret));
+    } else if (OB_ISNULL(dag)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+    } else if (OB_FAIL(dag->init(arg))) {
+      LOG_WARN("fail to init complement data dag", K(ret), K(arg));
+    } else if (OB_FAIL(dag_scheduler->check_dag_exist(dag, is_dag_exist))) {
+      LOG_WARN("check dag exist failed", K(ret));
+    } else if (is_dag_exist && OB_FAIL(dag_scheduler->cancel_dag(dag))) {
+      // sync to cancel ready dag only, not including running dag.
+      LOG_WARN("cancel dag failed", K(ret));
+    }
+    if (OB_NOT_NULL(dag)) {
+      (void) dag->handle_init_failed_ret_code(ret);
+      dag_scheduler->free_dag(*dag);
+      dag = nullptr;
+    }
+  }
+  if (REACH_COUNT_INTERVAL(1000L)) {
+    LOG_INFO("receive cancel ddl complement dag request", K(ret), K(is_dag_exist), K(arg));
   }
   return ret;
 }
@@ -2840,7 +3004,8 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(ERRSIM_GET_LS_SYNC_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_SYS_LS_SYNC_SCN_ERROR);
 int ObService::get_ls_sync_scn(
     const ObGetLSSyncScnArg &arg,
     ObGetLSSyncScnRes &result)
@@ -2908,6 +3073,16 @@ int ObService::get_ls_sync_scn(
       ret = OB_NOT_MASTER;
       LOG_WARN("the ls not master", KR(ret), K(ls_id), K(first_leader_epoch),
           K(second_leader_epoch), K(role));
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_LS_SYNC_SCN_ERROR) {
+      cur_sync_scn = ls_id.is_sys_ls() ? cur_sync_scn : SCN::minus(cur_sync_scn, 1000);
+      ret = result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, cur_restore_source_max_scn);
+      LOG_WARN("user ls errsim enabled", KR(ret), K(arg.get_tenant_id()), K(ls_id), K(cur_sync_scn), K(cur_restore_source_max_scn));
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_SYS_LS_SYNC_SCN_ERROR) {
+      cur_sync_scn = ls_id.is_sys_ls() ? SCN::minus(cur_sync_scn, 1000) : cur_sync_scn;
+      ret = result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, cur_restore_source_max_scn);
+      LOG_WARN("sys ls errsim enabled", KR(ret), K(arg.get_tenant_id()), K(ls_id), K(cur_sync_scn), K(cur_restore_source_max_scn));
     }
   }
   LOG_INFO("finish get_ls_sync_scn", KR(ret), K(cur_sync_scn), K(cur_restore_source_max_scn), K(arg), K(result));
@@ -3042,6 +3217,7 @@ int ObService::get_ls_replayed_scn(
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
+    share::SCN offline_scn;
     if (OB_ISNULL(ls_svr)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
@@ -3052,10 +3228,14 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
-    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn))) {
-      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
+    } else if (OB_FAIL(ls->get_offline_scn(offline_scn))) {
+      LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(),
+            cur_readable_scn, offline_scn))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn), K(offline_scn));
     } else {
-      LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
+      LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn),
+          K(arg), K(result), K(offline_scn));
     }
   }
   return ret;

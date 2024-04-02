@@ -297,7 +297,7 @@ private:
   {
   public:
     explicit RpcCB(RpcRequest &host) : host_(host) {}
-    virtual ~RpcCB() {}
+    virtual ~RpcCB() { result_.reset(); }
 
   public:
     rpc::frame::ObReqTransport::AsyncCB *clone(const rpc::frame::SPAlloc &alloc) const;

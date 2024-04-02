@@ -12,11 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
+#include "share/ob_cluster_version.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "lib/ob_name_def.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
+#include "share/schema/ob_schema_utils.h"
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_modify_tenant_stmt.h"
@@ -823,7 +825,20 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_SET_TABLE_COMMENT:
       case stmt::T_SET_COLUMN_COMMENT: {
-        DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        ObAlterTableStmt &stmt = *(static_cast<ObAlterTableStmt*>(&cmd));
+        const uint64_t tenant_id = stmt.get_tenant_id();
+        uint64_t data_version = OB_INVALID_VERSION;
+        bool is_parallel_ddl = true;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                           ObParallelDDLControlMode::SET_COMMENT, tenant_id, is_parallel_ddl))) {
+          LOG_WARN("fail to get whether is parallel set comment", KR(ret), K(tenant_id));
+        } else if (data_version < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        } else {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObCommentExecutor);
+        }
         break;
       }
       case stmt::T_XA_START: {
@@ -1010,6 +1025,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
+      case stmt::T_TRANSFER_PARTITION: {
+        DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:
@@ -1031,7 +1050,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
     SERVER_EVENT_ADD("sql", "execute_cmd",
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(sql_text),
-                     "return_code", ret);
+                     "return_code", ret,
+                     "tenant_id", MTL_ID());
   }
 
   if (is_ddl_or_dcl_stmt) {

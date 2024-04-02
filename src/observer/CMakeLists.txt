@@ -1,6 +1,5 @@
 ob_set_subtarget(ob_server ALONE
   ob_server.cpp
-  ob_service.cpp
 )
 
 ob_set_subtarget(ob_server common
@@ -39,6 +38,7 @@ ob_set_subtarget(ob_server common
   ob_server_startup_task_handler.cpp
   ob_srv_rpc_handler.cpp
   ob_check_params.cpp
+  ob_service.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed
@@ -46,9 +46,9 @@ ob_set_subtarget(ob_server common_mixed
   report/ob_tablet_table_updater.cpp
   report/ob_tenant_meta_checker.cpp
   report/ob_server_meta_table_checker.cpp
-)
-
-ob_set_subtarget(ob_server dbms_job
+  net/ob_ingress_bw_alloc_service.cpp
+  net/ob_net_endpoint_ingress_rpc_proccessor.cpp
+  net/ob_net_endpoint_ingress_rpc_struct.cpp
   dbms_job/ob_dbms_job_executor.cpp
   dbms_job/ob_dbms_job_master.cpp
   dbms_job/ob_dbms_job_rpc_processor.cpp
@@ -102,12 +102,6 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_set_option.cpp
 )
 
-ob_set_subtarget(ob_server net
-  net/ob_ingress_bw_alloc_service.cpp
-  net/ob_net_endpoint_ingress_rpc_proccessor.cpp
-  net/ob_net_endpoint_ingress_rpc_struct.cpp
-)
-
 ob_set_subtarget(ob_server omt
   omt/ob_multi_level_queue.cpp
   omt/ob_multi_tenant.cpp
@@ -139,7 +133,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_and_mutate_processor.cpp
   table/ob_table_query_processor.cpp
   table/ob_table_rpc_processor.cpp
-  table/ob_table_query_sync_processor.cpp
+  table/ob_table_query_async_processor.cpp
   table/ob_table_service.cpp
   table/ob_htable_lock_mgr.cpp
   table/ob_table_context.cpp
@@ -151,6 +145,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_modify_executor.cpp
   table/ob_table_replace_executor.cpp
   table/ob_table_scan_executor.cpp
+  table/ob_table_global_index_lookup_executor.cpp
   table/ob_table_update_executor.cpp
   table/ob_table_executor_factory.cpp
   table/ob_table_cg_service.cpp
@@ -356,6 +351,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_triggers_table.cpp
   virtual_table/ob_information_user_privileges_table.cpp
   virtual_table/ob_information_query_response_time.cpp
+  virtual_table/ob_information_schema_enable_roles_table.cpp
   virtual_table/ob_iterate_private_virtual_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp
   virtual_table/ob_mem_leak_checker_info.cpp

@@ -68,7 +68,8 @@ public:
                  const int64_t size,
                  const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
-                 const bool need_block);
+                 const bool need_block,
+                 const int64_t retry_timeout_us = 1000);
   int get_role(bool &is_leader, int64_t &epoch);
   int get_max_decided_scn(share::SCN &scn)
   {

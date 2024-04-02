@@ -228,33 +228,13 @@ int ObViewTableResolver::set_select_item(SelectItem &select_item, bool is_auto_g
     }
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
-  } else {
-    // 如果子查询列没有别名，超过 64 的话系统则自动为其会生成一个列别名
-    if (!is_create_view_ && !select_item.is_real_alias_ && is_auto_gen
-        && select_item.alias_name_.length() > static_cast<size_t>(
-        OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
-      ObString tmp_col_name;
-      ObString col_name;
-      char temp_str_buf[number::ObNumber::MAX_PRINTABLE_SIZE];
-      if (snprintf(temp_str_buf, sizeof(temp_str_buf), "Name_exp_%ld", auto_name_id_++) < 0) {
-        ret = OB_SIZE_OVERFLOW;
-        SQL_RESV_LOG(WARN, "failed to generate buffer for temp_str_buf", K(ret));
-      }
-      if (OB_SUCC(ret)) {
-        tmp_col_name = ObString::make_string(temp_str_buf);
-        if (OB_FAIL(ob_write_string(*allocator_, tmp_col_name, col_name))) {
-          SQL_RESV_LOG(WARN, "Can not malloc space for constraint name", K(ret));
-        } else {
-          select_item.alias_name_.assign_ptr(col_name.ptr(), col_name.length());
-        }
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_, true))) {
-      LOG_WARN("fail to make field name", K(ret));
-    }
-    if (OB_SUCC(ret) && OB_FAIL(select_stmt->add_select_item(select_item))) {
-      LOG_WARN("add select item to select stmt failed", K(ret));
-    }
+  } else if (select_item.is_real_alias_
+             && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_, true))) {
+    // Only check real alias here,
+    // auto generated alias will be checked in ObSelectResolver::check_auto_gen_column_names().
+    LOG_WARN("fail to make field name", K(ret));
+  } else if (OB_FAIL(select_stmt->add_select_item(select_item))) {
+    LOG_WARN("add select item to select stmt failed", K(ret));
   }
   return ret;
 }

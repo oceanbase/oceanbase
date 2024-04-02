@@ -51,11 +51,22 @@ public:
 
   int init(common::ObISQLClient *sql_proxy) { sql_proxy_ = sql_proxy; return common::OB_SUCCESS; }
 
+  int update_next_date(
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
+
   int update_for_start(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, bool update_nextdate = true);
-  int update_for_end(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
-  int update_nextdate(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
+
+  int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_finished_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_rollback_start_dml(ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
+  int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
+  int update_for_missed(ObDBMSSchedJobInfo &job_info);
+  int update_for_enddate(ObDBMSSchedJobInfo &job_info);
+  int update_for_rollback(ObDBMSSchedJobInfo &job_info);
+  int update_for_timeout(ObDBMSSchedJobInfo &job_info);
+  int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
 
   int seperate_job_id_from_name(common::ObString &job_name, int64_t &job_id);
 
@@ -77,14 +88,7 @@ public:
     sqlclient::ObMySQLResult &result, int64_t tenant_id, bool is_oracle_tenant,
     ObIAllocator &allocator, ObDBMSSchedJobClassInfo &job_class_info);
 
-  int calc_execute_at(
-    ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate = false);
-
   int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
-
-  int check_job_timeout(ObDBMSSchedJobInfo &job_info);
-
-  int check_auto_drop(ObDBMSSchedJobInfo &job_info);
 
   int register_default_job_class(uint64_t tenant_id);
   int purge_run_detail_histroy(uint64_t tenant_id);

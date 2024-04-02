@@ -1371,13 +1371,13 @@ int ObTransformSimplifyGroupby::transform_aggr_win_to_common_expr(ObSelectStmt *
     } else if (OB_ISNULL(param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                               ctx_->session_info_,
-                                                               *param_expr,
-                                                               expr->get_result_type(),
-                                                               new_expr))) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      expr,
+                                                                      param_expr,
+                                                                      ctx_->session_info_))) {
       LOG_WARN("try add cast expr above failed", K(ret));
     }
+    new_expr = param_expr;
   }
   return ret;
 }

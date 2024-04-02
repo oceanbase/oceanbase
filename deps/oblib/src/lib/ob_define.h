@@ -81,6 +81,7 @@ const int64_t MAX_IP_ADDR_LENGTH = INET6_ADDRSTRLEN;
 const int64_t MAX_IP_PORT_LENGTH = MAX_IP_ADDR_LENGTH + 6;
 const int64_t MAX_IP_PORT_SQL_LENGTH = MAX_IP_ADDR_LENGTH + 12;
 const uint64_t MAX_IFNAME_LENGTH = 128;
+const int64_t OB_MAX_SNAPSHOT_SOURCE_LENGTH = 128;
 const int64_t OB_MAX_SQL_ID_LENGTH = 32;
 const int64_t OB_MAX_CLIENT_INFO_LENGTH = 64;
 const int64_t OB_MAX_DIAG_SESS_INFO_LENGTH = 512;
@@ -209,6 +210,7 @@ const uint64_t OB_SERVER_USER_ID = 0;
 const int64_t OB_MAX_INDEX_PER_TABLE = 128;
 const int64_t OB_MAX_SSTABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE + 1;
 const int64_t OB_MAX_SQL_LENGTH = 64 * 1024;
+const int64_t OB_TINY_SQL_LENGTH = 128;
 const int64_t OB_SHORT_SQL_LENGTH = 1 * 1024; // 1KB
 const int64_t OB_MEDIUM_SQL_LENGTH = 2 * OB_SHORT_SQL_LENGTH; // 2KB
 const int64_t OB_MAX_PROXY_SQL_STORE_LENGTH = 8 * 1024; // 8KB
@@ -222,6 +224,7 @@ const int64_t OB_USER_MAX_ROWKEY_COLUMN_NUMBER = 64;
 const int64_t OB_MAX_ROWKEY_COLUMN_NUMBER = 2 * OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
 const int64_t OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL  = 64;
 const int64_t OB_MAX_COLUMN_NAME_LENGTH = 128; // Compatible with oracle, OB code logic is greater than Times TODO:xiyu
+const int64_t OB_MAX_COLUMN_NAME_BINARY_LENGTH = 512; //OB_MAX_COLUMN_NAME_LENGTH * 4 (max character bytes)
 const int64_t OB_MAX_COLUMN_NAME_BUF_LENGTH = OB_MAX_COLUMN_NAME_LENGTH + 1;
 const int64_t OB_MAX_COLUMN_NAMES_LENGTH = 2 * 1024;
 const int64_t OB_MAX_APP_NAME_LENGTH = 128;
@@ -690,6 +693,11 @@ const char *const OB_LOCAL_PREFIX = "local://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
+const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -799,6 +807,7 @@ const int64_t MAX_INFOSCHEMA_COLUMN_PRIVILEGE_LENGTH = 64;
 const int64_t MAX_COLUMN_YES_NO_LENGTH = 3;
 const int64_t MAX_COLUMN_VARCHAR_LENGTH = 262143;
 const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
+const uint64_t COLUMN_GROUP_START_ID = 1000;
 
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;
@@ -1179,8 +1188,8 @@ const uint64_t OB_PUBLIC_SCHEMA_ID            = OB_MIN_INNER_DATABASE_ID + 5;
 const uint64_t OB_ORA_SYS_DATABASE_ID         = OB_MIN_INNER_DATABASE_ID + 6;
 const uint64_t OB_ORA_LBACSYS_DATABASE_ID     = OB_MIN_INNER_DATABASE_ID + 7;
 const uint64_t OB_ORA_AUDITOR_DATABASE_ID     = OB_MIN_INNER_DATABASE_ID + 8;
-// not actual database, only for using and creating outlines without specified database
-const uint64_t OB_OUTLINE_DEFAULT_DATABASE_ID = OB_MIN_INNER_DATABASE_ID + 9;
+// use only if the 'use database' command is not executed.
+const uint64_t OB_MOCK_DEFAULT_DATABASE_ID = OB_MIN_INNER_DATABASE_ID + 9;
 const uint64_t OB_CTE_DATABASE_ID             = OB_MIN_INNER_DATABASE_ID + 10;
 const uint64_t OB_MAX_INNER_DATABASE_ID       = 202000;
 
@@ -1190,7 +1199,7 @@ const char* const OB_MYSQL_SCHEMA_NAME             = "mysql";
 const char* const OB_RECYCLEBIN_SCHEMA_NAME        = "__recyclebin"; //hidden
 const char* const OB_PUBLIC_SCHEMA_NAME            = "__public";     //hidden
 const char* const OB_ORA_SYS_SCHEMA_NAME           = "SYS";
-const char* const OB_OUTLINE_DEFAULT_DATABASE_NAME = "__outline_default_db";
+const char* const OB_MOCK_DEFAULT_DATABASE_NAME = "__outline_default_db";
 const char* const OB_TEST_SCHEMA_NAME              = "test";
 
 OB_INLINE bool is_oceanbase_sys_database_id(const uint64_t database_id)
@@ -1225,7 +1234,7 @@ OB_INLINE bool is_public_database_id(const uint64_t database_id)
 
 OB_INLINE bool is_outline_database_id(const uint64_t database_id)
 {
-  return OB_OUTLINE_DEFAULT_DATABASE_ID == database_id;
+  return OB_MOCK_DEFAULT_DATABASE_ID == database_id;
 }
 
 OB_INLINE bool is_inner_db(const uint64_t db_id)
@@ -1390,6 +1399,7 @@ OB_INLINE bool is_dblink_type_id(uint64_t type_id)
 const char* const OB_PRIMARY_INDEX_NAME = "PRIMARY";
 
 const int64_t OB_MAX_CONFIG_URL_LENGTH = 512;
+const int64_t OB_MAX_ADMIN_COMMAND_LENGTH = 1000;
 const int64_t OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH = 256;
 const int64_t OB_MAX_ARBITRATION_SERVICE_LENGTH = 512;
 
@@ -2515,7 +2525,7 @@ inline bool is_x86() {
 #endif
 }
 #define __maybe_unused  __attribute__((unused))
-#define DO_PRAGMA(x) _Pragma (#x)
+#define DO_PRAGMA(x) _Pragma(#x)
 #define DISABLE_WARNING_GCC_PUSH _Pragma("GCC diagnostic push")
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")

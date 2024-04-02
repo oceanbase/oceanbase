@@ -1187,11 +1187,11 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setDependent(true);
       }
       col_meta->setName(column_schema.get_column_name());
-      col_meta->setType(static_cast<int>(mysql_type));
       col_meta->setSigned(signed_flag);
       col_meta->setIsPK(column_schema.is_original_rowkey_column());
       col_meta->setNotNull(! column_schema.is_nullable());
 
+      set_column_type_(*col_meta, mysql_type);
       set_column_encoding_(col_type, column_schema.get_charset_type(), col_meta);
 
       if (column_schema.is_xmltype()) {
@@ -1233,6 +1233,20 @@ int ObLogMetaManager::set_column_meta_(
   }
 
   return ret;
+}
+
+// convert column type for drcmsg and oblogmsg
+void ObLogMetaManager::set_column_type_(IColMeta &col_meta, const obmysql::EMySQLFieldType &col_type)
+{
+  if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_FLOAT == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_FLOAT);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_BINARY_DOUBLE == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_DOUBLE);
+  } else if (EMySQLFieldType::MYSQL_TYPE_ORA_XML == col_type) {
+    col_meta.setType(drcmsg_field_types::DRCMSG_TYPE_ORA_XML);
+  } else {
+    col_meta.setType(static_cast<int>(col_type));
+  }
 }
 
 template<class TABLE_SCHEMA>
@@ -1709,9 +1723,12 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
     int64_t column_count = tb_schema_info.get_usr_column_count();
     LOG_TRACE("set_unique_keys_ begin", KPC(table_schema), K(index_table_count), K(tb_schema_info));
     if (column_count < 0) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("column_num is invalid", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(), K(column_count));
-      ret = OB_ERR_UNEXPECTED;
+    } else if (0 == column_count) {
+      LOG_INFO("ignore table without usr_column", "table_id", table_schema->get_table_id(),
+          "table_name", table_schema->get_table_name(), K(column_count) );
     } else {
       if (index_table_count > 0) {
         int64_t is_uk_column_array_size = column_count * sizeof(bool);

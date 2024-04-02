@@ -32,7 +32,7 @@ struct DupTableTsInfo
   share::SCN max_replayed_scn_;
   share::SCN max_read_version_;
   share::SCN max_commit_version_;
-  // TODO last recive time
+  // TODO last receive time
 
   DupTableTsInfo() { reset(); }
   void reset()

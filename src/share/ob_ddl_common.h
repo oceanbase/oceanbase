@@ -56,6 +56,10 @@ enum ObDDLType
   DDL_MODIFY_AUTO_INCREMENT = 4,
   DDL_CREATE_INDEX = 5,
   DDL_DROP_INDEX = 6,
+  DDL_CREATE_FTS_INDEX = 7,
+  DDL_CREATE_MLOG = 8,
+  DDL_DROP_MLOG = 9,
+  DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -132,6 +136,14 @@ enum ObDDLTaskStatus {
   REPENDING = 17,
   FAIL = 99,
   SUCCESS = 100
+};
+
+const char *const temp_store_format_options[] =
+{
+  "auto",
+  "zstd",
+  "lz4",
+  "none",
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
@@ -226,11 +238,23 @@ static inline bool is_direct_load_task(const ObDDLType type)
   return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
 }
 
+static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
+{
+  return DDL_DROP_COLUMN == type
+      || DDL_ADD_COLUMN_OFFLINE == type
+      || DDL_COLUMN_REDEFINITION == type
+      || DDL_TABLE_RESTORE == type;
+}
+
 static inline bool is_invalid_ddl_type(const ObDDLType type)
 {
   return DDL_INVALID == type;
 }
 
+static inline bool is_create_index(const ObDDLType type)
+{
+ return ObDDLType::DDL_CREATE_INDEX == type || ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX == type;
+}
 // ddl stmt or rs ddl trans has rollbacked and can retry
 static inline bool is_ddl_stmt_packet_retry_err(const int ret)
 {
@@ -325,11 +349,6 @@ public:
                               const int64_t table_id,
                               int64_t &tablet_count);
 
-  // get all tablets of a table by table_schema
-  static int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids);
-
   // check if the major sstable of a table are exist in all needed replicas
   static int check_major_sstable_complete(
       const uint64_t data_table_id,
@@ -355,6 +374,7 @@ public:
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
+      const ObString &partition_names,
       ObSqlString &sql_string);
 
   static int get_tablet_leader_addr(
@@ -384,12 +404,7 @@ public:
       const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_READABLE_COMMITED);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
-  
-  static bool is_table_lock_retry_ret_code(int ret)
-  {
-    return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
-           || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret;
-  }
+
   static bool need_remote_write(const int ret_code);
 
   static int check_can_convert_character(const ObObjMeta &obj_meta)
@@ -413,6 +428,47 @@ public:
     const uint64_t tenant_id,
     const common::ObTabletID &tablet_id,
     ObLSLocation &location);
+  static int construct_ls_tablet_id_map(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &ls_tablet_id_map);
+  static int get_index_table_batch_partition_names(
+    const uint64_t &tenant_id,
+    const int64_t &data_table_id,
+    const int64_t &index_table_id,
+    const ObIArray<ObTabletID> &tablets,
+    common::ObIAllocator &allocator,
+    ObIArray<ObString> &partition_names);
+  static int get_tablet_data_size(
+    const uint64_t &tenant_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObLSID &ls_id,
+    int64_t &data_size);
+  static int get_tablet_data_row_cnt(
+    const uint64_t &tenant_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObLSID &ls_id,
+    int64_t &data_row_cnt);
+  static int get_table_row_cnt_and_avg_row_len(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    int64_t &table_row_cnt,
+    double &table_avg_row_len);
+  static int get_ls_host_left_disk_space(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr &leader_addr,
+    uint64_t &left_space_size);
+  static int generate_partition_names(
+   const ObIArray<ObString> &partition_names_array,
+   common::ObIAllocator &allocator,
+   ObString &partition_names);
+  static int check_target_partition_is_running(
+   const ObString &running_sql_info,
+   const ObString &partition_name,
+   common::ObIAllocator &allocator,
+   bool &is_running_status);
 
   static int check_table_exist(
      const uint64_t tenant_id,
@@ -492,12 +548,21 @@ public:
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
 
+  static int check_table_empty_in_oracle_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &is_table_empty);
+
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
       const uint64_t check_tenant_id);
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+  static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
@@ -528,6 +593,13 @@ public:
       const uint64_t index_table_id,
       const int64_t execution_id,
       const uint64_t ddl_task_id);
+  static int check_tablet_checksum_update_status(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const uint64_t ddl_task_id,
+      const int64_t execution_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      bool &tablet_checksum_status);
 
 private:
 
@@ -583,15 +655,6 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
-
-  static int check_tablet_checksum_update_status(
-      const uint64_t tenant_id,
-      const uint64_t index_table_id,
-      const uint64_t ddl_task_id,
-      const int64_t execution_id,
-      ObIArray<ObTabletID> &tablet_ids,
-      bool &tablet_checksum_status);
-
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

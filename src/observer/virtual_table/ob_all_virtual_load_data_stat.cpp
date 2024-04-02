@@ -197,44 +197,58 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case COORDINATOR_RECEIVED_ROWS: {
-          cells[i].set_int(job_status->coordinator.received_rows_);
+          cells[i].set_int(job_status->coordinator_.received_rows_);
           break;
         }
         case COORDINATOR_LAST_COMMIT_SEGMENT_ID: {
-          cells[i].set_int(job_status->coordinator.last_commit_segment_id_);
+          cells[i].set_int(job_status->coordinator_.last_commit_segment_id_);
           break;
         }
         case COORDINATOR_STATUS: {
-          cells[i].set_varchar(job_status->coordinator.status_);
+          cells[i].set_varchar(job_status->coordinator_.status_);
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case COORDINATOR_TRANS_STATUS: {
-          cells[i].set_varchar(job_status->coordinator.trans_status_);
+          cells[i].set_varchar(job_status->coordinator_.trans_status_);
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case STORE_PROCESSED_ROWS: {
-          cells[i].set_int(job_status->store.processed_rows_);
+          cells[i].set_int(job_status->store_.processed_rows_);
           break;
         }
         case STORE_LAST_COMMIT_SEGMENT_ID: {
-          cells[i].set_int(job_status->store.last_commit_segment_id_);
+          cells[i].set_int(job_status->store_.last_commit_segment_id_);
           break;
         }
         case STORE_STATUS: {
-          cells[i].set_varchar(job_status->store.status_);
+          cells[i].set_varchar(job_status->store_.status_);
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case STORE_TRANS_STATUS: {
-          cells[i].set_varchar(job_status->store.trans_status_);
+          cells[i].set_varchar(job_status->store_.trans_status_);
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case MESSAGE: {
-          cells[i].set_varchar(job_status->message_);
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          int64_t pos = 0;
+          if (OB_FAIL(databuff_printf(job_status->message_, common::MAX_LOAD_DATA_MESSAGE_LENGTH, pos,
+                                      "COMPACT_STAGE_LOAD_ROWS: %ld, COMPACT_STAGE_DUMP_ROWS: %ld, "
+                                      "COMPACT_STAGE_PRODUCT_TMP_FILES: %ld, COMPACT_STAGE_CONSUME_TMP_FILES: %ld, "
+                                      "COMPACT_STAGE_MERGE_WRITE_ROWS: %ld, MERGE_STAGE_WRITE_ROWS: %ld",
+                                      job_status->store_.compact_stage_load_rows_,
+                                      job_status->store_.compact_stage_dump_rows_,
+                                      job_status->store_.compact_stage_product_tmp_files_,
+                                      job_status->store_.compact_stage_consume_tmp_files_,
+                                      job_status->store_.compact_stage_merge_write_rows_,
+                                      job_status->store_.merge_stage_write_rows_))) {
+            SERVER_LOG(WARN, "fail to fill message_", K(ret));
+          } else {
+            cells[i].set_varchar(job_status->message_);
+            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         default: {

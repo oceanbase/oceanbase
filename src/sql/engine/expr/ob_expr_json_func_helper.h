@@ -27,6 +27,7 @@
 #include "lib/json_type/ob_json_schema.h"
 #include "lib/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 
 using namespace oceanbase::common;
 
@@ -183,6 +184,9 @@ public:
   static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
                                   common::ObIAllocator &allocator,
                                   ObString& str, bool& is_null);
+  static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                  MultimodeAlloctor &allocator,
+                                  ObString& str, bool& is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -194,12 +198,17 @@ public:
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
   static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
-                          common::ObArenaAllocator &allocator,
+                          common::ObIAllocator &allocator,
+                          uint16_t index, ObIJsonBase*& j_base,
+                          bool &is_null, bool need_to_tree=true,
+                          bool relax = true, bool preserve_dup = false);
+  static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
+                          MultimodeAlloctor &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
                           bool &is_null, bool need_to_tree=true,
                           bool relax = true, bool preserve_dup = false);
   static int get_json_schema(const ObExpr &expr, ObEvalCtx &ctx,
-                            common::ObArenaAllocator &allocator,
+                            MultimodeAlloctor &allocator,
                             uint16_t index, ObIJsonBase*& j_base,
                             bool &is_null);
 
@@ -267,7 +276,7 @@ public:
                                     ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
                                     bool format_json = false, bool is_strict = false, bool is_bin = false);
 
-  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
+  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, MultimodeAlloctor *allocator,
                                 ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false, bool is_absent_null = false);
  
   /*
@@ -504,6 +513,17 @@ protected:
   ObLobCursor *cursor_;
   ObLobPartialData *partial_data_;
   int64_t query_timeout_ts_;
+};
+
+struct ObJsonZeroVal
+{
+  static const int32_t OB_JSON_ZERO_VAL_LENGTH = sizeof(ObLobCommon) + 2;
+  ObJsonZeroVal() : header_(), json_bin_() {
+    json_bin_[0] = '\0';
+    json_bin_[1] = '\0';
+  }
+  ObLobCommon header_;
+  char json_bin_[4];
 };
 
 } // sql

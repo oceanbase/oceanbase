@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #define UNITTEST_DEBUG
 #include "lib/utility/utility.h"
 #include <gtest/gtest.h>
@@ -76,6 +77,7 @@ public:
   static void replay();
   static void get_latest();
   static void get_snapshot();
+  static void get_latest_committed();
   static void get_snapshot_hung_1s();
   static void get_by_writer();
   static void insert_multi_row();
@@ -151,11 +153,16 @@ void TestMdsTable::get_latest()
   MdsCtx ctx1(mds::MdsWriter(ObTransID(1)));// abort finally
   ASSERT_EQ(OB_SUCCESS, mds_table_.set(data1, ctx1));
   int value = 0;
-  bool unused_committed_flag = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_latest<ExampleUserData1>([&value](const ExampleUserData1 &data) {
     value = data.value_;
     return OB_SUCCESS;
-  }, unused_committed_flag));
+  }, writer, trans_stat, trans_version));
+  ASSERT_EQ(writer.writer_id_, 1);
+  ASSERT_EQ(trans_stat, mds::TwoPhaseCommitState::STATE_INIT);
+  ASSERT_EQ(trans_version, share::SCN::max_scn());
   ASSERT_EQ(5, value);// read uncommitted
   ctx1.on_abort(mock_scn(11));
 }
@@ -168,6 +175,16 @@ void TestMdsTable::get_snapshot()
     return OB_SUCCESS;
   }, mock_scn(9)));
   ASSERT_EQ(3, value);// read snapshot
+}
+
+void TestMdsTable::get_latest_committed()
+{
+  int value = 0;
+  ASSERT_EQ(OB_SUCCESS, mds_table_.get_latest_committed<ExampleUserData1>([&value](const ExampleUserData1 &data) {
+    value = data.value_;
+    return OB_SUCCESS;
+  }));
+  ASSERT_EQ(1, value);// read latest committed
 }
 
 void TestMdsTable::get_snapshot_hung_1s()
@@ -269,8 +286,13 @@ void TestMdsTable::get_multi_row() {
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, read_data.value_);
 
-  bool unused_committed_flag = false;
-  ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), read_op, unused_committed_flag);
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
+  ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), read_op, writer, trans_stat, trans_version);
+  ASSERT_EQ(writer.writer_id_, 3);
+  ASSERT_EQ(trans_stat, mds::TwoPhaseCommitState::STATE_INIT);
+  ASSERT_EQ(trans_version, share::SCN::max_scn());
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, read_data.value_);
   ctx3.on_abort(mock_scn(3));
@@ -360,13 +382,25 @@ void TestMdsTable::OB_iterator() {
 // <ExampleUserKey, ExampleUserData1> : <1> : (data:100, writer:100, ver:19001) -> (data:2, writer:2, ver:2) -> (data:1, writer:1, ver:1)
 //                                      <2> : (data:200, writer:200, ver:MAX)
 void TestMdsTable::test_flush() {
+  int ret = OB_SUCCESS;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   ExampleUserKey key(1);
   ExampleUserData1 data1(100);
   MdsCtx ctx(mds::MdsWriter(ObTransID(100)));// commit finally
-  ASSERT_EQ(OB_SUCCESS, mds_table_.set(key, data1, ctx));
+  ret = mds_table_.set(key, data1, ctx);
+  ASSERT_EQ(OB_SUCCESS, ret);
   ctx.on_redo(mock_scn(19001));
   ctx.before_prepare();
   ctx.on_prepare(mock_scn(19001));
+  ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), [](const ExampleUserData1 &data){
+    return OB_SUCCESS;
+  }, writer, trans_stat, trans_version);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(writer.writer_id_, 100);
+  ASSERT_EQ(trans_stat, mds::TwoPhaseCommitState::ON_PREPARE);
+  ASSERT_EQ(trans_version, mock_scn(19001));
   ctx.on_commit(mock_scn(19002), mock_scn(19002));
 
   ExampleUserKey key2(2);
@@ -376,7 +410,7 @@ void TestMdsTable::test_flush() {
   ctx2.on_redo(mock_scn(200));
 
   int idx = 0;
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(300)));// 1. 以300为版本号进行flush动作
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(300), mock_scn(500)));// 1. 以300为版本号进行flush动作
   ASSERT_EQ(mock_scn(199), mds_table_.p_mds_table_base_->flushing_scn_);// 2. 实际上以199为版本号进行flush动作
   ASSERT_EQ(OB_SUCCESS, mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
     [&idx](const MdsDumpKV &kv) -> int {// 2. 转储时扫描mds table
@@ -427,23 +461,32 @@ void TestMdsTable::test_is_locked_by_others() {
 
 // <ExampleUserKey, ExampleUserData1> : <1> : (data:100, writer:100, ver:19001)
 void TestMdsTable::test_multi_key_remove() {
-  bool is_committed = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   int ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), [](const ExampleUserData1 &data){
     return OB_SUCCESS;
-  }, is_committed);
+  }, writer, trans_stat, trans_version);
+  ASSERT_EQ(trans_stat, mds::TwoPhaseCommitState::ON_COMMIT);
+  MDS_LOG(INFO, "print trans version", K(trans_version));
+  ASSERT_EQ(trans_version, mock_scn(19002));
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(200)));
-  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(200)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(200), mock_scn(500)));
+  mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([](const MdsDumpKV &){
+    return OB_SUCCESS;
+  }, 0, true);
+  mds_table_.on_flush(mock_scn(500), OB_SUCCESS);
+  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(500)));
   ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(2), [](const ExampleUserData1 &data){
     return OB_SUCCESS;
-  }, is_committed);
+  }, writer, trans_stat, trans_version);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
   MdsCtx ctx(mds::MdsWriter(ObTransID(1)));
   ret = mds_table_.remove<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ctx);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), [](const ExampleUserData1 &data){
     return OB_SUCCESS;
-  }, is_committed);
+  }, writer, trans_stat, trans_version);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 }
 
@@ -451,6 +494,7 @@ TEST_F(TestMdsTable, set) { TestMdsTable::set(); }
 TEST_F(TestMdsTable, replay) { TestMdsTable::replay(); }
 TEST_F(TestMdsTable, get_latest) { TestMdsTable::get_latest(); }
 TEST_F(TestMdsTable, get_snapshot) { TestMdsTable::get_snapshot(); }
+TEST_F(TestMdsTable, get_latest_committed) { TestMdsTable::get_latest_committed(); }
 TEST_F(TestMdsTable, get_snapshot_hung_1s) { TestMdsTable::get_snapshot_hung_1s(); }
 TEST_F(TestMdsTable, get_by_writer) { TestMdsTable::get_by_writer(); }
 TEST_F(TestMdsTable, insert_multi_row) { TestMdsTable::insert_multi_row(); }
@@ -512,16 +556,16 @@ TEST_F(TestMdsTable, test_recycle) {
   int64_t valid_cnt = 0;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_node_cnt(valid_cnt));
   ASSERT_EQ(1, valid_cnt);// 此时还有一个19001版本的已提交数据，因为rec_scn没有推上去
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000), mock_scn(40000)));
   mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([](const MdsDumpKV &){
     return OB_SUCCESS;
   }, 0, true);
-  mds_table_.on_flush(mock_scn(20000), OB_SUCCESS);
+  mds_table_.on_flush(mock_scn(40000), OB_SUCCESS);
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_rec_scn(rec_scn));
   MDS_LOG(INFO, "print rec scn", K(rec_scn));
   ASSERT_EQ(share::SCN::max_scn(), rec_scn);
-  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(20000)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(40000)));
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_node_cnt(valid_cnt));
   ASSERT_EQ(0, valid_cnt);// 此时还有一个19001版本的已提交数据，因为rec_scn没有推上去
 }
@@ -541,17 +585,17 @@ TEST_F(TestMdsTable, test_recalculate_flush_scn_op) {
   ASSERT_EQ(OB_SUCCESS, mds_table.set(ExampleUserData1(3), ctx3));
   ctx3.on_redo(mock_scn(9));
   ctx3.on_commit(mock_scn(11), mock_scn(11));
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(4)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(4), mock_scn(4)));
   ASSERT_EQ(mock_scn(4), mds_table.p_mds_table_base_->flushing_scn_);
   mds_table.on_flush(mock_scn(4), OB_SUCCESS);
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(5)));// no need do flush, directly advance rec_scn
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(5), mock_scn(5)));// no need do flush, directly advance rec_scn
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(6)));// no need do flush, directly advance rec_scn
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(6), mock_scn(6)));// no need do flush, directly advance rec_scn
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(7)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(7), mock_scn(7)));
   ASSERT_EQ(mock_scn(7), mds_table.p_mds_table_base_->flushing_scn_);
   mds_table.on_flush(mock_scn(7), OB_SUCCESS);
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(8)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(8), mock_scn(8)));
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
   ASSERT_EQ(mock_scn(9), mds_table.p_mds_table_base_->rec_scn_);
 }
@@ -629,16 +673,18 @@ TEST_F(TestMdsTable, test_rw_lock_wwlock) {
 
 TEST_F(TestMdsTable, test_rvalue_set) {
   ExampleUserData2 data;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
   ASSERT_EQ(OB_SUCCESS, data.assign(MdsAllocator::get_instance(), "123"));
   MdsCtx ctx(mds::MdsWriter(ObTransID(100)));
   ObString str = data.data_;
   ASSERT_EQ(OB_SUCCESS, mds_table_.set(std::move(data), ctx, 0));
-  bool is_committed = false;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_latest<ExampleUserData2>([&data, str](const ExampleUserData2 &read_data) -> int {
     MDS_ASSERT(data.data_ == nullptr);
     MDS_ASSERT(str.ptr() == read_data.data_.ptr());
     return OB_SUCCESS;
-  }, is_committed));
+  }, writer, trans_stat, trans_version));
 }
 
 }

@@ -87,6 +87,10 @@ public:
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
+ int process_thread0_(const ObAllTenantInfo &tenant_info);
+ int process_thread1_(const ObAllTenantInfo &tenant_info,
+                      share::SCN &start_scn,
+                      palf::PalfBufferIterator &iterator);
  //get log iterator by start_scn
  //interface for thread0
  int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
@@ -136,8 +140,14 @@ private:
  //thread1
  int do_standby_balance_();
  int do_ls_balance_task_();
+ int try_do_ls_balance_task_(const share::ObBalanceTaskHelper &ls_balance_task,
+                               const share::ObAllTenantInfo &tenant_info);
+ int check_transfer_begin_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
+                               const share::ObAllTenantInfo &tenant_info,
+                               bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
+
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  void try_update_primary_ip_list();
  bool check_need_update_ip_list_(share::ObLogRestoreSourceItem &item);

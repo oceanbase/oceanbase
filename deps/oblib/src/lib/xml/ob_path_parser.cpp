@@ -56,6 +56,17 @@ bool ObPathParserUtil::is_xpath_ident_terminator(const char ch) {
   return ret_bool;
 }
 
+//use for xmltable transfrom xpath special in resolve
+bool ObPathParserUtil::is_xpath_transform_terminator(const char ch) {
+  int ret_bool = false;
+  if (ObXPathUtil::is_whitespace(ch)
+      || ch == ObPathItem::SLASH
+      || ch == ObPathItem::BEGIN_ARRAY) {
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
 bool ObPathParserUtil::is_boolean_ans(ObFilterType type)
 {
   bool ret_bool = false;
@@ -1288,31 +1299,38 @@ int ObPathParser::parse_subpath(ObString& subpath, ObPathNode*& node, bool is_fi
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("should not be null", K(ret));
   } else {
-    ObPathParser* subpath_parser =
-    static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
-    if (OB_ISNULL(subpath_parser)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
-    } else {
-      subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
-      if (is_filter) {
-        if (subpath_parser->is_function_path()) {
-          if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+    uint64_t not_null_idx = 0;
+    ObXPathUtil::skip_whitespace(subpath, not_null_idx);
+    if (not_null_idx < subpath.length()) {
+      ObPathParser* subpath_parser =
+      static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
+      if (OB_ISNULL(subpath_parser)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
+      } else {
+        subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
+        if (is_filter) {
+          if (subpath_parser->is_function_path()) {
+            if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+              bad_index_ = subpath_parser->bad_index_;
+              LOG_WARN("fail to parse function.", K(ret), K(index_));
+            } // is function
+          } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
             bad_index_ = subpath_parser->bad_index_;
-            LOG_WARN("fail to parse function.", K(ret), K(index_));
-          } // is function
-        } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
+            LOG_WARN("fail to parse", K(ret));
+          }
+        } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
           bad_index_ = subpath_parser->bad_index_;
           LOG_WARN("fail to parse", K(ret));
         }
-      } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
-        bad_index_ = subpath_parser->bad_index_;
-        LOG_WARN("fail to parse", K(ret));
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(subpath_parser->get_root())) {
+          node = subpath_parser->get_root();
+        }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_NOT_NULL(subpath_parser->get_root())) {
-        node = subpath_parser->get_root();
-      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpath should not be null", K(ret));
     }
   }
   return ret;
@@ -1324,6 +1342,9 @@ int ObPathParser::get_xpath_subpath(ObPathNode*& node, bool is_filter, ObPathArg
   ObString subpath;
   if (OB_FAIL(get_subpath_str(is_filter, subpath))) {
     LOG_WARN("fail to get subpath str", K(ret));
+  } else if (subpath.length() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("subpath should not be null", K(ret));
   } else if (OB_FAIL(parse_subpath(subpath, node, is_filter, patharg_type))) {
     if (patharg_type != NOT_SUBPATH) ret = OB_ERR_PARSER_SYNTAX; // subpath parsing failed
     LOG_WARN("fail to parse subpath", K(ret));
@@ -1958,6 +1979,9 @@ int ObPathParser::parse_arg(ObPathNode*& arg, ObPathArgType patharg_type, bool i
   ObXPathUtil::skip_whitespace(expression_, index_);
 
   if (OB_FAIL(ret)) {
+  } else if (index_ >= len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid xpath", K(ret), K(expression_));
   } else if (is_filter && (negtive || is_number_begin() || is_literal_begin())) { // is_scalar
     ObPathArgNode* arg_node = nullptr;
     // filter arg: string, number, subpath
@@ -2009,99 +2033,104 @@ int ObPathParser::get_filter_char_type(ObXpathFilterChar& filter_char)
   INIT_SUCC(ret);
   ObXPathUtil::skip_whitespace(expression_, index_);
   bool space_error = false;
-  switch (expression_[index_]) {
-    case '[':
-      filter_char = ObXpathFilterChar::CHAR_BEGIN_FILTER;
-      break;
-    case '(':
-      filter_char = ObXpathFilterChar::CHAR_LEFT_BRACE;
-      break;
-    case '|':
-      filter_char = ObXpathFilterChar::CHAR_UNION;
-      break;
-    case 'o':
-      if (path_prefix_match("or ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_OR;
-          index_ += strlen(ObPathItem::OR);
-        } else {
-          space_error = true;
+  if (index_ >= len_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid xpath", K(ret), K(expression_));
+  } else {
+    switch (expression_[index_]) {
+      case '[':
+        filter_char = ObXpathFilterChar::CHAR_BEGIN_FILTER;
+        break;
+      case '(':
+        filter_char = ObXpathFilterChar::CHAR_LEFT_BRACE;
+        break;
+      case '|':
+        filter_char = ObXpathFilterChar::CHAR_UNION;
+        break;
+      case 'o':
+        if (path_prefix_match("or ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_OR;
+            index_ += strlen(ObPathItem::OR);
+          } else {
+            space_error = true;
+          }
         }
-      }
-      break;
-    case 'a':
-      if (path_prefix_match("and ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_AND;
-          index_ += strlen(ObPathItem::AND);
-        } else {
-          space_error = true;
+        break;
+      case 'a':
+        if (path_prefix_match("and ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_AND;
+            index_ += strlen(ObPathItem::AND);
+          } else {
+            space_error = true;
+          }
         }
-      }
-      break;
-    case '=':
-      filter_char = ObXpathFilterChar::CHAR_EQUAL;
-      break;
-    case '!':
-      if (path_prefix_match(ObPathItem::COM_NE)) {
-        filter_char = ObXpathFilterChar::CHAR_UNEQUAL;
-        ++index_;
-      }
-      break;
-    case '<' :
-      if (path_prefix_match(ObPathItem::COM_LE)) {
-        filter_char = ObXpathFilterChar::CHAR_LESS_EQUAL;
-        ++index_;
-      } else {
-        filter_char = ObXpathFilterChar::CHAR_LESS;
-      }
-      break;
-    case '>' :
-      if (path_prefix_match(ObPathItem::COM_GE)) {
-        filter_char = ObXpathFilterChar::CHAR_GREAT_EQUAL;
-        ++index_;
-      } else {
-        filter_char = ObXpathFilterChar::CHAR_GREAT;
-      }
-      break;
-    case '+':
-      filter_char = ObXpathFilterChar::CHAR_ADD;
-      break;
-    case '-':
-      filter_char = ObXpathFilterChar::CHAR_SUB;
-      break;
-    case '*':
-      filter_char = ObXpathFilterChar::CHAR_MULTI;
-      break;
-    case 'd':
-      if (path_prefix_match("div ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_DIV;
-          index_ += strlen(ObPathItem::DIV);
-        } else {
-          space_error = true;
+        break;
+      case '=':
+        filter_char = ObXpathFilterChar::CHAR_EQUAL;
+        break;
+      case '!':
+        if (path_prefix_match(ObPathItem::COM_NE)) {
+          filter_char = ObXpathFilterChar::CHAR_UNEQUAL;
+          ++index_;
         }
-      }
-      break;
-    case 'm':
-      if (path_prefix_match("mod ")) {
-        if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
-          filter_char = ObXpathFilterChar::CHAR_MOD;
-          index_ += strlen(ObPathItem::MOD);
+        break;
+      case '<' :
+        if (path_prefix_match(ObPathItem::COM_LE)) {
+          filter_char = ObXpathFilterChar::CHAR_LESS_EQUAL;
+          ++index_;
         } else {
-          space_error = true;
+          filter_char = ObXpathFilterChar::CHAR_LESS;
         }
-      }
-      break;
-    case ')':
-      filter_char = ObXpathFilterChar::CHAR_RIGHT_BRACE;
-      break;
-    case ']':
-      filter_char = ObXpathFilterChar::CHAR_END_FILTER;
-      break;
-    default:
-      filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
-      break;
+        break;
+      case '>' :
+        if (path_prefix_match(ObPathItem::COM_GE)) {
+          filter_char = ObXpathFilterChar::CHAR_GREAT_EQUAL;
+          ++index_;
+        } else {
+          filter_char = ObXpathFilterChar::CHAR_GREAT;
+        }
+        break;
+      case '+':
+        filter_char = ObXpathFilterChar::CHAR_ADD;
+        break;
+      case '-':
+        filter_char = ObXpathFilterChar::CHAR_SUB;
+        break;
+      case '*':
+        filter_char = ObXpathFilterChar::CHAR_MULTI;
+        break;
+      case 'd':
+        if (path_prefix_match("div ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_DIV;
+            index_ += strlen(ObPathItem::DIV);
+          } else {
+            space_error = true;
+          }
+        }
+        break;
+      case 'm':
+        if (path_prefix_match("mod ")) {
+          if (index_ > 1 && (expression_[index_ - 1] == ' ' || isdigit(expression_[index_ - 1]))) {
+            filter_char = ObXpathFilterChar::CHAR_MOD;
+            index_ += strlen(ObPathItem::MOD);
+          } else {
+            space_error = true;
+          }
+        }
+        break;
+      case ')':
+        filter_char = ObXpathFilterChar::CHAR_RIGHT_BRACE;
+        break;
+      case ']':
+        filter_char = ObXpathFilterChar::CHAR_END_FILTER;
+        break;
+      default:
+        filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
+        break;
+    }
   }
   if (space_error) {
     ret = OB_ERR_UNEXPECTED;
@@ -2240,8 +2269,8 @@ int ObPathParser::parse_filter_node(ObPathNode*& filter, ObPathArgType patharg_t
       if (OB_FAIL(char_stack.push_back(ObXpathFilterChar::CHAR_BEGIN_FILTER))) {
         LOG_WARN("fail to push_back charactor", K(ret), K(index_), K(expression_));
       } else {
+        ObXPathUtil::skip_whitespace(expression_, index_);
         while (OB_SUCC(ret) && index_ < len_ && char_stack.size() > 0) {
-          ObXPathUtil::skip_whitespace(expression_, index_);
           ObXpathFilterChar filter_char = ObXpathFilterChar::CMP_CHAR_MAX;
           bool minus = false;
           bool multi = false;
@@ -2273,6 +2302,7 @@ int ObPathParser::parse_filter_node(ObPathNode*& filter, ObPathArgType patharg_t
               LOG_WARN("fail to push arg", K(ret), K(index_), K(expression_));
             }
           }
+          ObXPathUtil::skip_whitespace(expression_, index_);
         } // end while
         // if not in predicate
         if (OB_SUCC(ret) && (index_ >= len_ && patharg_type != ObPathArgType::IN_FILTER)) {

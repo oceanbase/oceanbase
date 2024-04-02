@@ -35,6 +35,23 @@ int set_trace_id(char *buf);
 void init_log_and_gtest(int argc, char **argv);
 void init_gtest_output(std::string &gtest_log_name);
 
+struct RestartIndex
+{
+  int restart_zone_id_;
+  int restart_no_;
+
+  void reset()
+  {
+    restart_zone_id_ =  -1;
+    restart_no_ = 0;
+  }
+
+  RestartIndex()
+  {
+    reset();
+  }
+};
+
 class ObMultiReplicaTestBase : public testing::Test
 {
 public:
@@ -43,8 +60,12 @@ public:
   ObMultiReplicaTestBase();
   virtual ~ObMultiReplicaTestBase();
 
-  static int bootstrap_multi_replica(const std::string &env_prefix = "run_");
+  static int bootstrap_multi_replica(const std::string &app_name,
+                                    const int restart_zone_id = -1,
+                                     const int restart_no = 0,
+                                     const std::string &env_prefix = "run_");
   static int wait_all_test_completed();
+  static int restart_zone(const int zone_id, const int restart_no);
   static int start();
   static int close();
   observer::ObServer &get_curr_observer() { return replica_->get_observer(); }
@@ -66,11 +87,13 @@ public:
   int exec_write_sql_sys(const char *sql_str, int64_t &affected_rows);
   int check_tenant_exist(bool &bool_ret, const char *tenant_name = DEFAULT_TEST_TENANT_NAME);
 
+  static std::string TEST_CASE_BASE_NAME;
   static std::string ZONE_TEST_CASE_NAME[MAX_ZONE_COUNT];
-
 protected:
   static int init_replicas_();
   static int init_test_replica_(const int zone_id);
+
+  static int is_valid_zone_id(int zone_id) { return zone_id >= 0; }
 
 protected:
   virtual void SetUp();
@@ -85,7 +108,8 @@ protected:
   static bool is_inited_;
   static std::thread th_;
   static std::string env_prefix_;
-  static std::string curr_dir_;
+  static std::string app_name_;
+  static std::string exec_dir_;
   static std::string event_file_path_;
   static std::string env_prefix_path_;
   static bool enable_env_warn_log_;
@@ -96,8 +120,9 @@ protected:
   static std::string local_ip_;
 
   static int cur_zone_id_;
-  static int child_pid_;
-  static int child_pid2_;
+  static int restart_zone_id_;
+  static int restart_no_;
+  static std::vector<int> zone_pids_;
 
   static std::vector<int64_t> rpc_ports_;
   static ObServerInfoList server_list_;

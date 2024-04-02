@@ -477,7 +477,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   FLTSpanGuard(mpquery_single_stmt);
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   session.get_raw_audit_record().request_memory_used_ = 0;
   observer::ObProcessMallocCallback pmcb(0,
         session.get_raw_audit_record().request_memory_used_);
@@ -493,10 +492,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
     // observer will force refresh schema if local_schema_version < last_schema_version;
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
@@ -698,7 +695,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObTenantCachedSchemaGuardInfo &cached_schema_info = session.get_cached_schema_guard_info();
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
-  common::ObSqlInfoGuard si_guard(sql);
+  SQL_INFO_GUARD(sql, session.get_cur_sql_id());
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());
@@ -856,6 +853,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         sqlstat_record.record_sqlstat_end_value(di);
         sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
         sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
         sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                    ctx_.cur_sql_,
                                                    result.get_physical_plan());
@@ -926,9 +924,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
-      MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
-      audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
-
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();

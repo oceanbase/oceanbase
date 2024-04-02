@@ -55,6 +55,7 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType tas
     schema_version_(-1),
     tx_is_killed_(false),
     is_from_sql_(false),
+    ret_code_before_end_stmt_or_tx_(OB_SUCCESS),
     stmt_savepoint_()
 {
   abs_timeout_ts_ = (0 == timeout_us)
@@ -197,8 +198,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObLSService should not be null", K(ret));
-  } else if (ls_service->get_ls_iter(ls_iter_guard,
-                                     ObLSGetMod::TABLELOCK_MOD)) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard, ObLSGetMod::TABLELOCK_MOD))) {
     LOG_WARN("fail to get ls iterator", K(ret));
   } else {
     do {
@@ -426,6 +426,7 @@ int ObTableLockService::lock_table(const uint64_t table_id,
   LOG_INFO("ObTableLockService::lock_table",
             K(table_id), K(lock_mode), K(lock_owner), K(timeout_us));
   int ret = OB_SUCCESS;
+  int ret_code_before_end_stmt_or_tx = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(lock_mode),
@@ -442,6 +443,7 @@ int ObTableLockService::lock_table(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -450,9 +452,10 @@ int ObTableLockService::lock_table(const uint64_t table_id,
       ctx.lock_op_type_ = OUT_TRANS_LOCK;
       ret = process_lock_task_(ctx, lock_mode, lock_owner);
       need_retry = need_retry_trans_(ctx, ret);
+      ret_code_before_end_stmt_or_tx = ctx.ret_code_before_end_stmt_or_tx_;
     } while (need_retry);
   }
-  ret = rewrite_return_code_(ret);
+  ret = rewrite_return_code_(ret, ret_code_before_end_stmt_or_tx, false /*is_from_sql*/);
   return ret;
 }
 
@@ -479,6 +482,7 @@ int ObTableLockService::unlock_table(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -500,6 +504,7 @@ int ObTableLockService::lock_tablet(const uint64_t table_id,
                                     const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  int ret_code_before_end_stmt_or_tx = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(tablet_id),
@@ -518,6 +523,7 @@ int ObTableLockService::lock_tablet(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -530,9 +536,10 @@ int ObTableLockService::lock_tablet(const uint64_t table_id,
         LOG_WARN("process lock task failed", K(ret), K(tablet_id));
       }
       need_retry = need_retry_trans_(ctx, ret);
+      ret_code_before_end_stmt_or_tx = ctx.ret_code_before_end_stmt_or_tx_;
     } while (need_retry);
   }
-  ret = rewrite_return_code_(ret);
+  ret = rewrite_return_code_(ret, ret_code_before_end_stmt_or_tx, false /*is_from_sql*/);
   return ret;
 }
 
@@ -560,6 +567,7 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
     int64_t abs_timeout_ts = (0 == timeout_us)
       ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
       : ObTimeUtility::current_time() + timeout_us;
+    Thread::WaitGuard guard(Thread::WAIT);
     do {
       if (timeout_us != 0) {
         retry_timeout_us = abs_timeout_ts - ObTimeUtility::current_time();
@@ -599,6 +607,7 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     // is set by user in the 'WAIT n' option.
     // Furthermore, if timeout_us_ is 0, this lock will be judged as a try
     // lock semantics. It meets the actual semantics of 'NOWAIT' option.
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLE, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -606,6 +615,7 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     ctx.lock_op_type_ = arg.op_type_;
     ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -627,12 +637,15 @@ int ObTableLockService::unlock_table(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLE, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -653,17 +666,20 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_id_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -686,17 +702,20 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -718,17 +737,20 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLET, arg.table_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_id_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -752,16 +774,19 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_TABLET, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -784,17 +809,20 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_ALONE_TABLET, arg.table_id_,
                        arg.ls_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -818,17 +846,20 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_ALONE_TABLET, arg.table_id_,
                        arg.ls_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
     }
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -846,6 +877,7 @@ int ObTableLockService::lock_partition_or_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(get_table_partition_level_(arg.table_id_, part_level))) {
     LOG_WARN("can not get table partition level", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     switch (part_level) {
     case PARTITION_LEVEL_ONE: {
       if (OB_FAIL(lock_partition(tx_desc, tx_param, arg))) {
@@ -886,6 +918,7 @@ int ObTableLockService::lock_partition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_PARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -894,13 +927,14 @@ int ObTableLockService::lock_partition(ObTxDesc &tx_desc,
     ctx.lock_op_type_ = arg.op_type_;
     ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
 
 int ObTableLockService::unlock_partition(ObTxDesc &tx_desc,
                                          const ObTxParam &tx_param,
-                                         const ObLockPartitionRequest &arg)
+                                         const ObUnLockPartitionRequest &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -917,13 +951,16 @@ int ObTableLockService::unlock_partition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_PARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -946,6 +983,7 @@ int ObTableLockService::lock_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_SUBPARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
@@ -954,13 +992,14 @@ int ObTableLockService::lock_subpartition(ObTxDesc &tx_desc,
     ctx.lock_op_type_ = arg.op_type_;
     ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
 
 int ObTableLockService::unlock_subpartition(ObTxDesc &tx_desc,
                                             const ObTxParam &tx_param,
-                                            const ObLockPartitionRequest &arg)
+                                            const ObUnLockPartitionRequest &arg)
 {
   int ret = OB_SUCCESS;
 
@@ -977,13 +1016,16 @@ int ObTableLockService::unlock_subpartition(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_1_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_SUBPARTITION, arg.table_id_, arg.part_object_id_,
                        arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -1006,16 +1048,19 @@ int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_lock_id(arg.obj_type_, arg.obj_id_))) {
       LOG_WARN("set lock id failed", K(ret), K(arg));
     } else {
       ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
     }
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -1039,16 +1084,19 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_lock_id(arg.obj_type_, arg.obj_id_))) {
       LOG_WARN("set lock id failed", K(ret), K(arg));
     } else {
       ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
     }
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -1073,16 +1121,19 @@ int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_lock_id(arg.objs_))) {
       LOG_WARN("set lock id failed", K(ret), K(arg));
     } else {
       ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
     }
+    ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -1108,16 +1159,19 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
     LOG_WARN("cluster version check failed", K(ret), K(arg));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT);
     ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     if (OB_FAIL(ctx.set_lock_id(arg.objs_))) {
       LOG_WARN("set lock id failed", K(ret), K(arg));
     } else {
       ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
     }
+    ret = rewrite_return_code_(ret, ctx.is_from_sql_);
   }
   return ret;
 }
@@ -1172,7 +1226,7 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
       LOG_WARN("process table lock task failed", K(ret), K(ctx), K(lock_mode), K(lock_owner));
     }
   }
-
+  ctx.ret_code_before_end_stmt_or_tx_ = ret;
   if (ctx.is_in_trans_ && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = end_stmt_(ctx, OB_SUCCESS != ret)))) {
     LOG_WARN("failed to end stmt", K(ret), K(tmp_ret), K(ctx));
     // end stmt failed need rollback the whole trans.
@@ -1536,7 +1590,7 @@ int ObTableLockService::parallel_batch_rpc_handle_(RpcProxy &proxy_batch,
   const ObLSLockMap *in_map = nullptr;
   ObLSLockMap *retry_map = nullptr;
   bool can_retry = true;       // whether the whole rpc task can retry.
-  int64_t retry_times = 0;
+  int64_t retry_times = 1;
   for (int64_t i = 0; i < MAP_NUM && OB_SUCC(ret); i++) {
     if (OB_FAIL(maps[i].create(10, lib::ObLabel("LSLockMap")))) {
       LOG_WARN("ls lock map create failed", KR(ret), K(i));
@@ -1711,7 +1765,8 @@ int ObTableLockService::batch_pre_check_lock_(ObTableLockCtx &ctx,
       }
       if (ret == OB_TRY_LOCK_ROW_CONFLICT) {
         if (ctx.is_try_lock()) {
-          // do nothing
+          ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+          LOG_INFO("try lock and meet conflict", K(ret), K(ctx));
         } else if (OB_UNLIKELY(ctx.is_timeout())) {
           ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
           LOG_WARN("lock table timeout", K(ret), K(ctx));
@@ -1725,6 +1780,41 @@ int ObTableLockService::batch_pre_check_lock_(ObTableLockCtx &ctx,
     } while (need_retry);  // retry task level
     LOG_DEBUG("ObTableLockService::pre_check_lock_", K(ret), K(ctx),
               K(ctx.task_type_), K(lock_mode), K(lock_owner));
+  }
+  return ret;
+}
+
+template<class RpcProxy, class LockRequest>
+int ObTableLockService::rpc_call_(RpcProxy &proxy_batch,
+                                  const ObAddr &addr,
+                                  const int64_t timeout_us,
+                                  const LockRequest &request)
+{
+  int ret = OB_SUCCESS;
+  int32_t group_id = 0;
+  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_1_4 && min_cluster_version < CLUSTER_VERSION_4_2_2_0)
+      || (min_cluster_version >= CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+      || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0)) {
+    group_id = share::OBCG_LOCK;
+    if (request.is_unlock_request()) {
+      group_id = share::OBCG_UNLOCK;
+    }
+    if (OB_FAIL(proxy_batch.call(addr,
+                                 timeout_us,
+                                 GCONF.cluster_id,
+                                 MTL_ID(),
+                                 group_id,
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
+    }
+  } else {
+    if (OB_FAIL(proxy_batch.call(addr,
+                                 timeout_us,
+                                 MTL_ID(),
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
+    }
   }
   return ret;
 }
@@ -1777,12 +1867,11 @@ int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
           } else if (ctx.is_timeout()) {
             ret = (last_ret == OB_TRY_LOCK_ROW_CONFLICT) ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT;
             LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-          } else if (OB_FAIL(proxy_batch.call(addr,
-                                              timeout_us,
-                                              ctx.tx_desc_->get_tenant_id(),
-                                              request))) {
-            LOG_WARN("failed to all async rpc", KR(ret), K(addr),
-                                                K(ctx.abs_timeout_ts_), K(request));
+          } else if (OB_FAIL(rpc_call_(proxy_batch,
+                                       addr,
+                                       timeout_us,
+                                       request))) {
+            LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(request));
           } else {
             retry_ctx.send_rpc_count_++;
             ALLOW_NEXT_LOG();
@@ -1953,7 +2042,7 @@ int ObTableLockService::batch_rpc_handle_(RpcProxy &proxy_batch,
   const ObLSLockMap *in_map = nullptr;
   ObLSLockMap *retry_map = nullptr;
   bool can_retry = true;       // whether the whole rpc task can retry.
-  int64_t retry_times = 0;
+  int64_t retry_times = 1;
   for (int64_t i = 0; i < MAP_NUM && OB_SUCC(ret); i++) {
     if (OB_FAIL(maps[i].create(10, lib::ObLabel("LSLockMap")))) {
       LOG_WARN("ls lock map create failed", KR(ret), K(i));
@@ -2025,10 +2114,10 @@ int ObTableLockService::send_rpc_task_(RpcProxy &proxy_batch,
   } else if (ctx.is_timeout()) {
     ret = OB_TIMEOUT;
     LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-  } else if (OB_FAIL(proxy_batch.call(addr,
-                                      ctx.get_rpc_timeoutus(),
-                                      ctx.tx_desc_->get_tenant_id(),
-                                      request))) {
+  } else if (OB_FAIL(rpc_call_(proxy_batch,
+                               addr,
+                               ctx.get_rpc_timeoutus(),
+                               request))) {
     LOG_WARN("failed to call async rpc", KR(ret), K(addr),
                                         K(ctx.abs_timeout_ts_), K(request));
   } else {
@@ -2162,12 +2251,11 @@ int ObTableLockService::parallel_rpc_handle_(RpcProxy &proxy_batch,
     } else if (ctx.is_timeout()) {
       ret = OB_TIMEOUT;
       LOG_WARN("process obj lock timeout", K(ret), K(ctx));
-    } else if (OB_FAIL(proxy_batch.call(addr,
-                                        timeout_us,
-                                        ctx.tx_desc_->get_tenant_id(),
-                                        request))) {
-      LOG_WARN("failed to all async rpc", KR(ret), K(addr),
-                                          K(ctx.abs_timeout_ts_), K(request));
+    } else if (OB_FAIL(rpc_call_(proxy_batch,
+                                 addr,
+                                 timeout_us,
+                                 request))) {
+      LOG_WARN("failed to all async rpc", KR(ret), K(addr), K(timeout_us), K(request));
     } else {
       retry_ctx.send_rpc_count_++;
       ALLOW_NEXT_LOG();
@@ -2745,19 +2833,36 @@ bool ObTableLockService::need_renew_location_(const int64_t ret) const
   return (OB_LS_LOCATION_NOT_EXIST == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret);
 }
 
-int ObTableLockService::rewrite_return_code_(const int ret) const
+int ObTableLockService::rewrite_return_code_(const int ret, const int ret_code_before_end_stmt_or_tx, const bool is_from_sql) const
 {
   int rewrite_rcode = ret;
-  // rewrite to OB_EAGAIN, to make sure the ddl process will retry again.
-  if (OB_TRANS_KILLED == ret) {
+  if (is_from_sql) {
+    if (is_lock_conflict_ret_code_(ret_code_before_end_stmt_or_tx) && is_timeout_ret_code_(ret)) {
+      rewrite_rcode = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    }
+  } else if (is_can_retry_err_(ret)) {
+    // rewrite to OB_EAGAIN, to make sure the ddl process will retry again.
     rewrite_rcode = OB_EAGAIN;
   }
   return rewrite_rcode;
 }
 
-int ObTableLockService::is_timeout_ret_code_(const int ret) const
+bool ObTableLockService::is_lock_conflict_ret_code_(const int ret) const
 {
-  return (OB_TIMEOUT == ret || OB_GET_LOCATION_TIME_OUT == ret);
+  return (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret);
+}
+
+bool ObTableLockService::is_timeout_ret_code_(const int ret) const
+{
+  return (OB_TIMEOUT == ret || OB_TRANS_TIMEOUT == ret ||
+          OB_TRANS_STMT_TIMEOUT == ret || OB_GET_LOCATION_TIME_OUT == ret);
+}
+
+bool ObTableLockService::is_can_retry_err_(const int ret) const
+{
+  return (OB_TRANS_KILLED == ret || OB_OBJ_UNLOCK_CONFLICT == ret || OB_OBJ_LOCK_NOT_COMPLETED == ret
+          || OB_TRY_LOCK_ROW_CONFLICT == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret || OB_NOT_MASTER == ret
+          || OB_TIMEOUT == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret);
 }
 
 int ObTableLockService::get_ls_leader_(

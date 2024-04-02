@@ -196,7 +196,6 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   ObTxPart *coord = NULL;
   tx.set_commit_cb(&cb);
-  tx.commit_expire_ts_ = expire_ts;
   if (OB_FAIL(decide_tx_commit_info_(tx, coord))) {
     TRANS_LOG(WARN, "decide tx coordinator fail, tx will abort", K(ret), K(tx));
   } else if (OB_FAIL(tx.commit_task_.init(&tx, this))) {
@@ -624,13 +623,17 @@ void ObTransService::invalid_registered_snapshot_(ObTxDesc &tx)
   }
 }
 
-void ObTransService::registered_snapshot_clear_part_(ObTxDesc &tx)
+void ObTransService::process_registered_snapshot_on_commit_(ObTxDesc &tx)
 {
+  // cleanup snapshot's participant info, so that they will skip
+  // verify participant txn ctx, which cause false negative,
+  // because txn ctx has quit when txn committed.
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.savepoints_, i) {
     ObTxSavePoint &p = tx.savepoints_[i];
     if (p.is_snapshot() && p.snapshot_->valid_) {
       p.snapshot_->parts_.reset();
+      p.snapshot_->committed_ = true;
     }
   }
 }
@@ -940,7 +943,7 @@ int ObTransService::handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &
   if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
     TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(ls_id));
   } else {
-    (void)ctx->tx_keepalive_response_(msg.status_);
+    (void)ctx->handle_tx_keepalive_response(msg.status_);
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
@@ -1023,6 +1026,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   // need continue to check replica's readability
   if (OB_SUCC(ret)) {
     if ((MTL_TENANT_ROLE_CACHE_IS_PRIMARY()
+            && snapshot.source_ == ObTxReadSnapshot::SRC::LS
+            && snapshot.snapshot_lsid_ == ls_id
             && snapshot.snapshot_acquire_addr_ == GCTX.self_addr()
             && snapshot.snapshot_ls_role_ == common::ObRole::LEADER)
         || check_readable_ok) {
@@ -1035,7 +1040,11 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       store_ctx.timeout_,
                                       store_ctx.tablet_id_,
                                       *store_ctx.ls_))) {
-      TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
+      TRANS_LOG(WARN, "replica not readable", K(ret),
+              K(snapshot),
+              K(ls_id),
+              K(store_ctx),
+              "ls_weak_read_ts", store_ctx.ls_->get_ls_wrs_handler()->get_ls_weak_read_ts());
     }
   }
 
@@ -1112,6 +1121,9 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   if (tx.access_mode_ == ObTxAccessMode::RD_ONLY) {
     ret = OB_ERR_READ_ONLY_TRANSACTION;
     TRANS_LOG(WARN, "tx is readonly", K(ret), K(ls_id), K(tx), KPC(this));
+  } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
+    ret = OB_STANDBY_READ_ONLY;
+    TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
   } else if (!snapshot.valid_) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot));
@@ -2080,6 +2092,29 @@ int ObTransService::handle_sp_rollback_response(ObTxRollbackSPRespMsg &msg,
   result.init(ret, msg.get_timestamp());
   return ret;
 }
+
+// check ls status in trans layer
+int ObTransService::check_ls_status(const share::ObLSID &ls_id){
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(ls_id));
+  } else if (OB_FAIL(tx_ctx_mgr_.check_ls_status(ls_id))) {
+    TRANS_LOG(WARN, "check_ls_status error", KR(ret), K(ls_id));
+  } else {
+    TRANS_LOG(DEBUG, "check_ls_status success", K(ls_id));
+  }
+
+  return ret;
+}
+
 int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
 {
   int ret = OB_SUCCESS;
@@ -2279,6 +2314,16 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id),
               K(msg_type), K(status), K(receiver_addr), K(request_id));
+  } else if (KEEPALIVE == msg_type && common::OB_TENANT_NOT_IN_SERVER == status) {
+    ObPartTransCtx *ctx = NULL;
+    if (OB_FAIL(get_tx_ctx_(sender_ls_id, tx_id, ctx))) {
+      TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(sender_ls_id));
+    } else {
+      (void)ctx->handle_tx_keepalive_response(status);
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx_(ctx);
+    }
   } else if (common::OB_TENANT_NOT_IN_SERVER == status
              || common::OB_TRANS_RPC_TIMEOUT == status) {
     // upper layer do retry
@@ -2402,7 +2447,6 @@ int ObTransService::gen_trans_id(ObTransID &trans_id)
   int retry_times = 0;
   if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
     ret = OB_STANDBY_READ_ONLY;
-    TRANS_LOG(WARN, "standby tenant support read only", K(ret));
   } else {
     const int MAX_RETRY_TIMES = 50;
     int64_t tx_id = 0;
@@ -3422,11 +3466,87 @@ int ObTransService::check_for_standby(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   ObPartTransCtx *ctx = NULL;
   if (OB_SUCC(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
-    ret = ctx->check_for_standby(snapshot, can_read, trans_version, is_determined_state);
+    // ret = ctx->check_for_standby(snapshot, can_read, trans_version, is_determined_state);
+    ObTxCommitData::TxDataState tx_data_state = ObTxCommitData::TxDataState::UNKOWN;
+    if (OB_SUCC(ctx->infer_standby_trx_state(snapshot,
+                                             50_ms /*50ms*/,
+                                             true /*filter_unreadable_prepare_trx*/,
+                                             tx_data_state,
+                                             trans_version))) {
+      if (tx_data_state == ObTxCommitData::TxDataState::ABORT
+          || tx_data_state == ObTxCommitData::TxDataState::RUNNING) {
+        can_read = false;
+        trans_version.set_min();
+        is_determined_state = tx_data_state == ObTxCommitData::TxDataState::ABORT;
+      } else if (tx_data_state == ObTxCommitData::COMMIT && trans_version.is_valid_and_not_min()) {
+        can_read = snapshot >= trans_version;
+        is_determined_state = true;
+      } else {
+        ret = OB_ERR_SHARED_LOCK_CONFLICT;
+      }
+    } else {
+      ret = OB_ERR_SHARED_LOCK_CONFLICT;
+    }
     revert_tx_ctx_(ctx);
   } else {
     ret = OB_ERR_SHARED_LOCK_CONFLICT;
   }
+  return ret;
+}
+
+int ObTransService::mds_infer_standby_trx_state(const ObLS *ls_ptr,
+                                                const ObLSID &ls_id,
+                                                const ObTransID &tx_id,
+                                                const SCN &snapshot,
+                                                ObTxCommitData::TxDataState &tx_data_state,
+                                                share::SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+
+  ObPartTransCtx *ctx = nullptr;
+  ObLSHandle ls_handle;
+
+  if ((OB_ISNULL(ls_ptr) && !ls_id.is_valid())
+      || (OB_NOT_NULL(ls_ptr) && ls_id != ls_ptr->get_ls_id()) || !tx_id.is_valid()
+      || !snapshot.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(ls_ptr), K(ls_id), K(tx_id),K(snapshot) );
+  } else {
+    const ObLS *tmp_ls_ptr = nullptr;
+    if (OB_ISNULL(ls_ptr)) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+      } else {
+        tmp_ls_ptr = ls_handle.get_ls();
+      }
+
+    } else {
+      tmp_ls_ptr = ls_ptr;
+    }
+
+    if (OB_FAIL(ret) || OB_ISNULL(tmp_ls_ptr)) {
+      if (OB_SUCC(ret)) {
+        TRANS_LOG(WARN, "unexpected temp ls ptr", K(ret), KP(tmp_ls_ptr), K(ls_id), K(tx_id),
+                  K(snapshot));
+      }
+
+    } else if (OB_SUCC(tmp_ls_ptr->get_tx_ctx(tx_id, true, ctx))) {
+      if (OB_FAIL(ctx->infer_standby_trx_state(snapshot,
+                                               150_ms /*wait_participant_timeout_us*/,
+                                               false /*filter_unreadable_prepare_trx*/,
+                                               tx_data_state,
+                                               commit_version))) {
+        TRANS_LOG(WARN, "infer standby trx state for mds failed", K(ret), K(ls_id), K(tx_id),
+                  K(snapshot), K(tx_data_state), K(commit_version));
+      }
+
+      tmp_ls_ptr->revert_tx_ctx(ctx);
+
+    } else {
+      TRANS_LOG(WARN, "get tx ctx failed", K(ret), K(ls_id), K(tx_id), K(snapshot));
+    }
+  }
+
   return ret;
 }
 

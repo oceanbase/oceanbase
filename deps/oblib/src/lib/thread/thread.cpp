@@ -63,7 +63,8 @@ Thread::Thread(Threads *threads, int64_t idx, int64_t stack_size)
       tid_before_stop_(0),
       tid_(0),
       thread_list_node_(this),
-      cpu_time_(0)
+      cpu_time_(0),
+      create_ret_(OB_NOT_RUNNING)
 {}
 
 Thread::~Thread()
@@ -103,6 +104,13 @@ int Thread::start()
       if (pret != 0) {
         LOG_ERROR("pthread create failed", K(pret), K(errno));
         pth_ = 0;
+      } else {
+        while (ATOMIC_LOAD(&create_ret_) == OB_NOT_RUNNING) {
+          sched_yield();
+        }
+        if (OB_FAIL(create_ret_)) {
+          LOG_ERROR("thread create failed", K(create_ret_));
+        }
       }
     }
     if (0 != pret) {
@@ -272,7 +280,6 @@ void* Thread::__th_start(void *arg)
   ObActiveSessionGuard::get_stat().user_id_      = 0;
   ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
   ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
-  ObSessionStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_, ObActiveSessionGuard::get_stat().session_id_);
 
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
@@ -329,6 +336,7 @@ void* Thread::__th_start(void *arg)
         WITH_CONTEXT(*mem_context) {
           try {
             in_try_stmt = true;
+            ATOMIC_STORE(&th->create_ret_, OB_SUCCESS);
             th->run();
             in_try_stmt = false;
           } catch (OB_BASE_EXCEPTION &except) {
@@ -336,6 +344,10 @@ void* Thread::__th_start(void *arg)
             _LOG_ERROR("Exception caught!!! errno = %d, exception info = %s", except.get_errno(), except.what());
             ret = OB_ERR_UNEXPECTED;
             in_try_stmt = false;
+            if (1 == th->threads_->get_thread_count() && !th->has_set_stop()) {
+              LOG_WARN("thread exit by itself without set_stop", K(ret));
+              th->threads_->stop();
+            }
           }
         }
       }
@@ -344,7 +356,9 @@ void* Thread::__th_start(void *arg)
       }
     }
   }
-
+  if (OB_FAIL(ret)) {
+    ATOMIC_STORE(&th->create_ret_, ret);
+  }
   ATOMIC_FAA(&total_thread_count_, -1);
   return nullptr;
 }

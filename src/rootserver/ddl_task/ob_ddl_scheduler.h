@@ -353,6 +353,7 @@ private:
       const int64_t consumer_group_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
+      const share::ObDDLType task_type,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   int create_constraint_task(

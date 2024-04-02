@@ -165,7 +165,7 @@ private:
   int dump_tenant_locality_info_(const storage::ObExternTenantLocalityInfoDesc &locality_info);
   int dump_tenant_diagnose_info_(const storage::ObExternTenantDiagnoseInfoDesc &diagnose_info);
   int dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info);
-  int dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos, const storage::ObExternTenantLocalityInfoDesc &locality_info);
+  int dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos);
   int dump_backup_ls_meta_infos_file_(const storage::ObBackupLSMetaInfosDesc &ls_meta_infos);
   int dump_archive_round_start_file_(const share::ObRoundStartDesc &round_start_file);
   int dump_archive_round_end_file_(const share::ObRoundEndDesc round_end_file);

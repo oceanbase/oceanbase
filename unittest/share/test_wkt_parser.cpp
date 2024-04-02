@@ -16,6 +16,7 @@
 #include "lib/geo/ob_wkt_parser.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/geo/ob_geo_ibin.h"
+#include "lib/geo/ob_geo_3d.h"
 #undef private
 #undef protected
 
@@ -56,7 +57,16 @@ public:
     return wkb;
   }
 
-  void compare_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res);
+  ObString mock_3d_to_wkb(ObGeometry *geo) {
+    ObString wkb;
+    if (OB_NOT_NULL(geo) && !geo->is_tree()) {
+      ObGeometry3D *geo_bin = reinterpret_cast<ObGeometry3D *>(geo);
+      wkb = geo_bin->data_;
+    }
+    return wkb;
+  }
+
+  void compare_3d_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res);
   void comapre_wkt_parse_wrong_result(const ObString &wkt);
 
 private:
@@ -65,14 +75,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestWktParser);
 };
 
-void TestWktParser::compare_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res)
+void TestWktParser::compare_3d_wkt_parse_result(ObGeoType geotype, const ObString &wkt, const ObString &wkb_res)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObGeometry *geo = NULL;
   ASSERT_EQ(OB_SUCCESS, ObWktParser::parse_wkt(allocator, wkt, geo, true, false));
   ASSERT_TRUE(NULL != geo);
   ASSERT_EQ(geo->type(), geotype);
-  ObString wkb = to_hex(mock_to_wkb(geo));
+  ObString wkb = to_hex(mock_3d_to_wkb(geo));
   // std::cout<<std::string(wkb.ptr(), wkb.length())<<std::endl;
   ASSERT_EQ(wkb, wkb_res);
 }
@@ -528,10 +538,10 @@ TEST_F(TestWktParser, test_parse_3dwkt)
 {
   ObString wkb_res = ObString::make_string("01E9030000000000000000F03F000000000000F03F000000000000F03F");
   // point z
-  compare_wkt_parse_result(ObGeoType::POINTZ, ObString("POINTZ(1 1 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT Z(1 1 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT(1 1 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT Z (1 1 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POINTZ, ObString("POINTZ(1 1 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT Z(1 1 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT(1 1 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POINTZ, ObString("POINT Z (1 1 1)"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("POINT Z (0 0)"));
   comapre_wkt_parse_wrong_result(ObString("POINT Z (0 0,)"));
   comapre_wkt_parse_wrong_result(ObString("POINT Z (0 0 ))"));
@@ -541,10 +551,10 @@ TEST_F(TestWktParser, test_parse_3dwkt)
 
   // linestring z
   wkb_res = ObString::make_string("01EA03000002000000000000000000000000000000000000000000000000000040000000000000F03F000000000000F03F0000000000000840");
-  compare_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRING Z (0 0 2, 1 1 3)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRINGZ (0 0 2, 1 1 3)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRINGZ(0 0 2, 1 1 3)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRING(0 0 2, 1 1 3)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRING Z (0 0 2, 1 1 3)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRINGZ (0 0 2, 1 1 3)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRINGZ(0 0 2, 1 1 3)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::LINESTRINGZ, ObString("LINESTRING(0 0 2, 1 1 3)"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("LINESTRING Z (0 0, 0 1)"));
   comapre_wkt_parse_wrong_result(ObString("LINESTRING Z (0 0 0, 0 1)"));
   comapre_wkt_parse_wrong_result(ObString("LINESTRING Z (0 0, 0 1 2)"));
@@ -554,12 +564,11 @@ TEST_F(TestWktParser, test_parse_3dwkt)
 
   // polygon z
   wkb_res = ObString::make_string("01EB030000020000000500000000000000000000000000000000000000000000000000F03F00000000000024400000000000000000000000000000004000000000000024400000000000002440000000000000004000000000000000000000000000002440000000000000004000000000000000000000000000000000000000000000F03F05000000000000000000004000000000000000400000000000001440000000000000004000000000000014400000000000001040000000000000144000000000000014400000000000000840000000000000144000000000000000400000000000000840000000000000004000000000000000400000000000001440");
-  compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON Z ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON Z((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON Z ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON Z((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
   // not a close ring
-  comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 ,10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0, 10 0, 10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1), (0 0,10 0,10 10,0 10,0 0))"));
@@ -572,14 +581,14 @@ TEST_F(TestWktParser, test_parse_3dwkt)
 
   // multipoint z
   wkb_res = ObString::make_string("01EC0300000200000001E903000000000000000000000000000000000000000000000000000001E903000000000000000000400000000000000000000000000000F03F");
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINTZ((0 0 0), (2 0 1))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINTZ(0 0 0, 2 0 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z ((0 0 0), (2 0 1))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z (0 0 0, 2 0 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z((0 0 0), (2 0 1))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z(0 0 0, 2 0 1)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT((0 0 0), (2 0 1))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT(0 0 0, 2 0 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINTZ((0 0 0), (2 0 1))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINTZ(0 0 0, 2 0 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z ((0 0 0), (2 0 1))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z (0 0 0, 2 0 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z((0 0 0), (2 0 1))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT Z(0 0 0, 2 0 1)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT((0 0 0), (2 0 1))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOINTZ, ObString("MULTIPOINT(0 0 0, 2 0 1)"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("MULTIPOINTZ((0 0 0), (2 0))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOINTZ(0 0 0, 2 0)"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOINT((0 0), (2 0 0))"));
@@ -592,12 +601,12 @@ TEST_F(TestWktParser, test_parse_3dwkt)
 
   // multilinestring z
   wkb_res = ObString::make_string("01ED0300000200000001EA0300000200000000000000000000000000000000000000000000000000F03F00000000000000400000000000000000000000000000004001EA03000002000000000000000000F03F000000000000F03F0000000000000840000000000000004000000000000000400000000000001040");
-  compare_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRINGZ((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING Z ((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING Z((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRINGZ((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING Z ((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING Z((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRING((0 0 1, 2 0 2), (1 1 3, 2 2 4))"), wkb_res);
   wkb_res = ObString::make_string("01ED0300000100000001EA0300000200000000000000000000000000000000000000000000000000F03F00000000000000000000000000000000000000000000F03F");
-  compare_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRINGZ((0 0 1, 0 0 1))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTILINESTRINGZ, ObString("MULTILINESTRINGZ((0 0 1, 0 0 1))"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("MULTILINESTRINGZ((0 0 0))"));
   comapre_wkt_parse_wrong_result(ObString("MULTILINESTRINGZ((0 0))"));
   comapre_wkt_parse_wrong_result(ObString("MULTILINESTRINGZ((0 0))"));
@@ -611,21 +620,20 @@ TEST_F(TestWktParser, test_parse_3dwkt)
   wkb_res = ObString::make_string("01EE0300000200000001EB030000010000000500000000000000000000000000000000000000000000000000084000000000000024400000000000000000000000000000084000000000000024400000000000002440000"
                                   "000000000084000000000000000000000000000002440000000000000084000000000000000000000000000000000000000000000084001EB030000010000000500000000000000000000400000000000000040000000000"
                                   "0000840000000000000004000000000000014400000000000000840000000000000144000000000000014400000000000000840000000000000144000000000000000400000000000000840000000000000004000000000000000400000000000000840");
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)), ((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)), ((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
   wkb_res = ObString::make_string("01EE0300000200000001EB030000020000000500000000000000000000000000000000000000000000000000084000000000000024400000000000000000000000000000084000000000000024400000000000002440000"
                                   "00000000008400000000000000000000000000000244000000000000008400000000000000000000000000000000000000000000008400500000000000000000000000000000000000000000000000000004000000000000"
                                   "01440000000000000000000000000000000400000000000001440000000000000144000000000000008400000000000000000000000000000144000000000000008400000000000000000000000000000000000000000000"
                                   "0004001EB03000001000000050000000000000000000040000000000000004000000000000008400000000000000040000000000000144000000000000008400000000000001440000000000000144000000000000008400"
                                   "00000000000144000000000000000400000000000000840000000000000004000000000000000400000000000000840");
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 1)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"));
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2,2 5,5 5,5 2,2 2)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON Z(((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)),((0 0 1, 1 0 1, 0 0 1)))"));
@@ -646,27 +654,26 @@ TEST_F(TestWktParser, test_parse_3dwkt)
                                   "00000000840000000000000244000000000000024400000000000000840000000000000000000000000000024400000000000000840000000000000000000000000000000000000000000000840050000000000000000000"
                                   "04000000000000000400000000000000840000000000000004000000000000014400000000000000840000000000000144000000000000014400000000000000840000000000000144000000000000000400000000000000"
                                   "840000000000000004000000000000000400000000000000840");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (POINT Z(1 1 1), LINESTRINGZ (0 0 2, 1 1 3), POLYGON Z((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5)), GEOMETRYCOLLECTIONZ(MULTIPOINTZ((0 0 0), (2 0 1)), MULTILINESTRINGZ((0 0 1, 2 0 2), (1 1 3, 2 2 4)), MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3),(2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (POINT Z(1 1 1), LINESTRINGZ (0 0 2, 1 1 3), POLYGON Z((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5)), GEOMETRYCOLLECTIONZ(MULTIPOINTZ((0 0 0), (2 0 1)), MULTILINESTRINGZ((0 0 1, 2 0 2), (1 1 3, 2 2 4)), MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3),(2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))))"), wkb_res);
   wkb_res = ObString::make_string("01EF0300000200000001E9030000000000000000F03F000000000000F03F000000000000F03F01EA03000002000000000000000000000000000000000000000000000000000040000000000000F03F000000000000F03F0000000000000840");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION (POINT (1 1 1), LINESTRINGZ (0 0 2, 1 1 3))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION (POINT (1 1 1), LINESTRINGZ (0 0 2, 1 1 3))"), wkb_res);
   wkb_res = ObString::make_string("01EF0300000200000001E9030000000000000000F03F000000000000F03F000000000000F03F01EF03000000000000");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (POINT (1 1 1), GEOMETRYCOLLECTION EMPTY)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (POINT (1 1 1), GEOMETRYCOLLECTION EMPTY)"), wkb_res);
   wkb_res = ObString::make_string("01EF0300000100000001EF0300000200000001E9030000000000000000F03F000000000000F03F000000000000F03F01EF03000000000000");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION (GEOMETRYCOLLECTION(POINT Z(1 1 1) ,GEOMETRYCOLLECTION Z EMPTY))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION (GEOMETRYCOLLECTION(POINT Z(1 1 1) ,GEOMETRYCOLLECTION Z EMPTY))"), wkb_res);
   wkb_res = ObString::make_string("01EF03000000000000");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z EMPTY"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z ()"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z EMPTY"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z ()"), wkb_res);
   wkb_res = ObString::make_string("01EF0300000100000001EF03000000000000"); // different from pg res
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION Z EMPTY)"), wkb_res);
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION EMPTY)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION Z EMPTY)"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION EMPTY)"), wkb_res);
   wkb_res = ObString::make_string("01EF0300000100000001EF0300000100000001EF0300000100000001EF0300000100000001EF03000000000000");
-  compare_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION(GEOMETRYCOLLECTIONZ(GEOMETRYCOLLECTION(GEOMETRYCOLLECTIONZ()))))"), wkb_res);
+  compare_3d_wkt_parse_result(ObGeoType::GEOMETRYCOLLECTIONZ, ObString("GEOMETRYCOLLECTION Z (GEOMETRYCOLLECTION(GEOMETRYCOLLECTIONZ(GEOMETRYCOLLECTION(GEOMETRYCOLLECTIONZ()))))"), wkb_res);
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POINT (1 1))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POINT Z ())"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (LINESTRING (1 1 , 1 2))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (LINESTRING Z (1 1 1))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON((0 0,10 0,10 10,0 10,0 0)))"));
-  comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON Z((0 0 1,10 0 1,10 10 1,0 10 1,0 0 2)))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON Z((0 0 1,0 10 1,0 0 2)))"));
 }
 } // namespace common

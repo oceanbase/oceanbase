@@ -37,13 +37,16 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXStartTransferOutInfo &start_transfer_out_info);
-
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id));
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   share::ObTransferTaskID task_id_;
+  share::SCN data_end_scn_;   //master placeholder, 42x do not use it
+  int64_t transfer_epoch_;    //master placeholder, 42x do not use it
+  uint64_t data_version_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferOutInfo);
 };
 
@@ -56,14 +59,16 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXStartTransferInInfo &start_transfer_in_info);
-
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_meta_list), K_(task_id));
+  int get_tablet_id_list(common::ObIArray<common::ObTabletID> &tablet_id_list) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN start_scn_;
   common::ObSArray<ObMigrationTabletParam> tablet_meta_list_;
   share::ObTransferTaskID task_id_;
+  uint64_t data_version_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferInInfo);
 };
 
@@ -76,13 +81,14 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXFinishTransferOutInfo &finish_transfer_out_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(finish_scn), K_(tablet_list), K_(task_id));
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN finish_scn_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   share::ObTransferTaskID task_id_;
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTXFinishTransferOutInfo);
 };
 
@@ -95,14 +101,32 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXFinishTransferInInfo &finish_transfer_in_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_list), K_(task_id));
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN start_scn_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   share::ObTransferTaskID task_id_;
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTXFinishTransferInInfo);
+};
+
+struct ObTXTransferInAbortedInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTXTransferInAbortedInfo();
+  ~ObTXTransferInAbortedInfo() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObTXTransferInAbortedInfo &transfer_in_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+
+  share::ObLSID dest_ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+  uint64_t data_version_;
+  DISALLOW_COPY_AND_ASSIGN(ObTXTransferInAbortedInfo);
 };
 
 struct ObTransferEventRecorder final
@@ -175,6 +199,7 @@ public:
   {
     START = 0,
     DOING = 1,
+    ABORTED = 2,
     MAX_STATUS
   };
 public:

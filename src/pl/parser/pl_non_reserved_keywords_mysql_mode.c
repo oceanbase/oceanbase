@@ -95,6 +95,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"rollback", ROLLBACK},
   {"row", ROW},
   {"rowtype", ROWTYPE},
+  {"role", ROLE},
   {"schema_name", SCHEMA_NAME},
   {"signal", SIGNAL},
   {"sqlexception", SQLEXCEPTION},

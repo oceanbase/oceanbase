@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "execute post uninstall script"
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+
+rm -rf $prefix/.meta $prefix/log_obshell

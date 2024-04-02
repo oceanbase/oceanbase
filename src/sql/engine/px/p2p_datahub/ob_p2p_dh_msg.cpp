@@ -121,6 +121,9 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
   ObP2PDatahubMsgGuard guard(this);
 
   bool need_merge = true;
+  // to avoid data racing in the process of check_finish_receive, protect it in hashmap lock
+  // if set succ, check_finish_receive() in P2PMsgSetCall
+  // if set failed(with OB_HASH_EXIST, need merge), check_finish_receive() in P2PMsgMergeCall
   if (OB_FAIL(map.set_refactored(dh_key, this, 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/, &set_call))) {
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -140,9 +143,7 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
       }
     }
   }
-  if (OB_SUCC(ret) && !need_merge) {
-    (void)check_finish_receive();
-  }
+
   if (need_free) {
     // msg not in map, dec ref count
     guard.dec_msg_ref_count();

@@ -58,9 +58,9 @@ private:
     if (OB_FAIL(start_trans(false, /* is_readonly */
                             sql::stmt::T_INSERT,
                             arg_.consistency_level_,
-                            tb_ctx_.get_table_id(),
                             tb_ctx_.get_ls_id(),
-                            get_timeout_ts()))) {
+                            get_timeout_ts(),
+                            tb_ctx_.need_dist_das()))) {
       SERVER_LOG(WARN, "fail to start trans", K(ret));
     } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       SERVER_LOG(WARN, "fail to init trans", K(ret));
@@ -68,8 +68,6 @@ private:
       SERVER_LOG(WARN, "fail to process op", K(ret));
     }
 
-    result_.set_errno(ret);
-    table::ObTableApiUtil::replace_ret_code(ret);
     int tmp_ret = ret;
     if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
       SERVER_LOG(WARN, "fail to end trans", K(ret));
@@ -79,6 +77,26 @@ private:
     return ret;
   }
   int process_get();
+  int process_insert()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
+  int process_insert_up()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT_UP>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;

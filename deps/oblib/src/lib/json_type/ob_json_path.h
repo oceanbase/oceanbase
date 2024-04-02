@@ -359,8 +359,8 @@ private:
       bool& from_end1, bool& from_end2);
   int add_single_array_node(bool is_cell_type, uint64_t& index1, uint64_t& index2,
       bool& from_end1, bool& from_end2);
-  int get_mysql_origin_key_name(char* &str, uint64_t& length, bool is_quoted);
-  int get_oracle_origin_key_name(char* &str, uint64_t& length, bool is_quoted, bool& is_func);
+  int get_origin_key_name(char* &str, uint64_t& length, bool is_quoted, bool& is_func, bool& with_escape);
+  int deal_with_escape(char* &str, uint64_t& length);
   int parse_name_with_rapidjson(char*& str, uint64_t& len);
   int parse_func_node(char*& name, uint64_t& len);
   int get_char_comparison_type(ObJsonPathFilterNode* filter_comp_node);
@@ -455,11 +455,13 @@ public:
   static bool is_oracle_keyname(const char* name, uint64_t length);
   // add quote and 
   static int  double_quote(ObString &name, ObJsonBuffer* tmp_name);
-  static bool is_mysql_terminator(char ch);
+  static bool is_key_name_terminator(char ch);
   static bool is_begin_field_name(char ch);
   static bool is_end_of_comparission(char ch);
   static bool letter_or_not(char ch);
   static bool is_digit(char ch);
+  static bool is_escape(char ch);
+  static int append_character_of_escape(ObJsonBuffer& buf, char ch);
   static bool is_scalar(const ObJsonPathNodeType node_type);
   static void skip_whitespace(const ObString& path, uint64_t& idx);
   static int append_array_index(uint64_t index, bool from_end, ObJsonBuffer& str);

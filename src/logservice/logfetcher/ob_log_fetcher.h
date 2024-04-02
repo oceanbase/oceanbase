@@ -165,7 +165,6 @@ public:
   virtual void print_stat() = 0;
   //allocate memory for log decompression
   virtual void *alloc_decompression_buf(int64_t size) = 0;
-  virtual common::ObIAllocator *get_decompression_allocator() = 0;
   //free memory for log decompression
   virtual void free_decompression_buf(void *buf)  = 0;
 };
@@ -269,7 +268,6 @@ public:
 
   virtual void print_stat();
   void *alloc_decompression_buf(int64_t size);
-  common::ObIAllocator *get_decompression_allocator() {return &decompression_alloc_;}
   void free_decompression_buf(void *buf);
 
 private:

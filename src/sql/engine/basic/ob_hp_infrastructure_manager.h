@@ -27,7 +27,7 @@ using HashPartInfras = ObHashPartInfrastructure<HashCol, HashRowStore>;
 using HashPartInfrasList = common::ObDList<HashPartInfras>;
 public:
   ObHashPartInfrastructureGroup(common::ObIAllocator &allocator)
-    : allocator_(allocator), initial_hp_size_(0), hp_infras_buffer_(nullptr),
+    : allocator_(allocator), est_bucket_num_(0), initial_hp_size_(0), hp_infras_buffer_(nullptr),
       hp_infras_buffer_idx_(MAX_HP_INFRAS_CNT)
   {
   }
@@ -80,7 +80,9 @@ private:
     int ret = OB_SUCCESS;
     DLIST_FOREACH(hp_infras, hp_infras_list) {
       // It has been checked whether it is nullptr when it is added, so it will not be checked here
-      if (OB_FAIL((hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...))) {
+      if (hp_infras->is_destroyed()) {
+        // do nothing
+      } else if (OB_FAIL((hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...))) {
         SQL_ENG_LOG(WARN, "failed to execute function", K(ret));
       }
     }
@@ -93,7 +95,11 @@ private:
   {
     DLIST_FOREACH_NORET(hp_infras, hp_infras_list) {
       // It has been checked whether it is nullptr when it is added, so it will not be checked here
-      (hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...);
+      if (hp_infras->is_destroyed()) {
+        // do nothing
+      } else {
+        (hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...);
+      }
     }
   }
   int try_get_hp_infras_from_free_list(HashPartInfras *&hp_infras);
@@ -104,7 +110,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHashPartInfrastructureGroup);
 
 private:
+  const static int64_t RATIO = 20;
   common::ObIAllocator &allocator_;
+  int64_t est_bucket_num_;
   int64_t initial_hp_size_;
   HashPartInfras *hp_infras_buffer_;
   int64_t hp_infras_buffer_idx_;
@@ -119,9 +127,9 @@ class ObHashPartInfrastructureMgr
 public:
   static const int64_t MIN_BUCKET_COUNT = 1L << 1;  //2;
   static const int64_t MAX_BUCKET_COUNT = 1L << 19; //524288;
-  ObHashPartInfrastructureMgr()
-    : arena_alloc_("HPInfrasGroup"), inited_(false),
-      tenant_id_(UINT64_MAX), enable_sql_dumped_(false), est_rows_(0), width_(0),
+  ObHashPartInfrastructureMgr(const uint64_t tenant_id)
+    : arena_alloc_("HPInfrasGroup", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id), inited_(false),
+      tenant_id_(tenant_id), enable_sql_dumped_(false), est_rows_(0), width_(0),
       unique_(false), ways_(1), eval_ctx_(nullptr), sql_mem_processor_(nullptr),
       io_event_observer_(nullptr), hp_infras_group_(arena_alloc_)
   {

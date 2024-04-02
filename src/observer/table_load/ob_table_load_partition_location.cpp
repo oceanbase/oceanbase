@@ -91,7 +91,7 @@ int ObTableLoadPartitionLocation::fetch_ls_locations(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObArray<ObLSID> ls_ids;
-
+  ls_ids.set_tenant_id(MTL_ID());
   for (int64_t i = 0; OB_SUCC(ret) && (i < partition_ids.count()); ++i) {
     const ObTabletID &tablet_id = partition_ids[i].tablet_id_;
     if (OB_FAIL(tablet_ids_.push_back(tablet_id))) {
@@ -267,18 +267,22 @@ int ObTableLoadPartitionLocation::init_all_leader_info(ObIAllocator &allocator)
           if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
             LOG_WARN("fail to get refactored", KR(ret), K(addr));
           } else {
-            if (OB_ISNULL(partition_id_array =
+            ObArray<ObTableLoadLSIdAndPartitionId> *new_array = nullptr;
+            if (OB_ISNULL(new_array =
                             OB_NEWx(ObArray<ObTableLoadLSIdAndPartitionId>, (&tmp_allocator)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("fail to new array", KR(ret));
-            } else if (OB_FAIL(addr_map.set_refactored(addr, partition_id_array))) {
+            } else if (OB_FAIL(addr_map.set_refactored(addr, new_array))) {
               LOG_WARN("fail to set refactored", KR(ret), K(addr));
+            } else {
+              new_array->set_tenant_id(MTL_ID());
+              partition_id_array = new_array;
             }
             if (OB_FAIL(ret)) {
-              if (nullptr != partition_id_array) {
-                partition_id_array->~ObIArray<ObTableLoadLSIdAndPartitionId>();
-                tmp_allocator.free(partition_id_array);
-                partition_id_array = nullptr;
+              if (nullptr != new_array) {
+                new_array->~ObArray<ObTableLoadLSIdAndPartitionId>();
+                tmp_allocator.free(new_array);
+                new_array = nullptr;
               }
             }
           }
@@ -300,6 +304,7 @@ int ObTableLoadPartitionLocation::init_all_leader_info(ObIAllocator &allocator)
 		}
 	}
   ObArray<LeaderInfoForSort> sort_array;
+  sort_array.set_tenant_id(MTL_ID());
   for (addr_iter = addr_map.begin(); OB_SUCC(ret) && addr_iter != addr_map.end(); ++pos, ++addr_iter) {
     LeaderInfoForSort item;
     item.addr_ = addr_iter->first;

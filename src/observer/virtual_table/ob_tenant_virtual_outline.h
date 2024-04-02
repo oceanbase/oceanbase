@@ -89,9 +89,6 @@ class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase
     OUTLINE_SQL = OB_APP_MIN_COLUMN_ID + 8,
     SQL_ID = OB_APP_MIN_COLUMN_ID + 9,
     OUTLINE_CONTENT = OB_APP_MIN_COLUMN_ID + 10,
-    FORMAT_SQL_TEXT = OB_APP_MIN_COLUMN_ID + 11,
-    FORMAT_SQL_ID = OB_APP_MIN_COLUMN_ID + 12,
-    FORMAT_OUTLINE = OB_APP_MIN_COLUMN_ID + 13,
   };
 public:
   ObTenantVirtualOutline() : ObTenantVirtualOutlineBase() {}

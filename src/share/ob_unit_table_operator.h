@@ -77,6 +77,16 @@ public:
 
   int get_units_by_unit_group_id(const uint64_t unit_group_id,
                                      common::ObIArray<ObUnit> &units);
+
+  // get unit in specific unit_group and zone, if such a unit does not exist,
+  // then return ret == OB_ENTRY_NOT_EXIST
+  // @param [in] unit_group_id, target unit_group_id
+  // @param [in] zone, target zone
+  // @param [out] unit, unit in specific unit_group_id and zone
+  int get_unit_in_group(const uint64_t unit_group_id,
+                        const common::ObZone &zone,
+                        share::ObUnit &unit);
+
   int get_units_by_resource_pools(const ObIArray<share::ObResourcePoolName> &pools,
                                       common::ObIArray<ObUnit> &units);
   int get_units_by_tenant(const uint64_t tenant_id,
@@ -86,6 +96,7 @@ public:
 
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
+  virtual int check_server_empty(const common::ObAddr &server, bool &is_empty);
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);

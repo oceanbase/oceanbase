@@ -37,7 +37,8 @@ public:
                       common::ObIArray<ObWinFunRawExpr*> &win_exprs,
                       common::ObIArray<ObUDFInfo> &udf_exprs,
                       common::ObIArray<ObOpRawExpr*> &op_exprs,
-                      common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs) = 0;
+                      common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+                      common::ObIArray<ObInListInfo> &inlist_infos) = 0;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolver);

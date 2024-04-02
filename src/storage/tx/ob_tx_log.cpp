@@ -46,10 +46,19 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
 
       barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
+  } else if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
+    if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
+      barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
+    }
   } else if (ObTxLogType::TX_COMMIT_LOG == log_type) {
     if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
       barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
+  }  else if(ObTxLogType::TX_ABORT_LOG == log_type)  {
+    if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
+      barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
+    }
+
   }
 
   return barrier_flag;
@@ -1092,6 +1101,7 @@ void ObTxLogBlock::reset()
   replay_buf_ = nullptr;
   len_ = pos_ = 0;
   cur_log_type_ = ObTxLogType::UNKNOWN;
+  cur_block_barrier_type_ = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   cb_arg_array_.reset();
   big_segment_buf_ = nullptr;
 }
@@ -1100,6 +1110,7 @@ int ObTxLogBlock::reuse(const int64_t replay_hint, const ObTxLogBlockHeader &blo
 {
   int ret = OB_SUCCESS;
   cur_log_type_ = ObTxLogType::UNKNOWN;
+  cur_block_barrier_type_ = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   cb_arg_array_.reset();
   big_segment_buf_ = nullptr;
   pos_ = 0;
@@ -1110,7 +1121,8 @@ int ObTxLogBlock::reuse(const int64_t replay_hint, const ObTxLogBlockHeader &blo
 }
 
 ObTxLogBlock::ObTxLogBlock()
-    : replay_buf_(nullptr), len_(0), pos_(0), cur_log_type_(ObTxLogType::UNKNOWN), cb_arg_array_(),
+    : replay_buf_(nullptr), len_(0), pos_(0), cur_log_type_(ObTxLogType::UNKNOWN),
+      cur_block_barrier_type_(logservice::ObReplayBarrierType::NO_NEED_BARRIER), cb_arg_array_(),
       big_segment_buf_(nullptr)
 {
   // do nothing
@@ -1186,12 +1198,21 @@ int ObTxLogBlock::rewrite_barrier_log_block(int64_t replay_hint,
   int ret = OB_SUCCESS;
   int64_t tmp_pos = 0;
   char *serialize_buf = nullptr;
-  logservice::ObLogBaseHeader header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
-                                     barrier_type, replay_hint);
+  logservice::ObReplayBarrierType final_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
   if (OB_ISNULL(fill_buf_.get_buf())
       || logservice::ObReplayBarrierType::INVALID_BARRIER == barrier_type) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), K(replay_hint), K(barrier_type), KPC(this));
+  } else if (OB_FAIL(ObTxLogTypeChecker::decide_final_barrier_type(cur_block_barrier_type_,
+                                                                   final_barrier_type))) {
+    TRANS_LOG(WARN, "decide final barrier type with the cur_block_barrier failed", K(ret),
+              K(barrier_type), K(final_barrier_type), K(replay_hint));
+  } else if (OB_FAIL(
+                 ObTxLogTypeChecker::decide_final_barrier_type(barrier_type, final_barrier_type))) {
+    TRANS_LOG(WARN, "decide final barrier type with the barrier_type arg failed", K(ret),
+              K(barrier_type), K(final_barrier_type), K(replay_hint));
   } else {
     serialize_buf = fill_buf_.get_buf();
   }
@@ -1201,8 +1222,18 @@ int ObTxLogBlock::rewrite_barrier_log_block(int64_t replay_hint,
   } else if (OB_ISNULL(serialize_buf)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected empty serialize_buf", K(*this));
-  } else if (OB_FAIL(header.serialize(serialize_buf, len_, tmp_pos))) {
-    TRANS_LOG(WARN, "serialize log base header error", K(ret));
+  } else {
+    logservice::ObLogBaseHeader header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
+                                       final_barrier_type, replay_hint);
+
+    if (final_barrier_type != barrier_type) {
+      TRANS_LOG(INFO, "rewrite barrier_type without the origin target", K(ret), K(replay_hint),
+                K(final_barrier_type), K(barrier_type), KPC(this));
+    }
+
+    if (OB_FAIL(header.serialize(serialize_buf, len_, tmp_pos))) {
+      TRANS_LOG(WARN, "serialize log base header error", K(ret));
+    }
   }
 
   return ret;
@@ -1291,6 +1322,10 @@ int ObTxLogBlock::serialize_log_block_header_(const int64_t replay_hint,
     TRANS_LOG(WARN, "serialize log base header error", K(ret));
   } else if (OB_FAIL(block_header.serialize(serialize_buf, len_, pos_))) {
     TRANS_LOG(WARN, "serialize block header error", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    cur_block_barrier_type_ = barrier_type;
   }
 
   return ret;

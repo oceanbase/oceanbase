@@ -741,6 +741,7 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   bool contain_all_readable = false;
   int64_t logging_readable_cnt = 0;
   const int64_t all_readable_set_cnt = tablet_mgr_ptr_->get_readable_tablet_set_count();
+  const share::SCN cur_sync_succ_scn = logging_scn_;
   ObDupTableLSCheckpoint::ObLSDupTableMeta tmp_dup_ls_meta;
 
   if (OB_SUCC(ret)) {
@@ -799,13 +800,14 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   }
 
   if (lease_log_sync_cost_time + tablet_log_sync_cost_time + ckpt_update_cost_time > 500 * 1000) {
-    DUP_TABLE_LOG(INFO, "sync log succ cost too much time", K(ret), K(logging_scn_),
+    DUP_TABLE_LOG(INFO, "sync log succ cost too much time", K(ret), K(cur_sync_succ_scn),
                   K(logging_lease_addrs_.count()), K(logging_tablet_set_ids_.count()), K(stat_log_),
                   K(start_sync_time), K(lease_log_sync_cost_time), K(tablet_log_sync_cost_time),
                   K(ckpt_update_cost_time));
   }
 
   if (OB_NOT_NULL(interface_stat_ptr_)) {
+    interface_stat_ptr_->dup_table_max_applying_scn_.inc_update(cur_sync_succ_scn);
     interface_stat_ptr_->dup_table_lease_log_sync_total_time_ += lease_log_sync_cost_time;
     interface_stat_ptr_->dup_table_tablet_log_sync_total_time_ += tablet_log_sync_cost_time;
   }
@@ -1166,7 +1168,8 @@ OB_SERIALIZE_MEMBER_INHERIT(ObDupTableLeaseRequest,
 OB_SERIALIZE_MEMBER_INHERIT(ObDupTableBeforePrepareRequest,
                             ObDupTableMsgBase,
                             tx_id_,
-                            before_prepare_version_);
+                            before_prepare_version_,
+                            before_prepare_scn_src_);
 
 void ObDupTableMsgBase::reset()
 {
@@ -1201,6 +1204,153 @@ int ObDupTableRpc::init(rpc::frame::ObReqTransport *req_transport,
 
   return ret;
 }
+
+int ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::operator()(
+    common::hash::HashSetTypes<RedoSyncKey>::pair_type &redo_sync_hash_pair)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (ls_handle_.is_valid()) {
+    if (redo_sync_hash_pair.first.ls_id_ != ls_handle_.get_ls()->get_ls_id()) {
+      ls_handle_.reset();
+    }
+  }
+
+  // tmp_ret = OB_SUCCESS;
+  ObPartTransCtx *tx_ctx = nullptr;
+
+  if (!ls_handle_.is_valid() && OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+    if (OB_TMP_FAIL(
+            MTL(ObLSService *)
+                ->get_ls(redo_sync_hash_pair.first.ls_id_, ls_handle_, ObLSGetMod::TRANS_MOD))) {
+      TRANS_LOG(WARN, "get ls failed", K(ret), K(redo_sync_hash_pair.first));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+    if (OB_TMP_FAIL(ls_handle_.get_ls()->get_tx_ctx_with_timeout(
+            redo_sync_hash_pair.first.tx_id_, false /*for_replay*/, tx_ctx, 100 * 1000))) {
+      TRANS_LOG(WARN, "get tx ctx failed", K(ret), K(tmp_ret), K(redo_sync_hash_pair.first),
+                K(ls_handle_), KP(tx_ctx));
+      if (tmp_ret == OB_TIMEOUT) {
+        tmp_ret = OB_SUCCESS;
+      }
+    } else if (OB_TMP_FAIL(tx_ctx->dup_table_tx_redo_sync(false /*need_retry_by_task*/))) {
+      TRANS_LOG(WARN, "dup table redo sync failed", K(ret), K(tmp_ret),
+                K(redo_sync_hash_pair.first), K(ls_handle_), KP(tx_ctx));
+      if (tmp_ret == OB_EAGAIN) {
+        tmp_ret = OB_SUCCESS;
+      }
+    }
+
+    if (OB_NOT_NULL(tx_ctx)) {
+      (void)ls_handle_.get_ls()->revert_tx_ctx(tx_ctx);
+    }
+  }
+
+  TRANS_LOG(DEBUG, "iter tx redo sync by task", K(redo_sync_hash_pair.first), K(tmp_ret), K(ret),
+            KP(this));
+
+  if (OB_SUCCESS != tmp_ret) {
+    int tmp_ret2 = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret2 = del_list_.push_back(redo_sync_hash_pair.first))) {
+      TRANS_LOG(WARN, "push back into del_list failed", K(ret), K(tmp_ret), K(tmp_ret2),
+                K(redo_sync_hash_pair.first));
+    }
+  }
+
+  return ret;
+}
+
+void ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::remove_unused_redo_sync_key()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  RedoSyncKey tmp_key;
+  if (del_list_.size() > 0) {
+    while (OB_SUCC(del_list_.pop_front(tmp_key))) {
+      if (OB_TMP_FAIL(redo_sync_retry_set_.erase_refactored(tmp_key))) {
+        TRANS_LOG(WARN, "erase from hash map failed", K(ret), K(tmp_ret),K(tmp_key));
+      } else {
+        // DUP_TABLE_LOG(INFO, "erase from hash map succ", K(ret), K(tmp_key));
+      }
+    }
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // when pop all list, rewrite ret code
+      TRANS_LOG(DEBUG, "end del in while loop", K(ret));
+      ret = OB_SUCCESS;
+    }
+  }
+}
+
+int ObTxRedoSyncRetryTask::iter_tx_retry_redo_sync()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  share::ObLSID last_ls_id;
+  last_ls_id.reset();
+  ObLSHandle ls_handle;
+  TransModulePageAllocator allocator;
+
+  ObTxRedoSyncIterFunc redo_sync_func(redo_sync_retry_set_, allocator);
+
+  if (OB_FAIL(redo_sync_retry_set_.foreach_refactored(redo_sync_func))) {
+    TRANS_LOG(WARN, "retry to start tx redo sync failed", K(ret), K(redo_sync_retry_set_.size()));
+  }
+
+  redo_sync_func.remove_unused_redo_sync_key();
+
+  if (OB_SUCC(ret) && !redo_sync_retry_set_.empty() && ATOMIC_BCAS(&in_thread_pool_, false, true)) {
+    set_retry_interval_us(5 * 1000, 5 * 1000);
+    if (OB_TMP_FAIL(MTL(ObTransService *)->push(this))) {
+      ATOMIC_BCAS(&in_thread_pool_, true, false);
+      TRANS_LOG(WARN, "push redo sync task failed", K(ret), K(in_thread_pool_));
+    }
+  }
+
+  return ret;
+}
+int ObTxRedoSyncRetryTask::push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (!redo_sync_retry_set_.created()) {
+    if (OB_FAIL(redo_sync_retry_set_.create(100))) {
+      TRANS_LOG(WARN, "alloc a redo sync set failed", K(ret), K(tx_id), K(ls_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    RedoSyncKey redo_sync_key;
+    redo_sync_key.tx_id_ = tx_id;
+    redo_sync_key.ls_id_ = ls_id;
+    if (OB_FAIL(redo_sync_retry_set_.set_refactored(redo_sync_key, 0))) {
+      if (ret == OB_HASH_EXIST) {
+        ret = OB_SUCCESS;
+      } else {
+        TRANS_LOG(WARN, "insert redo_sync_set into hash_set failed", K(ret), K(tx_id), K(ls_id));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !redo_sync_retry_set_.empty() && ATOMIC_BCAS(&in_thread_pool_, false, true)) {
+    set_retry_interval_us(5 * 1000, 5 * 1000);
+    if (OB_TMP_FAIL(MTL(ObTransService *)->push(this))) {
+      ATOMIC_BCAS(&in_thread_pool_, true, false);
+      TRANS_LOG(WARN, "push redo sync task failed", K(ret), K(tx_id), K(ls_id), K(in_thread_pool_));
+    }
+  }
+
+  TRANS_LOG(INFO, "push redo sync task succ", K(ret), KP(this), K(tx_id), K(ls_id),
+            K(in_thread_pool_));
+
+  return ret;
+}
+
+
+
 } // namespace transaction
 
 namespace obrpc
@@ -1220,11 +1370,11 @@ int ObDupTableLeaseRequestP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->recive_lease_request(arg_)) {
-    DUP_TABLE_LOG(WARN, "recive_lease_request error", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->receive_lease_request(arg_))) {
+    DUP_TABLE_LOG(WARN, "receive_lease_request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive lease request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive lease request", K(ret), K(arg_));
   return ret;
 }
 
@@ -1243,11 +1393,11 @@ int ObDupTableTsSyncRequestP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_request(arg_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_request(arg_))) {
     DUP_TABLE_LOG(WARN, "handle ts sync request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive ts sync request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive ts sync request", K(ret), K(arg_));
 
   return ret;
 }
@@ -1267,11 +1417,11 @@ int ObDupTableTsSyncResponseP::process()
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
     DUP_TABLE_LOG(WARN, "ls pointer is nullptr", K(ret));
-  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_response(arg_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_dup_table_ls_handler()->handle_ts_sync_response(arg_))) {
     DUP_TABLE_LOG(WARN, "handle ts sync request error", K(ret));
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive ts sync response", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive ts sync response", K(ret), K(arg_));
 
   return ret;
 }
@@ -1294,17 +1444,22 @@ int ObDupTableBeforePrepareRequestP::process()
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(arg_.get_tx_id(), true, part_ctx))) {
     DUP_TABLE_LOG(WARN, "get part ctx failed", K(ret), K(arg_));
   } else {
+    if (arg_.get_before_prepare_scn_src()
+        <= transaction::ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::UNKNOWN) {
+      DUP_TABLE_LOG(WARN, "UNKOWN before prepare src", K(ret), K(arg_));
+    }
+
     if (OB_ISNULL(part_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       DUP_TABLE_LOG(WARN, "unexpected part ctx", K(ret), KPC(part_ctx), K(arg_));
-    } else if (OB_FAIL(part_ctx->retry_dup_trx_before_prepare(arg_.get_before_prepare_version()))) {
+    } else if (OB_FAIL(part_ctx->retry_dup_trx_before_prepare(arg_.get_before_prepare_version(), arg_.get_before_prepare_scn_src()))) {
       DUP_TABLE_LOG(WARN, "retry dup trx before_prepare failed", K(ret), KPC(part_ctx), K(arg_));
     }
 
     ls_handle.get_ls()->revert_tx_ctx(part_ctx);
   }
 
-  DUP_TABLE_LOG(DEBUG, "recive before prepare request", K(ret), K(arg_));
+  DUP_TABLE_LOG(DEBUG, "receive before prepare request", K(ret), K(arg_));
   return ret;
 }
 

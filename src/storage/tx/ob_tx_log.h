@@ -1116,6 +1116,7 @@ public:
                K(len_),
                K(pos_),
                K(cur_log_type_),
+               K(cur_block_barrier_type_),
                K(cb_arg_array_),
                KPC(big_segment_buf_));
 
@@ -1145,6 +1146,7 @@ private:
   int64_t len_;
   int64_t pos_;
   ObTxLogType cur_log_type_;
+  logservice::ObReplayBarrierType cur_block_barrier_type_;
   ObTxCbArgArray cb_arg_array_;
 
   ObTxBigSegmentBuf *big_segment_buf_;

@@ -125,6 +125,24 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator_(const uint64_t tenant
   return ret;
 }
 
+int ObTenantMutilAllocatorMgr::get_tenant_memstore_limit_percent_(const uint64_t tenant_id,
+                                                                  int64_t &limit_percent) const
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      limit_percent = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
+    }
+  }
+  return ret;
+}
+
 int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id,
                                                     TMA *&out_allocator)
 {
@@ -340,13 +358,14 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
   // Update mem_limit for each tenant, called when the chane unit specifications or
   // memstore_limite_percentage
   int ret = OB_SUCCESS;
-  const int64_t cur_memstore_limit_percent = ObServerConfig::get_instance().memstore_limit_percentage;
+  int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
     int64_t unit_cnt = all_tenant_units.count();
     for (int64_t i = 0; i < unit_cnt && OB_SUCC(ret); ++i) {
       const share::ObUnitInfoGetter::ObTenantConfig &tenant_config = all_tenant_units.at(i);
+      int64_t cur_memstore_limit_percent = 0;
       const uint64_t tenant_id = tenant_config.tenant_id_;
       const bool has_memstore = tenant_config.has_memstore_;
       int32_t nway = (int32_t)(tenant_config.config_.max_cpu());
@@ -358,15 +377,16 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
       if (has_memstore) {
         // If the unit type of tenant is not Log, need to subtract
         // the reserved memory of memstore
-        if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
+        if (OB_TMP_FAIL(get_tenant_memstore_limit_percent_(tenant_id, cur_memstore_limit_percent))) {
+          OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
+        } else if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
           OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
         } else {
           new_tma_limit = memory_size / 100 * ( 100 - cur_memstore_limit_percent);
         }
       }
-      int tmp_ret = OB_SUCCESS;
       ObTenantMutilAllocator *tma= NULL;
-      if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator_(tenant_id, tma))) {
+      if (OB_TMP_FAIL(get_tenant_mutil_allocator_(tenant_id, tma))) {
         OB_LOG(WARN, "get_tenant_mutil_allocator_ failed", K(tmp_ret), K(tenant_id));
       } else if (NULL == tma) {
         OB_LOG(WARN, "get_tenant_mutil_allocator_ failed", K(tenant_id));
@@ -382,7 +402,7 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
 
       //update memstore threshold of GmemstoreAllocator
       ObGMemstoreAllocator* memstore_allocator = NULL;
-      if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(tenant_id, memstore_allocator))) {
+      if (OB_TMP_FAIL(ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(tenant_id, memstore_allocator))) {
       } else if (OB_ISNULL(memstore_allocator)) {
         OB_LOG(WARN, "get_tenant_memstore_allocator failed", K(tenant_id));
       } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {

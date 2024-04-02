@@ -1,4 +1,4 @@
-static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
+static constexpr ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
 {
   /*NullType*/
   {
@@ -2888,3 +2888,5 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /*  ObCollectionSQLType*/
   },
 };
+
+static_assert(is_array_fully_initialized(RELATIONAL_RESULT_TYPE, ObMaxType), "RELATIONAL_RESULT_TYPE is partially initlized");

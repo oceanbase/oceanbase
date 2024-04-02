@@ -24,7 +24,7 @@ namespace transaction
 {
 
 const int64_t ObDupTableLSLeaseMgr::LEASE_UNIT = ObDupTableLoopWorker::LOOP_INTERVAL;
-const int64_t ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
+int64_t ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
 const int64_t ObDupTableLSLeaseMgr::MIN_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
 
 int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
@@ -71,7 +71,7 @@ void ObDupTableLSLeaseMgr::reset()
   lease_diag_info_log_buf_ = nullptr;
 }
 
-int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lease_req)
+int ObDupTableLSLeaseMgr::receive_lease_request(const ObDupTableLeaseRequest &lease_req)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lease_lock_);
@@ -89,7 +89,7 @@ int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lea
       DUP_TABLE_LOG(INFO, "first lease request from the new dup_table follower", K(ret), K(lease_req));
     }
   } else if (tmp_lease_info.cache_lease_req_.is_ready()) {
-    DUP_TABLE_LOG(INFO, "leader lease info is logging which can not recive new lease request",
+    DUP_TABLE_LOG(INFO, "leader lease info is logging which can not receive new lease request",
                   K(lease_req.get_src()));
   } else if (tmp_lease_info.cache_lease_req_.request_ts_ < lease_req.get_request_ts()) {
     // renew request ts before submit lease log
@@ -225,14 +225,19 @@ int ObDupTableLSLeaseMgr::deserialize_lease_log(DupTableLeaseItemArray &lease_he
         } else if (OB_FAIL(lease_header_array.push_back(DupTableLeaseItem(
                        lease_log_header, leader_lease_info.confirmed_lease_info_)))) {
           DUP_TABLE_LOG(WARN, "push back leader_lease_info failed", K(ret), K(leader_lease_info));
-        } else if (OB_FALSE_IT(leader_lease_info.lease_expired_ts_ =
-                                   leader_lease_info.confirmed_lease_info_.request_ts_
-                                   + leader_lease_info.confirmed_lease_info_.lease_interval_us_)) {
-          // do nothing
-        } else if (OB_FAIL(leader_lease_map_.set_refactored(lease_log_header.get_lease_owner(),
-                                                            leader_lease_info, 1))) {
-          DUP_TABLE_LOG(WARN, "insert into leader_lease_map_ for replay failed", K(ret),
-                        K(lease_log_header), K(leader_lease_info));
+        } else {
+          if (lease_header_array.count() == 1) {
+            //rewrite all leader lease infos on a follower by the new lease log
+            leader_lease_map_.reuse();
+          }
+          leader_lease_info.lease_expired_ts_ =
+              leader_lease_info.confirmed_lease_info_.request_ts_
+              + leader_lease_info.confirmed_lease_info_.lease_interval_us_;
+          if (OB_FAIL(leader_lease_map_.set_refactored(lease_log_header.get_lease_owner(),
+                                                       leader_lease_info, 1))) {
+            DUP_TABLE_LOG(WARN, "insert into leader_lease_map_ for replay failed", K(ret),
+                          K(lease_log_header), K(leader_lease_info));
+          }
         }
       }
     }
@@ -570,6 +575,9 @@ bool ObDupTableLSLeaseMgr::is_follower_lease_valid()
 
   SpinRLockGuard guard(lease_lock_);
   is_follower_lease = follower_lease_info_.lease_expired_ts_ > ObTimeUtility::current_time();
+  if (!is_follower_lease) {
+    DUP_TABLE_LOG(INFO, DUP_TABLET_LIFE_PREFIX "lease is expired", K(follower_lease_info_));
+  }
 
   return is_follower_lease;
 }
@@ -754,6 +762,7 @@ bool ObDupTableLSLeaseMgr::LeaseReqCacheHandler::operator()(
     item.durable_lease_.request_ts_ = hash_pair.second.cache_lease_req_.request_ts_;
     item.durable_lease_.lease_interval_us_ = hash_pair.second.cache_lease_req_.lease_interval_us_;
   } else if (loop_start_time_ >= hash_pair.second.lease_expired_ts_) {
+    renew_lease_count_++;
     DUP_TABLE_LOG(INFO, "remove expired lease follower from map", K(ret), K(will_remove),
                   K(hash_pair.first), K(hash_pair.second));
     will_remove = true;
@@ -822,11 +831,15 @@ int ObDupTableLSLeaseMgr::GetLeaseValidAddrFunctor::operator()(
   +----------------------------------------------------+
   */
 
-  if (hash_pair.second.lease_expired_ts_ > cur_time_
-      // include a granted logging lease
-      || hash_pair.second.cache_lease_req_.is_ready()) {
+  if (MTL(ObTransService *)->get_server() == hash_pair.first) {
+    DUP_TABLE_LOG(INFO, "we need not push back self into lease valid array", K(ret),
+                  K(hash_pair.first), K(hash_pair.second));
+  } else if (hash_pair.second.lease_expired_ts_ > cur_time_
+             // include a granted logging lease
+             || hash_pair.second.cache_lease_req_.is_ready()) {
     if (OB_FAIL(addr_arr_.push_back(hash_pair.first))) {
-      DUP_TABLE_LOG(WARN, "push back lease valid array failed", K(ret));
+      DUP_TABLE_LOG(WARN, "push back lease valid array failed", K(ret), K(hash_pair.first),
+                    K(hash_pair.second));
     }
   }
 

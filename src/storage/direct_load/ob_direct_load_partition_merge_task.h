@@ -18,6 +18,7 @@
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_scanner.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -49,6 +50,7 @@ protected:
   virtual int construct_row_iter(common::ObIAllocator &allocator,
                                  ObIStoreRowIterator *&row_iter) = 0;
 protected:
+  observer::ObTableLoadTableCtx *ctx_;
   const ObDirectLoadMergeParam *merge_param_;
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   int64_t parallel_idx_;
@@ -63,7 +65,8 @@ class ObDirectLoadPartitionRangeMergeTask : public ObDirectLoadPartitionMergeTas
 public:
   ObDirectLoadPartitionRangeMergeTask();
   virtual ~ObDirectLoadPartitionRangeMergeTask();
-  int init(const ObDirectLoadMergeParam &merge_param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &merge_param,
            ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
@@ -100,7 +103,8 @@ class ObDirectLoadPartitionRangeMultipleMergeTask : public ObDirectLoadPartition
 public:
   ObDirectLoadPartitionRangeMultipleMergeTask();
   virtual ~ObDirectLoadPartitionRangeMultipleMergeTask();
-  int init(const ObDirectLoadMergeParam &merge_param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &merge_param,
            ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
@@ -137,7 +141,8 @@ class ObDirectLoadPartitionHeapTableMergeTask : public ObDirectLoadPartitionMerg
 public:
   ObDirectLoadPartitionHeapTableMergeTask();
   virtual ~ObDirectLoadPartitionHeapTableMergeTask();
-  int init(const ObDirectLoadMergeParam &merge_param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &merge_param,
            ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadExternalTable *external_table,
            const share::ObTabletCacheInterval &pk_interval,
@@ -174,7 +179,8 @@ class ObDirectLoadPartitionHeapTableMultipleMergeTask : public ObDirectLoadParti
 public:
   ObDirectLoadPartitionHeapTableMultipleMergeTask();
   virtual ~ObDirectLoadPartitionHeapTableMultipleMergeTask();
-  int init(const ObDirectLoadMergeParam &merge_param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &merge_param,
            ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadMultipleHeapTable *heap_table,
            const share::ObTabletCacheInterval &pk_interval,
@@ -212,7 +218,8 @@ class ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask
 public:
   ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
   virtual ~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
-  int init(const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadMultipleHeapTable *> &heap_table_array,
            const share::ObTabletCacheInterval &pk_interval);

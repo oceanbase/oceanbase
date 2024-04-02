@@ -116,8 +116,13 @@ public:
   virtual int get_latest(int64_t unit_id,
                          void *key,
                          ObFunction<int(void *)> &op,
-                         bool &is_committed,
+                         MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
+                         TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
+                         share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
                          const int64_t read_seq) const override;
+  virtual int get_latest_committed(int64_t unit_id,
+                                   void *key,
+                                   ObFunction<int(void *)> &op) const override;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,
@@ -140,10 +145,8 @@ public:
                                   const int64_t mds_construct_sequence,
                                   const bool for_flush) const override;
   virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
-  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
-                                                     share::SCN &flush_scn,
-                                                     int64_t &need_dumped_nodes_cnt);
-  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit) override;
+  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN &flush_scn, int64_t &need_dumped_nodes_cnt);
+  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) override;
   void on_flush_(const share::SCN &flush_scn, const int flush_ret);
   virtual void on_flush(const share::SCN &flush_scn, const int flush_ret) override;
   virtual int try_recycle(const share::SCN recycle_scn) override;
@@ -152,80 +155,10 @@ public:
     return unit_tuple_.for_each(helper);
   }
   virtual int forcely_reset_mds_table(const char *reason) override;
-  /*****************************Single Key Unit Access Interface***********************************/
-  template <typename T>
-  int set(T &&data,
-          MdsCtx &ctx,
-          const int64_t lock_timeout_us = 0);
-  template <typename T>
-  int replay(T &&data,
-		   MdsCtx &ctx,
-             const share::SCN &scn);
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
-  int get_latest(OP &&read_op,
-                 bool &is_committed,
-                 const int64_t read_seq = 0) const;
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
-  int get_snapshot(OP &&read_op,
-                   const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
-                   const int64_t timeout_us = 0) const;
-  template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
-  int get_by_writer(OP &&read_op,
-                    const MdsWriter &writer,
-                    const share::SCN snapshot,
-                    const int64_t read_seq = 0,
-                    const int64_t timeout_us = 0) const;
-  template <typename T>
-  int is_locked_by_others(bool &is_locked, const MdsWriter &self = MdsWriter()) const;
-  /************************************************************************************************/
-
-  /******************************Multi Key Unit Access Interface***********************************/
-  template <typename Key, typename Value>
-  int set(const Key &key,
-          Value &&data,
-          MdsCtx &ctx,
-          const int64_t lock_timeout_us = 0);
-  template <typename Key, typename Value>
-  int replay(const Key &key,
-             Value &&data,
-		   MdsCtx &ctx,
-             const share::SCN &scn);
-  template <typename Key, typename Value>
-  int remove(const Key &key,
-             MdsCtx &ctx,
-             const int64_t lock_timeout_us = 0);
-  template <typename Key, typename Value>
-  int replay_remove(const Key &key,
-                    MdsCtx &ctx,
-                    const share::SCN &scn);
-  template <typename Key, typename Value, typename OP>
-  int get_latest(const Key &key,
-                 OP &&read_op,
-                 bool &is_committed,
-                 const int64_t read_seq = 0) const;
-  template <typename Key, typename Value, typename OP>
-  int get_snapshot(const Key &key,
-                   OP &&read_op,
-                   const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
-                   const int64_t timeout_us = 0) const;
-  template <typename Key, typename Value, typename OP>
-  int get_by_writer(const Key &key,
-                    OP &&read_op,
-                    const MdsWriter &writer,
-                    const share::SCN snapshot = share::SCN::max_scn(),
-                    const int64_t read_seq = 0,
-                    const int64_t timeout_us = 0) const;
-  template <typename Key, typename Value>
-  int is_locked_by_others(const Key &key,
-                          bool &is_locked,
-                          const MdsWriter &self = MdsWriter()) const;
-  /************************************************************************************************/
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op, const int64_t mds_construct_sequence, const bool for_flush);
-  TO_STRING_KV(KP(this), K_(ls_id), K_(tablet_id), K_(flushing_scn),
-               K_(rec_scn), K_(last_inner_recycled_scn), K_(total_node_cnt), K_(construct_sequence), K_(debug_info));
+  TO_STRING_KV(KP(this), K_(ls_id), K_(tablet_id), K_(flushing_scn), K_(rec_scn), K_(max_aborted_scn),
+               K_(last_inner_recycled_scn), K_(total_node_cnt), K_(construct_sequence), K_(debug_info));
   template <typename SCAN_OP>
   int for_each_scan_row(FowEachRowAction action_type, SCAN_OP &&op);
   MdsTableType &unit_tuple() { return unit_tuple_; }

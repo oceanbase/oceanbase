@@ -485,7 +485,8 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     const uint64_t tenant_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObMySQLProxy *sql_proxy,
-    const bool use_parallel_ddl /*= false*/)
+    const bool use_parallel_ddl /*= false*/,
+    const share::schema::ObTableSchema *data_table_schema /*nullptr*/)
   : tenant_id_(tenant_id),
     schema_guard_(schema_guard),
     sql_proxy_(sql_proxy),
@@ -494,7 +495,8 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     ls_id_array_(),
     inited_(false),
     is_add_partition_(false),
-    use_parallel_ddl_(use_parallel_ddl)
+    use_parallel_ddl_(use_parallel_ddl),
+    data_table_schema_(data_table_schema)
 {
 }
 
@@ -753,45 +755,49 @@ int ObNewTableTabletAllocator::alloc_tablet_for_create_balance_group(
              K(ls_id_array),
              K(part_num));
   } else {
+    /*
+      Example: 3 LS, 7 partitions
+          -------------------
+          |  LS1  LS2  LS3  |
+          |  p0   p1   p2   |
+          |  p3   p4   p5   | min_itl = 2
+          |  p6             |
+          -------------------
+          max_cnt = 1
+      Result ls_id_array_: 2 * {LS1, LS2, LS3} + {LS1}
+    */
     const int64_t bucket_num = ls_id_array.count();
     const int64_t min_itl = part_num / bucket_num;
     const int64_t max_itl = ((min_itl * bucket_num == part_num) ? (min_itl) : (min_itl + 1));
-    const int64_t min_cnt = max_itl * bucket_num - part_num;
-    const int64_t max_cnt = bucket_num - min_cnt;
+    const int64_t max_cnt = part_num % bucket_num;
     common::ObArray<ObBalanceGroupLSStat> bg_ls_stat_array;
     int64_t start_idx = fetch_ls_offset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array.count(); ++i) {
-      const share::ObLSID &ls_id = ls_id_array.at((start_idx + i) % ls_id_array.count());
-      const int64_t tablet_cnt = ((i < min_cnt) ? min_itl : max_itl);
-      for (int64_t j = 0; OB_SUCC(ret) && j < tablet_cnt; ++j) {
-        if (OB_FAIL(ls_id_array_.push_back(ls_id))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObBalanceGroupLSStat bg_ls_stat;
-        if (OB_FAIL(bg_ls_stat.build(
-                tenant_id_,
-                bg_id,
-                ls_id,
-                tablet_cnt,
-                bg_name))) {
-          LOG_WARN("fail to build bg ls stat", KR(ret));
-        } else if (OB_FAIL(bg_ls_stat_array.push_back(
-                bg_ls_stat))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
+    // 1.alloc ls
+    for (int64_t j = 0; OB_SUCC(ret) && j < part_num; ++j) {
+      const share::ObLSID &ls_id = ls_id_array.at((start_idx + j) % ls_id_array.count());
+      if (OB_FAIL(ls_id_array_.push_back(ls_id))) {
+        LOG_WARN("fail to push back", KR(ret), K(ls_id), K(ls_id_array_));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
-              THIS_WORKER.get_timeout_remain(),
-              *sql_proxy_,
-              tenant_id_,
-              bg_id,
-              bg_ls_stat_array))) {
-        LOG_WARN("fail to insert update balance group ls stat", KR(ret));
+    // 2.update __all_balance_group_ls_stat
+    ARRAY_FOREACH(ls_id_array, i) {
+      const share::ObLSID &ls_id = ls_id_array.at((start_idx + i) % ls_id_array.count());
+      const int64_t tablet_cnt = ((i < max_cnt) ? max_itl : min_itl);
+      ObBalanceGroupLSStat bg_ls_stat;
+      if (OB_FAIL(bg_ls_stat.build(tenant_id_, bg_id, ls_id, tablet_cnt, bg_name))) {
+        LOG_WARN("fail to build bg ls stat", KR(ret), K(bg_id), K(ls_id), K(tablet_cnt), K(bg_name));
+      } else if (OB_FAIL(bg_ls_stat_array.push_back(bg_ls_stat))) {
+        LOG_WARN("fail to push back", KR(ret), K(bg_ls_stat));
       }
+    }
+    if (FAILEDx(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
+        THIS_WORKER.get_timeout_remain(),
+        *sql_proxy_,
+        tenant_id_,
+        bg_id,
+        bg_ls_stat_array))) {
+      LOG_WARN("fail to insert update balance group ls stat",
+          KR(ret), K(tenant_id_), K(bg_id), K(bg_ls_stat_array));
     }
   }
   return ret;
@@ -1209,9 +1215,24 @@ int ObNewTableTabletAllocator::alloc_ls_for_local_index_tablet(
     const uint64_t tenant_id = index_schema.get_tenant_id();
     const uint64_t data_table_id = index_schema.get_data_table_id();
     const share::schema::ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard_.get_table_schema(
-        tenant_id, data_table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+    if (use_parallel_ddl_) {
+      if (OB_ISNULL(data_table_schema_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("should use cached data_table_schema when alloc ls for local index tablet when doing parallel ddl", KR(ret));
+      } else if (OB_UNLIKELY(data_table_schema_->get_table_id() != data_table_id)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("data_table_schema_'s table_id != index_schema's data_table_id",
+                 KR(ret), K(data_table_schema_->get_table_id()) ,K(data_table_id));
+      } else {
+        table_schema = data_table_schema_;
+      }
+    } else {
+      if (OB_FAIL(schema_guard_.get_table_schema(
+          tenant_id, data_table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(nullptr == table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not exist", KR(ret), K(data_table_id));

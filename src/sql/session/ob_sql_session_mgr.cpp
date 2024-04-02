@@ -116,7 +116,7 @@ void ObTenantSQLSessionMgr::destroy()
 {
 }
 
-int ObTenantSQLSessionMgr::mtl_init(ObTenantSQLSessionMgr *&t_session_mgr)
+int ObTenantSQLSessionMgr::mtl_new(ObTenantSQLSessionMgr *&t_session_mgr)
 {
   int ret = OB_SUCCESS;
   t_session_mgr = OB_NEW(ObTenantSQLSessionMgr, ObMemAttr(MTL_ID(), "TSQLSessionMgr"),
@@ -124,7 +124,14 @@ int ObTenantSQLSessionMgr::mtl_init(ObTenantSQLSessionMgr *&t_session_mgr)
   if (OB_ISNULL(t_session_mgr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc tenant session manager", K(ret));
-  } else if (OB_FAIL(t_session_mgr->init())) {
+  }
+  return ret;
+}
+
+int ObTenantSQLSessionMgr::mtl_init(ObTenantSQLSessionMgr *&t_session_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(t_session_mgr->init())) {
     LOG_WARN("failed to init tenant session manager", K(ret));
   }
   return ret;

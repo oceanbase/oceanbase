@@ -17,6 +17,7 @@
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_mem_worker.h"
 #include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -33,10 +34,12 @@ public:
 
   int init();
   int add_table(ObIDirectLoadPartitionTable *table) override;
-  void set_work_param(int64_t index_dir_id, int64_t data_dir_id,
+  void set_work_param(observer::ObTableLoadTableCtx *ctx,
+                      int64_t index_dir_id, int64_t data_dir_id,
                       common::ObIArray<ObDirectLoadMultipleHeapTable *> &heap_table_array,
                       common::ObIAllocator &heap_table_allocator)
   {
+    ctx_ = ctx;
     index_dir_id_ = index_dir_id;
     data_dir_id_ = data_dir_id;
     heap_table_array_ = &heap_table_array;
@@ -53,6 +56,7 @@ private:
 
 private:
   // data members
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMemContext *mem_ctx_;
   ObDirectLoadExternalFragmentArray fragments_;
   ObArenaAllocator allocator_;

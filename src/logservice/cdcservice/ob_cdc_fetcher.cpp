@@ -27,6 +27,7 @@ using namespace oceanbase::palf;
 
 namespace cdc
 {
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_RESP_ERROR);
 
 ObCdcFetcher::ObCdcFetcher()
   : is_inited_(false),
@@ -124,8 +125,9 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
       }
 
       if (OB_NOT_NULL(ls_ctx)) {
-        if (OB_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
-          LOG_WARN("failed to revert client ls ctx", K(req));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
+          LOG_WARN_RET(tmp_ret, "failed to revert client ls ctx", K(req));
         } else {
           ls_ctx = nullptr;
         }
@@ -326,6 +328,10 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   if (OB_FAIL(ret)) {
     LOG_WARN("fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
         K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
+        K(req), K(resp));
   }
 
   LOG_TRACE("do_fetch_log done", KR(ret), K(frt), K(req), K(resp));
@@ -373,6 +379,9 @@ int ObCdcFetcher::fetch_log_in_archive_(
     ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  // always reserve 4K for archive header
+  const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L - 4 * 1024;
+  const int64_t MAX_RETRY_COUNT = 4;
   if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
     LOG_WARN("init archive source failed", K(ctx), K(ls_id));
   } else {
@@ -381,22 +390,30 @@ int ObCdcFetcher::fetch_log_in_archive_(
     share::SCN pre_scn;
     if (OB_FAIL(pre_scn.convert_from_ts(ctx.get_progress()/1000L))) {
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
-    } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
-                                                          start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_,
-                                                          log_ext_handler_, ObCdcLSFetchLogResp::FETCH_BUF_LEN))) {
-      LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
-    } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
-      // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
-      if (OB_ITER_END != ret) {
-        LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
-      }
-    } else if (start_lsn != lsn) {
-      // to keep consistency with the ret code of palf
-      ret = OB_INVALID_DATA;
-      LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
-          K(remote_iter));
-    } else {
+    } else  {
+      int64_t retry_count = 0;
+      do {
+        if (! remote_iter.is_init() && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
+            start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
+          LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
+        } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
+          // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
+          if (OB_ITER_END != ret) {
+            LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
+          } else {
+            remote_iter.update_source_cb();
+            remote_iter.reset();
+            LOG_INFO("get iter end from remote_iter, retry", K(retry_count), K(MAX_RETRY_COUNT));
+          }
+        } else if (start_lsn != lsn) {
+          // to keep consistency with the ret code of palf
+          ret = OB_INVALID_DATA;
+          LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
+              K(remote_iter));
+        } else {
 
+        }
+      } while (OB_ITER_END == ret && ++retry_count < MAX_RETRY_COUNT);
     }
   }
   return ret;
@@ -1198,6 +1215,13 @@ int ObCdcFetcher::do_fetch_raw_log_(const obrpc::ObCdcFetchRawLogReq &req,
   if (retry_count > 1) {
     LOG_INFO("retry multiple times to read log", KR(ret), K(req), K(resp), K(retry_count),
         K(need_retry), K(fetch_log_succ));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fetch raw log fail", K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch raw log fail", K(req), K(resp));
   }
 
   return ret;

@@ -95,6 +95,7 @@ bool UpdateCtxFunctor::operator()(const ClientLSKey &key, ClientLSCtx *value)
 ObCdcService::ObCdcService()
   : is_inited_(false),
     stop_flag_(true),
+    tenant_id_(OB_INVALID_TENANT_ID),
     locator_(),
     fetcher_(),
     tg_id_(-1),
@@ -134,6 +135,7 @@ int ObCdcService::init(const uint64_t tenant_id,
     EXTLOG_LOG(WARN, "cdc thread group create failed", KR(ret), K(tenant_id));
   } else {
     dest_info_version_ = 0;
+    tenant_id_ = tenant_id;
     is_inited_ = true;
   }
 
@@ -158,7 +160,7 @@ void ObCdcService::run1()
     int64_t last_recycle_ts = 0;
     int64_t last_purge_ts = 0;
     int64_t last_check_cdc_read_archive_ts = 0;
-    while(! is_stoped()) {
+    while(! has_set_stop()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
       IGNORE_RETURN lib::Thread::update_loop_ts(current_ts);
@@ -205,6 +207,8 @@ void ObCdcService::run1()
       }
       ob_usleep(static_cast<uint32_t>(BASE_INTERVAL), true/*is_idle_sleep*/);
     }
+
+    EXTLOG_LOG(INFO, "CdcSrv Thread Exit due to has_set_stop", "stop_flag", has_set_stop());
   }
 }
 
@@ -217,7 +221,7 @@ int ObCdcService::start()
     EXTLOG_LOG(WARN, "ObCdcService not init", K(ret));
   } else if (OB_FAIL(log_ext_handler_.start(0))) {
     EXTLOG_LOG(WARN, "log ext handler start failed", K(ret));
-  } else if (OB_FAIL(start_tenant_tg_(MTL_ID()))) {
+  } else if (OB_FAIL(start_tenant_tg_(tenant_id_))) {
     EXTLOG_LOG(ERROR, "start CDCService failed", KR(ret));
   } else {
     stop_flag_ = false;
@@ -229,13 +233,13 @@ int ObCdcService::start()
 void ObCdcService::stop()
 {
   ATOMIC_STORE(&stop_flag_, true);
-  stop_tenant_tg_(MTL_ID());
+  stop_tenant_tg_(tenant_id_);
   log_ext_handler_.stop();
 }
 
 void ObCdcService::wait()
 {
-  wait_tenant_tg_(MTL_ID());
+  wait_tenant_tg_(tenant_id_);
   log_ext_handler_.wait();
   // do nothing
 }
@@ -244,7 +248,7 @@ void ObCdcService::destroy()
 {
   is_inited_ = false;
   stop_flag_ = true;
-  destroy_tenant_tg_(MTL_ID());
+  destroy_tenant_tg_(tenant_id_);
   fetcher_.destroy();
   locator_.destroy();
   dest_info_.reset();
@@ -252,6 +256,7 @@ void ObCdcService::destroy()
   large_buffer_pool_.destroy();
   ls_ctx_map_.destroy();
   log_ext_handler_.destroy();
+  tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
 int ObCdcService::req_start_lsn_by_ts_ns(const obrpc::ObCdcReqStartLSNByTsReq &req,

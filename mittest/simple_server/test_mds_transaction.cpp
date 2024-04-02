@@ -30,6 +30,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
+#include "storage/multi_data_source/test/example_user_helper_define.cpp"
 
 namespace oceanbase
 {
@@ -103,22 +104,36 @@ TEST_F(TestMdsTransactionTest, simple_test)
   ASSERT_EQ(OB_SUCCESS, inner_conn->commit());
 }
 
+TEST_F(TestMdsTransactionTest, add_tenant)
+{
+  // 创建普通租户tt1
+  ASSERT_EQ(OB_SUCCESS, create_tenant());
+  // 获取租户tt1的tenant_id
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(RunCtx.tenant_id_));
+  ASSERT_NE(0, RunCtx.tenant_id_);
+  // 初始化普通租户tt1的sql proxy
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
+}
+
 TEST_F(TestMdsTransactionTest, write_mds_table)
 {
+  std::this_thread::sleep_for(std::chrono::seconds(5));
   common::ObMySQLProxy *sql_proxy = GCTX.ddl_sql_proxy_;
   sqlclient::ObISQLConnection *connection = nullptr;
   ASSERT_EQ(OB_SUCCESS, sql_proxy->acquire(connection));
   observer::ObInnerSQLConnection *inner_conn = dynamic_cast<observer::ObInnerSQLConnection *>(connection);
 
-  ASSERT_EQ(OB_SUCCESS, inner_conn->start_transaction(OB_SYS_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, inner_conn->start_transaction(RunCtx.tenant_id_));
   constexpr int64_t LEN = 128;
   char buffer[LEN];
   int64_t pos = 0;
   int64_t magic_number = 12345;
   ASSERT_EQ(OB_SUCCESS, serialization::encode(buffer, LEN, pos, magic_number));
-  ASSERT_EQ(OB_SUCCESS, inner_conn->register_multi_data_source(OB_SYS_TENANT_ID, share::ObLSID(1), transaction::ObTxDataSourceType::TEST3, buffer, pos));
+  ASSERT_EQ(OB_SUCCESS, inner_conn->register_multi_data_source(RunCtx.tenant_id_, share::ObLSID(1), transaction::ObTxDataSourceType::TEST3, buffer, pos));
+  ASSERT_EQ(OB_SUCCESS, inner_conn->register_multi_data_source(RunCtx.tenant_id_, share::ObLSID(1001), transaction::ObTxDataSourceType::TEST3, buffer, pos));
   // ASSERT_EQ(OB_SUCCESS, inner_conn->commit());
-  ASSERT_EQ(OB_SUCCESS, inner_conn->rollback());
+  // ASSERT_EQ(OB_SUCCESS, inner_conn->rollback());
+  ASSERT_EQ(OB_SUCCESS, inner_conn->commit());
   // int64_t val = 0;
   // ASSERT_EQ(OB_SUCCESS, TestMdsTable.get_snapshot<ExampleUserData1>([&val](const ExampleUserData1 &data) {
   //   val = data.value_;

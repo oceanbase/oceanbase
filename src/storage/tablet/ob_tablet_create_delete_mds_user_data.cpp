@@ -36,7 +36,7 @@ ObTabletCreateDeleteMdsUserData::ObTabletCreateDeleteMdsUserData()
     create_commit_version_(ObTransVersion::INVALID_TRANS_VERSION),
     delete_commit_scn_(share::SCN::invalid_scn()),
     delete_commit_version_(ObTransVersion::INVALID_TRANS_VERSION),
-    transfer_out_commit_version_(ObTransVersion::INVALID_TRANS_VERSION)
+    start_transfer_commit_version_(ObTransVersion::INVALID_TRANS_VERSION)
 {
 }
 
@@ -49,7 +49,7 @@ ObTabletCreateDeleteMdsUserData::ObTabletCreateDeleteMdsUserData(const ObTabletS
     create_commit_version_(ObTransVersion::INVALID_TRANS_VERSION),
     delete_commit_scn_(share::SCN::invalid_scn()),
     delete_commit_version_(ObTransVersion::INVALID_TRANS_VERSION),
-    transfer_out_commit_version_(ObTransVersion::INVALID_TRANS_VERSION)
+    start_transfer_commit_version_(ObTransVersion::INVALID_TRANS_VERSION)
 {
 }
 
@@ -64,7 +64,7 @@ int ObTabletCreateDeleteMdsUserData::assign(const ObTabletCreateDeleteMdsUserDat
   create_commit_version_ = other.create_commit_version_;
   delete_commit_scn_ = other.delete_commit_scn_;
   delete_commit_version_ = other.delete_commit_version_;
-  transfer_out_commit_version_ = other.transfer_out_commit_version_;
+  start_transfer_commit_version_ = other.start_transfer_commit_version_;
   return ret;
 }
 
@@ -78,7 +78,7 @@ void ObTabletCreateDeleteMdsUserData::reset()
   create_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
   delete_commit_scn_.set_invalid();
   create_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
-  transfer_out_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
+  start_transfer_commit_version_ = ObTransVersion::INVALID_TRANS_VERSION;
 }
 
 void ObTabletCreateDeleteMdsUserData::on_redo(const share::SCN &redo_scn)
@@ -132,7 +132,7 @@ void ObTabletCreateDeleteMdsUserData::on_commit(const share::SCN &commit_version
     break;
   }
   case ObTabletMdsUserDataType::START_TRANSFER_IN : {
-    start_transfer_in_on_commit_(commit_version, commit_scn);
+    start_transfer_in_on_commit_(commit_version);
     break;
   }
   case ObTabletMdsUserDataType::REMOVE_TABLET : {
@@ -163,13 +163,6 @@ void ObTabletCreateDeleteMdsUserData::create_tablet_on_commit_(
   LOG_INFO("create tablet commit", KPC(this));
 }
 
-void ObTabletCreateDeleteMdsUserData::start_transfer_in_on_commit_(
-    const share::SCN &commit_version,
-    const share::SCN &commit_scn)
-{
-  LOG_INFO("[TRANSFER] transfer in create tablet commit", KPC(this));
-}
-
 void ObTabletCreateDeleteMdsUserData::delete_tablet_on_commit_(
     const share::SCN &commit_version,
     const share::SCN &commit_scn)
@@ -179,20 +172,27 @@ void ObTabletCreateDeleteMdsUserData::delete_tablet_on_commit_(
   LOG_INFO("delete tablet commit", KPC(this));
 }
 
+void ObTabletCreateDeleteMdsUserData::start_transfer_in_on_commit_(
+    const share::SCN &commit_version)
+{
+  start_transfer_commit_version_ = commit_version.get_val_for_tx();
+  LOG_INFO("[TRANSFER] start transfer in on commit", KPC(this));
+}
+
+void ObTabletCreateDeleteMdsUserData::start_transfer_out_on_commit_(
+    const share::SCN &commit_version)
+{
+  start_transfer_commit_version_ = commit_version.get_val_for_tx();
+  LOG_INFO("[TRANSFER] start transfer out on commit", KPC(this));
+}
+
 void ObTabletCreateDeleteMdsUserData::finish_transfer_out_on_commit_(
     const share::SCN &commit_version,
     const share::SCN &commit_scn)
 {
   delete_commit_scn_ = commit_scn;
   delete_commit_version_ = commit_version.get_val_for_tx();
-  LOG_INFO("[TRANSFER] transfer out delete tablet commit", KPC(this));
-}
-
-void ObTabletCreateDeleteMdsUserData::start_transfer_out_on_commit_(
-    const share::SCN &commit_version)
-{
-  transfer_out_commit_version_ = commit_version.get_val_for_tx();
-  LOG_INFO("[TRANSFER] transfer out on commit", KPC(this));
+  LOG_INFO("[TRANSFER] finish transfer out on commit", KPC(this));
 }
 
 int ObTabletCreateDeleteMdsUserData::set_tablet_gc_trigger(
@@ -242,6 +242,6 @@ OB_SERIALIZE_MEMBER(
     create_commit_version_,
     delete_commit_scn_,
     delete_commit_version_,
-    transfer_out_commit_version_)
+    start_transfer_commit_version_)
 } // namespace storage
 } // namespace oceanbase

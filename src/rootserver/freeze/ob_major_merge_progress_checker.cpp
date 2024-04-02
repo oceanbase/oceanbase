@@ -634,7 +634,10 @@ int ObMajorMergeProgressChecker::refresh_ls_infos()
         for (int64_t i = 0; (i < ls_infos_cnt) && OB_SUCC(ret); ++i) {
           const ObLSID &ls_id = ls_infos.at(i).get_ls_id();
           const ObLSInfo &ls_info = ls_infos.at(i);
-          if (OB_FAIL(ls_infos_map_.set_refactored(ls_id, ls_info, true/*overwrite*/))) {
+          if (OB_UNLIKELY(ls_id.is_sys_ls() && (0 == ls_info.get_replicas_cnt()))) {
+            ret = OB_LS_LOCATION_NOT_EXIST;
+            LOG_WARN("sys ls location not exist", KR(ret), K_(tenant_id), K(ls_info));
+          } else if (OB_FAIL(ls_infos_map_.set_refactored(ls_id, ls_info, true/*overwrite*/))) {
             LOG_WARN("fail to set refactored", KR(ret), K(ls_id), K(ls_info));
           }
         }

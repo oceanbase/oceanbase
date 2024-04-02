@@ -42,6 +42,8 @@ ObFileReadParam::ObFileReadParam()
 int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, ObFileReader *& file_reader)
 {
   int ret = OB_SUCCESS;
+  file_reader = nullptr;
+
   if (param.file_location_ == ObLoadFileLocation::SERVER_DISK) {
     ObRandomFileReader *tmp_reader = OB_NEWx(ObRandomFileReader, &allocator, allocator);
     if (OB_ISNULL(tmp_reader)) {
@@ -259,7 +261,6 @@ int ObRandomOSSReader::get_file_size(int64_t &file_size)
 /**
  * ObPacketStreamFileReader
  */
-
 class CSMemPoolAdaptor : public obmysql::ObICSMemPool
 {
 public:
@@ -283,7 +284,8 @@ ObPacketStreamFileReader::ObPacketStreamFileReader(ObIAllocator &allocator)
       packet_handle_(NULL),
       session_(NULL),
       timeout_ts_(INT64_MAX),
-      arena_allocator_(allocator),
+      // OB_MALLOC_MIDDLE_BLOCK_SIZE 64K. one mysql packet is about 16K
+      arena_allocator_(allocator, OB_MALLOC_MIDDLE_BLOCK_SIZE),
       cached_packet_(NULL),
       received_size_(0),
       read_size_(0),
@@ -301,8 +303,16 @@ ObPacketStreamFileReader::~ObPacketStreamFileReader()
   // normal SQL processor cannot handle the packets, so we
   // eat all packets with file content.
   timeout_ts_ = -1;
-  while (!eof_ && OB_SUCC(ret)) {
+  // We will wait at most 10 seconds if there is no more data come in.
+  const int64_t wait_timeout = 10 * 1000000L; // seconds
+  int64_t wait_deadline = ObTimeUtility::current_time() + wait_timeout;
+  int64_t last_received_size = received_size_;
+  while (!eof_ && OB_SUCC(ret) && ObTimeUtility::current_time() <= wait_deadline) {
     ret = receive_packet();
+    if (received_size_ > last_received_size) {
+      last_received_size = received_size_;
+      wait_deadline = ObTimeUtility::current_time() + wait_timeout;
+    }
   }
   arena_allocator_.reset();
 }

@@ -36,10 +36,11 @@ typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
 
 class ObAlterTableResolver : public ObDDLResolver
 {
-  static const int64_t ALTER_TABLE_NODE_COUNT = 3;
+  static const int64_t ALTER_TABLE_NODE_COUNT = 4;
   static const int64_t TABLE = 0;         // 0. table_node
   static const int64_t ACTION_LIST = 1;   // 1. alter table action list
   static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
+  static const int64_t ALTER_HINT = 3; // the hint.
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
   virtual ~ObAlterTableResolver();
@@ -82,6 +83,7 @@ public:
   int resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node);
 
   int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
+  int check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
 
   int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
 

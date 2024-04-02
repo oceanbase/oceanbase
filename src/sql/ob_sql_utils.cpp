@@ -33,12 +33,12 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/ob_select_stmt_printer.h"
-#include "sql/ob_insert_all_stmt_printer.h"
-#include "sql/ob_insert_stmt_printer.h"
-#include "sql/ob_update_stmt_printer.h"
-#include "sql/ob_delete_stmt_printer.h"
-#include "sql/ob_merge_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/printer/ob_insert_all_stmt_printer.h"
+#include "sql/printer/ob_insert_stmt_printer.h"
+#include "sql/printer/ob_update_stmt_printer.h"
+#include "sql/printer/ob_delete_stmt_printer.h"
+#include "sql/printer/ob_merge_stmt_printer.h"
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "sql/rewrite/ob_transform_rule.h"
@@ -59,6 +59,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/resolver/dcl/ob_dcl_resolver.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -1559,7 +1560,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_RECYCLEBIN == type
                || T_SHOW_TENANT == type
                || T_SHOW_RESTORE_PREVIEW == type
-               || T_SHOW_SEQUENCES == type) {
+               || T_SHOW_SEQUENCES == type
+               || (T_SET_ROLE == type && lib::is_mysql_mode())) {
       ret = true;
     }
   }
@@ -1778,6 +1780,7 @@ void ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
 }
 
 int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
+                                          const ObExprResType &dst_type,
                                           const ObSQLSessionInfo *session,
                                           ObCastMode &cast_mode)
 {
@@ -1791,7 +1794,8 @@ int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
     LOG_WARN("failed to get default cast mode", K(ret));
   } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(expr->get_collation_level(), cast_mode))) {
     LOG_WARN("failed to set cs level cast mode", K(ret));
-  } else if (expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+  } else if (lib::is_mysql_mode() && dst_type.is_string_type() &&
+             expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
     cast_mode |= CM_ADD_ZEROFILL;
   }
   return ret;
@@ -2553,7 +2557,7 @@ bool check_stack_overflow_c()
   return is_overflow;
 }
 
-int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
+int ObSQLUtils::extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                         ObIAllocator &allocator,
                                         ObExecContext &exec_ctx,
                                         ObQueryRangeArray &key_ranges,
@@ -2561,55 +2565,64 @@ int ObSQLUtils::extract_pre_query_range(const ObQueryRange &pre_query_range,
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_FAIL(pre_query_range.get_tablet_ranges(allocator, exec_ctx, key_ranges,
-                                                dummy_all_single_value_ranges,
-                                                dtc_params))) {
+  if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                     dummy_all_single_value_ranges,
+                                                     dtc_params))) {
     LOG_WARN("failed to get tablet ranges", K(ret));
   }
   return ret;
 }
 
-int ObSQLUtils::extract_geo_query_range(const ObQueryRange &pre_query_range,
-                                          ObIAllocator &allocator,
-                                          ObExecContext &exec_ctx,
-                                          ObQueryRangeArray &key_ranges,
-                                          ObMbrFilterArray &mbr_filters,
-                                          const ObDataTypeCastParams &dtc_params)
+int ObSQLUtils::extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
+                                        ObIAllocator &allocator,
+                                        ObExecContext &exec_ctx,
+                                        ObQueryRangeArray &key_ranges,
+                                        ObMbrFilterArray &mbr_filters,
+                                        const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
   bool dummy_all_single_value_ranges = false;
-  if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
-    //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
-    if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
-                                                        exec_ctx,
-                                                        key_ranges,
-                                                        dummy_all_single_value_ranges,
-                                                        dtc_params))) {
-      LOG_WARN("fail to get tablet ranges", K(ret));
-    } else {
-      const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
-        }
-      }
+  if (query_range_provider.is_new_query_range()) {
+    if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
+                                                      dummy_all_single_value_ranges,
+                                                      dtc_params))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else {
-    ObQueryRange final_query_range(allocator);
-    if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
-      // MUST deep copy to make it thread safe
-      LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
-    } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
-      LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
-    } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
-                                                           dummy_all_single_value_ranges,
-                                                           dtc_params))) {
-      LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+    const ObQueryRange &pre_query_range = static_cast<const ObQueryRange&>(query_range_provider);
+    if (OB_LIKELY(!pre_query_range.need_deep_copy())) {
+      //对于大多数查询来说，query条件是非常规范和工整的，这种条件我们不需要拷贝进行graph的变化，可以直接提取
+      if (OB_FAIL(pre_query_range.direct_get_tablet_ranges(allocator,
+                                                          exec_ctx,
+                                                          key_ranges,
+                                                          dummy_all_single_value_ranges,
+                                                          dtc_params))) {
+        LOG_WARN("fail to get tablet ranges", K(ret));
+      } else {
+        const MbrFilterArray &pre_filters = pre_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
+        }
+      }
     } else {
-      const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
-      FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
-        if (OB_FAIL(mbr_filters.push_back(*it))) {
-          LOG_WARN("store mbr_filters_ failed", K(ret));
+      ObQueryRange final_query_range(allocator);
+      if (OB_FAIL(final_query_range.deep_copy(pre_query_range))) {
+        // MUST deep copy to make it thread safe
+        LOG_WARN("fail to create final query range", K(ret), K(pre_query_range));
+      } else if (OB_FAIL(final_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
+        LOG_WARN("fail to final extract query range", K(ret), K(final_query_range));
+      } else if (OB_FAIL(final_query_range.get_tablet_ranges(key_ranges,
+                                                            dummy_all_single_value_ranges,
+                                                            dtc_params))) {
+        LOG_WARN("fail to get tablet ranges from query range", K(ret), K(final_query_range));
+      } else {
+        const MbrFilterArray &pre_filters = final_query_range.get_mbr_filter();
+        FOREACH_X(it, pre_filters, OB_SUCC(ret) && it != pre_filters.end()) {
+          if (OB_FAIL(mbr_filters.push_back(*it))) {
+            LOG_WARN("store mbr_filters_ failed", K(ret));
+          }
         }
       }
     }
@@ -4653,7 +4666,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         && !parent_ctx->get_pl_stack_ctx()->in_autonomous()) {
       if (ObStmt::is_dml_stmt(parent_ctx->get_sql_ctx()->stmt_type_)) {
         bret = true;
-      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_) {
+      } else if (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                 || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_) {
         /* anonymous block in a store procedure will be send to sql engine as sql, which will make new obexeccontext.
            consider follow scene:
             dml1(exec_ctx1)->udf/trigger->procedure->anonymous block(exec_ctx2)->dml2
@@ -4662,7 +4676,8 @@ bool ObSQLUtils::is_pl_nested_sql(ObExecContext *cur_ctx)
         do {
           parent_ctx = parent_ctx->get_parent_ctx();
         } while (OB_NOT_NULL(parent_ctx) && OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
-                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_));
+                 (stmt::T_ANONYMOUS_BLOCK == parent_ctx->get_sql_ctx()->stmt_type_
+                  || stmt::T_CALL_PROCEDURE == parent_ctx->get_sql_ctx()->stmt_type_));
 
         if (OB_NOT_NULL(parent_ctx) &&
             OB_NOT_NULL(parent_ctx->get_sql_ctx()) &&
@@ -5198,9 +5213,10 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get select stmt", K(ret));
-  } else if (is_oracle_mode()) {
+  } else if (is_oracle_mode() && !old_view_schema.is_sys_view()) {
     // column name in column schema should be the same as select item alias name in view definition
     // when view definition is not rebuilt and column list grammar is used, overwrite alias name
+    // sys view can not use column list grammar and column count of sys view may be changed
     const ObColumnSchemaV2 *column_schema;
     uint64_t column_id;
     bool is_column_schema_null = false;
@@ -5228,8 +5244,13 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if (OB_ISNULL(GCTX.sql_engine_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get sql engine", K(ret));
-  } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
-    if (!reset_column_infos) {
+  } else if ((0 == old_view_schema.get_object_status()
+             || 0 == old_view_schema.get_column_count()
+             || (old_view_schema.is_sys_view()
+                 && old_view_schema.get_schema_version() <= GCTX.start_time_))) {
+    if (old_view_schema.is_sys_view() && GCONF.in_upgrade_mode()) {
+      //do not recompile sys view until upgrade finish
+    } else if (!reset_column_infos) {
       ObArray<ObString> dummy_column_list;
       ObArray<ObString> column_comments;
       bool resolve_succ = true;
@@ -5505,4 +5526,13 @@ bool ObSQLUtils::check_json_expr(ObItemType type)
     }
   }
   return res;
+}
+
+int ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  OZ (GET_MIN_DATA_VERSION(tenant_id, data_version));
+  OV (DATA_VERSION_4_2_3_0 <= data_version, OB_NOT_SUPPORTED, data_version);
+  return ret;
 }

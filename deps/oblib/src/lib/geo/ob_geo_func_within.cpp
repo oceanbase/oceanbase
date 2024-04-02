@@ -28,7 +28,7 @@ namespace common
 namespace bg = boost::geometry;
 
 static int do_multi_difference(const ObSrsItem &srs,
-                                        ObIAllocator &allocator,
+                                        const ObGeoEvalCtx &context,
                                         ObGeometry *geo,
                                         ObGeometry *mpt,
                                         ObGeometry *ml,
@@ -38,9 +38,9 @@ static int do_multi_difference(const ObSrsItem &srs,
   INIT_SUCC(ret);
   ObGeometry *res_geo1 = NULL;
   ObGeometry *res_geo2 = NULL;
-  ObGeoEvalCtx gis_context1(&allocator, &srs);
-  ObGeoEvalCtx gis_context2(&allocator, &srs);
-  ObGeoEvalCtx gis_context3(&allocator, &srs);
+  ObGeoEvalCtx gis_context1(context.get_mem_ctx(), &srs);
+  ObGeoEvalCtx gis_context2(context.get_mem_ctx(), &srs);
+  ObGeoEvalCtx gis_context3(context.get_mem_ctx(), &srs);
   if (OB_NOT_NULL(mpt)) {
     if (OB_FAIL(gis_context1.append_geo_arg(reinterpret_cast<ObGeometry *>(geo))) || OB_FAIL(gis_context1.append_geo_arg(mpt))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context1.get_geo_count()));
@@ -260,7 +260,7 @@ static int ob_caculate_ml_within_gc(const ObGeometry *g1, const ObGeometry *g2,
     ObGeometry *i_geo1 = const_cast<ObGeometry *>(g1);
     if (OB_FAIL(i_geo1->do_visit(visitor))) {
       LOG_WARN("failed to do geo2 to_tree visit", K(ret));
-    } else if (OB_FAIL(do_multi_difference(*srs, *allocator, visitor.get_geometry(),
+    } else if (OB_FAIL(do_multi_difference(*srs, context, visitor.get_geometry(),
                                            NULL,
                                            reinterpret_cast<ObGeometry *>(multi_line),
                                            reinterpret_cast<ObGeometry *>(multi_poly),
@@ -304,7 +304,7 @@ static int ob_caculate_ml_within_gc_geog(const ObGeometry *g1, const ObGeometry 
     ObGeometry *i_geo1 = const_cast<ObGeometry *>(g1);
     if (OB_FAIL(i_geo1->do_visit(visitor))) {
       LOG_WARN("failed to do geo2 to_tree visit", K(ret));
-    } else if (OB_FAIL(do_multi_difference(*srs, *allocator, visitor.get_geometry(),
+    } else if (OB_FAIL(do_multi_difference(*srs, context, visitor.get_geometry(),
                                            NULL,
                                            reinterpret_cast<ObGeometry *>(multi_line),
                                            reinterpret_cast<ObGeometry *>(multi_poly),
@@ -503,7 +503,7 @@ private:
       IPointType i_point;
       i_point.set_data(data);
 
-      ObGeoEvalCtx intersects_context(context.get_allocator(), context.get_srs());
+      ObGeoEvalCtx intersects_context(context.get_mem_ctx(), context.get_srs());
       intersects_context.append_geo_arg(&i_point);
       intersects_context.append_geo_arg(g2);
       if (!within) {
@@ -954,7 +954,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
     const ObSrsItem *srs = context.get_srs();
     ObIAllocator *allocator = context.get_allocator();
     ObGeometry *res_geo3 = NULL;
-    if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_point),
+    if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_line),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_poly),
@@ -964,7 +964,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
       result = false;
     } else {
       ObGeometry *res_geo5 = NULL;
-      if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_line),
+      if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_line),
                                                         NULL,
                                                         reinterpret_cast<ObGeometry *>(g2_multi_line),
                                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),
@@ -974,7 +974,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeomCollection, ObWkbGeo
         result = false;
       } else {
         ObGeometry *res_geo6 = NULL;
-        if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_poly),
+        if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_poly),
                                                           NULL,
                                                           NULL,
                                                           reinterpret_cast<ObGeometry *>(g2_multi_poly),
@@ -1538,7 +1538,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     ObIAllocator *allocator = context.get_allocator();
 
     ObGeometry *res_geo3 = NULL;
-    if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_point),
+    if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_point),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_line),
                                                       reinterpret_cast<ObGeometry *>(g2_multi_poly),
@@ -1548,7 +1548,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
       result = false;
     } else {
       ObGeometry *res_geo5 = NULL;
-      if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_line),
+      if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_line),
                                                         NULL,
                                                         reinterpret_cast<ObGeometry *>(g2_multi_line),
                                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),
@@ -1558,7 +1558,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
         result = false;
       } else {
         ObGeometry * res_geo6 = NULL;
-        if (OB_FAIL(do_multi_difference(*srs, *allocator, reinterpret_cast<ObGeometry *>(g1_multi_poly),
+        if (OB_FAIL(do_multi_difference(*srs, context, reinterpret_cast<ObGeometry *>(g1_multi_poly),
                                         NULL,
                                         NULL,
                                         reinterpret_cast<ObGeometry *>(g2_multi_poly),

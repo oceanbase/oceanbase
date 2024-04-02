@@ -309,13 +309,16 @@ int ObUserSqlService::drop_user(
   //    1). role: update related grantees' schema version
   //    2). grantee: update related roles' schema version
   const ObUserInfo *user = NULL;
+  lib::Worker::CompatMode cmp_mode = lib::Worker::CompatMode::INVALID;
   if (FAILEDx(schema_guard.get_user_info(tenant_id, user_id, user))) {
     LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
   } else if (NULL == user) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user info is null", K(ret), K(user_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, cmp_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
   } else {
-    const bool is_role = user->is_role();
+    const bool is_role = user->is_role() || (lib::Worker::CompatMode::MYSQL == cmp_mode);
 
     OZ (drop_user_delete_role_grantee_map(tenant_id, is_role, new_schema_version,
                                           user, ddl_stmt_str, sql_client, schema_guard));
@@ -814,13 +817,16 @@ int ObUserSqlService::gen_user_dml(
   const bool is_ssl_support = (user.get_ssl_type() != ObSSLType::SSL_TYPE_NOT_SPECIFIED);
   LOG_INFO("gen_user_dml", K(is_ssl_support), K(user), K(is_from_inner_sql));
   uint64_t compat_version = 0;
+  bool is_oracle_mode = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(user.get_tenant_id(), compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(user.get_tenant_id()));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(user.get_tenant_id(), is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, user.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id,user.get_user_id())))
-      || OB_FAIL(dml.add_column("user_name", user.get_user_name()))
+      || OB_FAIL(dml.add_column("user_name", ObHexEscapeSqlStr(user.get_user_name())))
       || OB_FAIL(dml.add_column("host", user.get_host_name()))
       || OB_FAIL(dml.add_column("passwd", user.get_passwd()))
       || OB_FAIL(dml.add_column("info", user.get_info()))

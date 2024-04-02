@@ -131,11 +131,14 @@ public:
                                    ObShardingInfo *&out_sharding);
 
   virtual int compute_op_parallel_and_server_info() override;
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
+  int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
 protected:
   DistAlgo dist_algo_;
   common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;

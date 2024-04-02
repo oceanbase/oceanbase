@@ -44,6 +44,26 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
 
 namespace storage {
 
+void ObMemtableMgrHandle::reset()
+{
+  if (nullptr != memtable_mgr_) {
+    if (nullptr == pool_) {
+      STORAGE_LOG(DEBUG, "this memory manager is a special handle", KP(memtable_mgr_), "ref_cnt",
+                  memtable_mgr_->get_ref(), K(lbt()));
+      // at present, inner tablet's memtable_mgr_ is not managed by pool,
+      // just decrease ref and leave the release to the owner of memtable_mgr.
+      memtable_mgr_->dec_ref();
+      memtable_mgr_ = nullptr;
+    } else {
+      if (0 == memtable_mgr_->dec_ref()) {
+        TRANS_LOG(INFO, "dec ref to 0", KP(memtable_mgr_));
+      }
+      memtable_mgr_ = nullptr;
+      pool_ = nullptr;
+    }
+  }
+}
+
 int ObTxTable::online()
 {
   ATOMIC_INC(&epoch_);
@@ -492,7 +512,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
   read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
-  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ = ObTimeUtility::current_time() + 5000ll * 1000;
+  read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ts_ = ObTimeUtility::current_time() + 5000ll * 1000;
   blocksstable::ObDatumRow row;
   {
     ObTableIterParam iter_param;

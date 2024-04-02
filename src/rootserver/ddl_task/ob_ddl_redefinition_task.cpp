@@ -119,6 +119,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
   } else {
+    ObString partition_names;
     if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                       data_table_id_,
                                                       dest_table_id_,
@@ -130,6 +131,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                       use_heap_table_ddl_plan_,
                                                       true/*use_schema_version_hint_for_src_table*/,
                                                       &col_name_map_,
+                                                      partition_names,
                                                       sql_string))) {
       LOG_WARN("fail to generate build replica sql", K(ret));
     } else {
@@ -1368,9 +1370,17 @@ int ObDDLRedefinitionTask::finish()
 int ObDDLRedefinitionTask::fail()
 {
   int ret = OB_SUCCESS;
+  bool all_complement_dag_exit = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
+  } else if (is_complement_data_relying_on_dag(task_type_) &&
+      OB_FAIL(check_and_cancel_complement_data_dag(all_complement_dag_exit))) {
+    LOG_WARN("check and cancel complement data dag failed", K(ret));
+  } else if (!all_complement_dag_exit) {
+    if (REACH_COUNT_INTERVAL(1000L)) {
+      LOG_INFO("wait all complement data dag exit", K(dst_tenant_id_), K(task_id_));
+    }
   } else if (OB_FAIL(finish())) {
     LOG_WARN("finish failed", K(ret));
   } else {
@@ -2812,4 +2822,113 @@ int64_t ObDDLRedefinitionTask::get_build_replica_request_time()
 {
   TCRLockGuard guard(lock_);
   return build_replica_request_time_;
+}
+
+int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_complement_dag_exit)
+{
+  int ret = OB_SUCCESS;
+  all_complement_dag_exit = false;
+  const bool force_renew = true;
+  bool is_cache_hit = false;
+  const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
+  share::ObLocationService *location_service = GCTX.location_service_;
+  ObRootService *root_service = GCTX.root_service_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(location_service) || OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(location_service), KP(root_service));
+  } else if (OB_UNLIKELY(!check_dag_exit_tablets_map_.created())) {
+    const int64_t CHECK_DAG_EXIT_BUCKET_NUM = 64;
+    common::ObArray<common::ObTabletID> src_tablet_ids;
+    common::ObArray<common::ObTabletID> dst_tablet_ids;
+    if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, src_tablet_ids))) {
+      LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
+    } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, target_object_id_, dst_tablet_ids))) {
+      LOG_WARN("fail to get tablets", K(ret), K(dst_tenant_id_), K(target_object_id_));
+    } else if (OB_FAIL(check_dag_exit_tablets_map_.create(CHECK_DAG_EXIT_BUCKET_NUM, lib::ObLabel("DDLChkDagMap")))) {
+      LOG_WARN("create hashset set failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < src_tablet_ids.count(); i++) {
+        if (OB_FAIL(check_dag_exit_tablets_map_.set_refactored(src_tablet_ids.at(i), dst_tablet_ids.at(i)))) {
+          LOG_WARN("set refactored failed", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObAddr unused_leader_addr;
+    const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
+    common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> ::const_iterator iter =
+      check_dag_exit_tablets_map_.begin();
+    ObArray<common::ObTabletID> dag_not_exist_tablets;
+    for (; OB_SUCC(ret) && iter != check_dag_exit_tablets_map_.end(); iter++) {
+      ObLSID src_ls_id;
+      ObLSID dst_ls_id;
+      const common::ObTabletID &src_tablet_id = iter->first;
+      const common::ObTabletID &dst_tablet_id = iter->second;
+      int64_t paxos_member_count = 0;
+      common::ObArray<ObAddr> paxos_server_list;
+      if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(location_service, tenant_id_, src_tablet_id, timeout_us, src_ls_id, unused_leader_addr))) {
+        LOG_WARN("get src tablet leader addr failed", K(ret));
+      } else if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(location_service, dst_tenant_id_, dst_tablet_id, timeout_us, dst_ls_id, unused_leader_addr))) {
+        LOG_WARN("get dst tablet leader addr failed", K(ret));
+      } else if (OB_FAIL(ObDDLUtil::get_tablet_paxos_member_list(dst_tenant_id_, dst_tablet_id, paxos_server_list, paxos_member_count))) {
+        LOG_WARN("get tablet paxos member list failed", K(ret));
+      } else {
+        bool is_dag_exist = false;
+        obrpc::ObDDLBuildSingleReplicaRequestArg arg;
+        arg.ls_id_ = src_ls_id;
+        arg.dest_ls_id_ = dst_ls_id;
+        arg.tenant_id_ = tenant_id_;
+        arg.dest_tenant_id_ = dst_tenant_id_;
+        arg.source_tablet_id_ = src_tablet_id;
+        arg.dest_tablet_id_ = dst_tablet_id;
+        arg.source_table_id_ = object_id_;
+        arg.dest_schema_id_ = target_object_id_;
+        arg.schema_version_ = schema_version_;
+        arg.dest_schema_version_ = dst_schema_version_;
+        arg.snapshot_version_ = snapshot_version_;
+        arg.ddl_type_ = task_type_;
+        arg.task_id_ = task_id_;
+        arg.parallelism_ = 1; // to ensure arg valid only.
+        arg.execution_id_ = 1; // to ensure arg valid only.
+        arg.data_format_version_ = 1; // to ensure arg valid only.
+        arg.tablet_task_id_ = 1; // to ensure arg valid only.
+        arg.consumer_group_id_ = 0; // to ensure arg valid only.
+        for (int64_t j = 0; OB_SUCC(ret) && j < paxos_server_list.count(); j++) {
+          int tmp_ret = OB_SUCCESS;
+          obrpc::Bool dag_exist_in_current_server(true);
+          if (OB_TMP_FAIL(root_service->get_rpc_proxy().to(paxos_server_list.at(j))
+            .by(dst_tenant_id_).timeout(timeout_us).check_and_cancel_ddl_complement_dag(arg, dag_exist_in_current_server))) {
+            // consider as dag does not exist in this server.
+            LOG_WARN("check and cancel ddl complement dag failed", K(ret), K(tmp_ret), K(arg));
+          } else if (dag_exist_in_current_server) {
+            is_dag_exist = true;
+            if (REACH_COUNT_INTERVAL(1000L)) {
+              LOG_INFO("wait dag exist", "addr", paxos_server_list.at(j), K(arg));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !is_dag_exist) {
+          if (OB_FAIL(dag_not_exist_tablets.push_back(src_tablet_id))) {
+            LOG_WARN("push back failed", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < dag_not_exist_tablets.count(); j++) {
+        if (OB_FAIL(check_dag_exit_tablets_map_.erase_refactored(dag_not_exist_tablets.at(j)))) {
+          LOG_WARN("erase failed", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && check_dag_exit_tablets_map_.empty()) {
+    // all participants have no complement data dag.
+    all_complement_dag_exit = true;
+  }
+  return ret;
 }

@@ -407,6 +407,7 @@ int ObStorageHAUtils::check_ls_is_leader(
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be null", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KP(ls));
@@ -1059,63 +1060,31 @@ int ObTransferUtils::check_ls_replay_scn(
     common::ObIArray<ObAddr> &finished_addr_list)
 {
   int ret = OB_SUCCESS;
-  storage::ObFetchLSReplayScnProxy batch_proxy(
+  storage::ObFetchLSReplayScnProxy batch_rpc_proxy(
       *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::fetch_ls_replay_scn);
   ObFetchLSReplayScnArg arg;
-  const int64_t timeout = 10 * 1000 * 1000; //10s
-  const int64_t cluster_id = GCONF.cluster_id;
+  const int64_t rpc_timeout = timeout_ctx.get_timeout();
+  ObHAAsyncRpcArg async_rpc_arg;
+  ObArray<obrpc::ObFetchLSReplayScnRes> responses;
 
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !check_scn.is_valid() || group_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check transfer in tablet abort get invalid argument", K(ret), K(tenant_id), K(ls_id), K(check_scn), K(group_id));
+  } else if (rpc_timeout < 0) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("check ls replay scn already timeout", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
+    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
   } else {
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
-      const ObAddr &addr = member_addr_list.at(i);
-      if (timeout_ctx.is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("check transfer in tablet abort already timeout", K(ret), K(tenant_id), K(ls_id));
-        break;
-      } else if (OB_FAIL(batch_proxy.call(
-          addr,
-          timeout,
-          cluster_id,
-          arg.tenant_id_,
-          group_id,
-          arg))) {
-        LOG_WARN("failed to send fetch ls replay scn request", K(ret), K(addr), K(tenant_id), K(ls_id));
-      } else {
-        LOG_INFO("fetch ls replay scn complete", K(arg), K(addr));
-      }
-    }
-
-    ObArray<int> return_code_array;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
-      LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (return_code_array.count() != member_addr_list.count()
-        || return_code_array.count() != batch_proxy.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cnt not match", K(ret),
-               "return_cnt", return_code_array.count(),
-               "result_cnt", batch_proxy.get_results().count(),
-               "server_cnt", member_addr_list.count());
+    if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
+      LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
     } else {
-      ARRAY_FOREACH_X(batch_proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-        const obrpc::ObFetchLSReplayScnRes *response = batch_proxy.get_results().at(idx);
-        const int res_ret = return_code_array.at(idx);
-        if (OB_SUCCESS != res_ret) {
-          ret = res_ret;
-          LOG_WARN("rpc execute failed", KR(ret), K(idx));
-        } else if (OB_ISNULL(response)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("response is null", K(ret));
-        } else if (response->replay_scn_ >= check_scn && OB_FAIL(finished_addr_list.push_back(member_addr_list.at(idx)))) {
-          LOG_WARN("failed to push member addr into list", K(ret), K(idx), K(member_addr_list));
+      for (int64_t i = 0; OB_SUCC(ret) && i < responses.count(); ++i) {
+        const obrpc::ObFetchLSReplayScnRes &res = responses.at(i);
+        if (res.replay_scn_ >= check_scn && OB_FAIL(finished_addr_list.push_back(member_addr_list.at(i)))) {
+          LOG_WARN("failed to push member addr into list", K(ret), K(member_addr_list));
         }
       }
     }

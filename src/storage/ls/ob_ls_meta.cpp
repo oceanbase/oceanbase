@@ -62,7 +62,8 @@ ObLSMeta::ObLSMeta()
     all_id_meta_(),
     saved_info_(),
     transfer_scn_(SCN::min_scn()),
-    rebuild_info_()
+    rebuild_info_(),
+    transfer_meta_info_()
 {
 }
 
@@ -83,8 +84,10 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     tablet_change_checkpoint_scn_(ls_meta.tablet_change_checkpoint_scn_),
     saved_info_(ls_meta.saved_info_),
     transfer_scn_(ls_meta.transfer_scn_),
-    rebuild_info_(ls_meta.rebuild_info_)
+    rebuild_info_(ls_meta.rebuild_info_),
+    transfer_meta_info_(ls_meta.transfer_meta_info_)
 {
+  int ret = OB_SUCCESS;
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
 
@@ -103,6 +106,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
 {
   ObSpinLockTimeGuard guard(other.lock_);
   ObSpinLockTimeGuard guard_myself(lock_);
+  int ret = OB_SUCCESS;
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
@@ -121,6 +125,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     saved_info_ = other.saved_info_;
     transfer_scn_ = other.transfer_scn_;
     rebuild_info_ = other.rebuild_info_;
+    transfer_meta_info_ = other.transfer_meta_info_;
   }
   return *this;
 }
@@ -143,6 +148,7 @@ void ObLSMeta::reset()
   saved_info_.reset();
   transfer_scn_ = SCN::min_scn();
   rebuild_info_.reset();
+  transfer_meta_info_.reset();
 }
 
 LSN &ObLSMeta::get_clog_base_lsn()
@@ -285,7 +291,10 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
     if (write_slog && OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("migration_status write slog failed", K(ret));
     } else {
+      ObMigrationStatus original_status = migration_status_;
       migration_status_ = migration_status;
+      FLOG_INFO("succeed to set ls migration status", K(ls_id_), "original status",
+          original_status, "current status", migration_status);
     }
   }
   return ret;
@@ -372,7 +381,10 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("restore_status write slog failed", K(ret));
     } else {
+      ObLSRestoreStatus original_status = restore_status_;
       restore_status_ = restore_status;
+      FLOG_INFO("succeed to set ls restore status", K(ls_id_), "original status",
+          original_status, "current status", restore_status);
     }
   }
   return ret;
@@ -460,8 +472,9 @@ int ObLSMeta::update_ls_meta(
     tmp.offline_scn_ = src_ls_meta.offline_scn_;
     guard.click();
     tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
+    tmp.transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
-  // TODO(muwei.ym): now do not allow clog checkpoint ts rollback, may support it in 4.3
+    // TODO(muwei.ym): now do not allow clog checkpoint ts rollback, may support it in 4.3
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("do not allow clog checkpoint ts rollback", K(ret), K(src_ls_meta), KPC(this));
     } else if (OB_FAIL(write_slog_(tmp))) {
@@ -480,6 +493,7 @@ int ObLSMeta::update_ls_meta(
       if (update_restore_status) {
         restore_status_ = ls_restore_status;
       }
+      transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
     }
     LOG_INFO("update ls meta", K(ret), K(tmp), K(src_ls_meta), K(*this));
   }
@@ -512,6 +526,7 @@ int ObLSMeta::set_ls_rebuild()
       } else {
         migration_status_ = change_status;
         rebuild_seq_ = tmp.rebuild_seq_;
+        FLOG_INFO("succeed to set ls rebuild", "ls_id", ls_id_, KPC(this));
       }
     }
   }
@@ -742,6 +757,7 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       rebuild_info_ = rebuild_info;
+      FLOG_INFO("succeed to set rebuild info", K(ls_id_), K(rebuild_info));
     }
   }
   return ret;
@@ -756,6 +772,117 @@ int ObLSMeta::get_rebuild_info(ObLSRebuildInfo &rebuild_info) const
     LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
   } else {
     rebuild_info = rebuild_info_;
+  }
+  return ret;
+}
+
+int ObLSMeta::set_transfer_meta_info(
+    const share::SCN &replay_scn,
+    const share::ObLSID &src_ls,
+    const share::SCN &src_scn,
+    const ObTransferInTransStatus::STATUS &trans_status,
+    const common::ObIArray<common::ObTabletID> &tablet_id_array,
+    const uint64_t data_version)
+{
+  //START TRANSFER IN TX_END cannot get scn, so START TRANSFER IN TX_END using transfer out scn as replay scn
+  //TX_END has two stages : COMMIT or ABORT, using transfer out scn to as replay scn to set transfer meta info.
+  int ret = OB_SUCCESS;
+  bool need_update = true;
+  ObSpinLockTimeGuard guard(lock_);
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (!replay_scn.is_valid() || !src_ls.is_valid() || !src_scn.is_valid()
+      || !ObTransferInTransStatus::is_valid(trans_status) || 0 == data_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid transfer meta info", K(ret), K(replay_scn), K(src_ls), K(src_scn), K(trans_status), K(data_version));
+  } else if (transfer_scn_ > replay_scn) {
+    need_update = false;
+    LOG_INFO("no need set transfer meta info", K(replay_scn), K(src_ls), K(transfer_scn_));
+  } else if (transfer_scn_ == replay_scn) {
+    if (transfer_meta_info_.is_trans_status_same(trans_status)) {
+      need_update = false;
+      LOG_INFO("no need set transfer meta info", K(replay_scn), K(src_ls), K(src_scn),
+          K(trans_status), K(tablet_id_array), KPC(this));
+    } else if (ObTransferInTransStatus::PREPARE == transfer_meta_info_.trans_status_
+        && ObTransferInTransStatus::ABORT == trans_status) {
+      need_update = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("trans status is unexpected, can not update", K(ret), K(replay_scn), K(src_ls), K(src_scn),
+          K(trans_status), K(tablet_id_array), KPC(this));
+    }
+  } else {
+    need_update = true;
+    LOG_INFO("set transfer meta info", K(replay_scn), K(src_ls), K(src_scn),
+        K(trans_status), K(tablet_id_array), KPC(this));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (need_update) {
+    ObLSMeta tmp(*this);
+    if (FALSE_IT(tmp.transfer_scn_ = replay_scn)) {
+    } else if (OB_FAIL(tmp.transfer_meta_info_.set_transfer_info(src_ls, src_scn, trans_status, tablet_id_array, data_version))) {
+      LOG_WARN("failed to set transfer meta info", K(ret), K(src_ls), K(src_scn), K(trans_status), K(tablet_id_array));
+    } else if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("rebuild_info write slog failed", K(ret));
+    } else {
+      transfer_meta_info_ = tmp.transfer_meta_info_;
+      transfer_scn_ = tmp.transfer_scn_;
+    }
+  }
+  return ret;
+}
+
+int ObLSMeta::get_transfer_meta_info(ObLSTransferMetaInfo &transfer_meta_info) const
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockTimeGuard guard(lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
+  } else {
+    transfer_meta_info = transfer_meta_info_;
+  }
+  return ret;
+}
+
+int ObLSMeta::cleanup_transfer_meta_info(
+    const share::SCN &replay_scn)
+{
+  int ret = OB_SUCCESS;
+  bool need_update = true;
+  ObSpinLockTimeGuard guard(lock_);
+  if (OB_FAIL(check_can_update_())) {
+    LOG_WARN("ls meta cannot update", K(ret), K(*this));
+  } else if (!replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid transfer meta info", K(ret), K(replay_scn));
+  } else if (transfer_scn_ > replay_scn) {
+    need_update = false;
+    LOG_INFO("no need cleanup transfer meta info", K(replay_scn), K(transfer_scn_), KPC(this));
+  } else if (transfer_scn_ == replay_scn) {
+    if (ObTransferInTransStatus::NONE != transfer_meta_info_.trans_status_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cleanup transfer meta info trans status is unexpected", K(ret), KPC(this), K(replay_scn));
+    } else {
+      need_update = false;
+    }
+  } else {
+    need_update = true;
+    LOG_INFO("need cleanup transfer meta info", K(replay_scn), K(transfer_scn_), KPC(this));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_update) {
+    ObLSMeta tmp(*this);
+    if (FALSE_IT(tmp.transfer_scn_ = replay_scn)) {
+    } else if (OB_FAIL(tmp.transfer_meta_info_.cleanup_transfer_info())) {
+      LOG_WARN("failed to set transfer meta info", K(ret), K(tmp));
+    } else if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("rebuild_info write slog failed", K(ret));
+    } else {
+      transfer_meta_info_ = tmp.transfer_meta_info_;
+      transfer_scn_ = tmp.transfer_scn_;
+    }
   }
   return ret;
 }
@@ -787,7 +914,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     all_id_meta_,
                     saved_info_,
                     transfer_scn_,
-                    rebuild_info_);
+                    rebuild_info_,
+                    transfer_meta_info_);
 
 }
 }

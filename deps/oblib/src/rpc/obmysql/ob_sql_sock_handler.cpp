@@ -39,19 +39,7 @@ static int get_client_addr_for_sql_sock_session(int fd, ObAddr& client_addr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql nio getpeername failed", K(errno), K(ret));
   } else {
-    if (AF_INET == addr.ss_family) {
-      struct sockaddr_in  *s = (struct sockaddr_in *)&addr;
-      if (false == client_addr.set_ipv4_addr(ntohl(s->sin_addr.s_addr), ntohs(s->sin_port))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql nio set_ipv4_addr failed", K(ret));
-      }
-    } else if (AF_INET6 == addr.ss_family) {
-      struct sockaddr_in6  *s = (struct sockaddr_in6 *)&addr;
-      if (false == client_addr.set_ipv6_addr((void *)&s->sin6_addr, ntohs(s->sin6_port))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql nio set_ipv6_addr failed", K(ret));
-      }
-    }
+    client_addr.from_sockaddr(&addr);
   }
 
   return ret;

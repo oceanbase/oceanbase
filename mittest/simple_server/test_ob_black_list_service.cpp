@@ -40,6 +40,7 @@ TEST_F(TestObBlackListService, black_list_inner_func)
   // init, bl_service already inited in ObServer::init()
   int ret = OB_SUCCESS;
   bool check = true;
+  const int64_t query_timeout = 10 * 1000 * 1000; // 10s
   ObBLKey bl_key;
   ObLsInfo ls_info;
   ObBLService &bl_service = ObBLService::get_instance();
@@ -47,12 +48,12 @@ TEST_F(TestObBlackListService, black_list_inner_func)
   // sql
   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2("sys", "oceanbase"));
   ObSqlString sql;
-  sql.assign_fmt(BLACK_LIST_SELECT_LS_INFO_STMT);
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt(BLACK_LIST_SELECT_LS_INFO_STMT));
   ASSERT_EQ(OB_SUCCESS, ret);
   SMART_VAR(ObISQLClient::ReadResult, res) {
     // do sql query
-    ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
+    ObMySQLProxy &sql_proxy = *GCTX.sql_proxy_;
+    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, OB_SYS_TENANT_ID, sql.ptr(), nullptr, query_timeout));
     sqlclient::ObMySQLResult *result = res.get_result();
     ASSERT_NE(nullptr, result);
 
@@ -73,7 +74,7 @@ TEST_F(TestObBlackListService, black_list_inner_func)
     ASSERT_EQ(false, check);
 
     // query again
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
+    ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, OB_SYS_TENANT_ID, sql.ptr(), nullptr, query_timeout));
     result = res.get_result();
     ASSERT_NE(nullptr, result);
 

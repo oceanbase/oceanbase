@@ -25,6 +25,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
+#include "share/stat/ob_dbms_stats_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -116,6 +117,11 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
     job_info.get_tenant_id(), job_info.get_lowner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
+  if (OB_SUCC(ret) &&
+      user_infos.count() > 1 &&
+      ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
+    OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
+  }
   OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
   CK (OB_NOT_NULL(user_info = user_infos.at(0)));
   CK (OB_NOT_NULL(user_info));
@@ -145,9 +151,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
     CK (OB_LIKELY(inited_));
     CK (OB_NOT_NULL(sql_proxy_));
     CK (sql_proxy_->is_inited());
+    CK (job_info.valid());
+    CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
     if (OB_SUCC(ret)) {
-      CK (job_info.valid());
-      CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
       if (job_info.get_what().length() != 0) { // action
         if (job_info.is_oracle_tenant_) {
           OZ (what.append_fmt("BEGIN %.*s; END;",
@@ -168,13 +174,22 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
         SMART_VAR(ObMySQLProxy::MySQLResult, result) {
           if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
             LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_info.get_program_name().ptr()), K(job_info.get_job_name().ptr()));
-          } else if (OB_NOT_NULL(result.get_result())) {
+          } else if (OB_ISNULL(result.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+          } else {
             if (OB_SUCCESS == (ret = result.get_result()->next())) {
               EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "program_action", program_action);
               EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "number_of_argument", number_of_argument, uint64_t);
-              if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-                LOG_ERROR("got more than one row for dbms sched program!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                ret = OB_ERR_UNEXPECTED;
+              if (OB_SUCC(ret)) {
+                int tmp_ret = result.get_result()->next();
+                if (OB_SUCCESS == tmp_ret) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_ERROR("got more than one row for dbms sched program!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                } else if (tmp_ret != OB_ITER_END) {
+                  ret = tmp_ret;
+                  LOG_WARN("got next row for dbms sched program failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                }
               }
             } else if (OB_ITER_END == ret) {
               LOG_INFO("program not exists, may delete alreay!", K(ret), K(tenant_id), K(job_info.get_program_name().ptr()), K(job_info.get_program_name().ptr()));
@@ -200,12 +215,21 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
             SMART_VAR(ObMySQLProxy::MySQLResult, result) {
               if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
                 LOG_WARN("execute query failed", K(ret), K(sql), K(result.get_result()), K(tenant_id), K(job_info.get_job_name().ptr()));
-              } else if (OB_NOT_NULL(result.get_result())) {
+              } else if (OB_ISNULL(result.get_result())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()));
+              } else {
                 if (OB_SUCCESS == (ret = result.get_result()->next())) {
                   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "default_value", argument_value);
-                  if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-                    LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                    ret = OB_ERR_UNEXPECTED;
+                  if (OB_SUCC(ret)) {
+                    int tmp_ret = result.get_result()->next();
+                    if (OB_SUCCESS == tmp_ret) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                    } else if (tmp_ret != OB_ITER_END) {
+                      ret = tmp_ret;
+                      LOG_WARN("got next row for argument failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                    }
                   }
                 } else if (OB_ITER_END == ret) {
                   LOG_INFO("job argument not exists, use default");
@@ -219,12 +243,21 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
                   SMART_VAR(ObMySQLProxy::MySQLResult, tmp_result) {
                     if (OB_FAIL(sql_proxy_->read(tmp_result, tenant_id, sql.ptr()))) {
                       LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_info.get_job_name().ptr()));
-                    } else if (OB_NOT_NULL(tmp_result.get_result())) {
+                    } else if (OB_ISNULL(tmp_result.get_result())) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()));
+                    } else {
                       if (OB_SUCCESS == (ret = tmp_result.get_result()->next())) {
                         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(tmp_result.get_result()), "default_value", argument_value);
-                        if (OB_SUCC(ret) && (tmp_result.get_result()->next()) != OB_ITER_END) {
-                          LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                          ret = OB_ERR_UNEXPECTED;
+                        if (OB_SUCC(ret)) {
+                          int tmp_ret = tmp_result.get_result()->next();
+                          if (OB_SUCCESS == tmp_ret) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                          } else if (tmp_ret != OB_ITER_END) {
+                            ret = tmp_ret;
+                            LOG_WARN("got next row for argument failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                          }
                         }
                       } else if (OB_ITER_END == ret) {
                         LOG_ERROR("program default argument not exists", K(sql.ptr()), K(job_info.get_program_name().ptr()));
@@ -279,7 +312,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-    OZ (table_operator_.update_for_start(tenant_id, job_info));
 
     OZ (run_dbms_sched_job(tenant_id, job_info));
 
@@ -289,7 +321,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
       errmsg = ObString(strlen(ob_errpkt_strerror(ret, lib::is_oracle_mode())),
                         ob_errpkt_strerror(ret, lib::is_oracle_mode()));
     }
-    if ((tmp_ret = table_operator_.update_for_end(tenant_id, job_info, ret, errmsg)) != OB_SUCCESS) {
+    if ((tmp_ret = table_operator_.update_for_end(job_info, ret, errmsg)) != OB_SUCCESS) {
       LOG_WARN("update dbms sched job failed", K(tmp_ret), K(ret));
     }
     ret = OB_SUCCESS == ret ? tmp_ret : ret;

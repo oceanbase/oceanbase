@@ -1774,7 +1774,7 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
     COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
@@ -1811,7 +1811,7 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (params.use_memcpy_) {
     ret = databuff_memcpy(buffer, length, pos, jbuf.length(), jbuf.ptr());
@@ -1839,7 +1839,7 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
   } else if (str.empty()) { // nothing to print;
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
-  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+  } else if (OB_FAIL(j_base->print(jbuf, false, str.length()))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s",
                                      static_cast<int>(MIN(jbuf.length(), buf_len - pos)),
@@ -2322,8 +2322,8 @@ template <>
 inline int obj_val_serialize<ObExtendType>(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  OB_UNIS_ENCODE(obj.get_ext());
   if (obj.is_pl_extend()) {
+    OB_UNIS_ENCODE(obj.get_ext());
     COMMON_LOG(ERROR, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
     return OB_NOT_SUPPORTED; //TODO:@ryan.ly: close this feature before composite refactor
     if (NULL == serialize_composite_callback) {
@@ -2331,6 +2331,18 @@ inline int obj_val_serialize<ObExtendType>(const ObObj &obj, char* buf, const in
     } else {
       ret = serialize_composite_callback(obj, buf, buf_len, pos);
     }
+  } else if (obj.is_ext_sql_array()) {
+    int64_t v = 0;
+    OB_UNIS_ENCODE(v);
+    const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(obj.get_ext());
+    if (OB_SUCC(ret) && NULL != array_obj) {
+      int64_t len = array_obj->get_serialize_size();
+      int64_t tmp_pos = pos;
+      OB_UNIS_ENCODE(len);
+      OB_UNIS_ENCODE(*array_obj);
+    }
+  } else {
+    OB_UNIS_ENCODE(obj.get_ext());
   }
   return ret;
 }
@@ -2349,6 +2361,20 @@ inline int obj_val_deserialize<ObExtendType>(ObObj &obj, const char* buf, const 
       } else {
         ret = deserialize_composite_callback(obj, buf, data_len, pos);
       }
+    } else if (obj.is_ext_sql_array()) {
+      if (OB_UNLIKELY(v != 0)) {
+        ret = OB_NOT_SUPPORTED;
+        COMMON_LOG(WARN, "using such type in upgrade period", K(ret));
+      } else {
+        int64_t len = 0;
+        int64_t tmp_pos = pos;
+        OB_UNIS_DECODE(len);
+        /* record the buffer and delay it's deserialize.
+         * should call ObSqlArrayObj::do_real_deserialize which need an allocator
+         */
+        obj.set_extend(reinterpret_cast<int64_t>(buf + pos), T_EXT_SQL_ARRAY, int32_t(len));
+        pos += len;
+      }
     } else {
       obj.set_obj_value(v);
     }
@@ -2359,8 +2385,8 @@ template <>
 inline int64_t obj_val_get_serialize_size<ObExtendType>(const ObObj &obj)
 {
   int64_t len = 0;
-  OB_UNIS_ADD_LEN(obj.get_ext());
   if (obj.is_pl_extend()) {
+    OB_UNIS_ADD_LEN(obj.get_ext());
     COMMON_LOG_RET(ERROR, OB_NOT_SUPPORTED, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
     return len; //TODO:@ryan.ly: close this feature before composite refactor
     if (NULL == composite_serialize_size_callback) {
@@ -2368,6 +2394,17 @@ inline int64_t obj_val_get_serialize_size<ObExtendType>(const ObObj &obj)
     } else {
       len += composite_serialize_size_callback(obj);
     }
+  } else if (obj.is_ext_sql_array()) {
+    int64_t v = 0;
+    OB_UNIS_ADD_LEN(v);
+    const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(obj.get_ext());
+    if (NULL != array_obj) {
+      int64_t array_obj_len = array_obj->get_serialize_size();
+      OB_UNIS_ADD_LEN(array_obj_len);
+      OB_UNIS_ADD_LEN(*array_obj);
+    }
+  } else {
+    OB_UNIS_ADD_LEN(obj.get_ext());
   }
   return len;
 }

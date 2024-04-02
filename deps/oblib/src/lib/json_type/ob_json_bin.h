@@ -297,6 +297,7 @@ public:
   uint64_t get_obj_size_offset() const;
 
   uint64_t element_count() const { return element_count_; }
+
   void set_element_count(uint64_t count)
   {
     element_count_ = count;
@@ -408,7 +409,7 @@ public:
         int_val_(0),
         ctx_(nullptr),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -425,7 +426,7 @@ public:
         int_val_(0),
         ctx_(nullptr),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -443,7 +444,7 @@ public:
         int_val_(0),
         ctx_(ctx),
         is_alloc_ctx_(is_alloc_ctx),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -461,7 +462,7 @@ public:
         int_val_(0),
         ctx_(0),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -479,7 +480,7 @@ public:
         int_val_(0),
         ctx_(ctx),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -538,7 +539,13 @@ public:
   {
     return meta_.field_type_;
   }
-  int get_total_value(ObIAllocator* allocator, ObString &res) const;
+  int get_total_value(ObStringBuffer &res) const;
+
+  virtual uint64_t member_count() const override
+  {
+    return (meta_.get_type() == static_cast<uint8_t>(ObJsonNodeType::J_ARRAY) || meta_.get_type() == static_cast<uint8_t>(ObJsonNodeType::J_OBJECT)) ?
+      element_count() : 1;
+  }
 
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
@@ -557,6 +564,12 @@ public:
   int array_append(ObIJsonBase *value) override;
   int array_insert(uint64_t index, ObIJsonBase *value) override;
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
+  int set_key_entry(int index, uint64_t key_offset, uint64_t key_len, bool check=true);
+  int set_value_entry(int index, uint64_t value_offset, uint8_t value_type, bool check=true);
+  int set_current(const ObString &data, int64_t offset);
+  int set_obj_size(uint64_t obj_size);
+  static int add_doc_header_v0(ObJsonBuffer &buffer);
+  static int set_doc_header_v0(ObJsonBuffer &buffer,int64_t extend_seg_offset);
 public:
   static OB_INLINE ObJBVerType get_null_vertype() { return J_NULL_V0; }
   static OB_INLINE ObJBVerType get_decimal_vertype() { return J_DECIMAL_V0; } 
@@ -592,8 +605,6 @@ public:
 private:
   static OB_INLINE bool is_forward_v0(uint8_t type) { return J_FORWARD_V0 == type; }
   static OB_INLINE bool is_doc_header_v0(uint8_t type) { return J_DOC_HEADER_V0 == type; }
-  static int add_doc_header_v0(ObJsonBuffer &buffer);
-  static int set_doc_header_v0(ObJsonBuffer &buffer,int64_t extend_seg_offset);
   static int set_doc_header_v0(ObString &buffer, int64_t extend_seg_offset);
 public:
   TO_STRING_KV(
@@ -798,6 +809,7 @@ public:
   // release resource
   void destroy();
   void set_is_schema(bool is_schema) {is_schema_ = is_schema;}
+  OB_INLINE uint32_t depth() const override;
   virtual int reset();
   OB_INLINE const ObILobCursor* get_cursor() const { return cursor_; }
   OB_INLINE ObILobCursor* get_cursor() { return cursor_; }
@@ -946,15 +958,12 @@ private:
   int get_value_entry(int index, uint64_t &value_offset, uint8_t &value_type) const;
   int64_t get_value_entry_size() const;
   int get_value(int index, ObJsonBin &value) const;
-  int set_key_entry(int index, uint64_t key_offset, uint64_t key_len, bool check=true);
-  int set_value_entry(int index, uint64_t value_offset, uint8_t value_type, bool check=true);
   OB_INLINE uint64_t get_value_entry_offset(int index) const { return meta_.get_value_entry_offset(index); }
   OB_INLINE uint64_t get_key_entry_offset(int index) const { return meta_.get_key_entry_offset(index); }
   OB_INLINE uint8_t entry_var_type() const { return meta_.entry_var_type(); }
   OB_INLINE uint64_t entry_var_size() const { return meta_.entry_var_size(); }
 
   OB_INLINE uint64_t obj_size() const { return meta_.obj_size(); }
-  int set_obj_size(uint64_t obj_size);
   OB_INLINE uint64_t obj_size_var_size() const { return meta_.obj_size_var_size(); }
   OB_INLINE uint64_t get_obj_size_offset() const { return meta_.get_obj_size_offset(); }
   OB_INLINE uint8_t obj_size_var_type() const { return meta_.obj_size_var_type(); }
@@ -982,8 +991,6 @@ private:
   int record_remove_offset(int index);
   int record_insert_offset(int index, int64_t value_offset, int64_t value_len, uint8_t value_type);
   int get_json_path_at_iter(int index, ObString &path) const;
-
-  int set_current(const ObString &data, int64_t offset);
 
   int parse_type_();
   int skip_type_byte_();
@@ -1087,6 +1094,8 @@ public:
 public:
   static int serialize_json_integer(int64_t value, ObJsonBuffer &result);
   static int serialize_json_decimal(ObJsonDecimal *json_dec, ObJsonBuffer &result);
+  static int serialize_json_double(double value, ObJsonBuffer &result);
+  static int serialize_json_string(ObJBVerType vertype, const ObString &value, ObJsonBuffer &result);
 
 private:
   ObIAllocator *allocator_;

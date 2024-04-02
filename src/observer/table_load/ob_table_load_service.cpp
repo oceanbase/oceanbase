@@ -101,6 +101,7 @@ void ObTableLoadService::ObHeartBeatTask::runTimerTask()
     LOG_DEBUG("table load heart beat", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all table ctx", KR(ret), K(tenant_id_));
     }
@@ -146,6 +147,7 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     LOG_DEBUG("table load start gc", K(tenant_id_));
     ObTableLoadManager &manager = service_.get_manager();
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager.get_all_table_ctx(table_ctx_array))) {
       LOG_WARN("fail to get all  table ctx", KR(ret), K(tenant_id_));
     }
@@ -220,7 +222,7 @@ bool ObTableLoadService::ObGCTask::gc_table_not_exist_ctx(ObTableLoadTableCtx *t
       const ObTableSchema *table_schema = nullptr;
       if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, hidden_table_id, schema_guard,
                                                       table_schema))) {
-        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret)) {
+        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret && OB_TENANT_NOT_EXIST != ret)) {
           LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(hidden_table_id));
         } else {
           LOG_INFO("hidden table not exist, gc table load ctx", K(tenant_id_), K(table_id),
@@ -267,6 +269,7 @@ void ObTableLoadService::ObReleaseTask::runTimerTask()
   } else {
     LOG_DEBUG("table load start release", K(tenant_id_));
     ObArray<ObTableLoadTableCtx *> releasable_table_ctx_array;
+    releasable_table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.manager_.get_releasable_table_ctx_list(releasable_table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret), K(tenant_id_));
     }
@@ -308,6 +311,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
   } else {
     LOG_DEBUG("table load auto abort client task", K(tenant_id_));
     ObArray<ObTableLoadClientTask *> client_task_array;
+    client_task_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(service_.get_client_service().get_all_client_task(client_task_array))) {
       LOG_WARN("fail to get all client task", KR(ret));
     } else {
@@ -641,6 +645,7 @@ void ObTableLoadService::abort_all_client_task()
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadClientTask *> client_task_array;
+  client_task_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(client_service_.get_all_client_task(client_task_array))) {
     LOG_WARN("fail to get all client task", KR(ret));
   } else {
@@ -658,6 +663,7 @@ void ObTableLoadService::fail_all_ctx(int error_code)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableLoadTableCtx *> table_ctx_array;
+  table_ctx_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(manager_.get_all_table_ctx(table_ctx_array))) {
     LOG_WARN("fail to get all table ctx list", KR(ret));
   } else {
@@ -689,6 +695,7 @@ void ObTableLoadService::release_all_ctx()
     abort_all_client_task();
     fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_inactive_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get inactive table ctx list", KR(ret), K(tenant_id));
     } else {
@@ -725,6 +732,7 @@ void ObTableLoadService::release_all_ctx()
       LOG_INFO("[DIRECT LOAD DIRTY LIST]", "count", manager_.get_dirty_list_count());
     }
     ObArray<ObTableLoadTableCtx *> table_ctx_array;
+    table_ctx_array.set_tenant_id(MTL_ID());
     if (OB_FAIL(manager_.get_releasable_table_ctx_list(table_ctx_array))) {
       LOG_WARN("fail to get releasable table ctx list", KR(ret));
     }
@@ -797,6 +805,20 @@ int ObTableLoadService::assign_memory(bool is_sort, int64_t assign_memory)
     LOG_WARN("null table load service", KR(ret));
   } else {
     ret = service->assigned_memory_manager_.assign_memory(is_sort, assign_memory);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::recycle_memory(bool is_sort, int64_t assign_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.recycle_memory(is_sort, assign_memory);
   }
 
   return ret;

@@ -124,6 +124,7 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_schema = nullptr;
+  const ObDatabaseSchema *database_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -140,12 +141,19 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
+    LOG_WARN("fail to get database schema", KR(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null ptr", KR(ret));
   } else {
     obrpc::ObUpdateIndexStatusArg arg;
     arg.index_table_id_ = index_schema->get_table_id();
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
+    arg.data_table_id_ = index_schema->get_data_table_id();
+    arg.database_name_ = database_schema->get_database_name();
     int64_t ddl_rpc_timeout = 0;
     int64_t table_id = index_schema->get_table_id();
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);

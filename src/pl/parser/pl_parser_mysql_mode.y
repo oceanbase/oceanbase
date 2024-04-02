@@ -223,7 +223,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -304,10 +304,12 @@ stmt_list:
     stmt_list ';' stmt
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_LINK_NODE, 2, $1, $3);
+      parse_ctx->stmt_tree_ = $$;
     }
   | stmt
     {
       $$ = $1;
+      parse_ctx->stmt_tree_ = $$;
     }
 /*  | stmt_list ';' error
     {
@@ -412,6 +414,20 @@ sql_stmt:
       do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
     }
+  | CREATE ROLE /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
+  | DROP ROLE /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
   | CREATE OR REPLACE sql_keyword /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
@@ -440,14 +456,23 @@ sql_stmt:
       do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
       if (T_SET_PASSWORD == sql_stmt->type_ ||
           T_SET_NAMES == sql_stmt->type_ ||
-          T_SET_CHARSET == sql_stmt->type_) {
+          T_SET_CHARSET == sql_stmt->type_ ||
+          T_SET_ROLE == sql_stmt->type_ ||
+          T_ALTER_USER_DEFAULT_ROLE == sql_stmt->type_) {
         malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
       } else {
         $$ = sql_stmt;
       }
       if(T_VARIABLE_SET == $$->type_) {
+        int64_t child_cnt = $$->num_child_;
         for(int64_t i = 0; i < $$->num_child_; ++i) {
-          if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
+          if (T_SET_NAMES == $$->children_[i]->type_ || T_SET_CHARSET == $$->children_[i]->type_) {
+            malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+            if (child_cnt > 1) {
+              obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+              YYERROR;
+            }
+          } else if(OB_UNLIKELY(NULL == $$->children_[i] || NULL == $$->children_[i]->children_[1])) {
             YY_UNEXPECTED_ERROR("value node in SET statement is NULL");
           } else {
             obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$->children_[i]->children_[1]);
@@ -738,6 +763,7 @@ unreserved_keyword:
   | RETURNS
   | ROW
   | ROWTYPE
+  | ROLE
   | SCHEMA_NAME
   | SECURITY
   | SUBCLASS_ORIGIN
@@ -1533,12 +1559,18 @@ sp_proc_stmt_if:
 sp_if:
     expr THEN sp_proc_stmts sp_elseifs
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, $4);
     }
   | expr THEN sp_proc_stmts %prec PARENS
     {
+      if (NULL == $1) {
+        YYERROR;
+      }
       ParseNode *proc_stmts = NULL;
       merge_nodes(proc_stmts, parse_ctx->mem_pool_, T_SP_PROC_STMT_LIST, $3);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_IF, 3, $1, proc_stmts, NULL);

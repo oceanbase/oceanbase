@@ -22,6 +22,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_value.h"
 #include "sql/engine/expr/ob_expr_json_query.h"
 #include "sql/engine/expr/ob_expr_json_exists.h"
@@ -629,12 +630,17 @@ int ObJsonTableOp::reset_variable()
   jt_ctx_.is_cover_error_ = false;
   jt_ctx_.error_code_ = 0;
   jt_ctx_.is_need_end_ = 0;
-
-  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&jt_ctx_.row_alloc_, jt_ctx_.mem_ctx_))) {
-    LOG_WARN("fail to create tree memory context", K(ret));
+  MultimodeAlloctor *tmp_allocator = nullptr;
+  if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
+  } else {
+    new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
+    LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_ISNULL(MY_SPEC.value_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to open iter, value expr is null.", K(ret));
@@ -656,6 +662,7 @@ int ObJsonTableOp::switch_iterator()
 int ObJsonTableOp::init()
 {
   INIT_SUCC(ret);
+  uint64_t tenant_id = -1;
   if (!is_inited_) {
     const ObJsonTableSpec* spec_ptr = reinterpret_cast<const ObJsonTableSpec*>(&spec_);
     jt_ctx_.spec_ptr_ = const_cast<ObJsonTableSpec*>(spec_ptr);
@@ -663,7 +670,6 @@ int ObJsonTableOp::init()
       LOG_WARN("fail to init json table op, as generate exec tree occur error.", K(ret));
     } else {
       const sql::ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
-      uint64_t tenant_id = -1;
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
@@ -709,7 +715,15 @@ int ObJsonTableOp::init()
   jt_ctx_.is_cover_error_ = false;
   jt_ctx_.error_code_ = 0;
   jt_ctx_.is_need_end_ = 0;
-  if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&jt_ctx_.row_alloc_, jt_ctx_.mem_ctx_))) {
+  MultimodeAlloctor *tmp_allocator = nullptr;
+  if (OB_ISNULL(tmp_allocator = static_cast<MultimodeAlloctor*>(jt_ctx_.row_alloc_.alloc(sizeof(MultimodeAlloctor))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate Multimode alloc buf", K(ret));
+  } else {
+    new (tmp_allocator)MultimodeAlloctor(jt_ctx_.row_alloc_, T_XML_TABLE_EXPRESSION, ret);
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObXmlUtil::create_mulmode_tree_context(tmp_allocator, jt_ctx_.mem_ctx_))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   }
   return ret;
@@ -936,11 +950,20 @@ int XmlTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_
   ObString j_str;
   bool is_null = false;
   ObIMulModeBase *input_node = NULL;
+  ObDatum *t_datum = nullptr;
 
   if (doc_type == ObNullType) {
     ret = OB_ITER_END;
   } else if (ctx.is_xml_table_func()) {
-    if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
+    if (ob_is_extend(doc_type)) {
+      if (OB_FAIL(ctx.spec_ptr_->value_expr_->eval(eval_ctx, t_datum))) {
+        LOG_WARN("eval xml arg failed", K(ret));
+      } else if (t_datum->is_null()) {
+        ret = OB_ITER_END;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(doc_type)));
     } else {
@@ -2735,6 +2758,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
   ObString j_str;
   bool is_null = false;
   ObIJsonBase* in = NULL;
+  MultimodeAlloctor tmp_allocator(ctx.row_alloc_, T_JSON_TABLE_EXPRESSION, ret);
 
   if (doc_type == ObNullType) {
     ret = OB_ITER_END;
@@ -2747,11 +2771,12 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
   } else {
     jt.reset_columns();
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(ctx.spec_ptr_->value_expr_, eval_ctx,
-                                                        ctx.row_alloc_, j_str, is_null))) {
+                                                        tmp_allocator, j_str, is_null))) {
       ret = OB_ERR_INPUT_JSON_TABLE;
       LOG_WARN("get real data failed", K(ret));
     } else if (is_null) {
       ret = OB_ITER_END;
+    } else if (OB_FALSE_IT(tmp_allocator.set_baseline_size(j_str.length()))) {
     } else if ((ob_is_string_type(doc_type) || doc_type == ObLobType)
                 && (doc_cs_type != CS_TYPE_BINARY)
                 && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)) {
@@ -2761,7 +2786,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
       int64_t buf_len = j_str.length() * factor;
       uint32_t result_len = 0;
 
-      if (OB_ISNULL(buf = static_cast<char*>(ctx.row_alloc_.alloc(buf_len)))) {
+      if (OB_ISNULL(buf = static_cast<char*>(tmp_allocator.alloc(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(ObCharset::charset_convert(doc_cs_type, j_str.ptr(),
@@ -2782,7 +2807,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
 
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&ctx.row_alloc_, j_str, j_in_type, expect_type, in, parse_flag))
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, j_str, j_in_type, expect_type, in, parse_flag))
                 || (in->json_type() != ObJsonNodeType::J_ARRAY && in->json_type() != ObJsonNodeType::J_OBJECT)) {
       if (OB_FAIL(ret) || (is_ensure_json)) {
         in= nullptr;

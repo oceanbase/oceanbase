@@ -67,14 +67,22 @@ private:
 class ObSdoGeoObject
 {
 public:
-  ObSdoGeoObject(ObGeoType gtype, ObSdoPoint point, uint32_t srid = UINT32_MAX)
-    : gtype_(gtype), point_(point), srid_(srid) {}
+  ObSdoGeoObject(ObGeoType gtype, ObSdoPoint point, ObIAllocator &allocator, uint32_t srid = UINT32_MAX)
+    : gtype_(gtype), point_(point), srid_(srid),
+      elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
+      ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
+      {}
 
   ObSdoGeoObject(ObGeoType gtype, ObArray<uint64_t> elem_info,
-      ObArray<double> ordinates, uint32_t srid = UINT32_MAX)
-      : gtype_(gtype), elem_info_(elem_info), ordinates_(ordinates), srid_(srid)
+      ObArray<double> ordinates, ObIAllocator &allocator, uint32_t srid = UINT32_MAX)
+      : gtype_(gtype), srid_(srid),
+      elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
+      ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
   {}
-  ObSdoGeoObject() : gtype_(ObGeoType::GEOTYPEMAX), srid_(UINT32_MAX) {}
+  ObSdoGeoObject(ObIAllocator &allocator) : gtype_(ObGeoType::GEOTYPEMAX), srid_(UINT32_MAX),
+    elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
+    ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
+   {}
   ~ObSdoGeoObject()
   {}
   bool operator==(const ObSdoGeoObject &other) const;
@@ -96,13 +104,14 @@ public:
   TO_STRING_KV(K_(gtype), K_(srid), K_(point), K_(elem_info), K_(ordinates));
 
 private:
+  static const int64_t DEFAULT_PAGE_SIZE_ORDINATES = 1024; // 1KB
   bool need_sci_format(double num) { return num <= -1e9 || num >= 1e10; }
 
   ObGeoType gtype_;
   ObSdoPoint point_;
+  uint32_t srid_;
   ObArray<uint64_t> elem_info_;
   ObArray<double> ordinates_;
-  uint32_t srid_;
   DISALLOW_COPY_AND_ASSIGN(ObSdoGeoObject);
 };
 }  // namespace common

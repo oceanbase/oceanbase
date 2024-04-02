@@ -34,7 +34,7 @@
 #include "storage/tablet/ob_tablet_mds_data_cache.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
-#include "ob_i_tablet_mds_interface.h"
+#include "ob_i_tablet_mds_customized_interface.h"
 #include <type_traits>
 
 namespace oceanbase
@@ -106,7 +106,7 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;
 
-class ObTablet final : public ObITabletMdsInterface
+class ObTablet final : public ObITabletMdsCustomizedInterface
 {
   friend class ObLSTabletService;
   friend class ObTabletPointer;
@@ -139,8 +139,8 @@ public:
   int get_rec_log_scn(share::SCN &rec_scn);
   int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
-  int get_mds_table_rec_log_scn(share::SCN &rec_scn);
-  int mds_table_flush(const share::SCN &recycle_scn);
+  int get_mds_table_rec_scn(share::SCN &rec_scn) const;
+  int mds_table_flush(const share::SCN &decided_scn);
 
 public:
   // first time create tablet
@@ -301,6 +301,7 @@ public:
 
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
+  void reset_memtable();
   int release_memtables(const share::SCN scn);
   // force release all memtables
   // just for rebuild or migrate retry.
@@ -323,9 +324,6 @@ public:
       const int64_t len,
       share::ObLSID &ls_id,
       common::ObTabletID &tablet_id);
-  static int64_t get_lock_wait_timeout(
-      const int64_t abs_lock_timeout,
-      const int64_t stmt_timeout);
   int rowkey_exists(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -466,8 +464,10 @@ public:
 
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int check_tablet_status_for_read_all_committed();
-  int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
-  int check_snapshot_readable_with_cache(const int64_t snapshot_version, const int64_t timeout);
+  int check_schema_version_with_cache(const int64_t schema_version);
+  int check_snapshot_readable_with_cache(
+      const int64_t snapshot_version,
+      const int64_t schema_version);
   int set_tablet_status(
       const ObTabletCreateDeleteMdsUserData &tablet_status,
       mds::MdsCtx &ctx);
@@ -501,7 +501,7 @@ protected:// for MDS use
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
   virtual int get_mds_table_handle_(mds::MdsTableHandle &handle,
                                     const bool create_if_not_exist) const override final;
-  virtual ObTabletPointer *get_tablet_ponter_() const override final {
+  virtual ObTabletPointer *get_tablet_pointer_() const override final {
     return static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
   }
 private:
@@ -516,6 +516,7 @@ private:
   static int inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success);
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
+  int calc_tablet_data_usage();
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -524,8 +525,11 @@ private:
   int64_t get_self_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
-  int check_schema_version(const int64_t schema_version);
-  int check_snapshot_readable(const int64_t snapshot_version);
+  static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
+  static int check_snapshot_readable(
+      const ObDDLInfoCache& ddl_info_cache,
+      const int64_t snapshot_version,
+      const int64_t schema_version);
   int check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
@@ -620,6 +624,8 @@ private:
   int inner_get_mds_table(
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;
+  int pre_check_empty_shell(const ObTablet &old_tablet, ObTabletCreateDeleteMdsUserData &user_data);
+
   static int load_medium_info_list(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
@@ -628,6 +634,13 @@ private:
   int validate_medium_info_list(
       const int64_t finish_medium_scn,
       const ObTabletMdsData &mds_data) const;
+  static int build_user_data_for_aborted_tx_tablet(
+      const share::SCN &flush_scn,
+      ObTabletCreateDeleteMdsUserData &user_data);
+  static int build_user_data_for_aborted_tx_tablet(
+      common::ObArenaAllocator &allocator,
+      const share::SCN &flush_scn,
+      ObTabletMdsData &mds_data);
   int set_initial_state(const bool initial_state);
 
   int load_deserialize_v1(
@@ -691,11 +704,10 @@ private:
   int rebuild_memtable(
       const share::SCN &clog_checkpoint_scn,
       common::ObIArray<ObTableHandleV2> &handle_array);
-  int add_memtable(memtable::ObMemtable* const table);
+  int add_memtable(memtable::ObIMemtable* const table);
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
   int assign_ddl_kvs(ObITable * const *ddl_kvs, const int64_t ddl_kv_count);
-  void reset_memtable();
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
   int wait_release_memtables_();
@@ -830,14 +842,6 @@ inline int64_t ObTablet::dec_ref()
   STORAGE_LOG(DEBUG, "tablet dec ref", KP(this), K(tablet_id), "ref_cnt", cnt, K(lbt()));
 
   return cnt;
-}
-
-inline int64_t ObTablet::get_lock_wait_timeout(
-    const int64_t abs_lock_timeout,
-    const int64_t stmt_timeout)
-{
-  return (abs_lock_timeout < 0 ? stmt_timeout :
-          (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
 }
 
 #ifdef OB_BUILD_TDE_SECURITY

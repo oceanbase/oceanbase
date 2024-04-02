@@ -1858,7 +1858,7 @@ static int common_json_string(const ObExpr &expr,
     // get json string
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -2529,6 +2529,24 @@ CAST_FUNC_NAME(int, lob)
   return ret;
 }
 
+CAST_FUNC_NAME(null, json)
+{
+  int ret = OB_SUCCESS;                                                              \
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  ObString raw_bin;
+  ObJsonNull j_null;
+  ObIJsonBase *j_base = &j_null;
+
+  if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    LOG_WARN("fail to get null json binary", K(ret));
+  } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
+    LOG_WARN("fail to fill json bin lob locator", K(ret));
+  }
+
+  return ret;
+}
+
 CAST_FUNC_NAME(int, json)
 {
   EVAL_ARG_FOR_CAST_TO_JSON()
@@ -3079,12 +3097,16 @@ static int common_string_json(const ObExpr &expr,
         is_null_res = true;
       } else if (!is_oracle
                   && (is_enumset_to_str
+                      || (CM_IS_SQL_AS_JSON_SCALAR(expr.extra_) && ob_is_string_type(in_type))
                       || (CM_IS_IMPLICIT_CAST(expr.extra_)
                           && !CM_IS_COLUMN_CONVERT(expr.extra_)
                           && !CM_IS_JSON_VALUE(expr.extra_)
                           && is_convert_jstr_type))) {
         // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
         j_base = &j_string;
+        if ((CM_IS_SQL_AS_JSON_SCALAR(expr.extra_) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
+          j_base = &j_null;
+        }
       } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
       } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {
@@ -3307,9 +3329,10 @@ CAST_FUNC_NAME(text, string)
     ObExprStrResAlloc res_alloc(expr, ctx);
     ObTextStringIter instr_iter(in_type, in_cs_type, child_res->get_string(), has_lob_header);
     if (OB_FAIL(instr_iter.init(0, ctx.exec_ctx_.get_my_session(),
-                                is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator))) {
+                                is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator,
+                                &temp_allocator))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
-    } else if (OB_FAIL(instr_iter.get_full_data(data, &temp_allocator))) {
+    } else if (OB_FAIL(instr_iter.get_full_data(data))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
     } else if (lib::is_oracle_mode()
                && ob_is_clob(in_type, in_cs_type)
@@ -3478,7 +3501,7 @@ CAST_FUNC_NAME(string, geometry)
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, in_str, srs, true, cast_name))) {
       LOG_WARN("fail to get srs item", K(ret), K(in_str));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type || ObGeoType::GEOTYPEMAX == dst_geo_type) {
       ObString res_wkb;
@@ -7268,7 +7291,7 @@ CAST_FUNC_NAME(json, raw)
 
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+    } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
       LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -7317,7 +7340,7 @@ CAST_FUNC_NAME(json, string)
 
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      } else if (CAST_FAIL(j_base->print(j_buf, true, j_bin_str.length()))) {
         LOG_WARN("fail to convert json to string", K(ret), K(j_bin_str));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -10261,7 +10284,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_eval_arg,/*interval*/
     cast_eval_arg,/*rowid*/
     cast_eval_arg,/*lob*/
-    cast_eval_arg,/*json*/
+    cast_eval_arg,    /*json*/
     cast_not_support,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
@@ -10646,7 +10669,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    text_otimestamp,/*otimestamp*/
+    cast_inconsistent_types,/*otimestamp*/
     text_raw,/*raw*/
     text_interval,/*interval*/
     text_rowid,/*rowid*/
@@ -10886,7 +10909,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    lob_otimestamp,/*otimestamp*/
+    cast_inconsistent_types,/*otimestamp*/
     lob_raw,/*raw*/
     lob_interval,/*interval*/
     lob_rowid,/*rowid*/
@@ -11891,7 +11914,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_eval_arg,/*json*/
+    cast_eval_arg,    /*json*/
     cast_eval_arg,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint, place_holder*/

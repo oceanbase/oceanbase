@@ -1581,6 +1581,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
             }
             result_type.set_precision(static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
+            result_type.unset_result_flag(ZEROFILL_FLAG);
           }
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
@@ -1874,12 +1875,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           // keep same with default path
           expr.set_result_type(child_expr->get_result_type());
           expr.unset_result_flag(NOT_NULL_FLAG);
+          expr.unset_result_flag(ZEROFILL_FLAG);
         }
         break;
       }
       default: {
         expr.set_result_type(expr.get_param_expr(0)->get_result_type());
         expr.unset_result_flag(NOT_NULL_FLAG);
+        expr.unset_result_flag(ZEROFILL_FLAG);
       }
     }
 
@@ -2312,6 +2315,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
           LOG_WARN("failed to set enum_set_values", K(enum_set_values), K(expr), K(ret));
         } else {/*do nothing*/}
       }
+      expr.unset_result_flag(ZEROFILL_FLAG);
     }
     if (OB_SUCC(ret) && T_FUN_SYS_FROM_UNIX_TIME == expr.get_expr_type()
         && expr.get_param_count() == 2) {
@@ -2981,22 +2985,6 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   ObArray<ObExprResType> types;
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
-  //listagg有效性检测
-  if (lib::is_oracle_mode()) {
-    if (expr.get_real_param_count() > 2) {
-      ret = OB_ERR_PARAM_SIZE;
-      LOG_WARN("listagg has 2 params at most", K(ret), K(expr.get_real_param_count()));
-    } else if (expr.get_real_param_count() == 2) {
-      ObRawExpr *param_expr = NULL;
-      if (OB_ISNULL(param_expr = expr.get_real_param_exprs().at(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(param_expr));
-      } else if (OB_UNLIKELY(!param_expr->is_const_expr())) {
-        ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
-        LOG_WARN("separator expr should be const expr", K(ret), K(*param_expr));
-      } else {/*do nothing */}
-    }
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
@@ -3466,6 +3454,13 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
       }
+
+      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
+      if (ObStringTC == ori_tc && ObJsonTC == expect_tc
+          && IS_BASIC_CMP_OP(parent.get_expr_type())) {
+        uint64_t extra = new_expr->get_extra();
+        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
+      }
       OZ(parent.replace_param_expr(child_idx, new_expr));
       if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
         ret = OB_SUCCESS;
@@ -3544,7 +3539,7 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     cast_dst_type.set_length(child_res_type.get_length());
   }
   OZ(ObRawExprUtils::try_add_cast_expr_above(expr_factory_, my_session_, expr,
-                                             cast_dst_type, cm, new_expr));
+                                             cast_dst_type, cm, new_expr, my_local_vars_, local_vars_id_));
   ObRawExpr *e = new_expr;
   while (OB_SUCC(ret) && NULL != e &&
          e != &expr && T_FUN_SYS_CAST == e->get_expr_type()) {

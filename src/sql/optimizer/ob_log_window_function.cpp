@@ -321,7 +321,7 @@ int ObLogWindowFunction::est_cost()
                                                         first_child->get_width(),
                                                         win_exprs_.count(),
                                                         op_cost_,
-                                                        get_plan()->get_optimizer_context().get_cost_model_type()))) {
+                                                        get_plan()->get_optimizer_context()))) {
     LOG_WARN("calculate cost of window function failed", K(ret));
   } else {
     set_card(first_child->get_card());
@@ -352,7 +352,7 @@ int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, d
                                                           child->get_width(),
                                                           win_exprs_.count(),
                                                           op_cost,
-                                                          opt_ctx.get_cost_model_type()))) {
+                                                          opt_ctx))) {
       LOG_WARN("calculate cost of window function failed", K(ret));
     } else {
       cost = child_cost + op_cost;

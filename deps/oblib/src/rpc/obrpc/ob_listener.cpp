@@ -11,9 +11,11 @@
  */
 
 #include "rpc/obrpc/ob_listener.h"
+#include "lib/ob_running_mode.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/serialization.h"
+#include "lib/net/ob_net_util.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -32,6 +34,10 @@ extern "C" {
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common::serialization;
+
+#ifndef SO_REUSEPORT
+#define SO_REUSEPORT 15
+#endif
 
 ObListener::ObListener()
 {
@@ -57,58 +63,57 @@ int ObListener::ob_listener_set_opt(int fd, int option, int value)
     return setsockopt(fd, SOL_SOCKET, option, (void *)&value, sizeof(value));
 }
 
-int ObListener::listen_create(int port) {
+int ObListener::listen_special(int family, int port)
+{
   int ret = OB_SUCCESS;
   int fd = -1;
-  struct sockaddr_in sin;
+  struct sockaddr_storage addr;
   int no_block_flag = 1;
-
-  memset(&sin, 0, sizeof(sin));
-  socklen_t ob_listener_gid_len = sizeof(OB_LISTENER_GID);
-
+  memset(&addr, 0, sizeof(addr));
   if (port <= 0) {
     ret = OB_INVALID_ARGUMENT;
     RPC_LOG(ERROR, "invalid port", K(ret), K(port));
-  } else if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0)) < 0) {
+  } else if (AF_INET != family && AF_INET6 != family) {
+    ret = OB_INVALID_ARGUMENT;
+    RPC_LOG(ERROR, "invalid port", K(ret), K(port));
+  } else if ((fd = socket(family, SOCK_STREAM|SOCK_CLOEXEC, 0)) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "create socket failed!", K(ret), K(fd), K(port), K(errno));
+    RPC_LOG(ERROR, "create socket failed!", K(ret), K(fd), K(family), K(port), K(errno));
   } else if (ioctl(fd, FIONBIO, &no_block_flag) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "set non block failed!", K(ret), K(fd), K(port), K(errno));
+    RPC_LOG(ERROR, "set non block failed!", K(ret), K(fd), K(family), K(port), K(errno));
   } else if (ob_listener_set_tcp_opt(fd, TCP_DEFER_ACCEPT, 1) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "set tcp defer accept failed!", K(ret), K(fd), K(port), K(errno));
+    RPC_LOG(ERROR, "set tcp defer accept failed!", K(ret), K(fd), K(family), K(port), K(errno));
   } else if (ob_listener_set_opt(fd, SO_REUSEADDR, 1) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "set reuse_addr fail!", K(ret), K(fd), K(port), K(errno));
+    RPC_LOG(ERROR, "set reuse addr fail!", K(ret), K(fd), K(family), K(port), K(errno));
+  } else if (ob_listener_set_opt(fd, SO_REUSEPORT, 1) < 0) {
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "set reuse port fail!", K(fd), K(family), K(port), K(errno));
+  } else if (bind(fd, (sockaddr*)obsys::ObNetUtil::make_unix_sockaddr_any(AF_INET6 == family, port, &addr),
+              sizeof(addr)) < 0) {
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "bind failed!", K(fd), K(family), K(port), K(errno));
+  } else if (listen(fd, 1024) < 0) {
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "listen failed", K(fd), K(family), K(port), K(errno));
   }
-#ifdef SO_REUSEPORT
-  else if (ob_listener_set_opt(fd, SO_REUSEPORT, 1) < 0) {
-    ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "set reuse port fail!", K(fd), K(port), K(errno));
+  if (OB_FAIL(ret) && fd >= 0) {
+    close(fd);
+    fd = -1;
   }
-#endif
-  else if (ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_SERVER_GID, &OB_LISTENER_GID, ob_listener_gid_len) < 0) {
-    ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "set ObListener gid failed", K(OB_LISTENER_GID));
-  } else if (bind(fd, (sockaddr*)make_unix_sockaddr(&sin, 0, port), sizeof(sin)) < 0) {
-    ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "bind failed!", K(errno));
-  } else if (ussl_listen(fd, 1024) < 0) {
-    ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "listen failed", K(errno));
-  }
+  return fd;
+}
 
-  if (OB_FAIL(ret)) {
-    if (fd >= 0) {
-      close(fd);
-      fd = -1;
-    }
-  } else {
-    listen_fd_ = fd;
-    RPC_LOG(INFO, "create listen success!", K(port));
+int ObListener::listen_create(int port) {
+  int ret = OB_SUCCESS;
+  if ((listen_fd_ = listen_special(AF_INET, port)) < 0) {
+    RPC_LOG(ERROR, "create listen for IPv4 fail!", K(errno));
   }
-
+  if (listen_fd_ < 0) {
+    ret = OB_SERVER_LISTEN_ERROR;
+  }
   return ret;
 }
 
@@ -132,9 +137,11 @@ void ObListener::destroy()
     struct linger so_linger;
     so_linger.l_onoff = 1;
     so_linger.l_linger = 0;
-    setsockopt(listen_fd_, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
-    close(listen_fd_);
-    listen_fd_ = -1;
+    if (listen_fd_ >= 0) {
+      setsockopt(listen_fd_, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+      close(listen_fd_);
+      listen_fd_ = -1;
+    }
     memset(&io_wrpipefd_map_, 0, sizeof(io_wrpipefd_map_));
   }
 }
@@ -278,28 +285,35 @@ static void trace_connection_info(int fd)
     addr_len = sizeof(addr);
 
     if (getpeername(fd, (struct sockaddr *)&addr, &addr_len) == 0) {
-      char *src_addr = NULL;
-      uint16_t src_port = 0;
-      src_addr = inet_ntoa(((struct sockaddr_in *)&addr)->sin_addr);
-      src_port = ntohs(((struct sockaddr_in *)&addr)->sin_port);
-      RPC_LOG(INFO, "oblistener receive connection from", KCSTRING(src_addr), K(src_port));
+      ObAddr peer;
+      peer.from_sockaddr(&addr);
+      RPC_LOG(INFO, "oblistener receive connection from", K(peer));
     }
 }
 
 void ObListener::do_work()
 {
-  struct epoll_event listen_ev;
-  listen_ev.events = EPOLLIN;
-  listen_ev.data.fd = listen_fd_;
   int ret = OB_SUCCESS;
-  int epoll_fd = epoll_create(256);
+  int epoll_fd = -1;
 
-  if (epoll_fd < 0) {
+  if (listen_fd_ < 0) {
+    ret = OB_IO_ERROR;
+    RPC_LOG(ERROR, "listen_fd_ is less than 0");
+  } else if ((epoll_fd = epoll_create(256)) < 0) {
     ret = OB_IO_ERROR;
     RPC_LOG(ERROR, "epoll create failed", K(errno));
-  } else if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd_, &listen_ev) < 0) {
-    ret = OB_IO_ERROR;
-    RPC_LOG(ERROR, "epoll add listen fd failed!", K(errno));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (listen_fd_ >= 0) {
+      struct epoll_event listen_ev4;
+      listen_ev4.events = EPOLLIN;
+      listen_ev4.data.fd = listen_fd_;
+      if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd_, &listen_ev4) < 0) {
+        ret = OB_IO_ERROR;
+        RPC_LOG(ERROR, "epoll add listen fd for IPv4 failed!", K(errno));
+      }
+    }
   }
 
   if (OB_FAIL(ret)) {

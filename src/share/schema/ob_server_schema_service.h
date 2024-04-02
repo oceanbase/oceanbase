@@ -103,6 +103,7 @@ struct SchemaKey
     uint64_t rls_group_id_;
     uint64_t rls_context_id_;
     uint64_t routine_type_;
+    uint64_t column_priv_id_;
   };
   union {
     common::ObString table_name_;
@@ -157,7 +158,8 @@ struct SchemaKey
                K_(rls_policy_id),
                K_(rls_group_id),
                K_(rls_context_id),
-               K_(routine_type));
+               K_(routine_type),
+               K_(column_priv_id));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -315,6 +317,10 @@ struct SchemaKey
   ObTenantRlsContextId get_rls_context_key() const
   {
     return ObTenantRlsContextId(tenant_id_, rls_context_id_);
+  }
+  ObColumnPrivIdKey get_column_priv_key() const
+  {
+    return ObColumnPrivIdKey(tenant_id_, column_priv_id_);
   }
 };
 
@@ -569,6 +575,31 @@ public:
           a.obj_type_ == b.obj_type_;
     }
   };
+
+  struct column_priv_hash_func
+  {
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
+    {
+      hash_code = 0;
+      hash_code = common::murmurhash(&schema_key.tenant_id_,
+                                     sizeof(schema_key.tenant_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.column_priv_id_,
+                                     sizeof(schema_key.column_priv_id_),
+                                     hash_code);
+      return OB_SUCCESS;
+    }
+  };
+
+  struct column_priv_equal_to
+  {
+    bool operator()(const SchemaKey &a, const SchemaKey &b) const
+    {
+      return a.tenant_id_ == b.tenant_id_ &&
+             a.column_priv_id_ == b.column_priv_id_;
+    }
+  };
+
   struct obj_priv_hash_func
   {
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
@@ -726,7 +757,8 @@ public:
       table_priv_hash_func, table_priv_equal_to> TablePrivKeys;
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       routine_priv_hash_func, routine_priv_equal_to> RoutinePrivKeys;
-
+  typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
+      column_priv_hash_func, column_priv_equal_to> ColumnPrivKeys;
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       sys_priv_hash_func, sys_priv_equal_to> SysPrivKeys;
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -771,6 +803,9 @@ public:
     // routine_priv
     RoutinePrivKeys new_routine_priv_keys_;
     RoutinePrivKeys del_routine_priv_keys_;
+    // column_priv
+    ColumnPrivKeys new_column_priv_keys_;
+    ColumnPrivKeys del_column_priv_keys_;
     // virtual table or sys view
     common::ObArray<uint64_t> non_sys_table_ids_;
     // synonym
@@ -877,6 +912,7 @@ public:
     common::ObArray<ObDBPriv> simple_db_priv_schemas_;
     common::ObArray<ObTablePriv> simple_table_priv_schemas_;
     common::ObArray<ObRoutinePriv> simple_routine_priv_schemas_;
+    common::ObArray<ObColumnPriv> simple_column_priv_schemas_;
     common::ObArray<ObSimpleUDTSchema> simple_udt_schemas_;
     common::ObArray<ObSimpleSysVariableSchema> simple_sys_variable_schemas_;
     common::ObArray<ObKeystoreSchema> simple_keystore_schemas_;
@@ -1028,6 +1064,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(db_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine_priv);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(column_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(synonym);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(package);
@@ -1075,6 +1112,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(db_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(table_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(routine_priv, ObPrivMgr);
+  APPLY_SCHEMA_TO_CACHE(column_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(synonym, ObSynonymMgr);
   APPLY_SCHEMA_TO_CACHE(udf, ObUDFMgr);
   APPLY_SCHEMA_TO_CACHE(udt, ObUDTMgr);

@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.2.2.0"
-#current_data_version = "4.2.2.0"
+#current_cluster_version = "4.2.3.0"
+#current_data_version = "4.2.3.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -135,17 +135,48 @@
 #  cur.execute(sql)
 #  wait_parameter_sync(cur, False, parameter, value, timeout)
 #
-#def set_tenant_parameter(cur, parameter, value, timeout = 0):
+#def set_session_timeout(cur, seconds):
+#  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
+#  logging.info(sql)
+#  cur.execute(sql)
+#
+#def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
+#  if timeout > 0:
+#    logging.info("use timeout from opt, timeout(s):{0}".format(timeout))
+#  else:
+#    query_cur = QueryCursor(cur)
+#    tenant_id_list = fetch_tenant_ids(query_cur)
+#    cal_timeout = len(tenant_id_list) * timeout_per_tenant
+#    timeout = (cal_timeout if cal_timeout > min_timeout else min_timeout)
+#    logging.info("use default timeout caculated by tenants, "
+#                 "timeout(s):{0}, tenant_count:{1}, "
+#                 "timeout_per_tenant(s):{2}, min_timeout(s):{3}"
+#                 .format(timeout, len(tenant_id_list), timeout_per_tenant, min_timeout))
+#
+#  return timeout
+#
+#def set_tenant_parameter(cur, parameter, value, timeout = 0, only_sys_tenant = False):
+#
 #  tenants_list = []
-#  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+#  if only_sys_tenant:
+#    tenants_list = ['sys']
+#  elif get_min_cluster_version(cur) < get_version("4.2.1.0"):
 #    tenants_list = ['all']
 #  else:
 #    tenants_list = ['sys', 'all_user', 'all_meta']
+#
+#  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#
+#  set_session_timeout(cur, query_timeout)
+#
 #  for tenants in tenants_list:
 #    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
 #    logging.info(sql)
 #    cur.execute(sql)
-#  wait_parameter_sync(cur, True, parameter, value, timeout)
+#
+#  set_session_timeout(cur, 10)
+#
+#  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 #
 #def get_ori_enable_ddl(cur, timeout):
 #  ori_value_str = fetch_ori_enable_ddl(cur)
@@ -229,11 +260,25 @@
 #    bret = False
 #  return bret
 #
-#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+#def wait_parameter_sync(cur, is_tenant_config, key, value, timeout, only_sys_tenant = False):
 #  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+#  extra_sql = " and tenant_id = 1" if is_tenant_config and only_sys_tenant else ""
 #  sql = """select count(*) as cnt from oceanbase.{0}
-#           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
-#  times = (timeout if timeout > 0 else 60) / 5
+#           where name = '{1}' and value != '{2}'{3}""".format(table_name, key, value, extra_sql)
+#
+#  wait_timeout = 0
+#  query_timeout = 0
+#  if not is_tenant_config or timeout > 0:
+#    wait_timeout = (timeout if timeout > 0 else 60)
+#    query_timeout = wait_timeout
+#  else:
+#    # is_tenant_config & timeout not set
+#    wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#    query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
+#
+#  set_session_timeout(cur, query_timeout)
+#
+#  times = wait_timeout / 5
 #  while times >= 0:
 #    logging.info(sql)
 #    cur.execute(sql)
@@ -252,6 +297,8 @@
 #      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
 #      raise e
 #    time.sleep(5)
+#
+#  set_session_timeout(cur, 10)
 #
 #def do_begin_upgrade(cur, timeout):
 #
@@ -324,11 +371,18 @@
 #    tenants_list = ['all']
 #  else:
 #    tenants_list = ['sys', 'all_user', 'all_meta']
+#
+#  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#
+#  set_session_timeout(cur, query_timeout)
+#
 #  for tenants in tenants_list:
 #    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
 #    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
+#
+#  set_session_timeout(cur, 10)
 #
 #def do_resume_merge(cur, timeout):
 #  tenants_list = []
@@ -336,11 +390,18 @@
 #    tenants_list = ['all']
 #  else:
 #    tenants_list = ['sys', 'all_user', 'all_meta']
+#
+#  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#
+#  set_session_timeout(cur, query_timeout)
+#
 #  for tenants in tenants_list:
 #    action_sql = "alter system resume merge tenant = {0}".format(tenants)
 #    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
 #    logging.info(action_sql)
 #    cur.execute(action_sql)
+#
+#  set_session_timeout(cur, 10)
 #
 #class Cursor:
 #  __cursor = None
@@ -604,7 +665,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, False)  # need_check_major_status = False
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #      if run_modules.MODULE_END_ROLLING_UPGRADE in my_module_set:
@@ -790,7 +851,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
 #        logging.info('================succeed to run health check action ===============')
 #
 #    except Exception, e:
@@ -853,6 +914,90 @@
 #
 #
 #
+####====XXXX======######==== I am a splitter ====######======XXXX====####
+#filename:gen_obcdc_compatiable_info.py
+##!/usr/bin/env python3
+## -*- coding: utf-8 -*-
+#
+## RUN THIS SCRIPT AFTER oceanbase_upgrade_dep.yml MODIFIED
+##
+## PREPARE: install yaml with `pip install PyYaml` before run this script
+## RUN: run this script in tools/upgrade/ directory
+#
+#import yaml
+#import os
+#
+#def get_yaml(filename):
+#    yaml_data = None
+#    with open(filename, 'r', encoding='utf-8') as f:
+#        yaml_data = yaml.safe_load(f)
+#    return yaml_data
+#
+#def dump_to_yaml_obj(content):
+#   return yaml.safe_dump(content, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
+#
+#def write_yaml_to_file(content, filename):
+#    with open(filename, 'w',) as f :
+#        yaml.safe_dump(content, f, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
+#        print('Dump yaml format data to file successfully. File path: {0}'.format(filename))
+#
+#def collect_can_upgrade_from(target_ver):
+#    target_set = set()
+#    target_set.add(target_ver)
+#    if target_ver in can_upgrade_from_map.keys():
+#        can_upgrade_to_target_set = can_upgrade_from_map[target_ver]
+#        for target in can_upgrade_to_target_set:
+#            target_set.update(collect_can_upgrade_from(target))
+#    return target_set
+#
+#
+#if __name__ == '__main__':
+#    dir_path = os.path.dirname(os.path.realpath(__file__))
+#    ob_upgrade_deps_file = dir_path + "/oceanbase_upgrade_dep.yml"
+#    obcdc_compatiable_info_file = dir_path + "/obcdc_compatiable_ob_info.yaml"
+#    ob_upgrade_deps = get_yaml(ob_upgrade_deps_file)
+#    support_ob_versions = []
+#    cur_ob_version = ''
+#
+#    # key: upgraded_to_version
+#    # value: direct_upgrade_from_version_set
+#    can_upgrade_from_map = {}
+#    detect_cur_ob_ver_succ = False
+#
+#    if ob_upgrade_deps is not None:
+#        for ob_ver in ob_upgrade_deps:
+#            cur_ver = str(ob_ver['version'])
+#            if 'can_be_upgraded_to' not in ob_ver.keys():
+#                if detect_cur_ob_ver_succ:
+#                    print("duplicate detect cur_ob_version, last_detect_version: {cur_ob_version}, current_decect_info: {ob_ver}")
+#                    break
+#                else:
+#                    detect_cur_ob_ver_succ = True
+#                    cur_ob_version = cur_ver
+#                    if can_upgrade_to not in can_upgrade_from_map.keys():
+#                        can_upgrade_from_set = set()
+#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
+#            else:
+#                can_upgrade_to_list = list(ob_ver['can_be_upgraded_to'])
+#                for can_upgrade_to in can_upgrade_to_list:
+#                    if can_upgrade_to not in can_upgrade_from_map.keys():
+#                        can_upgrade_from_set = set()
+#                        can_upgrade_from_set.add(cur_ver)
+#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
+#                    else:
+#                        can_upgrade_from_map[can_upgrade_to].add(cur_ver)
+#
+#
+#        if detect_cur_ob_ver_succ:
+#            can_upgrade_from_set = can_upgrade_from_map[cur_ob_version]
+#            can_upgrade_from_set.update(collect_can_upgrade_from(cur_ob_version))
+#            res_map = {}
+#            res_list = []
+#            res_map["compatiable_ob_version"] = sorted(list(can_upgrade_from_set))
+#            res_map["obcdc_version"] = cur_ob_version
+#            res_list.append(res_map)
+#            print(dump_to_yaml_obj(res_list))
+#            write_yaml_to_file(res_list, obcdc_compatiable_info_file)
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:my_error.py
 ##!/usr/bin/env python
@@ -1276,19 +1421,19 @@
 #  # when upgrade across version, disable enable_ddl/major_freeze
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
-#    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
-#    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
-#    # wait scheduler in storage to notice adaptive_compaction is switched to false
-#    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\
 #      and actions.get_version(target_version) >= actions.get_version('4.2.0.0'):
 #    actions.set_tenant_parameter(cur, '_bloom_filter_enabled', 'False', timeout)
+#  # Disable enable_rebalance of sys tenant to avoid automatic unit migration
+#  # regardless of the same version upgrade or cross-version upgrade.
+#  # enable_rebalance is changed from cluster level to tenant level since 4.2.
+#  if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+#    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+#  else:
+#    only_sys_tenant = True
+#    actions.set_tenant_parameter(cur, 'enable_rebalance', 'False', timeout, only_sys_tenant)
 #
 #####========******####======== actions begin ========####******========####
 #  return
@@ -1334,17 +1479,7 @@
 #  else:
 #    run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 #
-#  # just to make __all_virtual_upgrade_inspection avaliable
-#  timeout_ts = (timeout if timeout > 0 else 600) * 1000 * 1000
-#  sql = "set @@session.ob_query_timeout = {0}".format(timeout_ts)
-#  logging.info(sql)
-#  cur.execute(sql)
-#  sql = "alter system run job 'root_inspection'"
-#  logging.info(sql)
-#  cur.execute(sql)
-#  sql = "set @@session.ob_query_timeout = 10000000"
-#  logging.info(sql)
-#  cur.execute(sql)
+#  run_root_inspection(cur, timeout)
 #####========******####======== actions begin ========####******========####
 #  upgrade_syslog_level(conn, cur)
 #  return
@@ -1360,7 +1495,6 @@
 #    info_cnt = result[0][0]
 #    if info_cnt > 0:
 #      actions.set_parameter(cur, "syslog_level", "WDIAG")
-#
 #  except Exception, e:
 #    logging.warn("upgrade syslog level failed!")
 #    raise e
@@ -1374,6 +1508,18 @@
 #
 #def get_tenant_ids(cur):
 #  return [_[0] for _ in query(cur, 'select tenant_id from oceanbase.__all_tenant')]
+#
+#def run_root_inspection(cur, timeout):
+#
+#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
+#
+#  actions.set_session_timeout(cur, query_timeout)
+#
+#  sql = "alter system run job 'root_inspection'"
+#  logging.info(sql)
+#  cur.execute(sql)
+#
+#  actions.set_session_timeout(cur, 10)
 #
 #def upgrade_across_version(cur):
 #  current_data_version = actions.get_current_data_version()
@@ -1480,7 +1626,9 @@
 #
 #def check_upgrade_job_result(cur, job_name, timeout, max_used_job_id):
 #  try:
-#    times = (timeout if timeout > 0 else 3600) / 10
+#    wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 3600)
+#
+#    times = wait_timeout / 10
 #    while (times >= 0):
 #      sql = """select job_status, rs_svr_ip, rs_svr_port, gmt_create from oceanbase.__all_rootservice_job
 #               where job_type = '{0}' and job_id > {1} order by job_id desc limit 1
@@ -1971,9 +2119,6 @@
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-#  if results[0][0] > 0 :
-#    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
 ## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -1997,6 +2142,15 @@
 #    fail_list.append('has abnormal tenant info, should stop')
 #  else:
 #    logging.info('check tenant info success')
+#
+#  # check tenant lock status
+#  (desc, results) = query_cur.exec_query("""select count(*) from DBA_OB_TENANTS where LOCKED = 'YES'""")
+#  if len(results) != 1 or len(results[0]) != 1:
+#    fail_list.append('results len not match')
+#  elif 0 != results[0][0]:
+#    fail_list.append('has locked tenant, should unlock')
+#  else:
+#    logging.info('check tenant lock status success')
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -2377,7 +2531,7 @@
 #'                    that all modules should be run. They are splitted by ",".\n' +\
 #'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
-#'-t, --timeout=name  check timeout, default: 600(s).\n' + \
+#'-t, --timeout=name  check timeout.\n' + \
 #'-z, --zone=name     If zone is not specified, check all servers status in cluster. \n' +\
 #'                    Otherwise, only check servers status in specified zone. \n' + \
 #'\n\n' +\
@@ -2439,8 +2593,7 @@
 #Option('m', 'module', True, False, 'all'),\
 ## 日志文件路径，不同脚本的main函数中中会改成不同的默认值
 #Option('l', 'log-file', True, False),\
-## 一些检查的超时时间，默认是600s
-#Option('t', 'timeout', True, False, '600'),\
+#Option('t', 'timeout', True, False, 0),\
 #Option('z', 'zone', True, False, ''),\
 #]\
 #
@@ -2592,13 +2745,38 @@
 #  else:
 #    logging.info("zone is empty, check all servers in cluster")
 #
+#def fetch_tenant_ids(query_cur):
+#  try:
+#    tenant_id_list = []
+#    (desc, results) = query_cur.exec_query("""select distinct tenant_id from oceanbase.__all_tenant order by tenant_id desc""")
+#    for r in results:
+#      tenant_id_list.append(r[0])
+#    return tenant_id_list
+#  except Exception, e:
+#    logging.exception('fail to fetch distinct tenant ids')
+#    raise e
+#
+#def set_default_timeout_by_tenant(query_cur, timeout, timeout_per_tenant, min_timeout):
+#  if timeout > 0:
+#    logging.info("use timeout from opt, timeout(s):{0}".format(timeout))
+#  else:
+#    tenant_id_list = fetch_tenant_ids(query_cur)
+#    cal_timeout = len(tenant_id_list) * timeout_per_tenant
+#    timeout = (cal_timeout if cal_timeout > min_timeout else min_timeout)
+#    logging.info("use default timeout caculated by tenants, "
+#                 "timeout(s):{0}, tenant_count:{1}, "
+#                 "timeout_per_tenant(s):{2}, min_timeout(s):{3}"
+#                 .format(timeout, len(tenant_id_list), timeout_per_tenant, min_timeout))
+#
+#  return timeout
+#
 ##### START ####
 ## 0. 检查server版本是否严格一致
 #def check_server_version_by_zone(query_cur, zone):
 #  if zone == '':
 #    logging.info("skip check server version by cluster")
 #  else:
-#    sql = """select distinct(substring_index(build_version, '_', 1)) from __all_server where zone = '{0}'""".format(zone);
+#    sql = """select distinct(substring_index(build_version, '_', 1)) from oceanbase.__all_server where zone = '{0}'""".format(zone);
 #    (desc, results) = query_cur.exec_query(sql);
 #    if len(results) != 1:
 #      raise MyError("servers build_version not match")
@@ -2608,8 +2786,9 @@
 ## 1. 检查paxos副本是否同步, paxos副本是否缺失
 #def check_paxos_replica(query_cur, timeout):
 #  # 1.1 检查paxos副本是否同步
-#  sql = """select count(*) from GV$OB_LOG_STAT where in_sync = 'NO'"""
-#  check_until_timeout(query_cur, sql, 0, timeout)
+#  sql = """select count(*) from oceanbase.GV$OB_LOG_STAT where in_sync = 'NO'"""
+#  wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 10, 600)
+#  check_until_timeout(query_cur, sql, 0, wait_timeout)
 #
 #  # 1.2 检查paxos副本是否有缺失 TODO
 #  logging.info('check paxos replica success')
@@ -2619,26 +2798,29 @@
 #  sql = """select count(*) from oceanbase.__all_server where (start_service_time <= 0 or status='inactive')"""
 #  if zone != '':
 #    sql += """ and zone = '{0}'""".format(zone)
-#  check_until_timeout(query_cur, sql, 0, timeout)
+#  wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 10, 600)
+#  check_until_timeout(query_cur, sql, 0, wait_timeout)
 #
 ## 3. 检查schema是否刷新成功
 #def check_schema_status(query_cur, timeout):
 #  sql = """select if (a.cnt = b.cnt, 1, 0) as passed from (select count(*) as cnt from oceanbase.__all_virtual_server_schema_info where refreshed_schema_version > 1 and refreshed_schema_version % 8 = 0) as a join (select count(*) as cnt from oceanbase.__all_server join oceanbase.__all_tenant) as b"""
-#  check_until_timeout(query_cur, sql, 1, timeout)
+#  wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 30, 600)
+#  check_until_timeout(query_cur, sql, 1, wait_timeout)
 #
 ## 4. check major finish
 #def check_major_merge(query_cur, timeout):
 #  need_check = 0
-#  (desc, results) = query_cur.exec_query("""select distinct value from  GV$OB_PARAMETERs where name = 'enable_major_freeze';""")
+#  (desc, results) = query_cur.exec_query("""select distinct value from oceanbase.GV$OB_PARAMETERS where name = 'enable_major_freeze';""")
 #  if len(results) != 1:
 #    need_check = 1
 #  elif results[0][0] != 'True':
 #    need_check = 1
 #  if need_check == 1:
-#    sql = """select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')"""
-#    check_until_timeout(query_cur, sql, 0, timeout)
-#    sql2 = """select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0"""
-#    check_until_timeout(query_cur, sql2, 0, timeout)
+#    wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 30, 600)
+#    sql = """select count(1) from oceanbase.CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')"""
+#    check_until_timeout(query_cur, sql, 0, wait_timeout)
+#    sql2 = """select /*+ query_timeout(1000000000) */ count(1) from oceanbase.__all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0"""
+#    check_until_timeout(query_cur, sql2, 0, wait_timeout)
 #
 #def check_until_timeout(query_cur, sql, value, timeout):
 #  times = timeout / 10
@@ -2660,7 +2842,7 @@
 #    time.sleep(10)
 #
 ## 开始健康检查
-#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, need_check_major_status, zone = ''):
+#def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, zone = ''):
 #  try:
 #    conn = mysql.connector.connect(user = my_user,
 #                                   password = my_passwd,
@@ -2670,7 +2852,6 @@
 #                                   raise_on_warnings = True)
 #    conn.autocommit = True
 #    cur = conn.cursor(buffered=True)
-#    timeout = timeout if timeout > 0 else 600
 #    try:
 #      query_cur = QueryCursor(cur)
 #      check_zone_valid(query_cur, zone)
@@ -2678,8 +2859,6 @@
 #      check_paxos_replica(query_cur, timeout)
 #      check_schema_status(query_cur, timeout)
 #      check_server_version_by_zone(query_cur, zone)
-#      if True == need_check_major_status:
-#        check_major_merge(query_cur, timeout)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -2714,7 +2893,7 @@
 #      zone = get_opt_zone()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
 #          host, port, user, password, log_filename, timeout, zone)
-#      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
+#      do_check(host, port, user, password, upgrade_params, timeout, zone)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
 #      raise e
@@ -2767,8 +2946,14 @@
 #  # check compatible sync
 #  parameter_count = int(server_count) * int(tenant_count)
 #  current_data_version = actions.get_current_data_version()
+#
+#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 2, 60)
+#  actions.set_session_timeout(cur, query_timeout)
+#
 #  sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
-#  times = (timeout if timeout > 0 else 60) / 5
+#
+#  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#  times = wait_timeout / 5
 #  while times >= 0:
 #    logging.info(sql)
 #    cur.execute(sql)
@@ -2788,6 +2973,8 @@
 #      raise e
 #    time.sleep(5)
 #
+#  actions.set_session_timeout(cur, 10)
+#
 #  # check target_data_version/current_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
 #  sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
@@ -2802,16 +2989,20 @@
 #    logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
 #
 ## 3 检查内部表自检是否成功
-#def check_root_inspection(query_cur, timeout):
+#def check_root_inspection(cur, query_cur, timeout):
 #  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
-#  times = timeout if timeout > 0 else 180
-#  while times > 0 :
+#
+#  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
+#
+#  times = wait_timeout / 10
+#  while times >= 0 :
 #    (desc, results) = query_cur.exec_query(sql)
 #    if results[0][0] == 0:
 #      break
 #    time.sleep(10)
 #    times -= 1
-#  if times == 0:
+#
+#  if times == -1:
 #    logging.warn('check root inspection failed!')
 #    raise e
 #  logging.info('check root inspection success')
@@ -2820,9 +3011,10 @@
 #def enable_ddl(cur, timeout):
 #  actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
 #
-## 5 打开rebalance
+## 5 打开sys租户rebalance
 #def enable_rebalance(cur, timeout):
-#  actions.set_parameter(cur, 'enable_rebalance', 'True', timeout)
+#  only_sys_tenant = True
+#  actions.set_tenant_parameter(cur, 'enable_rebalance', 'True', timeout, only_sys_tenant)
 #
 ## 6 打开rereplication
 #def enable_rereplication(cur, timeout):
@@ -2839,11 +3031,10 @@
 #  try:
 #    check_cluster_version(cur, timeout)
 #    check_data_version(cur, query_cur, timeout)
-#    check_root_inspection(query_cur, timeout)
+#    check_root_inspection(cur, query_cur, timeout)
 #    enable_ddl(cur, timeout)
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
-#    enable_major_freeze(cur, timeout)
 #  except Exception, e:
 #    logging.exception('run error')
 #    raise e

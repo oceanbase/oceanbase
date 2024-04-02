@@ -77,6 +77,10 @@ void ObTextStringDatumResult::set_result()
   res_datum_->set_string(buffer_, pos_);
 }
 
+void ObTextStringDatumResult::set_result_null()
+{
+  res_datum_->set_null();
+}
 
 int ObTextStringObObjResult::init(int64_t res_len, ObIAllocator *allocator)
 {

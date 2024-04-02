@@ -756,11 +756,11 @@ struct ObMemLobCommon
 struct ObMemLobExternFlags
 {
   ObMemLobExternFlags() :
-    has_tx_info_(1), has_location_info_(1), reserved_(0)
+    has_tx_info_(1), has_location_info_(1), has_retry_info_(1), reserved_(0)
   {}
 
   ObMemLobExternFlags(bool enable) :
-    has_tx_info_(enable), has_location_info_(enable), reserved_(0)
+    has_tx_info_(enable), has_location_info_(enable), has_retry_info_(enable), reserved_(0)
   {}
 
   ObMemLobExternFlags(const ObMemLobExternFlags &flags) { *this = flags; }
@@ -775,11 +775,12 @@ struct ObMemLobExternFlags
     return (*(reinterpret_cast<uint16_t *>(this)) = 0);
   }
 
-  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(reserved));
+  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(has_retry_info), K_(reserved));
 
   uint16_t has_tx_info_ : 1; // Indicate whether tx info exists
   uint16_t has_location_info_ : 1; // Indicate whether has cid exists (reserved)
-  uint16_t reserved_ : 14;
+  uint16_t has_retry_info_ : 1; // Indicate whether has retry info exists
+  uint16_t reserved_ : 13;
 };
 
 // Memory Locator V2, Extern Header:
@@ -848,6 +849,17 @@ struct ObMemLobLocationInfo
   char data_[0];
 };
 
+struct ObMemLobRetryInfo
+{
+  ObMemLobRetryInfo() : is_select_leader_(true), read_latest_(false), reserved_(0), addr_(), timeout_(0) {}
+  TO_STRING_KV(K_(is_select_leader), K_(read_latest), K_(reserved), K_(addr), K_(timeout));
+  int64_t is_select_leader_ : 1;
+  int64_t read_latest_ : 1;
+  int64_t reserved_ : 62;
+  ObAddr addr_;
+  uint64_t timeout_;
+};
+
 OB_INLINE void validate_has_lob_header(const bool &has_header)
 {
 #ifdef VALIDATE_LOB_HEADER
@@ -872,6 +884,7 @@ public:
   static const uint32_t MEM_LOB_EXTERN_HEADER_LEN = sizeof(ObMemLobExternHeader);
   static const uint32_t MEM_LOB_EXTERN_TXINFO_LEN = sizeof(ObMemLobTxInfo);
   static const uint32_t MEM_LOB_EXTERN_LOCATIONINFO_LEN = sizeof(ObMemLobLocationInfo);
+  static const uint32_t MEM_LOB_EXTERN_RETRYINFO_LEN = sizeof(ObMemLobRetryInfo);
   static const uint16_t MEM_LOB_EXTERN_SIZE_LEN = sizeof(uint16_t);
   static const uint32_t MEM_LOB_ADDR_LEN = 0; // reserved for temp lob address
   static const int64_t DISK_LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
@@ -984,6 +997,7 @@ public:
   int set_payload_data(const ObLobCommon *lob_comm, const ObString& payload);
   int set_tx_info(const ObMemLobTxInfo &tx_info);
   int set_location_info(const ObMemLobLocationInfo &location_info);
+  int set_retry_info(const ObMemLobRetryInfo &retry_info);
 
   // interfaces for read
   // Notice: all the following functions should be called after is_valid() or fill()
@@ -998,6 +1012,7 @@ public:
   int get_table_info(uint64_t &table_id, uint32_t &column_idex);
   int get_tx_info(ObMemLobTxInfo *&tx_info) const;
   int get_location_info(ObMemLobLocationInfo *&location_info) const;
+  int get_retry_info(ObMemLobRetryInfo *&retry_info) const;
   int get_real_locator_len(int64_t &real_len) const;
   int get_chunk_size(int64_t &chunk_size) const;
 
@@ -1430,7 +1445,6 @@ public:
   inline void set_lob(const char* ptr, const int32_t size, const ObLobScale &lob_scale);
 
   void set_val_len(const int32_t val_len);
-  void set_null_meta(const ObObjMeta meta);
 
   void set_interval_ym(const ObIntervalYMValue &value);
   void set_interval_ds(const ObIntervalDSValue &value);
@@ -1465,7 +1479,6 @@ public:
   OB_INLINE ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
   OB_INLINE ObScale get_scale() const { return meta_.get_scale(); }
   inline const ObObjMeta& get_meta() const { return meta_; }
-  inline const ObObjMeta& get_null_meta() const { return null_meta_; }
 
   inline int get_tinyint(int8_t &value) const;
   inline int get_smallint(int16_t &value) const;
@@ -1637,6 +1650,7 @@ public:
 
   OB_INLINE bool get_bool() const { return (0 != v_.int64_); }
   inline int64_t get_ext() const;
+  int get_real_param_count(int64_t &count) const;
   OB_INLINE int64_t get_unknown() const { return v_.unknown_; }
   OB_INLINE uint64_t get_bit() const { return v_.uint64_; }
   OB_INLINE uint64_t get_enum() const { return v_.uint64_; }
@@ -1997,7 +2011,6 @@ public:
     int32_t interval_fractional_; //values for intervalds type
     number::ObNumber::Desc nmb_desc_;
     ObOTimestampData::UnionTZCtx time_ctx_;
-    ObObjMeta null_meta_;
   };  // sizeof = 4
   ObObjValue v_;  // sizeof = 8
 };
@@ -2915,11 +2928,6 @@ inline int64_t ObObj::get_ext() const
 inline void ObObj::set_val_len(const int32_t val_len)
 {
   val_len_ = val_len;
-}
-
-inline void ObObj::set_null_meta(const ObObjMeta meta)
-{
-  null_meta_ = meta;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -4000,8 +4008,18 @@ public:
   }
   OB_INLINE int32_t get_raw_text_pos() const { return raw_text_pos_; }
   OB_INLINE int32_t get_raw_text_len() const { return raw_text_len_; }
-  OB_INLINE void set_param_meta() { param_meta_ = get_meta(); }
-  OB_INLINE void set_param_meta(const ObObjMeta &meta) { param_meta_ = meta; }
+  OB_INLINE void set_param_meta()
+  {
+    if (param_meta_.is_null() || ObNullType != get_meta().get_type()) {
+      param_meta_ = get_meta();
+    }
+  }
+  OB_INLINE void set_param_meta(const ObObjMeta &meta)
+  {
+    if (param_meta_.is_null() || ObNullType != meta.get_type()) {
+      param_meta_ = meta;
+    }
+  }
   OB_INLINE const ObObjMeta &get_param_meta() const
   {
     return param_meta_;
@@ -4105,6 +4123,10 @@ struct ObSqlArrayObj
   }
   typedef common::ObArrayWrap<common::ObObjParam> DataArray;
   static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
+  static int do_real_deserialize(common::ObIAllocator &allocator, char *buf, int64_t data_len, ObSqlArrayObj *&array_obj);
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int deserialize(common::ObIAllocator &allocator, const char* buf, const int64_t data_len, int64_t& pos);
+  int64_t get_serialize_size(void) const;
   TO_STRING_KV("data", DataArray(data_, count_), K_(count), K_(element));
   common::ObObjParam *data_;
   int64_t count_;

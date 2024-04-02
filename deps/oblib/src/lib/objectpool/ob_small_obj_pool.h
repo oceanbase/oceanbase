@@ -104,6 +104,7 @@ int ObSmallObjPool<T>::init(const int64_t fixed_count,
 {
   int ret = OB_SUCCESS;
   int64_t obj_size = sizeof(ObjItem);
+  lib::ObMemAttr free_list_attr(tenant_id, label);
   if (OB_UNLIKELY(inited_)) {
     LIB_LOG(ERROR, "small obj pool has been initialized");
     ret = OB_INIT_TWICE;
@@ -113,8 +114,8 @@ int ObSmallObjPool<T>::init(const int64_t fixed_count,
   } else if (OB_FAIL(allocator_.init(obj_size, label, tenant_id, block_size))) {
     LIB_LOG(ERROR, "init small allocator fail", K(ret), K(obj_size), K(label),
         K(tenant_id), K(block_size));
-  } else if (OB_FAIL(free_list_.init(fixed_count))) {
-    LIB_LOG(ERROR, "init free list fail", K(fixed_count));
+  } else if (OB_FAIL(free_list_.init(fixed_count, global_default_allocator, free_list_attr))) {
+    LIB_LOG(ERROR, "init free list fail", K(fixed_count), K(free_list_attr));
   } else {
     fixed_count_ = fixed_count;
     free_count_ = 0;

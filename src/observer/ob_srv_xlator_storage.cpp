@@ -101,6 +101,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcFetchTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcBatchSetTabletAutoincSeqP, gctx_);
+    RPC_PROCESSOR(ObRpcClearTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
@@ -110,6 +111,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSRemoveNonPaxosReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
+    RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
@@ -120,5 +122,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #endif
     RPC_PROCESSOR(ObRpcDDLCheckTabletMergeStatusP, gctx_);
     RPC_PROCESSOR(ObRpcCreateDuplicateLSP, gctx_);
+    RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
 }

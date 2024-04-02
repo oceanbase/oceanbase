@@ -7,6 +7,9 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_covered_by.cpp
   geo/ob_geo_func_within.cpp
   geo/ob_geo_func_union.cpp
+  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_buffer.cpp
+  geo/ob_geo_func_touches.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -75,18 +78,19 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_func_distance_sphere.cpp
   geo/ob_geo_func_transform.cpp
   geo/ob_geo_func_box.cpp
-  geo/ob_geo_func_buffer.cpp
+
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_isvalid.cpp
   geo/ob_geometry_cast.cpp
   geo/ob_sdo_geo_func_to_wkb.cpp
   geo/ob_wkb_to_sdo_geo_visitor.cpp
   geo/ob_wkb_to_json_visitor.cpp
+  geo/ob_wkb_to_json_bin_visitor.cpp
   geo/ob_wkb_byte_order_visitor.cpp
   geo/ob_geo_3d.cpp
   geo/ob_sdo_geo_object.cpp
   geo/ob_geo_func_equals.cpp
-  geo/ob_geo_func_touches.cpp
+
   geo/ob_geo_func_centroid.cpp
   geo/ob_geo_interior_point_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
@@ -97,12 +101,13 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_mvt_encode_visitor.cpp
   geo/ob_geo_mvt.cpp
   geo/ob_vector_tile.pb-c.c
-  geo/ob_geo_func_symdifference.cpp
+
   geo/ob_geo_affine_visitor.cpp
   geo/ob_geo_grid_visitor.cpp
   geo/ob_geo_simplify_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
   geo/ob_geo_func_dissolve_polygon.cpp
+  geo/ob_geo_close_ring_visitor.cpp
 )
 
 ob_set_subtarget(oblib_lib common_mixed
@@ -235,6 +240,8 @@ ob_set_subtarget(oblib_lib oblog
   oblog/ob_base_log_writer.cpp
   oblog/ob_easy_log.cpp
   oblog/ob_log.cpp
+  oblog/ob_log_compressor.cpp
+  oblog/ob_log_dba_event.cpp
   oblog/ob_log_module.ipp
   oblog/ob_log_time_fmt.cpp
   oblog/ob_trace_log.cpp
@@ -248,7 +255,6 @@ ob_set_subtarget(oblib_lib signal
   signal/ob_signal_struct.cpp
   signal/ob_signal_utils.cpp
   signal/ob_signal_worker.cpp
-  signal/safe_snprintf.c
   signal/ob_libunwind.c
 )
 
@@ -308,6 +314,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_malloc_allocator.cpp
   alloc/ob_malloc_callback.cpp
   alloc/ob_malloc_sample_struct.cpp
+  alloc/ob_malloc_time_monitor.cpp
   alloc/ob_tenant_ctx_allocator.cpp
   alloc/object_mgr.cpp
   alloc/object_set.cpp

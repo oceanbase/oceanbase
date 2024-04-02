@@ -162,8 +162,14 @@ private:
 class ObDirectLoadSSTableBuilder : public ObIDirectLoadPartitionTableBuilder
 {
 public:
-  ObDirectLoadSSTableBuilder() : allocator_("TLD_sstablebdr"), is_closed_(false), is_inited_(false)
+  ObDirectLoadSSTableBuilder()
+    : allocator_("TLD_sstablebdr"),
+      rowkey_allocator_("TLD_Rowkey"),
+      is_closed_(false),
+      is_inited_(false)
   {
+    allocator_.set_tenant_id(MTL_ID());
+    rowkey_allocator_.set_tenant_id(MTL_ID());
   }
   virtual ~ObDirectLoadSSTableBuilder() = default;
   int init(const ObDirectLoadSSTableBuildParam &param);
@@ -213,7 +219,6 @@ private:
   int64_t header_length_;
   int64_t item_size_;
   int64_t index_item_num_per_block_;
-  int64_t io_timeout_ms_;
   ObDirectLoadIndexBlockHeader header_;
   common::ObArenaAllocator allocator_;
   ObDirectLoadTmpFileIOHandle file_io_handle_;

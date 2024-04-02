@@ -28,6 +28,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -56,6 +57,12 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   obrpc::ObAlterTableRes res;
   ObString first_stmt;
   bool is_sync_ddl_user = false;
+  uint64_t tenant_id = create_index_arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+  int64_t start_time = 0;
+  int64_t refresh_time = 0;
+  int64_t ddl_task_time = 0;
+  int64_t end_time = 0;
   ObArenaAllocator allocator("CreateIndexExec");
 
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
@@ -83,10 +90,41 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   } else if (FALSE_IT(create_index_arg.is_inner_ = my_session->is_inner())) {
   } else if (FALSE_IT(create_index_arg.parallelism_ = stmt.get_parallelism())) {
   } else if (FALSE_IT(create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
-  } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
-    LOG_WARN("rpc proxy create index failed", K(create_index_arg),
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else {
+    bool is_parallel_ddl = true;
+    if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                ObParallelDDLControlMode::CREATE_INDEX,
+                tenant_id, is_parallel_ddl))) {
+      LOG_WARN("fail to get whether create index is parallel", KR(ret), K(tenant_id));
+    } else if (data_version < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
+      start_time = ObTimeUtility::current_time();
+      if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
+        LOG_WARN("rpc proxy create index failed", K(create_index_arg),
              "dst", common_rpc_proxy->get_server(), K(ret));
-  } else if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
+      }
+      refresh_time = ObTimeUtility::current_time();
+      ddl_task_time = refresh_time;
+    } else {
+      ObTimeoutCtx ctx;
+      start_time = ObTimeUtility::current_time();
+      create_index_arg.is_parallel_ = true;
+      if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+        LOG_WARN("fail to set timeout ctx", KR(ret));
+      } else if (OB_FAIL(common_rpc_proxy->parallel_create_index(create_index_arg, res))) {
+        LOG_WARN("fail to parallel create index", KR(ret), "dst", common_rpc_proxy->get_server());
+      } else {
+        refresh_time = ObTimeUtility::current_time();
+        if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+            ctx, my_session, tenant_id, res.schema_version_))) {
+          LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
+        }
+        ddl_task_time = ObTimeUtility::current_time();
+      }
+    }
+  }
+  if (FAILEDx(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
     LOG_WARN("Failed to check sync_dll_user", K(ret));
   } else if (!is_sys_index && !is_sync_ddl_user) {
     // 只考虑非系统表和非备份恢复时的索引同步检查
@@ -103,6 +141,14 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
       LOG_WARN("failed to wait ddl finish", K(ret));
     }
   }
+  end_time = ObTimeUtility::current_time();
+  LOG_INFO("[create_index]", KR(ret),
+           "tenant_id", tenant_id,
+           "cost", end_time - start_time,
+           "execute_time", refresh_time - start_time,
+           "wait_schema", ddl_task_time - refresh_time,
+           "wait_ddl_task", end_time - ddl_task_time,
+           "index_name", create_index_arg.index_name_);
   SERVER_EVENT_ADD("ddl", "create index execute finish",
     "tenant_id", MTL_ID(),
     "ret", ret,
@@ -110,7 +156,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     "task_id", res.task_id_,
     "table_id", res.index_table_id_,
     "schema_version", res.schema_version_);
-  SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_index_arg));
+  SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -385,7 +431,7 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
     "task_id", res.task_id_,
     "table_id", res.index_table_id_,
     "schema_version", res.schema_version_);
-  SQL_ENG_LOG(INFO, "finish drop index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_index_arg));
+  SQL_ENG_LOG(INFO, "finish drop index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -422,7 +468,7 @@ int ObFlashBackIndexExecutor::execute(ObExecContext &ctx, ObFlashBackIndexStmt &
       "new_table_name", flashback_index_arg.new_table_name_,
       flashback_index_arg.new_db_name_);
   }
-  SQL_ENG_LOG(INFO, "finish flashback index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(flashback_index_arg));
+  SQL_ENG_LOG(INFO, "finish flashback index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -459,7 +505,7 @@ int ObPurgeIndexExecutor::execute(ObExecContext &ctx, ObPurgeIndexStmt &stmt) {
       "database_id", purge_index_arg.database_id_,
       purge_index_arg.table_name_);
   }
-  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(purge_index_arg));
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

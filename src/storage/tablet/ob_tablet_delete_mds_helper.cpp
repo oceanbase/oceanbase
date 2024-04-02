@@ -55,7 +55,7 @@ int ObTabletDeleteMdsHelper::on_commit_for_old_mds(
     const int64_t len,
     const transaction::ObMulSourceDataNotifyArg &notify_arg)
 {
-  mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = NotifyType::UNKNOWN;// disable runtime check
+  mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = transaction::NotifyType::UNKNOWN;// disable runtime check
   return ObTabletCreateDeleteHelper::process_for_old_mds<obrpc::ObBatchRemoveTabletArg, ObTabletDeleteMdsHelper>(buf, len, notify_arg);
 }
 
@@ -234,7 +234,7 @@ int ObTabletDeleteMdsHelper::set_tablet_deleted_status(
   if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, timeout))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed(data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(timeout));
   } else {
     data.tablet_status_ = ObTabletStatus::DELETED;

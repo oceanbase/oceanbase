@@ -53,15 +53,14 @@ public:
   //constructor and destructor
   ObColumnSchemaV2();
   explicit ObColumnSchemaV2(common::ObIAllocator *allocator);
-  ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema);
+  DISABLE_COPY_ASSIGN(ObColumnSchemaV2);
   virtual ~ObColumnSchemaV2();
 
   //operators
-  ObColumnSchemaV2 &operator=(const ObColumnSchemaV2 &src_schema);
   bool operator==(const ObColumnSchemaV2 &r) const;
   bool operator!=(const ObColumnSchemaV2 &r) const;
 
-  int assign(const ObColumnSchemaV2 &other);
+  int assign(const ObColumnSchemaV2 &src_schema);
 
   //set methods
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }

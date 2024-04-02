@@ -279,6 +279,17 @@ struct FilterCompare
   common::ObIArray<ObExprSelPair> &predicate_selectivities_;
 };
 
+typedef std::pair<double, ObRawExpr *> ObExprRankPair;
+
+struct ObExprRankPairCompare
+{
+  ObExprRankPairCompare() {};
+  bool operator()(ObExprRankPair &left, ObExprRankPair &right)
+  {
+    return left.first < right.first;
+  }
+};
+
 class AdjustSortContext
 {
  public:
@@ -1313,7 +1324,7 @@ public:
   virtual int compute_property();
 
   int check_property_valid() const;
-  int compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise);
+  int compute_normal_multi_child_parallel_and_server_info();
   int set_parallel_and_server_info_for_match_all();
   int get_limit_offset_value(ObRawExpr *percent_expr,
                              ObRawExpr *limit_expr,
@@ -1612,6 +1623,8 @@ public:
    *  be evaluated earlier.
    */
   int reorder_filter_exprs();
+  int reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                            ObIArray<ObRawExpr *> &filters_exprs);
 
   int find_shuffle_join_filter(bool &find) const;
   int has_window_function_below(bool &has_win_func) const;
@@ -1665,6 +1678,8 @@ public:
                                ObIArray<ObExecParamRawExpr *> &right_above_params);
   // 生成 partition id 表达式
   int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
+  int pick_out_startup_filters();
+  int check_contain_false_startup_filter(bool &contain_false);
 
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
@@ -1818,6 +1833,7 @@ private:
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
+  virtual int get_card_without_filter(double &card);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator

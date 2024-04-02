@@ -13,6 +13,7 @@
 
 #include "ob_geo.h"
 #include "lib/container/ob_vector.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase {
 namespace common {
@@ -20,13 +21,13 @@ namespace common {
 template<typename T, typename O>
 ObWkbConstIterator<T, O>::ObWkbConstIterator()
   : idx_(-1), owner_(NULL), diff_info_(),
-    diff_info_ptr_(&diff_info_), offsets_(), offsets_ptr_(&offsets_)
-{}
+    offsets_ptr_(nullptr)
+{
+}
 
 template<typename T, typename O>
 ObWkbConstIterator<T, O>::ObWkbConstIterator(index_type idx, const owner_t* owner)
-  : idx_(idx), diff_info_(), diff_info_ptr_(&diff_info_),
-    offsets_(), offsets_ptr_(&offsets_)
+  : idx_(idx), diff_info_(), offsets_ptr_(nullptr)
 {
   owner_ = const_cast<owner_t*>(owner);
 }
@@ -36,10 +37,20 @@ template<typename T, typename O>
 ObWkbConstIterator<T, O>::ObWkbConstIterator(self& iter, bool do_array_assign)
   : idx_(iter.idx_),
     owner_(iter.owner_), diff_info_(iter.diff_info_),
-    diff_info_ptr_(&diff_info_), offsets_(), offsets_ptr_(&offsets_)
+    offsets_ptr_(nullptr)
 {
-  if (do_array_assign) {
-      offsets_.assign(iter.offsets_);
+  int ret = OB_SUCCESS; // for log
+  if (iter.offsets_ptr_ != nullptr && do_array_assign) {
+    // If the tenant ID can be obtained, use tenant memory
+    ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "GeoWkbIter");
+    if (nullptr != MTL_CTX()) {
+      mem_attr.tenant_id_ = MTL_ID();
+    }
+    void *buf = ob_malloc(sizeof(ObWkbIterOffsetArray), mem_attr);
+    if (nullptr == buf || nullptr == (offsets_ptr_ = new(buf) ObWkbIterOffsetArray(*iter.offsets_ptr_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "allocate memory for hashmap failed", K(ret));
+    }
   }
 }
 
@@ -48,11 +59,27 @@ template<typename T, typename O>
 ObWkbConstIterator<T, O>::ObWkbConstIterator(const self& iter, bool do_array_assign)
   : idx_(iter.idx_),
     owner_(iter.owner_), diff_info_(iter.diff_info_),
-    diff_info_ptr_(&diff_info_), offsets_(), offsets_ptr_(&offsets_)
+    offsets_ptr_(nullptr)
 {
-  if (do_array_assign) {
-      offsets_.assign(iter.offsets_);
+  int ret = OB_SUCCESS; // for log
+  if (iter.offsets_ptr_ != nullptr && do_array_assign) {
+    // If the tenant ID can be obtained, use tenant memory
+    ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "GeoWkbIter");
+    if (nullptr != MTL_CTX()) {
+      mem_attr.tenant_id_ = MTL_ID();
+    }
+    void *buf = ob_malloc(sizeof(ObWkbIterOffsetArray), mem_attr);
+    if (nullptr == buf || nullptr == (offsets_ptr_ = new(buf) ObWkbIterOffsetArray(*iter.offsets_ptr_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "allocate memory for hashmap failed", K(ret));
+    }
   }
+}
+
+template<typename T, typename O>
+ObWkbConstIterator<T, O>::~ObWkbConstIterator()
+{
+  OB_DELETE(ObWkbIterOffsetArray, "GeoWkbIter", offsets_ptr_);
 }
 
 // shift iter interface
@@ -92,8 +119,25 @@ const typename ObWkbConstIterator<T, O>::self& ObWkbConstIterator<T, O>::operato
   idx_ = iter.idx_;
   owner_ = iter.owner_;
   diff_info_ = iter.diff_info_;
-  // TODO: do vector copy?
-  offsets_ = iter.offsets_;
+  if (iter.offsets_ptr_ == nullptr) {
+    OB_DELETE(ObWkbIterOffsetArray, "GeoWkbIter", offsets_ptr_);
+  } else {
+    if (iter.offsets_ptr_ != nullptr) {
+      *iter.offsets_ptr_ = *iter.offsets_ptr_;
+    } else {
+      int ret = OB_SUCCESS; // for log
+      // If the tenant ID can be obtained, use tenant memory
+      ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "GeoWkbIter");
+      if (nullptr != MTL_CTX()) {
+        mem_attr.tenant_id_ = MTL_ID();
+      }
+      void *buf = ob_malloc(sizeof(ObWkbIterOffsetArray), mem_attr);
+      if (nullptr == buf || nullptr == (offsets_ptr_ = new(buf) ObWkbIterOffsetArray(*iter.offsets_ptr_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        COMMON_LOG(WARN, "allocate memory for hashmap failed", K(ret), KP(iter.offsets_ptr_));
+      }
+    }
+  }
   return iter;
 }
 
@@ -156,7 +200,6 @@ typename ObWkbConstIterator<T, O>::reference ObWkbConstIterator<T, O>::operator[
 {
   self iter(*this, false);
   this->move(iter, diff, false);
-  iter.diff_info_ptr_ = this->diff_info_ptr_;
   iter.offsets_ptr_ = this->offsets_ptr_;
   this->update_val(iter);
   return *(diff_info_.last_addr_);
@@ -183,12 +226,12 @@ template<typename T, typename O>
 void ObWkbConstIterator<T, O>::update_val(self& iter) const
 {
   pointer data = NULL;
-  iter.owner_->get_sub_addr(iter.diff_info_ptr_->last_addr_,
-                            iter.diff_info_ptr_->last_idx_,
+  iter.owner_->get_sub_addr(iter.diff_info_.last_addr_,
+                            iter.diff_info_.last_idx_,
                             iter.idx_, iter.offsets_ptr_, data);
   // update info
-  iter.diff_info_ptr_->last_addr_ = data;
-  iter.diff_info_ptr_->last_idx_ = iter.idx_;
+  iter.diff_info_.last_addr_ = data;
+  iter.diff_info_.last_idx_ = iter.idx_;
 }
 
 
@@ -287,7 +330,6 @@ typename ObWkbIterator<T, O>::reference ObWkbIterator<T, O>::operator[](differen
 {
   self iter(*this, false);
   this->move(iter, diff, false);
-  iter.diff_info_ptr_ = this->diff_info_ptr_;
   iter.offsets_ptr_ = this->offsets_ptr_;
   this->update_val(iter);
   return *(this->diff_info_.last_addr_);
@@ -310,12 +352,26 @@ void ObWkbUtils::get_sub_addr_common(const T& obj,
                                     typename T::const_pointer last_addr,
                                     typename T::index_type last_idx,
                                     typename T::index_type cur_idx,
-                                    ObWkbIterOffsetArray* offsets,
+                                    ObWkbIterOffsetArray *&offsets,
                                     typename T::pointer& data)
 {
   // init or reverse offset, search from head
   INIT_SUCC(ret);
-  bool enable_offset_info = (offsets != NULL);
+  bool enable_offset_info = true;
+  if (offsets == nullptr) {
+    // If the tenant ID can be obtained, use tenant memory
+    ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "GeoWkbIter");
+    if (nullptr != MTL_CTX()) {
+      mem_attr.tenant_id_ = MTL_ID();
+    }
+    void *buf = ob_malloc(sizeof(ObWkbIterOffsetArray), mem_attr);
+    if (nullptr == buf || nullptr == (offsets = new(buf) ObWkbIterOffsetArray())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      // allocate memory failed, can't maintain ObWkbIterOffsetArray
+      enable_offset_info = false;
+      COMMON_LOG(WARN, "allocate memory for hashmap failed", K(ret));
+    }
+  }
   bool need_do_scan = false;
   char* scan_ptr = nullptr;
   uint32_t offset = 0;
@@ -353,6 +409,8 @@ void ObWkbUtils::get_sub_addr_common(const T& obj,
     // TODO: prealloc whole array?
     if (enable_offset_info && OB_FAIL(offsets->prepare_allocate(obj.iter_idx_max()))) {
       COMMON_LOG(WARN, "failed to reserve for offsets!", K(ret), K(obj.iter_idx_max()));
+      // allocate memory failed, can't maintain ObWkbIterOffsetArray
+      enable_offset_info = false;
     }
     // assum offsets -> prepare_allocate will do memset 0
     uint64_t base_offset = (enable_offset_info) ?  offsets->operator[](st) : 0;

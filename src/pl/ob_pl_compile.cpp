@@ -256,6 +256,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     uint64_t old_db_id = OB_INVALID_ID;
     bool need_reset_exec_env = false;
     bool need_reset_default_database = false;
+    bool need_set_db = true;
 
     //Step 1：根据id从schema取出pl信息，并构造ObPLFunctionAST
     int64_t init_start = ObTimeUtility::current_time();
@@ -286,8 +287,16 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     CK (OB_UNLIKELY(OB_NOT_NULL(proc)));
     OZ (schema_guard_.get_database_schema(proc->get_tenant_id(), proc->get_database_id(), db));
     CK (OB_UNLIKELY(OB_NOT_NULL(db)));
+    // in mysql mode, only system packages with invoker's right do not need set db
+    // in oracle mode, set db by if the routine is invoker's right
     if (OB_SUCC(ret)
-        && !proc->is_invoker_right()
+        && (lib::is_oracle_mode()
+            || get_tenant_id_by_object_id(proc->get_package_id()) == OB_SYS_TENANT_ID)) {
+      need_set_db = !proc->is_invoker_right();
+    }
+
+    if (OB_SUCC(ret)
+        && need_set_db
         && proc->get_database_id() != old_db_id) {
       old_db_id = session_info_.get_database_id();
       if (OB_FAIL(old_db_name.append(session_info_.get_database_name()))) {
@@ -428,14 +437,14 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-    ObRoutinePersistentInfo routine_storage(tenant_id,
+    ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         proc->get_database_id(),
                                         session_info_.get_database_id(),
                                         func_ast.get_id());
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
         bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() &&
-            (cg.get_debug_mode() || !func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
+            !cg.get_debug_mode() && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
         OZ (cg.init());
         // Step 4: try to obtain dll from disk
         if (need_read_dll) {
@@ -533,7 +542,7 @@ int ObPLCompiler::update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp
   ObMySQLProxy *sql_proxy = nullptr;
   ObMySQLTransaction trans;
   bool skip = false;
-  if (GCTX.is_standby_cluster()) {
+  if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     skip = true;
   } else if (ObTriggerInfo::is_trigger_package_id(dep_obj_id)) {
     if (lib::is_oracle_mode()) {
@@ -729,7 +738,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
   CK (OB_NOT_NULL(session_info_.get_pl_engine()));
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
-      ObRoutinePersistentInfo routine_storage(get_tenant_id_by_object_id(package.get_id()),
+      ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         session_info_.get_database_id(),
                                         session_info_.get_database_id(),
                                         package.get_id());
@@ -1433,6 +1442,7 @@ template<class Info>
 void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard, int &ret)
 {
   ObExecEnv env;
+  bool need_set_db = true;
   OX (need_reset_exec_env_ = false);
   OX (need_reset_default_database_ = false);
   OX (old_db_id_ = OB_INVALID_ID);
@@ -1442,8 +1452,16 @@ void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info
     OZ (env.store(session_info_));
     OX (need_reset_exec_env_ = true);
   }
+
+  // in mysql mode, only system packages with invoker's right do not need set db
+  // in oracle mode, set db by if the routine is invoker's right
   if (OB_SUCC(ret)
-      && !info.is_invoker_right()
+      && (lib::is_oracle_mode()
+          || get_tenant_id_by_object_id(info.get_package_id()) == OB_SYS_TENANT_ID)) {
+    need_set_db = !info.is_invoker_right();
+  }
+  if (OB_SUCC(ret)
+      && need_set_db
       && info.get_database_id() != session_info_.get_database_id()) {
     const share::schema::ObDatabaseSchema *db_schema = NULL;
     old_db_id_ = session_info_.get_database_id();

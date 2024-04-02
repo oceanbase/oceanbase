@@ -46,6 +46,7 @@ public:
         for_update_(false),
         for_update_wait_us_(-1), /* default infinite */
         pre_query_range_(NULL),
+        pre_range_graph_(NULL),
         part_ids_(NULL),
         filter_before_index_back_(),
         table_partition_info_(NULL),
@@ -162,6 +163,18 @@ public:
   inline const ObQueryRange *get_pre_query_range() const
   { return pre_query_range_; }
 
+  inline const ObPreRangeGraph *get_pre_range_graph() const
+  { return pre_range_graph_; }
+
+  inline const ObQueryRangeProvider *get_pre_graph() const
+  {
+    return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                       : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
+  }
+
+  inline bool is_new_query_range() const
+  { return pre_range_graph_ != nullptr; }
+
   /**
    *  Get range columns
    */
@@ -217,6 +230,9 @@ public:
    */
   inline void set_pre_query_range(const ObQueryRange *query_range)
   { pre_query_range_ = query_range; }
+
+  inline void set_pre_range_graph(const ObPreRangeGraph *range_graph)
+  { pre_range_graph_ = range_graph; }
 
   /**
    *  Set range columns
@@ -333,13 +349,20 @@ public:
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info) { table_partition_info_ = table_partition_info; }
 
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
-  bool is_table_whole_range_scan() const { return !is_index_scan() && (NULL == pre_query_range_ ||
-                                                  (1 == ranges_.count() && ranges_.at(0).is_whole_range())); }
+  bool is_table_whole_range_scan() const
+  {
+    return !is_index_scan() &&
+           ((NULL == pre_query_range_ && NULL == pre_range_graph_) ||
+            (1 == ranges_.count() && ranges_.at(0).is_whole_range()));
+  }
   void set_skip_scan(bool is_skip_scan) { is_skip_scan_ = is_skip_scan; }
   bool is_skip_scan() const { return is_skip_scan_; }
   virtual bool is_table_scan() const override { return true; }
-  bool is_whole_range_scan() const {return NULL == pre_query_range_
-                                            || (1 == ranges_.count() && ranges_.at(0).is_whole_range()); }
+  bool is_whole_range_scan() const
+  {
+    return (NULL == pre_query_range_ && NULL == pre_range_graph_) ||
+           (1 == ranges_.count() && ranges_.at(0).is_whole_range());
+  }
   ObOrderDirection get_scan_direction() const { return scan_direction_; }
   void set_index_back(bool index_back) { index_back_ = index_back; }
   bool get_index_back() const { return index_back_; }
@@ -476,10 +499,12 @@ public:
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
   inline ObLogSet *get_rcte_op() { return rcte_op_; }
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
+  int copy_gen_col_range_exprs();
+  inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
+  virtual int get_card_without_filter(double &card) override;
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
-  int pick_out_startup_filters();
   int filter_before_index_back_set();
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
@@ -516,6 +541,7 @@ protected: // memeber variables
   // query range after preliminary extract, which will be stored in physical plan
   // for future use
   const ObQueryRange *pre_query_range_;
+  const ObPreRangeGraph *pre_range_graph_;
   const common::ObIArray<int64_t> *part_ids_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> range_conds_;
 

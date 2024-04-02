@@ -237,6 +237,13 @@ int get_user_tenant(ObRequest &req, char *user_name_buf, char *tenant_name_buf)
   return ret;
 }
 
+static void set_sql_sock_mem_pool_tenant_id(ObRequest &req, int64_t tenant_id)
+{
+  if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
+    obmysql::ObSqlSockSession* sess = (obmysql::ObSqlSockSession*)req.get_server_handle_context();
+    sess->pool_.set_tenant_id(tenant_id);
+  }
+}
 int dispatch_req(const uint64_t tenant_id, ObRequest &req, QueueThread *global_mysql_queue)
 {
   int ret = OB_SUCCESS;
@@ -259,6 +266,7 @@ int dispatch_req(const uint64_t tenant_id, ObRequest &req, QueueThread *global_m
       } else if (OB_ISNULL(mysql_queue)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mysql_queue is NULL", K(ret), K(tenant_id));
+      } else if (FALSE_IT(set_sql_sock_mem_pool_tenant_id(req, tenant_id))) {
       } else if (!mysql_queue->queue_.push(&req, MAX_QUEUE_LEN)) {  // MAX_QUEUE_LEN = 10000;
         ret = OB_QUEUE_OVERFLOW;
         EVENT_INC(MYSQL_DELIVER_FAIL);

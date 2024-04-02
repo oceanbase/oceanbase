@@ -378,6 +378,7 @@ private:
       IColMeta *col_meta,
       const COLUMN_SCHEMA &column_schema,
       const TABLE_SCHEMA &table_schema);
+  void set_column_type_(IColMeta &col_meta, const obmysql::EMySQLFieldType &col_type);
   template<class TABLE_SCHEMA>
   int set_primary_keys_(
       ITableMeta *table_meta,

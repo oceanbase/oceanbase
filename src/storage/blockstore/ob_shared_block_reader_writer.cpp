@@ -339,7 +339,7 @@ int ObSharedBlockReadHandle::verify_checksum(
       header_size = header->header_size_;
       buf_len = header->data_size_;
     }
-    LOG_DEBUG("zhuixin debug read shared block", K(ret), KPC(header));
+    LOG_DEBUG("read shared block", K(ret), KPC(header));
   }
   return ret;
 }
@@ -815,7 +815,7 @@ int ObSharedBlockReaderWriter::inner_write_block(
       } else if (!need_flush) {
         hanging_ = true;
       }
-      LOG_DEBUG("zhuixin debug inner write block", K(ret), K(header), K(size), K(need_flush),
+      LOG_DEBUG("inner write block", K(ret), K(header), K(size), K(need_flush),
           K(need_align), K(store_size), K(align_store_size), K(offset_), K(align_offset_),
           K(hanging_), K(addr), K(macro_handle));
     }

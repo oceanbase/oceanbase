@@ -24,16 +24,19 @@ namespace table
 class ObTableApiDelSpec : public ObTableApiModifySpec
 {
 public:
+  typedef common::ObArrayWrap<ObTableDelCtDef*> ObTableDelCtDefArray;
   ObTableApiDelSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
-        del_ctdef_(alloc)
+        del_ctdefs_()
   {
   }
+  int init_ctdefs_array(int64_t size);
+  virtual ~ObTableApiDelSpec();
 public:
-  OB_INLINE const ObTableDelCtDef& get_ctdef() const { return del_ctdef_; }
-  OB_INLINE ObTableDelCtDef& get_ctdef() { return del_ctdef_; }
+  OB_INLINE const ObTableDelCtDefArray& get_ctdefs() const { return del_ctdefs_; }
+  OB_INLINE ObTableDelCtDefArray& get_ctdefs() { return del_ctdefs_; }
 private:
-  ObTableDelCtDef del_ctdef_;
+  ObTableDelCtDefArray del_ctdefs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiDelSpec);
 };
@@ -41,12 +44,13 @@ private:
 class ObTableApiDeleteExecutor : public ObTableApiModifyExecutor
 {
 public:
+  typedef common::ObArrayWrap<ObTableDelRtDef> ObTableDelRtDefArray;
   ObTableApiDeleteExecutor(ObTableCtx &ctx, const ObTableApiDelSpec &spec)
       : ObTableApiModifyExecutor(ctx),
         entity_(nullptr),
         is_skip_scan_(false),
         del_spec_(spec),
-        del_rtdef_(),
+        del_rtdefs_(),
         cur_idx_(0)
   {
   }
@@ -59,6 +63,7 @@ public:
   }
 public:
   virtual int open();
+  int inner_open_with_das();
   virtual int get_next_row();
   virtual int close();
   OB_INLINE void set_entity(const ObITableEntity *entity) { entity_ = entity; }
@@ -66,6 +71,7 @@ public:
   OB_INLINE int is_skip_scan() { return is_skip_scan_; }
 private:
   int get_next_row_from_child();
+  int delete_row_to_das();
   int del_rows_post_proc();
   int process_single_operation(const ObTableEntity *entity);
   int delete_row_skip_scan();
@@ -74,7 +80,7 @@ private:
   const ObITableEntity *entity_;
   bool is_skip_scan_;
   const ObTableApiDelSpec &del_spec_;
-  ObTableDelRtDef del_rtdef_;
+  ObTableDelRtDefArray del_rtdefs_;
   int64_t cur_idx_;
 };
 

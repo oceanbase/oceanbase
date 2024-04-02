@@ -49,6 +49,10 @@ public:
                           ObTableSchema &alter_table_schema,
                           share::schema::ObSchemaOperationType operation_type,
                           const common::ObString *ddl_stmt_str = NULL);
+  int only_update_table_options(common::ObISQLClient &sql_client,
+                                ObTableSchema &new_table_schema,
+                                share::schema::ObSchemaOperationType operation_type,
+                                const common::ObString *ddl_stmt_str = NULL);
   int update_table_schema_version(common::ObISQLClient &sql_client,
                                   const ObTableSchema &table_schema,
                                   share::schema::ObSchemaOperationType operation_type,
@@ -253,7 +257,8 @@ public:
       const ObConstraint &cst);
 
 private:
-
+  int inner_update_table_options_(ObISQLClient &sql_client,
+                                  const ObTableSchema &new_table_schema);
   int add_table(common::ObISQLClient &sql_client, const ObTableSchema &table,
                 const bool update_object_status_ignore_version,
                 const bool only_history = false);

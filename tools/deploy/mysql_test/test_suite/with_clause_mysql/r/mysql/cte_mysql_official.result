@@ -320,20 +320,20 @@ SELECT * FROM strings WHERE LENGTH(s)=4;
 | s    |
 +------+
 | 0000 |
-| 0001 |
-| 0010 |
-| 0011 |
-| 0100 |
-| 0101 |
-| 0110 |
-| 0111 |
 | 1000 |
-| 1001 |
-| 1010 |
-| 1011 |
+| 0100 |
 | 1100 |
-| 1101 |
+| 0010 |
+| 1010 |
+| 0110 |
 | 1110 |
+| 0001 |
+| 1001 |
+| 0101 |
+| 1101 |
+| 0011 |
+| 1011 |
+| 0111 |
 | 1111 |
 +------+
 
@@ -380,14 +380,14 @@ SELECT category_id, name FROM cte;
 | category_id | name                 |
 +-------------+----------------------+
 |           1 | ELECTRONICS          |
-|           6 | PORTABLE ELECTRONICS |
 |           2 | TELEVISIONS          |
-|          10 | 2 WAY RADIOS         |
-|           5 | PLASMA               |
-|           9 | CD PLAYERS           |
-|           4 | LCD                  |
-|           7 | MP3 PLAYERS          |
+|           6 | PORTABLE ELECTRONICS |
 |           3 | TUBE                 |
+|           4 | LCD                  |
+|           5 | PLASMA               |
+|           7 | MP3 PLAYERS          |
+|           9 | CD PLAYERS           |
+|          10 | 2 WAY RADIOS         |
 |           8 | FLASH                |
 +-------------+----------------------+
 
@@ -403,14 +403,14 @@ SELECT * FROM cte ORDER BY depth;
 | category_id | name                 | depth |
 +-------------+----------------------+-------+
 |           1 | ELECTRONICS          |     0 |
-|           6 | PORTABLE ELECTRONICS |     1 |
 |           2 | TELEVISIONS          |     1 |
-|          10 | 2 WAY RADIOS         |     2 |
-|           5 | PLASMA               |     2 |
-|           9 | CD PLAYERS           |     2 |
-|           4 | LCD                  |     2 |
-|           7 | MP3 PLAYERS          |     2 |
+|           6 | PORTABLE ELECTRONICS |     1 |
 |           3 | TUBE                 |     2 |
+|           4 | LCD                  |     2 |
+|           5 | PLASMA               |     2 |
+|           7 | MP3 PLAYERS          |     2 |
+|           9 | CD PLAYERS           |     2 |
+|          10 | 2 WAY RADIOS         |     2 |
 |           8 | FLASH                |     3 |
 +-------------+----------------------+-------+
 
@@ -557,9 +557,9 @@ SELECT * FROM cte;
 | category_id | name                 | depth |
 +-------------+----------------------+-------+
 |           6 | PORTABLE ELECTRONICS |     0 |
-|          10 | 2 WAY RADIOS         |     1 |
-|           9 | CD PLAYERS           |     1 |
 |           7 | MP3 PLAYERS          |     1 |
+|           9 | CD PLAYERS           |     1 |
+|          10 | 2 WAY RADIOS         |     1 |
 +-------------+----------------------+-------+
 
 CREATE TABLE product(
@@ -627,13 +627,13 @@ SELECT * FROM descendants;
 | person      |
 +-------------+
 | Thurimbert  |
-| Ingramm     |
-| Landrade    |
-| Cancor      |
 | Robert II   |
-| Ermengarde  |
-| Chaudegrand |
+| Cancor      |
+| Landrade    |
+| Ingramm     |
 | Robert III  |
+| Chaudegrand |
+| Ermengarde  |
 +-------------+
 
 WITH RECURSIVE descendants AS
@@ -651,13 +651,13 @@ SELECT * FROM descendants ORDER BY level;
 | person      | level |
 +-------------+-------+
 | Thurimbert  |     1 |
-| Ingramm     |     2 |
-| Landrade    |     2 |
-| Cancor      |     2 |
 | Robert II   |     2 |
-| Ermengarde  |     3 |
-| Chaudegrand |     3 |
+| Cancor      |     2 |
+| Landrade    |     2 |
+| Ingramm     |     2 |
 | Robert III  |     3 |
+| Chaudegrand |     3 |
+| Ermengarde  |     3 |
 +-------------+-------+
 
 WITH RECURSIVE descendants AS

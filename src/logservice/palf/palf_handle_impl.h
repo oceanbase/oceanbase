@@ -60,6 +60,7 @@ class LogIOFlushMetaTask;
 class ReadBuf;
 class LogWriteBuf;
 class LogIOWorker;
+class LogSharedQueueTh;
 class LogRpc;
 class IPalfEnvImpl;
 
@@ -803,7 +804,9 @@ public:
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
   // ==================== Callback end ========================
-  virtual int revoke_leader(const int64_t proposal_id) = 0;
+  virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                            const int64_t downgrade_priority_time_us,
+                                                            const char *reason) = 0;
   virtual int flashback(const int64_t mode_version,
                         const share::SCN &flashback_scn,
                         const int64_t timeout_us) = 0;
@@ -825,6 +828,7 @@ public:
                        char *read_buf,
                        const int64_t nbytes,
                        int64_t &read_size) = 0;
+  virtual int try_handle_next_submit_log() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -843,6 +847,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
@@ -860,6 +865,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
            LogIOWorker*log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
@@ -961,11 +967,11 @@ public:
                             const int64_t in_read_size,
                             char *buf,
                             int64_t &out_read_size) const;
-
   int raw_read(const palf::LSN &lsn,
                char *buffer,
                const int64_t nbytes,
                int64_t &read_size) override final;
+  int try_handle_next_submit_log();
 public:
   int delete_block(const block_id_t &block_id) override final;
   int read_log(const LSN &lsn,
@@ -1144,7 +1150,9 @@ public:
   int handle_config_change_pre_check(const ObAddr &server,
                                      const LogGetMCStReq &req,
                                      LogGetMCStResp &resp) override final;
-  int revoke_leader(const int64_t proposal_id) override final;
+  int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
+                                                    const int64_t downgrade_priority_time_us,
+                                                    const char *reason) override final;
   int stat(PalfStat &palf_stat) override final;
   int handle_register_parent_req(const LogLearner &child,
                                  const bool is_to_leader) override final;
@@ -1434,6 +1442,7 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
+  ObMiniStat::ObStatItem handle_submit_log_cost_stat_;
   int64_t last_accum_write_statistic_time_;
   int64_t accum_write_log_size_;  // the accum size of written logs
   int64_t last_accum_fetch_statistic_time_;

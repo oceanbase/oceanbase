@@ -47,6 +47,19 @@ public:
   virtual ~ObCreateViewResolver();
 
   virtual int resolve(const ParseNode &parse_tree);
+  static int resolve_select_node_for_force_view(bool &add_undefined_columns,
+                                                ParseNode *select_stmt_node,
+                                                ObIArray<SelectItem> &select_items);
+  static int add_undefined_column_infos(const uint64_t tenant_id,
+                                        ObIArray<SelectItem> &select_items,
+                                        ObTableSchema &table_schema,
+                                        const common::ObIArray<ObString> &column_list);
+  static int try_add_undefined_column_infos(const uint64_t tenant_id,
+                                            bool has_resolved_field_list,
+                                            ParseNode *select_stmt_node,
+                                            ObSelectStmt &select_stmt,
+                                            ObTableSchema &table_schema,
+                                            const common::ObIArray<ObString> &column_list);
   static int add_column_infos(const uint64_t tenant_id,
                               ObSelectStmt &select_stmt,
                               ObTableSchema &table_schema,
@@ -72,7 +85,8 @@ private:
                          ParseNode *view_columns_node,
                          share::schema::ObErrorInfo &error_info,
                          const bool is_force_view,
-                         bool &can_expand_star);
+                         bool &can_expand_star,
+                         bool &add_undefined_columns);
   int check_privilege_needed(ObCreateTableStmt &stmt,
                              ObSelectStmt &select_stmt,
                              const bool is_force_view);

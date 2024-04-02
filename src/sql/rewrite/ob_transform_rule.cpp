@@ -27,7 +27,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 namespace oceanbase
 {
 namespace sql
@@ -84,6 +84,7 @@ int ObTransformerCtx::add_src_hash_val(uint64_t trans_type)
   int ret = OB_SUCCESS;
   const char *str = NULL;
   if (OB_ISNULL(str = get_trans_type_string(trans_type))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to convert trans type to src value", K(ret));
   } else {
     uint32_t hash_val = src_hash_val_.empty() ? 0 : src_hash_val_.at(src_hash_val_.count() - 1);
@@ -306,19 +307,24 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     trans_happened = true;
   } else if (ctx_->is_set_stmt_oversize_) {
     LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
-  } else if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true,
-                                   trans_stmt_cost, is_expected, check_ctx))) {
-    LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
-  } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
-    trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
-  } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false,
-                                   stmt_cost_, is_original_expected,
-                                   check_original_plan ? check_ctx : NULL))) {
-    LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
-  } else if (!is_original_expected) {
-    trans_happened = is_original_expected;
+  } else if (ctx_->in_accept_transform_) {
+    LOG_TRACE("not accept transform because already in one accepct transform", K(ctx_->in_accept_transform_));
   } else {
-    trans_happened = trans_stmt_cost < stmt_cost_;
+    ctx_->in_accept_transform_ = true;
+    if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true, trans_stmt_cost, is_expected,
+                              check_ctx))) {
+      LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
+    } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
+      trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
+    } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false, stmt_cost_, is_original_expected,
+                                     check_original_plan ? check_ctx : NULL))) {
+      LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
+    } else if (!is_original_expected) {
+      trans_happened = is_original_expected;
+    } else {
+      trans_happened = trans_stmt_cost < stmt_cost_;
+    }
+    ctx_->in_accept_transform_ = false;
   }
   RESUME_OPT_TRACE;
 
@@ -330,7 +336,7 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("is expected plan:", is_expected);
     OPT_TRACE("is expected original plan:", is_original_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
-                     K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+              K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
@@ -571,7 +577,8 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -689,8 +696,7 @@ int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_s
 bool ObTransformRule::is_normal_disabled_transform(const ObDMLStmt &stmt)
 {
   return (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) ||
-         stmt.is_insert_all_stmt() ||
-         stmt.is_values_table_query();
+         stmt.is_insert_all_stmt();
 }
 
 int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -780,7 +786,8 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     // do nothing
   } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                         ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {
@@ -921,7 +928,11 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
   } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_names(qb_name_counts_, query_ctx->stmt_count_))) {
     LOG_WARN("failed to revover qb names", K(ret));
+  } else if (NULL != unique_key_provider_
+             && OB_FAIL(unique_key_provider_->recover_useless_unique_for_temp_table())) {
+    LOG_WARN("failed to recover useless unique for temp table", K(ret));
   } else {
+    unique_key_provider_ = NULL;
     query_ctx->available_tb_id_ = available_tb_id_;
     query_ctx->subquery_count_ = subquery_count_;
     query_ctx->temp_table_count_ = temp_table_count_;

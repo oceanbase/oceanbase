@@ -49,15 +49,16 @@ static int eval_dissolve_polygon(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to create go by type", K(ret), K(res));
       } else if (is_self_intersects) {
+        ObArenaAllocator tmp_alloc;
         MPY *left_part =
-            OB_NEWx(MPY, context.get_allocator(), g1->get_srid(), *context.get_allocator());
+            OB_NEWx(MPY, &tmp_alloc, g1->get_srid(), tmp_alloc);
         MPY *right_part =
-            OB_NEWx(MPY, context.get_allocator(), g1->get_srid(), *context.get_allocator());
-        if (OB_ISNULL(res) || OB_ISNULL(left_part) || OB_ISNULL(right_part)) {
+            OB_NEWx(MPY, &tmp_alloc, g1->get_srid(), tmp_alloc);
+        if (OB_ISNULL(left_part) || OB_ISNULL(right_part)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to create go by type", K(ret), K(res), K(left_part), K(right_part));
         } else {
-          GeometryType *g1_rev = OB_NEWx(GeometryType, context.get_allocator(), *geo1);
+          GeometryType *g1_rev = OB_NEWx(GeometryType, &tmp_alloc, *geo1);
           if (OB_ISNULL(g1_rev)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to create go by type", K(ret));
@@ -67,13 +68,24 @@ static int eval_dissolve_polygon(
           }
         }
       } else {
+        ObArenaAllocator tmp_alloc;
         bg::intersection(*geo1, *geo1, *res);
         if (res->is_empty() && !geo1->is_empty()) {
-          bg::reverse(*geo1);
-          bg::intersection(*geo1, *geo1, *res);
+          GeometryType *g1_rev = OB_NEWx(GeometryType, &tmp_alloc, *geo1);
+          if (OB_ISNULL(g1_rev)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to create go by type", K(ret));
+          } else {
+            bg::reverse(*g1_rev);
+            bg::intersection(*g1_rev, *g1_rev, *res);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          bg::correct(*res);
         }
       }
-      if (res->size() == 1) {
+      if (OB_FAIL(ret)) {
+      } else if (res->size() == 1) {
         result = &res->front();
       } else {
         result = res;
@@ -108,11 +120,12 @@ static int eval_dissolve_multipolygon(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to create go by type", K(ret), K(res));
       } else if (is_self_intersects) {
-        MPY *left_part =
-            OB_NEWx(MPY, context.get_allocator(), g1->get_srid(), *context.get_allocator());
+        ObArenaAllocator tmp_alloc;
+         MPY *left_part =
+            OB_NEWx(MPY, &tmp_alloc, g1->get_srid(), tmp_alloc);
         MPY *right_part =
-            OB_NEWx(MPY, context.get_allocator(), g1->get_srid(), *context.get_allocator());
-        if (OB_ISNULL(res) || OB_ISNULL(left_part) || OB_ISNULL(right_part)) {
+            OB_NEWx(MPY, &tmp_alloc, g1->get_srid(), tmp_alloc);
+        if (OB_ISNULL(left_part) || OB_ISNULL(right_part)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to create go by type", K(ret), K(res), K(left_part), K(right_part));
         } else {
@@ -127,6 +140,7 @@ static int eval_dissolve_multipolygon(
           bg::reverse(*geo1);
           bg::intersection(*geo1, *geo1, *res);
         }
+        bg::correct(*res);
       }
       if (res->size() == 1) {
         result = &res->front();

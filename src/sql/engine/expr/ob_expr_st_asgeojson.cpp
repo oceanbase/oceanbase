@@ -18,8 +18,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "lib/geo/ob_wkb_to_json_visitor.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
+#include "lib/geo/ob_wkb_to_json_bin_visitor.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -54,7 +53,9 @@ int ObExprSTAsGeoJson::calc_result_typeN(ObExprResType &type, ObExprResType *typ
           LOG_WARN("invalid type for geometry", K(ret), K(type));
         }
       } else {
-        if (!ob_is_integer_type(type) && !ob_is_null(type) && !ob_is_string_type(type)) {
+        if (!ob_is_integer_type(type) && !ob_is_null(type)
+            && !ob_is_varchar_char_type(type, types_stack[i].get_collation_type())
+            && !ob_is_enum_or_set_type(type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid type", K(ret), K(type));
         } else {
@@ -72,7 +73,7 @@ int ObExprSTAsGeoJson::calc_result_typeN(ObExprResType &type, ObExprResType *typ
 }
 
 int ObExprSTAsGeoJson::process_input_params(const ObExpr &expr, ObEvalCtx &ctx,
-    ObIAllocator &allocator, ObGeometry *&geo, bool &is_null_res, ObGeoSrid& srid,
+    MultimodeAlloctor &allocator, ObGeometry *&geo, bool &is_null_res, ObGeoSrid& srid,
     uint32_t &max_dec_digits, uint8_t &flag)
 {
   int ret = OB_SUCCESS;
@@ -85,27 +86,26 @@ int ObExprSTAsGeoJson::process_input_params(const ObExpr &expr, ObEvalCtx &ctx,
   const ObSrsItem *srs = nullptr;
   if (ob_is_null(type1)) {
     is_null_res = true;
-  } else if (OB_FAIL(arg1->eval(ctx, datum))) {
+  } else if (OB_FAIL(allocator.eval_arg(arg1, ctx, datum))) {
     LOG_WARN("fail to eval args", K(ret));
   } else if (datum->is_null()) {
     is_null_res = true;
   } else {
     // construct geometry
     ObString wkb = datum->get_string();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
             allocator, *datum, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb))) {
       LOG_WARN("fail to read real string data", K(ret), K(arg1->obj_meta_.has_lob_header()));
     } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(
-                   allocator, wkb, srs_guard, srs, geo, N_ST_ASGEOJSON))) {
+                   allocator, wkb, srs_guard, srs, geo, N_ST_ASGEOJSON, true, false))) {
       LOG_WARN("fail to build geometry from wkb", K(ret), K(wkb));
     } else {
       srid = ObGeoWkbByteOrderUtil::read<uint32_t>(wkb.ptr(), ObGeoWkbByteOrder::LittleEndian);
     }
   }
   // max_dec_digits
-  max_dec_digits = INT_MAX32;
   if (!is_null_res && OB_SUCC(ret) && expr.arg_cnt_ > 1) {
-    if (OB_FAIL(expr.args_[1]->eval(ctx, datum))) {
+    if (OB_FAIL(allocator.eval_arg(expr.args_[1], ctx, datum))) {
       LOG_WARN("failed to eval second argument", K(ret));
     } else if (datum->is_null()) {
       is_null_res = true;
@@ -130,7 +130,7 @@ int ObExprSTAsGeoJson::process_input_params(const ObExpr &expr, ObEvalCtx &ctx,
   // flag
   flag = 0;
   if (!is_null_res && OB_SUCC(ret) && expr.arg_cnt_ > 2) {
-    if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
+    if (OB_FAIL(allocator.eval_arg(expr.args_[2], ctx, datum))) {
       LOG_WARN("failed to eval second argument", K(ret));
     } else if (datum->is_null()) {
       is_null_res = true;
@@ -160,8 +160,9 @@ int ObExprSTAsGeoJson::eval_st_asgeojson(const ObExpr &expr, ObEvalCtx &ctx, ObD
   int ret = OB_SUCCESS;
   bool is_null_res = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  uint32_t max_dec_digits = UINT_MAX32;
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_ST_ASGEOJSON);
+  uint32_t max_dec_digits = INT_MAX32;
   uint8_t flag = 0;
   ObGeometry *geo = nullptr;
   ObString json_res;
@@ -171,31 +172,23 @@ int ObExprSTAsGeoJson::eval_st_asgeojson(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_WARN("fail to process input geometry", K(ret));
   } else if (!is_null_res) {
     // cal asgeojson
-    ObWkbToJsonVisitor visitor(&temp_allocator, max_dec_digits, flag, srid);
-    if (OB_FAIL(geo->do_visit(visitor))) {
-      LOG_WARN("fail to do visit", K(ret));
+    ObWkbToJsonBinVisitor visitor(&temp_allocator, max_dec_digits, flag, srid);
+    if (OB_FAIL(visitor.to_jsonbin(geo, json_res))) {
+      LOG_WARN("fail to convert geo to jsonbin", K(ret));
     } else {
-      visitor.get_geojson(json_res);
+      temp_allocator.set_baseline_size(geo->length() + json_res.length());
+      temp_allocator.memory_usage_check_if_need();
     }
   }
-  uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
-  ObJsonNode *j_tree = NULL;
   // set result
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (is_null_res) {
     res.set_null();
-  } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, json_res, j_tree, parse_flag))) {
-      LOG_WARN("fail to parse string as json", K(ret));
-  } else {
-    ObIJsonBase *j_base = j_tree;
-    ObString raw_bin;
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
-      LOG_WARN("fail to get string json binary", K(ret));
-    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
-      LOG_WARN("fail to pack json result", K(ret));
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, json_res))) {
+    LOG_WARN("fail to pack json result", K(ret));
   }
+
   return ret;
 }
 

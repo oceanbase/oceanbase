@@ -45,6 +45,7 @@ public:
   int get_gts(const MonotonicTs stc, int64_t &gts, MonotonicTs &receive_gts_ts, bool &need_send_rpc) const;
   int get_srr_and_gts_safe(MonotonicTs &srr, int64_t &gts, MonotonicTs &receive_gts_ts) const;
   int update_latest_srr(const MonotonicTs latest_srr);
+  bool no_rpc_on_road() const { return ATOMIC_LOAD(&latest_srr_.mts_) == ATOMIC_LOAD(&srr_.mts_); }
 
   TO_STRING_KV(K_(srr), K_(gts), K_(latest_srr));
 private:

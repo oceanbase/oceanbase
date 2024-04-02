@@ -19,6 +19,7 @@ namespace sql
 template<typename HashCol, typename HashRowStore>
 void ObHashPartInfrastructureGroup<HashCol, HashRowStore>::reset()
 {
+  est_bucket_num_ = 0;
   initial_hp_size_ = 0;
   hp_infras_buffer_idx_ = MAX_HP_INFRAS_CNT;
   foreach_call(hp_infras_list_, &HashPartInfras::destroy);
@@ -34,7 +35,7 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_one_hp_infras(
   ObSqlMemMgrProcessor *sql_mem_processor, bool need_rewind)
 {
   int ret = OB_SUCCESS;
-  HashPartInfras *tmp_hp_infras = nullptr;
+  int64_t est_bucket_num = 0;
   auto total_mem_used_func = [this] () -> int64_t {
     int64_t total_mem_used = 0;
     // It has been checked whether it is nullptr when it is added, so it will not be checked here
@@ -50,11 +51,11 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_one_hp_infras(
   };
   if (OB_FAIL(try_get_hp_infras_from_free_list(hp_infras))) {
     SQL_ENG_LOG(WARN, "failed to try get hash partition infrastructure", K(ret));
-  } else if (nullptr == hp_infras) {
-    if (OB_FAIL(alloc_hp_infras(tmp_hp_infras))) {
+  } else if (nullptr == hp_infras || hp_infras->is_destroyed()) {
+    if (nullptr == hp_infras && OB_FAIL(alloc_hp_infras(hp_infras))) {
       SQL_ENG_LOG(WARN, "failed to alloc hash partition infrastructure", K(ret));
     } else {
-      hp_infras = new(tmp_hp_infras) HashPartInfras();
+      hp_infras = new(hp_infras) HashPartInfras();
       hp_infras->set_hp_infras_group_func(total_mem_used_func, slice_cnt_func);
       if (OB_FAIL(hp_infras->init(tenant_id, enable_sql_dumped, unique, true,
         ways, sql_mem_processor, need_rewind))) {
@@ -91,19 +92,18 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_hash_table(
   HashPartInfras *&hp_infras, const int64_t est_rows, const int64_t width)
 {
   int ret = OB_SUCCESS;
-  int64_t est_bucket_num = 0;
   if (OB_ISNULL(hp_infras)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "hash partition infrastructure is null", K(ret));
-  } else if (FALSE_IT(est_bucket_num = hp_infras->est_bucket_count(est_rows, width,
+  } else if (FALSE_IT(est_bucket_num_ = hp_infras->est_bucket_count(est_rows, width,
       HashPartInfrasMgr::MIN_BUCKET_COUNT, HashPartInfrasMgr::MAX_BUCKET_COUNT))) {
   } else if (OB_FAIL(hp_infras->start_round())) {
     SQL_ENG_LOG(WARN, "failed to start round", K(ret));
-  } else if (OB_FAIL(hp_infras->init_hash_table(est_bucket_num,
+  } else if (OB_FAIL(hp_infras->init_hash_table(est_bucket_num_,
       HashPartInfrasMgr::MIN_BUCKET_COUNT, HashPartInfrasMgr::MAX_BUCKET_COUNT))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret));
   } else {
-    SQL_ENG_LOG(TRACE, "init_hash_table", K(est_bucket_num), K(est_rows), K(width));
+    SQL_ENG_LOG(TRACE, "init_hash_table", K(est_bucket_num_), K(est_rows), K(width));
   }
   return ret;
 }
@@ -127,9 +127,16 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::free_one_hp_infras(Has
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "unexpected status: hp infras is null", K(ret));
   } else if (FALSE_IT(hp_infras_list_.remove(hp_infras))) {
-  } else if (!hp_infras_free_list_.add_last(hp_infras)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "failed to add hp infras to free list", K(ret));
+  } else {
+    if (hp_infras->get_bucket_num() > est_bucket_num_ * RATIO) {
+      hp_infras->destroy();
+    } else {
+      hp_infras->reuse();
+    }
+    if (!hp_infras_free_list_.add_last(hp_infras)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "failed to add hp infras to free list", K(ret));
+    }
   }
   return ret;
 }

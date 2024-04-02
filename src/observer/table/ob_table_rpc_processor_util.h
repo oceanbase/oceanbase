@@ -59,7 +59,7 @@ enum ObTableProccessType
   // query
   TABLE_API_TABLE_QUERY,
   TABLE_API_HBASE_QUERY,
-  TABLE_API_TABLE_QUERY_SYNC,
+  TABLE_API_TABLE_QUERY_ASYNC,
 
   // query_and_mutate
   TABLE_API_QUERY_AND_MUTATE,
@@ -269,11 +269,11 @@ public:
         break;
 
       // table query sync
-      case ObTableProccessType::TABLE_API_TABLE_QUERY_SYNC:
+      case ObTableProccessType::TABLE_API_TABLE_QUERY_ASYNC:
         EVENT_INC(TABLEAPI_QUERY_COUNT);
         EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
-        SET_AUDIT_SQL_STRING(table_query_sync);
+        SET_AUDIT_SQL_STRING(table_query_async);
         break;
 
       // table query_and_mutate

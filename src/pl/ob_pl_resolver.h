@@ -268,6 +268,9 @@ public:
   int check_contain_goto_block(const ObPLStmt *cur_stmt,
                                const ObPLStmtBlock *goto_block,
                                bool &is_contain);
+  static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
@@ -336,10 +339,6 @@ public:
                   sql::ObRawExpr *&expr,
                   bool for_write = false);
   int resolve_inner_call(const ParseNode *parse_tree, ObPLStmt *&stmt, ObPLFunctionAST &func);
-  int mock_self_param(bool need_rotate,
-                      ObIArray<ObObjAccessIdent> &obj_access_idents,
-                      ObIArray<ObObjAccessIdx> &self_access_idxs,
-                      ObPLFunctionAST &func);
   int resolve_sqlcode_or_sqlerrm(sql::ObQualifiedName &q_name,
                                  ObPLCompileUnitAST &unit_ast,
                                  sql::ObRawExpr *&expr);
@@ -454,7 +453,22 @@ public:
                                ObProcType &routine_type,
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
+  static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
+  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type);
 
+  static
+  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
+                                 ObRawExprFactory &expr_factory,
+                                 const sql::ObSQLSessionInfo *session_info,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 bool for_write,
+                                 ObString &result);
+  static
+  int set_write_property(ObRawExpr *obj_expr,
+                         ObRawExprFactory &expr_factory,
+                         const ObSQLSessionInfo *session_info,
+                         ObSchemaGetterGuard *schema_guard,
+                         bool for_write);
   int get_caller_accessor_item(
     const ObPLStmtBlock *caller, AccessorItem &caller_item);
   int check_package_accessible(
@@ -742,9 +756,13 @@ private:
   int resolve_udf_without_brackets(sql::ObQualifiedName &q_name, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr);
   int make_self_symbol_expr(ObPLCompileUnitAST &func, ObRawExpr *&expr);
   int add_udt_self_argument(const ObIRoutineInfo *routine_info,
+                            ObObjAccessIdent &access_ident,
+                            ObIArray<ObObjAccessIdx> &access_idxs,
+                            ObPLCompileUnitAST &func);
+  int add_udt_self_argument(const ObIRoutineInfo *routine_info,
                             ObIArray<ObRawExpr*> &expr_params,
                             ObIArray<ObObjAccessIdx> &access_idxs,
-                            ObUDFInfo &udf_info,
+                            ObUDFInfo *udf_info,
                             ObPLCompileUnitAST &func);
   int resolve_qualified_identifier(sql::ObQualifiedName &q_name,
                                            ObIArray<sql::ObQualifiedName> &columns,
@@ -920,19 +938,6 @@ private:
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);
   static
-  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
-                                 ObRawExprFactory &expr_factory,
-                                 const sql::ObSQLSessionInfo *session_info,
-                                 ObSchemaGetterGuard *schema_guard,
-                                 bool for_write,
-                                 ObString &result);
-  static
-  int set_write_property(ObRawExpr *obj_expr,
-                         ObRawExprFactory &expr_factory,
-                         const ObSQLSessionInfo *session_info,
-                         ObSchemaGetterGuard *schema_guard,
-                         bool for_write);
-  static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
                            const sql::ObSQLSessionInfo *session_info,
@@ -1014,6 +1019,7 @@ private:
                                 int64_t table_idx);
   int check_forall_sql_and_modify_params(ObPLForAllStmt &stmt,
                                 ObPLFunctionAST &func);
+  int replace_record_member_default_expr(ObRawExpr *&expr);
   int check_param_default_expr_legal(ObRawExpr *expr, bool is_subprogram_expr = true);
   int check_params_legal_in_body_routine(ObPLFunctionAST &routine_ast,
                                          const ObPLRoutineInfo *parent_routine_info,
@@ -1023,6 +1029,9 @@ private:
                               ObRawExpr *&expr,
                               const ObPLDataType *expected_type,
                               ObPLCompileUnitAST &func);
+  int try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func);
+  int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
+  int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int replace_to_const_expr_if_need(ObRawExpr *&expr);
   int build_seq_value_expr(ObRawExpr *&expr,
@@ -1067,8 +1076,6 @@ private:
   inline void set_item_type(ObItemType item_type) { item_type_ = item_type; }
 
   int resolve_question_mark_node(const ObStmtNodeTree *into_node, ObRawExpr *&into_expr);
-  bool is_question_mark_value(ObRawExpr *into_expr);
-  int set_question_mark_type(ObRawExpr *into_expr, const ObPLDataType *type);
 
   int check_cursor_formal_params(const ObIArray<int64_t>& formal_params,
                                  ObPLCursor &cursor,
@@ -1101,9 +1108,6 @@ private:
                                     ObRawExpr *real_expr);
 
   int replace_udf_param_expr(ObQualifiedName &q_name,
-                             ObIArray<ObQualifiedName> &columns,
-                             ObIArray<ObRawExpr*> &real_exprs);
-  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
   int get_names_by_access_ident(ObObjAccessIdent &access_ident,

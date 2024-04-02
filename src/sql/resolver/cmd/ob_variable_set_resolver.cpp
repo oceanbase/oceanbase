@@ -18,6 +18,8 @@
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
+#include "sql/resolver/dml/ob_inlist_resolver.h"
+#include "sql/resolver/cmd/ob_set_names_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -32,6 +34,26 @@ ObVariableSetResolver::ObVariableSetResolver(ObResolverParams &params)
 
 ObVariableSetResolver::~ObVariableSetResolver()
 {
+}
+
+int ObVariableSetResolver::resolve_set_names(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObSetNamesResolver set_names_resolver(params_);
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt not created in resolver", K(ret));
+  } else if (OB_FAIL(set_names_resolver.resolve(parse_tree))) {
+    LOG_WARN("fail to resolve", K(ret));
+  } else {
+    ObVariableSetStmt *variable_set_stmt = static_cast<ObVariableSetStmt*>(stmt_);
+    ObVariableSetStmt::VariableSetNode var_node;
+    var_node.set_names_stmt_ = static_cast<ObSetNamesStmt *>(set_names_resolver.get_basic_stmt());
+    if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+      LOG_WARN("Add set entry failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
@@ -57,6 +79,10 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
       if (OB_ISNULL(set_node = parse_tree.children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set node is NULL", K(ret));
+      } else if (T_SET_NAMES == set_node->type_ || T_SET_CHARSET == set_node->type_) {
+        if (OB_FAIL(resolve_set_names(*set_node))) {
+          LOG_WARN("fail to resolve set names", K(ret));
+        }
       } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set_node->type_ must be T_VAR_VAL", K(ret), K(set_node->type_));
@@ -227,6 +253,7 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
   ObArray<ObVarInfo> sys_vars;
   ObArray<ObOpRawExpr*> op_exprs;
   ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
+  ObArray<ObInListInfo> inlist_infos;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
@@ -252,11 +279,14 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
       LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(expr_resolver.resolve(&val_node, value_expr, columns, sys_vars,
                                              sub_query_info, aggr_exprs, win_exprs,
-                                             udf_info, op_exprs, user_var_exprs))) {
+                                             udf_info, op_exprs, user_var_exprs, inlist_infos))) {
       LOG_WARN("resolve expr failed", K(ret));
     } else if (udf_info.count() > 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("UDFInfo should not found be here!!!", K(ret));
+    } else if (inlist_infos.count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inlist_infos should not found be here!!!", K(ret));
     } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
       ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
       if (OB_ISNULL(call_expr->get_expr())) {

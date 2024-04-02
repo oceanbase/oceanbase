@@ -1544,5 +1544,21 @@ int ObXmlUtil::restore_ns_vec(ObNsSortedVector* element_ns_vec, ObVector<ObNsPai
   return ret;
 }
 
+template <typename T, typename... Args>
+ObXmlNode* ObXmlUtil::clone_new_node(ObIAllocator* allocator, Args &&... args)
+{
+  void *buf = allocator->alloc(sizeof(T));
+  T *new_node = NULL;
+
+  if (OB_ISNULL(buf)) {
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObXmlNode");
+  } else {
+    new_node = new(buf)T(std::forward<Args>(args)...);
+  }
+
+  return static_cast<ObXmlNode *>(new_node);
+
+}
+
 } // namespace common
 } // namespace oceanbase

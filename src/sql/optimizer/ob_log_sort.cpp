@@ -339,11 +339,44 @@ int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     card = param.need_row_count_;
   }
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child)) {
+  if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
+      || OB_ISNULL(get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(param.need_row_count_ = -1)) {
-    //limit N在sort算子被阻塞
+  } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_1_BP4) {
+    param.need_row_count_ = -1;
+  } else if (-1 == param.need_row_count_) {
+    //do nothing
+  } else if (!is_prefix_sort()) {
+    param.need_row_count_ = -1;
+  } else {
+    ObSEArray<ObRawExpr*, 4> prefix_ordering;
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_prefix_pos(); ++i) {
+      if (OB_FAIL(prefix_ordering.push_back(sort_keys_.at(i).expr_))) {
+        LOG_WARN("push back order key expr failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      double prefix_ndv = 0.0;
+      if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                        get_plan()->get_selectivity_ctx(),
+                                                        prefix_ordering,
+                                                        child->get_card(),
+                                                        prefix_ndv))) {
+        LOG_WARN("failed to calculate distinct", K(ret));
+      } else if (OB_UNLIKELY(std::fabs(prefix_ndv) < 1.0)) {
+        param.need_row_count_ = -1;
+      } else {
+        double num_rows_per_group = child->get_card() / prefix_ndv;
+        double num_groups = std::ceil(param.need_row_count_ / num_rows_per_group);
+        param.need_row_count_ = num_groups * num_rows_per_group;
+        if (param.need_row_count_ >= child->get_card()) {
+          param.need_row_count_ = -1;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(inner_est_cost(parallel, child_card, double_topn_count, op_cost))) {
@@ -387,7 +420,11 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
     }
     get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child_card);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    ObSortCostInfo cost_info(child_card / parallel,
+    double child_card_per_dop = child_card / parallel;
+    if (double_topn_count > child_card_per_dop) {
+      double_topn_count = child_card_per_dop;
+    }
+    ObSortCostInfo cost_info(child_card_per_dop,
                              child->get_width(),
                              get_prefix_pos(),
                              get_sort_keys(),
@@ -396,7 +433,7 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
                              &get_plan()->get_selectivity_ctx(),
                              double_topn_count,
                              part_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
+    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
     } else if (NULL != topn_expr_) {
       double_topn_count = std::min(double_topn_count * parallel, child_card);

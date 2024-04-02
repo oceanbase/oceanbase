@@ -22,6 +22,7 @@ namespace common
 {
 class ObObj;
 class ObNewRange;
+class ObAddr;
 }
 
 namespace sql
@@ -29,7 +30,6 @@ namespace sql
 class ObDASTabletLoc;
 class ObExecContext;
 class ObExternalTableAccessService;
-class ObQueryRange;
 }
 
 namespace share
@@ -85,6 +85,9 @@ class ObExternalTableUtils {
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
     int64_t sqc_count);
+
+  static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
+                                       common::ObIArray<common::ObAddr> &locations);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);
@@ -96,6 +99,7 @@ class ObExternalTableUtils {
                                             const int64_t last_lineno,
                                             common::ObIAllocator &allocator,
                                             common::ObNewRange &new_range);
+
 };
 }
 }

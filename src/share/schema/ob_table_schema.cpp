@@ -1507,6 +1507,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       table_flags_ = src_schema.table_flags_;
       name_generated_type_ = src_schema.name_generated_type_;
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
+      auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
+      is_column_store_supported_ = src_schema.is_column_store_supported_;
+      max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3248,6 +3252,11 @@ void ObTableSchema::reset()
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  auto_increment_cache_size_ = 0;
+
+  is_column_store_supported_ = false;
+  max_used_column_group_id_ = COLUMN_GROUP_START_ID;
+  mlog_tid_ = OB_INVALID_ID;
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -4343,6 +4352,10 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           is_offline = true;
         }
       }
+      if ((src_meta.is_signed_integer() && dst_meta.is_unsigned_integer())
+        || (src_meta.is_unsigned_integer() && dst_meta.is_signed_integer())) {
+          is_offline = true;
+      }
       if (!src_meta.is_lob_storage() && dst_meta.is_lob_storage()) {
         is_offline = true;
       }
@@ -4476,6 +4489,7 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   bool is_rowkey = false;
   bool is_index = false;
   bool is_same = false;
+  uint64_t data_version = 0;
   const ColumnType src_col_type = src_column.get_data_type();
   const ColumnType dst_col_type = dst_column.get_data_type();
   const ObObjMeta &src_meta = src_column.get_meta_type();
@@ -4488,7 +4502,9 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   } else if (is_same) {
     // do nothing
   } else if (!is_offline) {
-    if (is_oracle_mode) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+        LOG_WARN("failed to get min data version", K(ret), K(tenant_id_), K(data_version));
+    } else if (is_oracle_mode) {
       if (!ob_is_number_tc(src_col_type) &&
         ((!src_meta.is_varying_len_char_type() &&
         !src_meta.is_timestamp_tz() &&
@@ -4522,8 +4538,16 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           src_col_type != dst_col_type) &&
           (!src_meta.is_timestamp() &&
           !dst_meta.is_datetime()) &&
-          !(ob_is_integer_type(src_meta.get_type()) &&
-          ob_is_integer_type(dst_meta.get_type()))) { // if match rules has been check in check_alter_column_type()
+          !(src_meta.is_integer_type() && dst_meta.is_integer_type() && data_version >= DATA_VERSION_4_2_2_0)) {
+        /*
+          Note of the judge of data_version:
+            Determine data_version to avoid mixed deployment problems during the upgrade process.
+            During the upgrade process, the memtable_key.h of the old version of the observer will not have different types of defense rules (common::is_match_alter_integer_column_online_ddl_rules).
+            And, the type dismatch may cause 4016 problems;
+              1. This issue only needs to consider the primary key, index and part_key columns, so put the check here.
+              2. In the online ddl conversion released in 4.2.2, only the column type conversion of integer will involve this issue.
+            Therefore, we make a special case where the integer column is used as the primary key or index column.
+        */
         if (is_rowkey || src_column.is_tbl_part_key_column()) {
           is_offline = true;
         }
@@ -4715,7 +4739,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
           is_same = true;
         }
       } else {
-        if (src_column.get_data_precision() == dst_column.get_data_precision() &&
+        if ((ob_is_int_tc(src_column.get_data_type()) ||
+            src_column.get_data_precision() == dst_column.get_data_precision()) &&
             src_column.get_data_scale() == dst_column.get_data_scale()) {
           is_same = true;
         }
@@ -5647,8 +5672,10 @@ bool ObTableSchema::has_generated_and_partkey_column() const
       if (generated_columns_.has_member(i)) {
         uint64_t generated_column_id = i + OB_APP_MIN_COLUMN_ID;
         const ObColumnSchemaV2 *generated_column = get_column_schema(generated_column_id);
-        if (generated_column->is_tbl_part_key_column()) {
-          result = true;
+        if (OB_NOT_NULL(generated_column)) {
+          if (generated_column->is_tbl_part_key_column()) {
+            result = true;
+          }
         }
       }
     }
@@ -5801,8 +5828,8 @@ int ObSimpleTableSchemaV2::get_index_name(const ObString &table_name, ObString &
     pos = strlen(OB_INDEX_PREFIX);
 
     while (NULL != table_name.ptr() &&
-        isdigit(*(table_name.ptr() + pos)) &&
-        pos < table_name.length()) {
+        pos < table_name.length() &&
+        isdigit(*(table_name.ptr() + pos))) {
       ++pos;
     }
     if (pos == table_name.length()) {
@@ -5983,7 +6010,11 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(aux_lob_meta_tid),
     K_(aux_lob_piece_tid),
     K_(name_generated_type),
-    K_(lob_inrow_threshold));
+    K_(lob_inrow_threshold),
+    K_(is_column_store_supported),
+    K_(max_used_column_group_id),
+    K_(mlog_tid),
+    K_(auto_increment_cache_size));
   J_OBJ_END();
 
   return pos;
@@ -6253,6 +6284,20 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 name_generated_type_);
   }
   OB_UNIS_ENCODE(lob_inrow_threshold_);
+
+  // serialize column group
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialize_column_groups(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize column groups", K(ret));
+    } else {
+      LST_DO_CODE(OB_UNIS_ENCODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+
+  OB_UNIS_ENCODE(mlog_tid_);
+  OB_UNIS_ENCODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -6336,6 +6381,40 @@ int ObTableSchema::deserialize_constraints(const char *buf, const int64_t data_l
         SHARE_SCHEMA_LOG(WARN, "Fail to add cst", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::serialize_column_groups(
+    char *buf,
+    const int64_t data_len,
+    int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  // 42x does not support column storage tables, so column_group_cnt is set to 0
+  int64_t column_group_cnt = 0;
+  if (OB_FAIL(serialization::encode_vi64(buf, data_len, pos, column_group_cnt))) {
+    LOG_WARN("fail to encode column group cnt", KR(ret), K(column_group_cnt));
+  }
+  return ret;
+}
+
+int ObTableSchema::deserialize_column_groups(
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_column_group_cnt = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0) || OB_UNLIKELY(pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf should not be null", KR(ret), K(buf), K(data_len), K(pos));
+  } else if (pos == data_len) {
+    //do nothing
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &tmp_column_group_cnt))) {
+    LOG_WARN("fail to decode column group count", KR(ret));
+  } else {
+    // 42x does not support column storage tables, tmp_column_group_cnt is unused
   }
   return ret;
 }
@@ -6624,6 +6703,19 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }
 
   OB_UNIS_DECODE(lob_inrow_threshold_);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+
+  OB_UNIS_DECODE(mlog_tid_);
+  OB_UNIS_DECODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -6765,6 +6857,14 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(kv_attributes_);
   OB_UNIS_ADD_LEN(name_generated_type_);
   OB_UNIS_ADD_LEN(lob_inrow_threshold_);
+
+  // get column group size
+  int64_t column_group_cnt = 0; // 42x does not support column storage tables
+  len += serialization::encoded_length_vi64(column_group_cnt);
+  OB_UNIS_ADD_LEN(is_column_store_supported_);
+  OB_UNIS_ADD_LEN(max_used_column_group_id_);
+  OB_UNIS_ADD_LEN(mlog_tid_);
+  OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   return len;
 }
 
@@ -7761,8 +7861,7 @@ int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(ret));
-    } else if (ObObjType::ObExtendType == column_schema->get_data_type()
-               && ObObjType::ObUserDefinedSQLType == column_schema->get_data_type()) {
+    } else if (ObObjType::ObExtendType == column_schema->get_data_type()) {
       already_invalid = true;
       break;
     } else if (OB_FAIL(new_column_schema.assign(*column_schema))) {

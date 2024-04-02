@@ -24,6 +24,8 @@ class ObErrLogService;
 class ObDMLService
 {
 public:
+  static bool check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row);
+
   static int check_row_null(const ObExprPtrIArray &row,
                             ObEvalCtx &eval_ctx,
                             int64_t row_num,
@@ -246,6 +248,7 @@ public:
                                   int64_t row_num,
                                   common::ObString &column_name,
                                   ObExecContext &ctx);
+  static int get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, ObExecContext* &needed_ctx);
 
 private:
   template <int N>

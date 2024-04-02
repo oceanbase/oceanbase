@@ -19,7 +19,6 @@
 
 using namespace oceanbase::common;
 
-ObActiveSessionStat ObActiveSessionGuard::dummy_stat_;
 thread_local ObActiveSessionStat ObActiveSessionGuard::thread_local_stat_;
 
 // a sample would be taken place up to 20ms after ash iteration begins.
@@ -39,13 +38,20 @@ ObActiveSessionStat &ObActiveSessionGuard::get_stat()
   return *get_stat_ptr();
 }
 
+// called when forground session ends.
 void ObActiveSessionGuard::setup_default_ash()
 {
-  setup_thread_local_ash();
+  resetup_thread_local_ash();
 }
 
 void ObActiveSessionGuard::setup_ash(ObActiveSessionStat &stat)
 {
+  OB_ASSERT(&stat != &thread_local_stat_);
+  if (thread_local_stat_.is_bkgd_active_) {
+    // some case(e.g. rpc) thread_local_stat_ is first activated and then session in session mgr is created.
+    thread_local_stat_.accumulate_elapse_time();
+    thread_local_stat_.is_bkgd_active_ = false;
+  }
   get_stat_ptr() = &stat;
   stat.last_ts_ = common::ObTimeUtility::current_time();
 }
@@ -55,6 +61,12 @@ void ObActiveSessionGuard::resetup_ash(ObActiveSessionStat &stat)
   get_stat_ptr() = &stat;
 }
 
+void ObActiveSessionGuard::resetup_thread_local_ash()
+{
+  get_stat_ptr() = &thread_local_stat_;
+}
+
+// called when background session start to activate.
 void ObActiveSessionGuard::setup_thread_local_ash()
 {
   get_stat_ptr() = &thread_local_stat_;
@@ -70,7 +82,7 @@ void ObActiveSessionStat::fixup_last_stat(ObWaitEventDesc &desc)
       fixup_ash_buffer_.reset();
       fixup_index_ = -1;
     } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
     }
   }
 }
@@ -104,39 +116,21 @@ void ObActiveSessionStat::set_async_committing()
 {
   in_committing_ = true;
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(di_)) {
-    di_ = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
-  }
-  if (di_ &&
-      OB_SUCC(di_->notify_wait_begin(ObWaitEventIds::ASYNC_COMMITTING_WAIT, 0, 0, 0, 0, true))) {
-  } else {
-    LOG_WARN("begin async event failed", KPC(this));
-    wait_event_begin_ts_ = ObTimeUtility::current_time();
-    event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
-  }
+  wait_event_begin_ts_ = ObTimeUtility::current_time();
+  event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
 }
 
 void ObActiveSessionStat::finish_async_commiting() {
   in_committing_ = false;
   int ret = OB_SUCCESS;
-  ObTenantStatEstGuard tenant_stat_guard(tenant_id_);
-  if (di_ && OB_SUCC(di_->notify_wait_end(ObDiagnoseTenantInfo::get_local_diagnose_info(),
-                 true /*is_phy*/, false /*is_idle*/))) {
-    // di_ cache working and db time successfully stored.
+  if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
+    // if happened. caller of set_async_committing should check and revert the wait event.
   } else {
-    // di cache been evicted.
-    // LOG_WARN("async committing event but di cache invalidated.", KPC(this));
-    if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
-      // if happened. caller of set_async_committing should check and revert the wait event.
-    } else {
-      event_no_ = 0;
-      const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
-      wait_event_begin_ts_ = 0;
-      if (OB_UNLIKELY(cur_wait_time <= 0)) {
-        LOG_ERROR("failed to set wait_event_begin_ts_ for async wait event", KPC(this), K(cur_wait_time), KPC(this));
-      } else {
-        total_non_idle_wait_time_ += cur_wait_time;
-      }
+    event_no_ = 0;
+    const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
+    wait_event_begin_ts_ = 0;
+    if (OB_LIKELY(cur_wait_time > 0)) {
+      total_non_idle_wait_time_ += cur_wait_time;
     }
   }
 }
@@ -186,14 +180,20 @@ void ObActiveSessionStat::set_bkgd_sess_active()
 
 void ObActiveSessionStat::set_bkgd_sess_inactive()
 {
-  bkgd_elapse_time_ += common::ObTimeUtility::current_time() - last_ts_;
+  accumulate_elapse_time();
   is_bkgd_active_ = false;
+}
+
+void ObActiveSessionStat::accumulate_elapse_time()
+{
+  bkgd_elapse_time_ += common::ObTimeUtility::current_time() - last_ts_;
 }
 
 void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
-    const int64_t delta_time = sample_time - stat.last_ts_;
+    const int64_t delta_time = sample_time - stat.last_ts_ + stat.bkgd_elapse_time_;
+    stat.bkgd_elapse_time_ = 0;
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
@@ -235,14 +235,15 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
         stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
         stat.delta_db_time_ = delta_time - delta_idle_wait_time;
 
-        ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
+          ObTenantStatEstGuard guard(stat.tenant_id_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
         } else {
+          ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
           EVENT_ADD(SYS_TIME_MODEL_DB_TIME, stat.delta_db_time_);
           EVENT_ADD(SYS_TIME_MODEL_DB_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
@@ -299,8 +300,8 @@ void ObActiveSessionStat::calc_db_time_for_background_session(ObActiveSessionSta
         stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
         stat.delta_db_time_ = delta_time - delta_idle_wait_time;
 
-        ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
+          ObTenantStatEstGuard guard(stat.tenant_id_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
@@ -324,26 +325,23 @@ void ObActiveSessionGuard::set_bkgd_sess_inactive()
   get_stat().set_bkgd_sess_inactive();
 }
 
-ObRPCActiveGuard::ObRPCActiveGuard(int pcode)
+ObRPCActiveGuard::ObRPCActiveGuard(int pcode) : prev_is_bkgd_active_(true)
 {
-  pcode_ = pcode;
-  // inner sql would be recored in
-  if (pcode_ != obrpc::OB_INNER_SQL_SYNC_TRANSMIT && pcode_ != obrpc::OB_DAS_ASYNC_ACCESS &&
-      pcode_ != obrpc::OB_DAS_SYNC_ACCESS && pcode_ != obrpc::OB_REMOTE_SYNC_EXECUTE &&
-      pcode_ != obrpc::OB_REMOTE_EXECUTE) {
-    ObActiveSessionGuard::set_bkgd_sess_active();
-    ObActiveSessionGuard::get_stat().pcode_ = pcode;
-  }
+  prev_is_bkgd_active_ = ObActiveSessionGuard::get_stat().is_bkgd_active_;
+  ObActiveSessionGuard::set_bkgd_sess_active();
+  ObActiveSessionGuard::get_stat().pcode_ = pcode;
 }
 
 ObRPCActiveGuard::~ObRPCActiveGuard()
 {
-  if (pcode_ != obrpc::OB_INNER_SQL_SYNC_TRANSMIT && pcode_ != obrpc::OB_DAS_ASYNC_ACCESS &&
-      pcode_ != obrpc::OB_DAS_SYNC_ACCESS && pcode_ != obrpc::OB_REMOTE_SYNC_EXECUTE &&
-      pcode_ != obrpc::OB_REMOTE_EXECUTE) {
-    ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
-    ObActiveSessionGuard::get_stat().pcode_ = 0;
+  const ObActiveSessionStat *stat = &ObActiveSessionGuard::get_stat();
+  if (OB_UNLIKELY(stat != &ObActiveSessionGuard::thread_local_stat_)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ash stat didn't reset to thread local ash",
+        KPC(stat), K_(ObActiveSessionGuard::thread_local_stat), K(stat), K(&ObActiveSessionGuard::thread_local_stat_));
+    ObActiveSessionGuard::setup_default_ash();
   }
+  ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
+  ObActiveSessionGuard::get_stat().pcode_ = 0;
 }
 
 ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {

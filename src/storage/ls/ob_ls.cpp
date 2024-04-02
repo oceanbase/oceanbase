@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/utility/utility.h"
@@ -104,7 +105,8 @@ ObLS::ObLS()
     switch_epoch_(0),
     ls_meta_(),
     rs_reporter_(nullptr),
-    startup_transfer_info_()
+    startup_transfer_info_(),
+    need_delay_resource_recycle_(false)
 {}
 
 ObLS::~ObLS()
@@ -235,7 +237,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_INFO("register restore major freeze service complete", KR(ret));
       }
 
-      if (OB_SUCC(ret) && (ls_id == TABLE_LOAD_RESOURCE_SERVICE_LS)) {
+      if (OB_SUCC(ret) && (ls_id == TABLE_LOAD_RESOURCE_SERVICE_LS) && (is_user_tenant(tenant_id) || is_sys_tenant(tenant_id))) {
         REGISTER_TO_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
         LOG_INFO("register resource service complete", KR(ret));
       }
@@ -334,6 +336,7 @@ int ObLS::init(const share::ObLSID &ls_id,
 
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
+        need_delay_resource_recycle_ = false;
         is_inited_ = true;
         LOG_INFO("ls init success", K(ls_id));
       }
@@ -519,7 +522,7 @@ bool ObLS::is_need_gc() const
     bool_ret = true;
   } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
     LOG_WARN("get migration status failed", K(ret), K(ls_meta_.ls_id_));
-  } else if (ObMigrationStatusHelper::check_allow_gc_abandoned_ls(migration_status)) {
+  } else if (ObMigrationStatusHelper::can_gc_ls_without_check_dependency(migration_status)) {
     bool_ret = true;
   }
   if (bool_ret) {
@@ -799,7 +802,7 @@ void ObLS::destroy()
     rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service = MTL(rootserver::ObPrimaryMajorFreezeService *);
     UNREGISTER_FROM_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, primary_major_freeze_service);
   }
-  if (ls_meta_.ls_id_ == TABLE_LOAD_RESOURCE_SERVICE_LS) {
+  if (ls_meta_.ls_id_ == TABLE_LOAD_RESOURCE_SERVICE_LS && (is_user_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()))) {
     observer::ObTableLoadResourceService *resource_service = MTL(observer::ObTableLoadResourceService *);
     UNREGISTER_FROM_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, resource_service);
   }
@@ -926,6 +929,7 @@ void ObLS::destroy()
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   startup_transfer_info_.reset();
+  need_delay_resource_recycle_ = false;
 }
 
 int ObLS::offline_tx_(const int64_t start_ts)
@@ -1673,7 +1677,9 @@ int ObLS::replay_get_tablet(
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData data;
-  bool is_committed = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1684,12 +1690,12 @@ int ObLS::replay_get_tablet(
     // do nothing
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(ls_id), K(tablet_id), K(scn));
   } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
-      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
-    } else if (!is_committed) {
+    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
+      LOG_WARN("failed to get latest tablet status", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is empty shell but user data is uncommitted, unexpected", K(ret), KPC(tablet));
     } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
@@ -1703,14 +1709,14 @@ int ObLS::replay_get_tablet(
     }
   } else if ((!is_update_mds_table && scn > tablet->get_clog_checkpoint_scn())
       || (is_update_mds_table && scn > tablet->get_mds_checkpoint_scn())) {
-    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
+    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_EAGAIN;
         LOG_INFO("read empty mds data, should retry", KR(ret), K(ls_id), K(tablet_id), K(scn));
       } else {
         LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
       }
-    } else if (!is_committed) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
       if ((ObTabletStatus::NORMAL == data.tablet_status_ && data.create_commit_version_ == ObTransVersion::INVALID_TRANS_VERSION)
           || ObTabletStatus::TRANSFER_IN == data.tablet_status_) {
         ret = OB_EAGAIN;
@@ -1954,9 +1960,6 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
 
   return ret;
 }
-
-
-
 
 int ObLS::get_transfer_scn(share::SCN &scn)
 {
@@ -2430,12 +2433,27 @@ int ObLS::set_ls_migration_gc(
   } else if (OB_FAIL(ls_meta_.set_migration_status(change_status, write_slog))) {
     LOG_WARN("failed to set migration status", K(ret), K(change_status));
   } else {
-    ls_tablet_svr_.disable_to_read();
     allow_gc = true;
   }
   return ret;
 }
 
+bool ObLS::need_delay_resource_recycle() const
+{
+  LOG_INFO("need delay resource recycle", KPC(this));
+  return need_delay_resource_recycle_;
+}
 
+void ObLS::set_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = true;
+  LOG_INFO("set delay resource recycle", KPC(this));
+}
+
+void ObLS::clear_delay_resource_recycle()
+{
+  need_delay_resource_recycle_ = false;
+  LOG_INFO("clear delay resource recycle", KPC(this));
+}
 }
 }

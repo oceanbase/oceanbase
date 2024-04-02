@@ -30,7 +30,7 @@ int eval_intersects_by_disjoint(const ObGeometry *g1, const ObGeometry *g2, cons
   INIT_SUCC(ret);
   result = false;
   // Notice:should not use geoemtry from context, they are the original inputs, maybe changed
-  ObGeoEvalCtx disjoint_context(context.get_allocator(), context.get_srs());
+  ObGeoEvalCtx disjoint_context(context.get_mem_ctx(), context.get_srs());
   disjoint_context.append_geo_arg(g1);
   disjoint_context.append_geo_arg(g2);
   if (OB_SUCC(ObGeoFuncDisjoint::eval(disjoint_context, result))) {

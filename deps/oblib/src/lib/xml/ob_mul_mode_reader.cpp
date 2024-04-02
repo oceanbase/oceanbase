@@ -183,6 +183,8 @@ int ObMulModeReader::scan_next(ObIMulModeBase*& node)
 {
   INIT_SUCC(ret);
   bool is_found = false;
+  ObXmlNode::iterator save_iterator;
+  ObXmlBin::iterator save_bin;
 
   while (OB_SUCC(ret) && !is_found) {
     if (cur_->is_binary()) {
@@ -192,6 +194,7 @@ int ObMulModeReader::scan_next(ObIMulModeBase*& node)
       } else if (bin_iter_.end()) {
         ret = OB_ITER_END;
       } else {
+        save_bin = bin_iter_;
         node = *bin_iter_;
         ++bin_iter_;
       }
@@ -199,6 +202,7 @@ int ObMulModeReader::scan_next(ObIMulModeBase*& node)
       if (tree_iter_.end()) {
         ret = OB_ITER_END;
       } else {
+        save_iterator = tree_iter_;
         node = *tree_iter_;
         ++tree_iter_;
       }

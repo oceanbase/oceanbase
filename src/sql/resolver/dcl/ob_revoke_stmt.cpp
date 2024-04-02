@@ -39,7 +39,10 @@ ObRevokeStmt::ObRevokeStmt(ObIAllocator *name_pool)
       obj_id_(),
       obj_type_(),
       grantor_id_(),
-      revoke_all_ora_(false)
+      revoke_all_ora_(false),
+      has_warning_(false),
+      column_names_priv_(),
+      table_schema_version_(0)
 {
 }
 
@@ -58,7 +61,10 @@ ObRevokeStmt::ObRevokeStmt()
       obj_id_(),
       obj_type_(),
       grantor_id_(),
-      revoke_all_ora_(false)
+      revoke_all_ora_(false),
+      has_warning_(false),
+      column_names_priv_(),
+      table_schema_version_(0)
 {
 }
 

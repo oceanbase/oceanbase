@@ -2097,6 +2097,7 @@ int ObJsonSchemaValidator::inner_schema_validator(ObIJsonBase *json_doc, ObIArra
 {
   INIT_SUCC(ret);
   ObJsonNodeType json_type = ObJsonNodeType::J_ERROR;
+  bool need_recursive = false;
   if (!is_valid) {
   } else if (OB_ISNULL(json_doc) || schema_vec.count() < 1) {
     ret = OB_BAD_NULL_ERROR;
@@ -2108,7 +2109,11 @@ int ObJsonSchemaValidator::inner_schema_validator(ObIJsonBase *json_doc, ObIArra
     LOG_WARN("fail in check composition.", K(ret));
   } else if (OB_FALSE_IT(json_type = json_doc->json_type())) {
   } else if (json_type == ObJsonNodeType::J_OBJECT) { // recursion
-    if (OB_FAIL(schema_pointer_.push(ObJsonSchemaItem::PROPERTIES))) {
+    if (OB_FAIL(ObJsonSchemaUtils::need_check_recursive(schema_vec, need_recursive, false))) {
+      LOG_WARN("fail to check recursive keywords.", K(ret));
+    } else if (!need_recursive) {
+      // didn't define recursive keywords
+    } else if (OB_FAIL(schema_pointer_.push(ObJsonSchemaItem::PROPERTIES))) {
       LOG_WARN("fail to push schema pointer.", K(ret));
     } else if (OB_FAIL(object_recursive_validator(json_doc, schema_vec, ans_map, is_valid))) {
       LOG_WARN("fail in check object child.", K(ret));
@@ -2116,7 +2121,11 @@ int ObJsonSchemaValidator::inner_schema_validator(ObIJsonBase *json_doc, ObIArra
       schema_pointer_.pop();
     }
   } else if (json_type == ObJsonNodeType::J_ARRAY) {
-    if (OB_FAIL(schema_pointer_.push(ObJsonSchemaItem::ITEMS))) {
+    if (OB_FAIL(ObJsonSchemaUtils::need_check_recursive(schema_vec, need_recursive, true))) {
+      LOG_WARN("fail to check recursive keywords.", K(ret));
+    } else if (!need_recursive) {
+      // didn't define recursive keywords
+    } else if (OB_FAIL(schema_pointer_.push(ObJsonSchemaItem::ITEMS))) {
       LOG_WARN("fail to push schema pointer.", K(ret));
     } else if (OB_FAIL(array_recursive_validator(json_doc, schema_vec, ans_map, is_valid))) {
       LOG_WARN("fail in check array child.", K(ret));
@@ -2138,19 +2147,23 @@ int ObJsonSchemaValidator::get_schema_composition_ans(ObIJsonBase *json_doc, ObI
   INIT_SUCC(ret);
   // check dep_schema, if is object
   if (!is_valid) {
-  } else if (OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_DEP, ObJsonSchemaItem::DEPENDENTSCHEMAS, schema_vec, ans_map, is_valid))) {
+  } else if (OB_FAIL(composition_ans_recorded_
+            && get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_DEP, ObJsonSchemaItem::DEPENDENTSCHEMAS, schema_vec, ans_map, is_valid))) {
     LOG_WARN("fail to check comp.", K(ret));
   } else if (!is_valid) {
     failed_keyword_ = ObJsonSchemaItem::DEPENDENCIES;
-  } else if (OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ALLOF, ObJsonSchemaItem::ALLOF, schema_vec, ans_map, is_valid))) {
+  } else if (composition_ans_recorded_
+            && OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ALLOF, ObJsonSchemaItem::ALLOF, schema_vec, ans_map, is_valid))) {
     LOG_WARN("fail to check comp.", K(ret));
   } else if (!is_valid) {
     failed_keyword_ = ObJsonSchemaItem::ALLOF;
-  } else if (OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ANYOF, ObJsonSchemaItem::ANYOF, schema_vec, ans_map, is_valid))) {
+  } else if (composition_ans_recorded_
+            && OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ANYOF, ObJsonSchemaItem::ANYOF, schema_vec, ans_map, is_valid))) {
     LOG_WARN("fail to check comp.", K(ret));
   } else if (!is_valid) {
     failed_keyword_ = ObJsonSchemaItem::ANYOF;
-  } else if (OB_FAIL(get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ONEOF, ObJsonSchemaItem::ONEOF, schema_vec, ans_map, is_valid))) {
+  } else if (OB_FAIL(composition_ans_recorded_
+            && get_vec_schema_composition_ans(json_doc, ObJsonSchemaComp::JS_COMP_ONEOF, ObJsonSchemaItem::ONEOF, schema_vec, ans_map, is_valid))) {
     LOG_WARN("fail to check comp.", K(ret));
   } else if (!is_valid) {
     failed_keyword_ = ObJsonSchemaItem::ONEOF;
@@ -2803,7 +2816,11 @@ int ObJsonSchemaValidator::check_all_schema_def(ObIJsonBase *json_doc, ObIArray<
           break;
         }
         default: {
-          ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+          // not one of type definition, check only public keywords,
+          // other type-related keywords return default ans——true
+          if (OB_FAIL(check_public_key_words(json_doc, schema_def, valid_type, is_valid))) {
+            LOG_WARN("fail in check public key words.", K(valid_type), K(ret));
+          }
           break;
         }
       }
@@ -2846,6 +2863,7 @@ int ObJsonSchemaValidator::record_comp_ans(const int& def_id, const bool& ans, O
 {
   INIT_SUCC(ret);
   int size = ans_map.count();
+  composition_ans_recorded_ = true;
   if (def_id > 0 && def_id < size) {
     if (ans_map.at(def_id) == ObJsonSchemaAns::JS_FALSE) {
     } else {
@@ -2976,7 +2994,23 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
         break;
       }
       default: {
-        ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+        // not one of type definition, check only public keywords,
+        // ObJsonSchemaType set 0
+        ObJsonSchemaType comp_type;
+        comp_type.flags_ = 0;
+        for (int i = 0; i < size && OB_SUCC(ret); ++i) {
+          ObIJsonBase *tmp_comp = composition_def.at(i);
+          is_valid = true;
+          if (OB_FAIL(get_composition_schema_def(i, tmp_comp, comp_schema, ans_map, def_id))) {
+            if (ret == OB_ITER_END) { // already checked, and ans is false, escape
+              ret = OB_SUCCESS;
+            }
+          } else if (OB_FAIL(check_public_key_words(json_doc, comp_schema, comp_type, is_valid))) {
+            LOG_WARN("fail to check null.", K(ret));
+          } else if (OB_FAIL(record_comp_ans(def_id, is_valid, ans_map))) {
+            LOG_WARN("fail to deal with ans.", K(ret));
+          }
+        }
         break;
       }
     }
@@ -2985,16 +3019,10 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
 }
 
 // only check one of them: type, enum
-int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonBase *schema, bool is_null, bool& is_valid)
+
+int ObJsonSchemaValidator::check_public_key_words(ObIJsonBase *json_doc, ObIJsonBase *schema, const ObJsonSchemaType& valid_type, bool& is_valid)
 {
   INIT_SUCC(ret);
-  ObJsonSchemaType valid_type;
-  valid_type.flags_ = 0;
-  if (is_null) {
-    valid_type.null_ = 1;
-  } else {
-    valid_type.boolean_ = 1;
-  }
   ObIJsonBase* value = nullptr;
   ObString key_word;
   if (OB_FAIL(ObJsonSchemaUtils::get_single_key_value(schema, key_word, value))) {
@@ -3015,6 +3043,22 @@ int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonB
       }
     }
   } // no other key words need to check
+  return ret;
+}
+
+int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonBase *schema, bool is_null, bool& is_valid)
+{
+  INIT_SUCC(ret);
+  ObJsonSchemaType valid_type;
+  valid_type.flags_ = 0;
+  if (is_null) {
+    valid_type.null_ = 1;
+  } else {
+    valid_type.boolean_ = 1;
+  }
+  if (OB_FAIL(check_public_key_words(json_doc, schema, valid_type, is_valid))) {
+    LOG_WARN("fail to check type/enum.", K(ret));
+  }
   return ret;
 }
 
@@ -4562,6 +4606,73 @@ bool ObJsonSchemaUtils::is_legal_json_pointer_char(const char& ch)
     ret_bool = false;
   }
   return ret_bool;
+}
+
+int ObJsonSchemaUtils::need_check_recursive(ObIArray<ObIJsonBase*> &schema_vec, bool& need_recursive, bool is_array_keywords)
+{
+  INIT_SUCC(ret);
+  need_recursive = false;
+  int size = schema_vec.count();
+   for (int i = 0; i < size && !need_recursive && OB_SUCC(ret); ++i) {
+    ObIJsonBase* tmp_schema = schema_vec.at(i);
+    ObIJsonBase* tmp_value = nullptr;
+    if (is_array_keywords) {
+      if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::ITEMS, tmp_value)) || OB_ISNULL(tmp_value)) {
+        if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+          ret = OB_SUCCESS;
+          tmp_value = nullptr;
+          // didn't found items, check tuple items
+          if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::TUPLE_ITEMS, tmp_value)) || OB_ISNULL(tmp_value)) {
+            if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+              ret = OB_SUCCESS;
+              tmp_value = nullptr;
+              // didn't found items and tuple items, check additional items
+              if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::ADDITIONAL_ITEMS, tmp_value)) || OB_ISNULL(tmp_value)) {
+                if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+                  ret = OB_SUCCESS;
+                }
+              } else {
+                // found add items
+                need_recursive = true;
+              }
+            }
+          } else {
+            // found tuple items
+            need_recursive = true;
+          }
+        }
+      } else { // found items
+        need_recursive = true;
+      }
+    } else if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::PROPERTIES, tmp_value)) || OB_ISNULL(tmp_value)) {
+      if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+        ret = OB_SUCCESS;
+        tmp_value = nullptr;
+        // didn't found properties, check pattern pro
+        if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::PATTERN_PRO, tmp_value)) || OB_ISNULL(tmp_value)) {
+          if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+            ret = OB_SUCCESS;
+            tmp_value = nullptr;
+            // didn't found properties and pattern pro, check additional pro
+            if (OB_FAIL(tmp_schema->get_object_value(ObJsonSchemaItem::ADDITIONAL_PRO, tmp_value)) || OB_ISNULL(tmp_value)) {
+              if (ret == OB_SEARCH_NOT_FOUND || OB_ISNULL(tmp_value)) {
+                ret = OB_SUCCESS;
+              }
+            } else {
+              // found add pro
+              need_recursive = true;
+            }
+          }
+        } else {
+          // found pattern pro
+          need_recursive = true;
+        }
+      }
+    } else { // found properties
+      need_recursive = true;
+    }
+  }
+  return ret;
 }
 
 } // namespace common

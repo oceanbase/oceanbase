@@ -423,6 +423,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Task canceled",
   "Unable to process task due to transaction timeout",
   "Unable to process task due to inactive server in member list",
+  "Wait to retry due to the last failure",
   "Unknow"/*MAX_COMMENT*/
 };
 
@@ -491,7 +492,8 @@ ObTransferTask::ObTransferTask()
       result_(-1),
       comment_(ObTransferTaskComment::EMPTY_COMMENT),
       balance_task_id_(),
-      table_lock_owner_id_(OB_INVALID_INDEX)
+      table_lock_owner_id_(OB_INVALID_INDEX),
+      data_version_(0)
 {
 }
 
@@ -514,6 +516,7 @@ void ObTransferTask::reset()
   comment_ = ObTransferTaskComment::EMPTY_COMMENT;
   balance_task_id_.reset();
   table_lock_owner_id_ = OB_INVALID_INDEX;
+  data_version_ = 0;
 }
 
 // init by necessary info, other members take default values
@@ -524,7 +527,8 @@ int ObTransferTask::init(
     const ObTransferPartList &part_list,
     const ObTransferStatus &status,
     const common::ObCurTraceId::TraceId &trace_id,
-    const ObBalanceTaskID balance_task_id)
+    const ObBalanceTaskID balance_task_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!task_id.is_valid()
@@ -550,6 +554,7 @@ int ObTransferTask::init(
       balance_task_id_ = balance_task_id;
       start_scn_.set_min();
       finish_scn_.set_min();
+      data_version_ = data_version;
     }
   }
   return ret;
@@ -572,7 +577,8 @@ int ObTransferTask::init(
     const int result,
     const ObTransferTaskComment &comment,
     const ObBalanceTaskID balance_task_id,
-    const transaction::tablelock::ObTableLockOwnerID &lock_owner_id)
+    const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!task_id.is_valid()
@@ -608,6 +614,7 @@ int ObTransferTask::init(
     comment_ = comment;
     balance_task_id_ = balance_task_id;
     table_lock_owner_id_ = lock_owner_id;
+    data_version_ = data_version;
   }
   return ret;
 }
@@ -639,6 +646,7 @@ int ObTransferTask::assign(const ObTransferTask &other)
     comment_ = other.comment_;
     balance_task_id_ = other.balance_task_id_;
     table_lock_owner_id_ = other.table_lock_owner_id_;
+    data_version_ = other.data_version_;
   }
   return ret;
 }
@@ -669,7 +677,8 @@ ObTransferTaskInfo::ObTransferTaskInfo()
     tablet_list_(),
     start_scn_(),
     finish_scn_(),
-    result_(OB_SUCCESS)
+    result_(OB_SUCCESS),
+    data_version_(0)
 {
 }
 
@@ -723,6 +732,7 @@ int ObTransferTaskInfo::convert_from(const uint64_t tenant_id, const ObTransferT
     start_scn_ = task.get_start_scn();
     finish_scn_ = task.get_finish_scn();
     result_ = task.get_result();
+    data_version_ = task.get_data_version();
   }
   return ret;
 }
@@ -748,6 +758,7 @@ int ObTransferTaskInfo::assign(const ObTransferTaskInfo &task_info)
     start_scn_ = task_info.start_scn_;
     finish_scn_ = task_info.finish_scn_;
     result_ = task_info.result_;
+    data_version_ = task_info.data_version_;
   }
   return ret;
 }
@@ -828,14 +839,13 @@ int ObTransferLockUtil::unlock_tablet_on_src_ls_for_table_lock(
   return ret;
 }
 
-template<typename LockArg>
 int ObTransferLockUtil::process_table_lock_on_tablets_(
   ObMySQLTransaction &trans,
   const uint64_t tenant_id,
   const ObLSID &ls_id,
   const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
   const ObDisplayTabletList &table_lock_tablet_list,
-  LockArg &lock_arg)
+  ObLockAloneTabletRequest &lock_arg)
 {
   int ret = OB_SUCCESS;
   lock_arg.tablet_ids_.reset();
@@ -872,7 +882,7 @@ int ObTransferLockUtil::process_table_lock_on_tablets_(
       LOG_WARN("lock tablet failed", KR(ret), K(tenant_id), K(lock_arg));
     }
   } else if (OUT_TRANS_UNLOCK == lock_arg.op_type_) {
-    if (OB_FAIL(ObInnerConnectionLockUtil::unlock_tablet(tenant_id, lock_arg, conn))) {
+    if (OB_FAIL(ObInnerConnectionLockUtil::unlock_tablet(tenant_id, static_cast<ObUnLockAloneTabletRequest &>(lock_arg), conn))) {
       LOG_WARN("unock tablet failed", KR(ret), K(tenant_id), K(lock_arg));
     }
   } else {

@@ -103,8 +103,8 @@ public:
     }
     return pth;
   }
-protected:
   int64_t get_thread_count() const { return n_threads_; }
+protected:
   uint64_t get_thread_idx() const { return thread_idx_; }
   void set_thread_idx(int64_t idx) { thread_idx_ = idx; }
 

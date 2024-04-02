@@ -11,6 +11,7 @@ TOP_DIR=`pwd`/../
 echo "[BUILD] args: TOP_DIR=${TOP_DIR} PROJECT_NAME=${PROJECT_NAME} VERSION=${VERSION} RELEASE=${RELEASE}"
 
 cd ${TOP_DIR}
+./tools/upgrade/gen_obcdc_compatiable_info.py
 ./build.sh clean
 ./build.sh                  \
     rpm                     \

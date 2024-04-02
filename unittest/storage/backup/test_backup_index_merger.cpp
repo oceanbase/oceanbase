@@ -327,10 +327,14 @@ void TestBackupIndexMerger::SetUp()
   } else {
     ASSERT_EQ(OB_SUCCESS, ret);
   }
-  static ObTenantBase tenant_ctx(1);
+  static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
+  EXPECT_EQ(OB_SUCCESS, io_service->start());
+  tenant_ctx.set(io_service);
+  ObTenantEnv::set_tenant(&tenant_ctx);
   inner_init_();
 }
 

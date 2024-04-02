@@ -64,6 +64,7 @@ ObDirectLoadOriginTableMeta::~ObDirectLoadOriginTableMeta()
 ObDirectLoadOriginTable::ObDirectLoadOriginTable()
   : major_sstable_(nullptr), is_inited_(false)
 {
+  ddl_sstables_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadOriginTable::~ObDirectLoadOriginTable()
@@ -195,6 +196,8 @@ int ObDirectLoadOriginTable::scan(const ObDatumRange &key_range,
 ObDirectLoadOriginTableScanner::ObDirectLoadOriginTableScanner()
   : allocator_("TLD_OriSSTScan"), origin_table_(nullptr), schema_param_(allocator_), is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  col_ids_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadOriginTableScanner::~ObDirectLoadOriginTableScanner()
@@ -214,7 +217,6 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
     LOG_WARN("Invalid argument", KR(ret), KPC(origin_table), K(query_range));
   } else {
     origin_table_ = origin_table;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL((init_table_access_param()))) {
       LOG_WARN("fail to init query range", KR(ret));
     } else if (OB_FAIL(init_table_access_ctx())) {

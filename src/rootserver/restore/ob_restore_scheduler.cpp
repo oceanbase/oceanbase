@@ -663,6 +663,7 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(role_transition_service.init(
         tenant_id_,
         ObSwitchTenantArg::OpType::INVALID,
+        false, /* is_verify */
         sql_proxy_,
         GCTX.srv_rpc_proxy_,
         &cost_detail,
@@ -741,6 +742,26 @@ int ObRestoreScheduler::tenant_restore_finish(const ObPhysicalRestoreJob &job_in
     LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
     //restore success
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObRestoreFailureChecker checker;
+    bool is_concurrent_with_clean = false;
+    if (OB_TMP_FAIL(checker.init(job_info))) {
+      LOG_WARN("failed to init restore failure checker", K(tmp_ret), K(job_info));
+    } else if (OB_TMP_FAIL(checker.check_is_concurrent_with_clean(is_concurrent_with_clean))) {
+      LOG_WARN("failed to check is clean concurrency failure", K(tmp_ret));
+    }
+    if (OB_SUCC(ret) && is_concurrent_with_clean) {
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos,
+                                  "%s;", "physical restore run concurrently with backup data clean, please check backup and archive jobs"))) {
+        if (OB_SIZE_OVERFLOW == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to databuff printf comment", K(ret));
+        }
+      }
+    }
   }
 
   if (FAILEDx(ObRestoreUtil::recycle_restore_job(*sql_proxy_,
@@ -1364,7 +1385,7 @@ int ObRestoreScheduler::check_tenant_replay_to_consistent_scn(const uint64_t ten
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected recovery until scn", K(ret), K(tenant_info), K(scn));
   } else {
-    is_replay_finish = (tenant_info.get_recovery_until_scn() <= tenant_info.get_standby_scn());
+    is_replay_finish = (tenant_info.get_recovery_until_scn() <= tenant_info.get_readable_scn());
     LOG_INFO("[RESTORE]tenant replay to consistent_scn", K(is_replay_finish));
   }
   return ret;

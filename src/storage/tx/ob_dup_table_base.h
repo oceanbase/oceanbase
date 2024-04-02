@@ -72,6 +72,8 @@ struct DupTableInterfaceStat
   int64_t dup_table_redo_sync_succ_cnt_;
   int64_t dup_table_redo_sync_fail_cnt_;
 
+  share::SCN dup_table_max_applying_scn_;
+
   int64_t dup_table_log_entry_cnt_;
   int64_t dup_table_log_entry_total_size_;
 
@@ -86,6 +88,8 @@ struct DupTableInterfaceStat
     dup_table_follower_read_tablet_not_exist_cnt_ = 0;
     dup_table_follower_read_tablet_not_ready_cnt_ = 0;
     dup_table_follower_read_lease_expired_cnt_ = 0;
+
+    dup_table_max_applying_scn_.set_min();
 
     dup_table_redo_sync_succ_cnt_ = 0;
     dup_table_redo_sync_fail_cnt_ = 0;
@@ -105,6 +109,7 @@ struct DupTableInterfaceStat
                K(dup_table_follower_read_lease_expired_cnt_),
                K(dup_table_redo_sync_succ_cnt_),
                K(dup_table_redo_sync_fail_cnt_),
+               K(dup_table_max_applying_scn_),
                K(dup_table_log_entry_cnt_),
                K(dup_table_log_entry_total_size_),
                K(dup_table_log_replay_total_time_),
@@ -1227,9 +1232,21 @@ class ObDupTableBeforePrepareRequest : public ObDupTableMsgBase
   OB_UNIS_VERSION(1);
 
 public:
+  enum class BeforePrepareScnSrc : int64_t
+  {
+    UNKNOWN = -1,
+    REDO_COMPLETE_SCN = 1,
+    GTS = 2,
+    MAX_DECIDED_SCN = 3
+  };
+
+public:
   ObDupTableBeforePrepareRequest() { reset(); }
-  ObDupTableBeforePrepareRequest(const ObTransID &tx_id, const share::SCN &before_prepare_version)
-      : tx_id_(tx_id), before_prepare_version_(before_prepare_version)
+  ObDupTableBeforePrepareRequest(const ObTransID &tx_id,
+                                 const share::SCN &before_prepare_version,
+                                 const BeforePrepareScnSrc &before_prepare_src)
+      : tx_id_(tx_id), before_prepare_version_(before_prepare_version),
+        before_prepare_scn_src_(before_prepare_src)
   {}
 
   void reset()
@@ -1237,6 +1254,7 @@ public:
     ObDupTableMsgBase::reset();
     tx_id_.reset();
     before_prepare_version_.reset();
+    before_prepare_scn_src_ = BeforePrepareScnSrc::UNKNOWN;
   }
 
   bool is_valid() const
@@ -1244,17 +1262,20 @@ public:
     return ObDupTableMsgBase::is_valid() && tx_id_.is_valid() && before_prepare_version_.is_valid();
   }
 
-  const ObTransID &get_tx_id() { return tx_id_; }
-  const share::SCN &get_before_prepare_version() { return before_prepare_version_; }
+  const ObTransID &get_tx_id() const { return tx_id_; }
+  const share::SCN &get_before_prepare_version() const { return before_prepare_version_; }
+  const BeforePrepareScnSrc &get_before_prepare_scn_src() const { return before_prepare_scn_src_; }
 
   INHERIT_TO_STRING_KV("ObDupTableMsgBase",
                        ObDupTableMsgBase,
                        K(tx_id_),
-                       K(before_prepare_version_));
+                       K(before_prepare_version_),
+                       K(before_prepare_scn_src_));
 
 private:
   ObTransID tx_id_;
   share::SCN before_prepare_version_;
+  BeforePrepareScnSrc before_prepare_scn_src_;
 };
 
 } // namespace transaction
@@ -1363,6 +1384,70 @@ int ObDupTableRpc::post_msg(const common::ObAddr dst, DupTableMsgType &msg)
   }
   return ret;
 }
+
+class ObTxRedoSyncRetryTask : public ObTransTask
+{
+public:
+  struct RedoSyncKey
+  {
+    share::ObLSID ls_id_;
+    ObTransID tx_id_;
+
+    int hash(uint64_t& res) const { res = ls_id_.hash() + tx_id_.hash(); return OB_SUCCESS; }
+    uint64_t hash() const { return ls_id_.hash() + tx_id_.hash(); }
+    bool operator==(const RedoSyncKey &other) const
+    {
+      return ls_id_ == other.ls_id_ && tx_id_ == other.tx_id_;
+    }
+    TO_STRING_KV(K(ls_id_), K(tx_id_));
+  };
+
+  typedef common::hash::ObHashSet<RedoSyncKey, common::hash::SpinReadWriteDefendMode>
+      RedoSyncRetrySet;
+
+class ObTxRedoSyncIterFunc
+{
+public:
+  ObTxRedoSyncIterFunc(RedoSyncRetrySet &redo_sync_set, TransModulePageAllocator &trans_page_alloc)
+      : del_list_(trans_page_alloc), ls_handle_(), redo_sync_retry_set_(redo_sync_set)
+  {}
+  int operator()(common::hash::HashSetTypes<RedoSyncKey>::pair_type &redo_sync_hash_pair);
+
+  void remove_unused_redo_sync_key();
+
+  void reset()
+  {
+    del_list_.destroy();
+    ls_handle_.reset();
+  }
+
+private:
+  ObList<RedoSyncKey, TransModulePageAllocator> del_list_;
+  ObLSHandle ls_handle_;
+  RedoSyncRetrySet &redo_sync_retry_set_;
+};
+
+public:
+  ObTxRedoSyncRetryTask() : ObTransTask(ObTransRetryTaskType::DUP_TABLE_TX_REDO_SYNC_RETRY_TASK)
+  {
+    reset();
+  }
+  ~ObTxRedoSyncRetryTask() { destroy(); }
+  void reset()
+  {
+    redo_sync_retry_set_.destroy();
+    in_thread_pool_ = false;
+  }
+  void destroy() { reset(); }
+  int init();
+  int iter_tx_retry_redo_sync();
+  int push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id);
+  void clear_in_thread_pool_flag() { ATOMIC_STORE(&in_thread_pool_, false);}
+
+public:
+  RedoSyncRetrySet redo_sync_retry_set_;
+  bool in_thread_pool_;
+};
 
 } // namespace transaction
 

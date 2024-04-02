@@ -316,7 +316,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const ObPLDataType& cursor_type, // cursor返回值类型(record)
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
                                 ObPLCursor::CursorState state,
-                                bool has_dup_column_name)
+                                bool has_dup_column_name,
+                                bool skip_locked)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -339,6 +340,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_cursor_type(cursor_type);
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
+      cursor->set_skip_locked(skip_locked);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
@@ -918,7 +920,7 @@ int ObPLUDTNS::get_user_type(uint64_t type_id,
   const uint64_t tenant_id = get_tenant_id_by_object_id(type_id);
   CK (OB_NOT_NULL(allocator));
   OZ (schema_guard_.get_udt_info(tenant_id, type_id, udt_info));
-  CK (OB_NOT_NULL(udt_info));
+  OV (OB_NOT_NULL(udt_info), OB_ERR_OBJECT_INVALID, ret, tenant_id, type_id);
   OZ (udt_info->transform_to_pl_type(*allocator, user_type));
   CK (OB_NOT_NULL(user_type));
   return ret;
@@ -982,6 +984,9 @@ int ObPLBlockNS::add_symbol(const ObString &name,
   } else if (is_dup && lib::is_mysql_mode()) {
     ret = OB_ERR_SP_DUP_VAR;
     LOG_USER_ERROR(OB_ERR_SP_DUP_VAR, name.length(), name.ptr());
+  } else if (is_dup && is_formal_param) {
+    ret = OB_ERR_DUPLICATE_FILED;
+    LOG_WARN("duplicate fields in argument list are not permitted", K(ret), K(name), K(is_dup), K(is_formal_param));
   } else {
     OZ (symbols_.push_back(get_symbol_table()->get_count()));
     CK (OB_NOT_NULL(exprs_));
@@ -1138,7 +1143,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const common::ObIArray<int64_t> &formal_params,
                             ObPLCursor::CursorState state,
                             bool has_dup_column_name,
-                            int64_t &index)
+                            int64_t &index,
+                            bool skip_locked)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1170,7 +1176,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       cursor_type,
                                                       formal_params,
                                                       state,
-                                                      has_dup_column_name))) {
+                                                      has_dup_column_name,
+                                                      skip_locked))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);
@@ -1796,6 +1803,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         LOG_WARN("self or resolve package not exist", K(ret));
       } else {
         if (OB_NOT_NULL(parent_ns_)
+            && parent_ns_->get_database_id() == package_info_resolve->get_database_id()
             && ObCharset::case_compat_mode_equal(parent_ns_->get_package_name(), package_info_resolve->get_package_name())) {
           if (OB_FAIL(
               SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
@@ -1830,7 +1838,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               type = ObPLExternalNS::PKG_TYPE;
             }
           } else {
-            OX (data_type = var->get_type());
+            data_type = var->get_type();
+            type = ObPLExternalNS::PKG_VAR;
           }
           if (OB_SUCC(ret) && type != ObPLExternalNS::INVALID_VAR) {
             if (OB_NOT_NULL(dependency_table_)) {
@@ -2346,6 +2355,9 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       if (OB_ISNULL(record_type.get_record_member_type(member_index))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type is invalid", K(ret));
+      } else if (access_ident.has_brackets_ && 0 == access_ident.params_.count()) {
+        ret = OB_ERR_NOT_FUNC_NAME;
+        LOG_USER_ERROR(OB_ERR_NOT_FUNC_NAME, attr_name.length(), attr_name.ptr());
       } else {
         new(&access_idx)ObObjAccessIdx(*record_type.get_record_member_type(member_index),
             ObObjAccessIdx::IS_CONST, attr_name, *record_type.get_record_member_type(member_index),
@@ -2937,16 +2949,13 @@ bool ObPLBlockNS::search_routine_local(const ObString &db_name,
     search_local = true;
   } else if (!db_name.empty() && !package_name.empty()) {
     if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && ObCharset::case_compat_mode_equal(package_name_, package_name)) {
+        && ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   } else if (db_name.empty() && !package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(package_name_, package_name)) {
-      search_local = true;
-    }
-  } else if (!db_name.empty() && package_name.empty()) {
-    if (ObCharset::case_compat_mode_equal(db_name_, db_name)
-        && package_name_.empty()) {
+    if (ObCharset::case_compat_mode_equal(package_name_, package_name)
+        && type_ != ObPLBlockNS::BLOCK_ROUTINE) {
       search_local = true;
     }
   }
@@ -3061,10 +3070,12 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
     }
     if (OB_SUCC(ret) && routine_infos.empty()) {
       if (OB_NOT_NULL(external_ns_)) {
-        bool need_clear = false;
-        if (OB_ISNULL(external_ns_->get_resolve_ctx().params_.secondary_namespace_)
-            && OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_)) {
-          need_clear = true;
+        bool need_restore = false;
+        pl::ObPLBlockNS *second_ns = nullptr;
+        if (OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_) &&
+            external_ns_->get_resolve_ctx().params_.secondary_namespace_ != resolve_ctx.params_.secondary_namespace_) {
+          need_restore = true;
+          second_ns = external_ns_->get_resolve_ctx().params_.secondary_namespace_;
           (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
           = resolve_ctx.params_.secondary_namespace_;
         }
@@ -3078,8 +3089,8 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
           LOG_WARN("resolve routine failed", K(db_name), K(package_name), K(routine_name),
                    K(expr_params), K(ret));
         }
-        if (need_clear) {
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = NULL;
+        if (need_restore) {
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = second_ns;
         }
       }
     }
@@ -4164,25 +4175,33 @@ const ObIArray<ObPLCursor *>* ObPLStmt::get_cursors() const
   return NULL == get_cursor_table() ? NULL : &(get_cursor_table()->get_cursors());
 }
 
-const ObString *ObPLStmt::get_label() const
+const ObString* ObPLStmt::get_label(int64_t idx) const
 {
-  return NULL == get_label_table() ? NULL : get_label_table()->get_label(label_);
+  return NULL == get_label_table() ? NULL : get_label_table()->get_label(idx);
 }
 
 int ObPLStmt::set_label_idx(int64_t idx)
 {
   int ret = OB_SUCCESS;
+
   if (OB_ISNULL(get_label_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null label table", K(ret));
+  } else if (label_cnt_ >= FUNC_MAX_LABELS) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected label_cnt count, out of range", K(ret), K(label_cnt_));
   } else {
     ObPLLabelTable *pl_label = const_cast<ObPLLabelTable *>(get_label_table());
     if (0 <= idx && idx < pl_label->get_count()) {
       const ObPLStmt *ls = pl_label->get_next_stmt(idx);
-      if (OB_ISNULL(ls)) {
+      if (OB_NOT_NULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set label idx", K(ret));
+      } else {
         pl_label->set_next_stmt(idx, this);
+        labels_[label_cnt_] = idx;
+        label_cnt_++;
       }
-      label_ = idx;
     }
   }
 
@@ -4338,18 +4357,26 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
 int ObPLCompileUnitAST::add_expr(sql::ObRawExpr* expr, bool is_simple_integer)
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode()) {
-    bool is_simple_calc = false;
-    if (!is_simple_integer && OB_FAIL(check_simple_calc_expr(expr, is_simple_calc))) {
-      LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
-    } else if (is_simple_calc || is_simple_integer) {
-      if (OB_FAIL(add_simple_calc(exprs_.count()))) {
-        LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
-      }
-    } else { /*do nothing*/ }
+  bool exists = false;
+  for (int64_t i = 0; !exists && i < exprs_.count(); ++i) {
+    if (expr == exprs_.at(i)) {
+      exists = true;
+    }
   }
-  if (OB_SUCC(ret) && OB_FAIL(exprs_.push_back(expr))) {
-    LOG_WARN("push back error", K(expr), K(ret));
+  if (!exists) {
+    if (lib::is_oracle_mode()) {
+      bool is_simple_calc = false;
+      if (!is_simple_integer && OB_FAIL(check_simple_calc_expr(expr, is_simple_calc))) {
+        LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
+      } else if (is_simple_calc || is_simple_integer) {
+        if (OB_FAIL(add_simple_calc(exprs_.count()))) {
+          LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
+        }
+      } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(exprs_.push_back(expr))) {
+      LOG_WARN("push back error", K(expr), K(ret));
+    }
   }
   return ret;
 }

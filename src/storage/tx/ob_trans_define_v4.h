@@ -182,7 +182,7 @@ extern const ObString &get_tx_isolation_str(const ObTxIsolationLevel isolation);
 
 enum class ObTxAccessMode
 {
-  INVL = -1, RW = 0, RD_ONLY = 1
+  INVL = -1, RW = 0, RD_ONLY = 1, STANDBY_RD_ONLY = 2
 };
 
 struct ObTxParam
@@ -247,7 +247,8 @@ struct ObTxSnapshot
 // snapshot used to consistency read
 struct ObTxReadSnapshot
 {
-  bool valid_;
+  bool valid_;              // used by cursor check snapshot state
+  bool committed_;          // used by cursor check snapshot state
   ObTxSnapshot core_;
   enum class SRC {
     INVL = 0,
@@ -270,11 +271,14 @@ struct ObTxReadSnapshot
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
   void specify_snapshot_scn(const share::SCN snapshot);
   void wait_consistency();
-  ObString get_source_name() const;
+  const char* get_source_name() const;
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
+  bool is_valid() const { return valid_; }
+  bool is_committed() const { return committed_; }
+  int format_source_for_display(char *buf, const int64_t buf_len) const;
   const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
@@ -288,7 +292,8 @@ struct ObTxReadSnapshot
                K_(snapshot_lsid),
                K_(snapshot_ls_role),
                K_(snapshot_acquire_addr),
-               K_(parts));
+               K_(parts),
+               K_(committed));
   OB_UNIS_VERSION(1);
 };
 
@@ -442,6 +447,7 @@ protected:
     struct COMPAT_FOR_EXEC {
       uint64_t v_;
       uint64_t get_serialize_v_() const;
+      TO_STRING_KV(K_(v));
       NEED_SERIALIZE_AND_DESERIALIZE;
     } compat_for_exec_;
     struct
@@ -512,6 +518,7 @@ private:
   mutable ObSpinLock lock_;
   ObSpinLock commit_cb_lock_;       // protect commit_cb_ field
   ObITxCallback *commit_cb_;        // async commit callback
+  int64_t cb_tid_;                  // commit callback thread id
   int64_t exec_info_reap_ts_;       // the time reaping incremental tx exec info
   MaskSet brpc_mask_set_;           // used in message driven savepoint rollback
   ObTransCond rpc_cond_;            // used in message driven savepoint rollback
@@ -556,6 +563,7 @@ private:
   int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
   int merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_ids);
   int update_parts_(const ObTxPartList &list);
+  void post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
   bool has_extra_state_() const;
@@ -625,8 +633,8 @@ public:
   ObTxIsolationLevel get_isolation_level() const { return isolation_; }
   const ObTransID &tid() const { return tx_id_; }
   bool is_valid() const { return !is_in_tx() || tx_id_.is_valid(); }
-  ObTxAccessMode get_access_mode() const { return access_mode_; }
-  bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
+  ObTxAccessMode get_tx_access_mode() const { return access_mode_; }
+  bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY || access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY; }
   bool is_clean() const { return parts_.empty(); }
   bool is_shadow() const  { return flags_.SHADOW_; }
   bool is_explicit() const { return flags_.EXPLICIT_; }
@@ -732,7 +740,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t estimate_state_size();
   bool is_static_changed() { return state_change_flags_.STATIC_CHANGED_; }
   bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
-  bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
+  bool is_parts_changed() { return state_ > State::IDLE && state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }

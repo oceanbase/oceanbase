@@ -211,7 +211,7 @@ int ObPersistentLobApator::scan_lob_meta(
       // build key range
       void *buf = param.allocator_->alloc(sizeof(ObObj) * 4);
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc range obj failed.", K(ret));
       } else {
         ObObj *row_objs = reinterpret_cast<ObObj*>(buf);
@@ -1005,6 +1005,9 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.limit_param_.offset_ = 0;
     // sessions
     scan_param.snapshot_ = param.snapshot_;
+    if(param.read_latest_) {
+      scan_param.tx_id_ = param.snapshot_.core_.tx_id_;
+    }
     scan_param.sql_mode_ = param.sql_mode_;
     // common set
     scan_param.allocator_ = param.allocator_;
@@ -1052,7 +1055,7 @@ int ObPersistentLobApator::get_lob_tablets(
     LOG_WARN("failed to get data tablet", K(ret), K(param.ls_id_), K(param.tablet_id_));
   } else {
     if (!param.lob_meta_tablet_id_.is_valid() || !param.lob_piece_tablet_id_.is_valid()) {
-      if (OB_FAIL(data_tablet.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
         LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
       } else {
         param.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;

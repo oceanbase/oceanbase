@@ -221,7 +221,7 @@ int ObMergeLogPlan::create_merge_plans(ObIArray<CandidatePlan> &candi_plans,
     } else if (is_multi_part_dml && force_no_multi_part) {
       /*do nothing*/
     } else if (candi_plan.plan_tree_->is_sharding()
-               && (is_multi_part_dml || insert_sharding->is_local())
+               && (is_multi_part_dml || (insert_sharding != NULL && insert_sharding->is_local()))
                && OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_merge_as_top(candi_plan.plan_tree_, insert_table_part,

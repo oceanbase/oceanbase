@@ -62,12 +62,6 @@ ob_set_subtarget(ob_share cache
   cache/ob_kvcache_pre_warmer.cpp
 )
 
-ob_set_subtarget(ob_share scheduler
-  scheduler/ob_dag_scheduler.cpp
-  scheduler/ob_sys_task_stat.cpp
-  scheduler/ob_dag_warning_history_mgr.cpp
-)
-
 ob_set_subtarget(ob_share common
   ob_alive_server_tracer.cpp
   ob_all_server_tracer.cpp
@@ -266,6 +260,19 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table_load_sql_statistics.cpp
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
+  table/ob_table_util.cpp
+  scheduler/ob_dag_scheduler.cpp
+  scheduler/ob_sys_task_stat.cpp
+  scheduler/ob_dag_warning_history_mgr.cpp
+  partition_table/ob_partition_location.cpp
+  longops_mgr/ob_ddl_longops.cpp
+  longops_mgr/ob_i_longops.cpp
+  longops_mgr/ob_longops_mgr.cpp
+  ash/ob_active_sess_hist_list.cpp
+  ash/ob_active_sess_hist_task.cpp
+  throttle/ob_throttle_common.cpp
+  index_usage/ob_index_usage_info_mgr.cpp
+  index_usage/ob_index_usage_report_task.cpp
 )
 
 ob_set_subtarget(ob_share tablet
@@ -303,16 +310,6 @@ ob_set_subtarget(ob_share deadlock
   deadlock/ob_lcl_scheme/ob_lcl_utils.cpp
 )
 
-ob_set_subtarget(ob_share partition_table
-  partition_table/ob_partition_location.cpp
-)
-
-ob_set_subtarget(ob_share longops_mgr
-  longops_mgr/ob_ddl_longops.cpp
-  longops_mgr/ob_i_longops.cpp
-  longops_mgr/ob_longops_mgr.cpp
-)
-
 ob_set_subtarget(ob_share ls
   ls/ob_inmemory_ls_table.cpp
   ls/ob_ls_info.cpp
@@ -329,11 +326,6 @@ ob_set_subtarget(ob_share ls
   ls/ob_ls_creator.cpp
   ls/ob_ls_election_reference_info_operator.cpp
   ls/ob_ls_log_stat_info.cpp
-)
-
-ob_set_subtarget(ob_share ash
-  ash/ob_active_sess_hist_list.cpp
-  ash/ob_active_sess_hist_task.cpp
 )
 
 ob_set_subtarget(ob_share redolog
@@ -475,6 +467,8 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_ds_stat.cpp
   stat/ob_opt_ds_stat_cache.cpp
   stat/ob_dbms_stats_gather.cpp
+  stat/ob_opt_system_stat.cpp
+  stat/ob_opt_system_stat_cache.cpp
 )
 
 ob_set_subtarget(ob_share external_table
@@ -503,6 +497,7 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_job_table_operator.cpp
   balance/ob_balance_task_table_operator.cpp
   balance/ob_balance_task_helper_operator.cpp
+  balance/ob_transfer_partition_task_table_operator.cpp
 )
 
 if (OB_ERRSIM)
@@ -512,10 +507,6 @@ if (OB_ERRSIM)
    errsim_module/ob_errsim_module_interface_imp.cpp
  )
 endif()
-
-ob_set_subtarget(ob_share throttle
-  throttle/ob_throttle_common.cpp
-)
 
 ob_set_subtarget(ob_share wr
   wr/ob_wr_service.cpp

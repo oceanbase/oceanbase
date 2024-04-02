@@ -216,7 +216,9 @@ public:
 class ObDDLRedoLogWriter final
 {
 public:
+  static const int64_t DEFAULT_RETRY_TIMEOUT_US = 60L * 1000L * 1000L; // 1min
   static ObDDLRedoLogWriter &get_instance();
+  static bool need_retry(int ret_code);
   int init();
   int write(ObTabletHandle &tablet_handle,
             ObDDLKvMgrHandle &ddl_kv_mgr_handle,
@@ -298,7 +300,8 @@ public:
                                           const ObITable::TableKey &table_key,
                                           const uint64_t table_id,
                                           const int64_t execution_id,
-                                          const int64_t ddl_task_id);
+                                          const int64_t ddl_task_id,
+                                          const int64_t data_format_version);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id,
                      const bool allow_remote_write,
@@ -308,6 +311,12 @@ public:
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                            const blocksstable::MacroBlockId &macro_block_id);
   int write_commit_log(ObTabletHandle &tablet_handle,
+                       ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                       const bool allow_remote_write,
+                       const ObITable::TableKey &table_key,
+                       share::SCN &commit_scn,
+                       bool &is_remote_write);
+  int write_commit_log_with_retry(ObTabletHandle &tablet_handle,
                        ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                        const bool allow_remote_write,
                        const ObITable::TableKey &table_key,
@@ -352,6 +361,7 @@ public:
       const int64_t data_seq);
   int wait();
   int prepare_block_buffer_if_need();
+  int retry(const int64_t timeout_us);
 private:
   bool is_inited_;
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;

@@ -18,6 +18,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/ob_des_exec_context.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -285,7 +286,9 @@ int ObDASScanOp::init_scan_param()
     } else {
       uint64_t max_idx = 0;
       for (int i = 0; i < scan_param_.ext_file_column_exprs_->count(); i++) {
-        max_idx = std::max(max_idx, scan_param_.ext_file_column_exprs_->at(i)->extra_);
+        if (scan_param_.ext_file_column_exprs_->at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+          max_idx = std::max(max_idx, scan_param_.ext_file_column_exprs_->at(i)->extra_);
+        }
       }
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
     }
@@ -316,7 +319,7 @@ int ObDASScanOp::open_op()
     LOG_WARN("init scan param failed", K(ret));
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
-      ret = OB_TABLE_DEFINITION_CHANGED;
+      ret = OB_INVALID_QUERY_TIMESTAMP;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));
     }
@@ -366,7 +369,6 @@ int ObDASScanOp::release_op()
   //need to clear the flag:need_switch_param_
   //otherwise table_rescan will jump to the switch iterator path in retry
   scan_param_.need_switch_param_ = false;
-  scan_param_.partition_guard_ = nullptr;
   scan_param_.destroy_schema_guard();
 
   if (retry_alloc_ != nullptr) {
@@ -470,6 +472,11 @@ void ObDASScanOp::reset_access_datums_ptr()
 {
   if (scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
     FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.access_exprs_) {
+      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
+    FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_) {
       (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
@@ -599,7 +606,8 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
         has_more = true;
       }
       if (OB_SUCC(ret) && has_more) {
-        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_,
+        const ObBitVector *skip = NULL;
+        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_, skip,
                               K(simulate_row_cnt), K(datum_store.get_row_cnt()),
                               K(has_more));
       }
@@ -771,7 +779,8 @@ int ObDASScanResult::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
   } else {
-    PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count);
+    const ObBitVector *skip = NULL;
+    PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count, skip);
   }
   return ret;
 }
@@ -1132,6 +1141,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       "data_table_tablet_id", tablet_id_ ,
                       KPC_(snapshot),
                       KPC_(tx_desc));
+      concurrency_control::ObDataValidationService::set_delay_resource_recycle(ls_id_);
       if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
         for (int64_t i = 0; i < trans_info_array_.count(); i++) {
           LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),

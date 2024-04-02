@@ -1,4 +1,4 @@
-static ObObjType SUM_RESULT_TYPE[ObMaxType] =
+static constexpr ObObjType SUM_RESULT_TYPE[ObMaxType] =
 {
     ObDoubleType,        /*NullType  */
     ObNumberType,        /*TinyIntType  */
@@ -50,5 +50,8 @@ static ObObjType SUM_RESULT_TYPE[ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSQLType */
+    ObMaxType,         /* ObDecimalIntType */
     ObMaxType,         /* ObCollectionSQLType */
 };
+
+static_assert(is_array_fully_initialized(SUM_RESULT_TYPE), "SUM_RESULT_TYPE is partially initlized");

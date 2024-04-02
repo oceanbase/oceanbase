@@ -19,6 +19,7 @@
 #include "share/io/ob_io_calibration.h"
 #include "share/io/io_schedule/ob_io_mclock.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "mittest/mtlenv/mock_tenant_module_env.h"
 #undef private
 #include "share/ob_local_device.h"
 #include "lib/thread/thread_pool.h"
@@ -32,13 +33,12 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
-#define TEST_ROOT_DIR "io_test"
+#define TEST_ROOT_DIR "./"
 #define TEST_DATA_DIR TEST_ROOT_DIR "/data_dir"
 #define TEST_SSTABLE_DIR TEST_DATA_DIR "/sstable"
 
 static const int64_t IO_MEMORY_LIMIT = 10L * 1024L * 1024L * 1024L;
-static const uint64_t TEST_TENANT_ID = 1001;
-
+static const uint64_t TEST_TENANT_ID = 1;
 
 int init_device(const int64_t media_id, ObLocalDevice &device)
 {
@@ -48,8 +48,8 @@ int init_device(const int64_t media_id, ObLocalDevice &device)
   const int64_t data_disk_size = 1024L * 1024L * 1024L; // 1GB
   const int64_t data_disk_percentage = 50L;
   ObIODOpt io_opts[IO_OPT_COUNT];
-  io_opts[0].key_ = "data_dir";                   io_opts[0].value_.value_str = TEST_DATA_DIR;
-  io_opts[1].key_ = "sstable_dir";                io_opts[1].value_.value_str = TEST_SSTABLE_DIR;
+  io_opts[0].key_ = "data_dir";                   io_opts[0].value_.value_str = oceanbase::MockTenantModuleEnv::get_instance().storage_env_.data_dir_;
+  io_opts[1].key_ = "sstable_dir";                io_opts[1].value_.value_str = oceanbase::MockTenantModuleEnv::get_instance().storage_env_.sstable_dir_;
   io_opts[2].key_ = "block_size";                 io_opts[2].value_.value_int64 = block_size;
   io_opts[3].key_ = "datafile_disk_percentage";   io_opts[3].value_.value_int64 = data_disk_percentage;
   io_opts[4].key_ = "datafile_size";              io_opts[4].value_.value_int64 = data_disk_size;
@@ -74,7 +74,6 @@ int init_device(const int64_t media_id, ObLocalDevice &device)
   return ret;
 }
 
-
 class TestIOStruct : public ::testing::Test
 {
 public:
@@ -84,17 +83,14 @@ static void SetUpTestCase()
   system("mkdir -p " TEST_DATA_DIR);
   system("mkdir -p " TEST_SSTABLE_DIR);
 
+  ASSERT_SUCC(oceanbase::MockTenantModuleEnv::get_instance().init());
   ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
   ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1002);
-  // init io device
-  static oceanbase::share::ObLocalDevice local_device;
-  ASSERT_SUCC(init_device(0, local_device));
-  THE_IO_DEVICE = &local_device;
+  ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0)->set_limit(IO_MEMORY_LIMIT);
 }
 
 static void TearDownTestCase()
 {
-  THE_IO_DEVICE->destroy();
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(1002);
 }
@@ -284,10 +280,9 @@ TEST_F(TestIOStruct, IOAllocator)
 
 TEST_F(TestIOStruct, IORequest)
 {
-  ObTenantIOManager tenant_io_mgr;
-  tenant_io_mgr.inc_ref();
-  ASSERT_SUCC(tenant_io_mgr.io_allocator_.init(TEST_TENANT_ID, IO_MEMORY_LIMIT));
-  ObRefHolder<ObTenantIOManager> holder(&tenant_io_mgr);
+  ObRefHolder<ObTenantIOManager> holder;
+  OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, holder);
+  ObTenantIOManager &tenant_io_mgr = *(holder.get_ptr());
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
@@ -484,10 +479,7 @@ TEST_F(TestIOStruct, IOScheduler)
   ObIOAllocator io_allocator;
   ASSERT_SUCC(io_allocator.init(TEST_TENANT_ID, IO_MEMORY_LIMIT));
   ASSERT_TRUE(io_config.is_valid());
-  ObIOScheduler scheduler(io_config, io_allocator);
-  ASSERT_FALSE(scheduler.is_inited_);
-  ASSERT_SUCC(scheduler.init(2));
-  ASSERT_TRUE(scheduler.is_inited_);
+  ObIOScheduler &scheduler = *(OB_IO_MANAGER.get_scheduler());
 
   // test schedule
   ObIORequest req;
@@ -592,12 +584,8 @@ TEST_F(TestIOStruct, IOCallbackManager)
 
 TEST_F(TestIOStruct, IOFaultDetector)
 {
-  // test init
-  ObIOConfig io_config = ObIOConfig::default_config();
-  ObIOFaultDetector detector(io_config);
-  ASSERT_FALSE(detector.is_inited_);
-  ASSERT_SUCC(detector.init());
-  ASSERT_TRUE(detector.is_inited_);
+  ObIOFaultDetector &detector = OB_IO_MANAGER.get_device_health_detector();
+  ObIOConfig &io_config = (ObIOConfig &)detector.io_config_;
 
   // test get device health
   ObDeviceHealthStatus dhs = DEVICE_HEALTH_NORMAL;
@@ -605,10 +593,6 @@ TEST_F(TestIOStruct, IOFaultDetector)
   ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
   ASSERT_TRUE(DEVICE_HEALTH_NORMAL == dhs);
   ASSERT_TRUE(0 == disk_abnormal_time);
-
-  // test start
-  ASSERT_SUCC(detector.start());
-  ObIOManager::get_instance().is_working_ = true;
 
   // test read failure detection
   ObIOInfo io_info = get_random_io_info();
@@ -652,35 +636,27 @@ TEST_F(TestIOStruct, IOFaultDetector)
   ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
   ASSERT_TRUE(DEVICE_HEALTH_ERROR == dhs);
   ASSERT_TRUE(disk_abnormal_time > 0);
-
-  // test destroy
-  detector.destroy();
-  ASSERT_FALSE(detector.is_inited_);
 }
-
-TEST_F(TestIOStruct, IOManager)
-{
-  ObIOManager io_mgr;
-  ASSERT_FALSE(io_mgr.is_inited_);
-  ASSERT_SUCC(io_mgr.init());
-  ASSERT_TRUE(io_mgr.is_inited_);
-  ASSERT_SUCC(io_mgr.start());
-  io_mgr.stop();
-  io_mgr.destroy();
-  ASSERT_FALSE(io_mgr.is_inited_);
-}
-
 
 class TestIOManager : public TestIOStruct
 {
   // basic use resource manager
 public:
+  static void SetUpTestCase()
+  {
+  }
+
+  static void TearDownTestCase()
+  {
+    oceanbase::MockTenantModuleEnv::get_instance().destroy();
+  }
+
   virtual void SetUp()
   {
-    ObIOManager::get_instance().destroy();
+    OB_IO_MANAGER.destroy();
     const int64_t memory_limit = 10L * 1024L * 1024L * 1024L; // 10GB
-    ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit));
-    ASSERT_SUCC(ObIOManager::get_instance().start());
+    ASSERT_SUCC(OB_IO_MANAGER.init(memory_limit));
+    ASSERT_SUCC(OB_IO_MANAGER.start());
 
     // add io device
     ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(THE_IO_DEVICE, 16, 2, 1024));
@@ -696,12 +672,11 @@ public:
     io_config.other_group_config_.min_percent_ = 100;
     io_config.other_group_config_.max_percent_ = 100;
     io_config.other_group_config_.weight_percent_ = 100;
-    ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(tenant_id, io_config));
   }
   virtual void TearDown()
   {
-    ObIOManager::get_instance().stop();
-    ObIOManager::get_instance().destroy();
+    OB_IO_MANAGER.stop();
+    OB_IO_MANAGER.destroy();
   }
 };
 
@@ -1042,8 +1017,6 @@ TEST_F(TestIOManager, tenant)
 {
   ObTenantIOConfig default_config = ObTenantIOConfig::default_instance();
   default_config.unit_config_.max_iops_ = 20000L;
-  ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(1001, default_config));
-  ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(1002, default_config));
   int64_t current_ts = ObTimeUtility::fast_current_time();
   IOPerfLoad load;
   load.group_id_ = 0;
@@ -1068,8 +1041,6 @@ TEST_F(TestIOManager, tenant)
   IOPerfRunner runner;
   ASSERT_SUCC(runner.init(current_ts, load));
   usleep(2L * 1000L * 1000L); // 2s
-  ASSERT_SUCC(OB_IO_MANAGER.remove_tenant_io_manager(1002));
-  ASSERT_SUCC(OB_IO_MANAGER.remove_tenant_io_manager(1001));
   runner.wait();
   runner.destroy();
 }
@@ -1113,7 +1084,6 @@ TEST_F(TestIOManager, perf)
   for (int64_t i = 0; i < perf_tenants.count(); ++i) {
     IOPerfTenant &curr_config = perf_tenants.at(i);
     LOG_INFO("wenqu: tenant config", K(curr_config), K(i));
-    ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(curr_config.tenant_id_, curr_config.config_));
     ObRefHolder<ObTenantIOManager> tenant_holder;
     ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(curr_config.tenant_id_, tenant_holder));
     ASSERT_SUCC(tenant_holder.get_ptr()->refresh_group_io_config());
@@ -1187,7 +1157,6 @@ TEST_F(TestIOManager, IOTracer)
   for (int64_t i = 0; i < perf_tenants.count(); ++i) {
     IOPerfTenant &curr_config = perf_tenants.at(i);
     LOG_INFO("wenqu: tenant config", K(curr_config), K(i));
-    ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(curr_config.tenant_id_, curr_config.config_));
     ObRefHolder<ObTenantIOManager> tenant_holder;
     ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(curr_config.tenant_id_, tenant_holder));
     ASSERT_SUCC(tenant_holder.get_ptr()->refresh_group_io_config());
@@ -1274,7 +1243,6 @@ TEST_F(TestIOManager, ModifyIOPS)
   for (int64_t i = 0; i < perf_tenants.count(); ++i) {
     IOPerfTenant &curr_config = perf_tenants.at(i);
     LOG_INFO("wenqu: tenant config", K(curr_config), K(i));
-    ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(curr_config.tenant_id_, curr_config.config_));
     ObRefHolder<ObTenantIOManager> tenant_holder;
     ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(curr_config.tenant_id_, tenant_holder));
     ASSERT_SUCC(tenant_holder.get_ptr()->refresh_group_io_config());
@@ -1362,7 +1330,6 @@ TEST_F(TestIOManager, ModifyGroupIO)
     IOPerfTenant &curr_config = perf_tenants.at(i);
     if (curr_config.tenant_id_ == 1002) {
       LOG_INFO("qilu: tenant config", K(curr_config), K(i));
-      ASSERT_SUCC(OB_IO_MANAGER.add_tenant_io_manager(curr_config.tenant_id_, curr_config.config_));
       ObRefHolder<ObTenantIOManager> tenant_holder;
       ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(curr_config.tenant_id_, tenant_holder));
       ASSERT_SUCC(tenant_holder.get_ptr()->refresh_group_io_config());
@@ -1502,15 +1469,15 @@ void write_group_perf_config()
       "1           0           8               1               64              1               ./perf_test\n"
       "\n"
       "tenant_id   min_iops    max_iops    weight          group\n"
-      "1001        5000        100000       700             10001: testgroup1: 80, 100, 60; 10002: testgroup2: 10, 60, 30; 0: OTHER_GROUPS: 10, 100, 10;\n"
-      "1002        1000        50000        1000            12345: testgroup1: 50, 50, 50; 0: OTHER_GROUPS: 50, 50, 50;\n"
+      "1        5000        100000       700             10001: testgroup1: 80, 100, 60; 10002: testgroup2: 10, 60, 30; 0: OTHER_GROUPS: 10, 100, 10;\n"
+      "500        1000        50000        1000            12345: testgroup1: 50, 50, 50; 0: OTHER_GROUPS: 50, 50, 50;\n"
       "\n"
       "tenant_id   device_id     group    io_mode     io_size_byte    io_depth    perf_mode     target_iops     thread_count    is_sequence     start_s    stop_s\n"
-      "1001        1             0        r           16384           10          rolling       0               16              0               0          8\n"
-      "1001        1             10001        r           16384           10          rolling       0               16              0               2          7\n"
-      "1001        1             10002        r           16384           10          rolling       0               16              0               0          6\n"
-      "1002        1             0        r           16384           100          rolling       0               16              0               0          10\n"
-      "1002        1             12345        r           16384           100          rolling       0               16              0               0          10\n"
+      "1        1             0        r           16384           10          rolling       0               16              0               0          8\n"
+      "1        1             10001        r           16384           10          rolling       0               16              0               2          7\n"
+      "1        1             10002        r           16384           10          rolling       0               16              0               0          6\n"
+      "500        1             0        r           16384           100          rolling       0               16              0               0          10\n"
+      "500        1             12345        r           16384           100          rolling       0               16              0               0          10\n"
       ;
     const int64_t file_len = strlen(file_buf);
     int write_ret = ::write(fd, file_buf, file_len);

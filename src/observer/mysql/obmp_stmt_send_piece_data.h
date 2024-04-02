@@ -148,31 +148,34 @@ private:
   ObIAllocator *allocator_;
 };
 
-#define OB_MAX_PIECE_COUNT 1024
+#define OB_MAX_PIECE_BUFFER_COUNT 1024
+#define OB_MAX_PARAM_ID UINT16_MAX
+#define OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD (OB_MAX_PARAM_ID - 4096)  // imprecise estimate
 typedef common::ObFixedArray<ObPieceBuffer, common::ObIAllocator> ObPieceBufferArray;
 
 class ObPiece
 {
 public:
   ObPiece() 
-    : stmt_id_(0), 
-      param_id_(-1), 
+    : stmt_id_(0),
+      param_id_(OB_MAX_PARAM_ID),
       pos_(0),
       buffer_array_(NULL),
-      allocator_(NULL),
       is_null_map_(),
-      err_ret_(OB_SUCCESS) {}
+      err_ret_(OB_SUCCESS),
+      entity_(nullptr) {}
   ~ObPiece() { reset(); }
   void reset()
   {
     if (NULL != buffer_array_) {
       reset_buffer_array();
     }
-    if (NULL != allocator_) {
-      allocator_->reset();
+    if (nullptr != entity_) {
+      DESTROY_CONTEXT(entity_);
+      entity_ = nullptr;
     }
     stmt_id_ = 0;
-    param_id_ = -1;
+    param_id_ = OB_MAX_PARAM_ID;
     pos_ = 0;
     err_ret_ = OB_SUCCESS;
   }
@@ -182,7 +185,7 @@ public:
       for (uint64_t i = 0; i < buffer_array_->count(); i++) {
         ObPieceBuffer piece_buffer = buffer_array_->at(i);
         piece_buffer.~ObPieceBuffer();
-        allocator_->free(&piece_buffer);
+        entity_->get_arena_allocator().free(&piece_buffer);
       }
     }
   }
@@ -193,8 +196,7 @@ public:
   void set_position(uint64_t pos) { pos_ = pos; }
   uint64_t get_position() { return pos_; }
   void add_position() { pos_++; }
-  void set_allocator(ObIAllocator *alloc) { allocator_ = alloc; }
-  ObIAllocator *get_allocator() { return allocator_; }
+  ObIAllocator *get_allocator() { return nullptr != entity_ ? &entity_->get_arena_allocator() : NULL; }
   common::ObBitSet<> &get_is_null_map() { return is_null_map_; }
   void get_is_null_map(char *map, int64_t count) {
     for (int64_t i = 0; i<count; i++) {
@@ -213,9 +215,9 @@ private:
   uint16_t param_id_;
   uint64_t pos_;
   ObPieceBufferArray *buffer_array_;
-  ObIAllocator *allocator_;
   common::ObBitSet<> is_null_map_;
   int err_ret_;
+  lib::MemoryContext entity_;
 };  // end of class ObPiece
 
 class ObPieceCache {

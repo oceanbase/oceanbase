@@ -10,7 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_empty_shell_task.h"
+#include "storage/tx_storage/ob_empty_shell_task.h"
+#include "lib/literals/ob_literals.h"
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "storage/tablet/ob_tablet.h" // ObTablet
@@ -62,33 +63,38 @@ void ObEmptyShellTask::runTimerTask()
   } else {
     ObLS *ls = NULL;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      ObTabletEmptyShellHandler *tablet_empty_shell_handler = NULL;
-      if (OB_ISNULL(ls)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "ls is NULL", KR(ret));
-      } else if (FALSE_IT(tablet_empty_shell_handler = ls->get_tablet_empty_shell_handler())) {
-      } else if (tablet_empty_shell_handler->check_stop()) {
-        STORAGE_LOG(INFO, "[emptytablet] tablet_gc_handler is stop", K(ls->get_ls_id()));
-      } else if (0 == times || tablet_empty_shell_handler->get_empty_shell_trigger()) {
-        STORAGE_LOG(INFO, "[emptytablet] task check ls", "ls_id", ls->get_ls_id(), K(tablet_empty_shell_handler));
-        tablet_empty_shell_handler->set_empty_shell_trigger(false);
-        obsys::ObRLockGuard lock(tablet_empty_shell_handler->wait_lock_);
-        bool need_retry = false;
-        common::ObTabletIDArray empty_shell_tablet_ids;
-        if (OB_FAIL(tablet_empty_shell_handler->get_empty_shell_tablet_ids(empty_shell_tablet_ids, need_retry))) {
-          need_retry = true;
-          STORAGE_LOG(WARN, "[emptytablet] tablet_empty_shell_handler get empty shell tablet ids failed", K(ret), "ls_id", ls->get_ls_id());
-        } else if (empty_shell_tablet_ids.empty()) {
-          // do nothing
-        } else if (OB_FAIL(tablet_empty_shell_handler->update_tablets_to_empty_shell(ls, empty_shell_tablet_ids))) {
-          need_retry = true;
-          STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret), "ls_id", ls->get_ls_id());
-        }
-        if (need_retry) {
-          STORAGE_LOG(INFO, "[emptytablet] tablet become empty shell error, need try", KR(ret), KPC(ls), K(empty_shell_tablet_ids));
-          if (!tablet_empty_shell_handler->get_empty_shell_trigger()) {
-            tablet_empty_shell_handler->set_empty_shell_trigger(true);
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+      // one ls failed to handle empty shell task should not bother another ls
+      if (OB_ITER_END == ret) {
+        break;
+      } else {
+        ObTabletEmptyShellHandler *tablet_empty_shell_handler = NULL;
+        if (OB_ISNULL(ls)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "ls is NULL", KR(ret));
+        } else if (FALSE_IT(tablet_empty_shell_handler = ls->get_tablet_empty_shell_handler())) {
+        } else if (tablet_empty_shell_handler->check_stop()) {
+          STORAGE_LOG(INFO, "[emptytablet] tablet_gc_handler is stop", K(ls->get_ls_id()));
+        } else if (0 == times || tablet_empty_shell_handler->get_empty_shell_trigger()) {
+          STORAGE_LOG(INFO, "[emptytablet] task check ls", "ls_id", ls->get_ls_id(), K(tablet_empty_shell_handler));
+          tablet_empty_shell_handler->set_empty_shell_trigger(false);
+          obsys::ObRLockGuard lock(tablet_empty_shell_handler->wait_lock_);
+          bool need_retry = false;
+          common::ObTabletIDArray empty_shell_tablet_ids;
+          if (OB_FAIL(tablet_empty_shell_handler->get_empty_shell_tablet_ids(empty_shell_tablet_ids, need_retry))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "[emptytablet] tablet_empty_shell_handler get empty shell tablet ids failed", K(ret), "ls_id", ls->get_ls_id());
+          } else if (empty_shell_tablet_ids.empty()) {
+            // do nothing
+          } else if (OB_FAIL(tablet_empty_shell_handler->update_tablets_to_empty_shell(ls, empty_shell_tablet_ids))) {
+            need_retry = true;
+            STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret), "ls_id", ls->get_ls_id());
+          }
+          if (need_retry) {
+            STORAGE_LOG(INFO, "[emptytablet] tablet become empty shell error, need retry", KR(ret), KPC(ls), K(empty_shell_tablet_ids));
+            if (!tablet_empty_shell_handler->get_empty_shell_trigger()) {
+              tablet_empty_shell_handler->set_empty_shell_trigger(true);
+            }
           }
         }
       }
@@ -102,6 +108,28 @@ void ObEmptyShellTask::runTimerTask()
       }
     }
   }
+}
+
+
+ObTabletEmptyShellHandler::ObTabletEmptyShellHandler()
+  : ls_(NULL),
+    is_trigger_(true),
+    stopped_(false),
+    is_inited_(false)
+{
+}
+
+ObTabletEmptyShellHandler::~ObTabletEmptyShellHandler()
+{
+  reset();
+}
+
+void ObTabletEmptyShellHandler::reset()
+{
+  ls_ = NULL;
+  is_trigger_ = true;
+  stopped_ = false;
+  is_inited_ = false;
 }
 
 int ObTabletEmptyShellHandler::init(ObLS *ls)
@@ -130,10 +158,9 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
   } else if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     STORAGE_LOG(WARN, "failed to build ls tablet iter", KR(ret), KPC(this));
   } else {
+    const uint64_t tenant_id = MTL_ID();
     ObTabletHandle tablet_handle;
-    ObTablet *tablet = NULL;
     bool can_become_shell = false;
-    bool is_deleted = false;
     bool is_locked = false;
     while (OB_SUCC(ret)) {
       if (check_stop()) {
@@ -149,34 +176,31 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "invalid tablet handle", KR(ret), KPC(this), K(tablet_handle));
-      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "tablet is NULL", KR(ret));
-      } else if (tablet->is_ls_inner_tablet()) {
-        // skip ls inner tablet
-      } else if (OB_FAIL(tablet->is_locked_by_others<ObTabletCreateDeleteMdsUserData>(is_locked))) {
-        STORAGE_LOG(WARN, "failed to get is locked", KR(ret), KPC(tablet));
-      } else if (is_locked) {
-        STORAGE_LOG(INFO, "tablet_status is changing", KR(ret), KPC(tablet));
-        need_retry = true;
-      } else if (OB_FAIL(check_tablet_deleted_(tablet, is_deleted))) {
-        STORAGE_LOG(WARN, "fail to check_tablet_deleted", KR(ret));
-      } else if (!is_deleted) {
-      } else if (OB_FAIL(check_can_become_empty_shell_(*tablet, can_become_shell, need_retry))) {
-        STORAGE_LOG(WARN, "check tablet can become empty shell failed", KR(ret), KPC(tablet));
-      } else if (!can_become_shell) {
-        STORAGE_LOG(INFO, "tablet can not become shell", KR(ret), "tablet_meta", tablet->get_tablet_meta());
-      } else if (OB_FAIL(empty_shell_tablet_ids.push_back(tablet->get_tablet_meta().tablet_id_))) {
-        STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret),"tablet_meta", tablet->get_tablet_meta());
+      } else {
+        ObTablet *tablet = tablet_handle.get_obj();
+        const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
+        const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+        if (tablet->is_ls_inner_tablet()) {
+          // skip ls inner tablet
+        } else if (OB_FAIL(tablet->is_locked_by_others<ObTabletCreateDeleteMdsUserData>(is_locked))) {
+          STORAGE_LOG(WARN, "failed to get is locked", KR(ret), K(ls_id), K(tablet_id));
+        } else if (is_locked) {
+          STORAGE_LOG(INFO, "tablet status is changing", KR(ret), K(ls_id), K(tablet_id));
+          need_retry = true;
+        } else if (OB_FAIL(check_candidate_tablet_(*tablet, can_become_shell, need_retry))) {
+          STORAGE_LOG(WARN, "fail to check candidate tablet", KR(ret), K(ls_id), K(tablet_id));
+        } else if (can_become_shell && OB_FAIL(empty_shell_tablet_ids.push_back(tablet_id))) {
+          STORAGE_LOG(WARN, "failed to push back empty shell tablet id", KR(ret), K(ls_id), K(tablet_id));
+        }
       }
-
     }
   }
 
   return ret;
 }
 
-int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const common::ObIArray<common::ObTabletID> &tablet_ids) {
+int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const common::ObIArray<common::ObTabletID> &tablet_ids)
+{
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     const ObTabletID &tablet_id = tablet_ids.at(i);
@@ -193,99 +217,129 @@ int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const com
   return ret;
 }
 
-int ObTabletEmptyShellHandler::check_tablet_deleted_(ObTablet *tablet, bool &is_deleted)
+int ObTabletEmptyShellHandler::check_candidate_tablet_(const ObTablet &tablet, bool &can_become_shell, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  is_deleted = false;
-  bool is_finish = false;
-  ObTabletCreateDeleteMdsUserData data;
-  if (OB_ISNULL(tablet)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "tablet is null", KR(ret));
-  } else if (tablet->is_empty_shell()) {
+  const int64_t tenant_id = MTL_ID();
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  can_become_shell = false;
+  bool is_written = false;
+
+  if (tablet.is_empty_shell()) {
     // do nothing
-  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-    if (OB_EMPTY_RESULT == ret) {
-      STORAGE_LOG(INFO, "tablet_status is null", KR(ret), KPC(tablet));
-      ret = OB_SUCCESS;
-    } else {
-      STORAGE_LOG(WARN, "failed to get latest tablet status", K(ret), KP(tablet));
+  } else if (OB_FAIL(tablet.check_tablet_status_written(is_written))) {
+    STORAGE_LOG(WARN, "failed to check tablet status written", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObTabletCreateDeleteMdsUserData data;
+    mds::MdsWriter writer; // will be removed later
+    mds::TwoPhaseCommitState trans_stat; // will be removed later
+    share::SCN trans_version; // will be removed later
+
+    if (OB_FAIL(tablet.get_latest(data, writer, trans_stat, trans_version))) {
+      if (OB_EMPTY_RESULT == ret) {
+        ret = OB_SUCCESS;
+        STORAGE_LOG(INFO, "tablet status is null, may be create tx is aborted or create user data has not been written",
+            K(ret), K(ls_id), K(tablet_id));
+
+        if (!is_written) {
+          // mds table has not been written, do nothing
+        } else if (!is_user_tenant(tenant_id)) {
+          can_become_shell = true;
+          STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
+        } else if (OB_FAIL(check_tablet_from_aborted_tx_(tablet, can_become_shell, need_retry))) {
+          STORAGE_LOG(WARN, "failed to check tablet from aborted tx", K(ret), K(ls_id), K(tablet_id));
+        }
+      } else {
+        STORAGE_LOG(WARN, "failed to get latest tablet status", K(ret), K(ls_id), K(tablet_id));
+      }
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat
+        && (ObTabletStatus::DELETED == data.tablet_status_ || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_)) {
+      STORAGE_LOG(INFO, "delete tx is committed", K(ret), K(ls_id), K(tablet_id), K(trans_stat), K(data));
+
+      if (!is_user_tenant(tenant_id)) {
+        can_become_shell = true;
+        STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(check_tablet_from_deleted_tx_(tablet, data, can_become_shell, need_retry))) {
+        STORAGE_LOG(WARN, "failed to check tablet from deleted tx", K(ret), K(ls_id), K(tablet_id));
+      }
     }
-  } else if (ObTabletStatus::DELETED == data.tablet_status_
-             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
-    is_deleted = true;
-    STORAGE_LOG(INFO, "get tablet for deleting", "ls_id", ls_->get_ls_id(), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(data));
   }
+
   return ret;
 }
 
-int ObTabletEmptyShellHandler::check_can_become_empty_shell_(const ObTablet &tablet, bool &can, bool &need_retry)
+int ObTabletEmptyShellHandler::check_tablet_from_aborted_tx_(const ObTablet &tablet, bool &can_become_shell, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  can = false;
-  bool is_committed = false;
-  ObTabletCreateDeleteMdsUserData user_data;
-  const uint64_t tenant_id = MTL_ID();
-  bool is_shell = false;
-  const ObTabletID tablet_id(tablet.get_tablet_meta().tablet_id_);
-  if (!is_user_tenant(tenant_id)) {
-    can = true;
-    STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(tablet.ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-    if (OB_EMPTY_RESULT == ret) {
-      can = false;
-      STORAGE_LOG(INFO, "tablet_status is null", KR(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
-      ret = OB_SUCCESS;
-    } else {
-      STORAGE_LOG(WARN, "failed to get latest tablet status", K(ret), "tablet_meta", tablet.get_tablet_meta());
+  can_become_shell = false;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  share::SCN rec_scn;
+  share::SCN readable_scn(SCN::base_scn());
+
+  if (OB_FAIL(tablet.get_mds_table_rec_scn(rec_scn))) {
+    STORAGE_LOG(WARN, "failed to get mds table rec scn", K(ret), K(ls_id), K(tablet_id));
+  } else if (rec_scn.is_max()) {
+    can_become_shell = false;
+    need_retry = false;
+    STORAGE_LOG(INFO, "mds table rec scn is MAX, redo log has NOT been written, should delete tablet instantly",
+        K(ret), K(ls_id), K(tablet_id), K(rec_scn));
+  } else if (OB_FAIL(get_readable_scn(readable_scn))) {
+    STORAGE_LOG(WARN, "failed to get readable scn", K(ret));
+  } else if (rec_scn < readable_scn) {
+    can_become_shell = true;
+    STORAGE_LOG(INFO, "readable scn is bigger than rec scn, tablet should be converted info empty shell",
+        K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(readable_scn));
+  } else {
+    need_retry = true;
+    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+      STORAGE_LOG(INFO, "readable scn is smaller than rec scn, shoudle retry",
+          K(ret), K(ls_id), K(tablet_id), K(rec_scn), K(readable_scn));
     }
-  } else if (OB_FAIL(check_tablet_empty_shell_(tablet, user_data, can, need_retry))) {
-    STORAGE_LOG(WARN, "failed to check tablet empty shell", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
   }
+
   return ret;
 }
 
-int ObTabletEmptyShellHandler::check_tablet_empty_shell_(
+int ObTabletEmptyShellHandler::check_tablet_from_deleted_tx_(
     const ObTablet &tablet,
     const ObTabletCreateDeleteMdsUserData &user_data,
-    bool &can,
+    bool &can_become_shell,
     bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  can = false;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  can_become_shell = false;
   bool not_depend_on = false;
   ObTabletStatus::Status tablet_status = user_data.get_tablet_status();
-  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
-  SCN readable_scn = SCN::base_scn();
-  const ObTabletID tablet_id(tablet.get_tablet_meta().tablet_id_);
-  if (!user_data.is_valid()) {
+  share::SCN readable_scn = SCN::base_scn();
+  const uint64_t tenant_id = MTL_ID();
+
+  if (OB_UNLIKELY(!user_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(user_data));
-  } else if (OB_ISNULL(info)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "tenant info is null", K(ret), K(user_data));
-  } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
-    STORAGE_LOG(WARN, "failed to get readable scn", K(ret), K(readable_scn), K(user_data));
-  } else if (!readable_scn.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "The tenant is belong to the primary database or readable_scn is invalid",
-        K(ret), K(readable_scn), K(user_data));
+  } else if (!is_user_tenant(tenant_id)) {
+    can_become_shell = true;
+    STORAGE_LOG(INFO, "tenant is not a user tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_readable_scn(readable_scn))) {
+    STORAGE_LOG(WARN, "failed to get readable scn", K(ret));
   } else if (ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status
       && OB_FAIL(check_transfer_out_deleted_tablet_(tablet, user_data, not_depend_on, need_retry))) {
     STORAGE_LOG(WARN, "failed to check transfer out deleted tablet", K(ret), K(readable_scn), K(user_data));
   } else if (ObTabletStatus::DELETED == tablet_status || not_depend_on) {
     if (user_data.delete_commit_scn_.is_valid() && user_data.delete_commit_scn_ <= readable_scn) {
-      can = true;
-      STORAGE_LOG(INFO, "readable_scn is bigger than finish_scn",
-        "ls_id", ls_->get_ls_id(), K(tablet_id), K(readable_scn), K(user_data));
+      can_become_shell = true;
+      STORAGE_LOG(INFO, "readable scn is bigger than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data));
     } else {
       need_retry = true;
-      if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000/*1s*/)) {
-        STORAGE_LOG(INFO, "readable_scn is smaller than finish_scn",
-          "ls_id", ls_->get_ls_id(), K(tablet_id), K(readable_scn), K(user_data), KPC(info));
+      if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+        STORAGE_LOG(INFO, "readable scn is smaller than finish scn", K(ret), K(tablet_id), K(tablet_id), K(readable_scn), K(user_data));
       }
     }
   }
+
   return ret;
 }
 
@@ -317,9 +371,9 @@ int ObTabletEmptyShellHandler::check_transfer_out_deleted_tablet_(
     } else {
       STORAGE_LOG(WARN, "failed to get ls", K(ret), K(user_data));
     }
-  } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls should not be NULL", K(ret),K(user_data));
+    STORAGE_LOG(WARN, "ls should not be NULL", K(ret), K(user_data));
   } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
     STORAGE_LOG(WARN, "ls is get migration status", K(ret),K(user_data));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD == migration_status
@@ -339,11 +393,26 @@ int ObTabletEmptyShellHandler::check_transfer_out_deleted_tablet_(
       "ls_id", ls_->get_ls_id(), K(tablet_id), K(can), K(user_data), K(decided_scn));
   } else {
     need_retry = true;
-    if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000/*1s*/)) {
+    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
       STORAGE_LOG(INFO, "decided_scn is smaller than tablet delete commit scn",
         "ls_id", ls_->get_ls_id(), K(tablet_id), K(user_data), K(decided_scn));
     }
   }
+  return ret;
+}
+
+int ObTabletEmptyShellHandler::get_readable_scn(share::SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObTenantInfoLoader *info_loader = MTL(rootserver::ObTenantInfoLoader*);
+
+  if (OB_FAIL(info_loader->get_readable_scn(readable_scn))) {
+    STORAGE_LOG(WARN, "failed to get tenant readable scn", K(ret), K(readable_scn));
+  } else if (OB_UNLIKELY(!readable_scn.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "readable scn is invalid", K(ret), K(readable_scn));
+  }
+
   return ret;
 }
 
@@ -377,7 +446,6 @@ void ObTabletEmptyShellHandler::online()
   set_start();
   STORAGE_LOG(INFO, "empty shell handler online", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
 }
-
 
 } // checkpoint
 } // storage

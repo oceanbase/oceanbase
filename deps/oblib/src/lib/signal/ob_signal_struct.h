@@ -112,32 +112,38 @@ struct ObSigHandlerCtx
 
 extern ObSigHandlerCtx g_sig_handler_ctx_;
 
+struct ObSqlInfo
+{
+  ObString sql_string_;
+  ObString sql_id_;
+};
+
 class ObSqlInfoGuard
 {
 public:
-	ObSqlInfoGuard(const ObString &sql)
-      : sql_(sql)
+  ObSqlInfoGuard(const ObString &sql_string, const ObString &sql_id)
+    : last_sql_info_(tl_sql_info)
 	{
-    last_ = get_cur_guard();
-    get_cur_guard() = this;
+    tl_sql_info.sql_string_ = sql_string;
+    tl_sql_info.sql_id_ = sql_id;
   }
 	~ObSqlInfoGuard()
   {
-    get_cur_guard() = last_;
+    tl_sql_info = last_sql_info_;
   }
-  static ObSqlInfoGuard *&get_cur_guard()
+  static ObSqlInfo get_tl_sql_info()
   {
-    static thread_local ObSqlInfoGuard *cur_guard = NULL;
-    return cur_guard;
+    return tl_sql_info;
   }
-public:
-  ObString sql_;
 private:
-
-  ObSqlInfoGuard *last_;
+  static thread_local ObSqlInfo tl_sql_info;
+  ObSqlInfo last_sql_info_;
 };
 
 } // namespace common
 } // namespace oceanbase
+
+#define SQL_INFO_GUARD(sql_string, sql_id)                              \
+oceanbase::common::ObSqlInfoGuard sql_info_guard(sql_string, sql_id);
 
 #endif // OCEANBASE_SIGNAL_STRUCT_H_

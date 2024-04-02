@@ -42,6 +42,7 @@ public:
   ObUnit();
   ~ObUnit() {}
   inline bool operator <(const ObUnit &unit) const;
+  int assign(const ObUnit& that);
   void reset();
   bool is_valid() const;
   bool is_manual_migrate() const { return is_manual_migrate_; }

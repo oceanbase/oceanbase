@@ -873,6 +873,13 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           } else {
             ctx.not_param_ = not_param;
             ctx.ignore_scale_check_ = ignore_scale_check;
+            // select a + 1 as 'a' from t where b = ?; 'a' in SQL will be recognized as a constant by fast parser
+            // In the ps parameterization scenario, 'a' will be added to the param store as a fixed parameter in
+            // the execute phase. The param store has two parameters, causing correctness problems.
+            // Therefore, the scene ps parameterization ability of specifying aliases needs to be disabled.
+            if (T_ALIAS == root->type_ && NULL != root->str_value_) {
+              ctx.sql_info_->ps_need_parameterized_ = false;
+            }
             if (T_ALIAS == root->type_ && 0 == i) {
               // alias node的param_num_处理必须等到其第一个子节点转换完之后
               // select a + 1 as 'a'，'a'不能被参数化，但是它在raw_params数组内的下标必须是计算了1的下标之后才能得到
@@ -1104,34 +1111,20 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
       // do nothing
     }
     if (OB_SUCC(ret)) {
+      char *buf = NULL;
       int32_t pos = 0;
-      int64_t format_pos = 0;
-      ObString con_str;
-      bool can_format = true;
-      int64_t len = pc_ctx.raw_sql_.length();
-      char* buf1 = (char *)allocator.alloc(len);
-      char* buf2 = (char *)allocator.alloc(len);
-      if (NULL == buf1) {
+      buf = (char *)allocator.alloc(pc_ctx.raw_sql_.length());
+      if (NULL == buf) {
         SQL_PC_LOG(WARN, "fail to alloc buf", K(pc_ctx.raw_sql_.length()));
         ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (NULL == buf2) {
-        SQL_PC_LOG(WARN, "fail to alloc buf", K(pc_ctx.raw_sql_.length()));
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf1, len, pos))) {
+      } else if (OB_FAIL(construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
         SQL_PC_LOG(WARN, "fail to construct_sql", K(ret));
-      } else if (FALSE_IT(con_str.assign_ptr(buf1, pos))) {
-        // do nothing
-      } else if (OB_FAIL(try_format_in_expr(con_str, buf2, len, format_pos, can_format))) {
-        SQL_PC_LOG(WARN, "fail to format in expr", K(ret));
       } else if (is_prepare_mode(mode) && OB_FAIL(transform_neg_param(pc_ctx.fp_result_.raw_params_))) {
         SQL_PC_LOG(WARN, "fail to transform_neg_param", K(ret));
       } else {
-        pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_.assign_ptr(buf1, pos);
+        pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_.assign_ptr(buf, pos);
         pc_ctx.ps_need_parameterized_ = sql_info.ps_need_parameterized_;
         pc_ctx.normal_parse_const_cnt_ = sql_info.total_;
-        if (can_format) {
-          pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_.assign_ptr(buf2, format_pos);
-        }
       }
     }
   }
@@ -1407,145 +1400,6 @@ int ObSqlParameterization::construct_sql(const ObString &no_param_sql,
       idx += len;
       pos += len;
     }
-  }
-  return ret;
-}
-
-int ObSqlParameterization::try_format_in_expr(const common::ObString &con_sql,
-                                              char *buf,
-                                              int32_t buf_len,
-                                              int64_t &pos,
-                                              bool& can_format)
-{
-  int ret = OB_SUCCESS;
-  can_format = false;
-  int64_t in_pos = 0;
-  int64_t in_end = 0;
-  int64_t qm_cnt = 0;
-  bool need_break = false;
-  // find in pos
-  MEMSET(buf, 0x00, buf_len);
-  if (con_sql.empty()) {
-    // do nothing
-  } else {
-    while (!need_break) {
-      bool found = false;
-      int old_in_pos = in_pos;
-      if (OB_FAIL(search_in_expr_pos(con_sql.ptr(), con_sql.length(), in_pos, found))) {
-        LOG_WARN("failed to search in expr pos", K(con_sql.ptr()), K(con_sql.length()), K(in_pos));
-      } else if (!found) {
-        need_break = true;
-        in_pos = con_sql.length();
-      } else if (OB_FAIL(search_vector(con_sql.ptr(), con_sql.length(), in_pos, in_end, can_format, qm_cnt))) {
-        LOG_WARN("failed to search vector", K(con_sql.ptr()), K(con_sql.length()), K(in_pos), K(in_end));
-      } else {
-        // do nothing
-      }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else {
-        int64_t old_pos = pos;
-        MEMCPY(buf + pos, con_sql.ptr() + old_in_pos, (in_pos - old_in_pos));
-        pos += (in_pos - old_in_pos);
-        if (found) {
-          buf[pos] = '(';
-          pos++;
-          if (qm_cnt > 1) {
-            buf[pos] = '(';
-            pos++;
-          }
-          for (int64_t i = 0; i < qm_cnt; i++) {
-            buf[pos] = '?';
-            buf[pos + 1] = ',';
-            pos += 2;
-          }
-          buf[pos - 1] = ')';
-          if (qm_cnt > 1) {
-            buf[pos] = ')';
-            pos++;
-          }
-        }
-        in_pos = in_end;
-      }
-    }
-  }
-  // search vector
-  return ret;
-}
-
-
-bool ObSqlParameterization::is_in_expr_prefix(char c) {
-  return c == ' ' || c == '\n' || c == '\r' || c == '\t';
-}
-
-int ObSqlParameterization::search_in_expr_pos(const char* buf, const int64_t buf_len, int64_t& pos, bool& found)
-{
-  int ret = OB_SUCCESS;
-  found = false;
-  for (int64_t i = pos; !found && i < buf_len; i++) {
-    if (i + 3 < buf_len && is_in_expr_prefix(buf[i])
-        && (buf[i + 1] == 'i' || buf[i + 1] == 'I')
-        && (buf[i + 2] == 'n' || buf[i + 2] == 'N')
-        && (is_in_expr_prefix(buf[i + 3]) || buf[i + 3] == '(')) {
-      pos = i + 4;
-      if (buf[i + 3] == '(') pos--;
-      found = true;
-    }
-  }
-  return ret;
-}
-
-int ObSqlParameterization::search_vector(const char* buf,
-                                         const int64_t buf_len,
-                                         int64_t& vec_start,
-                                         int64_t& vec_end,
-                                         bool &is_valid,
-                                         int64_t& qm_cnt)
-{
-  int ret = OB_SUCCESS;
-  bool need_break = false;
-  int vec_level = 0;
-  is_valid = false;
-  qm_cnt = 1;
-  for (int64_t i = vec_start; !need_break  && i <  buf_len; i++) {
-    if (buf[i] == ' ') {
-      // skip
-    } else {
-      if (buf[i] == '(') {
-        vec_level++;
-        if (vec_level == 2) {
-          qm_cnt = 0;
-        }
-      } else {
-        if (vec_level > 0 && vec_level <= 2) {
-          if (buf[i] == ')') {
-            vec_level--;
-            if (vec_level == 0) {
-              vec_end = i + 1;
-              need_break = true;
-              is_valid = true;
-            }
-          } else if (buf[i] == '?') {
-            // skip
-            if (vec_level == 2) {
-              qm_cnt++;
-            }
-          } else if (buf[i] == ',') {
-            // skip
-          } else {
-            // invalid character, break
-            need_break = true;
-            vec_end = buf_len;
-            is_valid = false;
-          }
-        } else {
-          need_break = true;
-          vec_end = buf_len;
-          is_valid = false;
-        }
-      }
-    }
-
   }
   return ret;
 }
@@ -1927,13 +1781,11 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
-      } else if ((0 == func_name.case_compare("substr")
-                  || 0 == func_name.case_compare("extract_xml"))
-          && (3 == node[1]->num_child_)) {
+      } else if (0 == func_name.case_compare("substr") && (3 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_THREE = 3;
         bool mark_arr[ARGS_NUMBER_THREE] = {0, 1, 1}; //0表示参数化, 1 表示不参数化
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE, sql_info))) {
-          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+          SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
         }
       } else if (0 == func_name.case_compare("xmlserialize")
             && (10 == node[1]->num_child_)) {

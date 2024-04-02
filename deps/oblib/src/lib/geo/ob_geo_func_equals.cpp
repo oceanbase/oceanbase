@@ -492,15 +492,15 @@ OB_GEO_FUNC_END;
 
 // cartesian tree
 // Geom Point
-OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianPoint, ObWkbGeomPoint, bool)
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianPoint, ObCartesianPoint, bool)
 {
-  return eval_equals_without_strategy<ObWkbGeomPoint, ObWkbGeomPoint>(g1, g2, result);
+  return eval_equals_without_strategy<ObCartesianPoint, ObCartesianPoint>(g1, g2, result);
 }
 OB_GEO_FUNC_END;
 
-OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObWkbGeomPoint, ObCartesianMultipoint, bool)
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianPoint, ObCartesianMultipoint, bool)
 {
-  return eval_equals_without_strategy<ObWkbGeomPoint, ObCartesianMultipoint>(g1, g2, result);
+  return eval_equals_without_strategy<ObCartesianPoint, ObCartesianMultipoint>(g1, g2, result);
 }
 OB_GEO_FUNC_END;
 
@@ -533,9 +533,9 @@ OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianPolygon, ObCartesian
 OB_GEO_FUNC_END;
 
 // Geom MultiPoint
-OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianMultipoint, ObWkbGeomPoint, bool)
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncEqualsImpl, ObCartesianMultipoint, ObCartesianPoint, bool)
 {
-  return eval_equals_without_strategy<ObCartesianMultipoint, ObWkbGeomPoint>(g1, g2, result);
+  return eval_equals_without_strategy<ObCartesianMultipoint, ObCartesianPoint>(g1, g2, result);
 }
 OB_GEO_FUNC_END;
 

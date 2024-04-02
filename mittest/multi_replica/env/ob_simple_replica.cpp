@@ -79,24 +79,21 @@ int64_t ObSimpleServerReplica::get_rpc_port(int &server_fd)
   return unittest::get_rpc_port(server_fd);
 }
 
-ObSimpleServerReplica::ObSimpleServerReplica(const std::string &env_prefix,
-                        const int zone_id,
-                        const int rpc_port,
-                        const string &rs_list,
-                        const ObServerInfoList &server_list,
-                        ObServer &server ,
-                        const std::string &dir_prefix,
-                        const char *log_disk_size,
-                        const char *memory_limit)
-  : server_(server),
-    zone_id_(zone_id),
-    rpc_port_(rpc_port),
-    rs_list_(rs_list),
-    server_info_list_(server_list),
-    data_dir_(dir_prefix),
-    run_dir_(env_prefix),
-    log_disk_size_(log_disk_size),
-    memory_limit_(memory_limit)
+ObSimpleServerReplica::ObSimpleServerReplica(const std::string &app_name,
+                                             const std::string &env_prefix,
+                                             const int zone_id,
+                                             const int rpc_port,
+                                             const string &rs_list,
+                                             const ObServerInfoList &server_list,
+                                             bool is_restart,
+                                             ObServer &server,
+                                             const std::string &dir_prefix,
+                                             const char *log_disk_size,
+                                             const char *memory_limit)
+    : server_(server), zone_id_(zone_id), rpc_port_(rpc_port), rs_list_(rs_list),
+      server_info_list_(server_list), app_name_(app_name), data_dir_(dir_prefix),
+      run_dir_(env_prefix), log_disk_size_(log_disk_size), memory_limit_(memory_limit),
+      is_restart_(is_restart)
 {
   // if (ObSimpleServerReplicaRestartHelper::is_restart_) {
   //   std::string port_file_name = run_dir_ + std::string("/port.txt");
@@ -106,7 +103,7 @@ ObSimpleServerReplica::ObSimpleServerReplica(const std::string &env_prefix,
   //   }
   //   fscanf(infile, "%d\n", &rpc_port_);
   // } else {
-    // rpc_port_ = unittest::get_rpc_port(server_fd_);
+  // rpc_port_ = unittest::get_rpc_port(server_fd_);
   // }
   mysql_port_ = rpc_port_ + 1;
 }
@@ -172,16 +169,31 @@ int ObSimpleServerReplica::simple_init()
           getpid(), zone_id_, rpc_port_, mysql_port_, zone_str.c_str(), server_info_list_.count(),
           rs_list_.c_str());
 
+
   // 因为改变了工作目录，设置为绝对路径
   for (int i = 0; i < MAX_FD_FILE; i++) {
     int len = strlen(OB_LOGGER.log_file_[i].filename_);
     if (len > 0) {
+      std::string cur_file_name = OB_LOGGER.log_file_[i].filename_;
+      cur_file_name = cur_file_name.substr(cur_file_name.find_last_of("/\\") + 1);
       std::string ab_file = std::string(curr_dir) + "/" + run_dir_ + "/"
-                            + std::string(OB_LOGGER.log_file_[i].filename_);
+                            + cur_file_name;
       SERVER_LOG(INFO, "convert ab file", K(ab_file.c_str()));
       MEMCPY(OB_LOGGER.log_file_[i].filename_, ab_file.c_str(), ab_file.size());
     }
   }
+  // std::string ab_file = std::string(curr_dir) + "/" + run_dir_ + "/" + app_name_;
+  //
+  // std::string app_log_name = ab_file + ".log";
+  // std::string app_rs_log_name = ab_file + "_rs.log";
+  // std::string app_ele_log_name = ab_file + "_election.log";
+  // std::string app_trace_log_name = ab_file + "_trace.log";
+  // OB_LOGGER.set_file_name(app_log_name.c_str(),
+  //                         true,
+  //                         false,
+  //                         app_rs_log_name.c_str(),
+  //                         app_ele_log_name.c_str(),
+  //                         app_trace_log_name.c_str());
 
   ObPLogWriterCfg log_cfg;
   ret = server_.init(opts, log_cfg);
@@ -277,7 +289,7 @@ int ObSimpleServerReplica::simple_start()
 {
   int ret = OB_SUCCESS;
   // bootstrap
-  if (zone_id_ == 1) {
+  if (zone_id_ == 1 && !is_restart_) {
     std::thread th([this]() {
       int64_t start_time = ObTimeUtility::current_time();
       int ret = OB_SUCCESS;
@@ -298,7 +310,7 @@ int ObSimpleServerReplica::simple_start()
   SERVER_LOG(INFO, "ObSimpleServerReplica init succ prepare to start...", K(zone_id_), K(rpc_port_),
              K(mysql_port_));
   ret = server_.start();
-  if (zone_id_ == 1) {
+  if (zone_id_ == 1 && !is_restart_) {
     th_.join();
     fprintf(stdout, "[BOOTSTRAP SUCC] zone_id = %d, rpc_port = %d, mysql_port = %d\n", zone_id_,
             rpc_port_, mysql_port_);

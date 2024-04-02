@@ -34,6 +34,15 @@ const char* __attribute__((weak)) get_mysql_str_error(int index)
   return NULL;
 }
 
+bool __attribute__((weak)) get_dblink_reuse_connection_cfg()
+{
+  return true;
+}
+
+bool __attribute__((weak)) get_enable_dblink_cfg()
+{
+  return true;
+}
 
 namespace oceanbase
 {
@@ -73,6 +82,10 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
 	}
         int msg_len = STRLEN(errmsg);
         LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, external_errno, msg_len, errmsg);
+      } else if (1 == match_count) {
+        if (is_oracle_err && OB_TRANS_XA_BRANCH_FAIL == ob_errno) {
+          ob_errno = OB_TRANS_NEED_ROLLBACK;
+        }
       }
     }
   }

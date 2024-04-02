@@ -24,6 +24,7 @@
 #include "ob_tx_ctx_mds.h"
 #include "ob_one_phase_committer.h"
 #include "ob_two_phase_committer.h"
+#include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
 
@@ -134,7 +135,7 @@ public:
   /*
    * graceful kill: wait trx finish logging
    */
-  int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array);
+  int kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list);
   memtable::ObMemtableCtx *get_memtable_ctx() { return &mt_ctx_; }
   int commit(const share::ObLSArray &parts,
              const MonotonicTs &commit_time,
@@ -175,6 +176,7 @@ public:
   int check_modify_time_elapsed(const ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_stat(ObTxLockStatIterator &iter);
   int get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr);
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
@@ -214,6 +216,15 @@ public:
                         bool &can_read,
                         share::SCN &trans_version,
                         bool &is_determined_state);
+
+  int infer_standby_trx_state(const share::SCN snapshot,
+                              const int64_t wait_participant_timeout_us,
+                              const bool filter_unreadable_prepare_trx,
+                              ObTxCommitData::TxDataState &tx_data_state,
+                              share::SCN &commit_version);
+  static bool is_undecied_standby_trx_state_info(const ObTxCommitData::TxDataState tx_data_state,
+                                                 const share::SCN commit_version);
+
   int handle_trans_ask_state(const share::SCN &snapshot, ObAskStateRespMsg &resp);
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
   int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
@@ -248,7 +259,6 @@ private:
                 "2pc_role",
                 get_2pc_role(),
                 K_(collected),
-                K_(ref),
                 K_(rec_log_ts),
                 K_(prev_rec_log_ts),
                 K_(lastest_snapshot),
@@ -295,13 +305,36 @@ private:
   int on_success_ops_(ObTxLogCb * log_cb);
   void check_and_register_timeout_task_();
 
-  // bool need_commit_barrier(); 
+
+  static int
+  infer_standby_participants_trx_state_(const ObTransID tx_id,
+                                        const ObLSID ls_id,
+                                        const share::SCN snapshot,
+                                        const bool filter_unreadable_prepare_trx,
+                                        const share::SCN ls_replica_readable_scn,
+                                        const ObTxState local_ctx_durable_state,
+                                        const share::SCN local_ctx_prepare_version,
+                                        const ObStateInfoArray &state_info_array,
+                                        ObTxCommitData::TxDataState &infer_standby_trx_state,
+                                        share::SCN &infer_standby_trx_commit_version);
+  int infer_local_standby_replica_trx_state_(const share::SCN snapshot,
+                                             const bool filter_unreadable_prepare_trx,
+                                             const share::SCN ls_replica_readable_scn,
+                                             ObTxState &ctx_durable_state,
+                                             share::SCN &ctx_prepare_version,
+                                             ObTxCommitData::TxDataState &local_replica_trx_state,
+                                             share::SCN &local_replica_trx_commit_version,
+                                             ObStateInfoArray &state_info_array);
+  int check_and_copy_participant_state_info_(const share::SCN snapshot,
+                                             ObStateInfoArray &cur_state_info_array);
 
 public:
   // ========================================================
   // newly added for 4.0
 
-  int retry_dup_trx_before_prepare(const share::SCN &before_prepare_version);
+  int retry_dup_trx_before_prepare(
+      const share::SCN &before_prepare_version,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   // int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
   int set_scheduler(const common::ObAddr &scheduler);
   const common::ObAddr &get_scheduler() const;
@@ -386,9 +419,9 @@ public:
 
   // leader switch related
   bool need_callback_scheduler_();
-  int switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb_array);
+  int switch_to_follower_forcedly(ObTxCommitCallback *&cb_list);
   int switch_to_leader(const share::SCN &start_working_ts);
-  int switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &cb_array);
+  int switch_to_follower_gracefully(ObTxCommitCallback *&cb_list);
   int resume_leader(const share::SCN &start_working_ts);
   int supplement_undo_actions_if_exist_();
 
@@ -403,6 +436,7 @@ public:
                                  const bool try_lock,
                                  const ObRegisterMdsFlag &register_flag);
 
+  int dup_table_tx_redo_sync(const bool need_retry_by_task);
   const share::SCN get_start_log_ts()
   {
     return ctx_tx_data_.get_start_log_ts();
@@ -480,7 +514,7 @@ private:
   int fix_redo_lsns_(const ObTxLogCb *log_cb);
 
   int search_unsubmitted_dup_table_redo_() __attribute__((__noinline__));
-  int dup_table_tx_redo_sync_();
+  int dup_table_tx_redo_sync_(const bool need_retry_by_task = true);
   int check_dup_trx_with_submitting_all_redo(ObTxLogBlock &log_block,
                                              memtable::ObRedoLogSubmitHelper &helper);
   bool is_dup_table_redo_sync_completed_();
@@ -492,7 +526,10 @@ private:
     exec_info_.is_dup_tx_ = true;
     exec_info_.trans_type_ = TransType::DIST_TRANS;
   }
-  int dup_table_before_preapre_(const share::SCN &before_prepare_version, const bool before_replay  = false);
+  int dup_table_before_preapre_(
+      const share::SCN &before_prepare_version,
+      const bool after_redo_completed,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   int clear_dup_table_redo_sync_result_();
 
   int do_local_tx_end_(TxEndAction tx_end_action);
@@ -526,6 +563,8 @@ private:
   int check_trans_type_for_replay_(const int32_t &trans_type, const share::SCN &commit_log_ts);
   void set_durable_state_(const ObTxState state)
   { exec_info_.state_ = state; }
+  ObTxState get_durable_state_() const
+  { return exec_info_.state_; }
 
   bool is_2pc_logging_() const
   { return sub_state_.is_state_log_submitting() || sub_state_.is_gts_waiting(); }
@@ -538,9 +577,9 @@ private:
                           const share::SCN &log_ts,
                           const bool for_replay,
                           const ObTxBufferNodeArray &notify_array,
+                          const bool willing_to_commit = true,
                           const bool is_force_kill = false);
-  int gen_final_mds_array_(ObTxBufferNodeArray &array, bool is_committing = true) const;
-  int gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const;
+  int gen_total_mds_array_(ObTxBufferNodeArray &mds_array);
   int deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
                            ObTxBufferNodeArray &incremental_array,
                            bool need_replace = false);
@@ -739,11 +778,12 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn);
+  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ to_scn);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
+  int handle_tx_keepalive_response(const int64_t status);
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
@@ -805,7 +845,6 @@ private:
   TransModulePageAllocator reserve_allocator_;
   // ========================================================
   // newly added for 4.0
-  share::ObLSID ls_id_;
   // persistent state
   ObTxExecInfo exec_info_;
   ObCtxTxData ctx_tx_data_;

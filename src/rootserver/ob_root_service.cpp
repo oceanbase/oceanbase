@@ -113,6 +113,9 @@
 
 #include "parallel_ddl/ob_create_table_helper.h" // ObCreateTableHelper
 #include "parallel_ddl/ob_create_view_helper.h"  // ObCreateViewHelper
+#include "parallel_ddl/ob_set_comment_helper.h" //ObCommentHelper
+#include "parallel_ddl/ob_create_index_helper.h" // ObCreateIndexHelper
+#include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 
 namespace oceanbase
 {
@@ -867,7 +870,7 @@ int ObRootService::init(ObServerConfig &config,
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
   } else if (OB_FAIL(unit_manager_.init(sql_proxy_, *config_, rpc_proxy_, *schema_service,
-                                        root_balancer_))) {
+                                        root_balancer_, *this))) {
     // init unit manager
     FLOG_WARN("init unit_manager failed", KR(ret));
   } else if (OB_FAIL(snapshot_manager_.init(self_addr_))) {
@@ -1951,6 +1954,10 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
   int ret = OB_SUCCESS;
   const obrpc::ObServerInfoList &server_list = arg.server_list_;
   BOOTSTRAP_LOG(INFO, "STEP_1.1:execute_bootstrap start to executor.");
+  DBA_STEP_RESET(bootstrap);
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "cluster bootstrap begin.");
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("root_service not inited", K(ret));
@@ -2031,6 +2038,17 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
   BOOTSTRAP_LOG(INFO, "execute_bootstrap finished", K(ret));
+  if (OB_FAIL(ret)) {
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_BOOTSTRAP_FAIL, ret,
+                        DBA_STEP_INC_INFO(bootstrap),
+                        "cluster bootstrap fail. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "cluster bootstrap success.");
+  }
+
   return ret;
 }
 
@@ -2646,13 +2664,10 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
     } else if (OB_FAIL(unit_manager_.alter_resource_pool(
             pool, arg.unit_, arg.delete_unit_id_array_))) {
       LOG_WARN("alter_resource_pool failed", K(pool), K(arg), "resource unit", arg.unit_, K(ret));
-      int mysql_error = -common::ob_mysql_errno(ret);
-      if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          if (OB_CANCELED != tmp_ret) {
-            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
-          }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {//ensure submit task all case
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), K(tmp_ret));
         }
       }
     }
@@ -4228,6 +4243,33 @@ int ObRootService::recover_restore_table_ddl(const obrpc::ObRecoverRestoreTableD
   return ret;
 }
 
+int ObRootService::set_comment(const obrpc::ObSetCommentArg &arg, obrpc::ObParallelDDLRes &res)
+{
+  LOG_TRACE("receive set comment arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("fail to pre check parallel ddl", KR(ret), K(tenant_id));
+  } else {
+    ObSetCommentHelper comment_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(comment_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init comment helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(comment_helper.execute())) {
+      LOG_WARN("fail to execute comment", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish set comment", KR(ret), K(arg), K(cost));
+  return ret;
+}
+
 int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res)
 {
   LOG_DEBUG("receive alter table arg", K(arg));
@@ -4373,6 +4415,43 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
                         "table_id", table_id_buffer,
                         "schema_version", res.schema_version_);
   LOG_INFO("finish create index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::parallel_create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res)
+{
+  LOG_TRACE("receive parallel create index arg", K(arg));
+  int ret = OB_SUCCESS;
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else {
+    ObCreateIndexHelper create_index_helper(schema_service_, tenant_id, ddl_service_, arg, res);
+    if (OB_FAIL(create_index_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create index helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_index_helper.execute())) {
+      LOG_WARN("fail to execute create index table", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, index_table_id:%ld",
+            arg.data_table_id_, arg.index_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel create index",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_TRACE("finish parallel create index", KR(ret), K(arg), K(cost), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -5039,6 +5118,32 @@ int ObRootService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
   return ret;
 }
 
+int ObRootService::parallel_update_index_status(const obrpc::ObUpdateIndexStatusArg &arg, obrpc::ObParallelDDLRes &res)
+{
+  LOG_TRACE("receive update index status arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid() || OB_INVALID_ID == arg.data_table_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else {
+    ObUpdateIndexStatusHelper update_index_status_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(update_index_status_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create table helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(update_index_status_helper.execute())) {
+      LOG_WARN("fail to execute update index status helper", KR(ret));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish update index status", KR(ret), K(arg), K(cost));
+  return ret;
+}
 int ObRootService::init_debug_database()
 {
   const schema_create_func *creator_ptr_array[] = {
@@ -5404,29 +5509,7 @@ int ObRootService::check_parallel_ddl_conflict(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObDDLArg &arg)
 {
-  int ret = OB_SUCCESS;
-  int64_t schema_version = OB_INVALID_VERSION;
-
-  if (arg.is_need_check_based_schema_objects()) {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.based_schema_object_infos_.count()); ++i) {
-      const ObBasedSchemaObjectInfo &info = arg.based_schema_object_infos_.at(i);
-      if (OB_FAIL(schema_guard.get_schema_version(
-          info.schema_type_,
-          info.schema_tenant_id_ == OB_INVALID_TENANT_ID ? arg.exec_tenant_id_: info.schema_tenant_id_,
-          info.schema_id_,
-          schema_version))) {
-        LOG_WARN("failed to get_schema_version", K(ret), K(arg.exec_tenant_id_), K(info));
-      } else if (OB_INVALID_VERSION == schema_version) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is OB_INVALID_VERSION", K(ret), K(info));
-      } else if (schema_version != info.schema_version_) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is not equal to info.schema_version_", K(ret), K(schema_version), K(info));
-      }
-    }
-  }
-
-  return ret;
+  return ddl_service_.check_parallel_ddl_conflict(schema_guard, arg);
 }
 
 int ObRootService::init_sequence_id()
@@ -5808,7 +5891,17 @@ int ObRootService::grant(const ObGrantArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    if (OB_FAIL(ddl_service_.grant(arg))) {
+    lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+    if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, compat_mode))) {
+      LOG_WARN("failed to get compat mode", K(ret), K(arg.tenant_id_));
+    } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+      //do nothing
+    } else if (arg.column_names_priv_.count() != 0
+               && OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(arg.tenant_id_))) {
+      LOG_WARN("grant or revoke column priv is not suppported", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ddl_service_.grant(arg))) {
       LOG_WARN("Grant user failed", K(arg), K(ret));
     }
   }
@@ -5964,13 +6057,16 @@ int ObRootService::revoke_database(const ObRevokeDBArg &arg)
 int ObRootService::revoke_table(const ObRevokeTableArg &arg)
 {
   int ret = OB_SUCCESS;
+  lib::Worker::CompatMode mode;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else {
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, mode))) {
+    LOG_WARN("fail to get tenant mode", K(ret));
+  } else if (lib::Worker::CompatMode::ORACLE == mode) {
     ObTablePrivSortKey table_priv_key(arg.tenant_id_, arg.user_id_, arg.db_, arg.table_);
     ObObjPrivSortKey obj_priv_key(arg.tenant_id_,
                                   arg.obj_id_,
@@ -5978,11 +6074,22 @@ int ObRootService::revoke_table(const ObRevokeTableArg &arg)
                                   OBJ_LEVEL_FOR_TAB_PRIV,
                                   arg.grantor_id_,
                                   arg.user_id_);
-    OZ (ddl_service_.revoke_table(table_priv_key,
+    OZ (ddl_service_.revoke_table(arg,
+                                  table_priv_key,
                                   arg.priv_set_,
                                   obj_priv_key,
                                   arg.obj_priv_array_,
                                   arg.revoke_all_ora_));
+  } else if (lib::Worker::CompatMode::MYSQL == mode) {
+    if (arg.column_names_priv_.count() != 0
+        && OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(arg.tenant_id_))) {
+      LOG_WARN("grant or revoke column priv is not suppported", KR(ret));
+    } else if (OB_FAIL(ddl_service_.revoke_table_and_column_mysql(arg))) {
+      LOG_WARN("revoke table and col failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected feature action", K(ret));
   }
   return ret;
 }
@@ -6047,9 +6154,9 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     const ObDatabaseSchema *db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
-    } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
+    } else if (database_name == OB_MOCK_DEFAULT_DATABASE_NAME) {
       // if not specify database, set default database name and database id;
-      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
+      outline_info.set_database_id(OB_MOCK_DEFAULT_DATABASE_ID);
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -6068,7 +6175,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     bool is_update = false;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.check_outline_exist(outline_info, is_or_replace, is_update))) {
-        LOG_WARN("failed to check_outline_exist", K(outline_info), K(is_or_replace), K(is_update), K(ret));
+        LOG_WARN("failed to check_outline_exist", K(outline_info), K(ret));
       }
     }
 
@@ -6622,8 +6729,9 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
                                               udt_name, exist))) {
           LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
       } else if (!exist && exist_valid_udt) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("valid udt can not be found any more", K(ret), K(udt_name));
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("valid udt at resolve stage can not be found any more at rootservice stage, "
+                 "could be dropped by another parallel ddl", K(ret), K(udt_name));
       } else if (exist) {
         if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
                                               db_schema->get_database_id(),
@@ -10274,11 +10382,14 @@ void ObRootService::update_fail_count(int ret)
   if (count > OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT
       && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     LOG_ERROR("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_ROOTSERVICE_START_FAIL, ret,
+                        "rootservice start()/do_restart() has failed ", count, " times. "
+                        "you may find solutions in previous error logs or seek help from official technicians.");
   } else {
     LOG_WARN("rs_monitor_check : fail to start root service", KR(ret), K(count));
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
+                 KR(ret), "fail_cnt", count);
   }
-  LOG_DBA_WARN(OB_ERR_ROOTSERVICE_START, "msg", "rootservice start()/do_restart() has failure",
-               KR(ret), "fail_cnt", count);
 }
 
 int ObRootService::send_physical_restore_result(const obrpc::ObPhysicalRestoreResult &res)
@@ -10786,7 +10897,10 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
 {
   int ret = OB_SUCCESS;
   ObRootKey root_key;
-  if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(arg.tenant_id_, root_key))) {
@@ -10794,19 +10908,18 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
   } else if (obrpc::RootKeyType::INVALID != root_key.key_type_) {
     result.key_type_ = root_key.key_type_;
     result.root_key_ = root_key.key_;
-  } else if (OB_FAIL(get_root_key_from_obs(arg, result))) {
+  } else if (OB_FAIL(get_root_key_from_obs_(arg, result))) {
     LOG_WARN("failed to get root key from obs", K(ret));
   }
   return ret;
 }
 
-int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
-                                         obrpc::ObRootKeyResult &result)
+int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
+                                          obrpc::ObRootKeyResult &result)
 {
   int ret = OB_SUCCESS;
   ObZone empty_zone;
   ObArray<ObAddr> active_server_list;
-  ObArray<ObAddr> inactive_server_list;
   const ObSimpleTenantSchema *simple_tenant = NULL;
   ObSchemaGetterGuard guard;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -10822,12 +10935,11 @@ int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
     enable_default = true;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
-                                                      inactive_server_list))) {
-    LOG_WARN("get alive servers failed", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, active_server_list))) {
+    LOG_WARN("get alive servers failed", KR(ret));
   } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
-                                                   enable_default))) {
-    LOG_WARN("failed to notify root key");
+                                                   enable_default, true/*skip_call_rs*/))) {
+    LOG_WARN("failed to notify root key", KR(ret));
   }
   return ret;
 }

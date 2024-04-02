@@ -37,7 +37,6 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     session_info_(nullptr),
     exec_ctx_(nullptr),
     task_scheduler_(nullptr),
-    next_trans_idx_(0),
     next_batch_id_(0),
     table_ctx_(nullptr),
     client_status_(ObTableLoadClientStatus::MAX_STATUS),
@@ -46,6 +45,8 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  column_names_.set_tenant_id(MTL_ID());
+  column_idxs_.set_tenant_id(MTL_ID());
   free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
 }
 
@@ -157,7 +158,8 @@ int ObTableLoadClientTask::create_session_info(uint64_t user_id, uint64_t databa
   } else if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info, free_session_ctx))) {
     LOG_WARN("create session id failed", KR(ret));
   } else {
-    common::ObArenaAllocator allocator;
+    ObArenaAllocator allocator("TLD_Tmp");
+    allocator.set_tenant_id(MTL_ID());
     ObStringBuffer buffer(&allocator);
     buffer.append("DIRECT LOAD_");
     buffer.append(table_schema->get_table_name());
@@ -259,28 +261,6 @@ int ObTableLoadClientTask::get_table_ctx(ObTableLoadTableCtx *&table_ctx)
   } else {
     table_ctx = table_ctx_;
     table_ctx->inc_ref_count();
-  }
-  return ret;
-}
-
-int ObTableLoadClientTask::add_trans_id(const ObTableLoadTransId &trans_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(trans_ids_.push_back(trans_id))) {
-    LOG_WARN("fail to push back trans id", KR(ret), K(trans_id));
-  }
-  return ret;
-}
-
-int ObTableLoadClientTask::get_next_trans_id(ObTableLoadTransId &trans_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(trans_ids_.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty trans id", KR(ret));
-  } else {
-    const int64_t trans_idx = ATOMIC_FAA(&next_trans_idx_, 1) % trans_ids_.count();
-    trans_id = trans_ids_.at(trans_idx);
   }
   return ret;
 }

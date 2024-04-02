@@ -39,7 +39,7 @@ public:
     random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_ctx_(nullptr),
     min_size_(0), row_count_(0), input_size_(0), bucket_size_(0),
     chunk_size_(0), cache_size_(-1), one_pass_size_(0), expect_size_(OB_INVALID_ID),
-    global_bound_size_(INT64_MAX), dop_(-1), plan_id_(-1), exec_id_(-1), sql_id_(),
+    global_bound_size_(INT64_MAX), dop_(-1), plan_id_(-1), exec_id_(-1), sql_id_(), db_id_(-1),
     session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
@@ -145,6 +145,7 @@ public:
   uint64_t get_exec_id();
   const char* get_sql_id();
   uint64_t get_session_id();
+  uint64_t get_db_id();
 
   OB_INLINE bool need_profiled()
   {
@@ -180,6 +181,7 @@ private:
   int64_t plan_id_;
   int64_t exec_id_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t db_id_;
   int64_t session_id_;
   // 取 min(cache_size, global_bound_size)
   // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size
@@ -218,14 +220,14 @@ public:
     active_avg_time_(0), max_temp_size_(0), last_temp_size_(0), is_auto_policy_(false)
   {}
 public:
-  // key: (sql_id, plan_id, operator_id) 可以确认相同执行的统计
+  // key: (sql_id, plan_id, operator_id, database_id) 可以确认相同执行的统计
   struct WorkareaKey {
-    WorkareaKey(uint64_t plan_id, uint64_t operator_id) :
-      plan_id_(plan_id), operator_id_(operator_id)
+    WorkareaKey(uint64_t plan_id, uint64_t operator_id, uint64_t database_id) :
+      plan_id_(plan_id), operator_id_(operator_id), database_id_(database_id)
     {
       sql_id_[0] = '\0';
     }
-    WorkareaKey() : plan_id_(UINT64_MAX), operator_id_(UINT64_MAX)
+    WorkareaKey() : plan_id_(UINT64_MAX), operator_id_(UINT64_MAX), database_id_(UINT64_MAX)
     {
       sql_id_[0] = '\0';
     }
@@ -239,12 +241,14 @@ public:
     }
     void set_plan_id(uint64_t plan_id) { plan_id_ = plan_id; }
     void set_operator_id(uint64_t op_id) { operator_id_ = op_id; }
+    void set_database_id(uint64_t database_id) { database_id_ = database_id; }
 
     void assign(const WorkareaKey &other)
     {
       strncpy(sql_id_, other.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
       plan_id_ = other.plan_id_;
       operator_id_ = other.operator_id_;
+      database_id_ = other.database_id_;
     }
     WorkareaKey &operator=(const WorkareaKey &other)
     {
@@ -254,6 +258,7 @@ public:
     int64_t hash() const
     {
       uint64_t val = common::murmurhash(&plan_id_, sizeof(plan_id_), 0);
+      val = common::murmurhash(&database_id_, sizeof(database_id_), val);
       return common::murmurhash(&operator_id_, sizeof(operator_id_), val);
     }
     int hash(uint64_t &hash_val) const
@@ -265,13 +270,15 @@ public:
     bool operator==(const WorkareaKey &other) const
     {
       return plan_id_ == other.plan_id_ && operator_id_ == other.operator_id_
-          && 0 == MEMCMP(sql_id_, other.sql_id_, strlen(sql_id_));
+          && 0 == MEMCMP(sql_id_, other.sql_id_, strlen(sql_id_))
+          && database_id_ == other.database_id_;
     }
-    TO_STRING_KV(K_(sql_id), K_(plan_id), K_(operator_id));
+    TO_STRING_KV(K_(sql_id), K_(plan_id), K_(operator_id), K_(database_id));
   public:
     char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];   // sql id
     uint64_t plan_id_;                                // plan id
     uint64_t operator_id_;                            // operator id
+    uint64_t database_id_;                            // database id
   }; // end WorkareaKey
 
   OB_INLINE void set_seqno(int64_t seqno) { seqno_ = seqno; }
@@ -280,6 +287,7 @@ public:
   OB_INLINE const char* get_sql_id() const { return workarea_key_.sql_id_; }
   OB_INLINE uint64_t get_plan_id() const { return workarea_key_.plan_id_; }
   OB_INLINE uint64_t get_operator_id() const { return workarea_key_.operator_id_; }
+  OB_INLINE uint64_t get_database_id() const { return workarea_key_.database_id_; }
   OB_INLINE ObPhyOperatorType get_op_type() const { return op_type_; }
   OB_INLINE int64_t get_est_cache_size() const { return est_cache_size_; }
   OB_INLINE int64_t get_est_one_pass_size() const { return est_one_pass_size_; }
@@ -330,7 +338,8 @@ class ObSqlWorkareaProfileInfo
 {
 public:
   ObSqlWorkareaProfileInfo() :
-    profile_(ObSqlWorkAreaType::MAX_TYPE), plan_id_(0), sql_exec_id_(0), session_id_(0)
+    profile_(ObSqlWorkAreaType::MAX_TYPE), plan_id_(0),
+    sql_exec_id_(0), session_id_(0), database_id_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -342,6 +351,7 @@ public:
     plan_id_ = other.plan_id_;
     sql_exec_id_ = other.sql_exec_id_;
     session_id_ = other.session_id_;
+    database_id_ = other.database_id_;
   }
 
   ObSqlWorkareaProfileInfo &operator=(const ObSqlWorkareaProfileInfo &other)
@@ -365,6 +375,7 @@ public:
   uint64_t plan_id_;
   uint64_t sql_exec_id_;
   uint64_t session_id_;
+  uint64_t database_id_;
 };
 
 class ObSqlWorkAreaIntervalStat
@@ -580,10 +591,11 @@ public:
     mem_target_(0), max_workarea_size_(0), workarea_hold_size_(0), max_auto_workarea_size_(0),
     max_tenant_memory_size_(0),
     manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0),
-    lock_()
+    lock_(), global_bound_update_lock_()
   {}
   ~ObTenantSqlMemoryManager() {}
 public:
+  static int mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static int mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static void mtl_destroy(ObTenantSqlMemoryManager *&sql_mem_mgr);
 
@@ -632,11 +644,12 @@ private:
   OB_INLINE bool need_manual_by_drift();
 
   OB_INLINE void increase(int64_t size)
-  { (ATOMIC_AAF(&drift_size_, size)); ATOMIC_INC(&profile_cnt_); }
+  { (ATOMIC_AAF(&drift_size_, size)); }
   OB_INLINE void decrease(int64_t size)
-  { (ATOMIC_SAF(&drift_size_, size)); ATOMIC_DEC(&profile_cnt_); }
+  { (ATOMIC_SAF(&drift_size_, size)); }
   OB_INLINE int64_t get_drift_size() { return (ATOMIC_LOAD(&drift_size_)); }
-
+  OB_INLINE void increase_profile_cnt() { ATOMIC_INC(&profile_cnt_); }
+  OB_INLINE void decrease_profile_cnt() { ATOMIC_DEC(&profile_cnt_); }
   void reset();
   int try_push_profiles_work_area_size(int64_t global_bound_size);
   int calc_work_area_size_by_profile(int64_t global_bound_size, ObSqlWorkAreaProfile &profile);
@@ -702,6 +715,7 @@ private:
   static const int64_t DRIFT_CNT_PERCENT = 10;
 
   static const int64_t HASH_CNT = 256;
+  static const int64_t MIN_PROFILE_CHANEG_CNT = 8;
 
   ObTenantSqlMemoryCallback sql_mem_callback_;
   common::ObFIFOAllocator allocator_;
@@ -730,6 +744,7 @@ private:
   int64_t wa_end_;
   int64_t wa_cnt_;
   ObLatch lock_;
+  ObLatch global_bound_update_lock_;
   hash::ObHashMap<ObSqlWorkAreaStat::WorkareaKey,
       ObSqlWorkAreaStat*, hash::NoPthreadDefendMode> wa_ht_;
   ObSEArray<ObSqlWorkAreaStat, MAX_WORKAREA_STAT_CNT> workarea_stats_;
@@ -753,14 +768,16 @@ OB_INLINE bool ObTenantSqlMemoryManager::need_manual_calc_bound()
     if (need_manual_by_drift()) {
       manual_calc_bound = true;
     } else {
-      int64_t delta_cnt = pre_profile_cnt_ - profile_cnt_;
-      if (delta_cnt > 0) {
+      int64_t delta_cnt = std::abs(pre_profile_cnt_ - profile_cnt_);
+      if (delta_cnt >= MIN_PROFILE_CHANEG_CNT) {
         manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < delta_cnt;
-      } else {
-        manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < -delta_cnt;
       }
     }
   }
+  SQL_ENG_LOG(DEBUG, "print need calc bound", K(manual_calc_bound),
+             K(global_bound_size_),
+             K(drift_size_), K(mem_target_), K(profile_cnt_),
+             K(pre_profile_cnt_), K(profile_cnt_));
   return manual_calc_bound;
 }
 

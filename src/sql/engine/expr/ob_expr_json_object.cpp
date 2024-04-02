@@ -193,7 +193,9 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonObject j_obj(&temp_allocator);
   ObIJsonBase *j_base = &j_obj;
 
@@ -205,7 +207,7 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   for (int32 i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i += 2) {
     ObExpr *arg = expr.args_[i];
     ObDatum *json_datum = NULL;  
-    if (OB_FAIL(arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(arg, ctx, json_datum))) {
       LOG_WARN("failed: eval json args datum failed", K(ret));
     } else if (json_datum->is_null()) {
       ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
@@ -217,6 +219,9 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       bool is_null = false;
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, key, is_null))) {
         LOG_WARN("fail to get real data.", K(ret), K(key));
+      } else if (OB_FALSE_IT(temp_allocator.add_baseline_size(key.length()))) {
+      } else if (OB_FAIL(temp_allocator.add_baseline_size(expr.args_[i+1], ctx))) {
+        LOG_WARN("failed to add baseline size.", K(ret), K(i+1));
       } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
@@ -247,7 +252,9 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBuffer string_buffer(&temp_allocator);
   ObObjType val_type;
   ObCollationType value_cs_type;
@@ -270,7 +277,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
   int64_t opt_res_type = 0;
   ObDatum *datum_res_type = nullptr;
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(OB_FAIL(expr.args_[expr.arg_cnt_ - 3]->eval(ctx, datum_res_type)))) {
+  } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[expr.arg_cnt_ - 3], ctx, datum_res_type))) {
       LOG_WARN("eval json arg failed", K(ret));
   } else {
     opt_res_type = datum_res_type->get_int();
@@ -310,7 +317,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
     ObObjType value_data_type = arg_value->datum_meta_.type_;
 
     ObDatum *datum_key = nullptr;
-    if (OB_FAIL(arg_key->eval(ctx, datum_key))) {
+    if (OB_FAIL(temp_allocator.eval_arg(arg_key, ctx, datum_key))) {
       LOG_WARN("failed: eval json args datum failed", K(ret));
     } else if (datum_key->is_null() || key_data_type == ObNullType) {
       ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
@@ -330,6 +337,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       ObIJsonBase *j_val = nullptr;
       ObString key = datum_key->get_string();
       bool is_format_json = format_type > 0;
+      temp_allocator.add_baseline_size(key.length());
 
       if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
                     arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
@@ -363,7 +371,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
 
       if (OB_FAIL(string_buffer.reserve(j_obj.get_serialize_size()))) {
         LOG_WARN("fail to reserve string.", K(ret), K(j_obj.get_serialize_size()));
-      } else if (OB_FAIL(j_base->print(string_buffer, false, false))) {
+      } else if (OB_FAIL(j_base->print(string_buffer, false, 0, false))) {
         LOG_WARN("fail to transform to string.", K(ret), K(string_buffer.length()));
       } else {
         ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
@@ -434,22 +442,6 @@ int ObExprJsonObject::set_result(ObObjType dst_type, ObString str_res, common::O
   } else {
     ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
     LOG_USER_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING);
-  }
-  return ret;
-}
-
-int ObExprJsonObject::get_ora_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
-                          uint16_t index, ObDatum*& j_datum,
-                          bool &is_null)
-{
-  INIT_SUCC(ret);
-  ObExpr *json_arg = expr.args_[index];
-  j_datum = NULL;
-  ObObjType val_type = json_arg->datum_meta_.type_;
-  if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, j_datum)))) {
-    LOG_WARN("eval json arg failed", K(ret), K(val_type));
-  } else if (j_datum->is_null()) {
-    is_null = true;
   }
   return ret;
 }

@@ -62,7 +62,7 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     ret = COVER_SUCC(tmp_ret);
   }
 
-  op_result.set_errno(ret);
+  op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
   spec->destroy_executor(executor);
   return ret;
@@ -86,21 +86,39 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     bool use_insert_expr = false;
     if (TABLE_API_EXEC_INSERT_UP == spec.get_type()) {
       const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
-      ins_exprs = &ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
-      upd_exprs = &ins_up_spec.get_ctdef().upd_ctdef_.new_row_;
-      use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+      if (ins_up_spec.get_ctdefs().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insup ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(ins_up_spec.get_ctdefs().at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insup ctdef is NULL", K(ret));
+      } else {
+        ins_exprs = &ins_up_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
+        upd_exprs = &ins_up_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
+        use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+      }
+
     } else {
       ObTableApiTTLExecutor &ttl_executor = static_cast<ObTableApiTTLExecutor&>(executor);
       const ObTableApiTTLSpec &ttl_spec = static_cast<const ObTableApiTTLSpec&>(spec);
-      ins_exprs = &ttl_spec.get_ctdef().ins_ctdef_.new_row_;
-      upd_exprs = &ttl_spec.get_ctdef().upd_ctdef_.new_row_;
-      use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+      if (ttl_spec.get_ctdefs().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ttl ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(ttl_spec.get_ctdefs().at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ttl ctdef is NULL", K(ret));
+      } else {
+        ins_exprs = &ttl_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
+        upd_exprs = &ttl_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
+        use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+      }
     }
 
     ObIArray<ObTableAssignment> &assigns = tb_ctx.get_assignments();
     ObIAllocator &allocator = tb_ctx.get_allocator();
     ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * assigns.count()));
-    if (OB_ISNULL(obj_array)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret), K(assigns.count()));
     } else if (OB_ISNULL(ins_exprs)) {
@@ -201,6 +219,78 @@ int ObTableOpWrapper::process_get_with_spec(ObTableCtx &tb_ctx,
   return ret;
 }
 
+int ObTableOpWrapper::get_insert_spec(ObTableCtx &tb_ctx,
+                                      ObTableApiCacheGuard &cache_guard,
+                                      ObTableApiSpec *&spec)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create insert spec", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_TTL>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create ttl spec", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::get_insert_up_spec(ObTableCtx &tb_ctx,
+                                         ObTableApiCacheGuard &cache_guard,
+                                         ObTableApiSpec *&spec)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT_UP>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create insert up spec", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_TTL>(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get or create ttl spec", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process insert operation", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_TTL>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process ttl insert operation", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableOpWrapper::process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!tb_ctx.is_ttl_table()) {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process insert up operation", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_TTL>(tb_ctx, op_result))) {
+      LOG_WARN("fail to process ttl insert up operation", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
                                               ObNewRow *row,
                                               const ObTableSchema *table_schema,
@@ -208,12 +298,24 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
                                               ObITableEntity *entity)
 {
   int ret = OB_SUCCESS;
-  const int64_t N = cnames.count();
+  int64_t N = cnames.count();
   const ObColumnSchemaV2 *column_schema = NULL;
+  ObSEArray<ObString, 32> all_columns;
+  const ObIArray<ObString>* arr_col = &cnames;
+  if (N == 0) {
+    if (OB_FAIL(expand_all_columns(table_schema, all_columns))) {
+      LOG_WARN("fail to expand all column to cnames", K(ret));
+    } else {
+      N = all_columns.count();
+      arr_col = &all_columns;
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const ObString &name = cnames.at(i);
+    const ObString &name = arr_col->at(i);
     if (OB_ISNULL(column_schema = table_schema->get_column_schema(name))) {
-      ret = OB_ERR_COLUMN_NOT_FOUND;
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      const ObString &table = table_schema->get_table_name_str();
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, name.length(), name.ptr(), table.length(), table.ptr());
       LOG_WARN("column not exist", K(ret), K(name));
     } else {
       int64_t column_idx = table_schema->get_column_idx(column_schema->get_column_id());
@@ -225,6 +327,25 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
       }
     }
   } // end for
+  return ret;
+}
+
+int ObTableApiUtil::expand_all_columns(const ObTableSchema *table_schema,
+                                       ObIArray<ObString> &cnames)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+  ObTableSchema::const_column_iterator end = table_schema->column_end();
+  for (; OB_SUCC(ret) && iter != end; iter++) {
+    column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is NULL", K(ret));
+    } else if (OB_FAIL(cnames.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("fail to push back column name", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -310,7 +431,7 @@ int ObHTableDeleteExecutor::build_range(ObTableQuery &query)
   range.border_flag_.set_inclusive_start();
   range.border_flag_.set_inclusive_end();
 
-  if (OB_FAIL(key_ranges.push_back(range))) {
+  if (OB_SUCC(ret) && OB_FAIL(key_ranges.push_back(range))) {
     LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
   }
 

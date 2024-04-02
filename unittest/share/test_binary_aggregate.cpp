@@ -488,13 +488,14 @@ TEST_F(TestBinaryAgg, json_agg)
   {
     cout << "TEST JSON CASE: 1" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT));
+    ObStringBuffer value(&allocator);
     int json_array[2] = {0, 1};
     for (int i = 0; i < 2; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -514,12 +515,13 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 2" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT));
     int json_array[3] = {1, 2, 0};
+     ObStringBuffer value(&allocator);
     for (int i = 0; i < 3; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -539,12 +541,13 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 3" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT));
     int json_array[5] = {0, 1, 2, 3, 4};
+     ObStringBuffer value(&allocator);
     for (int i = 0; i < 5; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -564,12 +567,13 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 4" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT));
     int json_array[3] = {3, 5, 4};
+    ObStringBuffer value(&allocator);
     for (int i = 0; i < 3; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -589,12 +593,13 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 5" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_OBJECT));
     int json_array[5] = {0, 1, 4, 5, 6};
+     ObStringBuffer value(&allocator);
     for (int i = 0; i < 5; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(json_key_array[json_array[i]], value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -615,13 +620,14 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 6" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY));
     int json_array[8] = {0, 0, 0, 6};
+    ObStringBuffer value(&allocator);
     ObString input_null;
     for (int i = 0; i < 4; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(input_null, bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(input_null, value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);
@@ -641,13 +647,14 @@ TEST_F(TestBinaryAgg, json_agg)
     cout << "TEST JSON CASE: 7" << endl;
     ObBinAggSerializer bin_agg(&allocator, ObBinAggType::AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY));
     int json_array[8] = {0, 0, 0, 0, 6};
+    ObStringBuffer value(&allocator);
     ObString input_null;
     for (int i = 0; i < 5; i++) {
       cout << "Add JSON: " << i << endl;
       ObIJsonBase *input_base = NULL;
       ASSERT_EQ(ObJsonBaseFactory::get_json_base(&allocator, json_text_array[json_array[i]], ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, input_base), OB_SUCCESS);
       ObJsonBin *bin = static_cast<ObJsonBin*>(input_base);
-      ASSERT_EQ(bin_agg.append_key_and_value(input_null, bin), OB_SUCCESS);
+      ASSERT_EQ(bin_agg.append_key_and_value(input_null, value, bin), OB_SUCCESS);
     }
 
     ASSERT_EQ(bin_agg.serialize(), OB_SUCCESS);

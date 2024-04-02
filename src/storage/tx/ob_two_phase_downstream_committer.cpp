@@ -341,7 +341,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_() {
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive prepare request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive prepare request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -426,7 +426,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive commit request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive commit request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -525,7 +525,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive 2pc abort request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive 2pc abort request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -659,7 +659,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_clear_request_impl_()
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "The root should not recive clear request", K(ret), KPC(this));
+      TRANS_LOG(WARN, "The root should not receive clear request", K(ret), KPC(this));
       break;
     }
     case Ob2PCRole::INTERNAL: {
@@ -1192,13 +1192,8 @@ int ObTxCycleTwoPhaseCommitter::decide_2pc_log_type_(bool &need_submit,
       break;
     }
     case ObTxState::REDO_COMPLETE: {
-      if (is_sub2pc()) {
-        need_submit = true;
-        log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO;
-      } else {
-        ret = OB_TRANS_INVALID_STATE;
-        TRANS_LOG(ERROR, "invalid 2pc state", KR(ret), KPC(this));
-      }
+      need_submit = true;
+      log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO;
       break;
     }
     case ObTxState::PREPARE: {

@@ -27,26 +27,6 @@ namespace sql
 
 typedef std::pair<uint64_t, uint64_t> JoinTableIdPair;
 
-class ObTransformPreProcess: public ObTransformRule
-{
-public:
-  explicit ObTransformPreProcess(ObTransformerCtx *ctx)
-     : ObTransformRule(ctx, TransMethod::POST_ORDER) { }
-  virtual ~ObTransformPreProcess() {}
-
-  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                                 ObDMLStmt *&stmt,
-                                 bool &trans_happened) override;
-
-  static int transform_expr(ObRawExprFactory &expr_factory,
-                            const ObSQLSessionInfo &session,
-                            ObRawExpr *&expr,
-                            bool &trans_happened);
-private:
-  virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                             const int64_t current_level,
-                             const ObDMLStmt &stmt,
-                             bool &need_trans) override;
 // used for transform in expr to or exprs
 struct DistinctObjMeta
 {
@@ -70,9 +50,29 @@ struct DistinctObjMeta
     bool cs_level_equal = lib::is_oracle_mode() ? true : (coll_level_ == other.coll_level_);
     return obj_type_ == other.obj_type_ && coll_type_ == other.coll_type_ && cs_level_equal;
   }
-  TO_STRING_KV(K_(obj_type), K_(coll_type));
+  TO_STRING_KV(K_(obj_type), K_(coll_type), K_(coll_level));
 };
 
+class ObTransformPreProcess: public ObTransformRule
+{
+public:
+  explicit ObTransformPreProcess(ObTransformerCtx *ctx)
+     : ObTransformRule(ctx, TransMethod::POST_ORDER) { }
+  virtual ~ObTransformPreProcess() {}
+
+  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObDMLStmt *&stmt,
+                                 bool &trans_happened) override;
+
+  static int transform_expr(ObRawExprFactory &expr_factory,
+                            const ObSQLSessionInfo &session,
+                            ObRawExpr *&expr,
+                            bool &trans_happened);
+private:
+  virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                             const int64_t current_level,
+                             const ObDMLStmt &stmt,
+                             bool &need_trans) override;
   /*
    * following functions are used to add all rowkey columns
    */
@@ -446,8 +446,9 @@ struct DistinctObjMeta
   int transformer_aggr_expr(ObDMLStmt *stmt, bool &trans_happened);
   int transform_rownum_as_limit_offset(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                        ObDMLStmt *&stmt,
+                                       ObDMLStmt *&limit_stmt,
                                        bool &trans_happened);
-  int transform_common_rownum_as_limit(ObDMLStmt *&stmt, bool &trans_happened);
+  int transform_common_rownum_as_limit(ObDMLStmt *&stmt, ObDMLStmt *&limit_stmt, bool &trans_happened);
   int try_transform_common_rownum_as_limit_or_false(ObDMLStmt *stmt, ObRawExpr *&limit_expr, bool& is_valid);
   int transform_generated_rownum_as_limit(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                           ObDMLStmt *stmt,
@@ -619,6 +620,25 @@ struct DistinctObjMeta
   int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
   int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);
   int convert_join_preds_vector_to_scalar(JoinedTable &joined_table, bool &trans_happened);
+  int preserve_order_for_pagination(ObDMLStmt *stmt,
+                                    bool &trans_happened);
+  int check_stmt_need_preserve_order(ObDMLStmt *stmt,
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                     bool &is_valid);
+
+  int check_view_need_preserve_order(ObSelectStmt* stmt,
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                     bool &need_preserve);
+
+  int check_set_stmt_need_preserve_order(ObSelectStmt* stmt,
+                                         ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                         bool &need_preserve);
+
+  int add_order_by_for_stmt(ObSelectStmt* stmt, bool &trans_happened);
+
+  int get_rowkey_for_single_table(ObSelectStmt* stmt,
+                                  ObIArray<ObRawExpr*> &unique_keys,
+                                  bool &is_valid);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

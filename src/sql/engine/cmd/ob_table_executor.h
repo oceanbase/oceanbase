@@ -214,6 +214,18 @@ private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };
 
+class ObCommentExecutor
+{
+public:
+  ObCommentExecutor();
+  virtual ~ObCommentExecutor();
+  int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
+private:
+  // because of the lack of the assign in alter table schema and alter column schema, this function is implemented for
+  // assigning args needed for parallel comment.
+  int assign_alter_to_comment_(const obrpc::ObAlterTableArg &alter_table_arg, obrpc::ObSetCommentArg &set_comment_arg);
+};
+
 class ObDropTableStmt;
 class ObDropTableExecutor
 {
@@ -242,8 +254,6 @@ public:
   ObTruncateTableExecutor();
   virtual ~ObTruncateTableExecutor();
   int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
-private:
-  int check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate);
 
 };
 

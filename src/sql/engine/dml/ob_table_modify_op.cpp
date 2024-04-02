@@ -57,10 +57,8 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
       if (OB_SUCC(ret) && !new_row.empty()) {
         if (ACTION_CHECK_EXIST == fk_arg.ref_action_) {
           // insert or update.
-          bool is_foreign_key_cascade = false;
-          if (OB_FAIL(op.get_foreign_key_cascade(is_foreign_key_cascade))) {
-            LOG_WARN("failed to get foreign key cascade", K(ret), K(fk_arg), K(new_row));
-          } else if (is_foreign_key_cascade) {
+          bool is_foreign_key_cascade = ObSQLUtils::is_fk_nested_sql(&op.get_exec_ctx());
+          if (is_foreign_key_cascade) {
             // nested update can not check parent row.
             LOG_DEBUG("skip foreign_key_check_exist in nested session");
           } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false))) {
@@ -247,8 +245,6 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
         LOG_WARN("failed to begin nested session", K(ret), K(stmt_buf));
-      } else if (OB_FAIL(op.set_foreign_key_check_exist(true))) {
-        LOG_WARN("failed to set foreign key cascade", K(ret));
       } else {
         // must call end_nested_session() if begin_nested_session() success.
         bool is_zero = false;
@@ -312,13 +308,6 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
             if (OB_SUCCESS == ret) {
               ret = close_ret;
             }
-          }
-        }
-        int reset_ret = op.set_foreign_key_check_exist(false);
-        if (OB_SUCCESS != reset_ret) {
-          LOG_WARN("failed to reset foreign key cascade", K(reset_ret));
-          if (OB_SUCCESS == ret) {
-            ret = reset_ret;
           }
         }
         int end_ret = op.end_nested_session();
@@ -408,21 +397,8 @@ int ForeignKeyHandle::cascade(ObTableModifyOp &op,
     if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
       LOG_WARN("failed to begin nested session", K(ret));
     } else {
-      // must call end_nested_session() if begin_nested_session() success.
-      //
-      // skip modify_ctx.set_foreign_key_cascade when cascade update and self ref.
-      if (!(fk_arg.is_self_ref_ && !new_row.empty()) &&
-          OB_FAIL(op.set_foreign_key_cascade(true))) {
-        LOG_WARN("failed to set foreign key cascade", K(ret));
-      } else if (OB_FAIL(op.execute_write(stmt_buf))) {
+      if (OB_FAIL(op.execute_write(stmt_buf))) {
         LOG_WARN("failed to execute stmt", K(ret), K(stmt_buf));
-      }
-      int reset_ret = op.set_foreign_key_cascade(false);
-      if (OB_SUCCESS != reset_ret) {
-        LOG_WARN("failed to reset foreign key cascade", K(reset_ret));
-        if (OB_SUCCESS == ret) {
-          ret = reset_ret;
-        }
       }
       int end_ret = op.end_nested_session();
       if (OB_SUCCESS != end_ret) {
@@ -490,17 +466,8 @@ int ForeignKeyHandle::set_null(ObTableModifyOp &op,
     if (OB_FAIL(op.begin_nested_session(fk_arg.is_self_ref_))) {
       LOG_WARN("failed to begin nested session", K(ret));
     } else {
-      if (OB_FAIL(op.set_foreign_key_cascade(true))) {
-        LOG_WARN("failed to set foreign key cascade", K(ret));
-      } else if (OB_FAIL(op.execute_write(stmt_buf))) {
+      if (OB_FAIL(op.execute_write(stmt_buf))) {
         LOG_WARN("failed to execute stmt", K(ret), K(stmt_buf));
-      }
-      int reset_ret = op.set_foreign_key_cascade(false);
-      if (OB_SUCCESS != reset_ret) {
-        LOG_WARN("failed to reset foreign key cascade", K(reset_ret));
-        if (OB_SUCCESS == ret) {
-          ret = reset_ret;
-        }
       }
       int end_ret = op.end_nested_session();
       if (OB_SUCCESS != end_ret) {
@@ -718,20 +685,6 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
   GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), obj_print_params_.skip_escape_);
 }
 
-bool ObTableModifyOp::is_fk_root_session() {
-  bool ret = false;
-  if (OB_ISNULL(ctx_.get_parent_ctx())) {
-    if (this->need_foreign_key_checks()) {
-      ret = true;
-    }
-  } else {
-    if (!ctx_.get_parent_ctx()->get_das_ctx().is_fk_cascading_ && need_foreign_key_checks()) {
-      ret = true;
-    }
-  }
-  return ret;
-}
-
 int ObTableModifyOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -878,19 +831,6 @@ int ObTableModifyOp::inner_close()
     }
   }
   dml_modify_rows_.clear();
-  // Release the hash sets created at fk root ctx for delete distinct checks
-  if (get_exec_ctx().is_fk_root_ctx()) {
-    DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
-    DASDelCtxList::iterator iter = del_ctx_list.begin();
-    for (; iter != del_ctx_list.end(); iter++) {
-      DmlRowkeyDistCtx& del_ctx = *iter;
-      if (del_ctx.deleted_rows_ != nullptr) {
-        del_ctx.deleted_rows_->destroy();
-        del_ctx.deleted_rows_ = nullptr;
-      }
-    }
-    del_ctx_list.destroy();
-  }
   return ret;
 }
 
@@ -1085,43 +1025,6 @@ int ObTableModifyOp::end_nested_session()
   }
   return ret;
 }
-
-int ObTableModifyOp::set_foreign_key_cascade(bool is_cascade)
-{
-  int ret = OB_SUCCESS;
-  OV (OB_NOT_NULL(inner_conn_));
-  OZ (inner_conn_->set_foreign_key_cascade(is_cascade));
-  return ret;
-}
-
-int ObTableModifyOp::get_foreign_key_cascade(bool &is_cascade) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(inner_conn_)) {
-    OZ (inner_conn_->get_foreign_key_cascade(is_cascade));
-  } else {
-    //if inner connection is null, it means not need use inner sql, so set is_cascade false
-    is_cascade = false;
-  }
-  return ret;
-}
-
-int ObTableModifyOp::set_foreign_key_check_exist(bool is_check_exist)
-{
-  int ret = OB_SUCCESS;
-  OV (OB_NOT_NULL(inner_conn_));
-  OZ (inner_conn_->set_foreign_key_check_exist(is_check_exist));
-  return ret;
-}
-
-int ObTableModifyOp::get_foreign_key_check_exist(bool &is_check_exist) const
-{
-  int ret = OB_SUCCESS;
-  OV (OB_NOT_NULL(inner_conn_));
-  OZ (inner_conn_->get_foreign_key_check_exist(is_check_exist));
-  return ret;
-}
-
 int ObTableModifyOp::execute_write(const char *sql)
 {
   int ret = OB_SUCCESS;

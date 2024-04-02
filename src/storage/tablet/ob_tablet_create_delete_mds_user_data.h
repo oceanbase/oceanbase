@@ -68,16 +68,16 @@ public:
   TO_STRING_KV(K_(tablet_status), K_(transfer_scn),
       K_(transfer_ls_id), K_(data_type),
       K_(create_commit_scn), K_(create_commit_version),
-      K_(delete_commit_scn), K_(delete_commit_version), K_(transfer_out_commit_version));
+      K_(delete_commit_scn), K_(delete_commit_version),
+      K_(start_transfer_commit_version));
 private:
   void start_transfer_out_on_redo_(const share::SCN &redo_scn);
   void finish_transfer_in_on_redo_(const share::SCN &redo_scn);
   void create_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-  void start_transfer_in_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-
   void delete_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-  void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
+  void start_transfer_in_on_commit_(const share::SCN &commit_version);
   void start_transfer_out_on_commit_(const share::SCN &commit_version);
+  void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
 public:
   ObTabletStatus tablet_status_;
   share::SCN transfer_scn_;
@@ -89,7 +89,7 @@ public:
   int64_t create_commit_version_; // create tx commit trans version
   share::SCN delete_commit_scn_; // delete tx commit log scn
   int64_t delete_commit_version_; // delete tx commit trans version
-  int64_t transfer_out_commit_version_; //transfer out commit trans version
+  int64_t start_transfer_commit_version_; // start transfer commit trans version(transfer in/transfer out)
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const

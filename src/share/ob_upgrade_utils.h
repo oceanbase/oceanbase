@@ -173,7 +173,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 9;
+  static const int64_t DATA_VERSION_NUM = 14;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -224,6 +224,9 @@ private:
   int post_upgrade_for_dbms_scheduler();
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 3)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 4)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 5)
 
 class ObUpgradeFor4220Processor : public ObBaseUpgradeProcessor
 {
@@ -235,6 +238,8 @@ public:
 private:
   int post_upgrade_for_create_replication_role_in_oracle();
 };
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

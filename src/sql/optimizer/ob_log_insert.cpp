@@ -188,7 +188,7 @@ int ObLogInsert::compute_sharding_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (NULL != get_sharding()) {
-    is_partition_wise_ = true;
+    //do nothing
   } else if (is_multi_part_dml()) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (OB_FAIL(ObLogDelUpd::compute_sharding_info())) {
@@ -309,7 +309,7 @@ int ObLogInsert::inner_est_cost(double child_card, double &op_cost)
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_insert(cost_info, 
                                           op_cost, 
-                                          opt_ctx.get_cost_model_type()))) {
+                                          opt_ctx))) {
       LOG_WARN("failed to get insert cost", K(ret));
     }
   }

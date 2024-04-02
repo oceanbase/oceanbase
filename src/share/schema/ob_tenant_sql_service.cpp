@@ -158,6 +158,10 @@ int ObTenantSqlService::delete_tenant(
     }
   }
 
+  if (FAILEDx(RS_JOB_COMPLETE_ALL_JOB_FOR_DROPPING_TENANT(tenant_id, sql_client))) {
+    LOG_WARN("fail to complete all rs job for dropping tenant", KR(ret), K(tenant_id));
+  }
+
   if (OB_SUCC(ret)) {
     ObSchemaOperation delete_tenant_op;
     delete_tenant_op.tenant_id_ = tenant_id;

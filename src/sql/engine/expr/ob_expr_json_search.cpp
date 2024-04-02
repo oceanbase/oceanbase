@@ -12,11 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_search.h"
+#include "util/easy_string.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/signal/safe_snprintf.h"
 #include "ob_expr_json_func_helper.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -169,7 +169,7 @@ int ObExprJsonSearch::find_matches(common::ObIAllocator *allocator,
             } else {
               uint64_t reserve_len = i == 0 ? 3 : static_cast<uint64_t>(std::log10(i)) + 3;
               char temp_buf[reserve_len + 1];
-              int64_t count = safe_snprintf(temp_buf, reserve_len + 1, "[%lu]", i);
+              int64_t count = lnprintf(temp_buf, reserve_len + 1, "[%lu]", i);
               if (count < 0) {
                 LOG_WARN("fail to snprintf", K(i), K(count));
               } else if (OB_FAIL(path.append(temp_buf, count))) {
@@ -230,9 +230,7 @@ int ObExprJsonSearch::calc_result_typeN(ObExprResType& type,
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i++) {
       if (types_stack[i].get_type() == ObNullType) {
       } else if (ob_is_string_type(types_stack[i].get_type())) {
-        if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
-          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-        }
+        types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       } else {
         types_stack[i].set_calc_type(ObLongTextType);
         types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -253,7 +251,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   bool is_null = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -267,16 +267,24 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[1];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
     } else if (!ob_is_string_type(val_type)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("input type error", K(val_type));
     } else {
       ObString target_str = json_datum->get_string();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target_str, is_null))) {
         LOG_WARN("fail to get real data.", K(ret), K(target_str));
+      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+        OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
+                                                                CS_TYPE_UTF8MB4_BIN,
+                                                                &temp_allocator,
+                                                                target_str,
+                                                                target_str))) {
+        LOG_WARN("fail to convert string", K(ret));
       } else if (0 == target_str.case_compare("one")) {
         one_flag = true;
       } else if (0 == target_str.case_compare("all")) {
@@ -293,17 +301,25 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && expr.arg_cnt_ >= 4 && !is_null) {
     json_arg = expr.args_[3];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       // do nothing, null type use default escape
     } else if (!ob_is_string_type(val_type)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("input type error", K(val_type));
     } else {
       ObString escape = json_datum->get_string();
       bool is_null_str = false;
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, escape, is_null_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(escape));
+      } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+        OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
+                                                                CS_TYPE_UTF8MB4_BIN,
+                                                                &temp_allocator,
+                                                                escape,
+                                                                escape))) {
+        LOG_WARN("fail to convert string", K(ret));
       } else if (escape.length() > 0) {
         const ObCollationType escape_coll = json_arg->datum_meta_.cs_type_;
         size_t length = ObCharset::strlen_char(escape_coll, escape.ptr(), escape.length());
@@ -324,17 +340,22 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[2];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
     } else if (!ob_is_string_type(val_type)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("input type error", K(val_type));
-    } else {
-      target = json_datum->get_string();
-      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target, is_null))) {
-        LOG_WARN("fail to get real data.", K(ret), K(target));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target, is_null))) {
+      LOG_WARN("fail to get real data.", K(ret), K(target));
+    } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+      OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
+                                                              CS_TYPE_UTF8MB4_BIN,
+                                                              &temp_allocator,
+                                                              target,
+                                                              target))) {
+      LOG_WARN("fail to convert string", K(ret));
     }
   }
 
@@ -360,11 +381,12 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_; i++) {        
         json_arg = expr.args_[i];
         val_type = json_arg->datum_meta_.type_;
-        if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+        if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
           LOG_WARN("eval json arg failed", K(ret));
         } else if (val_type == ObNullType || json_datum->is_null()) {
           is_null = true;
         } else if (!ob_is_string_type(val_type)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("input type error", K(val_type));
         } else {
           ObString j_path_text = json_datum->get_string();
@@ -373,6 +395,13 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
           } else if (j_path_text.length() == 0) {
             is_null = true;
+          } else if (json_arg->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+            OB_FAIL(ObJsonExprHelper::convert_string_collation_type(json_arg->datum_meta_.cs_type_,
+                                                                    CS_TYPE_UTF8MB4_BIN,
+                                                                    &temp_allocator,
+                                                                    j_path_text,
+                                                                    j_path_text))) {
+            LOG_WARN("fail to convert string", K(ret));
           } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path,
               j_path_text, i, true))) {
             LOG_WARN("parse text to path failed", K(j_path_text), K(ret));

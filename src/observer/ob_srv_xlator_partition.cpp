@@ -45,7 +45,7 @@
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
-#include "observer/table/ob_table_query_sync_processor.h"
+#include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "storage/ob_storage_rpc.h"
 
@@ -119,6 +119,8 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObRpcGetLSAccessModeP, gctx_);
   RPC_PROCESSOR(ObRpcChangeLSAccessModeP, gctx_);
   RPC_PROCESSOR(ObTabletLocationReceiveP, gctx_);
+  RPC_PROCESSOR(ObForceSetTenantLogDiskP, gctx_);
+  RPC_PROCESSOR(ObForceDumpServerUsageP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_migrator(ObSrvRpcXlator *xlator) {
@@ -169,6 +171,8 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObStorageWakeupTransferServiceP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObFetchLSMemberAndLearnerListP);
   RPC_PROCESSOR(ObAdminUnlockMemberListP, gctx_);
+  RPC_PROCESSOR(ObCheckTransferInTabletAbortedP);
+  RPC_PROCESSOR(ObUpdateTransferMetaInfoP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
@@ -199,7 +203,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableBatchExecuteP, gctx_);
   RPC_PROCESSOR(ObTableQueryP, gctx_);
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
-  RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
+  RPC_PROCESSOR(ObTableQueryAsyncP, gctx_);
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
   RPC_PROCESSOR(ObTenantTTLP, gctx_);
 
@@ -312,4 +316,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // session info diagnosis
   RPC_PROCESSOR(ObSessInfoDiagnosisP, gctx_);
+
+  // ddl
+  RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 }

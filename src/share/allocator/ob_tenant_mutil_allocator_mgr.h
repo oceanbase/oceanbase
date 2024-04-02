@@ -52,6 +52,8 @@ public:
 private:
   int64_t get_slot_(const int64_t tenant_id) const;
   int get_tenant_mutil_allocator_(const uint64_t tenant_id, TMA *&out_allocator);
+  int get_tenant_memstore_limit_percent_(const uint64_t tenant_id,
+                                         int64_t &limit_percent) const;
   int delete_tenant_mutil_allocator_(const uint64_t tenant_id);
   int construct_allocator_(const uint64_t tenant_id,
                            TMA *&out_allocator);

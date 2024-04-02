@@ -264,8 +264,8 @@ int ObDelUpdLogPlan::check_table_rowkey_distinct(
       if (OB_ISNULL(index_dml_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
-      } else if (!use_pdml() && !index_dml_info->is_primary_index_) {
-        // for PDML, primary table & index table both need unique checker.
+      } else if (!index_dml_info->is_primary_index_) {
+        // only primary table need unique checker.
       } else if (OB_FAIL(index_dml_info->get_rowkey_exprs(rowkey_exprs))) {
         LOG_WARN("failed to get rowkey exprs", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(rowkey_exprs,
@@ -1186,7 +1186,8 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
 }
 
 int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
-                                                               OSGShareInfo &info)
+                                                               OSGShareInfo &info,
+                                                               bool force_osg_gather)
 {
   int ret = OB_SUCCESS;
   ObLogOptimizerStatsGathering *osg = NULL;
@@ -1198,8 +1199,9 @@ int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate sequence operator", K(ret));
   } else {
+    force_osg_gather |= old_top->is_sharding();
     OSG_TYPE type = old_top->need_osg_merge() ? OSG_TYPE::MERGE_OSG :
-                    old_top->is_sharding() ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
+                    force_osg_gather ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
     osg->set_child(ObLogicalOperator::first_child, old_top);
     osg->set_osg_type(type);
     osg->set_table_id(info.table_id_);

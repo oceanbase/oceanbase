@@ -77,7 +77,7 @@ int ObIndexNameCache::check_index_name_exist(
       data_table_id = OB_INVALID_ID;
     } else {
       uint64_t data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(index_name);
-      if (OB_INVALID_ID == database_id) {
+      if (OB_INVALID_ID == data_table_id) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid index name", KR(ret), K(index_name));
       } else if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(index_name, idx_name))) {

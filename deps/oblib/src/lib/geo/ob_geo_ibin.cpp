@@ -94,11 +94,11 @@ bool ObIWkbGeomPolygon::is_empty_inner() const
   return (poly->exterior_ring().size(static_cast<ObGeoWkbByteOrder>(poly->get_bo())) == 0) && (poly->inner_rings().size() == 0);
 }
 
-int ObIWkbGeomCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
+int ObIWkbGeomCollection::get_sub(ObIAllocator *allocator, uint32_t idx, ObGeometry*& geo) const
 {
   INIT_SUCC(ret);
   ObWkbGeomCollection* g = reinterpret_cast<ObWkbGeomCollection*>(const_cast<char*>(val()));
-  if (OB_ISNULL(this->allocator_)) {
+  if (OB_ISNULL(allocator)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("Null allocator.", K(ret));
   } else if (idx >= g->size()) {
@@ -112,7 +112,7 @@ int ObIWkbGeomCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
     // TODO  use create_obj_by_type
     switch (g->get_sub_type(ptr)) {
       case ObGeoType::POINT: {
-        geo = OB_NEWx(ObIWkbGeomPoint, this->allocator_);
+        geo = OB_NEWx(ObIWkbGeomPoint, allocator, srid_);
         break;
       }
       default: {
@@ -194,11 +194,11 @@ bool ObIWkbGeogPolygon::is_empty_inner() const
   return bret;
 }
 
-int ObIWkbGeogCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
+int ObIWkbGeogCollection::get_sub(ObIAllocator *allocator, uint32_t idx, ObGeometry*& geo) const
 {
   INIT_SUCC(ret);
   ObWkbGeogCollection* g = reinterpret_cast<ObWkbGeogCollection*>(const_cast<char*>(val()));
-  if (OB_ISNULL(this->allocator_)) {
+  if (OB_ISNULL(allocator)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("Null allocator.", K(ret));
   } else if (idx >= g->size()) {
@@ -212,7 +212,7 @@ int ObIWkbGeogCollection::get_sub(uint32_t idx, ObGeometry*& geo) const
     // TODO  use create_obj_by_type
     switch (g->get_sub_type(ptr)) {
       case ObGeoType::POINT: {
-        geo = OB_NEWx(ObIWkbGeomPoint, this->allocator_);
+        geo = OB_NEWx(ObIWkbGeomPoint, allocator, srid_);
         break;
       }
       default: {

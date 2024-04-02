@@ -62,7 +62,7 @@ public:
   int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage);
   void destroy();
   int calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
-  int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
+  static int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
   int sync_tenant_clock(ObTenantIOClock *ioclock);
   int adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
   int adjust_proportion_clock(const int64_t delta_us);

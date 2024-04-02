@@ -16,6 +16,7 @@
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_operator.h"
 #include "ob_table_cg_service.h"
+#include "sql/engine/dml/ob_dml_service.h"
 
 using namespace oceanbase::sql;
 
@@ -24,21 +25,61 @@ namespace oceanbase
 namespace table
 {
 
+int ObTableApiDelSpec::init_ctdefs_array(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(del_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      del_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiDelSpec::~ObTableApiDelSpec()
+{
+  for (int64_t i = 0; i < del_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(del_ctdefs_.at(i))) {
+      del_ctdefs_.at(i)->~ObTableDelCtDef();
+    }
+  }
+  del_ctdefs_.reset();
+}
+
 int ObTableApiDeleteExecutor::open()
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_del_rtdef(del_spec_.get_ctdef(), del_rtdef_))) {
-    LOG_WARN("fail to generate delete rtdef");
-  } else {
-    if (tb_ctx_.is_skip_scan()) {
-      set_entity(tb_ctx_.get_entity());
-      set_skip_scan(true);
-    }
+  } else if (OB_FAIL(inner_open_with_das())) {
+    LOG_WARN("fail to open delete executor", K(ret));
+  } else if (tb_ctx_.is_skip_scan()) {
+    set_entity(tb_ctx_.get_entity());
+    set_skip_scan(true);
   }
 
+  return ret;
+}
+
+int ObTableApiDeleteExecutor::inner_open_with_das()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(del_rtdefs_.allocate_array(allocator_, del_spec_.get_ctdefs().count()))) {
+    LOG_WARN("fail to alloc del rtdefs", K(ret));
+  }
+  for (int64_t i = 0; i < del_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableDelRtDef &del_rtdef = del_rtdefs_.at(i);
+     ObTableDelCtDef *del_ctdef = del_spec_.get_ctdefs().at(i);
+    if (OB_ISNULL(del_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("del ctdef is NULL", K(ret));
+    } else if (OB_FAIL(generate_del_rtdef(*del_ctdef, del_rtdef))) {
+      LOG_WARN("fail to generate delete rt_defs", K(ret), K(i));
+    }
+  }
   return ret;
 }
 
@@ -96,24 +137,47 @@ int ObTableApiDeleteExecutor::del_rows_post_proc()
 
   if (OB_FAIL(submit_all_dml_task())) {
     LOG_WARN("fail to execute all delete das task", K(ret));
+  } else if (del_rtdefs_.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("del rtdefs count is less than 1", K(ret), K(del_rtdefs_.count()));
   } else {
-    affected_rows_ = del_rtdef_.das_rtdef_.affected_rows_;
+    affected_rows_ = del_rtdefs_.at(0).das_rtdef_.affected_rows_;
   }
 
+  return ret;
+}
+
+int ObTableApiDeleteExecutor::delete_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < del_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableDelRtDef &del_rtdef = del_rtdefs_.at(i);
+    ObTableDelCtDef *del_ctdef = del_spec_.get_ctdefs().at(i);
+    if (OB_ISNULL(del_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("del ctdef is NULL", K(ret));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_row_to_das(*del_ctdef, del_rtdef))) {
+      LOG_WARN("fail to delete row to das", K(ret), K(del_ctdef), K(del_rtdef));
+    }
+  }
   return ret;
 }
 
 int ObTableApiDeleteExecutor::delete_row_skip_scan()
 {
   int ret = OB_SUCCESS;
+  const ObTableApiDelSpec::ObTableDelCtDefArray& del_ctdef_array = del_spec_.get_ctdefs();
   if (OB_ISNULL(entity_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is NULL", K(ret));
+  } else if (del_ctdef_array.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("del ctdef count is less than 1", K(ret), K(del_ctdef_array.count() ));
   } else if (OB_FAIL(ObTableExprCgService::refresh_delete_exprs_frame(tb_ctx_,
-                                                                      del_spec_.get_ctdef().old_row_,
+                                                                      del_ctdef_array.at(0)->old_row_,
                                                                       static_cast<const ObTableEntity &>(*entity_)))) {
     LOG_WARN("fail to refresh delete exprs frame", K(ret));
-  } else if (OB_FAIL(delete_row_to_das(del_spec_.get_ctdef(), del_rtdef_))) {
+  } else if (OB_FAIL(delete_row_to_das())) {
     LOG_WARN("fail to delete row to das", K(ret));
   }
 
@@ -139,7 +203,7 @@ int ObTableApiDeleteExecutor::get_next_row()
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         }
-      } else if (OB_FAIL(delete_row_to_das(del_spec_.get_ctdef(), del_rtdef_))) {
+      } else if (OB_FAIL(delete_row_to_das())) {
         LOG_WARN("fail to delete row to das", K(ret));
       }
 

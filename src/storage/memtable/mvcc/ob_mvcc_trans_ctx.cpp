@@ -242,6 +242,7 @@ void ObTransCallbackMgr::reset()
   callback_remove_for_remove_memtable_count_ = 0;
   callback_remove_for_fast_commit_count_ = 0;
   callback_remove_for_rollback_to_count_ = 0;
+  callback_ext_info_log_count_ = 0;
   pending_log_size_ = 0;
   flushed_log_size_ = 0;
 }
@@ -438,7 +439,7 @@ void ObTransCallbackMgr::reset_pdml_stat()
     WRLockGuard guard(rwlock_);
     int64_t stat = ATOMIC_LOAD(&parallel_stat_);
     if (!ATOMIC_BCAS(&parallel_stat_, stat, 0)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "reset parallel stat when leader revoke encounter parallel",
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "reset parallel stat when leader revoke encounter parallel",
                 K(stat), K(parallel_stat_));
     } else {
       need_retry = false;
@@ -979,6 +980,8 @@ int ObMvccRowCallback::checkpoint_callback()
     TRANS_LOG(ERROR, "checkpoint never called on unsynced callback", KPC(this));
   } else if (OB_FAIL(value_.remove_callback(*this))) {
     TRANS_LOG(ERROR, "remove callback from trans node failed", K(ret), K(*this));
+  } else if (OB_NOT_NULL(tnode_)) {
+    (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());
   }
 
   return ret;

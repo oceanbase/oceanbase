@@ -76,7 +76,11 @@ class ObDirectLoadTableStore
 {
 public:
   const static constexpr int64_t MAX_BUCKET_CNT = 1024;
-  ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false) {}
+  ObDirectLoadTableStore() : allocator_("TLD_TSBucket"), is_inited_(false)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+    bucket_ptr_array_.set_tenant_id(MTL_ID());
+  }
   ~ObDirectLoadTableStore();
   int init(const ObDirectLoadTableStoreParam &param);
   int append_row(const common::ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const blocksstable::ObDatumRow &datum_row);

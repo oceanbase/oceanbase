@@ -31,6 +31,7 @@
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
+#include "storage/tablet/ob_tablet_space_usage.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
@@ -143,7 +144,8 @@ public:
                K_(ddl_commit_scn),
                K_(mds_checkpoint_scn),
                K_(transfer_info),
-               K_(create_schema_version));
+               K_(create_schema_version),
+               K_(space_usage));
 
 public:
   int32_t version_;
@@ -175,6 +177,7 @@ public:
   share::SCN ddl_commit_scn_;
   share::SCN mds_checkpoint_scn_;
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
+  ObTabletSpaceUsage space_usage_;
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
@@ -294,7 +297,6 @@ public:
   ObTabletFullMemoryMdsData mds_data_;
   ObTabletTransferInfo transfer_info_;
   int64_t create_schema_version_;
-
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

@@ -190,7 +190,7 @@ private:
   TransMap trans_map_;
   TransCtxMap trans_ctx_map_;
   SegmentCtxMap segment_ctx_map_;
-  common::ObSEArray<ObTableLoadTransStore *, 64> committed_trans_store_array_;
+  common::ObArray<ObTableLoadTransStore *> committed_trans_store_array_;
   uint64_t last_heart_beat_ts_;
   bool enable_heart_beat_check_;
   bool is_inited_;

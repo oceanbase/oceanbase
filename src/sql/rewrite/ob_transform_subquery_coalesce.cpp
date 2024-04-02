@@ -1832,7 +1832,8 @@ int ObTransformSubqueryCoalesce::get_coalesce_infos(ObDMLStmt &parent_stmt,
                                                                 map_info,
                                                                 relation))) {
         LOG_WARN("failed to check stmt containment", K(ret));
-      } else if (!check_subquery_can_coalesce(map_info)) {
+      } else if (!check_subquery_can_coalesce(map_info) ||
+                 stmt->is_scala_group_by() != helper->stmt_->is_scala_group_by()) {
         //do nothing
         OPT_TRACE("not same suqbuery, can not coalesce");
       } else if (OB_FAIL(helper->similar_stmts_.push_back(stmt))) {
@@ -2080,7 +2081,7 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
     if (OB_SUCC(ret) && !find) {
       ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
       ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-      if (ObTransformUtils::replace_expr(subquery_column_list, new_column_list, subquery_select)) {
+      if (OB_FAIL(ObTransformUtils::replace_expr(subquery_column_list, new_column_list, subquery_select))) {
         LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(subquery_select,
                                                              aggr_items))) {

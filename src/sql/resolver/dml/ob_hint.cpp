@@ -508,15 +508,18 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   // OPTIMIZER_FEATURES_ENABLE
   if (OB_SUCC(ret) && (has_valid_opt_features_version())) {
     int64_t cur_pos = 0;
-    const uint64_t version = has_valid_opt_features_version()
-                             ? opt_features_version_ : CURRENT_OUTLINE_ENABLE_VERSION;
+    // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LASTED_COMPAT_VERSION,
+    // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LASTED_COMPAT_VERSION
+    const bool print_empty_str = (OB_SUCCESS != (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)
+                                 && LASTED_COMPAT_VERSION == opt_features_version_);
     if (OB_FAIL(BUF_PRINTF("%s%s(\'", outline_indent, "OPTIMIZER_FEATURES_ENABLE"))) {
       LOG_WARN("failed to print hint", K(ret));
-    } else if (OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
+    } else if (!print_empty_str &&
+               OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
                                                                                buf_len - pos,
-                                                                               version)))) {
+                                                                               opt_features_version_)))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to print version str", K(ret), K(version));
+      LOG_WARN("failed to print version str", K(ret), K(opt_features_version_));
     } else if (OB_FALSE_IT(pos += cur_pos)) {
     } else if (OB_FAIL(BUF_PRINTF("\')"))) {
     }
@@ -743,7 +746,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
-    case STORAGE_CARD_ESTIMATION: {
+    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case INLIST_REWRITE_THRESHOLD: {
+      is_valid = val.is_int() && (0 < val.get_int());
+      break;
+    }
+    case PRESERVE_ORDER_FOR_PAGINATION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -902,8 +914,6 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_DISTINCT_PUSHDOWN: return T_DISTINCT_PUSHDOWN;
     case T_NO_USE_HASH_SET: return T_USE_HASH_SET;
     case T_NO_USE_DISTRIBUTED_DML:    return T_USE_DISTRIBUTED_DML;
-    case T_DYNAMIC_SAMPLING:    return T_DYNAMIC_SAMPLING;
-
     default:                    return type;
   }
 }
@@ -974,6 +984,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_USE_HASH_SET: return is_enable_hint ? "USE_HASH_SET" : "NO_USE_HASH_SET";
     case T_USE_DISTRIBUTED_DML:    return is_enable_hint ? "USE_DISTRIBUTED_DML" : "NO_USE_DISTRIBUTED_DML";
     case T_TABLE_DYNAMIC_SAMPLING:    return "DYNAMIC_SAMPLING";
+    case T_PQ_SUBQUERY: return "PQ_SUBQUERY";
     default:                    return NULL;
   }
 }
@@ -1048,7 +1059,6 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_GROUPBY_PLACEMENT: DEEP_COPY_NORMAL_HINT(ObGroupByPlacementHint); break;
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
-    case HINT_TABLE_DYNAMIC_SAMPLING: DEEP_COPY_NORMAL_HINT(ObTableDynamicSamplingHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -1197,6 +1207,29 @@ bool ObHint::is_expr_match_str(const ObRawExpr &expr, const ObString &str)
   bret = 0 == str.case_compare(tmp_str);
   LOG_DEBUG("check is expr match str", K(bret), K(tmp_str), K(str));
   return bret;
+}
+
+int ObHint::print_table_list(const ObIArray<TablesInHint> &table_list, PlanText &plan_text)
+{
+  int ret = OB_SUCCESS;
+  if (!table_list.empty()) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
+      const TablesInHint &cur_table = table_list.at(i);
+      if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
+        LOG_WARN("failed to do BUF_PRINTF", K(ret));
+      } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
+        LOG_WARN("failed to print joined tables in hint", K(ret));
+      } else if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
+        LOG_WARN("failed to do BUF_PRINTF", K(ret));
+      } else if (i < table_list.count() - 1 && OB_FAIL(BUF_PRINTF(" "))) {
+        LOG_WARN("failed to do BUF_PRINTF", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObViewMergeHint::assign(const ObViewMergeHint &other)
@@ -1377,49 +1410,40 @@ bool QbNameList::is_subset(const ObIArray<ObString> &qb_name_list) const
   return bret;
 }
 
+int QbNameList::print_qb_names(PlanText &plan_text, const bool print_quote) const
+{
+  int ret = OB_SUCCESS;
+  if (!qb_names_.empty()) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    if (print_quote && OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("failed to do BUF_PRINTF", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < qb_names_.count(); ++i) {
+      const ObString &qb_name = qb_names_.at(i);
+      if (OB_FAIL(BUF_PRINTF("\"%.*s\"", qb_name.length(), qb_name.ptr()))) {
+        LOG_WARN("failed to print qb name", K(ret));
+      } else if (i != qb_names_.count() - 1 && OB_FAIL(BUF_PRINTF(" "))) {
+        LOG_WARN("failed to do BUF_PRINTF", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && print_quote && OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("failed to do BUF_PRINTF", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObCountToExistsHint::assign(const ObCountToExistsHint &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(qb_name_list_.assign(other.qb_name_list_))) {
+  if (OB_FAIL(qb_names_.assign(other.qb_names_))) {
     LOG_WARN("failed to assign qb name list", K(ret));
   } else if (OB_FAIL(ObTransHint::assign(other))) {
     LOG_WARN("fail to assign hint", K(ret));
   }
   return ret;
-}
-
-int ObCountToExistsHint::print_hint_desc(PlanText &plan_text) const
-{
-  int ret = OB_SUCCESS;
-  if (!qb_name_list_.empty()) {
-    char *buf = plan_text.buf_;
-    int64_t &buf_len = plan_text.buf_len_;
-    int64_t &pos = plan_text.pos_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < qb_name_list_.count(); ++i) {
-      ObString qb_name = qb_name_list_.at(i);
-      if (OB_FAIL(BUF_PRINTF("\"%.*s\"", qb_name.length(), qb_name.ptr()))) {
-        LOG_WARN("failed to print qb name", K(ret));
-      } else if (i != qb_name_list_.count() - 1) {
-        if (OB_FAIL(BUF_PRINTF(" "))) {
-          LOG_WARN("failed to do BUF_PRINTF", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-bool ObCountToExistsHint::enable_count_to_exists(const ObString &qb_name) const
-{
-  bool bret = false;
-  if (is_enable_hint()) {
-    bool found = false;
-    for (int64_t i = 0; !found && i < qb_name_list_.count(); ++i) {
-      found = 0 == qb_name.case_compare(qb_name_list_.at(i));
-    }
-    bret = found || qb_name_list_.empty();
-  }
-  return bret;
 }
 
 int ObLeftToAntiHint::assign(const ObLeftToAntiHint &other)
@@ -1429,29 +1453,6 @@ int ObLeftToAntiHint::assign(const ObLeftToAntiHint &other)
     LOG_WARN("fail to assign hint", K(ret));
   } else if (OB_FAIL(table_list_.assign(other.get_tb_name_list()))) {
     LOG_WARN("failed to assign table name list", K(ret));
-  }
-  return ret;
-}
-
-int ObLeftToAntiHint::print_hint_desc(PlanText &plan_text) const
-{
-  int ret = OB_SUCCESS;
-  if (!table_list_.empty()) {
-    char *buf = plan_text.buf_;
-    int64_t &buf_len = plan_text.buf_len_;
-    int64_t &pos = plan_text.pos_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
-        LOG_WARN("failed to print joined tables in hint", K(ret));
-      } else if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (i < table_list_.count() - 1 && OB_FAIL(BUF_PRINTF(" "))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1472,8 +1473,7 @@ bool ObLeftToAntiHint::enable_left_to_anti(ObCollationType cs_type, const TableI
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
+      bret = ObTableInHint::is_match_table_item(cs_type, table_list_.at(i), table);
     }
     bret |= table_list_.empty();
   }
@@ -1487,29 +1487,6 @@ int ObEliminateJoinHint::assign(const ObEliminateJoinHint &other)
     LOG_WARN("fail to assign hint", K(ret));
   } else if (OB_FAIL(table_list_.assign(other.get_tb_name_list()))) {
     LOG_WARN("failed to assign table name list", K(ret));
-  }
-  return ret;
-}
-
-int ObEliminateJoinHint::print_hint_desc(PlanText &plan_text) const
-{
-  int ret = OB_SUCCESS;
-  if (!table_list_.empty()) {
-    char *buf = plan_text.buf_;
-    int64_t &buf_len = plan_text.buf_len_;
-    int64_t &pos = plan_text.pos_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
-        LOG_WARN("failed to print joined tables in hint", K(ret));
-      } else if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (i < table_list_.count() - 1 && OB_FAIL(BUF_PRINTF(" "))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1530,8 +1507,7 @@ bool ObEliminateJoinHint::enable_eliminate_join(ObCollationType cs_type, const T
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
+      bret = ObTableInHint::is_match_table_item(cs_type, table_list_.at(i), table);
     }
     bret |= table_list_.empty();
   }
@@ -1546,29 +1522,6 @@ int ObGroupByPlacementHint::assign(const ObGroupByPlacementHint &other)
     LOG_WARN("fail to assign hint", K(ret));
   } else if (OB_FAIL(table_list_.assign(other.get_tb_name_list()))) {
     LOG_WARN("failed to assign table name list", K(ret));
-  }
-  return ret;
-}
-
-int ObGroupByPlacementHint::print_hint_desc(PlanText &plan_text) const
-{
-  int ret = OB_SUCCESS;
-  if (!table_list_.empty()) {
-    char *buf = plan_text.buf_;
-    int64_t &buf_len = plan_text.buf_len_;
-    int64_t &pos = plan_text.pos_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, cur_table))) {
-        LOG_WARN("failed to print joined tables in hint", K(ret));
-      } else if (cur_table.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      } else if (i < table_list_.count() - 1 && OB_FAIL(BUF_PRINTF(" "))) {
-        LOG_WARN("failed to do BUF_PRINTF", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -1589,8 +1542,7 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type, c
   bool bret = false;
   if (is_enable_hint()) {
     for (int64_t i = 0; !bret && i < table_list_.count(); i++) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      bret = ObTableInHint::is_match_table_item(cs_type, cur_table, table);
+      bret = ObTableInHint::is_match_table_item(cs_type, table_list_.at(i), table);
     }
     bret |= table_list_.empty();
   }
@@ -1608,8 +1560,7 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
       LOG_WARN("assign failed", K(ret));
     }
     for (int64_t i = 0; !bret && i < table_list_.count(); i++) {
-      single_or_joined_table cur_table = table_list_.at(i);
-      bret = ObTableInHint::is_match_table_items(cs_type, cur_table, check_tables);
+      bret = ObTableInHint::is_match_table_items(cs_type, table_list_.at(i), check_tables);
     }
     bret |= table_list_.empty();
   }
@@ -1649,7 +1600,7 @@ int ObWinMagicHint::print_hint_desc(PlanText &plan_text) const
       LOG_WARN("table in hint count < 2", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_list_.count(); ++i) {
-      ObTableInHint cur_table = table_list_.at(i);
+      const ObTableInHint &cur_table = table_list_.at(i);
       if (table_list_.count() > 2 && i == 1 && OB_FAIL(BUF_PRINTF("("))) {
         LOG_WARN("failed to do BUF_PRINTF", K(ret));
       } else if (OB_FAIL(cur_table.print_table_in_hint(plan_text))) {
@@ -1964,7 +1915,7 @@ int ObJoinHint::print_hint_desc(PlanText &plan_text) const
   } else if (tables_.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
     LOG_WARN("failed to print hint", K(ret));
   } else if (T_PQ_DISTRIBUTE == hint_type_ && NULL != algo_str
-             && OB_FAIL(BUF_PRINTF(" %s", get_dist_algo_str()))) {
+             && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("failed to print dist algo", K(ret));
   }
   return ret;
@@ -2286,6 +2237,34 @@ const char *ObPQSetHint::get_dist_method_str(const ObItemType dist_method)
   }
   return NULL;
 };
+
+int ObPQSubqueryHint::assign(const ObPQSubqueryHint &other)
+{
+  int ret = OB_SUCCESS;
+  dist_algo_ = other.dist_algo_;
+  if (OB_FAIL(sub_qb_names_.assign(other.sub_qb_names_))) {
+    LOG_WARN("fail to assign subplan qb names", K(ret));
+  } else if (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  }
+  return ret;
+}
+
+int ObPQSubqueryHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  const char *algo_str = NULL;
+  if (OB_FAIL(sub_qb_names_.print_qb_names(plan_text, true))) {
+    LOG_WARN("failed to print qb names", K(ret));
+  } else if (NULL != (algo_str = ObJoinHint::get_dist_algo_str(get_dist_algo()))
+             && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
+    LOG_WARN("failed to print dist algo", K(ret));
+  }
+  return ret;
+}
 
 int ObJoinOrderHint::print_hint_desc(PlanText &plan_text) const
 {

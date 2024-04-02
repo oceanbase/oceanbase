@@ -23,6 +23,9 @@
 #undef private
 #include "../parser/ob_admin_parser_log_entry.h"
 #include "../parser/ob_admin_parser_group_entry.h"
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
 namespace oceanbase
 {
 using namespace common;
@@ -149,6 +152,145 @@ ObAdminDumpBlock::ObAdminDumpBlock(const char *block_path,
 }
 
 int ObAdminDumpBlock::dump()
+{
+  int ret = OB_SUCCESS;
+  if (LogFormatFlag::DECOMPRESS_FORMAT == str_arg_.flag_) {
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+    ret = decompress_();
+#endif
+  } else {
+    ret = dump_();
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+int ObAdminDumpBlock::decompress_()
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  char *block_name = basename((char*)block_path_);
+  const char *path= block_path_;
+  struct stat stat_buf;
+  int64_t log_len = 0;
+  int fd_out = 0;
+  char *buf_out = NULL;
+  if (-1 == (fd_out = ::open(path, O_RDONLY))) {
+    ret = palf::convert_sys_errno();
+    LOG_WARN("open file fail", K(path), KERRMSG, K(ret));
+  } else if (-1 == fstat(fd_out, &stat_buf)) {
+    ret = OB_IO_ERROR;
+    CLOG_LOG(ERROR, "stat_buf error", K(path), KERRMSG, K(ret));
+  } else if (MAP_FAILED == (buf = ::mmap(NULL, stat_buf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd_out, 0)) || NULL == buf) {
+    ret = palf::convert_sys_errno();
+    LOG_WARN("failed to mmap file", K(path), K(errno), KERRMSG, K(ret), K(fd_out));
+  } else {
+    buf_out = static_cast<char *>(buf);
+    log_len = stat_buf.st_size;
+    LOG_INFO("map_log_file success", K(path), KP(buf), K(fd_out), KP(buf_out), K(log_len));
+  }
+
+  if (OB_SUCC(ret)) {
+    int64_t total_len_if_not_compressed = 0;// used to compute compression radio
+    int64_t total_compressed_len = 0;
+    int64_t total_decompressed_len = 0;
+    int64_t log_cnt = 0;
+    int64_t compressed_log_cnt = 0;
+    MemPalfBufferIterator iter;
+    ObAdminDumpBlockHelper helper;
+    LSN start_lsn(0);
+    MemoryStorage mem_storage;
+    const LSN end_lsn = start_lsn + log_len;
+    ObGetFileSize get_file_size(end_lsn);
+
+    if (mem_storage.init(start_lsn)) {
+      LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
+    } else if (OB_FAIL(mem_storage.append(buf_out, log_len))) {
+      LOG_WARN("MemoryStorage append failed", K(ret));
+    } else if (OB_FAIL(iter.init(start_lsn, get_file_size, &mem_storage))) {
+      LOG_WARN("LogIteratorImpl init failed", K(ret), K(start_lsn), K(end_lsn));
+    } else {
+      LSN cur_lsn;
+      SCN cur_scn;
+      const int64_t start_ts = ObTimeUtility::fast_current_time();
+      int64_t before_get_entry_ts = start_ts;
+      int64_t after_get_entry_ts = 0;
+      int64_t after_decompress_ts = 0;
+      int64_t iter_log_used = 0;
+      int64_t decompress_log_used = 0;
+      LOG_INFO("[START]uncompress begin");
+      while (OB_SUCC(ret) && OB_SUCC(iter.next())) {
+        const char *buf = NULL;
+        int64_t buf_len = 0;
+        if (OB_FAIL(iter.get_entry(buf, buf_len, cur_scn, cur_lsn))) {
+          if (OB_ITER_END != ret) {
+            LOG_ERROR("ObAdminDumpIterator get_entry failed", K(iter));
+          } else {
+            LOG_INFO("end iterator all logs");
+          }
+        } else {
+          logservice::ObLogBaseHeader log_base_header;
+          int64_t pos = 0;
+          if (OB_FAIL(log_base_header.deserialize(buf, buf_len, pos))) {
+            LOG_ERROR("deserialize log_base_header failed", K(buf), K(buf_len), K(pos));
+          } else {
+            after_get_entry_ts = ObTimeUtility::fast_current_time();
+            iter_log_used += (after_get_entry_ts - before_get_entry_ts);
+            char *decompression_buf = NULL;
+            int64_t decompressed_len = 0;
+            int64_t final_decompressed_len = 0;
+            const int64_t is_compressed = log_base_header.is_compressed();
+            if (is_compressed) {
+              if (OB_FAIL(logservice::decompress(buf + pos, buf_len - pos, str_arg_.decompress_buf_,
+                      str_arg_.decompress_buf_len_, final_decompressed_len))) {
+                LOG_ERROR("failed to decompress", K(pos), K(log_base_header));
+              } else {
+                compressed_log_cnt++;
+              }
+            }
+            after_decompress_ts = ObTimeUtility::fast_current_time();
+            decompress_log_used += (after_decompress_ts - after_get_entry_ts);
+            total_len_if_not_compressed += (is_compressed ? final_decompressed_len : (buf_len - pos));
+            total_compressed_len += buf_len - pos;
+            total_decompressed_len += (is_compressed ? (buf_len - pos) : 0);
+            log_cnt++;
+            before_get_entry_ts = after_decompress_ts;
+          }
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+      if (OB_FAIL(ret)) {
+        CLOG_LOG(ERROR, "uncompressed failed", K(total_len_if_not_compressed), K(total_compressed_len), K(total_decompressed_len));
+      } else {
+        const int64_t end_ts = ObTimeUtility::fast_current_time();
+        double time_used = (end_ts - start_ts) * 1.0 / 1000 / 1000;
+        CLOG_LOG(INFO, "\nDECOMPRESS DONE", K(time_used),
+            "\ntotal_len_if_not_compressed(M):", total_len_if_not_compressed / 1024 / 1024,
+            "\ntotal_compressed_len(M)", total_compressed_len / 1024 / 1024,
+            "\naverage_log_size_origin(B)", total_len_if_not_compressed / log_cnt,
+            "\naverage_log_size_compressed(B)", total_compressed_len / log_cnt,
+            "\ncompress_radio", total_compressed_len * 1.0 / total_len_if_not_compressed,
+            "\niter_speed(M/S)", (log_len * 1.0 / 1024 / 1024) / (iter_log_used *1.0/1000/1000),
+            "\ndecompress_speed(M/S)", (log_len * 1.0 / 1024 / 1024) / (decompress_log_used*1.0/1000/1000),
+            "\nlog_count", log_cnt,
+            "\ncompressed_log_cnt", compressed_log_cnt,
+            "\ndecompress_speed(M/S)", (total_decompressed_len * 1.0 / 1024 / 1024)/(decompress_log_used*1.0/1000/1000));
+      }
+    }
+  }
+
+  if (NULL != buf && -1 != fd_out) {
+    ::munmap(reinterpret_cast<void*>(buf), log_len);
+    ::close(fd_out);
+  }
+
+  return ret;
+}
+#endif
+
+int ObAdminDumpBlock::dump_()
 {
   int ret = OB_SUCCESS;
   char *block_name = basename((char*)block_path_);

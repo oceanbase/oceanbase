@@ -240,9 +240,18 @@ int ObExprOutputPack::convert_string_value_charset(common::ObObj &value,
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType ncharset_type = CHARSET_INVALID;
   if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
+  } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
   } else {
+    if (lib::is_oracle_mode()
+        && (value.is_nchar() || value.is_nvarchar2())
+        && ncharset_type != CHARSET_INVALID
+        && ncharset_type != CHARSET_BINARY) {
+      charset_type = ncharset_type;
+    }
     OZ (value.convert_string_value_charset(charset_type, alloc));
   }
   return ret;
@@ -255,6 +264,7 @@ int ObExprOutputPack::convert_lob_value_charset(common::ObObj &value,
   ObString str;
   ObLobLocator *lob_locator = NULL;
   ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType ncharset_type = CHARSET_INVALID;
   if (OB_FAIL(value.get_lob_locator(lob_locator))) {
     LOG_WARN("get lob locator failed", K(ret));
   } else if (OB_ISNULL(lob_locator)) {
@@ -264,6 +274,17 @@ int ObExprOutputPack::convert_lob_value_charset(common::ObObj &value,
     LOG_WARN("get lob locator payload failed", K(ret));
   } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
+  } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
+  } else {
+    if (lib::is_oracle_mode()
+        && (value.is_nchar() || value.is_nvarchar2())
+        && ncharset_type != CHARSET_INVALID
+        && ncharset_type != CHARSET_BINARY) {
+      charset_type = ncharset_type;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (ObCharset::is_valid_charset(charset_type) && CHARSET_BINARY != charset_type) {
     ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
     const ObCharsetInfo *from_charset_info = ObCharset::get_charset(value.get_collation_type());
@@ -308,12 +329,24 @@ int ObExprOutputPack::convert_text_value_charset(common::ObObj& value,
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType ncharset_type = CHARSET_INVALID;
   ObString raw_str = value.get_string();
   if (OB_ISNULL(raw_str.ptr()) || raw_str.length() == 0) {
     // may need return error?
     LOG_DEBUG("get null lob locator v2", K(ret));
   } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
+    } else if (OB_FAIL(my_session.get_ncharacter_set_connection(ncharset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
+  } else {
+    if (lib::is_oracle_mode()
+        && (value.is_nchar() || value.is_nvarchar2())
+        && ncharset_type != CHARSET_INVALID
+        && ncharset_type != CHARSET_BINARY) {
+      charset_type = ncharset_type;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (ObCharset::is_valid_charset(charset_type) && CHARSET_BINARY != charset_type) {
     ObCollationType to_collation_type = ObCharset::get_default_collation(charset_type);
     ObCollationType from_collation_type = value.get_collation_type();
@@ -651,11 +684,10 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
         } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry())
                    && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type())
+        } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type() || obj.is_geometry())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(obj, &alloc, session,
                                                                        &ctx.exec_ctx_,
-                                                                       session->is_ps_protocol()))
-        ) {
+                                                                       session->is_ps_protocol()))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(obj.get_udt_subschema_id()));
         }
       }

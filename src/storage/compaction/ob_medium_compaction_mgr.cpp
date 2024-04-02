@@ -248,6 +248,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
     } else if (OB_FAIL(replay_executor.execute(scn, ls_id_, tablet_id_))) {
       if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
         ret = OB_SUCCESS;
+        LOG_INFO("skip reply medium info", KR(ret), K(replay_medium_info));
       } else {
         LOG_WARN("failed to replay medium info", K(ret), K(replay_medium_info));
       }

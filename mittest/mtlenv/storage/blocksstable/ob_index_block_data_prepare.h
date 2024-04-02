@@ -172,9 +172,6 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   ObClockGenerator::init();
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      tenant_id_, ObTenantIOConfig::default_instance());
-
   fake_freeze_info();
 
   // create ls
@@ -497,8 +494,8 @@ void TestIndexBlockDataPrepare::prepare_data()
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-  param.data_block_ids_ = res.data_block_ids_;
-  param.other_block_ids_ = res.other_block_ids_;
+  ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
+  ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
   param.contain_uncommitted_row_ = false;

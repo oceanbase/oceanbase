@@ -207,6 +207,14 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
 #endif
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   CK (OB_NOT_NULL(session));
+  if (OB_SUCCESS != ret) {
+    // do nothing
+  } else if (!session->is_inner() && session->associated_xa()) {
+    // NOTE that not support dblink trans in this interface
+    // PLEASE handle implicit cases for dblink trans instead of this interface
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
+  }
   int64_t tx_id = 0;
   OX (tx_id = session->get_tx_id().get_id());
   CHECK_TX_FREE_ROUTE(exec_ctx, session);
@@ -438,7 +446,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
     ObTransDeadlockDetectorAdapter::unregister_from_deadlock_detector(tx_ptr->tid(),
                                     ObTransDeadlockDetectorAdapter::UnregisterPath::DO_END_TRANS);
   }
-  if (session->associated_xa() && !is_explicit) {
+  if (!session->is_inner() && session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
     LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
   } else {
@@ -563,7 +571,8 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     ar_snapshot.version_ = snapshot.core_.version_;
     ar_snapshot.tx_id_ = snapshot.core_.tx_id_.get_id();
     ar_snapshot.scn_ = snapshot.core_.scn_.cast_to_int();
-    ar_snapshot.source_ = snapshot.get_source_name().ptr();
+    (void)snapshot.format_source_for_display(audit_record.snapshot_source_, sizeof(audit_record.snapshot_source_));
+    ar_snapshot.source_ = audit_record.snapshot_source_;
   }
   if (OB_SUCC(ret) && !session->has_start_stmt()) {
     OZ (session->set_start_stmt());
@@ -1037,6 +1046,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   sql::stmt::StmtType stmt_type = sql::stmt::StmtType::T_NONE;
   bool is_plain_select = false;
   transaction::ObTxSEQ savepoint = das_ctx.get_savepoint();
+  int exec_errcode = exec_ctx.get_errcode();
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1049,9 +1059,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     CK (OB_NOT_NULL(tx_desc));
     ObTransID tx_id_before_rollback;
     OX (tx_id_before_rollback = tx_desc->get_tx_id());
-    if (tx_desc->has_conflict_txs()) {
-      OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
-    }
+    OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
     auto &tx_result = session->get_trans_result();
     if (OB_FAIL(ret)) {
     } else if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
@@ -1064,7 +1072,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     } else if (rollback) {
       auto stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
       auto &touched_ls = tx_result.get_touched_ls();
-      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls),
+      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
           savepoint, stmt_expire_ts, touched_ls);
       // prioritize returning session error code
       if (session->is_terminate(ret)) {
@@ -1108,7 +1116,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #else
   if (OB_FAIL(ret) || rollback) { print_log = true; }
 #endif
-  if (print_log && OB_NOT_NULL(session)) {
+  if (print_log
+      && OB_NOT_NULL(session)
+      && OB_TRY_LOCK_ROW_CONFLICT != exec_ctx.get_errcode()) {
     LOG_INFO("end stmt", K(ret),
              "plain_select", is_plain_select,
              "stmt_type", stmt_type,

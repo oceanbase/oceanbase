@@ -135,6 +135,7 @@ enum ObNodeDataType: int8_t {
 };
 
 class ObIMulModeBase;
+class ObXmlNode;
 struct ObNodeMetaData {
   ObNodeMetaData(ObNodeMemType m_type, ObNodeDataType data_type)
     : m_type_(m_type),
@@ -186,6 +187,8 @@ public:
       if (OB_SUCC(ret)) {
         total_ = stack_size;
         buffer_.set_length(length);
+      } else {
+        OB_LOG(WARN, "failed to construct ObStack", K(ret), K(length));
       }
     }
   }
@@ -208,6 +211,8 @@ public:
         char* dst_buf = const_cast<char*> (buffer_.ptr()) + i * sizeof(T);
         new (dst_buf) T(*reinterpret_cast<T*>(src_buf));
       }
+    } else {
+      OB_LOG(WARN, "failed to construct ObStack", K(ret), K(length));;
     }
   }
 
@@ -224,6 +229,7 @@ public:
 
     if (total_ <= pos_) {
       if (OB_FAIL(extend())) {
+        OB_LOG(WARN, "failed to extend", K(ret));
       }
     }
 
@@ -233,7 +239,7 @@ public:
       pos_++;
     }
 
-    return 0;
+    return ret;
   }
 
   int extend()
@@ -242,6 +248,7 @@ public:
     int64_t length = buffer_.length();
     int64_t extend_size = extend_step_ * sizeof(T);
     if (OB_FAIL(buffer_.reserve(extend_size))) {
+      OB_LOG(WARN, "failed to reserve.", K(ret), K(extend_size));
     } else {
       total_ += extend_step_;
       length += extend_size;
@@ -291,7 +298,7 @@ public:
       new (write_buf) T(iter);
     }
 
-    return 0;
+    return ret;
   }
 
   bool empty() { return pos_ == 0; }
@@ -365,6 +372,7 @@ public:
    * node type, json xml together enum
   */
   virtual ObMulModeNodeType type() const = 0;
+  virtual int clone(ObMulModeMemCtx *ctx, ObXmlNode *&node) { return OB_NOT_SUPPORTED; }
 
   bool is_binary() const { return meta_.m_type_ == BINARY_TYPE; }
 
@@ -595,6 +603,8 @@ public:
   *  virtual int to_time(int64_t &value) const = 0;
   *  virtual int to_bit(uint64_t &value) const = 0;
   **/
+private:
+  int get_bin_size(uint64_t &size);
 
 protected:
   ObNodeMetaData meta_;

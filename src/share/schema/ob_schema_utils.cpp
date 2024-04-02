@@ -25,6 +25,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
+#include "sql/engine/cmd/ob_ddl_executor_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -442,7 +443,8 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 // construct inner table schemas in tenant space
 int ObSchemaUtils::construct_inner_table_schemas(
     const uint64_t tenant_id,
-    ObIArray<ObTableSchema> &tables)
+    ObSArray<ObTableSchema> &tables,
+    ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (is_sys_tenant(tenant_id)) {
@@ -456,6 +458,16 @@ int ObSchemaUtils::construct_inner_table_schemas(
       virtual_table_schema_creators,
       sys_view_schema_creators
     };
+    int64_t capacity = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
+      for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
+           OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
+        ++capacity;
+      }
+    }
+    if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
+      LOG_WARN("fail to prepare allocate table schemas", KR(ret), K(tenant_id), K(capacity));
+    }
     HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
         for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
@@ -495,6 +507,7 @@ int ObSchemaUtils::construct_inner_table_schemas(
 
 int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     const ObTimeoutCtx &ctx,
+    sql::ObSQLSessionInfo *session,
     const uint64_t tenant_id,
     const int64_t schema_version)
 {
@@ -506,19 +519,27 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
   if (tenant_config.is_valid()) {
     consensus_timeout = tenant_config->_wait_interval_after_parallel_ddl;
   }
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+  if (OB_ISNULL(session) || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
       || schema_version <= 0
       || consensus_timeout < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version), K(consensus_timeout));
+    LOG_WARN("invalid arg", KR(ret), KP(session), K(tenant_id), K(schema_version), K(consensus_timeout));
   } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
   }
+  bool is_dropped = false;
   while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
     int64_t refreshed_schema_version = OB_INVALID_VERSION;
     int64_t consensus_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
+    if (OB_FAIL(schema_service->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+      LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(is_dropped)) {
+      ret = OB_TENANT_HAS_BEEN_DROPPED;
+      LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObDDLExecutorUtil::handle_session_exception(*session))) {
+      LOG_WARN("fail to handle session exception", KR(ret));
+    } else if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("get refreshed schema_version fail", KR(ret), K(tenant_id));
     } else if (OB_FAIL(schema_service->get_tenant_broadcast_consensus_version(tenant_id, consensus_schema_version))) {
       LOG_WARN("get consensus schema_version fail", KR(ret), K(tenant_id));
@@ -717,6 +738,149 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
       table_schemas))) {
     LOG_WARN("get batch tables failed", KR(ret),
         K(schema_status), K(schema_version), K(need_refresh_table_schema_keys));
+  }
+  return ret;
+}
+
+int ObSchemaUtils::check_whether_column_exist(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObObjectID &table_id,
+    const ObString &column_name,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || OB_INVALID_ID == table_id
+      || column_name.empty()
+      || !is_sys_table(table_id)
+      || is_core_table(table_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_id), K(column_name));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      // in __all_column, tenant_id is primary key and it's value is 0
+      if (OB_FAIL(sql.append_fmt(
+          "SELECT count(*) = 1 AS exist FROM %s WHERE tenant_id = 0 and table_id = %lu and column_name = '%.*s'",
+          OB_ALL_COLUMN_TNAME, table_id, column_name.length(), column_name.ptr()))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(sql_client.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        LOG_WARN("next failed", KR(ret), K(sql));
+      } else if (OB_FAIL(res->get_bool("exist", exist))) {
+        LOG_WARN("get max task id failed", KR(ret), K(sql));
+      }
+    }
+  }
+  return ret;
+}
+
+const char* DDLType[]
+{
+  "TRUNCATE_TABLE",
+  "SET_COMMENT",
+  "CREATE_INDEX"
+};
+
+int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  ddl_type = MAX_TYPE;
+  STATIC_ASSERT((ARRAYSIZEOF(DDLType)) == MAX_TYPE, "size count not match");
+  bool find = false;
+  for (uint64_t i = 0; !find && i < ARRAYSIZEOF(DDLType); i++) {
+    if (ddl_string.case_compare(DDLType[i]) == 0) {
+      find = true;
+      ddl_type = static_cast<ObParallelDDLType>(i);
+    }
+  }
+  if (OB_UNLIKELY(!find)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknown ddl_type", KR(ret), K(ddl_string));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::set_value(const ObConfigModeItem &mode_item)
+{
+  int ret = OB_SUCCESS;
+  const uint8_t* values = mode_item.get_value();
+  if (OB_ISNULL(values)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "mode item's value_ is null ptr", KR(ret));
+  } else {
+    STATIC_ASSERT(((sizeof(value_)/sizeof(uint8_t) <= ObConfigModeItem::MAX_MODE_BYTES)),
+                  "value_ size overflow");
+    STATIC_ASSERT( (MAX_TYPE * 2) <= (sizeof(value_) * 8), "type size overflow");
+    value_ = 0;
+    for (uint64_t i = 0; i < 8; ++i) {
+      value_ = (value_ | static_cast<uint64_t>(values[i]) << (8 * i));
+    }
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::set_parallel_ddl_mode(const ObParallelDDLType type, const uint8_t mode)
+{
+  int ret = OB_SUCCESS;
+  if ((TRUNCATE_TABLE <= type) && (type < MAX_TYPE)) {
+    uint64_t shift = static_cast<uint64_t>(type);
+    if (!check_mode_valid_(mode)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "mode invalid", KR(ret), K(mode));
+    } else {
+      uint64_t mask = MASK << (shift * MASK_SIZE);
+      value_ = (value_ & ~mask) | (static_cast<uint64_t>(mode) << (shift * MASK_SIZE));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "type invalid", KR(ret), K(type));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel)
+{
+  int ret = OB_SUCCESS;
+  is_parallel = true;
+  if ((TRUNCATE_TABLE <= type) && (type < MAX_TYPE)) {
+    uint64_t shift = static_cast<uint64_t>(type);
+    uint8_t value = static_cast<uint8_t>((value_ >> (shift * MASK_SIZE)) & MASK);
+    if (value == ObParallelDDLControlParser::MODE_OFF) {
+      is_parallel = false;
+    } else if (value == ObParallelDDLControlParser::MODE_ON) {
+      is_parallel = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "invalid value unexpected", KR(ret), K(value));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "type invalid", KR(ret), K(type));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::is_parallel_ddl_enable(const ObParallelDDLType ddl_type, const uint64_t tenant_id, bool &is_parallel)
+{
+  int ret = OB_SUCCESS;
+  is_parallel = true;
+  ObParallelDDLControlMode cfg;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "invalid tenant config", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_config->_parallel_ddl_control.init_mode(cfg))) {
+    LOG_WARN("init mode failed", KR(ret));
+  } else if (OB_FAIL(cfg.is_parallel_ddl(ddl_type, is_parallel))) {
+    LOG_WARN("fail to check is parallel ddl", KR(ret), K(ddl_type));
   }
   return ret;
 }

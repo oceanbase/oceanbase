@@ -159,7 +159,7 @@ private:
 class SwitchToFollowerForcedlyFunctor
 {
 public:
-  SwitchToFollowerForcedlyFunctor(ObIArray<ObTxCommitCallback> &cb_array) : cb_array_(cb_array)
+  SwitchToFollowerForcedlyFunctor(ObTxCommitCallback *&cb_list) : cb_list_(cb_list)
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/)
   }
@@ -171,7 +171,7 @@ public:
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       tmp_ret = common::OB_INVALID_ARGUMENT;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
-    } else if (common::OB_SUCCESS != (tmp_ret = tx_ctx->switch_to_follower_forcedly(cb_array_))) {
+    } else if (common::OB_SUCCESS != (tmp_ret = tx_ctx->switch_to_follower_forcedly(cb_list_))) {
       TRANS_LOG_RET(ERROR, tmp_ret, "leader revoke failed", K(tx_id), K(*tx_ctx));
     }
 
@@ -179,7 +179,7 @@ public:
   }
 
 private:
-  ObIArray<ObTxCommitCallback> &cb_array_;
+  ObTxCommitCallback *&cb_list_;
 };
 
 class SwitchToLeaderFunctor
@@ -216,9 +216,8 @@ private:
 class SwitchToFollowerGracefullyFunctor
 {
 public:
-  SwitchToFollowerGracefullyFunctor(const int64_t abs_expired_time,
-                                    ObIArray<ObTxCommitCallback> &cb_array)
-      : abs_expired_time_(abs_expired_time), count_(0), ret_(OB_SUCCESS), cb_array_(cb_array)
+  SwitchToFollowerGracefullyFunctor(const int64_t abs_expired_time, ObTxCommitCallback *&cb_list)
+      : abs_expired_time_(abs_expired_time), count_(0), ret_(OB_SUCCESS), cb_list_(cb_list)
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -241,7 +240,7 @@ public:
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(tx_ctx->switch_to_follower_gracefully(cb_array_))) {
+      if (OB_FAIL(tx_ctx->switch_to_follower_gracefully(cb_list_))) {
         TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), K(*tx_ctx));
         ret_ = ret;
       } else {
@@ -258,7 +257,7 @@ private:
   int64_t abs_expired_time_;
   int64_t count_;
   int ret_;
-  ObIArray<ObTxCommitCallback> &cb_array_;
+  ObTxCommitCallback *&cb_list_;
 };
 
 class ResumeLeaderFunctor
@@ -319,8 +318,8 @@ private:
 class KillTxCtxFunctor
 {
 public:
-  KillTxCtxFunctor(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array)
-      : arg_(arg), release_audit_mgr_lock_(false), cb_array(cb_array)
+  KillTxCtxFunctor(const KillTransArg &arg, ObTxCommitCallback *&cb_list)
+      : arg_(arg), release_audit_mgr_lock_(false), cb_list_(cb_list)
   {
 
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
@@ -339,7 +338,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
       tmp_ret = common::OB_INVALID_ARGUMENT;
     } else {
-      if (OB_SUCC(tx_ctx->kill(arg_, cb_array))) {
+      if (OB_SUCC(tx_ctx->kill(arg_, cb_list_))) {
         TRANS_LOG(INFO, "kill transaction success", K(tx_id), K_(arg));
       } else if (common::OB_TRANS_CANNOT_BE_KILLED == ret) {
         TRANS_LOG(INFO, "transaction can not be killed", K(tx_id), "context", *tx_ctx);
@@ -354,7 +353,7 @@ public:
 private:
   KillTransArg arg_;
   bool release_audit_mgr_lock_;
-  ObIArray<ObTxCommitCallback> &cb_array;
+  ObTxCommitCallback *&cb_list_;
 };
 
 class StopLSFunctor

@@ -16,8 +16,15 @@
 #define private public
 
 #include "env/ob_multi_replica_test_base.h"
+#include "env/ob_multi_replica_util.h"
 #include "env/ob_fast_bootstrap.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
+
+#define CUR_TEST_CASE_NAME ObSimpleMultiReplicaExampleTest
+
+DEFINE_MULTI_ZONE_TEST_CASE_CLASS
+
+APPEND_RESTART_TEST_CASE_CLASS(1, 1)
 
 namespace oceanbase
 {
@@ -27,12 +34,6 @@ namespace unittest
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 
-std::string ObMultiReplicaTestBase::ZONE_TEST_CASE_NAME[MAX_ZONE_COUNT] = {
-    "ObSimpleMultiReplicaExampleTest_ZONE1", "ObSimpleMultiReplicaExampleTest_ZONE2",
-    "ObSimpleMultiReplicaExampleTest_ZONE3"};
-
-static const std::string TEST_DIR_PREFIX =  "test_multi_replica_basic_";
-
 class TestRunCtx
 {
 public:
@@ -41,25 +42,6 @@ public:
 };
 
 TestRunCtx RunCtx;
-
-class ObSimpleMultiReplicaExampleTest_ZONE1 : public ObMultiReplicaTestBase
-{
-public:
-  ObSimpleMultiReplicaExampleTest_ZONE1() : ObMultiReplicaTestBase() {}
-
-};
-
-class ObSimpleMultiReplicaExampleTest_ZONE2 : public ObMultiReplicaTestBase
-{
-public:
-  ObSimpleMultiReplicaExampleTest_ZONE2() : ObMultiReplicaTestBase() {}
-};
-
-class ObSimpleMultiReplicaExampleTest_ZONE3 : public ObMultiReplicaTestBase
-{
-public:
-  ObSimpleMultiReplicaExampleTest_ZONE3() : ObMultiReplicaTestBase() {}
-};
 
 TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, observer_start)
 {
@@ -77,7 +59,6 @@ TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, add_tenant)
   // 初始化普通租户tt1的sql proxy
   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
 }
-
 
 TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, create_table)
 {
@@ -123,12 +104,11 @@ TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, create_table)
   }
 }
 
-
-TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, delete_tenant)
+TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, restart_zone1)
 {
-  ASSERT_EQ(OB_SUCCESS, delete_tenant());
+  // ASSERT_EQ(OB_SUCCESS, delete_tenant());
+  ASSERT_EQ(OB_SUCCESS, ObMultiReplicaTestBase::restart_zone(1, 1));
 }
-
 
 TEST_F(ObSimpleMultiReplicaExampleTest_ZONE1, end)
 {
@@ -154,41 +134,61 @@ TEST_F(ObSimpleMultiReplicaExampleTest_ZONE3, end)
   }
 }
 
+TEST_F(GET_RESTART_ZONE_TEST_CLASS_NAME(1, 1), restart_zone1)
+{
+}
+
 } // end unittest
 } // end oceanbase
 
 
-int main(int argc, char **argv)
-{
-  int return_code = 0;
-  int ret = OB_SUCCESS;
-  int c = 0;
-  int time_sec = 0;
-  char *log_level = (char *)"INFO";
-  while (EOF != (c = getopt(argc, argv, "t:l:"))) {
-    switch (c) {
-    case 't':
-      time_sec = atoi(optarg);
-      break;
-    case 'l':
-      log_level = optarg;
-      oceanbase::unittest::ObMultiReplicaTestBase::enable_env_warn_log_ = false;
-      break;
-    default:
-      break;
-    }
-  }
-  oceanbase::unittest::init_log_and_gtest(argc, argv);
-  OB_LOGGER.set_log_level(log_level);
-
-  LOG_INFO("main>>>");
-  oceanbase::unittest::RunCtx.time_sec_ = time_sec;
-  ::testing::InitGoogleTest(&argc, argv);
-  if (OB_FAIL(oceanbase::unittest::ObMultiReplicaTestBase::bootstrap_multi_replica(
-          oceanbase::unittest::TEST_DIR_PREFIX))) {
-    fprintf(stdout, "init test case failed. ret = %d", ret);
-    return ret;
-  }
-  return_code = RUN_ALL_TESTS();
-  return return_code;
-}
+MULTI_REPLICA_TEST_MAIN_FUNCTION(  "test_multi_replica_basic_" );
+// int main(int argc, char **argv)
+// {
+//   int return_code = 0;
+//   int ret = OB_SUCCESS;
+//   int c = 0;
+//   int time_sec = 0;
+//   char *log_level = (char *)"INFO";
+//   while (EOF != (c = getopt(argc, argv, "t:l:"))) {
+//     switch (c) {
+//     case 't':
+//       time_sec = atoi(optarg);
+//       break;
+//     case 'l':
+//       log_level = optarg;
+//       oceanbase::unittest::ObMultiReplicaTestBase::enable_env_warn_log_ = false;
+//       break;
+//     default:
+//       break;
+//     }
+//   }
+//   oceanbase::unittest::init_log_and_gtest(argc, argv);
+//   OB_LOGGER.set_log_level(log_level);
+//
+//   for(int i =0; i < argc; i++)
+//   {
+//     printf("MAIN FUNC : argc = %d, i =%d, arv = %s\n", argc, i, argv[i]);
+//   }
+//
+//     int restart_zone_id = -1;
+//     int restart_zone_no = 0;
+//     if(argc >= 3)
+//     {
+//       std::string tmp_str;
+//       tmp_str = argv[1];
+//       restart_zone_id = std::stoi(tmp_str);
+//       tmp_str = argv[2];
+//       restart_zone_no = std::stoi(tmp_str);
+//     }
+//   LOG_INFO("main>>>");
+//   oceanbase::unittest::RunCtx.time_sec_ = time_sec;
+//   ::testing::InitGoogleTest(&argc, argv);
+//   if (OB_FAIL(oceanbase::unittest::ObMultiReplicaTestBase::bootstrap_multi_replica(
+//           restart_zone_id, restart_zone_no, oceanbase::unittest::TEST_DIR_PREFIX))) {
+//     fprintf(stdout, "init test case failed. ret = %d", ret);
+//     return ret;
+//   }
+//   return_code = RUN_ALL_TESTS();
+//   return return_code;
+// }

@@ -494,6 +494,9 @@ int modify_progressive_merge_num_for_tenant(ObExecContext &ctx,
               if (table->is_tmp_table()) {
                 do_alter = false;
               }
+              if (table->is_external_table()) {
+                do_alter = false;
+              }
               if (do_alter) {
                 ObSqlString sql;
                 int64_t affected_rows = 0;

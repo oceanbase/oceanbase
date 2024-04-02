@@ -59,9 +59,6 @@ int ObTableLoadTransStore::init()
       } else {
         session_store->session_id_ = i + 1;
       }
-      session_store->allocator_.set_tenant_id(trans_ctx_->ctx_->param_.tenant_id_);
-      session_store->partition_table_array_.set_block_allocator(
-        ModulePageAllocator(session_store->allocator_));
       if (OB_FAIL(session_store_array_.push_back(session_store))) {
         LOG_WARN("fail to push back session store", KR(ret));
       }
@@ -101,12 +98,13 @@ void ObTableLoadTransStore::reset()
 
 ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, uint64_t tenant_id, ObDataTypeCastParams cast_params)
   : session_id_(session_id),
-    cast_allocator_("TLD_TS_Caster", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+    cast_allocator_("TLD_TS_Caster"),
     cast_params_(cast_params),
     last_receive_sequence_no_(0),
     extra_buf_(nullptr),
     extra_buf_size_(0)
 {
+  cast_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransStoreWriter::SessionContext::~SessionContext()
@@ -119,11 +117,13 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
     trans_ctx_(trans_store->trans_ctx_),
     store_ctx_(trans_ctx_->ctx_->store_ctx_),
     param_(trans_ctx_->ctx_->param_),
-    allocator_("TLD_TSWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_),
+    allocator_("TLD_TSWriter"),
     table_data_desc_(nullptr),
     ref_count_(0),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  column_schemas_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
@@ -305,7 +305,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
     session_ctx.cast_allocator_.reuse();
   }
@@ -342,7 +342,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
   }
   return ret;

@@ -268,7 +268,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 491	__all_routine_privilege_history	0	201001	1
 492	__wr_sqlstat	0	201001	1
 493	__all_ncomp_dll	0	201001	1
+494	__all_aux_stat	0	201001	1
+495	__all_index_usage_info	0	201001	1
+498	__all_transfer_partition_task	0	201001	1
+499	__all_transfer_partition_task_history	0	201001	1
 501	__wr_sqltext	0	201001	1
+505	__all_column_privilege	0	201001	1
+506	__all_column_privilege_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -683,8 +689,15 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12444	__all_virtual_routine_privilege_history	2	201001	1
 12445	__all_virtual_sqlstat	2	201001	1
 12446	__all_virtual_wr_sqlstat	2	201001	1
+12447	__all_virtual_aux_stat	2	201001	1
 12450	__all_virtual_sys_variable_default_value	2	201001	1
+12451	__all_virtual_transfer_partition_task	2	201001	1
+12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12454	__all_virtual_wr_sqltext	2	201001	1
+12459	__all_virtual_index_usage_info	2	201001	1
+12462	__all_virtual_column_privilege	2	201001	1
+12463	__all_virtual_column_privilege_history	2	201001	1
+12466	ENABLED_ROLES	2	201002	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1058,7 +1071,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21482	CDB_WR_SYSTEM_EVENT	1	201001	1
 21483	DBA_WR_EVENT_NAME	1	201001	1
 21484	CDB_WR_EVENT_NAME	1	201001	1
-21485	DBA_OB_FORMAT_OUTLINES	1	201001	1
 21486	procs_priv	1	201003	1
 21487	GV$OB_SQLSTAT	1	201001	1
 21488	V$OB_SQLSTAT	1	201001	1
@@ -1070,11 +1082,22 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21494	V$OB_SYS_TIME_MODEL	1	201001	1
 21495	DBA_WR_SYS_TIME_MODEL	1	201001	1
 21496	CDB_WR_SYS_TIME_MODEL	1	201001	1
+21497	DBA_OB_AUX_STATISTICS	1	201001	1
+21498	CDB_OB_AUX_STATISTICS	1	201001	1
+21499	DBA_INDEX_USAGE	1	201001	1
 21500	DBA_OB_SYS_VARIABLES	1	201001	1
+21501	DBA_OB_TRANSFER_PARTITION_TASKS	1	201001	1
+21502	CDB_OB_TRANSFER_PARTITION_TASKS	1	201001	1
+21503	DBA_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
+21504	CDB_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
 21505	DBA_WR_SQLTEXT	1	201001	1
 21506	CDB_WR_SQLTEXT	1	201001	1
 21507	GV$OB_ACTIVE_SESSION_HISTORY	1	201001	1
 21508	V$OB_ACTIVE_SESSION_HISTORY	1	201001	1
+21511	role_edges	1	201003	1
+21512	default_roles	1	201003	1
+21513	CDB_INDEX_USAGE	1	201001	1
+21516	columns_priv	1	201003	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

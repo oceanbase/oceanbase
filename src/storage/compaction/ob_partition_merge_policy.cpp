@@ -46,7 +46,6 @@ namespace oceanbase
 namespace compaction
 {
 
-// keep order with ObMergeType
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[MERGE_TYPE_MAX]
   = { ObPartitionMergePolicy::get_minor_merge_tables,
       ObPartitionMergePolicy::get_hist_minor_merge_tables,
@@ -54,14 +53,17 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::get_mini_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type
     };
-
 
 int ObPartitionMergePolicy::get_neighbour_freeze_info(
     const int64_t snapshot_version,
     const ObITable *last_major,
     ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info)
 {
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(get_merge_tables), "get merge table func cnt is mismatch");
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_neighbour_major_freeze(snapshot_version, freeze_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {

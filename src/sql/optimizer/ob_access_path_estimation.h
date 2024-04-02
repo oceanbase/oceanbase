@@ -55,6 +55,12 @@ public:
                                           uint64_t ref_table_id,
                                           bool &can_use);
 private:
+  static int inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                     common::ObIArray<AccessPath *> &paths,
+                                     const bool is_inner_path,
+                                     const ObIArray<ObRawExpr*> &filter_exprs,
+                                     ObBaseTableEstMethod &method);
+
   static inline uint64_t choose_one_est_method(ObBaseTableEstMethod valid_methods, const ObBaseTableEstMethod est_priority[], uint64_t cnt)
   {
     ObBaseTableEstMethod ret = EST_INVALID;
@@ -89,6 +95,7 @@ private:
                                   common::ObIArray<AccessPath*> &paths,
                                   const bool is_inner_path,
                                   const ObIArray<ObRawExpr*> &filter_exprs,
+                                  ObBaseTableEstMethod &valid_methods,
                                   ObBaseTableEstMethod &method);
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
@@ -174,6 +181,7 @@ private:
 
   static int estimate_prefix_range_rowcount(
       const obrpc::ObEstPartResElement &result,
+      bool new_range_with_exec_param,
       ObCostTableScanInfo &est_cost_info,
       double &logical_row_count,
       double &physical_row_count);
@@ -243,6 +251,9 @@ private:
                                                         ObIArray<AccessPath *> &paths,
                                                         const bool is_inner_path,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
+  static int classify_paths(common::ObIArray<AccessPath *> &paths,
+                             common::ObIArray<AccessPath *> &normal_paths,
+                             common::ObIArray<AccessPath *> &geo_paths);
 };
 
 }

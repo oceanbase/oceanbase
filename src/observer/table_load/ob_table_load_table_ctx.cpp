@@ -44,6 +44,7 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     is_inited_(false)
 {
   free_session_ctx_.sessid_ = sql::ObSQLSessionInfo::INVALID_SESSID;
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCtx::~ObTableLoadTableCtx()
@@ -64,7 +65,6 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
   } else {
     param_ = param;
     ddl_param_ = ddl_param;
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(param_.tenant_id_),
                K(param_.table_id_));
@@ -109,14 +109,6 @@ int ObTableLoadTableCtx::register_job_stat()
     job_stat->start_time_ = ObTimeUtil::current_time();
     job_stat->max_allowed_error_rows_ = param_.max_error_row_count_;
     job_stat->detected_error_rows_ = 0;
-    job_stat->coordinator.received_rows_ = 0;
-    job_stat->coordinator.last_commit_segment_id_ = 0;
-    job_stat->coordinator.status_ = "none";
-    job_stat->coordinator.trans_status_ = "none";
-    job_stat->store.processed_rows_ = 0;
-    job_stat->store.last_commit_segment_id_ = 0;
-    job_stat->store.status_ = "none";
-    job_stat->store.trans_status_ = "none";
     job_stat->allocator_.set_tenant_id(param_.tenant_id_);
     if (OB_FAIL(ObTableLoadUtils::deep_copy(schema_.table_name_, job_stat->table_name_,
                                             job_stat->allocator_))) {

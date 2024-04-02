@@ -58,10 +58,10 @@ int ObStringBuffer::get_result_string(ObString &buffer)
 
 int ObStringBuffer::append(const char *str)
 {
-  return append(str, NULL == str ? 0 : strlen(str));
+  return append(str, NULL == str ? 0 : strlen(str), 0);
 }
 
-int ObStringBuffer::append(const char *str, const uint64_t len, int8_t index)
+int ObStringBuffer::append(const char *str, const uint64_t len, int8_t flag)
 {
   INIT_SUCC(ret);
   if (OB_ISNULL(allocator_)) {
@@ -77,7 +77,7 @@ int ObStringBuffer::append(const char *str, const uint64_t len, int8_t index)
       if (need_len < len_) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("size over flow", K(ret), K(need_len), K(len_));
-      } else if (OB_FAIL(reserve(index == -1 ? need_len : len))) {
+      } else if (OB_FAIL(reserve(flag == -1 ? need_len : len))) {
         LOG_WARN("reserve data failed", K(ret), K(need_len), K(len_));
       } else {
         MEMCPY(data_ + len_, str, len);
@@ -90,9 +90,9 @@ int ObStringBuffer::append(const char *str, const uint64_t len, int8_t index)
   return ret;
 }
 
-int ObStringBuffer::append(const ObString &str)
+int ObStringBuffer::append(const ObString &str, int8_t flag)
 {
-  return append(str.ptr(), str.length());
+  return append(str.ptr(), str.length(), flag);
 }
 
 int ObStringBuffer::reserve(const uint64_t len)
@@ -159,6 +159,22 @@ int ObStringBuffer::set_length(const uint64_t len)
     if (cap_ > 0) {
       data_[len_] = '\0';
     }
+  }
+  return ret;
+}
+
+int ObStringBuffer::deep_copy(ObIAllocator *allocator, ObStringBuffer &input)
+{
+  INIT_SUCC(ret);
+  char *new_data = NULL;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("allocator is null.", K(ret));
+  } else {
+    set_allocator(allocator);
+    len_ = input.length();
+    cap_ = input.capacity();
+    data_ = input.ptr();
   }
   return ret;
 }

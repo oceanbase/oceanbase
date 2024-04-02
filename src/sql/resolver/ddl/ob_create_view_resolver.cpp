@@ -18,7 +18,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h" // resolve select clause
 #include "sql/resolver/dml/ob_dml_stmt.h" // PartExprItem
 #include "sql/ob_sql_context.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "lib/json/ob_json_print_utils.h"  // for SJ
@@ -103,6 +103,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     uint64_t old_database_id = session_info_->get_database_id();
     bool resolve_succ = true;
     bool can_expand_star = true;
+    bool add_undefined_columns = false;
+    ParseNode *select_stmt_node = NULL;
     if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[VIEW_NODE],
                                             view_name, db_name,
                                             false, false, &dblink_name_ptr, &dblink_name_len, &has_dblink_node))) {
@@ -160,10 +162,11 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       view_table_resolver.params_.is_specified_col_name_ = parse_tree.children_[VIEW_COLUMNS_NODE] != NULL;
       view_table_resolver.set_current_view_level(1);
       view_table_resolver.set_is_top_stmt(true);
+      view_table_resolver.set_has_resolved_field_list(false);
       view_table_resolver.set_is_create_view(true);
       // set ObViewSchema.materialized_ in RS
       view_table_resolver.set_materialized(parse_tree.children_[MATERIALIZED_NODE] ? true : false);
-      ParseNode *select_stmt_node = parse_tree.children_[SELECT_STMT_NODE];
+      select_stmt_node = parse_tree.children_[SELECT_STMT_NODE];
       ParseNode *view_columns_node = parse_tree.children_[VIEW_COLUMNS_NODE];
       ObString sql_str(select_stmt_node->str_len_, select_stmt_node->str_value_);
       view_define = sql_str;
@@ -198,6 +201,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         } else {
           LOG_WARN("resolve select in create view failed", K(select_stmt_node), K(ret));
         }
+      } else if (OB_FAIL(view_table_resolver.check_auto_gen_column_names())) {
+        LOG_WARN("fail to check auto gen column names", K(ret));
       } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                           params_.session_info_,
                                                           view_table_resolver.get_select_stmt()))) {
@@ -219,7 +224,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         table_schema.set_table_type(USER_VIEW);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(resolve_column_list(parse_tree.children_[VIEW_COLUMNS_NODE],
+      } else if (OB_FAIL(resolve_column_list(view_columns_node,
                                              column_list,
                                              table_schema))) {
         LOG_WARN("fail to resolve view columns", K(ret));
@@ -229,19 +234,35 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_ISNULL(select_stmt->get_real_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get real stmt", K(ret), K(*select_stmt));
-      } else if (OB_FAIL(check_view_columns(*select_stmt, view_columns_node,
-                                            create_arg.error_info_, is_force_view, can_expand_star))) {
+      } else if (OB_FAIL(check_view_columns(*select_stmt,
+                                            view_columns_node,
+                                            create_arg.error_info_,
+                                            is_force_view,
+                                            can_expand_star,
+                                            add_undefined_columns))) {
         LOG_WARN("failed to check view columns", K(ret));
-      } else if (OB_FAIL(add_column_infos(session_info_->get_effective_tenant_id(),
-                                          *select_stmt,
-                                          table_schema,
-                                          *allocator_,
-                                          *session_info_,
-                                          column_list,
-                                          comment_list))) {
+      } else if ((lib::is_mysql_mode() || (resolve_succ && !add_undefined_columns))
+                 && OB_FAIL(add_column_infos(session_info_->get_effective_tenant_id(),
+                                             *select_stmt,
+                                             table_schema,
+                                             *allocator_,
+                                             *session_info_,
+                                             column_list,
+                                             comment_list))) {
         LOG_WARN("failed to add column infos", K(ret));
+      } else if ((!resolve_succ || add_undefined_columns)
+                  && is_force_view && lib::is_oracle_mode()
+                  && OB_FAIL(try_add_undefined_column_infos(session_info_->get_effective_tenant_id(),
+                                                            view_table_resolver.has_resolved_field_list(),
+                                                            select_stmt_node,
+                                                            *select_stmt,
+                                                            table_schema,
+                                                            column_list))) {
+        LOG_WARN("failed to add undefined column infos", K(ret));
       } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
+      } else if (is_force_view && (!resolve_succ || add_undefined_columns)
+                 && FALSE_IT(table_schema.set_object_status(ObObjectStatus::INVALID))) {
       } else {
         bool is_updatable = true;
         ViewCheckOption check_option = VIEW_CHECK_OPTION_NONE;
@@ -365,7 +386,8 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
                                              ParseNode *view_columns_node,
                                              share::schema::ObErrorInfo &error_info,
                                              const bool is_force_view,
-                                             bool &can_expand_star)
+                                             bool &can_expand_star,
+                                             bool &add_undefined_columns)
 {
   int ret = OB_SUCCESS;
   // oracle 模式下, create view时要求每一个select expr有明确的别名
@@ -379,7 +401,7 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   int64_t select_item_size = select_stmt.get_select_item_size();
   if (NULL != view_columns_node && view_columns_node->num_child_ > 0) {
     ObCollationType cs_type = CS_TYPE_INVALID;
-    if (OB_UNLIKELY(select_item_size != view_columns_node->num_child_)) {
+    if (OB_UNLIKELY(!is_force_view && select_item_size != view_columns_node->num_child_)) {
       ret = OB_ERR_VIEW_WRONG_LIST;
       LOG_WARN("view columns is not equal with select columns", K(select_item_size),
                                                       K(view_columns_node->num_child_));
@@ -387,6 +409,15 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
         LOG_WARN("fail to get collation_connection", K(ret));
     } else if (OB_FAIL(view_col_names.create(view_columns_node->num_child_))) {
       LOG_WARN("failed to init hashset", K(ret), K(select_stmt.get_select_items().count()));
+    } else if (is_force_view && select_item_size != view_columns_node->num_child_) {
+      if (OB_FAIL(try_add_error_info(OB_ERR_VIEW_WRONG_LIST, error_info))) {
+        LOG_WARN("failed to add error info to for force view", K(ret));
+      } else {
+        can_expand_star = false;
+        add_undefined_columns = true;
+        LOG_TRACE("force view columns is not equal with select columns", K(select_item_size),
+                                                              K(view_columns_node->num_child_));
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && !is_col_dup && i < view_columns_node->num_child_; i++) {
       if (OB_ISNULL(view_columns_node->children_[i])) {
@@ -1103,6 +1134,118 @@ int ObCreateViewResolver::collect_dependency_infos(ObQueryCtx *query_ctx,
   }
   return ret;
 }
+int ObCreateViewResolver::try_add_undefined_column_infos(const uint64_t tenant_id,
+                                                         bool has_resolved_field_list,
+                                                         ParseNode *select_stmt_node,
+                                                         ObSelectStmt &select_stmt,
+                                                         ObTableSchema &table_schema,
+                                                         const common::ObIArray<ObString> &column_list)
+{
+  int ret = OB_SUCCESS;
+  bool add_undefined_columns = false;
+  ObArray<SelectItem> select_items;
+  if (has_resolved_field_list) {
+    if (OB_FAIL(add_undefined_column_infos(tenant_id,
+                                           select_stmt.get_select_items(),
+                                           table_schema,
+                                           column_list))) {
+      LOG_WARN("failed to add undefined column infos", K(ret));
+    }
+  } else if (column_list.empty()
+             && OB_FAIL(resolve_select_node_for_force_view(add_undefined_columns,
+                                                           select_stmt_node,
+                                                           select_items))) {
+    LOG_WARN("failed to resolve select node", K(ret));
+  } else if ((add_undefined_columns || !column_list.empty())
+             && OB_FAIL(add_undefined_column_infos(tenant_id,
+                                                   select_items,
+                                                   table_schema,
+                                                   column_list))) {
+    LOG_WARN("failed to add undefined column infos", K(ret));
+  }
+  return ret;
+}
+int ObCreateViewResolver::resolve_select_node_for_force_view(bool &add_undefined_columns,
+                                                             ParseNode *select_stmt_node,
+                                                             ObIArray<SelectItem> &select_items)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *field_list_node = NULL;
+  bool has_star = false;
+  ParseNode *project_node = NULL;
+  SelectItem select_item;
+  if (OB_ISNULL(select_stmt_node)
+      || OB_ISNULL(field_list_node = select_stmt_node->children_[PARSE_SELECT_SELECT])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse node is null", K(ret));
+  }
+  for (int32_t i = 0; OB_SUCC(ret) && !has_star && i < field_list_node->num_child_; ++i) {
+    if (OB_ISNULL(project_node = field_list_node->children_[i]->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("parse node is null", K(ret));
+    } else if (project_node->type_ == T_STAR
+               || (project_node->type_ == T_COLUMN_REF
+                   && project_node->children_[2]->type_ == T_STAR)) {
+      has_star = true;
+    } else {
+      select_item.expr_name_.assign_ptr(field_list_node->children_[i]->str_value_,
+                          static_cast<int32_t>(field_list_node->children_[i]->str_len_));
+      if (project_node->type_ == T_ALIAS) {
+        ParseNode *alias_node = project_node->children_[1];
+        select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                            static_cast<int32_t>(alias_node->str_len_));
+        if (OB_UNLIKELY(alias_node->str_len_ > OB_MAX_COLUMN_NAME_LENGTH)) {
+          ret = OB_ERR_TOO_LONG_IDENT;
+          LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(select_items.push_back(select_item))) {
+        LOG_WARN("failed to push back select item");
+      }
+    }
+  }
+  if (!has_star && OB_SUCC(ret)) {
+    add_undefined_columns = true;
+  }
+  return ret;
+}
+
+int ObCreateViewResolver::add_undefined_column_infos(const uint64_t tenant_id,
+                                                     ObIArray<SelectItem> &select_items,
+                                                     ObTableSchema &table_schema,
+                                                     const common::ObIArray<ObString> &column_list)
+{
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 column;
+  int64_t cur_column_id = OB_APP_MIN_COLUMN_ID;
+  int64_t column_count = !column_list.empty() ? column_list.count() : select_items.count();
+  if (lib::is_oracle_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+      column.reset();
+      if (!column_list.empty()) {
+        OZ(column.set_column_name(column_list.at(i)));
+      } else if (!select_items.at(i).alias_name_.empty()) {
+        OZ(column.set_column_name(select_items.at(i).alias_name_));
+      } else {
+        OZ(column.set_column_name(select_items.at(i).expr_name_));
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        column.set_column_id(cur_column_id++);
+        //ObExtendType only used internal, we user it to describe UNDEFINED type
+        column.set_data_type(ObObjType::ObExtendType);
+        column.set_data_length(0);
+        column.set_data_precision(-1);
+        column.set_data_scale(OB_MIN_NUMBER_SCALE - 1);
+        if (OB_FAIL(table_schema.add_column(column))) {
+          LOG_WARN("add column to table_schema failed", K(ret), K(column));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
                                            ObSelectStmt &select_stmt,
@@ -1121,7 +1264,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
     if ((!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count()))
-        || (!comment_list.empty() && OB_UNLIKELY(comment_list.count() != select_items.count()))) {
+        || (!table_schema.is_sys_view() && !comment_list.empty()
+             && OB_UNLIKELY(comment_list.count() != select_items.count()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get wrong column count", K(ret), K(column_list.count()), K(comment_list.count()),
                                            K(select_items.count()), K(table_schema), K(select_stmt));
@@ -1141,7 +1285,9 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
         } else {
           OZ(column.set_column_name(select_item.expr_name_));
         }
-        if (OB_SUCC(ret) && !comment_list.empty()) {
+        if (OB_SUCC(ret) && !comment_list.empty() && !table_schema.is_sys_view()) {
+          // System view recompilation may have definition changes,
+          // so previous comments can only be discarded.
           OZ(column.set_comment(comment_list.at(i)));
         }
         if (OB_SUCC(ret)) {
@@ -1171,11 +1317,16 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
           column.set_column_id(cur_column_id++);
           ObColumnSchemaV2 *org_column = table_schema.get_column_schema(column.get_column_name());
           if (OB_NOT_NULL(org_column)) {
-            ObColumnSchemaV2 new_column(*org_column);
-            new_column.set_column_id(cur_column_id++);
-            new_column.set_prev_column_id(UINT64_MAX);
-            new_column.set_next_column_id(UINT64_MAX);
-            if (1 == table_schema.get_column_count()) {
+            ObColumnSchemaV2 new_column;
+            if (OB_FAIL(new_column.assign(*org_column))) {
+              LOG_WARN("fail to assign column schema", KR(ret), KPC(org_column));
+            } else {
+              new_column.set_column_id(cur_column_id++);
+              new_column.set_prev_column_id(UINT64_MAX);
+              new_column.set_next_column_id(UINT64_MAX);
+            }
+            if (OB_FAIL(ret)) {
+            } else if (1 == table_schema.get_column_count()) {
             } else if (OB_FAIL(table_schema.delete_column(org_column->get_column_name_str()))) {
               LOG_WARN("delete column failed", K(ret), K(new_column.get_column_name_str()));
             } else if (OB_FAIL(table_schema.add_column(new_column))) {

@@ -24,6 +24,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/number/ob_number_v2.h"
 #include "common/object/ob_object.h"
+#include "lib/geo/ob_geo_to_tree_visitor.h"
 
 namespace oceanbase
 {
@@ -43,6 +44,7 @@ enum ObGeoBuildFlag: uint8_t {
   GEO_ALLOW_3D = 0x08,
   GEO_CHECK_RANGE = 0x10,
   GEO_RESERVE_3D = 0x20, // do not convert 3D Geometry to 2D
+  GEO_NOT_COPY_WKB = 0x40, // copy input wkb str to output geo data
   GEO_DEFAULT = GEO_NORMALIZE | GEO_CORRECT | GEO_CHECK_RANGE,
   GEO_ALLOW_3D_DEFAULT = GEO_DEFAULT | GEO_ALLOW_3D,
 };
@@ -77,7 +79,8 @@ public:
                                 const ObString &wkb,
                                 const ObSrsItem *srs,
                                 ObGeometry *&geo,
-                                bool has_srid = true);
+                                bool has_srid = true,
+                                bool with_copy = true);
   static int correct_polygon(ObIAllocator &alloc,
                              const ObSrsItem *srs,
                              bool is_ring_closed,
@@ -162,6 +165,18 @@ public:
   static double round_double(double x, int32_t dec, bool truncate);
   static double distance_point_squre(const ObWkbGeomInnerPoint& p1, const ObWkbGeomInnerPoint& p2);
   static int add_geo_version(ObIAllocator &allocator, const ObString &src, ObString &res_wkb);
+  // only check if polygon is a line or it's valid points are lesser than 4.
+  template<typename PyTree, typename MpyTree, typename CollTree>
+  static int is_polygon_valid_simple(const ObGeometry *geo, bool &res);
+  template<typename GcTreeType>
+  static int remove_duplicate_multi_geo(ObGeometry *&geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs);
+  template<typename GcTreeType>
+  static int simplify_geo_collection(ObGeometry *&geo, common::ObIAllocator &allocator, const ObSrsItem *srs);
+  template<typename GcType>
+  static int simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator);
+  static int remove_duplicate_geo(ObGeometry *&geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs, bool need_simplify = true);
+  template<typename GcTreeType>
+  static int check_if_geo_duplicate(ObGeometry *geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs, bool &is_duplicate);
 private:
   template<typename PT, typename LN, typename PY, typename MPT, typename MLN, typename MPY, typename GC>
   static int create_geo_bin_by_type(ObIAllocator &allocator,
@@ -188,6 +203,11 @@ private:
   static int get_varry_obj_from_map(const QualifiedMap &map, const common::ObString &key,
                                     const common::ObObjMeta &num_meta, NumberObjType type, ArrayType &array);
   static int append_point(double x, double y, ObWkbBuffer &wkb_buf);
+  template<typename RingTree>
+  static bool is_valid_ring_simple(const RingTree &ring);
+  template<typename MpType>
+  static int is_in_geometry(lib::MemoryContext &mem_ctx, const ObGeometry &geo, const MpType &multi_geo,
+      const ObSrsItem *srs, bool &res, uint32_t start_idx = 0);
   DISALLOW_COPY_AND_ASSIGN(ObGeoTypeUtil);
 };
 
@@ -237,6 +257,7 @@ public:
   template<typename GeometryType>
   static int get_geog_line_box(const GeometryType &line, ObGeogBox &box);
   static int get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box);
+  static int get_geom_poly_box(const ObWkbGeomPolygon &poly, bool not_calc_inner_ring, ObGeogBox &res);
   static int caculate_line_box(ObPoint3d &start, ObPoint3d &end, ObGeogBox &box);
   static void get_box_center(const ObGeogBox &box, ObPoint2d &center);
   static bool is_same_point3d(const ObPoint3d &p3d1, const ObPoint3d &p3d2);
@@ -263,7 +284,7 @@ public:
   static void get_point2d_from_geom_point(const ObWkbGeomInnerPoint &point, ObPoint2d &p2d);
   template<typename GeometryType>
   static int get_geom_line_box(const GeometryType &line, ObGeogBox &box);
-  static int clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const ObGeogBox &box, ObGeometry *&geo_out);
+  static int clip_by_box(ObGeometry &geo_in, lib::MemoryContext &mem_ctx, const ObGeogBox &box, ObGeometry *&geo_out, bool is_called_in_pg_expr);
   static bool boxes_overlaps(const ObGeogBox &box1, const ObGeogBox &box2);
   static bool boxes_contains(const ObGeogBox &box1, const ObGeogBox &box2);
   template<typename GeometryType>
@@ -276,8 +297,6 @@ public:
   static inline bool is_float_gteq(double left, double right) { return (left + OB_GEO_TOLERANCE) >= right; }
   static inline bool is_float_zero(double ft) { return fabs(ft) <= OB_GEO_TOLERANCE; }
   static bool is_box_valid(const ObGeogBox &box);
-
-  static constexpr double OB_GEO_TOLERANCE = 5e-14;
 };
 
 /*
@@ -312,6 +331,28 @@ typedef struct
   double y_size;
   double z_size;
 } ObGeoGrid;
+
+class ObGeoBoostAllocGuard
+{
+public:
+  ObGeoBoostAllocGuard(uint64_t tenant_id)
+  : mem_context_(nullptr),
+    inited_(false),
+    malloc_guard_(lib::ObMemAttr(tenant_id, "GISModule")),
+    tenant_id_(tenant_id)
+    {}
+  ~ObGeoBoostAllocGuard();
+  int init();
+  lib::MemoryContext *get_memory_ctx();
+  bool is_inited() { return inited_; }
+private:
+  static const int64_t CONTEXT_MEMORY_LIMIT = 512 << 10;
+  lib::MemoryContext mem_context_;
+  bool inited_;
+  lib::ObMallocHookAttrGuard malloc_guard_;
+  uint64_t tenant_id_;
+};
+
 
 class ObGeoMVTUtil
 {
@@ -364,31 +405,31 @@ int ObGeoTypeUtil::create_geo_bin_by_type(ObIAllocator &allocator,
 
   switch(geo_type) {
     case ObGeoType::POINT: {
-      tmp_geo = OB_NEWx(PT, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(PT, (&allocator), srid);
       break;
     }
     case ObGeoType::LINESTRING: {
-      tmp_geo = OB_NEWx(LN, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(LN, (&allocator), srid);
       break;
     }
     case ObGeoType::POLYGON: {
-      tmp_geo = OB_NEWx(PY, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(PY, (&allocator), srid);
       break;
     }
     case ObGeoType::MULTIPOINT: {
-      tmp_geo = OB_NEWx(MPT, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(MPT, (&allocator), srid);
       break;
     }
     case ObGeoType::MULTILINESTRING: {
-      tmp_geo = OB_NEWx(MLN, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(MLN, (&allocator), srid);
       break;
     }
     case ObGeoType::MULTIPOLYGON: {
-      tmp_geo = OB_NEWx(MPY, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(MPY, (&allocator), srid);
       break;
     }
     case ObGeoType::GEOMETRYCOLLECTION: {
-      tmp_geo = OB_NEWx(GC, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(GC, (&allocator), srid);
       break;
     }
     default: {
@@ -420,7 +461,7 @@ int ObGeoTypeUtil::create_geo_tree_by_type(ObIAllocator &allocator,
 
   switch(geo_type) {
     case ObGeoType::POINT: {
-      tmp_geo = OB_NEWx(PT, (&allocator), srid, (&allocator));
+      tmp_geo = OB_NEWx(PT, (&allocator), srid);
       break;
     }
     case ObGeoType::LINESTRING: {
@@ -462,6 +503,334 @@ int ObGeoTypeUtil::create_geo_tree_by_type(ObIAllocator &allocator,
     }
   }
 
+  return ret;
+}
+
+template<typename GcType>
+int ObGeoTypeUtil::simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator)
+{
+  // e.g. MULTILINESTRING((0 0, 1 1)) -> LINESTRING(0 0, 1 1)
+  int ret= OB_SUCCESS;
+  switch (geo->type()) {
+    case ObGeoType::MULTILINESTRING: {
+      typename GcType::sub_ml_type *mp = reinterpret_cast<typename GcType::sub_ml_type *>(geo);
+      if (OB_ISNULL(mp)) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        OB_LOG(WARN, "invalid null pointer", K(ret));
+      } else if (mp->size() == 1) {
+        geo = &(mp->front());
+      }
+      break;
+    }
+    case ObGeoType::MULTIPOINT: {
+      typename GcType::sub_mpt_type  *mpt = reinterpret_cast<typename GcType::sub_mpt_type  *>(geo);
+      if (OB_ISNULL(mpt)) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        OB_LOG(WARN, "invalid null pointer", K(ret));
+      } else if (mpt->size() == 1) {
+        typename GcType::sub_pt_type *p = OB_NEWx(typename GcType::sub_pt_type, &allocator, geo->get_srid());
+        if (OB_ISNULL(p)) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          OB_LOG(WARN, "invalid null pointer", K(ret));
+        } else {
+          p->set_data(mpt->front());
+          geo = p;
+        }
+      }
+      break;
+    }
+    case ObGeoType::MULTIPOLYGON: {
+      typename GcType::sub_mp_type *mp = reinterpret_cast<typename GcType::sub_mp_type *>(geo);
+      if (OB_ISNULL(mp)) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        OB_LOG(WARN, "invalid null pointer", K(ret));
+      } else if (mp->size() == 1) {
+        geo = &(mp->front());
+      }
+      break;
+    }
+    case ObGeoType::GEOMETRYCOLLECTION: {
+      GcType *mp = reinterpret_cast<GcType *>(geo);
+      if (OB_ISNULL(mp)) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        OB_LOG(WARN, "invalid null pointer", K(ret));
+      } else if (mp->size() > 0) {
+        for (uint32_t i = 0; i < mp->size() && OB_SUCC(ret); i++) {
+          bool in_res_geo = false;
+          ObGeometry *cur_geo = &(*mp)[i];
+          if (OB_FAIL(simplify_multi_geo<GcType>(cur_geo, allocator))) {
+            OB_LOG(WARN, "fail to remove dupilicate multi geometry", K(ret));
+          } else if (OB_FAIL(mp->set(i, cur_geo))) {
+            OB_LOG(WARN, "fail to set geometry", K(ret), K(i), KP(cur_geo));
+          }
+        }
+        if (mp->size() == 1) {
+          geo = &(mp->front());
+        }
+      }
+      break;
+    }
+    default: {
+      break;  // do nothing
+    }
+  }
+  return ret;
+}
+
+// for geo tree
+template<typename GcTreeType>
+int ObGeoTypeUtil::simplify_geo_collection(ObGeometry *&geo, common::ObIAllocator &allocator, const ObSrsItem *srs)
+{
+  int ret = OB_SUCCESS;
+  if (geo->type() != ObGeoType::GEOMETRYCOLLECTION) {
+    // do nothing
+  } else {
+    GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
+    ObGeoType front_type;
+    bool need_simplify = true;
+    if (geo_coll->size() < 2) {
+      need_simplify = false;
+    } else {
+      front_type = geo_coll->front().type();
+      for (uint32_t i = 1; need_simplify && i < geo_coll->size(); ++i) {
+        if (((*geo_coll)[i]).type() != front_type) {
+          need_simplify = false;
+        }
+      }
+    }
+    if (need_simplify) {
+      switch(front_type) {
+        case ObGeoType::POINT: {
+          typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, &allocator, geo->get_srid(), allocator);
+          if (OB_ISNULL(res_geo)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc memory", K(ret));
+          }
+          for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+            typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
+            if (OB_FAIL(res_geo->push_back(geo_point))) {
+              OB_LOG(WARN, "failed to add point to multipoint", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            geo = res_geo;
+          }
+          break;
+        }
+        case ObGeoType::LINESTRING: {
+          typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, &allocator, geo->get_srid(), allocator);
+          if (OB_ISNULL(res_geo)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc memory", K(ret));
+          }
+          for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+            if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+              OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            geo = res_geo;
+          }
+          break;
+        }
+        case ObGeoType::POLYGON: {
+          typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, &allocator, geo->get_srid(), allocator);
+          if (OB_ISNULL(res_geo)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc memory", K(ret));
+          }
+          for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+            if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+              OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            geo = res_geo;
+          }
+          break;
+        }
+        default: {
+          // do nothing
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// for geo tree
+template<typename GcTreeType>
+int ObGeoTypeUtil::remove_duplicate_multi_geo(ObGeometry *&geo, lib::MemoryContext &mem_ctx, const ObSrsItem *srs)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator &allocator = mem_ctx->get_arena_allocator();
+  switch (geo->type()) {
+    case ObGeoType::POINT:
+    case ObGeoType::LINESTRING:
+    case ObGeoType::POLYGON: {
+      break;
+    }
+    case ObGeoType::MULTIPOINT: {
+      typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, &allocator, geo->get_srid(), allocator);
+      typename GcTreeType::sub_mpt_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_mpt_type &>(*geo);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failt to allocate memory for geometry", K(ret), K(geo->type()));
+      }
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret); i++) {
+        bool in_res_geo = false;
+        for (int32_t j = 0; j < res_geo->size() && OB_SUCC(ret) && !in_res_geo; j++) {
+          if ((sp_geo[i].template get<0>() == sp_geo[j].template get<0>())
+              && (sp_geo[i].template get<1>() == sp_geo[j].template get<1>())) {
+            in_res_geo = true;
+          }
+        }
+        if (OB_SUCC(ret) && !in_res_geo) {
+          typename GcTreeType::sub_pt_type pt(sp_geo[i].template get<0>(), sp_geo[i].template get<1>());
+          if (OB_FAIL(res_geo->push_back(pt))) {
+            OB_LOG(WARN, "fail to push back geometry", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::MULTILINESTRING: {
+      typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, &allocator, geo->get_srid(), allocator);
+      typename GcTreeType::sub_ml_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_ml_type &>(*geo);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failt to allocate memory for geometry", K(ret), K(geo->type()));
+      }
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret); i++) {
+        bool in_res_geo = false;
+        if (OB_FAIL(is_in_geometry(mem_ctx, sp_geo[i], *res_geo, srs, in_res_geo))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        } else if (!in_res_geo && OB_FAIL(res_geo->push_back(sp_geo[i]))) {
+          OB_LOG(WARN, "fail to push back geometry", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::MULTIPOLYGON: {
+      typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, &allocator, geo->get_srid(), allocator);
+      typename GcTreeType::sub_mp_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_mp_type &>(*geo);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failt to allocate memory for geometry", K(ret), K(geo->type()));
+      }
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret); i++) {
+        bool in_res_geo = false;
+        if (OB_FAIL(is_in_geometry(mem_ctx, sp_geo[i], *res_geo, srs, in_res_geo))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        } else if (!in_res_geo && OB_FAIL(res_geo->push_back(sp_geo[i]))) {
+          OB_LOG(WARN, "fail to push back geometry", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::GEOMETRYCOLLECTION: {
+      GcTreeType *res_geo = OB_NEWx(GcTreeType, &allocator, geo->get_srid(), allocator);
+      GcTreeType *&sp_geo = reinterpret_cast<GcTreeType *&>(geo);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failt to allocate memory for geometry", K(ret), K(geo->type()));
+      }
+      for (int32_t i = 0; i < sp_geo->size() && OB_SUCC(ret); i++) {
+        bool in_res_geo = false;
+        ObGeometry *cur_geo = &(*sp_geo)[i];
+        if (OB_FAIL(remove_duplicate_multi_geo<GcTreeType>(cur_geo, mem_ctx, srs))) {
+          OB_LOG(WARN, "fail to remove dupilicate multi geometry", K(ret));
+        } else if (OB_FAIL(is_in_geometry(mem_ctx, *cur_geo, *res_geo, srs, in_res_geo))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        } else if (!in_res_geo && OB_FAIL(res_geo->push_back(*cur_geo))) {
+          OB_LOG(WARN, "fail to push back geometry", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "geometry type not supported", K(ret), K(geo->type()));
+      break;
+    }
+  }
+  return ret;
+}
+
+template<typename GcTreeType>
+int ObGeoTypeUtil::check_if_geo_duplicate(ObGeometry *geo, lib::MemoryContext &mem_ctx,
+      const ObSrsItem *srs, bool &is_duplicate)
+{
+  INIT_SUCC(ret);
+  ObArenaAllocator &allocator = mem_ctx->get_arena_allocator();
+  is_duplicate = false;
+  switch (geo->type()) {
+    case ObGeoType::POINT:
+    case ObGeoType::LINESTRING:
+    case ObGeoType::POLYGON: {
+      break;
+    }
+    case ObGeoType::MULTIPOINT: {
+      typename GcTreeType::sub_mpt_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_mpt_type &>(*geo);
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret) && !is_duplicate; i++) {
+        for (int32_t j = i + 1; j < sp_geo.size() && OB_SUCC(ret) && !is_duplicate; j++) {
+          if ((sp_geo[i].template get<0>() == sp_geo[j].template get<0>())
+              && (sp_geo[i].template get<1>() == sp_geo[j].template get<1>())) {
+            is_duplicate = true;
+          }
+        }
+      }
+      break;
+    }
+    case ObGeoType::MULTILINESTRING: {
+      typename GcTreeType::sub_ml_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_ml_type &>(*geo);
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret) && !is_duplicate; i++) {
+        if (OB_FAIL(is_in_geometry(mem_ctx, sp_geo[i], sp_geo, srs, is_duplicate, i + 1))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        }
+      }
+      break;
+    }
+    case ObGeoType::MULTIPOLYGON: {
+      typename GcTreeType::sub_mp_type &sp_geo = reinterpret_cast<typename GcTreeType::sub_mp_type &>(*geo);
+      for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret) && !is_duplicate; i++) {
+        if (OB_FAIL(is_in_geometry(mem_ctx, sp_geo[i], sp_geo, srs, is_duplicate, i + 1))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        }
+      }
+      break;
+    }
+    case ObGeoType::GEOMETRYCOLLECTION: {
+      GcTreeType *&sp_geo = reinterpret_cast<GcTreeType *&>(geo);
+      for (int32_t i = 0; i < sp_geo->size() && OB_SUCC(ret) && !is_duplicate; i++) {
+        ObGeometry *cur_geo = &(*sp_geo)[i];
+        if (OB_FAIL(check_if_geo_duplicate<GcTreeType>(cur_geo, mem_ctx, srs, is_duplicate))) {
+          OB_LOG(WARN, "fail to remove dupilicate multi geometry", K(ret));
+        } else if (!is_duplicate && OB_FAIL(is_in_geometry(mem_ctx, *cur_geo, *sp_geo, srs, is_duplicate))) {
+          OB_LOG(WARN, "fail to check is in geometry", K(ret));
+        }
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "geometry type not supported", K(ret), K(geo->type()));
+      break;
+    }
+  }
   return ret;
 }
 
@@ -561,6 +930,109 @@ int ObGeoBoxUtil::get_geom_line_box(const GeometryType &line, ObGeogBox &box)
 
   return ret;
 }
+
+template<typename RingTree>
+bool ObGeoTypeUtil::is_valid_ring_simple(const RingTree &ring)
+{
+  // const ObCartesianLinearring &ring
+  bool is_valid = true;
+  int64_t sz = ring.size();
+  if (sz < 3) {
+    is_valid = false;
+  } else {
+    int32_t min_pos = 0;
+    // find the point closest to the bottom left
+    for (uint32_t i = 1; i < sz; ++i) {
+      if (ring[i].template get<0>() < ring[min_pos].template get<0>()) {
+        min_pos = i;
+      } else if (ring[i].template get<0>() == ring[min_pos].template get<0>()
+                && ring[i].template get<1>() < ring[min_pos].template get<1>()) {
+        min_pos = i;
+      }
+    }
+    int64_t prev_pos = min_pos - 1;
+    if (min_pos == sz - 1) {
+      is_valid = false;
+    } else if (min_pos == 0) {
+      if (ring[sz - 1].template get<0>() == ring[min_pos].template get<0>()
+          && ring[sz - 1].template get<1>() == ring[min_pos].template get<1>()) {
+        prev_pos = sz - 2;
+        while (prev_pos >= 0 && ring[prev_pos].template get<0>() == ring[min_pos].template get<0>()
+          && ring[prev_pos].template get<1>() == ring[min_pos].template get<1>()) {
+          --prev_pos;
+        }
+        if (prev_pos < 0) {
+          is_valid = false;
+        }
+      }
+    }
+    if (is_valid) {
+      int64_t post_pos = min_pos + 1;
+      while (post_pos < sz && ring[post_pos].template get<0>() == ring[min_pos].template get<0>()
+        && ring[post_pos].template get<1>() == ring[min_pos].template get<1>()) {
+        ++post_pos;
+      }
+      if (post_pos == sz) {
+        is_valid = false;
+      } else {
+        double x1 = ring[min_pos].template get<0>() - ring[prev_pos].template get<0>();
+        double y1 = ring[min_pos].template get<1>() - ring[prev_pos].template get<1>();
+        double x2 = ring[post_pos].template get<0>() - ring[min_pos].template get<0>();
+        double y2 = ring[post_pos].template get<1>() - ring[min_pos].template get<1>();
+        double sign = x1 * y2 - x2 * y1;
+        if (sign == 0) {
+          is_valid = false;
+        }
+      }
+    }
+  }
+
+  return is_valid;
+}
+
+template<typename PyTree, typename MpyTree, typename CollTree>
+int ObGeoTypeUtil::is_polygon_valid_simple(const ObGeometry *geo, bool &res)
+{
+  int ret = OB_SUCCESS;
+  res = true;
+  const ObGeometry *geo_tree = nullptr;
+  ObArenaAllocator tmp_allocator;
+  if (!geo->is_tree()) {
+    ObGeoToTreeVisitor tree_visit(&tmp_allocator);
+    if (OB_FAIL(const_cast<ObGeometry *>(geo)->do_visit(tree_visit))) {
+      OB_LOG(WARN, "fail to do tree visitor", K(ret));
+    } else {
+      geo_tree = tree_visit.get_geometry();
+    }
+  } else {
+    geo_tree = geo;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (geo_tree->type() == ObGeoType::POLYGON) {
+    const PyTree &poly = reinterpret_cast<const PyTree &>(*geo_tree);
+    res = is_valid_ring_simple(poly.exterior_ring());
+    for (int32_t i = 0; res && i < poly.inner_ring_size(); ++i) {
+      res = is_valid_ring_simple(poly.inner_ring(i));
+    }
+  } else if (geo_tree->type() == ObGeoType::MULTIPOLYGON) {
+    const MpyTree &mpy = *reinterpret_cast<const MpyTree *>(geo_tree);
+    for (int32_t i = 0; i < mpy.size() && res; ++i) {
+      res = is_valid_ring_simple(mpy[i].exterior_ring());
+      for (int32_t j = 0; res && j < mpy[i].inner_ring_size(); ++j) {
+        res = is_valid_ring_simple(mpy[i].inner_ring(j));
+      }
+    }
+  } else if (geo_tree->type() == ObGeoType::GEOMETRYCOLLECTION) {
+    const CollTree &coll = reinterpret_cast<const CollTree &>(*geo_tree);
+    for (int32_t i = 0; i < coll.size() && OB_SUCC(ret) && res; i++) {
+      if (OB_FAIL((is_polygon_valid_simple<PyTree, MpyTree, CollTree>(&coll[i], res)))) {
+        OB_LOG(WARN, "failed to do tree item visit", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // namespace common
 } // namespace oceanbase

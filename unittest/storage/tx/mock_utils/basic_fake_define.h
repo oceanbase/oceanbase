@@ -314,6 +314,11 @@ public:
     return ret;
   }
 
+  int remove_dropped_tenant(const uint64_t tenant_id) {
+    UNUSED(tenant_id);
+    return OB_SUCCESS;
+  }
+
   int update_base_ts(const int64_t base_ts) { return OB_SUCCESS; }
   int get_base_ts(int64_t &base_ts) { return OB_SUCCESS; }
   bool is_external_consistent(const uint64_t tenant_id) { return true; }
@@ -472,7 +477,8 @@ public:
                  const int64_t size,
                  const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
-                 const bool need_nonblock)
+                 const bool need_nonblock,
+                 const int64_t retry_timeout_us)
   {
     int ret = OB_SUCCESS;
     logservice::ObLogBaseHeader base_header;

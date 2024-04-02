@@ -18,7 +18,6 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_expr_st_dwithin.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 
 using namespace oceanbase::common;
@@ -46,44 +45,29 @@ int ObExprPrivSTDWithin::calc_result_type3(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  int unexpected_types = 0;
-  int null_types = 0;
-
   if (input1.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(input1.get_type()) && !ob_is_string_type(input1.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(input1.get_type()));
+    input1.set_calc_type(ObVarcharType);
+    input1.set_calc_collation_type(CS_TYPE_BINARY);
   }
   if (input2.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(input2.get_type()) && !ob_is_string_type(input2.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(input2.get_type()));
+    input2.set_calc_type(ObVarcharType);
+    input2.set_calc_collation_type(CS_TYPE_BINARY);
   }
-  // an invalid type and a null type will return null
-  // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
-      LOG_WARN("invalid type", K(ret));
+  if (!ob_is_double_type(input3.get_type())) {
+    input3.set_calc_type(ObDoubleType);
   }
-
-  if (OB_SUCC(ret)) {
-    if (!ob_is_double_type(input3.get_type())) {
-      input3.set_calc_type(ObDoubleType);
-    }
-    type.set_int32();
-    type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
-    type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  }
+  type.set_int32();
+  type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+  type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
 
   return ret;
 }
 
 template<typename ResType>
 int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
-                                                ObArenaAllocator &temp_allocator,
+                                                MultimodeAlloctor &temp_allocator,
                                                 ObString wkb1,
                                                 ObString wkb2,
                                                 double distance_tolerance,
@@ -102,6 +86,10 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
   uint32_t srid2;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
+  temp_allocator.set_baseline_size(wkb1.length() + wkb2.length());
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  ObGeoBoostAllocGuard guard(tenant_id);
+  lib::MemoryContext *mem_ctx = nullptr;
 
   if (distance_tolerance < 0.0) {
     ret = OB_ERR_GIS_INVALID_DATA;
@@ -114,20 +102,23 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     }
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
+    if (ret == OB_ERR_GIS_INVALID_DATA) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
+    }
   } else if (srid1 != srid2) {
     ret = OB_ERR_GIS_DIFFERENT_SRIDS;
     LOG_WARN("srid not the same", K(srid1), K(srid2), K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb1));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_TRANSFORM,
-                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
     }
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_TRANSFORM,
-                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D | GEO_NOT_COPY_WKB))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
@@ -144,8 +135,13 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
   } else if (ob_is_string_type(input_type2)
       && OB_FAIL(ObGeoExprUtils::check_coordinate_range(srs, geo2, N_PRIV_ST_DWITHIN, true))) {
     LOG_WARN("invalid coordinate range", K(input_type2), K(geo2));
+  } else if (OB_FAIL(guard.init())) {
+    LOG_WARN("fail to init geo allocator guard", K(ret));
+  } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("fail to get mem ctx", K(ret));
   } else {
-    ObGeoEvalCtx gis_context(&temp_allocator, srs);
+    ObGeoEvalCtx gis_context(*mem_ctx, srs);
     double result = 0.0;
     if (OB_FAIL(ObGeoExprUtils::normalize_wkb(srs, wkb1, temp_allocator, geo1))) {
       LOG_WARN("normalize wkb1 failed", K(srid1), K(ret));
@@ -159,6 +155,9 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     } else {
       res.set_bool(result <= distance_tolerance);
     }
+  }
+  if (mem_ctx != nullptr) {
+    temp_allocator.add_ext_used((*mem_ctx)->arena_used());
   }
   return ret;
 }
@@ -179,18 +178,19 @@ int ObExprPrivSTDWithin::eval_st_dwithin(const ObExpr &expr, ObEvalCtx &ctx, ObD
   bool is_null_res = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))
-      || OB_FAIL(gis_arg3->eval(ctx, gis_datum3))) {
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_ST_DWITHIN);
+  if (OB_FAIL(temp_allocator.eval_arg(gis_arg1, ctx, gis_datum1)) || OB_FAIL(temp_allocator.eval_arg(gis_arg2, ctx, gis_datum2))
+      || OB_FAIL(temp_allocator.eval_arg(gis_arg3, ctx, gis_datum3))) {
     LOG_WARN("eval geo args failed", K(ret), KP(gis_datum1),KP(gis_datum2),KP(gis_datum3));
   } else if (gis_datum1->is_null() || gis_datum2->is_null() || gis_datum3->is_null()) {
     res.set_null();
   } else if (FALSE_IT(wkb1 = gis_datum1->get_string())) {
   } else if (FALSE_IT(wkb2 = gis_datum2->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum1,
             gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *gis_datum2,
             gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb2));
   } else if (OB_FAIL(ObExprPrivSTDWithin::eval_st_dwithin_common(ctx,

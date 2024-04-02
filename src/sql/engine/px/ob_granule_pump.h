@@ -57,6 +57,7 @@ public:
 
     ObIArray<const ObTableScanSpec *> &get_scan_ops() { return (ObIArray<const ObTableScanSpec *> &)scan_ops_; }
     ObTableModifySpec *get_modify_op() { return (ObTableModifySpec *)modify_op_; }
+    int assign(const ObGranulePumpOpInfo &rhs);
     common::ObArray<const ObTableScanSpec*> scan_ops_;
     const ObTableModifySpec* modify_op_;
   };
@@ -88,6 +89,7 @@ public :
     external_table_files_.reset();
   }
 
+  int assign(const ObGranulePumpArgs &rhs);
 
   ObExecContext *ctx_;
   ObGranulePumpOpInfo op_info_;
@@ -144,6 +146,8 @@ public:
   ObGITaskSet() : gi_task_set_(), cur_pos_(0) {}
   TO_STRING_KV(K(gi_task_set_), K(cur_pos_));
   int get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) const;
+  int get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_id) const;
+
   int get_next_gi_task_pos(int64_t &pos);
   int get_next_gi_task(ObGranuleTaskInfo &info);
   int assign(const ObGITaskSet &other);
@@ -195,7 +199,7 @@ public :
   virtual ~ObGranuleSplitter() = default;
 
   static int get_query_range(ObExecContext &ctx,
-                             const ObQueryRange &tsc_pre_query_range,
+                             const ObQueryRangeProvider &tsc_pre_query_range,
                              ObIArray<ObNewRange> &ranges,
                              ObIArray<ObNewRange> &ss_ranges,
                              int64_t table_id,
@@ -481,7 +485,8 @@ public:
   need_partition_pruning_(false),
   pruning_table_locations_(),
   pump_version_(0),
-  is_taskset_reset_(false)
+  is_taskset_reset_(false),
+  fetch_task_ret_(OB_SUCCESS)
   {
   }
 
@@ -593,6 +598,9 @@ private:
   int64_t pump_version_;
 
   bool is_taskset_reset_;
+  // when granule tasks are fetched concurrently, if one thread failed to fetch task,
+  // others should not fetch tasks any more.
+  int fetch_task_ret_;
 };
 
 }//sql

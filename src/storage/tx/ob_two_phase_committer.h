@@ -208,7 +208,7 @@ public:
   virtual int on_abort() = 0;
   virtual int on_clear() = 0;
 
-  // 1. when recive a new request msg, the participant will enter into the next phase.
+  // 1. when receive a new request msg, the participant will enter into the next phase.
   // 2. invoke do_xxx to execute all in-memory operation with the next phase
   // 3. set upstream_state at last
   // 4. retry submit log if upstream_state is larger than downstream_state

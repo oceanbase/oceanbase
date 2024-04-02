@@ -398,9 +398,12 @@
 #include "sql/engine/expr/ob_expr_priv_xml_binary.h"
 #include "sql/engine/expr/ob_expr_xmlparse.h"
 #include "sql/engine/expr/ob_expr_xml_element.h"
+#include "sql/engine/expr/ob_expr_xml_forest.h"
+#include "sql/engine/expr/ob_expr_xml_concat.h"
 #include "sql/engine/expr/ob_expr_xml_attributes.h"
 #include "sql/engine/expr/ob_expr_extract_value.h"
 #include "sql/engine/expr/ob_expr_extract_xml.h"
+#include "sql/engine/expr/ob_expr_existsnode_xml.h"
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
@@ -415,6 +418,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_equals.h"
 #include "sql/engine/expr/ob_expr_priv_st_touches.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
+#include "sql/engine/expr/ob_expr_inner_decode_like.h"
 #include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
 #include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
 #include "sql/engine/expr/ob_expr_priv_st_pointonsurface.h"
@@ -429,6 +433,8 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_priv_st_geohash.h"
+#include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1034,6 +1040,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTEquals);
     REG_OP(ObExprPrivSTTouches);
     REG_OP(ObExprAlignDate4Cmp);
+    REG_OP(ObExprInnerIsTrue);
+    REG_OP(ObExprInnerDecodeLike);
     REG_OP(ObExprPrivSTMakeEnvelope);
     REG_OP(ObExprPrivSTClipByBox2D);
     REG_OP(ObExprPrivSTPointOnSurface);
@@ -1048,6 +1056,9 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSTSymDifference);
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
+    REG_OP(ObExprPrivSTGeoHash);
+    REG_OP(ObExprPrivSTMakePoint);
+    REG_OP(ObExprCurrentRole);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1351,9 +1362,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprPrivXmlBinary);
   REG_OP_ORCL(ObExprXmlparse);
   REG_OP_ORCL(ObExprXmlElement);
+  REG_OP_ORCL(ObExprXmlConcat);
+  REG_OP_ORCL(ObExprXmlForest);
   REG_OP_ORCL(ObExprXmlAttributes);
   REG_OP_ORCL(ObExprExtractValue);
   REG_OP_ORCL(ObExprExtractXml);
+  REG_OP_ORCL(ObExprExistsNodeXml);
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
@@ -1363,6 +1377,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprDeleteXml);
   REG_OP_ORCL(ObExprXmlSequence);
   REG_OP_ORCL(ObExprTempTableSSID);
+  REG_OP_ORCL(ObExprInnerIsTrue);
+  REG_OP_ORCL(ObExprInnerDecodeLike);
   REG_OP_ORCL(ObExprJsonObjectStar);
 }
 

@@ -387,3 +387,100 @@ int ObDCLResolver::check_dcl_on_inner_user(const ObItemType &type,
   }
   return ret;
 }
+
+int ObDCLResolver::resolve_user_list_node(ParseNode *user_node,
+                                          ParseNode *top_node,
+                                          ObString &user_name,
+                                          ObString &host_name)
+{
+  int ret = OB_SUCCESS;
+  const ObUserInfo *user_info = NULL;
+  if (OB_ISNULL(user_node)) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("The child of user_hostname node should not be NULL", K(ret));
+  } else if (2 != user_node->num_child_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql_parser parse user error", K(ret));
+  } else if (OB_ISNULL(user_node->children_[0])) {
+    // 0: user, 1: hostname
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("The child of user node should not be NULL", K(ret));
+  } else {
+    ParseNode *user_hostname_node = user_node;
+    user_name = ObString (user_hostname_node->children_[0]->str_len_, user_hostname_node->children_[0]->str_value_);
+    if (NULL == user_hostname_node->children_[1]) {
+      host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+    } else {
+      host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
+                           static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
+    }
+    if (OB_FAIL(schema_checker_->get_user_info(params_.session_info_->get_effective_tenant_id(),
+                                               user_name, host_name, user_info))) {
+      LOG_WARN("failed to get user info", K(ret), K(user_name));
+      if (OB_USER_NOT_EXIST == ret) {
+        // 跳过, RS统一处理, 兼容MySQL行为
+        ret = OB_SUCCESS;
+        user_info = NULL;
+      }
+    } else if (is_inner_user_or_role(user_info->get_user_id())) {
+      ret = OB_ERR_NO_PRIVILEGE;
+      SQL_RESV_LOG(WARN, "Can not drop internal user", K(ret));
+    } else if (OB_FAIL(check_dcl_on_inner_user(top_node->type_,
+                                               params_.session_info_->get_priv_user_id(),
+                                               user_info->get_user_id()))) {
+      LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
+               K(ret), K(params_.session_info_->get_user_name()), K(user_name));
+    }
+  }
+  return ret;
+}
+
+int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
+                                     common::ObString &user_name,
+                                     common::ObString &host_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(user_pass) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_ISNULL(user_pass->children_[0])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Child 0 of user_pass should not be NULL", K(ret));
+  } else {
+    user_name = ObString(user_pass->children_[0]->str_len_, user_pass->children_[0]->str_value_);
+
+    if (user_pass->children_[0]->type_ != T_IDENT
+        && OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                     *allocator_, session_info_->get_dtc_params(), user_name))) {
+      LOG_WARN("fail to convert user name to utf8", K(ret), K(user_name),
+               KPHEX(user_name.ptr(), user_name.length()));
+    } else if (!session_info_->is_inner() && (0 == user_name.case_compare(OB_RESTORE_USER_NAME))) {
+      ret = OB_ERR_NO_PRIVILEGE;
+      LOG_WARN("__oceanbase_inner_restore_user is reserved", K(ret));
+    } else if (NULL == user_pass->children_[3]) {
+      host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+    } else {
+      host_name.assign_ptr(user_pass->children_[3]->str_value_,
+                           static_cast<int32_t>(user_pass->children_[3]->str_len_));
+    }
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && NULL != user_pass->children_[4]) {
+      /* here code is to mock a auth plugin check. */
+      ObString auth_plugin(static_cast<int32_t>(user_pass->children_[4]->str_len_),
+                            user_pass->children_[4]->str_value_);
+      ObString default_auth_plugin;
+      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                  default_auth_plugin))) {
+        LOG_WARN("fail to get block encryption variable", K(ret));
+      } else if (0 != auth_plugin.compare(default_auth_plugin)) {
+        ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+        LOG_USER_ERROR(OB_ERR_PLUGIN_IS_NOT_LOADED, auth_plugin.length(), auth_plugin.ptr());
+      } else {/* do nothing */}
+    }
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create user with hostname");
+      LOG_WARN("create user should not use hostname in oracle mode", K(ret));
+    }
+  }
+  return ret;
+}

@@ -3453,34 +3453,29 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
   if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
-    const EqualSet *input_eset = input_equal_sets.at(i);
-    bool contain_exec_param = false;
-    raw_eset.reuse();
-    if (OB_ISNULL(input_eset)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(check_contain_my_exec_param(*input_eset,
-                                                   table_item->exec_params_,
-                                                   contain_exec_param))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contain_exec_param) {
-      // do nothing
-    } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
-                                                                  dummy_equal_sets,
-                                                                  table_id,
-                                                                  parent_stmt,
-                                                                  child_stmt,
-                                                                  true,
-                                                                  *input_eset,
-                                                                  raw_eset))) {
-     LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (raw_eset.count() > 1 &&
-               OB_FAIL(ObRawExprSetUtils::add_expr_set(allocator, raw_eset, output_equal_sets))) {
-      LOG_WARN("failed to push back equal set", K(ret));
-    } else { /*do nothing*/ }
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
+      const EqualSet *input_eset = input_equal_sets.at(i);
+      raw_eset.reuse();
+      if (OB_ISNULL(input_eset)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
+                                                                    dummy_equal_sets,
+                                                                    table_id,
+                                                                    parent_stmt,
+                                                                    child_stmt,
+                                                                    true,
+                                                                    *input_eset,
+                                                                    raw_eset))) {
+      LOG_WARN("failed to convert subplan scan expr", K(ret));
+      } else if (raw_eset.count() > 1 &&
+                OB_FAIL(ObRawExprSetUtils::add_expr_set(allocator, raw_eset, output_equal_sets))) {
+        LOG_WARN("failed to push back equal set", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -3504,76 +3499,73 @@ int ObOptimizerUtil::convert_subplan_scan_fd_item_sets(ObFdItemFactory &fd_facto
   } else if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_fd_item_sets.count(); ++i) {
-    const ObFdItem *old_fd_item = NULL;
-    bool contain_exec_param = false;
-    new_parent_exprs.reuse();
-    if (OB_ISNULL(old_fd_item = input_fd_item_sets.at(i)) ||
-        OB_ISNULL(old_fd_item->get_parent_exprs())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(old_fd_item));
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(check_contain_my_exec_param(*old_fd_item->get_parent_exprs(),
-                                                   table_item->exec_params_,
-                                                   contain_exec_param))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contain_exec_param) {
-      // do nothing
-    } else if (OB_FAIL(convert_subplan_scan_fd_parent_exprs(expr_factory,
-                                                            equal_sets,
-                                                            const_exprs,
-                                                            table_id,
-                                                            parent_stmt,
-                                                            child_stmt,
-                                                            *old_fd_item->get_parent_exprs(),
-                                                            new_parent_exprs))) {
-      LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (new_parent_exprs.empty()) {
-      /*do nothing*/
-    } else if (old_fd_item->is_unique()) {
-      ObTableFdItem *table_fd_item = NULL;
-      if (OB_FAIL(fd_factory.create_table_fd_item(table_fd_item, true, new_parent_exprs, tables))) {
-        LOG_WARN("failed to create fd item", K(ret));
-      } else if (OB_FAIL(output_fd_item_sets.push_back(table_fd_item))) {
-        LOG_WARN("failed to push back fd item", K(ret));
-      }
-    } else {
-      ObRawExpr *temp_expr = NULL;
-      ObSEArray<ObRawExpr *, 8> child_select_exprs;
-      ObSEArray<ObRawExpr *, 8> new_child_exprs;
-      ObExprFdItem *expr_fd_item = NULL;
-      if (OB_FAIL(child_stmt.get_select_exprs(child_select_exprs))) {
-        LOG_WARN("failed to get select exprs", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < child_select_exprs.count(); ++j) {
-          bool is_in_child = false;
-          if (OB_FAIL(old_fd_item->check_expr_in_child(child_select_exprs.at(j),
-                                                       equal_sets,
-                                                       is_in_child))) {
-            LOG_WARN("failed to check expr in child");
-          } else if (!is_in_child) {
-            /*do nothing*/
-          } else if (NULL == (temp_expr = parent_stmt.get_column_expr_by_id(
-                                          table_id,
-                                          OB_APP_MIN_COLUMN_ID + j))) {
-            /*do nothing*/
-          } else if (OB_FAIL(new_child_exprs.push_back(temp_expr))) {
-            LOG_WARN("failed to push back exprs", K(ret));
-          } else { /*do nothing*/ }
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_fd_item_sets.count(); ++i) {
+      const ObFdItem *old_fd_item = NULL;
+      bool contain_exec_param = false;
+      new_parent_exprs.reuse();
+      if (OB_ISNULL(old_fd_item = input_fd_item_sets.at(i)) ||
+          OB_ISNULL(old_fd_item->get_parent_exprs())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(old_fd_item));
+      } else if (OB_FAIL(convert_subplan_scan_fd_parent_exprs(expr_factory,
+                                                              equal_sets,
+                                                              const_exprs,
+                                                              table_id,
+                                                              parent_stmt,
+                                                              child_stmt,
+                                                              *old_fd_item->get_parent_exprs(),
+                                                              new_parent_exprs))) {
+        LOG_WARN("failed to convert subplan scan expr", K(ret));
+      } else if (new_parent_exprs.empty()) {
+        /*do nothing*/
+      } else if (old_fd_item->is_unique()) {
+        ObTableFdItem *table_fd_item = NULL;
+        if (OB_FAIL(fd_factory.create_table_fd_item(table_fd_item, true, new_parent_exprs, tables))) {
+          LOG_WARN("failed to create fd item", K(ret));
+        } else if (OB_FAIL(output_fd_item_sets.push_back(table_fd_item))) {
+          LOG_WARN("failed to push back fd item", K(ret));
         }
-        if (OB_SUCC(ret) && !new_child_exprs.empty()) {
-          if (OB_FAIL(fd_factory.create_expr_fd_item(expr_fd_item, false,
-                                                     new_parent_exprs,
-                                                     new_child_exprs))) {
-            LOG_WARN("failed to create fd item", K(ret));
-          } else if (OB_FAIL(output_fd_item_sets.push_back(expr_fd_item))) {
-            LOG_WARN("failed to push back fd item", K(ret));
-          } else { /*do nothing*/}
+      } else {
+        ObRawExpr *temp_expr = NULL;
+        ObSEArray<ObRawExpr *, 8> child_select_exprs;
+        ObSEArray<ObRawExpr *, 8> new_child_exprs;
+        ObExprFdItem *expr_fd_item = NULL;
+        if (OB_FAIL(child_stmt.get_select_exprs(child_select_exprs))) {
+          LOG_WARN("failed to get select exprs", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < child_select_exprs.count(); ++j) {
+            bool is_in_child = false;
+            if (OB_FAIL(old_fd_item->check_expr_in_child(child_select_exprs.at(j),
+                                                        equal_sets,
+                                                        is_in_child))) {
+              LOG_WARN("failed to check expr in child");
+            } else if (!is_in_child) {
+              /*do nothing*/
+            } else if (NULL == (temp_expr = parent_stmt.get_column_expr_by_id(
+                                            table_id,
+                                            OB_APP_MIN_COLUMN_ID + j))) {
+              /*do nothing*/
+            } else if (OB_FAIL(new_child_exprs.push_back(temp_expr))) {
+              LOG_WARN("failed to push back exprs", K(ret));
+            } else { /*do nothing*/ }
+          }
+          if (OB_SUCC(ret) && !new_child_exprs.empty()) {
+            if (OB_FAIL(fd_factory.create_expr_fd_item(expr_fd_item, false,
+                                                      new_parent_exprs,
+                                                      new_child_exprs))) {
+              LOG_WARN("failed to create fd item", K(ret));
+            } else if (OB_FAIL(output_fd_item_sets.push_back(expr_fd_item))) {
+              LOG_WARN("failed to push back fd item", K(ret));
+            } else { /*do nothing*/}
+          }
         }
       }
     }
   }
+
   return ret;
 }
 
@@ -3992,6 +3984,19 @@ int ObOptimizerUtil::decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
     }
   } else if (OB_FAIL(merge_key.assign(*interesting_key))) {
     LOG_WARN("failed to assign merge key", K(ret));
+    /* interesting_key->need_sort_ is true generally.
+      When ObOptimizerUtil::check_need_sort use ordering contain lossless cast, need_sort_ can be false
+      and ObOptimizerUtil::check_need_sort is needed for other path use the interesting_key */
+  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(merge_key.order_items_,
+                                                      input_ordering,
+                                                      fd_item_set,
+                                                      equal_sets,
+                                                      const_exprs,
+                                                      exec_ref_exprs,
+                                                      is_at_most_one_row,
+                                                      merge_key.need_sort_,
+                                                      merge_key.prefix_pos_))) {
+    LOG_WARN("failed to check need sort", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -4471,6 +4476,7 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
   all_contain = true;
   for (int64_t i = 0; OB_SUCC(ret) && all_contain && i < or_qual.get_param_count(); ++i) {
     ObRawExpr *cur_expr = or_qual.get_param_expr(i);
+    bool contain_op_row = false;
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr in or expr is null", K(ret));
@@ -4479,11 +4485,16 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
       ObOpRawExpr *and_expr = static_cast<ObOpRawExpr *>(cur_expr);
       for (int64_t j = 0; OB_SUCC(ret) && j < and_expr->get_param_count(); ++j) {
         ObRawExpr *cur_and_expr = and_expr->get_param_expr(j);
+        contain_op_row = false;
         if (OB_ISNULL(cur_and_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr in and expr is null", K(ret));
         } else if (cur_and_expr->has_flag(CNT_SUB_QUERY)) {
           //do nothing
+        } else if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(cur_and_expr, contain_op_row))) {
+          LOG_WARN("fail to check contain op row", K(ret));
+        } else if (contain_op_row) {
+          // do nothing
         } else if (!table_ids.is_superset(cur_and_expr->get_relation_ids())) {
           //do nothing
         } else if (cur_and_expr->get_relation_ids().is_empty() &&
@@ -4498,6 +4509,10 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
         all_contain = false;
       }
     } else if (cur_expr->has_flag(CNT_SUB_QUERY)) {
+      all_contain = false;
+    } else if (OB_FAIL(ObRawExprUtils::check_contain_op_row_expr(cur_expr, contain_op_row))) {
+      LOG_WARN("fail to check contain op row", K(ret));
+    } else if (contain_op_row) {
       all_contain = false;
     } else if (!table_ids.is_superset(cur_expr->get_relation_ids())) {
       all_contain = false;
@@ -4518,6 +4533,7 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   new_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> new_expr_params;
   ObRawExprFactory &expr_factory = opt_ctx.get_expr_factory();
   const ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
   if (OB_ISNULL(session_info) || OB_ISNULL(stmt)) {
@@ -4532,39 +4548,34 @@ int ObOptimizerUtil::generate_push_down_expr(const ObDMLStmt *stmt,
     for (int64_t i = 0; OB_SUCC(ret) && i < sub_exprs.count(); ++i) {
       ObIArray<ObRawExpr *> &cur_exprs = sub_exprs.at(i);
       const int64_t N = cur_exprs.count();
-        // 在原or expr的子expr上只有一个expr符合条件，直接加入到or expr中即可
       if (1 == N) {
-        if (OB_FAIL(new_expr->add_param_expr(cur_exprs.at(0)))) {
-          LOG_WARN("failed to add param expr", K(ret));
+        if (OB_FAIL(new_expr_params.push_back(cur_exprs.at(0)))) {
+          LOG_WARN("failed to push back param expr", K(ret));
         }
       } else {
+        ObOpRawExpr *new_param_expr = NULL;
         // 在原or expr的子expr上有多个expr符合条件，需要生成一个新的and expr
-        ObOpRawExpr *new_and_expr = NULL;
-        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, new_and_expr))) {
+        if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, new_param_expr))) {
           LOG_WARN("failed to create and expr", K(ret));
-        } else if (OB_ISNULL(new_and_expr)) {
+        } else if (OB_ISNULL(new_param_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create expr get null", K(ret));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < N; ++j) {
-          if (OB_FAIL(new_and_expr->add_param_expr(cur_exprs.at(j)))) {
-            LOG_WARN("failed to add param expr", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          /* do nothing */
-        } else if (OB_FAIL(new_and_expr->formalize(session_info))) {
+        } else if (OB_FAIL(new_param_expr->get_param_exprs().assign(cur_exprs))) {
+          LOG_WARN("failed to assign param exprs", K(ret));
+        } else if (OB_FAIL(new_param_expr->formalize(session_info))) {
           LOG_WARN("failed to formalize and expr", K(ret));
-        } else if (OB_FAIL(new_and_expr->pull_relation_id())) {
+        } else if (OB_FAIL(new_param_expr->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
-        } else if (OB_FAIL(new_expr->add_param_expr(new_and_expr))) {
-          LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(new_expr_params.push_back(new_param_expr))) {
+          LOG_WARN("failed to push back param expr", K(ret));
         }
       }
     }
   }
   if (OB_FAIL(ret)) {
     /* do nothing */
+  } else if (OB_FAIL(new_expr->get_param_exprs().assign(new_expr_params))) {
+    LOG_WARN("failed to assign param exprs", K(ret));
   } else if (OB_FAIL(new_expr->formalize(session_info))) {
     LOG_WARN("failed to formalize or expr", K(ret));
   } else if (OB_FAIL(new_expr->pull_relation_id())) {
@@ -4598,6 +4609,8 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   ObRawExprSet *min_parent_exprs = NULL;
   bool is_contain = false;
   bool is_in_child = false;
+  ObSqlBitSet<> root_exprs_set;
+  int64_t expr_idx = -1;
   root_exprs.reset();
   // 将 fd item 分为unique的和非unique的
   for (int64_t i = 0; OB_SUCC(ret) && i < fd_item_set.count(); ++i) {
@@ -4630,11 +4643,10 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   }
   // 找到一个unique fd item, 直接从candi exprs里找出匹配parent set的expr
   if (OB_SUCC(ret) && NULL != min_parent_exprs) {
-    int64_t expr_idx = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < min_parent_exprs->count(); ++i) {
       if (find_equal_expr(candi_exprs, min_parent_exprs->at(i), equal_sets, expr_idx)) {
-        if (OB_FAIL(root_exprs.push_back(candi_exprs.at(expr_idx)))) {
-          LOG_WARN("failed to push back root expr", K(ret));
+        if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       } else { /* not find means min_parent_exprs->at(i) is const, do nothing */ }
     }
@@ -4654,7 +4666,6 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
       } else if (is_contain) {
         ObSEArray<ObRawExpr *, 8> left_domain;
         ObSEArray<ObRawExpr *, 8> right_domain;
-        int64_t expr_idx = -1;
         // 生成新的root exprs集合
         for (int64_t j = 0; OB_SUCC(ret) && j < root_exprs.count(); ++j) {
           if (OB_FAIL(left_domain.push_back(root_exprs.at(j)))) {
@@ -4703,18 +4714,35 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
         }
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_exprs.count(); ++i) {
+      if(OB_UNLIKELY(!find_item(candi_exprs, root_exprs.at(i), &expr_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find item", K(ret));
+      } else if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    }
     // 所有non unique fd item都遍历过了, 但是还有其它无法被决定的expr, 直接加入到root exprs中
     if (OB_SUCC(ret) && eliminate_set.num_members() < candi_exprs.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
         if (eliminate_set.has_member(i)) {
           // do nothing
-        } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
-          LOG_WARN("failed to push back candi expr", K(ret));
+        } else if (OB_FAIL(root_exprs_set.add_member(i))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       }
     }
   }
   if (OB_SUCC(ret)) {
+    root_exprs.reuse();
+    // use bitset to keep exprs ordering
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
+      if (!root_exprs_set.has_member(i)) {
+        // do nothing
+      } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
+        LOG_WARN("failed to push back candi expr", K(ret));
+      }
+    }
     LOG_TRACE("succeed to simply exprs", K(fd_item_set), K(equal_sets), K(const_exprs),
         K(candi_exprs), K(root_exprs));
   }
@@ -4900,33 +4928,30 @@ int ObOptimizerUtil::get_subplan_const_column(const ObDMLStmt &parent_stmt,
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
-    const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
-    ObRawExpr *parent_expr = NULL;
-    bool is_const = false;
-    bool contains = false;
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret), K(expr));
-    } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
-      LOG_WARN("failed to check expr is const expr", K(ret));
-    } else if (!is_const) {
-      // do nothing
-    } else if (table_item->is_lateral_table() &&
-               OB_FAIL(ObOptimizerUtil::check_contain_my_exec_param(expr,
-                                                                    table_item->exec_params_,
-                                                                    contains))) {
-      LOG_WARN("failed to check contain my exec param", K(ret));
-    } else if (contains) {
-      // do nothing
-    } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
-                                                                        OB_APP_MIN_COLUMN_ID + i))) {
-      // parent expr is prunned
-    } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs, parent_expr))) {
-      LOG_WARN("failed to add parent expr into output", K(ret));
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
+      const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
+      ObRawExpr *parent_expr = NULL;
+      bool is_const = false;
+      bool contains = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(expr));
+      } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
+        LOG_WARN("failed to check expr is const expr", K(ret));
+      } else if (!is_const) {
+        // do nothing
+      } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
+                                                                          OB_APP_MIN_COLUMN_ID + i))) {
+        // parent expr is prunned
+      } else if (OB_FAIL(add_var_to_array_no_dup(output_exprs, parent_expr))) {
+        LOG_WARN("failed to add parent expr into output", K(ret));
+      }
     }
   }
+
   return ret;
 }
 
@@ -4942,34 +4967,42 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   bool is_valid = true;
   ObSEArray<ObRawExpr*, 8> temp_exprs;
+  TableItem *table_item = parent_stmt.get_table_item_by_id(table_id);
   ObRawExprCopier copier(expr_factory);
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < input_exprs.count(); i++) {
-    ObRawExpr *expr = NULL;
-    if (OB_ISNULL(input_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null expr", K(input_exprs.at(i)), K(ret));
-    } else if (OB_FAIL(convert_subplan_scan_expr(copier,
-                                                 equal_sets,
-                                                 table_id,
-                                                 parent_stmt,
-                                                 child_stmt,
-                                                 input_exprs.at(i),
-                                                 expr))) {
-      LOG_WARN("failed to generate subplan scan expr", K(ret));
-    } else if (OB_ISNULL(expr)) {
-      if (!skip_invalid) {
-        is_valid = false;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (table_item->is_lateral_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < input_exprs.count(); i++) {
+      ObRawExpr *expr = NULL;
+      if (OB_ISNULL(input_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(input_exprs.at(i)), K(ret));
+      } else if (OB_FAIL(convert_subplan_scan_expr(copier,
+                                                  equal_sets,
+                                                  table_id,
+                                                  parent_stmt,
+                                                  child_stmt,
+                                                  input_exprs.at(i),
+                                                  expr))) {
+        LOG_WARN("failed to generate subplan scan expr", K(ret));
+      } else if (OB_ISNULL(expr)) {
+        if (!skip_invalid) {
+          is_valid = false;
+        }
+      } else if (OB_FAIL(add_var_to_array_no_dup(temp_exprs, expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && is_valid && !temp_exprs.empty()) {
+      if (OB_FAIL(output_exprs.assign(temp_exprs))) {
+        LOG_WARN("failed to push back exprs", K(ret));
+      } else {
+        LOG_TRACE("succeed to convert subplan scan expr", K(input_exprs),
+                  K(output_exprs));
       }
-    } else if (OB_FAIL(add_var_to_array_no_dup(temp_exprs, expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret) && is_valid && !temp_exprs.empty()) {
-    if (OB_FAIL(output_exprs.assign(temp_exprs))) {
-      LOG_WARN("failed to push back exprs", K(ret));
-    } else {
-      LOG_TRACE("succeed to convert subplan scan expr", K(input_exprs),
-                K(output_exprs));
     }
   }
   return ret;
@@ -5984,6 +6017,22 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
       } else if (ObNumberTC == child_tc && ObNumberTC == dst_tc) {
         is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
                       && PRECISION_UNKNOWN_YET == dst_type.get_precision();
+      } else if (ObCharType == child_type.get_type()) {
+        if (ObVarcharType == dst_type.get_type() && !expr->is_const_expr()) {
+          if ((dst_acc.get_length() >= child_type.get_accuracy().get_length() ||
+               dst_acc.get_length() == -1) &&
+              dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObNCharType == child_type.get_type()) {
+        if (ObNVarchar2Type == dst_type.get_type() && !expr->is_const_expr()) {
+          if ((dst_acc.get_length() >= child_type.get_accuracy().get_length() ||
+               dst_acc.get_length() == -1) &&
+               dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+            is_lossless = true;
+          }
+        }
       }
     }
   }
@@ -9358,6 +9407,30 @@ int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op
     if (can_use_batch_nlj && OB_FAIL(SMART_CALL(check_ancestor_node_support_skip_scan(parent, can_use_batch_nlj)))) {
       LOG_WARN("failed to check parent node can use batch NLJ", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false)
+{
+  int ret = OB_SUCCESS;
+  ObObj const_value;
+  bool got_result = false;
+  bool is_result_true = false;
+  if (!expr.is_static_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx.get_exec_ctx(),
+                                                               &expr,
+                                                               const_value,
+                                                               got_result,
+                                                               opt_ctx.get_allocator()))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  } else if (!got_result) {
+    // do nothing
+  } else if (OB_FAIL(ObObjEvaluator::is_true(const_value, is_result_true))) {
+    LOG_WARN("failed to check is const value true", K(ret));
+  } else {
+    is_static_false = !is_result_true;
   }
   return ret;
 }

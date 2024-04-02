@@ -262,8 +262,8 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, alter_table_arg_.inner_sql_exec_addr_))) {
       LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
       ret = OB_SUCCESS; // ignore ret
-    } else {
-      set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
+    } else if (OB_FAIL(set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_))) {
+      LOG_WARN("failed to set sql execute addr", K(ret), K(alter_table_arg_.inner_sql_exec_addr_));
     }
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
@@ -516,7 +516,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(dst_tenant_id_,
-                                         ObDDLType::DDL_CREATE_INDEX,
+                                         (data_format_version_ >= DATA_VERSION_4_2_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                                          table_schema,
                                          index_schema,
                                          0/*object_id*/,
@@ -1281,9 +1281,9 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
           job_stat.parallel_,
           job_stat.max_allowed_error_rows_,
           job_stat.detected_error_rows_,
-          job_stat.coordinator.received_rows_,
-          job_stat.coordinator.status_.length(),
-          job_stat.coordinator.status_.ptr());
+          job_stat.coordinator_.received_rows_,
+          job_stat.coordinator_.status_.length(),
+          job_stat.coordinator_.status_.ptr());
     }
   }
 
@@ -1391,10 +1391,10 @@ int ObTableRedefinitionTask::get_direct_load_job_stat(common::ObArenaAllocator &
         EXTRACT_INT_FIELD_MYSQL(*select_result, "PARALLEL", job_stat.parallel_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*select_result, "MAX_ALLOWED_ERROR_ROWS", job_stat.max_allowed_error_rows_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*select_result, "DETECTED_ERROR_ROWS", job_stat.detected_error_rows_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator.received_rows_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator_.received_rows_, int64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*select_result, "COORDINATOR_STATUS", load_status);
         if (OB_SUCC(ret)
-            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator.status_))) {
+            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator_.status_))) {
           LOG_WARN("failed to write string", KR(ret));
         }
       }

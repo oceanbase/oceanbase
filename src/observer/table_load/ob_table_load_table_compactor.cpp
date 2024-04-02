@@ -36,6 +36,8 @@ using namespace storage;
 ObTableLoadTableCompactResult::ObTableLoadTableCompactResult()
   : allocator_("TLD_TCResult"), tablet_result_map_(64)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  all_table_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCompactResult::~ObTableLoadTableCompactResult()
@@ -58,7 +60,6 @@ void ObTableLoadTableCompactResult::reset()
 int ObTableLoadTableCompactResult::init()
 {
   int ret = OB_SUCCESS;
-  allocator_.set_tenant_id(MTL_ID());
   if (OB_FAIL(tablet_result_map_.init("TLD_TCResult", MTL_ID()))) {
     LOG_WARN("fail to init link hash map", KR(ret));
   }
@@ -104,6 +105,7 @@ int ObTableLoadTableCompactResult::add_table(ObIDirectLoadPartitionTable *table)
 ObTableLoadTableCompactCtx::ObTableLoadTableCompactCtx()
   : allocator_("TLD_TCCtx"), store_ctx_(nullptr), merger_(nullptr), compactor_(nullptr)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadTableCompactCtx::~ObTableLoadTableCompactCtx()
@@ -125,7 +127,6 @@ int ObTableLoadTableCompactCtx::init(ObTableLoadStoreCtx *store_ctx, ObTableLoad
     if (OB_FAIL(result_.init())) {
       LOG_WARN("fail to init result", KR(ret));
     } else {
-      allocator_.set_tenant_id(MTL_ID());
       store_ctx_ = store_ctx;
       merger_ = &merger;
     }

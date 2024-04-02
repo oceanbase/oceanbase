@@ -193,7 +193,7 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
         LOG_ERROR("failed to decode", K(easy_conn), KP(ms), K(is_current_normal_mode), K(ret));
       } else {
         if (NULL != pkt) {
-          const int64_t receive_ts = common::ObClockGenerator::getClock();
+          const int64_t receive_ts = common::ObTimeUtility::current_time();
           const int64_t fly_ts = receive_ts - pkt->get_timestamp();
           if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
             LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),

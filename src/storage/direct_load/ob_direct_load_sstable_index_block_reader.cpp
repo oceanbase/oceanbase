@@ -31,7 +31,7 @@ ObDirectLoadSSTableIndexBlockReader::~ObDirectLoadSSTableIndexBlockReader()
 int ObDirectLoadSSTableIndexBlockReader::init(int64_t data_block_size,
                                               ObCompressorType compressor_type)
 {
-  return ParentType::init(data_block_size, data_block_size, compressor_type);
+  return ParentType::init(data_block_size, compressor_type);
 }
 
 int ObDirectLoadSSTableIndexBlockReader::get_next_entry(const ObDirectLoadSSTableIndexEntry *&entry)

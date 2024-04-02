@@ -142,7 +142,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
     DEBUG_SYNC(BEFORE_CHECKPOINT_TASK);
     ObLS *ls = nullptr;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       ObDataCheckpoint *data_checkpoint = nullptr;
@@ -264,7 +264,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
   return cannot_recycle_log_over_threshold;
 }
 
-int ObCheckPointService::flush_if_need_(bool need_flush)
+int ObCheckPointService::flush_if_need_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -283,7 +283,7 @@ int ObCheckPointService::flush_if_need_(bool need_flush)
     int64_t ls_cnt = 0;
     int64_t succ_ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_TMP_FAIL(ls->flush_if_need(need_flush))) {
+      if (OB_TMP_FAIL(ls->flush_if_need(true))) {
         STORAGE_LOG(WARN, "flush ls failed", KR(tmp_ret), KPC(ls));
         tmp_ret = OB_SUCCESS;
       } else {
@@ -316,7 +316,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   } else {
     ObLS *ls = nullptr;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
@@ -358,7 +358,7 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
     }
   }
 
-  if (need_flush && OB_FAIL(checkpoint_service_.flush_if_need_(need_flush))) {
+  if (need_flush && OB_FAIL(checkpoint_service_.flush_if_need_())) {
     STORAGE_LOG(ERROR, "flush if needed failed", K(ret), K(need_flush));
   }
 }

@@ -33,28 +33,6 @@ public:
                        const int64_t src_data_size,
                        char *dst_buffer,
                        const int64_t dst_buffer_size,
-                       int64_t &dst_data_size,
-                       ObIAllocator *allocator)
-  {
-    UNUSED(allocator);
-    return compress(src_buffer, src_data_size, dst_buffer, dst_buffer_size,
-                    dst_data_size);
-  }
-  virtual int decompress(const char *src_buffer,
-                         const int64_t src_data_size,
-                         char *dst_buffer,
-                         const int64_t dst_buffer_size,
-                         int64_t &dst_data_size,
-                         ObIAllocator *allocator)
-  {
-    UNUSED(allocator);
-    return decompress(src_buffer, src_data_size, dst_buffer, dst_buffer_size,
-                      dst_data_size);
-  }
-  virtual int compress(const char *src_buffer,
-                       const int64_t src_data_size,
-                       char *dst_buffer,
-                       const int64_t dst_buffer_size,
                        int64_t &dst_data_size) = 0;
   virtual int decompress(const char *src_buffer,
                          const int64_t src_data_size,
@@ -63,8 +41,6 @@ public:
                          int64_t &dst_data_size) = 0;
   virtual int get_max_overflow_size(const int64_t src_data_size,
                                     int64_t &max_overflow_size) const = 0;
-  virtual void reset_mem() {}
-
   virtual const char *get_compressor_name() const = 0;
   virtual ObCompressorType get_compressor_type() const = 0;
 };

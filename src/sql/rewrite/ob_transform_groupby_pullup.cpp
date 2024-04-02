@@ -68,6 +68,8 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
     ObSelectStmt *view_stmt = NULL;
     int64_t view_id = valid_views.at(i).table_id_;
     TableItem *view = NULL;
+    StmtUniqueKeyProvider unique_key_provider;
+    try_trans_helper.unique_key_provider_ = &unique_key_provider;
     LOG_DEBUG("begin pull up", K(valid_views.count()), K(valid_views.at(i).need_merge_));
     if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_,
                                                  *ctx_->expr_factory_,
@@ -80,7 +82,7 @@ int ObTransformGroupByPullup::transform_one_stmt(common::ObIArray<ObParentDMLStm
     } else if (OB_FALSE_IT(pullup_ctx.view_talbe_id_ = valid_views.at(i).table_id_)) {
     } else if (OB_FAIL(get_trans_view(trans_stmt, view_stmt))) {
       LOG_WARN("failed to get transform view", K(ret));
-    } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i)))) {
+    } else if (OB_FAIL(do_groupby_pull_up(view_stmt, valid_views.at(i), unique_key_provider))) {
       LOG_WARN("failed to do pull up group by", K(ret));
     } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                         valid_views.at(i).need_merge_, true,
@@ -226,7 +228,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     OPT_TRACE("stmt contain for update, can not transform");
   } else if (OB_FAIL(stmt->check_if_contain_inner_table(contain_inner_table))) {
     LOG_WARN("failed to check if contain inner table", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(stmt, has_unique_keys))) {
+  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(stmt, has_unique_keys))) {
     LOG_WARN("failed to check stmt has unique keys", K(ret));
   } else if (!has_unique_keys) {
     //如果当前stmt不能生成唯一键，do nothing
@@ -704,7 +706,9 @@ int ObTransformGroupByPullup::get_trans_view(ObDMLStmt *stmt, ObSelectStmt *&vie
   return ret;
 }
 
-int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelper &helper)
+int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt,
+                                                 PullupHelper &helper,
+                                                 StmtUniqueKeyProvider &unique_key_provider)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> unique_exprs;
@@ -724,10 +728,10 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
     LOG_WARN("subquery is null", K(*table_item), K(ret));
   } else if (OB_FAIL(ignore_tables.add_member(stmt->get_table_bit_index(table_item->table_id_)))) {
     LOG_WARN("failed to add ignore table index", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_,
-                                                           stmt,
-                                                           ignore_tables,
-                                                           unique_exprs))) {
+  } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_,
+                                                            stmt,
+                                                            ignore_tables,
+                                                            unique_exprs))) {
     LOG_WARN("failed to generated unique keys", K(ret));
   } else if (OB_FAIL(append(stmt->get_group_exprs(), unique_exprs))) {
     LOG_WARN("failed to append group exprs", K(ret));

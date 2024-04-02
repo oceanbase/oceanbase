@@ -34,7 +34,9 @@ public:
   enum { DATA_OP_TIMEOUT = 200 * 1000 };
 
 public:
-  virtual int parse(PartTransTask &task, volatile bool &stop_flag) = 0;
+  // is_build_baseline: in data_dict refresh mode and build baseline stage, we need ddl parser
+  // to parse ddl stmt and delete dropped table
+  virtual int parse(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag) = 0;
 
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag) = 0;
 };
@@ -53,7 +55,7 @@ public:
   virtual ~ObLogPartTransParser();
 
 public:
-  virtual int parse(PartTransTask &task, volatile bool &stop_flag);
+  virtual int parse(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag);
   virtual int parse(ObLogEntryTask &task, volatile bool &stop_flag);
 
 public:
@@ -68,10 +70,11 @@ private:
       const PartTransTask &part_trans_task,
       const MutatorRow &row,
       bool &need_rollback);
-  int parse_ddl_redo_log_(PartTransTask &task, volatile bool &stop_flag);
+  int parse_ddl_redo_log_(PartTransTask &task, const bool is_build_baseline, volatile bool &stop_flag);
   int parse_stmts_(
       ObLogTenant *tenant,
       const RedoLogMetaNode &redo_log_node,
+      const bool is_build_baseline,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &task,
       uint64_t &row_index,
@@ -117,6 +120,7 @@ private:
   int parse_ddl_stmts_(
       const uint64_t row_index,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema,
+      const bool is_build_baseline,
       MutatorRow &row,
       PartTransTask &task,
       volatile bool &stop_flag);
@@ -145,6 +149,7 @@ private:
       const ObTabletID &tablet_id,
       const char *redo_data,
       const int64_t redo_data_len,
+      const bool is_build_baseline,
       int64_t &pos,
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
@@ -173,6 +178,7 @@ private:
   bool              inited_;
   IObLogBRPool      *br_pool_;
   IObLogMetaManager *meta_manager_;
+  ObLogAllDdlOperationSchemaInfo all_ddl_operation_table_schema_info_;
 
   // The cluster ID of this cluster
   // Set as the unique ID of the DDL

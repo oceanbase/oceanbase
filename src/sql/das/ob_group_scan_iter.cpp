@@ -21,6 +21,7 @@ namespace sql
 {
 int ObGroupResultRows::init(const common::ObIArray<ObExpr *> &exprs,
                             ObEvalCtx &eval_ctx,
+                            const ExprFixedArray &access_exprs,
                             ObIAllocator &das_op_allocator,
                             int64_t max_size,
                             ObExpr *group_id_expr,
@@ -50,6 +51,7 @@ int ObGroupResultRows::init(const common::ObIArray<ObExpr *> &exprs,
       }
       inited_ = true;
       exprs_ = &exprs;
+      access_exprs_ = &access_exprs;
       eval_ctx_ = &eval_ctx;
       max_size_ = max_size;
       group_id_expr_pos_ = OB_INVALID_INDEX;
@@ -283,7 +285,8 @@ int ObGroupScanIter::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
     if (OB_SUCC(ret)) {
-      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *row_store_.eval_ctx_, *row_store_.exprs_, storage_count);
+      const ObBitVector *skip = NULL;
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *row_store_.eval_ctx_, *row_store_.exprs_, storage_count, skip);
       ObDatum *group_idx_batch = group_id_expr_->locate_batch_datums(*row_store_.eval_ctx_);
       int64_t i = 0;
       for (i = 0; i < storage_count; i++) {
@@ -349,10 +352,12 @@ int ObGroupScanIter::get_next_rows(int64_t &count, int64_t capacity)
 
 void ObGroupScanIter::reset_expr_datum_ptr()
 {
-  FOREACH_CNT(e, *row_store_.exprs_) {
-    (*e)->locate_datums_for_update(*row_store_.eval_ctx_, row_store_.max_size_);
-    ObEvalInfo &info = (*e)->get_eval_info(*row_store_.eval_ctx_);
-    info.point_to_frame_ = true;
+  if (OB_NOT_NULL(row_store_.access_exprs_)) {
+    FOREACH_CNT(e, *row_store_.access_exprs_) {
+      (*e)->locate_datums_for_update(*row_store_.eval_ctx_, row_store_.max_size_);
+      ObEvalInfo &info = (*e)->get_eval_info(*row_store_.eval_ctx_);
+      info.point_to_frame_ = true;
+    }
   }
 }
 

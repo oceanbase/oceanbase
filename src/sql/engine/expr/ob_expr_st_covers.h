@@ -15,6 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ST_COVERS_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 namespace oceanbase
 {
@@ -32,7 +33,7 @@ public:
   static int eval_st_covers(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   template<typename ResType>
   static int eval_st_covers_common(ObEvalCtx &ctx,
-                                   ObArenaAllocator &temp_allocator,
+                                   MultimodeAlloctor &temp_allocator,
                                    ObString wkb1,
                                    ObString wkb2,
                                    ResType &res);

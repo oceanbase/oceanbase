@@ -342,7 +342,7 @@ public:
                           ObStmtExprVisitor &visitor);
   int iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items, ObStmtExprVisitor &visitor);
   int iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor);
-  int update_stmt_table_id(const ObSelectStmt &other);
+  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other);
   int64_t get_select_item_size() const { return select_items_.count(); }
   int64_t get_group_expr_size() const { return group_exprs_.count(); }
   int64_t get_rollup_expr_size() const { return rollup_exprs_.count(); }
@@ -437,8 +437,8 @@ public:
   bool is_from_pivot() const { return is_from_pivot_; }
   bool has_hidden_rowid() const;
   virtual int clear_sharable_expr_reference() override;
-  virtual int remove_useless_sharable_expr() override;
-  int maintain_scala_group_by_ref();
+  virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
+                                           ObSQLSessionInfo *session_info) override;
 
   const common::ObIArray<OrderItem>& get_search_by_items() const { return search_by_items_; }
   const common::ObIArray<ColumnItem>& get_cycle_items() const { return cycle_by_items_; }
@@ -511,6 +511,7 @@ public:
   }
   int add_having_expr(ObRawExpr *expr) { return having_exprs_.push_back(expr); }
   bool has_for_update() const;
+  bool is_skip_locked() const;
   common::ObIArray<ObColumnRefRawExpr*> &get_for_update_columns() { return for_update_columns_; }
   const common::ObIArray<ObColumnRefRawExpr *> &get_for_update_columns() const { return for_update_columns_; }
   bool contain_ab_param() const { return contain_ab_param_; }
@@ -623,6 +624,7 @@ public:
   bool has_external_table() const;
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
+  int get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const;
 
 private:
   SetOperator set_op_;

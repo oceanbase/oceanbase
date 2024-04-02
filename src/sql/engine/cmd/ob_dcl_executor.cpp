@@ -51,6 +51,9 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get schema service failed", K(ret));
   } else if (!is_role) {
     ObString user_name;
     ObString host_name;
@@ -124,11 +127,27 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
     arg.object_type_ = stmt.get_object_type();
     arg.object_id_ = stmt.get_object_id();
     arg.grantor_id_ = stmt.get_grantor_id();
-    arg.ins_col_ids_ = stmt.get_ins_col_ids();
-    arg.upd_col_ids_ = stmt.get_upd_col_ids();
-    arg.ref_col_ids_ = stmt.get_ref_col_ids();
     arg.is_inner_ = session_info->is_inner();
-    if (OB_FAIL(common_rpc_proxy->grant(arg))) {
+    arg.based_schema_object_infos_.reset();
+    if (OB_FAIL(append(arg.column_names_priv_, stmt.get_column_privs()))
+        || OB_FAIL(append(arg.ins_col_ids_, stmt.get_ins_col_ids()))
+        || OB_FAIL(append(arg.upd_col_ids_, stmt.get_upd_col_ids()))
+        || OB_FAIL(append(arg.ref_col_ids_, stmt.get_ref_col_ids()))) {
+        LOG_WARN("append failed", K(ret));
+    } else if (lib::is_mysql_mode() && arg.object_type_ == ObObjectType::TABLE
+                && arg.column_names_priv_.count() > 0) {
+      if (arg.object_id_ == OB_INVALID) {
+        //do nothing
+        //todo: oracle every object will use id, and should also record the schema version in future.
+      } else if (stmt.get_table_schema_version() != 0
+                  && OB_FAIL(arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.object_id_,
+                                                                            TABLE_SCHEMA,
+                                                                            stmt.get_table_schema_version())))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(common_rpc_proxy->grant(arg))) {
       LOG_WARN("Grant privileges to user error", K(ret), K(arg));
     }
   }
@@ -147,6 +166,8 @@ int ObRevokeExecutor::execute(ObExecContext &ctx, ObRevokeStmt &stmt)
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
+  } else if (stmt.get_has_warning()) {
+    //do nothing
   } else {
     switch (stmt.get_grant_level()) {
       case OB_PRIV_USER_LEVEL: {
@@ -255,7 +276,7 @@ int ObRevokeExecutor::revoke_db(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt
 int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(rpc_proxy)) {
+  if (OB_ISNULL(rpc_proxy) || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
   } else {
@@ -264,13 +285,30 @@ int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeS
     arg.priv_set_ = stmt.get_priv_set();
     arg.db_ = stmt.get_database_name();
     arg.table_ = stmt.get_table_name();
-    arg.obj_id_ = stmt.get_obj_id();
+    arg.obj_id_ = stmt.get_object_id();
     arg.obj_type_ = static_cast<uint64_t>(stmt.get_object_type());
     arg.grantor_id_ = stmt.get_grantor_id();
     arg.revoke_all_ora_ = stmt.get_revoke_all_ora();
-
+    arg.based_schema_object_infos_.reset();
+    if (OB_FAIL(append(arg.column_names_priv_, stmt.get_column_privs()))) {
+      LOG_WARN("append failed", K(ret));
+    } else if (stmt.get_object_type() == ObObjectType::TABLE
+            && (arg.column_names_priv_.count() > 0)) {
+      if (arg.obj_id_ == OB_INVALID) {
+        //do nothing
+        //todo: oracle every object will use id, and should also record the schema version in future.
+      } else if (lib::is_mysql_mode() && stmt.get_table_schema_version()!= 0 &&
+                OB_FAIL(arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.obj_id_,
+                                                                            TABLE_SCHEMA,
+                                                                            stmt.get_table_schema_version())))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    } else {
+      //todo: pl routine and others
+    }
     const ObIArray<uint64_t> &user_ids = stmt.get_users();
-    if (0 == user_ids.count()) {
+    if (OB_FAIL(ret)) {
+    } else if (0 == user_ids.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("User ids is empty, resolver may be error", K(ret));
     } else {
@@ -297,7 +335,7 @@ int ObRevokeExecutor::revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevok
     arg.priv_set_ = stmt.get_priv_set();
     arg.db_ = stmt.get_database_name();
     arg.routine_ = stmt.get_table_name();
-    arg.obj_id_ = stmt.get_obj_id();
+    arg.obj_id_ = stmt.get_object_id();
     arg.obj_type_ = static_cast<uint64_t>(stmt.get_object_type());
     arg.grantor_id_ = stmt.get_grantor_id();
     arg.revoke_all_ora_ = stmt.get_revoke_all_ora();

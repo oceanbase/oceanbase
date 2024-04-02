@@ -172,10 +172,19 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_4_2_1_0 (oceanbase::common::cal_version(4, 2, 1, 0))
 #define CLUSTER_VERSION_4_2_1_1 (oceanbase::common::cal_version(4, 2, 1, 1))
 #define CLUSTER_VERSION_4_2_1_2 (oceanbase::common::cal_version(4, 2, 1, 2))
+#define CLUSTER_VERSION_4_2_1_3 (oceanbase::common::cal_version(4, 2, 1, 3))
+// MOCK_XXX is used to CP compatible code from branch with lower version,
+// should consider that if is supported when upgrade from such version.
+#define MOCK_CLUSTER_VERSION_4_2_1_4 (oceanbase::common::cal_version(4, 2, 1, 4))
+#define MOCK_CLUSTER_VERSION_4_2_1_5 (oceanbase::common::cal_version(4, 2, 1, 5))
 #define CLUSTER_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
+#define CLUSTER_VERSION_4_2_2_1 (oceanbase::common::cal_version(4, 2, 2, 1))
+#define CLUSTER_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
+
+#define CLUSTER_VERSION_4_3_0_0 (oceanbase::common::cal_version(4, 3, 0, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_2_2_0
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_2_3_0
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
 
 #define IS_CLUSTER_VERSION_BEFORE_4_1_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_1_0_0)
@@ -184,6 +193,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // 1. After 4.0, each cluster_version is corresponed to a data version.
 // 2. cluster_version and data_version is not compariable.
 // 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
+#define DEFAULT_MIN_DATA_VERSION (oceanbase::common::cal_version(0, 0, 0, 1))
 #define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
 #define DATA_VERSION_4_1_0_1 (oceanbase::common::cal_version(4, 1, 0, 1))
@@ -192,9 +202,16 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_2_1_0 (oceanbase::common::cal_version(4, 2, 1, 0))
 #define DATA_VERSION_4_2_1_1 (oceanbase::common::cal_version(4, 2, 1, 1))
 #define DATA_VERSION_4_2_1_2 (oceanbase::common::cal_version(4, 2, 1, 2))
+#define DATA_VERSION_4_2_1_3 (oceanbase::common::cal_version(4, 2, 1, 3))
+// MOCK_XXX is used to CP compatible code from branch with lower version,
+// should consider that if is supported when upgrade from such version.
+#define MOCK_DATA_VERSION_4_2_1_4 (oceanbase::common::cal_version(4, 2, 1, 4))
+#define MOCK_DATA_VERSION_4_2_1_5 (oceanbase::common::cal_version(4, 2, 1, 5))
 #define DATA_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
+#define DATA_VERSION_4_2_2_1 (oceanbase::common::cal_version(4, 2, 2, 1))
+#define DATA_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
 
-#define DATA_CURRENT_VERSION DATA_VERSION_4_2_2_0
+#define DATA_CURRENT_VERSION DATA_VERSION_4_2_3_0
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // LAST_BARRIER_DATA_VERSION should be the latest barrier data version before DATA_CURRENT_VERSION
 #define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_2_1_0

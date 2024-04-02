@@ -47,6 +47,7 @@ namespace sql
 {
 class ObPsCache;
 class ObSQLSessionInfo;
+class ObAlterRoutineResolver;
 }
 namespace jit
 {
@@ -94,7 +95,7 @@ public:
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
-                               bool set_record_null = true) const;
+                               bool set_null = true) const;
 };
 
 class ObPLFunctionBase
@@ -730,7 +731,7 @@ public:
   int execute();
   int final(int ret);
   int deep_copy_result_if_need();
-  int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj);
+  int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }
   inline const sql::ObPhysicalPlanCtx &get_physical_plan_ctx() const { return phy_plan_ctx_; }
@@ -862,6 +863,8 @@ public:
     is_function_or_trigger_ = false;
     last_insert_id_ = 0;
     trace_id_.reset();
+    old_user_priv_set_ = OB_PRIV_SET_EMPTY;
+    old_db_priv_set_ = OB_PRIV_SET_EMPTY;
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -1011,6 +1014,8 @@ private:
   uint64_t database_id_;
   common::ObSEArray<uint64_t, 8> old_role_id_array_;
   uint64_t old_priv_user_id_;
+  ObPrivSet old_user_priv_set_;
+  ObPrivSet old_db_priv_set_;
   bool old_in_definer_;
   bool need_reset_default_database_;
   bool need_reset_role_id_array_;
@@ -1068,6 +1073,7 @@ struct PlTransformTreeCtx
 
 class ObPL
 {
+  friend class sql::ObAlterRoutineResolver;
 public:
   ObPL() :
     sql_proxy_(NULL),

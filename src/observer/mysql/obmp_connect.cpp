@@ -225,11 +225,8 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   } else if (OB_FAIL(set_session_active(sql, session, ObTimeUtil::current_time()))) {
     LOG_WARN("fail to set session active", K(ret));
   } else {
-    const bool enable_trace_log = lib::is_trace_log_enabled();
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     ctx.retry_times_ = 0; // 这里是建立连接的时候的初始化sql的执行，不重试
     ctx.schema_guard_ = &schema_guard;
     HEAP_VAR(ObMySQLResultSet, result, session, allocator) {
@@ -243,18 +240,16 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx, result))) {
         LOG_WARN("sql execute failed", K(multi_stmt_item), K(sql), K(ret));
       } else {
-        if (OB_FAIL(result.open())) {
-          LOG_WARN("failed to do result set open", K(ret));
+        int open_ret = result.open();
+        if (open_ret) {
+          LOG_WARN("failed to do result set open", K(open_ret));
         }
-        int save_ret = ret;
         if (OB_FAIL(result.close())) {
           LOG_WARN("result close failed, disconnect.", K(ret));
         }
-        ret = (save_ret != OB_SUCCESS) ? save_ret : ret;
+        ret = (open_ret != OB_SUCCESS) ? open_ret : ret;
       }
-      if (enable_trace_log) {
-        ObThreadLogLevelUtils::clear();
-      }
+      ObThreadLogLevelUtils::clear();
     }
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
@@ -1399,14 +1394,25 @@ int ObMPConnect::get_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
       LOG_WARN("extract_tenant_id failed", K(ret), K_(tenant_name));
     }
   }
-  if (OB_SUCC(ret) && !is_sys_tenant(tenant_id)) {
+  if (OB_SUCC(ret)) {
     if (is_meta_tenant(tenant_id)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
+    } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.ob_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_service or ob_service is NULL", KR(ret), K(tenant_id));
     } else if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
-      ret = OB_SERVER_IS_INIT;
-      LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      bool is_empty = false;
+      if (is_sys_tenant(tenant_id)
+          && OB_FAIL(GCTX.ob_service_->check_server_empty(is_empty))) {
+        LOG_WARN("fail to check server is empty", KR(ret));
+      } else if (is_sys_tenant(tenant_id) && is_empty) {
+          //in bootstrap, we could use sys to login
+      } else {
+        ret = OB_SERVER_IS_INIT;
+        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
+      }
     }
   }
   return ret;
@@ -2149,4 +2155,3 @@ int ObMPConnect::set_client_version(ObSMConnection &conn)
   }
   return ret;
 }
-

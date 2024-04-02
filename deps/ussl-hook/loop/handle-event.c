@@ -42,41 +42,12 @@ static void auth_type_to_str(int auth_type, char *buf, size_t len)
   }
 }
 
-static void get_client_addr(int fd, char *buf, int len)
-{
-  struct sockaddr_storage addr;
-  socklen_t sock_len = sizeof(addr);
-  if (0 != getsockname(fd, (struct sockaddr *)&addr, &sock_len)) {
-    ussl_log_warn("getsockname failed, fd:%d, errno:%d", fd, errno);
-  } else {
-    char src_addr[INET6_ADDRSTRLEN];
-    if (AF_INET == addr.ss_family) {
-      struct sockaddr_in *s = (struct sockaddr_in *)&addr;
-      if (NULL != inet_ntop(AF_INET, &s->sin_addr, src_addr, INET_ADDRSTRLEN)) {
-        if (snprintf(buf, len, "%s:%d", src_addr, ntohs(s->sin_port)) < 0) {
-          ussl_log_warn("snprintf failed, errno:%d", errno);
-        }
-      } else {
-        ussl_log_warn("call inet_ntop for AF_INET failed, errno:%d", errno);
-      }
-    } else {
-      struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
-      if (NULL != inet_ntop(AF_INET6, &s->sin6_addr, src_addr, INET6_ADDRSTRLEN)) {
-        if (snprintf(buf, len, "[%s]:%d", src_addr, ntohs(s->sin6_port)) < 0) {
-          ussl_log_warn("snprintf failed, errno:%d", errno);
-        }
-      } else {
-        ussl_log_warn("call inet_ntop for AF_INET6 failed, errno:%d", errno);
-      }
-    }
-  }
-}
-
+extern char *sockfd_to_str_c(int fd, char *buf, int len);
 static int epoll_unregist_and_give_back(clientfd_sk_t *cs, int need_close)
 {
   int ret = 0;
   char client_addr[IP_STRING_MAX_LEN] = {0};
-  get_client_addr(cs->fd_info.client_fd, client_addr, IP_STRING_MAX_LEN);
+  sockfd_to_str_c(cs->fd_info.client_fd, client_addr, IP_STRING_MAX_LEN);
   if (need_close && cs->fd >= 0) {
     shutdown(cs->fd, SHUT_WR);
   }
@@ -147,7 +118,7 @@ static int handle_client_writable_event(ussl_sock_t *s)
         } else { // 4.add to timeout list (if needed)
           // succ log
           char client_addr[IP_STRING_MAX_LEN] = {0};
-          get_client_addr(cs->fd, client_addr, IP_STRING_MAX_LEN);
+          sockfd_to_str_c(cs->fd, client_addr, IP_STRING_MAX_LEN);
           char auth_type[AUTH_TYPE_STRING_MAX_LEN] = {0};
           auth_type_to_str(nego_msg.type, auth_type, AUTH_TYPE_STRING_MAX_LEN);
           ussl_log_info("client send negotiation message succ, fd:%d, addr:%s, auth_method:%s, gid:0x%lx",
@@ -231,7 +202,7 @@ static int handle_client_readable_event(ussl_sock_t *s)
   int ret = EAGAIN;
   clientfd_sk_t *cs = (clientfd_sk_t *)s;
   char client_addr[IP_STRING_MAX_LEN] = {0};
-  get_client_addr(cs->fd, client_addr, IP_STRING_MAX_LEN);
+  sockfd_to_str_c(cs->fd, client_addr, IP_STRING_MAX_LEN);
   char auth_type[AUTH_TYPE_STRING_MAX_LEN] = {0};
   auth_type_to_str(cs->fd_info.auth_methods, auth_type, AUTH_TYPE_STRING_MAX_LEN);
   if (SEND_FIRST_NEGO_MESSAGE == cs->fd_info.stage) {

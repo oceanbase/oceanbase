@@ -65,8 +65,8 @@ int ObIExprSTGeomFromWKB::calc_result_typeN(ObExprResType& type,
         if (ob_is_null(types_stack[i].get_type())) {
         } else if (!ob_is_string_type(types_stack[i].get_type())
                    || ObCharset::is_cs_nonascii(types_stack[i].get_collation_type())) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_name());
+          types_stack[i].set_calc_type(ObVarcharType);
+          types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
         }
       }
       // srid
@@ -96,13 +96,13 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, get_func_name());
   ObDatum *datum = NULL;
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
   ObGeoAxisOrder axis_order = ObGeoAxisOrder::INVALID;
   ObString wkb;
-  ObString wkb_copy;
   const ObSrsItem *srs_item = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   omt::ObSrsCacheGuard srs_guard;
@@ -116,8 +116,9 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   bool is_3d_geo = false;
   // get srid
   if (num_args > 1) {
-    expr.args_[1]->eval(ctx, datum);
-    if (datum->is_null()) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
+      LOG_WARN("fail to eval argument", K(ret));
+    } else if (datum->is_null()) {
       is_null_result = true;
     } else if (datum->get_int() < 0 || datum->get_int() > UINT_MAX32) {
          ret = OB_OPERATE_OVERFLOW;
@@ -141,13 +142,15 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   // get axis_order
   if (!is_null_result && OB_SUCC(ret) && num_args > 2) {
     ObString axis_str;
-    expr.args_[2]->eval(ctx, datum);
-    if (datum->is_null()){
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[2], ctx, datum))) {
+      LOG_WARN("fail to eval argument", K(ret));
+    } else if (datum->is_null()){
       is_null_result = true;
     } else if (FALSE_IT(axis_str = datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *datum,
               expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), axis_str))) {
       LOG_WARN("fail to get real string data", K(ret), K(axis_str));
+    } else if (FALSE_IT(tmp_allocator.add_baseline_size(axis_str.length()))) {
     } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(axis_str, get_func_name(), axis_order))) {
       LOG_WARN("failed to parse axis order option string", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_need_reverse(axis_order, need_reverse))) {
@@ -157,18 +160,17 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
 
   // get wkb
   if (!is_null_result && OB_SUCC(ret)) {
-    if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, datum))) {
       LOG_WARN("failed to eval wkb", K(ret));
     } else if (datum->is_null()){
       is_null_result = true;
     } else {
       wkb = datum->get_string();
-      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *datum,
           expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
         LOG_WARN("fail to get real string data", K(ret), K(wkb));
-      } else if (OB_FAIL(ob_write_string(tmp_allocator, wkb, wkb_copy, false))) {
-        LOG_WARN("fail to deep copy wkb", K(ret));
-      } else if (OB_FAIL(create_by_wkb_without_srid(tmp_allocator, wkb_copy, srs_item, geo, bo))) {
+      } else if (FALSE_IT(tmp_allocator.add_baseline_size(wkb.length()))) {
+      } else if (OB_FAIL(create_by_wkb_without_srid(tmp_allocator, wkb, srs_item, geo, bo))) {
         LOG_WARN("failed to create geometry object with raw wkb", K(ret));
         ret = OB_ERR_GIS_INVALID_DATA;
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_func_name());
@@ -188,11 +190,12 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
     }
 
     if (OB_SUCC(ret) && !is_3d_geo && bo == ObGeoWkbByteOrder::BigEndian) {
-      ObGeoToTreeVisitor tree_visitor(&tmp_allocator);
-      if (OB_FAIL(geo->do_visit(tree_visitor))) {
-        LOG_WARN("fail to do visit", K(ret), K(geo->type()));
+      // transform to LittleEndian
+      ObWkbByteOrderVisitor bo_visitor(&tmp_allocator, ObGeoWkbByteOrder::LittleEndian);
+      if (OB_FAIL(geo->do_visit(bo_visitor))) {
+        LOG_WARN("fail to transform big endian to little endian", K(ret));
       } else {
-        geo = tree_visitor.get_geometry();
+        geo->set_data(bo_visitor.get_wkb());
       }
     }
 

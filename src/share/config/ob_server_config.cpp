@@ -109,7 +109,7 @@ int ObServerConfig::read_config()
         OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
       } else {
         key.set_version(it->second->version());
-        temp_ret = system_config_->read_config(key, *(it->second));
+        temp_ret = system_config_->read_config(get_tenant_id(), key, *(it->second));
         if (OB_SUCCESS != temp_ret) {
           OB_LOG(DEBUG, "Read config error", "name", it->first.str(), K(temp_ret));
         }
@@ -405,17 +405,20 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
 
   int ret = OB_SUCCESS;
   bool unlimited = false;
-  auto ma = ObMallocAllocator::get_instance();
+  int64_t tenant_limit = INT64_MAX;
+  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
   if (UNLIMIT_MODE == limit_mode) {
     unlimited = true;
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
   } else if (CTX_LIMIT_MODE == limit_mode) {
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
+    // do-nothing
   } else if (TENANT_LIMIT_MODE == limit_mode) {
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = true;
+    tenant_limit = system_memory_ - get_extra_memory();
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
+  }
+  if (OB_SUCC(ret)) {
+    set_tenant_memory_limit(OB_SERVER_TENANT_ID, tenant_limit);
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||

@@ -69,7 +69,10 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     rd_sort_cmp_funcs_,
                     rd_pby_sort_cnt_,
                     role_type_,
-                    wf_aggr_status_expr_);
+                    wf_aggr_status_expr_,
+                    input_rows_mem_bound_ratio_,
+                    estimated_part_cnt_,
+                    enable_hash_base_distinct_);
 
 OB_SERIALIZE_MEMBER(ObWindowFunctionOpInput, local_task_count_, total_task_count_, wf_participator_shared_info_);
 
@@ -1151,7 +1154,6 @@ int ObWindowFunctionOp::FuncAllocer::alloc(WinFuncCell *&return_func,
 int ObWindowFunctionOp::init()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   ObWindowFunctionOpInput *op_input = static_cast<ObWindowFunctionOpInput*>(input_);
   if (OB_UNLIKELY(!wf_list_.is_empty())) {
     ret = OB_INIT_TWICE;
@@ -1173,7 +1175,8 @@ int ObWindowFunctionOp::init()
         MY_SPEC.type_,
         MY_SPEC.id_,
         &ctx_))) {
-      LOG_WARN("failed to init sql memory manager processor", K(ret));
+      LOG_WARN("failed to init sql memory manager processor", K(ret), K(MY_SPEC.rows_),
+        K(est_rows), K(MY_SPEC.width_), K(MY_SPEC.estimated_part_cnt_));
     } else {
       LOG_DEBUG("show some est values", K(ret), K(MY_SPEC.rows_), K(est_rows), K(MY_SPEC.width_),
                 K(MY_SPEC.estimated_part_cnt_), K(MY_SPEC.input_rows_mem_bound_ratio_));
@@ -1290,7 +1293,7 @@ int ObWindowFunctionOp::init()
                 LOG_WARN("failed to initialize init_group_rows", K(ret));
                 aggr_func->~AggrCell();
                 aggr_func = NULL;
-              } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+              } else if (MY_SPEC.enable_hash_base_distinct_
                 && aggr_func->aggr_processor_.has_distinct()
                 && OB_FAIL(init_distinct_set(aggr_func->aggr_processor_))) {
                 LOG_WARN("failed to init distinct set", K(ret));
@@ -1477,7 +1480,6 @@ int ObWindowFunctionOp::init_mem_context()
 int ObWindowFunctionOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   if (OB_FAIL(ObOperator::inner_open())) {
     LOG_WARN("inner_open child operator failed", K(ret));
   } else if (OB_ISNULL(ctx_.get_my_session())) {
@@ -1487,7 +1489,7 @@ int ObWindowFunctionOp::inner_open()
     LOG_WARN("init shadow copy row failed", K(ret));
   } else if (OB_FAIL(init())) {
     LOG_WARN("init failed", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && distinct_aggr_count_ > 0
     && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_aggr_count_))) {
     LOG_WARN("failed to init hp infras group", K(ret), K(distinct_aggr_count_));
@@ -1501,8 +1503,6 @@ int ObWindowFunctionOp::inner_open()
 int ObWindowFunctionOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
-  hp_infras_mgr_.destroy();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("rescan child operator failed", K(ret));
   } else if (OB_ISNULL(ctx_.get_my_session())) {
@@ -1510,13 +1510,6 @@ int ObWindowFunctionOp::inner_rescan()
     LOG_WARN("NULL ptr", K(ret));
   } else if (OB_FAIL(reset_for_scan(ctx_.get_my_session()->get_effective_tenant_id()))) {
     LOG_WARN("reset_for_scan failed", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
-    && distinct_aggr_count_ > 0) {
-    if (OB_FAIL(init_hp_infras_group_mgr())) {
-      LOG_WARN("failed to init hp infras group manager", K(ret));
-    } else if (OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_aggr_count_))) {
-      LOG_WARN("failed to init hp infras group", K(ret), K(distinct_aggr_count_));
-    }
   }
   stat_ = ProcessStatus::PARTIAL;
   restore_row_cnt_ = 0;
@@ -1585,17 +1578,20 @@ int ObWindowFunctionOp::inner_close()
     local_allocator_.free(pby_hash_values_.at(i));
     pby_hash_values_.at(i) = NULL;
   }
+  pby_hash_values_.reset();
   for (int64_t i = 0; i < participator_whole_msg_array_.count(); ++i) {
     participator_whole_msg_array_.at(i)->reset();
     local_allocator_.free(participator_whole_msg_array_.at(i));
     participator_whole_msg_array_.at(i) = NULL;
   }
+  participator_whole_msg_array_.reset();
   for (int64_t i = 0; i < pby_hash_values_sets_.count(); ++i) {
     pby_hash_values_sets_.at(i)->destroy();
     local_allocator_.free(pby_hash_values_sets_.at(i));
     pby_hash_values_sets_.at(i) = NULL;
   }
   sql_mem_processor_.unregister_profile();
+  pby_hash_values_sets_.reset();
   return ObOperator::inner_close();
 }
 
@@ -2113,13 +2109,10 @@ int ObWindowFunctionOp::detect_aggr_status() // for participator
 }
 
 // for participator, add aggr result row
-int ObWindowFunctionOp::found_part_end(
-    const WinFuncCell *end,
-    //const int64_t aggr_status_value,
-    RowsStore *rows_store,
-    bool add_row_cnt /* = true */)
+int ObWindowFunctionOp::found_part_end(const WinFuncCell *end, bool add_row_cnt /* = true */)
 {
   int ret = OB_SUCCESS;
+  RowsStore *rows_store = input_rows_.cur_;
   if (MY_SPEC.is_participator()) {
     if (last_aggr_status_ < wf_list_.get_last()->wf_idx_) {
       for (WinFuncCell *wf = wf_list_.get_first(); OB_SUCC(ret) && wf != end; wf = wf->get_next()) {
@@ -2161,6 +2154,13 @@ int ObWindowFunctionOp::found_part_end(
           }
         }
       }
+    }
+  }
+  if (OB_SUCC(ret) && !rows_store->ra_rs_.is_empty_save_row_cnt()) {
+    // If there are at least two blocks in the store, we need to check if we need to
+    // dump the input_rows at the end of one partition
+    if (OB_FAIL(rows_store->process_dump<true>(true))) {
+      LOG_WARN("fail to process dump for input store", K(ret));
     }
   }
   return ret;
@@ -2226,7 +2226,7 @@ int ObWindowFunctionOp::partial_next_row()
           LOG_WARN("check other window function failed", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(found_part_end(end, input_rows_.cur_))) {
+        } else if (OB_FAIL(found_part_end(end))) {
           // For participator, add aggr result row to input rows
           LOG_WARN("found_part_end failed", K(ret), K(last_aggr_status_));
         } else if (OB_FAIL(compute_wf_values(end, check_times))) {
@@ -3551,7 +3551,7 @@ int ObWindowFunctionOp::get_next_partition(int64_t &check_times)
 
   if (child_iter_end_) {
     if (!first_batch) {
-      if (OB_FAIL(found_part_end(end, input_rows_.cur_))) {
+      if (OB_FAIL(found_part_end(end))) {
         // add aggr result row for the last part
         LOG_WARN("found_part_end failed", K(ret), K(last_aggr_status_));
       } else if (OB_FAIL(compute_wf_values(end, check_times))) {
@@ -3564,7 +3564,7 @@ int ObWindowFunctionOp::get_next_partition(int64_t &check_times)
              || child_brs->size_ == (row_idx = next_nonskip_row_index(row_idx, *child_brs))) {
     child_iter_end_ = true;
     if (!first_batch) {
-      if (OB_FAIL(found_part_end(end, input_rows_.cur_))) {
+      if (OB_FAIL(found_part_end(end))) {
         LOG_WARN("found_part_end failed", K(ret), K(last_aggr_status_));
       } else if (OB_FAIL(compute_wf_values(end, check_times))) {
         LOG_WARN("compute wf values failed", K(ret));
@@ -3635,7 +3635,7 @@ int ObWindowFunctionOp::process_child_batch(
         } else if (!same_part) {
           if (OB_FAIL(check_wf_same_partition(end))) {
             LOG_WARN("check wf same partition failed", K(ret));
-          } else if (OB_FAIL(found_part_end(end, input_rows_.cur_))) {
+          } else if (OB_FAIL(found_part_end(end))) {
             LOG_WARN("found_part_end failed", K(ret));
           } else if (end != wf_list_.get_header()) {
             if (OB_FAIL(found_new_part(false))) {
@@ -3732,7 +3732,7 @@ int ObWindowFunctionOp::process_child_batch(
         } else { // child_iter_end_
           found_next_part = true;
           // add aggr result row for the last part
-          if (OB_FAIL(found_part_end(wf_list_.get_header(), input_rows_.cur_))) {
+          if (OB_FAIL(found_part_end(wf_list_.get_header()))) {
             LOG_WARN("found_part_end failed", K(ret), K(last_aggr_status_));
           } else if (OB_FAIL(compute_wf_values(wf_list_.get_header(), check_times))) {
             LOG_WARN("compute wf values failed", K(ret));
@@ -4073,12 +4073,12 @@ int ObWindowFunctionOp::init_distinct_set(ObAggregateProcessor &aggr_processor)
 int ObWindowFunctionOp::init_hp_infras_group_mgr()
 {
   int ret = OB_SUCCESS;
-  int64_t est_rows = MY_SPEC.rows_;
+  int64_t est_rows = MY_SPEC.rows_ / MY_SPEC.estimated_part_cnt_;
   uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   if (!hp_infras_mgr_.is_inited()) {
-    if (OB_FAIL(hp_infras_mgr_.init(tenant_id,
-      GCONF.is_sql_operator_dump_enabled(), est_rows, MY_SPEC.width_, true/*unique*/, 1/*ways*/,
-      &eval_ctx_, &sql_mem_processor_, &io_event_observer_))) {
+    if (OB_FAIL(hp_infras_mgr_.init(tenant_id, GCONF.is_sql_operator_dump_enabled(), est_rows,
+                                    MY_SPEC.width_, true /*unique*/, 1 /*ways*/, &eval_ctx_,
+                                    &sql_mem_processor_, &io_event_observer_))) {
       LOG_WARN("failed to init hash infras group", K(ret));
     }
   }
@@ -4122,21 +4122,32 @@ int ObWindowFunctionOp::check_interval_valid(ObExpr &expr)
 }
 
 template <bool IS_INPUT>
-int ObWindowFunctionOp::RowsStore::process_dump()
+int ObWindowFunctionOp::RowsStore::process_dump(const bool found_part_end /*false*/)
 {
   int ret = OB_SUCCESS;
   bool need_dump = false;
   if (OB_FAIL(op_.update_mem_limit_version_periodically())) {
     LOG_WARN("fail to update op global memory limit version periodically", K(ret));
-  } else if (OB_UNLIKELY(need_check_dump(op_.get_global_mem_limit_version()))) {
+  } else if (OB_UNLIKELY(found_part_end || need_check_dump(op_.get_global_mem_limit_version()))) {
     local_mem_limit_version_ = op_.get_global_mem_limit_version();
-    const double mem_bound_ratio =
-      IS_INPUT ? op_.get_input_rows_mem_bound_ratio() : (1 - op_.get_input_rows_mem_bound_ratio());
-    int64_t target_dump_size = -(op_.sql_mem_processor_.get_mem_bound() * mem_bound_ratio);
-    for (int64_t i = 0; i < prior_dumping_rows_stores_.count(); ++i) {
-      target_dump_size += prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
+    int64_t target_dump_size = 0;
+    if (IS_INPUT) {
+      const static double MEM_DISCOUNT_FOR_PART_END = 0.8;
+      const double mem_bound_ratio = !found_part_end ? op_.get_input_rows_mem_bound_ratio() :
+         op_.get_input_rows_mem_bound_ratio() * MEM_DISCOUNT_FOR_PART_END;
+      target_dump_size = -(op_.sql_mem_processor_.get_mem_bound() * mem_bound_ratio);
+      for (int64_t i = 0; i < prior_dumping_rows_stores_.count(); ++i) {
+        target_dump_size += prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
+      }
+      target_dump_size += ra_rs_.get_mem_hold();
+    } else { // for result
+      // dump BIG_BLOCK_SIZE * 2 at least, because dump is already needed at this time,
+      // ensure the minimum amount of memory for each dump.
+      const static int64_t MIN_DUMP_SIZE = (256L << 10) * 2;
+      target_dump_size = (op_.sql_mem_processor_.get_data_size() - op_.sql_mem_processor_.get_mem_bound());
+      target_dump_size = MAX(target_dump_size, MIN_DUMP_SIZE);
     }
-    target_dump_size += (ra_rs_.get_mem_hold() - ra_rs_.get_blkbuf_remain_size());
+
     if (OB_UNLIKELY(target_dump_size > 0)) {
       // dump prior_dump_stores until the mem hold of that less than mem limit
       // the max count of prior_dumping_rows_stores_ is 2, one for first and one for processed
@@ -4147,10 +4158,6 @@ int ObWindowFunctionOp::RowsStore::process_dump()
           K(prior_dumping_rows_stores_.count()));
       } else {
         int64_t pop_count = 0;
-        const static int64_t MAX_DUMP_SIZE = 2L << 20; // 2M (BIG_BLOCK_SIZE * 8)
-        // dump BIG_BLOCK_SIZE * 8 each time, because we alloc BIG_BLOCK_SIZE at most each time
-        // this method can avoid dumping a large amount of memory at the same moment
-        target_dump_size = MIN(MAX_DUMP_SIZE, target_dump_size);
         for (int64_t i = 0; OB_SUCC(ret) && target_dump_size > 0
               && i < prior_dumping_rows_stores_.count(); ++i) {
           const int64_t mem_hold = prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
@@ -4158,7 +4165,8 @@ int ObWindowFunctionOp::RowsStore::process_dump()
             LOG_WARN("fail to dump row stores", K(ret), K(i),
               K(prior_dumping_rows_stores_.at(i)->ra_rs_));
           } else {
-            target_dump_size -= mem_hold;
+            target_dump_size -=
+              (mem_hold - prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold());
             pop_count += prior_dumping_rows_stores_.at(i)->ra_rs_.is_all_dumped();
           }
         }

@@ -52,7 +52,7 @@ static const int64_t MERGE_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 2;
 // static const int64_t MV_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 5;
 // static const int64_t BUILD_INDEX_READ_SNAPSHOT_VERSION = INT64_MAX - 6;
 // static const int64_t WARM_UP_READ_SNAPSHOT_VERSION = INT64_MAX - 7;
-static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
+// static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
 // static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
 
 #ifdef ERRSIM
@@ -399,7 +399,7 @@ struct ObBatchUpdateTableStoreParam final
   int assign(const ObBatchUpdateTableStoreParam &param);
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
-  TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(update_logical_minor_sstable), K_(is_transfer_replace),
+  TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
       K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(restore_status));
 
   ObTablesHandleArray tables_handle_;
@@ -407,7 +407,6 @@ struct ObBatchUpdateTableStoreParam final
   ObErrsimTransferBackfillPoint errsim_point_info_;
 #endif
   int64_t rebuild_seq_;
-  bool update_logical_minor_sstable_;
   bool is_transfer_replace_;
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;

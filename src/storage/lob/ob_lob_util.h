@@ -51,7 +51,8 @@ struct ObLobStorageParam
 
 struct ObLobAccessParam {
   ObLobAccessParam()
-    : tx_desc_(nullptr), snapshot_(), tx_id_(), sql_mode_(SMO_DEFAULT), allocator_(nullptr),
+    : tx_desc_(nullptr), snapshot_(), tx_id_(), read_latest_(0),
+      sql_mode_(SMO_DEFAULT), allocator_(nullptr),
       dml_base_param_(nullptr), column_ids_(),
       meta_table_schema_(nullptr), piece_table_schema_(nullptr),
       main_tablet_param_(nullptr), meta_tablet_param_(nullptr), piece_tablet_param_(nullptr),
@@ -63,7 +64,9 @@ struct ObLobAccessParam {
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),  enable_query_cache_(false)
+      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+      schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),  enable_query_cache_(false),
+      remote_query_ctx_(nullptr), scan_objs_(nullptr)
   {}
   ~ObLobAccessParam() {
     if (OB_NOT_NULL(dml_base_param_)) {
@@ -89,12 +92,14 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(lob_piece_tablet_id),
     KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
-    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(enable_query_cache));
+    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest),
+    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(enable_query_cache));
 
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
   transaction::ObTxReadSnapshot snapshot_; // for read
-  transaction::ObTransID tx_id_;           // used when read-latest
+  transaction::ObTransID tx_id_; // used when read-latest
+  bool read_latest_;
   ObSQLMode sql_mode_;
   bool is_total_quantity_log_;
   ObIAllocator *allocator_;
@@ -141,6 +146,9 @@ public:
   int64_t schema_chunk_size_;
   bool enable_query_cache_;
   ObObj ext_info_log_;
+  // remote query ctx
+  void *remote_query_ctx_;
+  void *scan_objs_;
 };
 
 struct ObLobMetaInfo {
@@ -225,7 +233,7 @@ class ObInsertLobColumnHelper final
 {
 public:
   static const uint64_t LOB_ACCESS_TX_TIMEOUT = 60000000; // 60s
-  static const uint64_t LOB_ALLOCATOR_RESET_CYCLE = 128;
+  static const uint64_t LOB_ALLOCATOR_RESET_THRESHOLD = 32 * 1024L * 1024L; // 32M
 public:
   static int start_trans(const share::ObLSID &ls_id,
                          const bool is_for_read,

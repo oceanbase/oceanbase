@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_column_stat.h"
@@ -268,7 +269,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID ||
-         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID;
+         table_id == share::OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID ||
+         table_id == share::OB_ALL_VIRTUAL_MDS_NODE_STAT_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
@@ -688,6 +690,7 @@ bool ObDbmsStatsUtils::is_part_id_valid(const ObTableStatParam &param,
 }
 
 int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
+                                     ObIAllocator &allocator,
                                      ObIArray<PartInfo> &part_infos,
                                      ObIArray<PartInfo> &subpart_infos,
                                      ObIArray<int64_t> &part_ids,
@@ -706,10 +709,11 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         LOG_WARN("get null partition", K(ret), K(part));
       } else {
         PartInfo part_info;
-        part_info.part_name_ = part->get_part_name();
         part_info.part_id_ = part->get_part_id();
         part_info.tablet_id_ = part->get_tablet_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, part->get_part_name(), part_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = part->get_tablet_id();
@@ -724,7 +728,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
           LOG_WARN("failed to push back part id", K(ret));
         } else if (is_twopart &&
-                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
+                   OB_FAIL(get_subpart_infos(table_schema, part, allocator, subpart_infos, subpart_ids, part_map))) {
           LOG_WARN("failed to get subpart info", K(ret));
         } else {
           part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
@@ -739,6 +743,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
 
 int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
                                         const ObPartition *part,
+                                        ObIAllocator &allocator,
                                         ObIArray<PartInfo> &subpart_infos,
                                         ObIArray<int64_t> &subpart_ids,
                                         OSGPartMap *part_map/*default NULL*/)
@@ -762,7 +767,9 @@ int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
         subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
         subpart_info.tablet_id_ = subpart->get_tablet_id();
         subpart_info.first_part_id_ = part->get_part_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, subpart->get_part_name(), subpart_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = subpart->get_tablet_id();
@@ -811,7 +818,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(const ObObj *old_obj,
       } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(alloc, str, *tmp_obj))) {
         LOG_WARN("failed to convert str to lob", K(ret));
       } else {
-        tmp_obj->set_type(old_obj->get_type());
+        tmp_obj->set_meta_type(old_obj->get_meta());
         new_obj = tmp_obj;
         is_truncated = true;
       }
@@ -851,7 +858,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &al
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj.get_type()) && obj.is_string_type()) {
     if(obj.is_lob_storage()) {
-      ObObjType ori_type = obj.get_type();
+      ObObjMeta ori_meta = obj.get_meta();
       ObString str = obj.get_string();
       bool can_reuse = false;
       if (OB_FAIL(check_text_can_reuse(obj, can_reuse))) {
@@ -863,7 +870,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &al
       } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator, str, obj))) {
         LOG_WARN("failed to convert str to lob", K(ret));
       } else {
-        obj.set_type(ori_type);
+        obj.set_meta_type(ori_meta);
         LOG_TRACE("Succeed to truncate text obj for opt stats", K(ret), K(obj), K(str));
       }
     } else {

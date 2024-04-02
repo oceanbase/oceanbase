@@ -46,6 +46,9 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     enable_heart_beat_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
+  idx_array_.set_tenant_id(MTL_ID());
+  commited_trans_ctx_array_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
@@ -104,7 +107,6 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), KPC(exec_ctx));
   } else {
-    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(ctx_->param_.tenant_id_),
                K(ctx_->ddl_param_.dest_table_id_));
@@ -231,7 +233,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
     // advance status
     else {
       status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
@@ -251,7 +253,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code));
     }
   }
@@ -266,7 +268,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
     LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+    table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
     LOG_INFO("LOAD DATA COORDINATOR status abort");
   }
   return ret;
