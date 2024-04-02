@@ -578,9 +578,9 @@ int ObQueryRange::extract_basic_info(const ObRawExpr *l_expr,
     uint64_t table_id = common::OB_INVALID_ID;
 
     const ObRawExpr *calc_urowid_expr = NULL;
-    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID))) {
+    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID) && l_expr->is_const_expr())) {
       calc_urowid_expr = r_expr;
-    } else if (l_expr->has_flag(IS_ROWID)) {
+    } else if (l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr()) {
       calc_urowid_expr = l_expr;
     }
     if (OB_FAIL(get_extract_rowid_range_infos(calc_urowid_expr,
@@ -1525,12 +1525,12 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
     uint64_t part_column_id = common::OB_INVALID_ID;
 
     const ObRawExpr *calc_urowid_expr = NULL;
-    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID))) {
+    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID) && l_expr->is_const_expr())) {
       const_expr = l_expr;
       c_type = (T_OP_LE == cmp_type ? T_OP_GE : (T_OP_GE == cmp_type ? T_OP_LE :
                                                  (T_OP_LT == cmp_type ? T_OP_GT : (T_OP_GT == cmp_type ? T_OP_LT : cmp_type))));
       calc_urowid_expr = r_expr;
-    } else if (l_expr->has_flag(IS_ROWID)) {
+    } else if (l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr()) {
       const_expr = r_expr;
       c_type = cmp_type;
       calc_urowid_expr = l_expr;
