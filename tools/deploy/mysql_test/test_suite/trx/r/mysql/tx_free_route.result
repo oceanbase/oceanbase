@@ -1,4 +1,4 @@
-change mysql tenant primary_zone from zone1;zone2 to RANDOM
+change mysql tenant primary_zone to RANDOM
 alter tenant mysql set primary_zone = 'RANDOM';
 drop table if exists t;
 create table t(id int primary key) partition by range(id)
@@ -351,5 +351,4 @@ drop outline tx_route_test_ot_4;
 "------------- X - special query types ----------------------"
 "CLEANUP"
 drop table t;
-recovery primary_zone settings for mysql tenant to : zone1;zone2
-alter tenant mysql set primary_zone = "zone1;zone2";
+recovery primary_zone settings for mysql tenant
