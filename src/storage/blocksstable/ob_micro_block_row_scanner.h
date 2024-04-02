@@ -276,9 +276,7 @@ public:
         trans_version_col_idx_(-1),
         sql_sequence_col_idx_(-1),
         cell_cnt_(0),
-        read_row_direct_flag_(false),
-        ignore_shadow_row_(false),
-        use_pre_micro_row_(false)
+        read_row_direct_flag_(false)
   {}
   virtual ~ObMultiVersionMicroBlockRowScanner() {}
   void reuse() override;
@@ -295,8 +293,7 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border) override final;
-  virtual int set_ignore_shadow_row() override final { ignore_shadow_row_ = true; return OB_SUCCESS; }
-  INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner", ObIMicroBlockRowScanner, K_(read_row_direct_flag), K_(ignore_shadow_row), K_(version_range), K_(is_last_multi_version_row), K_(finish_scanning_cur_rowkey), K_(use_pre_micro_row));
+  INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner", ObIMicroBlockRowScanner, K_(read_row_direct_flag), K_(version_range), K_(is_last_multi_version_row), K_(finish_scanning_cur_rowkey));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
   virtual void inner_reset();
@@ -343,8 +340,6 @@ private:
   transaction::ObTransID trans_id_;
   common::ObVersionRange version_range_;
   bool read_row_direct_flag_;
-  bool ignore_shadow_row_;
-  bool use_pre_micro_row_;
 };
 
 // multi version sstable micro block scanner for minor merge

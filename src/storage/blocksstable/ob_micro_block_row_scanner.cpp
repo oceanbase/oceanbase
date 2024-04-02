@@ -1154,8 +1154,6 @@ void ObMultiVersionMicroBlockRowScanner::reuse()
   finish_scanning_cur_rowkey_ = true;
   is_last_multi_version_row_ = true;
   read_row_direct_flag_ = false;
-  ignore_shadow_row_ = false;
-  use_pre_micro_row_ = false;
 }
 
 void ObMultiVersionMicroBlockRowScanner::inner_reset()
@@ -1244,28 +1242,10 @@ int ObMultiVersionMicroBlockRowScanner::open(
   } else if (OB_FAIL(set_base_scan_param(is_left_border, is_right_border))) {
     LOG_WARN("failed to set base scan param", K(ret), K(is_left_border), K(is_right_border));
   } else {
-    use_pre_micro_row_ = false;
     int64_t column_number = block_data.get_micro_header()->column_count_;
     int64_t max_col_count = MAX(read_info_->get_request_count(), column_number);
     if (OB_FAIL(tmp_row_.reserve(max_col_count))) {
       LOG_WARN("fail to reserve memory for tmp datumrow", K(ret), K(max_col_count));
-    }
-  }
-
-  if (OB_SUCC(ret) && ObIMicroBlockReaderInfo::INVALID_ROW_INDEX != current_) {
-    if (OB_UNLIKELY(!reverse_scan_ && !is_last_multi_version_row_)) {
-      const ObRowHeader *row_header = nullptr;
-      if (OB_FAIL(reader_->get_row_header(current_, row_header))) {
-        LOG_WARN("failed to get row header", K(ret), K(current_), K_(macro_id));
-      } else {
-        ObMultiVersionRowFlag row_flag;
-        row_flag.flag_ = row_header->get_mvcc_row_flag();
-        if (row_flag.is_first_multi_version_row()) {
-          use_pre_micro_row_ = !finish_scanning_cur_rowkey_;
-          finish_scanning_cur_rowkey_ = true;
-          is_last_multi_version_row_ = true;
-        }
-      }
     }
   }
 
@@ -1303,10 +1283,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&ro
 {
   int ret = OB_SUCCESS;
   // TODO(yuanzhe) refactor blockscan opt of multi version sstable
-  if (OB_UNLIKELY(use_pre_micro_row_)) {
-    row = &prev_micro_row_;
-    use_pre_micro_row_ = false;
-  } else if (can_ignore_multi_version_) {
+  if (can_ignore_multi_version_) {
     if (OB_FAIL(ObIMicroBlockRowScanner::inner_get_next_row(row))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Failed to inner get next row", K(ret), K_(start), K_(last), K_(current));
@@ -1377,17 +1354,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
         }
       }
 
-      if (OB_SUCC(ret) && version_fit && ignore_shadow_row_) {
-        if (OB_ISNULL(multi_version_row)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "unexpected null multi_version_row", K(ret), K(read_row_direct_flag_));
-        } else if (multi_version_row->is_shadow_row()) {
-          if (multi_version_row == &row_) { //ptr equal only when the previous row_ is empty, reset the row to be empty for skip shadow row
-            row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
-          }
-          continue;
-        }
-      }
       if (OB_SUCC(ret)) {
         if (!version_fit) {
           // do nothing
@@ -1518,16 +1484,10 @@ int ObMultiVersionMicroBlockRowScanner::locate_cursor_to_read(bool &found_first_
       } else {
         row_flag.flag_ = row_header->get_mvcc_row_flag();
         if (row_flag.is_last_multi_version_row()) {
+          finish_scanning_cur_rowkey_ = false;
+          found_first_row = true;
           reserved_pos_ = current_;
           current_ = current_ + 1;
-          if (!reverse_scan_ && OB_FAIL(end_of_block())) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to judge end of block or not", K(ret), K_(macro_id));
-            }
-          } else {
-            finish_scanning_cur_rowkey_ = false;
-            found_first_row = true;
-          }
           break;
         } else {
           current_ = reverse_scan_ ? current_ - 1 : current_ + 1;
