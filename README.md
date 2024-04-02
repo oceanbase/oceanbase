@@ -43,7 +43,7 @@ English | [中文版](README_CN.md)
 - **Transparent Scalability**: 1,500 nodes, PB data and a trillion rows of records in one cluster.
 - **Ultra-fast Performance**: TPC-C 707 million tmpC and TPC-H 15.26 million QphH @30000GB.
 - **Cost Efficiency**: saves 70%–90% of storage costs.
-- **Real-time Operational Analytics**: supports HTAP without additional overhead. 
+- **Real-time Analytics**: supports HTAP without additional cost. 
 - **Continuous Availability**: RPO = 0(zero data loss) and RTO < 8s(recovery time)
 - **MySQL Compatible**: easily migrated from MySQL database.
 
