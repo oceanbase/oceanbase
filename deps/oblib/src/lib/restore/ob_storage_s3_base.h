@@ -48,6 +48,7 @@
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/core/utils/HashingUtils.h>
 #include <aws/core/utils/crypto/CRC32.h>
+#include <aws/core/client/DefaultRetryStrategy.h>
 #pragma pop_macro("private")
 
 namespace oceanbase
