@@ -642,10 +642,13 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
   CK (current_consist_level != ObConsistencyLevel::INVALID_CONSISTENCY);
 
   // adjust stmt's consistency level
-  if (OB_SUCC(ret)
-    && !plan->is_plain_select()
-    && current_consist_level != ObConsistencyLevel::STRONG) {
-    plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+  if (OB_SUCC(ret)) {
+    // Weak read statement with inner table should be converted to strong read.
+    // For example, schema refresh statement;
+    if (plan->is_contain_inner_table() ||
+      (!plan->is_plain_select() && current_consist_level != ObConsistencyLevel::STRONG)) {
+      plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+    }
   }
 
   if (OB_SUCC(ret) && session->is_in_transaction()) {
