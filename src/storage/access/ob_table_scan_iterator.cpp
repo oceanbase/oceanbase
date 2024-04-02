@@ -593,7 +593,7 @@ int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
         // The txn has been killed during normal processing. So we return
         // OB_TRANS_KILLED to prompt this abnormal state.
         ret = OB_TRANS_KILLED;
-        STORAGE_LOG(WARN, "txn has terminated", K(ret), "tx_id", acc_ctx.tx_id_);
+        STORAGE_LOG(WARN, "txn has terminated", K(ret), "tx_id", acc_ctx.snapshot_.tx_id_);
       }
     }
   }

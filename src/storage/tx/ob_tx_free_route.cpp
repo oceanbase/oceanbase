@@ -466,6 +466,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         // mark as REPLICA_ for all temporary node
       } else if (FALSE_IT(tx->flags_.SHADOW_ = tx->is_xa_trans() && tx->addr_ != self_)) {
         // mark as SHADOW_ for XA's temporary node, exclude XA orig node
+      } else if (FALSE_IT(ctx.set_start_sessid(tx->sess_id_))) {
       }
       int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
@@ -1256,7 +1257,7 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
     m.sender_ = self_;
     m.receiver_ = ctx.txn_addr_;
     m.req_sess_id_ = session_id;
-    m.tx_sess_id_ = tx.sess_id_;
+    m.tx_sess_id_ = ctx.get_start_session_id();
     ret = rpc_->post_msg(ctx.txn_addr_, m);
     bool print_log = OB_FAIL(ret);
 #ifndef NDEBUG
