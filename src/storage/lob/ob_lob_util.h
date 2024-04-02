@@ -56,7 +56,8 @@ struct ObLobAccessParam {
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), spec_lob_id_()
+      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), spec_lob_id_(),
+      remote_query_ctx_(nullptr)
   {}
   ~ObLobAccessParam() {
     if (OB_NOT_NULL(dml_base_param_)) {
@@ -123,6 +124,8 @@ public:
   bool inrow_read_nocopy_;
   int64_t inrow_threshold_;
   ObLobId spec_lob_id_;
+  // remote query ctx
+  void *remote_query_ctx_;
 };
 
 struct ObLobMetaInfo {

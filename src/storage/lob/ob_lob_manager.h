@@ -90,16 +90,24 @@ private:
   ObString data_buffer_;
 };
 
+struct ObLobRemoteQueryCtx
+{
+  ObLobRemoteQueryCtx() : handle_(), rpc_buffer_(), query_arg_(), remote_reader_() {}
+  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle_;
+  common::ObDataBuffer rpc_buffer_;
+  ObLobQueryArg query_arg_;
+  ObLobQueryRemoteReader remote_reader_;
+};
+
 class ObLobQueryIter
 {
 public:
   ObLobQueryIter() : is_reverse_(false), cs_type_(CS_TYPE_BINARY), is_end_(false),
                      meta_iter_(), lob_ctx_(), param_(), last_data_(), last_data_ptr_(nullptr), last_data_buf_len_(0),
                      inner_data_(), cur_pos_(0), is_in_row_(false), is_inited_(false),
-                     is_remote_(false), handle_(), rpc_buffer_(), query_arg_(), remote_reader_() {}
-  int open(ObLobAccessParam &param, ObLobCtx& lob_ctx); // outrow open
+                     is_remote_(false), remote_query_ctx_(nullptr) {}
   int open(ObString &data, uint32_t byte_offset, uint32_t byte_len, ObCollationType cs, bool is_reverse = false); // inrow open
-  int open(ObLobAccessParam &param, common::ObAddr dst_addr); // remote open
+  int open(ObLobAccessParam &param, ObLobCtx& lob_ctx, common::ObAddr& dst_addr, bool &is_remote); // open with retry inner
   int get_next_row(ObString& data);
   uint64_t get_cur_pos() { return meta_iter_.get_cur_pos(); }
   void reset();
@@ -126,10 +134,7 @@ private:
   bool is_inited_;
   // remote ctx
   bool is_remote_;
-  obrpc::ObStorageRpcProxy::SSHandle<obrpc::OB_LOB_QUERY> handle_;
-  common::ObDataBuffer rpc_buffer_;
-  ObLobQueryArg query_arg_;
-  ObLobQueryRemoteReader remote_reader_;
+  void* remote_query_ctx_;
 };
 
 class ObLobManager
@@ -184,6 +189,15 @@ public:
                                         const ObString &data,
                                         common::ObCollationType coll_type,
                                         ObLobLocatorV2 &out);
+  int lob_query_with_retry(ObLobAccessParam &param,
+                           ObAddr &dst_addr,
+                           bool &remote_bret,
+                           ObLobMetaScanIter& iter,
+                           ObLobQueryArg::QueryType qtype,
+                           void *&ctx);
+  int lob_remote_query_init_ctx(ObLobAccessParam &param,
+                                ObLobQueryArg::QueryType qtype,
+                                void *&ctx);
   int lob_remote_query_with_retry(
     ObLobAccessParam &param,
     common::ObAddr& dst_addr,
@@ -308,7 +322,7 @@ private:
   int get_inrow_data(ObLobAccessParam& param, ObString& data);
   int get_ls_leader(ObLobAccessParam& param, const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   int is_remote(ObLobAccessParam& param, bool& is_remote, common::ObAddr& dst_addr);
-  int query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, ObString& data);
+  int query_remote(ObLobAccessParam& param, ObString& data);
   int getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, uint64_t &len);
   int do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult &result, ObString &tmp_buff);
   int prepare_erase_buffer(ObLobAccessParam& param, ObString &tmp_buff);
