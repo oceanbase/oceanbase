@@ -563,7 +563,14 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(
       audit_record.seq_ = 0;  //don't use now
       audit_record.status_ =
           (OB_SUCCESS == ret || common::OB_ITER_END == ret) ? obmysql::REQUEST_SUCC : ret;
-      session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
+      if (OB_NOT_NULL(plan)) {
+        const ObString &sql_id = plan->get_sql_id_string();
+        int64_t length = sql_id.length();
+        MEMCPY(audit_record.sql_id_, sql_id.ptr(), std::min(length, OB_MAX_SQL_ID_LENGTH));
+        audit_record.sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+      } else {
+        session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
+      }
       audit_record.db_id_ = session->get_database_id();
       audit_record.execution_id_ = session->get_current_execution_id();
       audit_record.client_addr_ = session->get_client_addr();
