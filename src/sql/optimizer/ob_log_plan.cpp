@@ -7830,10 +7830,8 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     LOG_WARN("invalid argument", K(ret));
   } else if (FALSE_IT(need_limit = get_stmt()->has_limit())) {
     /*do nothing*/
-  } else if (OB_FAIL(get_stmt()->get_order_exprs(candi_subquery_exprs))) {
-    LOG_WARN("failed to get exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
-    LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter_for_order_by())) {
+    LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan)) {
@@ -7890,6 +7888,41 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
       } else { /*do nothing*/ }
     }
   }
+  return ret;
+}
+
+/* allocate subplan filter for subquerys in order by
+ * 1. Query has no limit, if select_item also has subquery, then allocate subquery together.
+ * 2. Query has limit, don't allocate subqery in select_item.
+*/
+int ObLogPlan::candi_allocate_subplan_filter_for_order_by()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> candi_exprs;
+  ObSEArray<ObQueryRefRawExpr *, 4> candi_subquery_exprs;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(stmt->get_order_exprs(candi_exprs))) {
+    LOG_WARN("failed to get exprs", K(ret));
+  } else if (!get_stmt()->has_limit() && stmt->is_select_stmt()) {
+    for (int64_t i = 0; OB_SUCC(ret) && candi_subquery_exprs.empty() && i < candi_exprs.count(); ++i) {
+      if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(candi_exprs.at(i),
+                                                           candi_subquery_exprs,
+                                                           false))) {
+        LOG_WARN("failed to extract query ref exprs", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !candi_subquery_exprs.empty() &&
+        OB_FAIL(static_cast<const ObSelectStmt *>(stmt)->get_select_exprs(candi_exprs))) {
+      LOG_WARN("failed to get select exprts", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) &&
+      OB_FAIL(candi_allocate_subplan_filter(candi_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
+  } else { /* do nothing */ }
   return ret;
 }
 
@@ -8350,7 +8383,8 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     }
 
     // allocate push down sort if necessary
-    if ((exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
+    if (OB_SUCC(ret) &&
+        (exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
         (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;

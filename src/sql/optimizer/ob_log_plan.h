@@ -988,6 +988,7 @@ public:
   inline void set_signature(uint64_t hash_value) { hash_value_ = hash_value; }
 
   int candi_allocate_subplan_filter_for_where();
+  int candi_allocate_subplan_filter_for_order_by();
 
   int candi_allocate_subplan_filter(const ObIArray<ObRawExpr *> &subquery_exprs,
                                     const ObIArray<ObRawExpr *> *filters = NULL,
@@ -1025,7 +1026,6 @@ public:
                                            const bool for_cursor_expr,
                                            const bool ignore_hint,
                                            int64_t &dist_methods);
-
   int generate_subplan_filter_info(const ObIArray<ObRawExpr*> &subquery_exprs,
                                    ObIArray<ObLogPlan*> &subquery_ops,
                                    ObIArray<ObQueryRefRawExpr *> &query_refs,

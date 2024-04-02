@@ -1151,9 +1151,9 @@ public:
    * get cur_op's expected_ordering
    */
   inline void set_is_local_order(bool is_local_order) { is_local_order_ = is_local_order; }
-  inline bool get_is_local_order() { return is_local_order_; }
+  inline bool get_is_local_order() const { return is_local_order_; }
   inline void set_is_range_order(bool is_range_order) { is_range_order_ = is_range_order; }
-  inline bool get_is_range_order() { return is_range_order_; }
+  inline bool get_is_range_order() const { return is_range_order_; }
 
   inline void set_is_at_most_one_row(bool is_at_most_one_row) { is_at_most_one_row_ = is_at_most_one_row; }
   inline bool get_is_at_most_one_row() { return is_at_most_one_row_; }
