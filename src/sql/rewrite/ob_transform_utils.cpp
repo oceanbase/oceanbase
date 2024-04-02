@@ -12851,6 +12851,7 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_uint64_max = NULL;
   ObConstRawExpr *const_zero = NULL;
+  ObRawExpr *then_expr = NULL;
   if (OB_ISNULL(aggr) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KR(ret));
@@ -12859,7 +12860,8 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
     LOG_WARN("wrong expr type", K(ret));
   } else if (OB_UNLIKELY(T_FUN_SYS_BIT_AND != aggr->get_expr_type() &&
                          T_FUN_SYS_BIT_OR != aggr->get_expr_type() &&
-                         T_FUN_SYS_BIT_XOR != aggr->get_expr_type())) {
+                         T_FUN_SYS_BIT_XOR != aggr->get_expr_type()) ||
+             OB_ISNULL(then_expr = aggr->get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("use wrong func type", KR(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*(ctx->expr_factory_),
@@ -12869,9 +12871,12 @@ int ObTransformUtils::transform_bit_aggr_to_common_expr(ObDMLStmt &stmt,
     LOG_WARN("failed to build const uint expr", KR(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(*(ctx->expr_factory_), ObUInt64Type, 0, const_zero))) {
     LOG_WARN("failed to build const uint expr", KR(ret));
+  } else if (OB_FAIL(add_cast_for_replace_if_need(*ctx->expr_factory_, aggr, then_expr,
+                                                  ctx->session_info_))) {
+    LOG_WARN("failed to add cast expr", K(ret));
   } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(stmt,
                                                             aggr->get_param_expr(0),
-                                                            aggr->get_param_expr(0),
+                                                            then_expr,
                                                             T_FUN_SYS_BIT_AND == aggr->get_expr_type() ? const_uint64_max : const_zero,
                                                             out_expr,
                                                             ctx))) {

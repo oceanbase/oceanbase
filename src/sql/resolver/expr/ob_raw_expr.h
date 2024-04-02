@@ -2897,6 +2897,7 @@ public:
                                    int64_t buf_len,
                                    int64_t &pos,
                                    ExplainType type) const;
+  int get_subquery_comparison_flag() const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,

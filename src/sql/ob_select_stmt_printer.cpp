@@ -59,7 +59,7 @@ int ObSelectStmtPrinter::do_print()
           LOG_WARN("fail to print_unpivot",
                    KPC(stmt_->get_transpose_item()), K(ret));
         }
-      } else if (OB_FAIL(print())) {
+      } else if (OB_FAIL(SMART_CALL(print()))) {
         LOG_WARN("fail to print stmt", KPC(stmt_), K(ret));
       }
     }
