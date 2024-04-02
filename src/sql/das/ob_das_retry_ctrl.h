@@ -33,7 +33,6 @@ public:
   static void tablet_location_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
   static void tablet_nothing_readable_proc(ObDASRef &, ObIDASTaskOp &, bool &);
   static void task_network_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
-  static void tablet_not_exist_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
 };
 
 }  // namespace sql
