@@ -40,29 +40,17 @@ English | [中文版](README_CN.md)
 
 # Key features
 
-- **Transparent Scalability**
+- **Transparent Scalability**: 1,500 nodes, PB data and a trillion rows of records in one cluster.
 
-    An OceanBase cluster can be scaled to 1,500 nodes transparently, handling petabytes of data and a trillion rows of records.
+- **Ultra-fast Performance**: TPC-C 707 million tmpC and TPC-H 15.26 million QphH @30000GB.
 
-- **Ultra-fast Performance**
+- **Real-time Operational Analytics**: supports HTAP without additional overhead. 
 
-    The only distributed database that has refreshed both the TPC-C record, at 707 million tmpC, and the TPC-H record, at 15.26 million QphH @30000GB.
+- **Continuous Availability**: RPO = 0(zero data loss) and RTO < 8s(recovery time)
 
-- **Real-time Operational Analytics**
+- **MySQL Compatible**: easily migrated from MySQL database.
 
-    A unified system for both transactional and real-time operational analytics workloads.
-
-- **Continuous Availability**
-
-    OceanBase Database adopts the Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO. Supports intra-city/remote disaster recovery, enabling multi-activity in multiple locations and zero data loss.
-
-- **MySQL Compatible**
-
-    OceanBase Database is highly compatible with MySQL, which ensures that zero or a few modifications are needed for migration.
-
-- **Cost Efficiency**
-
-    The cutting-edge compression technology saves 70%–90% of storage costs without compromising performance. The multi-tenancy architecture achieves higher resource utilization.
+- **Cost Efficiency**: saves 70%–90% of storage costs.
 
 See also [key features](https://en.oceanbase.com/product/opensource) for more details.
 
