@@ -1118,7 +1118,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
-    if (OB_CANCELED == real_ret_code) {
+    if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
           trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addr_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
