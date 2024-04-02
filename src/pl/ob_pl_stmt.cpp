@@ -2755,7 +2755,29 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         type = ObPLExternalNS::LABEL_NS;
       }
     }
-    // 尝试匹配为父NS的VAR或者TYPE
+    // try routine
+    if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx && OB_INVALID_INDEX == parent_id) {
+      const ObIArray<int64_t> &routines = get_routines();
+      for (int64_t i = 0; OB_SUCC(ret) && i < routines.count(); ++i) {
+        const ObPLRoutineInfo *routine = NULL;
+        OZ (get_routine_info(routines.at(i), routine));
+        CK (OB_NOT_NULL(routine));
+        if (OB_SUCC(ret) && 0 == routine->get_routine_name().case_compare(var_name)) {
+          if (get_block_type() != BLOCK_ROUTINE // subprogram is not member function, distingish with block type
+              && routine->is_udt_routine() && !routine->is_udt_cons() && !routine->is_udt_static_routine()) {
+            // only care about member routine without prefix.
+            type = ObPLExternalNS::UDT_MEMBER_ROUTINE;
+            var_idx = routine->get_routine_id();
+            parent_id = routine->get_package_id();
+          } else {
+            type = ObPLExternalNS::INVALID_VAR;
+            var_idx = routine->get_routine_id();
+            parent_id = routine->get_package_id();
+          }
+        }
+      }
+    }
+    // search to parent namespace, util to top parent, then try self and external symbol.
     if (OB_SUCC(ret)
         && OB_INVALID_INDEX == var_idx
         && OB_INVALID_INDEX == parent_id) {

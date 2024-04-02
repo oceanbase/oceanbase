@@ -3901,6 +3901,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             // 如果当前cursor已经有spi_result则复用,避免内存占用过多
             retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update());
             OZ (cursor->prepare_spi_result(ctx, spi_result));
+            CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
             OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
             OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result->get_scheme_guard())));
             OX (spi_result->get_sql_ctx().schema_guard_ = &spi_result->get_scheme_guard());
@@ -3914,7 +3915,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
               WITH_CONTEXT(cursor->get_cursor_entity()) {
                 lib::ContextTLOptGuard guard(false);
                 OZ (inner_open(ctx,
-                              spi_result->get_allocaor(),
+                              spi_result->get_memory_ctx()->get_arena_allocator(),
                               sql,
                               ps_sql,
                               type,
@@ -3928,7 +3929,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
               }
             } else {
               ret = inner_open(ctx,
-                        spi_result->get_allocaor(),
+                        spi_result->get_memory_ctx()->get_arena_allocator(),
                         sql,
                         ps_sql,
                         type,
@@ -4027,6 +4028,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                   spi_result.get_out_params().reset();
                   spi_result.reset_member_for_retry(*session_info);
                 }
+                CK (OB_NOT_NULL(spi_result.get_memory_ctx()));
                 OX (retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update()));
                 OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result.get_scheme_guard())));
                 OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
@@ -4036,7 +4038,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 OX (retry_ctrl.set_sys_local_schema_version(sys_version));
 
                 OZ (inner_open(ctx,
-                              spi_result.get_allocaor(),
+                              spi_result.get_memory_ctx()->get_arena_allocator(),
                               sql,
                               ps_sql,
                               type,
@@ -6905,7 +6907,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       // add exec_param_info for sql_audit
       char *tmp_ptr = NULL;
       int64_t tmp_len = 0;
-      OZ (ObMPStmtExecute::store_params_value_to_str(spi_result.get_allocaor(),
+      OZ (ObMPStmtExecute::store_params_value_to_str(spi_result.get_memory_ctx()->get_arena_allocator(),
                                                     *ctx->exec_ctx_->get_my_session(),
                                                     &exec_params,
                                                     tmp_ptr,
