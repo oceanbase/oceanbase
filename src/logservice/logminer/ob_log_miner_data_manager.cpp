@@ -267,7 +267,7 @@ void ObLogMinerDataManager::run1()
       if (REACH_TIME_INTERVAL(STAT_INTERVAL)) {
         do_statistics_();
       }
-      usleep(LOOP_INTERVAL);
+      ob_usleep(LOOP_INTERVAL);
     }
   }
 }
