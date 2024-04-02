@@ -217,15 +217,34 @@ int ObLogSet::compute_fd_item_set()
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
   } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
-             OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
+             OB_FAIL(append_child_fd_item_set(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_op_ &&
-             OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
+             OB_FAIL(append_child_fd_item_set(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
     LOG_WARN("falied to deduce fd item set", K(ret));
   } else {
     set_fd_item_set(fd_item_set);
+  }
+  return ret;
+}
+
+// just ignore table fd item now
+// todo: adjust log set fd, convert child fd set to currnet level stmt
+int ObLogSet::append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set)
+{
+  int ret = OB_SUCCESS;
+  ObFdItem *fd_item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_fd_item_set.count(); ++i) {
+    if (OB_ISNULL(fd_item = child_fd_item_set.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (fd_item->is_table_fd_item()) {
+      /* do nothing */
+    } else if (OB_FAIL(all_fd_item_set.push_back(fd_item))) {
+      LOG_WARN("failed to push back fd item", K(ret));
+    }
   }
   return ret;
 }
