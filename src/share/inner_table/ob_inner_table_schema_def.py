@@ -6952,6 +6952,7 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 515 : __all_user_proxy_role_info_history
 # 516 : __all_service
 # 517 : __all_storage_io_usage
+# 518 : __all_mview_dep
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
