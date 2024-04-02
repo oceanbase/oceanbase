@@ -760,6 +760,8 @@ int ObLS::offline_(const int64_t start_ts)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (running_state_.is_stopped()) {
+    LOG_INFO("ls is stopped state, do nothing", K(ret), K(ls_meta_));
   } else if (OB_FAIL(running_state_.pre_offline(ls_meta_.ls_id_))) {
     LOG_WARN("ls pre offline failed", K(ret), K(ls_meta_));
   } else if (FALSE_IT(update_state_seq_())) {
