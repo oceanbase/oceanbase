@@ -58,6 +58,7 @@ public:
       page_allocator_(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
       point_mode_arena_(DEFAULT_PAGE_SIZE_GEO, page_allocator_),
       vertexes_(&point_mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+      srs_(srs),
       x_min_(NAN), x_max_(NAN), is_inited_(false) {}
   virtual ~ObCachedGeomBase() {};
   // get vertex from origin_geo_
@@ -85,6 +86,7 @@ protected:
   ModulePageAllocator page_allocator_;
   ObCachePointModuleArena point_mode_arena_;
   ObVertexes vertexes_;
+  const ObSrsItem *srs_;
   double x_min_;
   double x_max_;
   bool is_inited_;

@@ -66,7 +66,6 @@ public:
       line_segments_(page_allocator_, point_mode_arena_),
       input_vertexes_(&point_mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
       rings_rtree_(page_allocator_, seg_mode_arena_),
-      srs_(srs),
       check_valid_(false),
       is_valid_(false) {}
   virtual ~ObCachedGeoPolygon() {};
@@ -108,7 +107,6 @@ private:
   ObLineSegments line_segments_;
   ObVertexes input_vertexes_;
   ObRingsRtree rings_rtree_;
-  const ObSrsItem *srs_;
   bool check_valid_;
   bool is_valid_;
 };

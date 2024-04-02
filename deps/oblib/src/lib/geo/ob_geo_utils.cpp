@@ -3182,7 +3182,7 @@ int ObGeoTypeUtil::get_collection_dimension(T_IBIN *geo, ObGeoDimension& dim)
   uint64_t pos = WKB_COMMON_WKB_HEADER_LEN;
   dim = ObGeoDimension::MAX_DIMENSION;
   for ( ; iter != collection->end() && OB_SUCC(ret) && !(dim == ObGeoDimension::TWO_DIMENSION); iter++) {
-    ObGeoDimension tmp_dim = ObGeoDimension::MAX_DIMENSION;
+    ObGeoDimension tmp_dim = ObGeoDimension::ZERO_DIMENSION;
     typename ObWkbGeomCollection::const_pointer sub_ptr = iter.operator->();
     if (pos + WKB_GEO_TYPE_SIZE + WKB_GEO_BO_SIZE > total_len) {
       ret = OB_INVALID_ARGUMENT;
@@ -3206,7 +3206,16 @@ int ObGeoTypeUtil::get_collection_dimension(T_IBIN *geo, ObGeoDimension& dim)
           break;
         }
         case ObGeoType::GEOMETRYCOLLECTION : {
-          ret = get_collection_dimension<T_IBIN, T_BIN>(geo, dim);
+          const T_BIN *subgc = reinterpret_cast<const T_BIN *>(sub_ptr);
+          T_IBIN sub_collection;
+          ObString data(total_len - pos, reinterpret_cast<const char *>(subgc));
+          sub_collection.set_data(data);
+          ret = get_collection_dimension<T_IBIN, T_BIN>(&sub_collection, tmp_dim);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to do wkb geom sub collection visit", K(ret));
+          } else {
+            pos += sub_collection.length();
+          }
           break;
         }
         default : {
