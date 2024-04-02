@@ -210,11 +210,6 @@ int ObKVCacheMap::put(
           if (NULL == iter) {
             // put new node
             (void) ATOMIC_AAF(&inst.status_.kv_cnt_, 1);
-          } else {
-            // overwrite
-            (void) ATOMIC_SAF(&iter->mb_handle_->kv_cnt_, 1);
-            (void) ATOMIC_SAF(&iter->mb_handle_->get_cnt_, iter->get_cnt_);
-
           }
           (void) ATOMIC_AAF(&mb_handle->kv_cnt_, 1);
           (void) ATOMIC_AAF(&mb_handle->get_cnt_, 1);
@@ -295,12 +290,15 @@ int ObKVCacheMap::get(
         iter = iter->next_;
       }
 
+      int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ret)) {
       } else if (NULL == iter) {
         ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_UNLIKELY(mb_handle_kv_cnt < 0)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(ERROR, "unexpected kv cnt", K(tmp_ret), K(mb_handle_kv_cnt), KPC(iter->mb_handle_));
       } else {
         if (LRU == mb_policy && need_modify_cache(iter_get_cnt, mb_get_cnt, mb_handle_kv_cnt)) {
-          int tmp_ret = OB_SUCCESS;
           ObBucketWLockGuard guard(bucket_lock_, bucket_pos);
           if (OB_TMP_FAIL(guard.get_ret())) {
             COMMON_LOG(WARN, "Fail to write lock bucket, ", K(tmp_ret), K(bucket_pos));
