@@ -133,7 +133,10 @@ public:
       const ObArray<common::ObObjMeta> &col_types,
       blocksstable::ObDatumRow &datum_row);
   // flush macro block, close and destroy slice writer.
-  int close_sstable_slice(const ObDirectLoadSliceInfo &slice_info, ObInsertMonitor *insert_monitor = NULL);
+  int close_sstable_slice(
+      const ObDirectLoadSliceInfo &slice_info,
+      ObInsertMonitor *insert_monitor,
+      blocksstable::ObMacroDataSeq &next_seq);
 
   // end direct load due to commit or abort.
   // @param [in] is_full_direct_load.
@@ -337,7 +340,8 @@ public:
       const ObDirectLoadSliceInfo &slice_info,
       const share::SCN &start_scn,
       const int64_t execution_id,
-      ObInsertMonitor *insert_monitor=NULL);
+      ObInsertMonitor *insert_monitor,
+      blocksstable::ObMacroDataSeq &next_seq);
 
   // for ref_cnt
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }

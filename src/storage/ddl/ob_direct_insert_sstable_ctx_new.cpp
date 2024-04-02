@@ -599,7 +599,10 @@ int ObTenantDirectLoadMgr::cancel(
   return ret;
 }
 
-int ObTenantDirectLoadMgr::close_sstable_slice(const ObDirectLoadSliceInfo &slice_info, ObInsertMonitor* insert_monitor)
+int ObTenantDirectLoadMgr::close_sstable_slice(
+    const ObDirectLoadSliceInfo &slice_info,
+    ObInsertMonitor* insert_monitor,
+    blocksstable::ObMacroDataSeq &next_seq)
 {
   int ret = OB_SUCCESS;
   ObTabletDirectLoadMgrHandle handle;
@@ -624,7 +627,12 @@ int ObTenantDirectLoadMgr::close_sstable_slice(const ObDirectLoadSliceInfo &slic
   } else if (OB_FAIL(tablet_exec_context_map_.get_refactored(exec_id, exec_context))) {
     LOG_WARN("get tablet execution context failed", K(ret));
   } else if (OB_FAIL(handle.get_obj()->close_sstable_slice(
-      slice_info.is_lob_slice_/*is_data_tablet_process_for_lob*/, slice_info, exec_context.start_scn_, exec_context.execution_id_, insert_monitor))) {
+      slice_info.is_lob_slice_/*is_data_tablet_process_for_lob*/,
+      slice_info,
+      exec_context.start_scn_,
+      exec_context.execution_id_,
+      insert_monitor,
+      next_seq))) {
     LOG_WARN("close sstable slice failed", K(ret), K(slice_info), "execution_start_scn", exec_context.start_scn_, "execution_id", exec_context.execution_id_);
   }
   return ret;
@@ -1731,9 +1739,11 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
     const ObDirectLoadSliceInfo &slice_info,
     const share::SCN &start_scn,
     const int64_t execution_id,
-    ObInsertMonitor *insert_monitor)
+    ObInsertMonitor *insert_monitor,
+    blocksstable::ObMacroDataSeq &next_seq)
 {
   int ret = OB_SUCCESS;
+  next_seq.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1748,7 +1758,7 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(slice_info));
     } else if (OB_FAIL(lob_mgr_handle_.get_obj()->close_sstable_slice(
-        false, slice_info, start_scn, execution_id))) {
+        false, slice_info, start_scn, execution_id, insert_monitor, next_seq))) {
       LOG_WARN("close lob sstable slice failed", K(ret), K(slice_info));
     }
   } else {
@@ -1761,6 +1771,8 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       LOG_WARN("unexpected err", K(ret), K(slice_info));
     } else if (OB_FAIL(slice_writer->close())) {
       LOG_WARN("close failed", K(ret), K(slice_info));
+    } else if (OB_FALSE_IT(next_seq = slice_writer->get_next_block_start_seq())) {
+      // block start seq after the close operation is the next availabled one.
     } else if (!slice_info.is_lob_slice_ && is_ddl_direct_load(direct_load_type_)) {
       int64_t task_finish_count = -1;
       {

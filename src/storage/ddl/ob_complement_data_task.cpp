@@ -1358,19 +1358,27 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
     ObTabletDirectLoadMgrHandle direct_load_hdl;
     bool is_major_sstable_exist = false;
-    ObDDLInsertRowIterator row_iter(nullptr/*ObPxMultiPartSSTableInsertOp*/, false/*is_slice_empty*/,
-          param_->dest_ls_id_, param_->dest_tablet_id_, 0/*unused_rowkey_num*/, param_->snapshot_version_, context_->context_id_, task_id_);
+    ObDDLInsertRowIterator row_iter;
     blocksstable::ObNewRowBuilder new_row_builder;
     int64_t lob_inrow_threshold = OB_DEFAULT_LOB_INROW_THRESHOLD;
-    if (OB_ISNULL(tenant_direct_load_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-    } else if (OB_UNLIKELY(!is_inited_)) {
+    if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
-    } else if (OB_ISNULL(param_) || OB_ISNULL(scan) || OB_UNLIKELY(!param_->is_valid()) || OB_ISNULL(context_)) {
+    } else if (OB_ISNULL(scan)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret));
+    } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(row_iter.init(nullptr/*ObPxMultiPartSSTableInsertOp*/,
+                              false/*is_slice_empty*/,
+                              param_->dest_ls_id_,
+                              param_->dest_tablet_id_,
+                              0/*unused_rowkey_num*/,
+                              param_->snapshot_version_,
+                              context_->context_id_,
+                              task_id_))) {
+      LOG_WARN("init failed", K(ret));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
       LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
     } else if (OB_FAIL(context_->check_already_committed(param_->dest_ls_id_, param_->dest_tablet_id_, ddl_committed))) {
