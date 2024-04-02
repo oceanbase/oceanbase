@@ -1938,6 +1938,8 @@ public:
   static int check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain);
   static int check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain);
   static int check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain);
+  // check if a constant or parameterized constant is NULL.
+  static bool is_const_null(ObRawExpr &expr);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
