@@ -449,6 +449,19 @@ static int mock_migrate_arg_for_location(ObMigrationOpArg &mock_arg)
   return ret;
 }
 
+static int mock_migrate_arg_for_r_type(ObMigrationOpArg &mock_arg)
+{
+  int ret = OB_SUCCESS;
+  mock_arg.reset();
+
+  if (OB_FAIL(mock_migrate_arg_for_location(mock_arg))) {
+    LOG_WARN("failed to mock ", K(ret), K(mock_arg));
+  } else {
+    mock_arg.dst_.replica_type_ = common::ObReplicaType::REPLICA_TYPE_READONLY;
+  }
+  return ret;
+}
+
 static share::SCN mock_ckpt_inc(share::SCN &local_ls_checkpoint_scn)
 {
   share::SCN result;

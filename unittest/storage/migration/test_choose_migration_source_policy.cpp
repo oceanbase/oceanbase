@@ -21,6 +21,7 @@
 #include "rpc/mock_ob_common_rpc_proxy.h"
 #include "storage/ob_locality_manager.h"
 #include "lib/ob_errno.h"
+#include "logservice/palf/palf_handle_impl.h"
 
 namespace oceanbase
 {
@@ -267,6 +268,21 @@ public:
     return ret;
   }
 
+  int get_ls_succ_with_palf(const share::ObLSID &, ObLSHandle &ls_handle)
+  {
+    int ret = OB_SUCCESS;
+    common::ObAddr parent;
+    if (OB_FAIL(mock_addr("192.168.1.1:1234", parent))) {
+      LOG_WARN("failed to mock addr", K(ret));
+    } else {
+      mock_ls_.log_handler_.palf_handle_.palf_handle_impl_ = &mock_palf_handle_impl_;
+      mock_palf_handle_impl_.is_inited_ = true;
+      mock_palf_handle_impl_.config_mgr_.parent_ = parent;
+      ls_handle.ls_ = &mock_ls_;
+    }
+    return ret;
+  }
+
   int get_ls_fail(const share::ObLSID &, ObLSHandle &ls_handle)
   {
     int ret = OB_ERR_UNEXPECTED;
@@ -275,6 +291,7 @@ public:
   }
 
 public:
+  palf::PalfHandleImpl mock_palf_handle_impl_;
   ObLS mock_ls_;
 };
 
@@ -391,7 +408,9 @@ void TestChooseMigrationSourcePolicy::TearDown()
 }
 // test checkpoint policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234"]
-// mock condition: max checkpoint:192.168.1.1:1234. min checkpoint:192.168.1.2:1234, 192.168.1.3:1234, 192.168.1.4:1234.
+// mock condition:
+// 192.168.1.1:1234: checkpoint -> OB_MAX_SCN_TS_NS, type -> F
+// 192.168.1.2:1234, 192.168.1.3:1234, 192.168.1.4:1234: checkpoint -> OB_MIN_SCN_TS_NS, status -> F
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_checkpoint_policy)
 {
@@ -424,8 +443,11 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_checkpoint_policy
 }
 // test rs recommand policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234"]
-// mock condition:src replica type
-// output addr:192.168.1.1:1234
+// mock condition:
+// 192.168.1.1:1234, 192.168.1.2:1234, 192.168.1.3:1234: checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234: checkpoint -> OB_BASE_SCN_TS_NS, type -> R
+// recommand addr: 192.168.1.4:1234
+// output addr:192.168.1.4:1234
 TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
 {
   MockLsMetaInfo ls_meta;
@@ -455,8 +477,11 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
-// mock condition: idc:192.168.1.1:1234. region:192.168.1.2:1234, 192.168.1.3:1234. diff region:192.168.1.4:1234, 192.168.1.5:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.5:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_leader)
 {
@@ -488,8 +513,11 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_leader)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
-// mock condition: idc:192.168.1.1:1234, 192.168.1.2:1234. region:192.168.1.3:1234, 192.168.1.4:1234. diff region:192.168.1.5:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.5:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.2:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_follower)
 {
@@ -521,8 +549,9 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_follower)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234"]
-// mock condition: region:192.168.1.1:1234. diff region:192.168.1.2:1234, 192.168.1.3:1234.
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_leader)
 {
@@ -554,8 +583,9 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_leader)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234"]
-// mock condition: region:192.168.1.1:1234, 192.168.1.2:1234. diff region:192.168.1.3:1234.
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.2:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_follower)
 {
@@ -587,8 +617,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_follower)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234"]
-// mock condition: diff region:192.168.1.1:1234.
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
 {
@@ -620,8 +649,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234"]
-// mock condition: diff region:192.168.1.1:1234, 192.168.1.2:1234.
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.2:1234
 TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_follower)
 {
@@ -652,9 +681,10 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_follower)
   EXPECT_EQ(expect_addr, src_info.src_addr_);
 }
 // test region policy
-// candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234"]
-// mock condition: idc:192.168.1.1:1234. region:192.168.1.2:1234. diff region:192.168.1.3:1234, 192.168.1.4:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.2:1234
 TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_follower)
 {
@@ -686,8 +716,9 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_follower)
 }
 // test region policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234"]
-// mock condition: region:192.168.1.1:1234. diff region:192.168.1.2:1234, 192.168.1.3:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_leader)
 {
@@ -719,8 +750,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_leader)
 }
 // test region policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234"]
-// mock condition: diff region:192.168.1.1:1234, 192.168.1.2:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.2:1234
 TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_follower)
 {
@@ -752,8 +783,7 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_follower)
 }
 // test region policy
 // candidate addr: ["192.168.1.1:1234"]
-// mock condition: diff region:192.168.1.1:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_leader)
 {
@@ -785,8 +815,11 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_leader)
 }
 // test rebuild policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
-// mock condition: idc:192.168.1.1:1234. region:192.168.1.2:1234, 192.168.1.3:1234. diff region:192.168.1.4:1234, 192.168.1.5:1234
-// mock condition: leader:192.168.1.1:1234
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.5:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
 // output addr:192.168.1.1:1234
 TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rebuild)
 {
@@ -886,9 +919,16 @@ TEST_F(TestChooseMigrationSourcePolicy, src_provider_init_checkpoint_fail)
   EXPECT_EQ(OB_INVALID_ARGUMENT, choose_src_helper_.init(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, policy, &storage_rpc_, &member_helper_));
 }
 // test check replica valid fail
-// local checkpoint fail
-// parent checkpoint fail
-// replica type fail
+// candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
+// local checkpoint -> OB_BASE_SCN_TS_NS
+// parent checkpoint -> OB_BASE_SCN_TS_NS + 1
+// dst type -> F
+// 192.168.1.1:1234 : checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : checkpoint -> OB_MIN_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : checkpoint -> OB_BASE_SCN_TS_NS + 2, type -> F
+// 192.168.1.5:1234 : checkpoint -> OB_MAX_SCN_TS_NS, type -> R
+// output addr:192.168.1.3:1234
 TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
 {
   MockLsMetaInfo ls_meta;
@@ -920,6 +960,99 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.3:1234", expect_addr));
+  EXPECT_EQ(expect_addr, src_info.src_addr_);
+}
+// test check replica valid fail
+// candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
+// local checkpoint -> OB_BASE_SCN_TS_NS
+// parent checkpoint -> OB_BASE_SCN_TS_NS + 1
+// dst type -> F
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_MIN_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS + 2, type -> F
+// 192.168.1.5:1234 : idc -> idc1, region -> region2, checkpoint -> OB_MIN_SCN_TS_NS, type -> F
+// output addr:192.168.1.4:1234
+TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
+{
+  MockLsMetaInfo ls_meta;
+  EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_parent_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_large_checkpoint))
+      .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
+  MockMemberList member_list;
+  EXPECT_CALL(member_helper_, get_ls_member_list_and_learner_list_(_, _, _, _, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_leader));
+  EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, get_ls(_, _))
+      .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  share::SCN local_ls_checkpoint_scn;
+  local_ls_checkpoint_scn.set_base();
+  ObMigrationOpArg mock_arg;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_location(mock_arg));
+  ObStorageHASrcProvider::ChooseSourcePolicy policy;
+  EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, policy));
+  ObStorageHASrcInfo src_info;
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, policy, &storage_rpc_, &member_helper_));
+  EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
+  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
+  common::ObAddr expect_addr;
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
+  EXPECT_EQ(expect_addr, src_info.src_addr_);
+}
+// test check replica valid fail
+// candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
+// local checkpoint -> OB_BASE_SCN_TS_NS
+// parent checkpoint -> OB_BASE_SCN_TS_NS + 1
+// dst type -> F
+// 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_MIN_SCN_TS_NS, type -> F, leader
+// 192.168.1.2:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.3:1234 : idc -> idc2, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F
+// 192.168.1.4:1234 : idc -> idc1, region -> region2, checkpoint -> OB_BASE_SCN_TS_NS + 2, type -> F
+// 192.168.1.5:1234 : idc -> idc1, region -> region2, checkpoint -> OB_MIN_SCN_TS_NS, type -> F
+// output addr:192.168.1.4:1234
+TEST_F(TestChooseMigrationSourcePolicy, idc_mode_r_replica_init)
+{
+  MockLsMetaInfo ls_meta;
+  EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_parent_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
+      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_large_checkpoint))
+      .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
+  MockMemberList member_list;
+  EXPECT_CALL(member_helper_, get_ls_member_list_and_learner_list_(_, _, _, _, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_leader));
+  EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, get_ls(_, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  share::SCN local_ls_checkpoint_scn;
+  local_ls_checkpoint_scn.set_base();
+  ObMigrationOpArg mock_arg;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_r_type(mock_arg));
+  ObStorageHASrcProvider::ChooseSourcePolicy policy;
+  EXPECT_EQ(OB_SUCCESS, get_idc_policy(mock_arg, tenant_id, policy));
+  ObStorageHASrcInfo src_info;
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, policy, &storage_rpc_, &member_helper_));
+  EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
+  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
+  common::ObAddr expect_addr;
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
   EXPECT_EQ(expect_addr, src_info.src_addr_);
 }
 
