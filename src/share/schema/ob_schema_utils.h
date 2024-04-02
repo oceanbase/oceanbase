@@ -159,7 +159,8 @@ public:
              const ObTimeoutCtx &ctx,
              sql::ObSQLSessionInfo *session,
              const uint64_t tenant_id,
-             const int64_t schema_version);
+             const int64_t schema_version,
+             const bool skip_consensus);
 
   // Use to check if the column of sys table (exclude core table) does exist
   // by querying __all_column when the column is not accessible.
