@@ -580,6 +580,7 @@ all_table_privilege_def = dict(
       ('priv_index', 'int', 'false', '0'),
       ('priv_create_view', 'int', 'false', '0'),
       ('priv_show_view', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 

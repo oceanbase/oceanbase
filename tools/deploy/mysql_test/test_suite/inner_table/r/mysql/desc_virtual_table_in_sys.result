@@ -2490,6 +2490,7 @@ priv_select	bigint(20)	NO		0
 priv_index	bigint(20)	NO		0	
 priv_create_view	bigint(20)	NO		0	
 priv_show_view	bigint(20)	NO		0	
+priv_others	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2514,6 +2515,7 @@ priv_select	bigint(20)	YES		0
 priv_index	bigint(20)	YES		0	
 priv_create_view	bigint(20)	YES		0	
 priv_show_view	bigint(20)	YES		0	
+priv_others	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege_history;
 IF(count(*) >= 0, 1, 0)
 1

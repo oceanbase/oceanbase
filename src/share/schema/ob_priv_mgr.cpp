@@ -78,6 +78,8 @@ const char *ObPrivMgr::priv_names_[] = {
     "CREATE TABLESPACE",
     "SHUTDOWN",
     "RELOAD",
+    "CREATE ROLE",
+    "DROP ROLE",
 };
 
 ObPrivMgr::ObPrivMgr()
