@@ -1798,6 +1798,12 @@ const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 const int64_t OB_MAX_CPU_NUM = 64;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
+#elif defined(__powerpc64__)
+const int64_t OB_MAX_CPU_NUM = 256; //To verify whether larger (256/512/1024/2048) is better for performance
+#endif
+#if defined(__powerpc64__)
+const ssize_t PPC_SMALL_PAGE_SIZE = 4096; //Power ppc64le support medium page 65536(default) and small page 4096
+const ssize_t PPC_MEDIUM_PAGE_SIZE = 65536; //Power ppc64le support medium page 65536(default) and small page 4096, getpagesize() return 65536
 #endif
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 

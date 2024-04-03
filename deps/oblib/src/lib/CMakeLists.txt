@@ -345,6 +345,10 @@ target_link_libraries(ob_malloc_object oblib_base_base_base)
 add_library(ob_malloc STATIC)
 target_link_libraries(ob_malloc ob_malloc_object)
 
+if( ${ARCHITECTURE} STREQUAL "ppc64le" )
+target_link_libraries(oblib_lib  PUBLIC -lcrc32c_ppc)
+endif()
+
 add_library(malloc_hook STATIC
   alloc/malloc_hook.cpp
   alloc/malloc_hook.h)

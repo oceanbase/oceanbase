@@ -174,6 +174,7 @@ void build_obj_double(double num, ObArenaAllocator &allocator, ObObj &res) {
 
 void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator &ctx_allocator, common::ObObj &result)
 {
+#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
   pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
@@ -205,10 +206,12 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
   elem_array->set_first(1);
   elem_array->set_last(elem_cnt);
   result.set_extend(reinterpret_cast<int64_t>(elem_array), elem_array->get_type());
+#endif
 }
 
 void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &ctx_allocator, common::ObObj &result)
 {
+#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
   pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
@@ -240,6 +243,7 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
   elem_array->set_first(1);
   elem_array->set_last(ori_size);
   result.set_extend(reinterpret_cast<int64_t>(elem_array), elem_array->get_type());
+#endif
 }
 
 TEST_F(TestGeoCommon, sql_udt_to_wkt)
@@ -277,8 +281,10 @@ TEST_F(TestGeoCommon, sql_udt_to_wkt)
   ASSERT_EQ(elem_info.push_back(1), OB_SUCCESS);
   mock_write_sdo_elem_info(elem_info, allocator, elem_info_pl);
   ObString elem_info_str;
+#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
   ASSERT_EQ(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(allocator, elem_info_str, elem_info_pl), OB_SUCCESS);
   elem_info_obj.set_sql_collection(elem_info_str.ptr(), elem_info_str.length(), 30027);
+#endif
 
   ObObj ordinate_pl;
   ObObj ordinate_obj;
