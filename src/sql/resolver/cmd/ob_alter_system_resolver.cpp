@@ -3367,6 +3367,8 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve string failed", K(ret));
     } else if (OB_ISNULL(parse_tree.children_[1])) {
       stmt->get_rpc_arg().with_restore_scn_ = false;
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore preview must have a scn or timestamp, otherwise");
     } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
       stmt->get_rpc_arg().restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
       stmt->get_rpc_arg().with_restore_scn_ = false;
@@ -3394,7 +3396,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
           if (session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid sql syntax", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "should not have backup_dest and restore_source at the same time");
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "have backup_dest and restore_source at the same time");
           } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1],
                                           stmt->get_rpc_arg().uri_))) {
             LOG_WARN("resolve string failed", K(ret));

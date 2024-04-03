@@ -84,7 +84,7 @@ public:
   static int check_physical_restore_finish(common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed);
   static int get_restore_job_comment(common::ObISQLClient &proxy, const int64_t job_id, char *buf, const int64_t buf_size);
   static int get_restore_tenant_cpu_count(common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count);
-  static int fill_restore_scn_(
+  static int fill_restore_scn(
       const share::SCN &src_scn,
       const ObString &timestamp,
       const bool with_restore_scn,
@@ -109,7 +109,7 @@ static int fill_multi_path_restore_scn_without_compl_log_(
       const ObIArray<share::ObSinglePieceDesc> &backup_piece_array,
       share::SCN &restore_scn);
 
-  static int check_restore_using_complement_log_(
+  static int check_restore_using_complement_log(
              const ObIArray<ObString> &tenant_path_array,
              bool &only_contain_backup_set);
 
@@ -145,7 +145,8 @@ private:
              const common::ObString &passwd_array,
              const share::SCN &restore_scn,
              share::SCN &restore_start_scn,
-             ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
+             ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+             ObTimeZoneInfoWrap &time_zone_wrap);
   static int sort_multi_paths_by_backup_set_id_(
               const ObArray<std::pair<ObString, ObBackupSetFileDesc>> &path_set_pairs,
               ObIArray<ObString> &multi_path_array);
@@ -168,6 +169,7 @@ private:
              const ObIArray<ObString> &multi_path_array,
              const SCN &restore_start_scn,
              const SCN &restore_end_scn,
+             const ObTimeZoneInfoWrap &time_zone_wrap,
              ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
   static int get_all_piece_keys_(
              const ObIArray<ObString> &multi_path_array,
@@ -183,6 +185,7 @@ private:
              const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
              const SCN &restore_start_scn,
              const SCN &restore_end_scn,
+             const ObTimeZoneInfoWrap &time_zone_wrap,
              ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces);
   static int get_restore_log_array_for_complement_log_(
              const ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
