@@ -332,7 +332,11 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
       }
     } else {
       if (CLICK_FAIL(ls.get_tablet_svr()->set_ddl_info(tablet_id, std::move(data), user_ctx, 0/*lock_timeout_us*/))) {
-        LOG_WARN("failed to save tablet binding info", K(ret));
+        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+          ret = OB_EAGAIN;
+        } else {
+          LOG_WARN("failed to save tablet binding info", K(ret));
+        }
       }
     }
   }
