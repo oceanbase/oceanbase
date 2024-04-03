@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/ob_errno.h"
 #include <gtest/gtest.h>
 
 #define private public
@@ -723,6 +724,61 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_full_inclusion)
     info.reset();
     ret = reader.get_next_medium_info(allocator, key, info);
     ASSERT_EQ(OB_ITER_END, ret);
+  }
+}
+
+TEST_F(TestMediumInfoReader, mds_table_cannot_read_uncommitted_node) {
+  int ret = OB_SUCCESS;
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  ObTabletHandle tablet_handle;
+  ObTabletHandle new_tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+
+  // insert data into mds table
+  mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(1)));
+  compaction::ObMediumCompactionInfoKey key(1);
+  compaction::ObMediumCompactionInfo info;
+  ret = MediumInfoHelper::build_medium_compaction_info(allocator_, info, 1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = mds_table_.set(key, info, ctx);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // iterate
+  {
+    common::ObArenaAllocator allocator;
+    ObTabletMediumInfoReader reader(*tablet);
+    ret = reader.init(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    key.reset();
+    info.reset();
+    ret = reader.get_next_medium_info(allocator, key, info);
+    ASSERT_EQ(OB_ITER_END, ret);
+  }
+
+  // commit
+  {
+    ctx.on_redo(mock_scn(1));
+    ctx.before_prepare();
+    ctx.on_prepare(mock_scn(1));
+    ctx.on_commit(mock_scn(1), mock_scn(1));
+  }
+
+  // iterate
+  {
+    common::ObArenaAllocator allocator;
+    ObTabletMediumInfoReader reader(*tablet);
+    ret = reader.init(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = reader.get_next_medium_info(allocator, key, info);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(1, key.medium_snapshot_);
+    ASSERT_EQ(1, info.medium_snapshot_);
   }
 }
 } // namespace storage

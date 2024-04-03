@@ -36,6 +36,7 @@
 #include <numeric>
 #include "storage/multi_data_source/runtime_utility/mds_lock.h"
 #include "storage/tablet/ob_tablet_meta.h"
+#include "storage/multi_data_source/mds_table_iterator.h"
 namespace oceanbase {
 namespace storage
 {
