@@ -242,14 +242,18 @@ int ObTableCkmItems::build_column_ckm_sum_array(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("checksum items or tablet pairs are empty", KR(ret), K_(ckm_items), K_(tablet_pairs));
   } else if (!ckm_sum_array_.empty()) {
-    // inited before
+    LOG_INFO("use cached ckm array", KR(ret), K_(row_count), K_(ckm_sum_array), K(compaction_scn));
   } else {
+    row_count_ = 0;
+    ckm_sum_array_.reuse();
+
     const int64_t column_checksums_cnt = ckm_items_.at(0).column_meta_.column_checksums_.count();
     uint64_t pre_tablet_id = OB_INVALID_ID;
     if (OB_FAIL(ckm_sum_array_.reserve(column_checksums_cnt))) {
       LOG_WARN("failed to reserve tablet column checksum array", KR(ret));
     }
     // items are order by tablet_id
+    int64_t pair_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && (i < items_cnt); ++i) {
       const ObTabletReplicaChecksumItem &cur_item = ckm_items_.at(i);
       LOG_TRACE("build_column_ckm_sum_array", KR(ret), K(i), K(cur_item), K(compaction_scn), K(row_cnt));
@@ -271,7 +275,15 @@ int ObTableCkmItems::build_column_ckm_sum_array(
           } // end of for
           row_count_ += cur_item.row_count_;
         }
-        pre_tablet_id = cur_item.tablet_id_.id();
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(cur_item.tablet_id_.id() != pre_tablet_id // meet new tablet
+            && (pair_idx >= tablet_pairs_.count() || tablet_pairs_.at(pair_idx++).get_tablet_id() != cur_item.tablet_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet pair and ckm items are mismatch", KR(ret), K(i), K(cur_item), K(tablet_pairs_), K(pair_idx));
+        } else {
+          pre_tablet_id = cur_item.tablet_id_.id();
+        }
       } else {
         ret = OB_ITEM_NOT_MATCH;
         LOG_WARN("compaction scn mismtach", KR(ret), K(cur_item), K(compaction_scn));
@@ -280,6 +292,9 @@ int ObTableCkmItems::build_column_ckm_sum_array(
   }
   if (OB_SUCC(ret)) {
     row_cnt = row_count_;
+  } else {
+    row_count_ = 0;
+    ckm_sum_array_.reuse();
   }
   return ret;
 }
@@ -523,11 +538,12 @@ void ObTableCkmItems::reset()
 {
   is_inited_ = false;
   table_id_ = 0;
+  row_count_ = 0;
+  table_schema_ = NULL;
   tablet_pairs_.reset();
   ckm_items_.reset();
   sort_col_id_array_.reset();
   ckm_sum_array_.reset();
-  row_count_ = 0;
 }
 
 } // namespace compaction

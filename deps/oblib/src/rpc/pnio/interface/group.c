@@ -667,6 +667,18 @@ PN_API int pn_get_fd(uint64_t req_id)
   return fd;
 }
 
+PN_API int64_t pn_get_pkt_id(uint64_t req_id)
+{
+  int64_t pkt_id = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkt_id = ctx->pkt_id;
+  }
+  return pkt_id;
+}
+
 void pn_print_diag_info(pn_comm_t* pn_comm) {
   pn_t* pn = (pn_t*)pn_comm;
   int64_t client_cnt = 0;

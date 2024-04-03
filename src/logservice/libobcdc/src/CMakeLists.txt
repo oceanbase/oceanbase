@@ -118,6 +118,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_table_id_cache.cpp
   ob_log_table_matcher.cpp
   ob_log_tenant.cpp
+  ob_log_tic_update_info.cpp
   ob_log_tenant_mgr.cpp
   ob_log_tenant_task_queue.cpp
   ob_log_timer.cpp

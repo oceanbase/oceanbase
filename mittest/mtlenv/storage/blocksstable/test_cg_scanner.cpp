@@ -553,7 +553,6 @@ TEST_F(TestCGScanner, test_filter)
   filter.datum_params_.push_back(arg_datum);
   filter.filter_.expr_->args_[1] = reinterpret_cast<sql::ObExpr *>(expr_buf3) + 1;
   filter.filter_.expr_->args_[1]->type_ = T_REF_COLUMN;
-  ASSERT_EQ(OB_SUCCESS, filter.init_obj_set());
   filter.cmp_func_ = get_datum_cmp_func(filter.filter_.expr_->args_[0]->obj_meta_, filter.filter_.expr_->args_[0]->obj_meta_);
 
   exprs.init(1);

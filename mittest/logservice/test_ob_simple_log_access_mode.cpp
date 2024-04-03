@@ -196,21 +196,17 @@ TEST_F(TestObSimpleLogClusterAccessMode, add_member)
     std::vector<PalfHandleImplGuard*> palf_list;
     const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000 * 1000L; // 10s
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
     // set leader's region is different from follower, learner will
     // register itself to leader
     std::vector<ObRegion> region_list;
     LogMemberRegionMap region_map;
     common::ObRegion default_region(DEFAULT_REGION_NAME);
-    EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-    region_map.insert(get_cluster()[0]->get_addr(), default_region);
-    region_map.insert(get_cluster()[1]->get_addr(), ObRegion("SHANGHAI"));
-    region_map.insert(get_cluster()[2]->get_addr(), ObRegion("TIANJIN"));
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_paxos_member_region_map(region_map));
-    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
-    palf_list[1]->palf_handle_impl_->set_region(ObRegion("SHANGHAI"));
-    palf_list[2]->palf_handle_impl_->set_region(ObRegion("TIANJIN"));
-
+    get_cluster()[0]->get_locality_manager()->set_server_region(get_cluster()[0]->get_addr(), default_region);
+    get_cluster()[0]->get_locality_manager()->set_server_region(get_cluster()[1]->get_addr(), ObRegion("SHANGHAI"));
+    get_cluster()[0]->get_locality_manager()->set_server_region(get_cluster()[2]->get_addr(), ObRegion("TIANJIN"));
+    for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
     AccessMode curr_access_mode;
     int64_t mode_version, curr_proposal_id;
     ObRole unused_role;

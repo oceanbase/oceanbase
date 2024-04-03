@@ -703,7 +703,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
       ObSEArray<ObOptStat, 1> tmp_opt_stats;
       if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, approx_level, NULL, false,
                                                               DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE,
-                                                              gather_param))) {
+                                                              false, gather_param))) {
         LOG_WARN("failed to assign", K(ret));
       } else if (OB_FAIL(gather_param.column_params_.assign(param.column_params_))) {
         LOG_WARN("failed to assign", K(ret));

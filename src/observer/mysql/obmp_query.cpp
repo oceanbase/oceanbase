@@ -712,6 +712,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       LOG_ERROR("invalid sql engine", K(ret), K(gctx_));
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
+      session.reset_plsql_exec_time();
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
@@ -749,6 +750,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         LOG_WARN("fail to set session active", K(ret));
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx_, result))) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        session.reset_plsql_exec_time();
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
           retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
@@ -780,6 +782,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       } else {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        session.reset_plsql_exec_time();
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
@@ -942,6 +945,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_ = params_value_;
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+      audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+        audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+      }
 
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_ISNULL(plan_ctx)) {

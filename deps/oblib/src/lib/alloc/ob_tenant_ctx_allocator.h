@@ -268,13 +268,13 @@ public:
   int iter_label(VisitFunc func) const;
   int64_t sync_wash(int64_t wash_size);
   int64_t sync_wash();
-  bool check_has_unfree(char *first_label)
+  bool check_has_unfree(char *first_label, char *first_bt)
   {
     bool has_unfree = obj_mgr_.check_has_unfree();
     if (has_unfree) {
-      bool tmp_has_unfree = obj_mgr_.check_has_unfree(first_label);
+      bool tmp_has_unfree = obj_mgr_.check_has_unfree(first_label, first_bt);
       for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID && !tmp_has_unfree; ++i) {
-        tmp_has_unfree = obj_mgrs_[i].check_has_unfree(first_label);
+        tmp_has_unfree = obj_mgrs_[i].check_has_unfree(first_label, first_bt);
       }
     }
     return has_unfree;

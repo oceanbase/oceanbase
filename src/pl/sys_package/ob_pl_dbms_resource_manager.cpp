@@ -133,6 +133,10 @@ int ObPlDBMSResourceManager::create_consumer_group(
       LOG_WARN("name of consumer group cannot be null or empty", K(ret));
     // consumer_group 肯定存在，所以可以 get_string 读取，
     // COMMENT 是可选的可能为 null，所以传入 ObObj
+    } else if (!GCTX.cgroup_ctrl_->is_valid_group_name(consumer_group)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid consumer group name");
+      LOG_WARN("invalid consumer group name", K(ret), K(consumer_group));
     } else if (OB_FAIL(proxy.create_consumer_group(tenant_id, consumer_group, params.at(COMMENT)))) {
       LOG_WARN("fail create consumer_group", K(tenant_id), K(consumer_group), K(ret));
     }

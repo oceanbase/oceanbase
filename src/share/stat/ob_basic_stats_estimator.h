@@ -56,7 +56,9 @@ public:
 
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,
-                                  PartitionIdBlockMap &id_block_map);
+                                  PartitionIdBlockMap &id_block_map,
+                                  bool &use_column_store,
+                                  bool &use_split_part);
 
   static int estimate_modified_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
@@ -148,7 +150,10 @@ public:
   template <class T>
   int add_stat_item(const T &item);
 
-  int fill_hints(common::ObIAllocator &alloc, const ObString &table_name, int64_t gather_vectorize);
+  int fill_hints(common::ObIAllocator &alloc,
+                 const ObString &table_name,
+                 int64_t gather_vectorize,
+                 bool use_column_store);
 
 private:
 
@@ -167,6 +172,14 @@ private:
 
   static int generate_column_group_ids(const ObTableStatParam &param,
                                        ObIArray<uint64_t> &column_group_ids);
+
+  static int check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
+                                                              const int64_t memtable_row_cnt,
+                                                              const int64_t cg_cnt,
+                                                              const int64_t part_cnt,
+                                                              const int64_t degree,
+                                                              bool &use_column_store,
+                                                              bool &use_split_part);
 };
 
 }

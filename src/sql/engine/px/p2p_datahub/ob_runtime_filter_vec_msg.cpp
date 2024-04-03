@@ -981,9 +981,8 @@ int ObRFInFilterVecMsg::ObRFInFilterRowStore::create_and_add_row(
     ObIVector *vec = expr->get_vector(ctx);
     OZ(vec->to_row(row_meta, row, batch_idx, i));
   }
-  uint64_t &extra_payload = row->extra_payload<uint64_t>(row_meta);
-  extra_payload = hash_val;
   if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(row->extra_payload<uint64_t>(row_meta) = hash_val)) {
   } else if (OB_FAIL(serial_rows_.push_back(row))) {
     LOG_WARN("failed to push back row");
   } else if (OB_FAIL(row_sizes_.push_back(row_size))) {

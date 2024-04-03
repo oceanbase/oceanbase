@@ -172,6 +172,7 @@ public:
                                        const PartitionIdBlockMap *partition_id_block_map,
                                        bool is_split_gather,
                                        int64_t gather_vectorize,
+                                       bool use_column_store,
                                        ObOptStatGatherParam &gather_param);
 
   static int merge_split_gather_tab_stats(ObIArray<ObOptTableStat *> &all_tstats,

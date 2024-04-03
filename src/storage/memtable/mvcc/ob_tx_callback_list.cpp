@@ -292,12 +292,20 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn
   LockGuard guard(*this, LOCK_MODE::TRY_LOCK_ITERATE);
   if (guard.is_locked()) {
     int64_t remove_cnt = calc_need_remove_count_for_fast_commit_();
-    // use rm_logged_latch_ to protected multiple thread try to remove logged callbacks
-    bool skip_checksum = is_skip_checksum_();
-    const share::SCN right_bound = skip_checksum ? share::SCN::max_scn()
-      : (stop_scn.is_valid() ? stop_scn : sync_scn_);
+    share::SCN right_bound;
+    if (!stop_scn.is_valid()) {
+      // unspecified stop_scn, used callback_list's sync_scn_
+      right_bound = sync_scn_;
+    } else if (!sync_scn_.is_min()) {
+      // specified stop_scn, and callback_list's sync_scn_ is valid
+      // use mininum
+      right_bound = SCN::min(stop_scn, sync_scn_);
+    } else {
+      // callback_list's sync_scn is invalid, use stop_scn
+      right_bound = stop_scn;
+    }
     ObRemoveCallbacksForFastCommitFunctor functor(remove_cnt, right_bound);
-    if (!skip_checksum) {
+    if (!is_skip_checksum_()) {
       functor.set_checksumer(checksum_scn_, &batch_checksum_);
     }
     if (OB_FAIL(callback_(functor, get_guard(), log_cursor_, guard.state_))) {

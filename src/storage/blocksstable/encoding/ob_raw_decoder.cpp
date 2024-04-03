@@ -1185,7 +1185,7 @@ int ObRawDecoder::traverse_all_data(
         cur_datum.pack_ = datum_len;
         cur_datum.ptr_ = (const char *)(&value);
         bool result = false;
-        if (OB_FAIL(eval(col_ctx.obj_meta_, cur_datum, filter, result))) {
+        if (OB_FAIL(eval(cur_datum, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_datum));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(offset))) {
@@ -1240,7 +1240,7 @@ int ObRawDecoder::traverse_all_data(
         if (OB_SUCC(ret)) {
           // Run lambda here to filter out the data according to op_type
           bool result = false;
-          if (OB_FAIL(eval(col_ctx.obj_meta_, cur_datum, filter, result))) {
+          if (OB_FAIL(eval(cur_datum, filter, result))) {
             LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_datum));
           } else if (result) {
             if (OB_FAIL(result_bitmap.set(offset))) {
@@ -1256,7 +1256,6 @@ int ObRawDecoder::traverse_all_data(
 }
 
 int ObRawDecoder::ObRawDecoderFilterCmpFunc::operator()(
-    const ObObjMeta &obj_meta,
     const ObDatum &cur_datum,
     const sql::ObWhiteFilterExecutor &filter,
     bool &result) const
@@ -1272,7 +1271,6 @@ int ObRawDecoder::ObRawDecoderFilterCmpFunc::operator()(
 }
 
 int ObRawDecoder::ObRawDecoderFilterBetweenFunc::operator()(
-    const ObObjMeta &obj_meta,
     const ObDatum &cur_datum,
     const sql::ObWhiteFilterExecutor &filter,
     bool &result) const
@@ -1293,17 +1291,13 @@ int ObRawDecoder::ObRawDecoderFilterBetweenFunc::operator()(
 }
 
 int ObRawDecoder::ObRawDecoderFilterInFunc::operator()(
-    const ObObjMeta &obj_meta,
     const ObDatum &cur_datum,
     const sql::ObWhiteFilterExecutor &filter,
     bool &result) const
 {
   int ret = OB_SUCCESS;
-  ObObj cur_obj;
-  if (OB_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
-    LOG_WARN("convert datum to obj failed", K(ret), K(cur_datum), K(obj_meta));
-  } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-    LOG_WARN("Failed to check obj in hashset", K(ret), K(cur_obj));
+  if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+    LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
   }
   return ret;
 }
@@ -1618,6 +1612,253 @@ raw_compare_function_with_null RawCompareFunctionFactory::get_cs_cmp_function_wi
     cmp_function = cs_functions_with_null_array_[fix_len_tag][op_type];
   }
   return cmp_function;
+}
+
+template <typename DataType, typename Op>
+class RawAggFunctionImpl
+{
+  public:
+  // can use SIMD
+  OB_MULTITARGET_FUNCTION_AVX2_SSE42(
+  OB_MULTITARGET_FUNCTION_HEADER(static void), raw_min_max_function, OB_MULTITARGET_FUNCTION_BODY((
+      const unsigned char* raw_data,
+      uint32_t from,
+      uint32_t to,
+      uint64_t &res)
+  {
+    const DataType *start_pos = reinterpret_cast<const DataType *>(raw_data);
+    const DataType *a_end = start_pos + to;
+    const DataType * __restrict a_pos = start_pos + from;
+    DataType res_value = *(start_pos + from);
+    while (a_pos < a_end) {
+      if (Op::apply(*a_pos, res_value)) {
+        res_value = *a_pos;
+      }
+      ++a_pos;
+    }
+    res = res_value;
+  }))
+
+  // can not use SIMD
+  OB_MULTITARGET_FUNCTION_AVX2_SSE42(
+  OB_MULTITARGET_FUNCTION_HEADER(static void), raw_min_max_function_with_null, OB_MULTITARGET_FUNCTION_BODY((
+      const unsigned char* raw_data,
+      const uint64_t null_value,
+      uint32_t from,
+      uint32_t to,
+      uint64_t &res)
+  {
+    const DataType *start_pos = reinterpret_cast<const DataType *>(raw_data);
+    const DataType *a_end = start_pos + to;
+    const DataType * __restrict a_pos = start_pos + from;
+    DataType res_value = *(start_pos + from);
+    while (a_pos < a_end) {
+      if (*a_pos != null_value && Op::apply(*a_pos, res_value)) {
+        res_value = *a_pos;
+      }
+      ++a_pos;
+    }
+    res = res_value;
+  }))
+
+  // can use SIMD
+  OB_MULTITARGET_FUNCTION_AVX2_SSE42(
+  OB_MULTITARGET_FUNCTION_HEADER(static void), raw_min_max_function_with_null_bitmap, OB_MULTITARGET_FUNCTION_BODY((
+      const unsigned char* raw_data,
+      const uint8_t *null_bitmap,
+      uint32_t from,
+      uint32_t to,
+      uint64_t &res)
+  {
+    const DataType *start_pos = reinterpret_cast<const DataType *>(raw_data);
+    const DataType *a_end = start_pos + to;
+    const DataType * __restrict a_pos = start_pos + from;
+    const uint8_t * __restrict b_pos = null_bitmap;
+    DataType res_value = *(start_pos + from);
+    while (a_pos < a_end) {
+      if (!*b_pos && Op::apply(*a_pos, res_value)) {
+        res_value = *a_pos;
+      }
+      ++a_pos;
+      ++b_pos;
+    }
+    res = res_value;
+  }))
+};
+
+template <bool IS_SIGNED, int32_t LEN_TAG>
+struct RawAggFunctionProducer
+{
+  static raw_min_max_function produce_min_max(
+    const uint32_t type)
+  {
+    raw_min_max_function min_max_function = nullptr;
+    typedef typename ObEncodingTypeInference<IS_SIGNED, LEN_TAG>::Type DataType;
+    const bool is_supported = is_arch_supported(ObTargetArch::AVX2);
+    switch (type) {
+      case 0: // min
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function;
+#endif
+        break;
+      case 1:
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function;
+#endif
+        break;
+      default:
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Invalid min max type", K(type));
+        break;
+    }
+    return min_max_function;
+  }
+
+  static raw_min_max_function_with_null produce_min_max_with_null_for_cs(
+    const uint32_t type)
+  {
+    raw_min_max_function_with_null min_max_function = nullptr;
+    typedef typename ObEncodingTypeInference<IS_SIGNED, LEN_TAG>::Type DataType;
+    const bool is_supported = is_arch_supported(ObTargetArch::AVX2);
+    switch (type) {
+      case 0: // min
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null;
+#endif
+        break;
+      case 1:
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null;
+#endif
+        break;
+      default:
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Invalid min max type", K(type));
+        break;
+    }
+    return min_max_function;
+  }
+
+    static raw_min_max_function_with_null_bitmap produce_min_max_with_null_bitmap_for_cs(
+    const uint32_t type)
+  {
+    raw_min_max_function_with_null_bitmap min_max_function = nullptr;
+    typedef typename ObEncodingTypeInference<IS_SIGNED, LEN_TAG>::Type DataType;
+    const bool is_supported = is_arch_supported(ObTargetArch::AVX2);
+    switch (type) {
+      case 0: // min
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null_bitmap_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null_bitmap;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawLessOp<DataType>>::raw_min_max_function_with_null_bitmap;
+#endif
+        break;
+      case 1:
+#if OB_USE_MULTITARGET_CODE
+        if (is_supported) {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null_bitmap_avx2;
+        } else {
+          min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null_bitmap;
+        }
+#else
+        min_max_function = RawAggFunctionImpl<DataType, RawGreaterOp<DataType>>::raw_min_max_function_with_null_bitmap;
+#endif
+        break;
+      default:
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Invalid min max type", K(type));
+        break;
+    }
+    return min_max_function;
+  }
+};
+
+// For cs encoding, all value is unsigned
+RawAggFunctionFactory::RawAggFunctionFactory()
+{
+  for (uint32_t k = 0; k < MIN_MAX_CNT; ++k) {
+    min_max_functions_array_[0][k] = RawAggFunctionProducer<0, 0>::produce_min_max(k);
+    min_max_functions_array_[1][k] = RawAggFunctionProducer<0, 1>::produce_min_max(k);
+    min_max_functions_array_[2][k] = RawAggFunctionProducer<0, 2>::produce_min_max(k);
+    min_max_functions_array_[3][k] = RawAggFunctionProducer<0, 3>::produce_min_max(k);
+
+    cs_min_max_functions_with_null_array_[0][k] = RawAggFunctionProducer<0, 0>::produce_min_max_with_null_for_cs(k);
+    cs_min_max_functions_with_null_array_[1][k] = RawAggFunctionProducer<0, 1>::produce_min_max_with_null_for_cs(k);
+    cs_min_max_functions_with_null_array_[2][k] = RawAggFunctionProducer<0, 2>::produce_min_max_with_null_for_cs(k);
+    cs_min_max_functions_with_null_array_[3][k] = RawAggFunctionProducer<0, 3>::produce_min_max_with_null_for_cs(k);
+
+    cs_min_max_functions_with_null_bitmap_array_[0][k] = RawAggFunctionProducer<0, 0>::produce_min_max_with_null_bitmap_for_cs(k);
+    cs_min_max_functions_with_null_bitmap_array_[1][k] = RawAggFunctionProducer<0, 1>::produce_min_max_with_null_bitmap_for_cs(k);
+    cs_min_max_functions_with_null_bitmap_array_[2][k] = RawAggFunctionProducer<0, 2>::produce_min_max_with_null_bitmap_for_cs(k);
+    cs_min_max_functions_with_null_bitmap_array_[3][k] = RawAggFunctionProducer<0, 3>::produce_min_max_with_null_bitmap_for_cs(k);
+  }
+}
+
+RawAggFunctionFactory &RawAggFunctionFactory::instance()
+{
+  static RawAggFunctionFactory ret;
+  return ret;
+}
+
+raw_min_max_function RawAggFunctionFactory::get_min_max_function(
+    const int32_t fix_len_tag,
+    const bool is_min)
+{
+  raw_min_max_function min_max_function = nullptr;
+  if (OB_UNLIKELY(fix_len_tag < 0 || fix_len_tag >= FIX_LEN_TAG_CNT)) {
+  } else {
+    min_max_function = min_max_functions_array_[fix_len_tag][is_min ? 0 : 1];
+  }
+  return min_max_function;
+}
+
+raw_min_max_function_with_null RawAggFunctionFactory::get_cs_min_max_function_with_null(
+    const int32_t fix_len_tag,
+    const bool is_min)
+{
+  raw_min_max_function_with_null min_max_function = nullptr;
+  if (OB_UNLIKELY(fix_len_tag < 0 || fix_len_tag >= FIX_LEN_TAG_CNT)) {
+  } else {
+    min_max_function = cs_min_max_functions_with_null_array_[fix_len_tag][is_min ? 0 : 1];
+  }
+  return min_max_function;
+}
+
+raw_min_max_function_with_null_bitmap RawAggFunctionFactory::get_cs_min_max_function_with_null_bitmap(
+    const int32_t fix_len_tag,
+    const bool is_min)
+{
+  raw_min_max_function_with_null_bitmap min_max_function = nullptr;
+  if (OB_UNLIKELY(fix_len_tag < 0 || fix_len_tag >= FIX_LEN_TAG_CNT)) {
+  } else {
+    min_max_function = cs_min_max_functions_with_null_bitmap_array_[fix_len_tag][is_min ? 0 : 1];
+  }
+  return min_max_function;
 }
 
 } // end namespace blocksstable

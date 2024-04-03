@@ -55,7 +55,6 @@ public:
   // int set_initial_member_list(const common::ObMemberList &member_list,
   //                             const int64_t paxos_replica_num);
   DELEGATE_WITH_RET(palf_handle_, set_initial_member_list, int);
-  DELEGATE_WITH_RET(palf_handle_, set_paxos_member_region_map, int);
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] cost PalfAppendOptions&, decide this append option whether need block thread.
   // @param[in] const void *, the data buffer.
@@ -221,7 +220,6 @@ public:
   DELEGATE_WITH_RET(palf_handle_, remove_learner, int);
   DELEGATE_WITH_RET(palf_handle_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(palf_handle_, switch_acceptor_to_learner, int);
-  DELEGATE_WITH_RET(palf_handle_, set_region, int);
   DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
   DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);

@@ -531,6 +531,13 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
+  audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+  if (audit_record.pl_trace_id_.is_invalid() &&
+        result_set.is_pl_stmt(result_set.get_stmt_type()) &&
+        OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+    audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+  }
+  session.update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
 
   if (enable_perf_event) {
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
@@ -2115,38 +2122,6 @@ int ObInnerSQLConnection::end_nested_session(ObSQLSessionInfo::StmtSavedValue &s
     execute_end_timestamp_ = saved_conn.execute_end_timestamp_;
     saved_conn.reset();
   }
-  return ret;
-}
-
-int ObInnerSQLConnection::set_foreign_key_cascade(bool is_cascade)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_casecade(is_cascade));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_cascade(bool &is_cascade) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_cascade = extern_session_->is_foreign_key_cascade());
-  return ret;
-}
-
-int ObInnerSQLConnection::set_foreign_key_check_exist(bool is_check_exist)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_check_exist(is_check_exist));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_check_exist(bool &is_check_exist) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_check_exist = extern_session_->is_foreign_key_check_exist());
   return ret;
 }
 } // end of namespace observer

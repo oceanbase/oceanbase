@@ -18,6 +18,8 @@
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;
@@ -178,7 +180,8 @@ int ObRpcSessionHandler::destroy_session(int64_t sessid)
 
 int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
                                                ObRequest *&req,
-                                               const int64_t timeout)
+                                               const int64_t timeout,
+                                               const ObRpcReverseKeepaliveArg& reverse_keepalive_arg)
 {
   int ret = OB_SUCCESS;
   int hash_ret = 0;
@@ -208,6 +211,8 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
                  K(ret), K(sessid), K(thid), K(wait_object.thid_), K(ret));
       } else if (NULL == wait_object.req_) {
         int64_t timeout_ms = timeout / 1000;
+        int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
+        int64_t keepalive_timeout_us = abs_timeout_us - timeout + MAX_WAIT_TIMEOUT_MS * 1000;
         if (timeout_ms < DEFAULT_WAIT_TIMEOUT_MS) {
           timeout_ms = DEFAULT_WAIT_TIMEOUT_MS;
         } else {
@@ -215,7 +220,8 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
         }
 
         //Waking up by IO thread
-        while (timeout_ms > 0) {
+        int64_t current_time_us = 0;
+        while ((current_time_us = ObTimeUtility::current_time()) < abs_timeout_us) {
           // Here we don't care about result of wait because:
           //
           //   1. If it return success, it may be caused by spurious wakeup.
@@ -232,14 +238,22 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
             break;
           } else if (OB_ISNULL(wait_object.req_)) {
             LOG_DEBUG("the stream request hasn't come");
+            // when waiting for OB_REMOTE_EXECUTE/OB_REMOTE_SYNC_EXECUTE/OB_INNER_SQL_SYNC_TRANSMIT request more than 30s,
+            // try to send reverse keepalive request.
+            if (current_time_us >= keepalive_timeout_us
+                  && reverse_keepalive_arg.is_valid()
+                  && OB_FAIL(stream_rpc_reverse_probe(reverse_keepalive_arg))) {
+              LOG_WARN("stream rpc sender has been aborted, unneed to wait", K(sessid), K(timeout), K(reverse_keepalive_arg));
+              break;
+            }
           } else {
             req = wait_object.req_;
             break;
           }
-          timeout_ms -= DEFAULT_WAIT_TIMEOUT_MS;
+          timeout_ms = (abs_timeout_us - current_time_us) / 1000;
         }
 
-        if (timeout_ms <= 0) {
+        if (current_time_us >= abs_timeout_us) {
           // Stop or time out
           req = NULL;
           ret = OB_WAIT_NEXT_TIMEOUT; //WAIT_TIMEOUT;

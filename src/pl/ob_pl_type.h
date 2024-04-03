@@ -244,7 +244,8 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_()
+      type_info_(),
+      charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
     type_info_.set_tenant_id(MTL_ID());
   }
@@ -256,7 +257,8 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_()
+      type_info_(),
+      charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
     type_info_.set_tenant_id(MTL_ID());
   }
@@ -268,7 +270,8 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_()
+      type_info_(),
+      charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
     common::ObDataType data_type;
     data_type.set_obj_type(type);
@@ -282,7 +285,8 @@ public:
       obj_type_(other.obj_type_),
       user_type_id_(other.user_type_id_),
       not_null_(other.not_null_),
-      pls_type_(other.pls_type_)
+      pls_type_(other.pls_type_),
+      charsetnr_(other.charsetnr_)
   {
     type_info_.set_tenant_id(MTL_ID());
     type_info_ = other.type_info_;
@@ -300,6 +304,7 @@ public:
     not_null_ = false;
     pls_type_ = ObPLIntegerType::PL_INTEGER_INVALID;
     type_info_.reset();
+    charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
   }
 
   bool operator==(const ObPLDataType &other) const;
@@ -345,6 +350,10 @@ public:
   inline bool is_not_null() const { return not_null_; }
   inline bool get_not_null() const { return not_null_; }
   inline void set_not_null(bool not_null) { not_null_ = not_null; }
+
+  void set_charset(const ObCollationType charset) { charsetnr_ = charset; }
+  void reset_charset() { charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI; }
+  ObCollationType get_charset() const { return charsetnr_; }
 
   const common::ObIArray<common::ObString>& get_type_info() const { return type_info_; }
   int set_type_info(const common::ObIArray<common::ObString> &type_info);
@@ -614,6 +623,7 @@ protected:
     ObPLGenericType generic_type_;
   };
   common::ObArray<common::ObString> type_info_;
+  ObCollationType charsetnr_;
 };
 
 inline void ObPLDataType::set_pl_integer_type(ObPLIntegerType integer_type, const common::ObDataType &obj_type)
@@ -873,6 +883,7 @@ public:
     first_row_.reset();
     last_row_.reset();
     is_need_check_snapshot_ = false;
+    sql_trace_id_.reset();
     is_packed_ = false;
   }
 
@@ -1018,6 +1029,8 @@ public:
                           uint64_t tenant_id,
                           uint64_t mem_limit,
                           bool is_local_for_update = false);
+  ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
+
 
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }
@@ -1047,6 +1060,7 @@ public:
                K_(snapshot),
                K_(is_need_check_snapshot),
                K_(last_execute_time),
+               K_(sql_trace_id),
                K_(is_packed));
 
 protected:
@@ -1079,6 +1093,7 @@ protected:
   bool is_need_check_snapshot_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
+  ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
   bool is_packed_;
 };
 

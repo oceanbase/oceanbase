@@ -1087,11 +1087,14 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj obj;
+    ObField field;
     if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret), K(get_obj_type()));
     } else {
       obj = *(reinterpret_cast<ObObj *>(src));
       src += sizeof(ObObj);
+      field.accuracy_ = get_data_type()->get_accuracy();
+      field.flags_ = get_data_type()->is_zero_fill() ? ZEROFILL_FLAG : 0;
     }
     if (OB_SUCC(ret)
         && !obj.is_invalid_type() // deleted element not serialize.
@@ -1100,7 +1103,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to serialize pl data type, data type inconsistent with pl type",
                  K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
-      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, NULL, NULL))) {
+      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
       } else {
         LOG_DEBUG("success serialize pl data type", K(*this), K(obj),
@@ -2060,6 +2063,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     snapshot_ = src.snapshot_;
     is_need_check_snapshot_ = src.is_need_check_snapshot_;
     last_execute_time_ = src.last_execute_time_;
+    sql_trace_id_ = src.sql_trace_id_;
     //these should not be copied ..
     //    lib::MemoryContext entity_;
     //    ObIAllocator *allocator_;

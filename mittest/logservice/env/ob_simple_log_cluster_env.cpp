@@ -294,10 +294,10 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id,
         }
       }
       handle->set_location_cache_cb(loc_cb);
+      handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
       const ObMemberList &member_list = get_member_list();
       GlobalLearnerList learner_list;
       handle->set_initial_member_list(member_list, member_list.get_member_number(), learner_list);
-      handle->set_paxos_member_region_map(get_member_region_map());
       CLOG_LOG(INFO, "set_initial_member_list success", K(id), "addr", svr->get_addr(), K(member_list));
     }
     if (NULL != handle) {
@@ -422,7 +422,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
           }
         }
         handle->set_location_cache_cb(loc_cb);
-        handle->set_paxos_member_region_map(get_member_region_map());
+        handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
         CLOG_LOG(INFO, "set_initial_member_list success", K(member_list));
       }
       if (NULL == svr->get_palf_env()) {

@@ -1091,6 +1091,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
+    case T_FUN_SUM_OPNSIZE:
+      SET_SYMBOL_IF_EMPTY("sum_opnsize");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -3336,6 +3338,7 @@ do { \
   const share::schema::OBJECT *object_info = NULL; \
   ObSchemaChecker checker; \
   bool exist = false; \
+  bool is_private_syn = false; \
   if (OB_SYS_TENANT_ID == tenant_id) { \
   } else if (OB_FAIL(schema_guard_->get_object_info_func(tenant_id, object_id, object_info))) { \
     LOG_WARN("failed to get udt info", K(ret), KPC(expr), K(tenant_id)); \
@@ -3350,7 +3353,8 @@ do { \
   } else if (OB_FAIL(checker.check_exist_same_name_object_with_synonym(tenant_id, \
                                                                        database_schema->get_database_id(), \
                                                                        database_schema->get_database_name_str(), \
-                                                                       exist))) { \
+                                                                       exist, \
+                                                                       is_private_syn))) { \
     LOG_WARN("failed to check exist same name object with database name", K(ret), KPC(database_schema)); \
   } else if (!exist) { \
     PRINT_IDENT_WITH_QUOT(database_schema->get_database_name_str()); \

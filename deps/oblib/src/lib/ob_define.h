@@ -865,6 +865,7 @@ const char *const OB_ORA_CONNECT_ROLE_NAME = "CONNECT";
 const char *const OB_ORA_RESOURCE_ROLE_NAME = "RESOURCE";
 const char *const OB_ORA_DBA_ROLE_NAME = "DBA";
 const char *const OB_ORA_PUBLIC_ROLE_NAME = "PUBLIC";
+const char *const OB_ORA_STANDBY_REPLICATION_ROLE_NAME = "STANDBY_REPLICATION";
 const char *const OB_RESTORE_USER_NAME = "__oceanbase_inner_restore_user";
 const char *const OB_DRC_USER_NAME = "__oceanbase_inner_drc_user";
 const char *const OB_SYS_TENANT_NAME = "sys";
@@ -1141,6 +1142,7 @@ const uint64_t OB_ORA_RESOURCE_ROLE_ID = OB_MIN_INNER_USER_ID + 7;
 const uint64_t OB_ORA_DBA_ROLE_ID      = OB_MIN_INNER_USER_ID + 8;
 const uint64_t OB_ORA_PUBLIC_ROLE_ID   = OB_MIN_INNER_USER_ID + 9;
 const uint64_t OB_AUDIT_MOCK_USER_ID   = OB_MIN_INNER_USER_ID + 10;
+const uint64_t OB_ORA_STANDBY_REPLICATION_ROLE_ID = OB_MIN_INNER_USER_ID + 11;
 const char * const OB_PROXYRO_USERNAME = "proxyro";
 const uint64_t OB_MAX_INNER_USER_ID    = 201000;
 
@@ -1192,6 +1194,11 @@ OB_INLINE bool is_ora_dba_role(const uint64_t uid)
 OB_INLINE bool is_ora_public_role(const uint64_t uid)
 {
   return (uid == OB_ORA_PUBLIC_ROLE_ID);
+}
+
+OB_INLINE bool is_ora_standby_replication_role(const uint64_t uid)
+{
+  return (uid == OB_ORA_STANDBY_REPLICATION_ROLE_ID);
 }
 
 /*

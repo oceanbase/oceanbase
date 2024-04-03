@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX PL_CACHE
 #include "ob_pl_cache_object.h"
 #include "lib/oblog/ob_log_module.h"
+#include "pl/pl_cache/ob_pl_cache.h"
+#include "src/share/ob_truncated_string.h"
 
 namespace oceanbase
 {
@@ -109,6 +111,66 @@ int ObPLCacheObject::set_params_info(const ParamStore &params, bool is_anonymous
       }
     }
     param_info.reset();
+  }
+  return ret;
+}
+
+int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+  PLCacheObjStat &stat = get_stat_for_update();
+
+  stat.pl_schema_id_ = pc_ctx.key_.key_id_;
+  stat.gen_time_ = ObTimeUtility::current_time();
+  stat.last_active_time_ = ObTimeUtility::current_time();
+  stat.hit_count_ = 0;
+  stat.schema_version_ = get_tenant_schema_version();
+  MEMCPY(stat.sql_id_, pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
+
+  if (OB_SUCC(ret)) {
+    ObTruncatedString trunc_name_sql(stat.name_, OB_MAX_SQL_LENGTH);
+    if (OB_FAIL(ob_write_string(get_allocator(),
+                                trunc_name_sql.string(),
+                                stat.name_))) {
+      LOG_WARN("failed to write sql", K(ret));
+    } else {
+      stat.sql_cs_type_ = pc_ctx.session_info_->get_local_collation_connection();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (ObLibCacheNameSpace::NS_ANON == get_ns() ||
+        ObLibCacheNameSpace::NS_CALLSTMT == get_ns()) {
+      ObTruncatedString trunc_raw_sql(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
+      if (OB_FAIL(ob_write_string(get_allocator(),
+                                  trunc_raw_sql.string(),
+                                  stat.raw_sql_))) {
+        LOG_WARN("failed to write sql", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (ObLibCacheNameSpace::NS_ANON == get_ns() && OB_INVALID_ID != pc_ctx.key_.key_id_) {
+      stat.ps_stmt_id_ = pc_ctx.key_.key_id_;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // Update last_active_time_ last, because last_active_time_ is used to
+    // indicate whether the cache stat has been updated.
+    stat.last_active_time_ = ObTimeUtility::current_time();
+  }
+  return ret;
+}
+
+int ObPLCacheObject::update_execute_time(int64_t exec_time)
+{
+  int ret = OB_SUCCESS;
+  ATOMIC_STORE(&(stat_.elapsed_time_), exec_time);
+  ATOMIC_INC(&(stat_.execute_times_));
+  int64_t slowest_usec = ATOMIC_LOAD(&stat_.slowest_exec_usec_);
+  if (slowest_usec < exec_time) {
+    ATOMIC_STORE(&(stat_.slowest_exec_usec_), exec_time);
+    ATOMIC_STORE(&(stat_.slowest_exec_time_), ObClockGenerator::getClock());
   }
   return ret;
 }

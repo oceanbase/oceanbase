@@ -75,8 +75,9 @@ private:
     bool operator() (const logservice::TenantLSID &key, FetchStreamContainer *value)
     {
       UNUSED(key);
+      int64_t traffic = 0;
       if (NULL != value) {
-        value->do_stat();
+        value->do_stat(traffic);
       }
       return true;
     }
@@ -85,6 +86,13 @@ private:
   typedef common::ObLinearHashMap<logservice::TenantLSID, FetchStreamContainer*> FscMap;
   typedef common::ObSmallObjPool<FetchStreamContainer> FscPool;
   static const int64_t SVR_STREAM_POOL_BLOCK_SIZE = 1 << 22;
+
+  struct TenantStreamStatFunc
+  {
+    TenantStreamStatFunc() : total_traffic_(0) {}
+    bool operator() (const logservice::TenantLSID &key, FetchStreamContainer *value);
+    int64_t total_traffic_;
+  };
 
 private:
   bool is_inited_;

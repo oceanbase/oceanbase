@@ -188,15 +188,14 @@ int ObTabletCreateMdsHelper::on_replay(
     LOG_WARN("failed to convert_schemas", K(ret), "arg", PRETTY_ARG(arg));
   } else if (CLICK_FAIL(check_create_new_tablets(arg, true/*is_replay*/))) {
     LOG_WARN("failed to check create new tablets", K(ret));
-  }
+  } else {
+    if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
+      LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
+    }
 
-  if (OB_FAIL(ret)) {
-  } else if (CLICK_FAIL(replay_process(arg, scn, ctx))) {
-    LOG_WARN("fail to replay_process", K(ret), "arg", PRETTY_ARG(arg));
-  }
-
-  if (OB_FAIL(ret)) {
-    handle_ret_for_replay(ret);
+    if (OB_FAIL(ret)) {
+      handle_ret_for_replay(ret);
+    }
   }
 
   return ret;

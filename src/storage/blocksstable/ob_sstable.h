@@ -344,7 +344,11 @@ protected:
       const ObDatumRowkey &rowkey,
       ObTableAccessContext &access_context,
       ObStoreRowIterator *&iter);
-  int build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter);
+  int build_multi_exist_iterator(
+      const ObTableIterParam &iter_param,
+      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
+      ObTableAccessContext &access_context,
+      ObStoreRowIterator *&iter);
   int init_sstable_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;

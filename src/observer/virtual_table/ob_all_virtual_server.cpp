@@ -151,6 +151,9 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
         case DATA_DISK_ALLOCATED:
           cur_row_.cells_[i].set_int(data_disk_allocated);
           break;
+        case DATA_DISK_ASSIGNED:
+          cur_row_.cells_[i].set_null();
+          break;
         case DATA_DISK_HEALTH_STATUS:
           cur_row_.cells_[i].set_varchar(data_disk_health_status);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));

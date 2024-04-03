@@ -16,13 +16,16 @@
 
 #include "lib/oblog/ob_log.h"
 #include "rpc/obrpc/ob_rpc_session_handler.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
 ObRpcStreamCond::ObRpcStreamCond(ObRpcSessionHandler &handler)
-    : sessid_(0), handler_(handler)
+    : sessid_(0), handler_(handler),
+      first_pkt_id_(INVALID_RPC_PKT_ID), first_send_ts_(OB_INVALID_TIMESTAMP), src_addr_()
 {
 }
 
@@ -31,7 +34,7 @@ ObRpcStreamCond::~ObRpcStreamCond()
   destroy();
 }
 
-int ObRpcStreamCond::prepare()
+int ObRpcStreamCond::prepare(const ObAddr *src_addr, const ObRpcPacket *packet)
 {
   int ret = OB_SUCCESS;
   if (0 == sessid_) {
@@ -41,6 +44,10 @@ int ObRpcStreamCond::prepare()
 
     if (OB_FAIL(handler_.prepare_for_next_request(sessid_))) {
       LOG_WARN("preapre stream rpc fail", K(ret));
+    } else if (src_addr != NULL) {
+      src_addr_ = *src_addr;
+      first_pkt_id_ = packet->get_packet_id();
+      first_send_ts_ = packet->get_timestamp();
     }
   }
   return ret;
@@ -49,10 +56,11 @@ int ObRpcStreamCond::prepare()
 int ObRpcStreamCond::wait(ObRequest *&req, int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  ObRpcReverseKeepaliveArg reverse_keepalive_arg(src_addr_, first_send_ts_, first_pkt_id_);
   if (sessid_ <= 0) {
     LOG_WARN("sessid is invalied", K_(sessid));
   } else if (OB_FAIL(handler_.wait_for_next_request(
-                        sessid_, req, timeout))) {
+                        sessid_, req, timeout, reverse_keepalive_arg))) {
     LOG_WARN("wait for next request failed", K(ret), K_(sessid));
   } else {
     //do nothing

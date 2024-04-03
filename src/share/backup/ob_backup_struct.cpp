@@ -3034,7 +3034,8 @@ int ObBackupTaskStatus::set_status(const char *str)
 }
 
 OB_SERIALIZE_MEMBER(ObBackupStats, input_bytes_, output_bytes_, tablet_count_, finish_tablet_count_,
-    macro_block_count_, finish_macro_block_count_, extra_bytes_, finish_file_count_);
+    macro_block_count_, finish_macro_block_count_, extra_bytes_, finish_file_count_,
+    log_file_count_, finish_log_file_count_);
 
 ObBackupStats::ObBackupStats()
   : input_bytes_(0),
@@ -3044,7 +3045,9 @@ ObBackupStats::ObBackupStats()
     macro_block_count_(0),
     finish_macro_block_count_(0),
     extra_bytes_(0),
-    finish_file_count_(0)
+    finish_file_count_(0),
+    log_file_count_(0),
+    finish_log_file_count_(0)
 {
 }
 

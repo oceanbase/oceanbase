@@ -41,6 +41,7 @@
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
 #include "lib/allocator/ob_lf_fifo_allocator.h"     // ObConcurrentFIFOAllocator
 #include "ob_log_safe_arena.h"
+#include "ob_log_tic_update_info.h"                 // TICUpdateInfo
 
 namespace oceanbase
 {
@@ -1140,6 +1141,16 @@ public:
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
   ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
+  int push_tic_update_info(const TICUpdateInfo &tic_update_info);
+  void get_tic_update_info(ObArray<TICUpdateInfo> &tic_update_infos) const
+  {
+    tic_update_infos = tic_update_infos_;
+  }
+
+  bool need_update_table_id_cache() const
+  {
+    return !tic_update_infos_.empty();
+  }
   void set_unserved() { set_unserved_(); }
 
   TO_STRING_KV(
@@ -1315,6 +1326,8 @@ private:
   common::ObCond          *wait_formatted_cond_;
 
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
+
+  ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
 
   // allocator used to alloc:
   // LogEntryNode/RollbackNode

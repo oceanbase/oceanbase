@@ -6224,19 +6224,20 @@ int ObDbmsStats::init_gather_task_info(ObExecContext &ctx,
   return ret;
 }
 
-//} else if (OB_FAIL(schema->has_all_column_group(has_all_column_group))) {
-//    LOG_WARN("failed to check has row store", K(ret));
-//  } else if (OB_FALSE_IT(has_normal_column_group = schema->is_normal_column_store_table())) {
-
 int ObDbmsStats::init_column_group_stat_param(const share::schema::ObTableSchema &table_schema,
                                               ObIArray<ObColumnGroupStatParam> &column_group_params)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
   uint64_t data_version = 0;
+  bool is_column_store = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_3_0_0) {
+    //do nothing
+  } else if (OB_FAIL(table_schema.get_is_column_store(is_column_store))) {
+    LOG_WARN("failed to get is column store", K(ret));
+  } else if (!is_column_store) {
     //do nothing
   } else if (OB_FAIL(table_schema.get_store_column_groups(column_group_metas))) { // get cg metas without empty default cg
     LOG_WARN("failed to get column group metas", K(ret));

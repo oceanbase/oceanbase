@@ -64,9 +64,14 @@ int ObXAService::init(const ObAddr &self_addr,
     TRANS_LOG(ERROR, "xa trans relocate worker init error", KR(ret));
   } else if (OB_FAIL(xa_inner_table_gc_worker_.init(this))) {
     TRANS_LOG(WARN, "xa inner table gc worker init error", KR(ret));
+  } else if (OB_FAIL(xa_statistics_v2_.init(MTL_ID()))) {
+    TRANS_LOG(WARN, "xa statistics init error", KR(ret));
+  } else if (OB_FAIL(dblink_statistics_.init(MTL_ID()))) {
+    TRANS_LOG(WARN, "dblink statistics init error", KR(ret));
   } else {
     is_inited_ = true;
   }
+  TRANS_LOG(INFO, "xa service init", K(ret));
 
   return ret;
 }
@@ -85,6 +90,8 @@ void ObXAService::destroy()
     timer_.destroy();
     xa_rpc_.destroy();
     xa_proxy_.destroy();
+    xa_statistics_v2_.destroy();
+    dblink_statistics_.destroy();
     is_inited_ = false;
   }
   TRANS_LOG(INFO, "xa service destroy");
@@ -93,7 +100,7 @@ void ObXAService::destroy()
 int ObXAService::start()
 {
   int ret = OB_SUCCESS;
-  
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa service is not inited", K(ret));
@@ -111,6 +118,7 @@ int ObXAService::start()
   } else {
     is_running_ = true;
   }
+  TRANS_LOG(INFO, "xa service start", KR(ret));
 
   return ret;
 }
@@ -200,6 +208,11 @@ int ObXAService::remote_one_phase_xa_commit_(const ObXATransID &xid,
 
   if (OB_SUCC(ret)) {
     ret = result;
+  }
+
+  // for statistics
+  if (OB_SUCC(ret)) {
+    XA_STAT_ADD_XA_COMMIT_REMOTE_COUNT();
   }
 
   return ret;
@@ -302,7 +315,9 @@ int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   int64_t bqual_len = 0;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -329,7 +344,9 @@ int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
-    xa_statistics_.inc_cleanup_tx_count();
+    // xa_statistics_.inc_cleanup_tx_count();
+    // XA_INNER_INCREMENT_COMPENSATE_COUNT
+    xa_statistics_v2_.inc_compensate_record_count();
     TRANS_LOG(INFO, "execute insert record sql success", K(exec_tenant_id), K(tenant_id),
               K(sql), K(affected_rows));
   }
@@ -359,7 +376,9 @@ int ObXAService::insert_xa_lock(ObISQLClient &client,
 
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -476,7 +495,9 @@ int ObXAService::insert_xa_record(ObISQLClient &client,
 
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -534,7 +555,9 @@ int ObXAService::delete_xa_record(const uint64_t tenant_id,
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
 
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -602,7 +625,9 @@ int ObXAService::delete_xa_all_tightly_branch(const uint64_t tenant_id,
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
 
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -653,8 +678,10 @@ int ObXAService::delete_xa_branch(const uint64_t tenant_id,
   char bqual_str[128] = {0};
   int64_t bqual_len = 0;
   int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -750,7 +777,9 @@ int ObXAService::query_xa_scheduler_trans_id(const uint64_t tenant_id,
     int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
 
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+    const int64_t start_ts = ObTimeUtility::current_time();
+    THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+    ObXAInnerSqlStatGuard stat_guard(start_ts);
 
     if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
       ret = OB_INVALID_ARGUMENT;
@@ -1028,11 +1057,12 @@ int ObXAService::xa_start(const ObXATransID &xid,
     tx_desc->set_xa_start_addr(GCONF.self_addr_);
   }
   if (OB_FAIL(ret)) {
-    xa_statistics_.inc_failure_xa_start();
+    // xa_statistics_.inc_failure_xa_start();
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
-    xa_statistics_.inc_success_xa_start();
-    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id(), KPC(tx_desc));
+    // xa_statistics_.inc_success_xa_start();
+    TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds),
+        "tx_id", tx_desc->get_tx_id(), KPC(tx_desc));
   }
 
   return ret;
@@ -1063,8 +1093,17 @@ int ObXAService::xa_start_(const ObXATransID &xid,
   // step 1: if tightly coupled, insert lock record first.
   if (OB_FAIL(MTL(transaction::ObTransService *)->gen_trans_id(trans_id))) {
     TRANS_LOG(WARN, "gen trans id fail", K(ret), K(exec_tenant_id), K(xid));
-  } else if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
-    TRANS_LOG(WARN, "trans start failed", K(ret), K(exec_tenant_id), K(xid));
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
+    if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
+      TRANS_LOG(WARN, "trans start failed", K(ret), K(exec_tenant_id), K(xid));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else {
     if (is_tightly_coupled) {
       // tightly couple
@@ -1096,6 +1135,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
   }
   // step 2: if first xa start, alloc tx_desc
   if (OB_FAIL(ret)) {
+    ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
     (void)trans.end(false);
     TRANS_LOG(WARN, "insert or query xa lock record failed", K(ret), K(trans_id), K(xid));
   } else {
@@ -1128,8 +1168,11 @@ int ObXAService::xa_start_(const ObXATransID &xid,
     } else {
       TRANS_LOG(WARN, "insert xa trans into inner table error", K(ret), K(trans_id), K(xid));
     }
-    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-      TRANS_LOG(WARN, "rollback lock record failed", K(tmp_ret), K(xid));
+    { // for inner sql statistics guard
+      ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        TRANS_LOG(WARN, "rollback lock record failed", K(tmp_ret), K(xid));
+      }
     }
     if (is_first_xa_start) {
       if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
@@ -1163,8 +1206,13 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 
       if (OB_SUCC(ret)) {
         //commit record
-        if (OB_FAIL(trans.end(true))) {
-          TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+        { // for inner sql statistics guard
+          ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
+          if (OB_FAIL(trans.end(true))) {
+            TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+          }
+        }
+        if (OB_FAIL(ret)) {
           const bool need_decrease_ref = true;
           if (OB_SUCCESS != (tmp_ret = MTL(ObTransService*)->abort_tx(*tx_desc,
             ObTxAbortCause::IMPLICIT_ROLLBACK))) {
@@ -1173,11 +1221,16 @@ int ObXAService::xa_start_(const ObXATransID &xid,
           xa_ctx->try_exit(need_decrease_ref);
           xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
           tx_desc = NULL;
+        } else {
+          XA_STAT_ADD_XA_TRANS_START_COUNT();
         }
       } else {
         //rollback record
-        if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
-          TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
+        { // for inner sql statistics guard
+          ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
+          if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+            TRANS_LOG(WARN, "rollback inner table trans failed", K(tmp_ret), K(xid));
+          }
         }
         if (OB_NOT_NULL(xa_ctx)) {
           xa_ctx_mgr_.erase_xa_ctx(trans_id);
@@ -1196,8 +1249,14 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // tightly coupled mode, xa start noflags
       // this xa start is not the first for this xa trans
       // therefore the tx_id is from the inner table
-      if (OB_FAIL(trans.end(true))) {
-        TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+      { // for inner sql statistics guard
+        ObXAInnerSqlStatGuard stat_guard(ObTimeUtility::current_time());
+        if (OB_FAIL(trans.end(true))) {
+          TRANS_LOG(WARN, "commit inner table trans failed", K(ret), K(xid));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else {
         alloc = (GCTX.self_addr() == sche_addr) ? false : true;
         bool need_retry = false;
@@ -1485,7 +1544,7 @@ int ObXAService::xa_commit(const ObXATransID &xid,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t request_id = ObTimeUtility::current_time();
+  const int64_t start_ts = ObTimeUtility::current_time();
 
   if (OB_UNLIKELY(!xid.is_valid())
       || OB_UNLIKELY(!ObXAFlag::is_valid(flags, ObXAReqType::XA_COMMIT))
@@ -1497,21 +1556,22 @@ int ObXAService::xa_commit(const ObXATransID &xid,
     TRANS_LOG(WARN, "xa service not inited", K(ret), K(xid));
   } else {
     const int64_t timeout_us = xa_timeout_seconds * 1000000;
+    const int64_t request_id = start_ts;
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_COMMIT)) {
       if (OB_FAIL(two_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table,
               tx_id))) {
         TRANS_LOG(WARN, "two phase xa commit failed", K(ret), K(xid));
-        xa_statistics_.inc_failure_xa_2pc_commit();
+        // xa_statistics_.inc_failure_xa_2pc_commit();
       } else {
-        xa_statistics_.inc_success_xa_2pc_commit();
+        // xa_statistics_.inc_success_xa_2pc_commit();
       }
     } else if (ObXAFlag::is_tmonephase(flags)) {
       if (OB_FAIL(one_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table,
               tx_id))) {
         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
-        xa_statistics_.inc_failure_xa_1pc_commit();
+        // xa_statistics_.inc_failure_xa_1pc_commit();
       } else {
-        xa_statistics_.inc_success_xa_1pc_commit();
+        // xa_statistics_.inc_success_xa_1pc_commit();
       }
     } else {
       ret = OB_TRANS_XA_INVAL;
@@ -1600,6 +1660,8 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
       }
     }
   }
+  // for statistics
+  XA_STAT_ADD_XA_ONE_PHASE_COMMIT_TOTAL_COUNT();
 
   return ret;
 }
@@ -1666,7 +1728,7 @@ int ObXAService::xa_rollback(const ObXATransID &xid,
     }
   }
   TRANS_LOG(INFO, "xa rollback", K(ret), K(xid), K(xa_timeout_seconds));
-  xa_statistics_.inc_xa_rollback();
+  // xa_statistics_.inc_xa_rollback();
   return ret;
 }
 
@@ -1944,6 +2006,10 @@ int ObXAService::xa_rollback_remote_(const ObXATransID &xid,
     result = OB_TRANS_CTX_NOT_EXIST;
   }
   #endif
+  // for statistics
+  if (OB_SUCC(ret)) {
+    XA_STAT_ADD_XA_ROLLBACK_REMOTE_COUNT();
+  }
 
   return ret;
 }
@@ -2190,9 +2256,9 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
   }
 
   if (OB_FAIL(ret) && OB_TRANS_XA_RDONLY != ret) {
-    xa_statistics_.inc_failure_xa_prepare();
+    // xa_statistics_.inc_failure_xa_prepare();
   } else {
-    xa_statistics_.inc_success_xa_prepare();
+    // xa_statistics_.inc_success_xa_prepare();
   }
   return ret;
 }
@@ -2343,6 +2409,10 @@ int ObXAService::remote_xa_prepare_(const ObXATransID &xid,
       // and we expect that xa_rollback can deal with all cases
       ret = result;
     }
+  }
+  // for statistics
+  if (OB_SUCC(ret)) {
+    XA_STAT_ADD_XA_PREPARE_REMOTE_COUNT();
   }
 
   return ret;
@@ -2549,7 +2619,9 @@ int ObXAService::query_xa_coord_from_tableone(const uint64_t tenant_id,
     int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
 
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+    const int64_t start_ts = ObTimeUtility::current_time();
+    THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+    ObXAInnerSqlStatGuard stat_guard(start_ts);
 
     if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
       ret = OB_INVALID_ARGUMENT;
@@ -2642,7 +2714,9 @@ int ObXAService::query_sche_and_coord(const uint64_t tenant_id,
     int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
 
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+    const int64_t start_ts = ObTimeUtility::current_time();
+    THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+    ObXAInnerSqlStatGuard stat_guard(start_ts);
 
     if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
       ret = OB_INVALID_ARGUMENT;
@@ -2745,7 +2819,9 @@ int ObXAService::update_coord(const uint64_t tenant_id,
     mask = ObXAFlag::OBTEMPTABLE;
   }
 
-  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
+  const int64_t start_ts = ObTimeUtility::current_time();
+  THIS_WORKER.set_timeout_ts(start_ts + XA_INNER_TABLE_TIMEOUT);
+  ObXAInnerSqlStatGuard stat_guard(start_ts);
 
   if (!is_valid_tenant_id(tenant_id)
       || xid.empty()
@@ -2944,6 +3020,12 @@ void ObXACache::clean_prepare_cache_item(const ObXATransID &xid) {
 void ObXACache::clean_prepare_cache_item_(ObXACacheItem &item) {
   // should get lock in upper layer
   item.reset();
+}
+
+void ObXAService::try_print_statistics()
+{
+  xa_statistics_v2_.try_print_xa_statistics();
+  dblink_statistics_.try_print_dblink_statistics();
 }
 
 }//transaction

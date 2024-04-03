@@ -1288,7 +1288,8 @@ public:
       case T_OP_EQ: // fall through
       case T_OP_NSEQ: // fall through
       case T_OP_SQ_EQ: // fall through
-      case T_OP_SQ_NSEQ: {
+      case T_OP_SQ_NSEQ:
+      case T_OP_IN: {
         cmp_op = common::CO_EQ;
         break;
       }

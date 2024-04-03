@@ -68,6 +68,7 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
     const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
     const ObGlobalHint &global_hint = query_hint.get_global_hint();
     ObGlobalHint &global_hint_dblink = query_hint_dblink.get_global_hint();
+    global_hint_dblink.reset();
     global_hint_dblink.merge_query_timeout_hint(global_hint.query_timeout_);
     global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
     global_hint_dblink.merge_log_level_hint(global_hint.log_level_);

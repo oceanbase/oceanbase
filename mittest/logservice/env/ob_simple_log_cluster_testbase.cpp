@@ -29,7 +29,7 @@ namespace unittest
 std::vector<ObISimpleLogServer*> ObSimpleLogClusterTestBase::cluster_;
 bool ObSimpleLogClusterTestBase::is_started_ = false;
 common::ObMemberList ObSimpleLogClusterTestBase::member_list_ = ObMemberList();
-common::ObArrayHashMap<common::ObAddr, common::ObRegion> ObSimpleLogClusterTestBase::member_region_map_;
+common::hash::ObHashMap<common::ObAddr, common::ObRegion> ObSimpleLogClusterTestBase::member_region_map_;
 common::ObMemberList ObSimpleLogClusterTestBase::node_list_ = ObMemberList();
 int64_t ObSimpleLogClusterTestBase::node_idx_base_ = 1002;
 char ObSimpleLogClusterTestBase::sig_buf_[sizeof(ObSignalWorker) + sizeof(observer::ObSignalHandle)];
@@ -77,7 +77,8 @@ int ObSimpleLogClusterTestBase::start()
     SERVER_LOG(ERROR, "Start signal worker error", K(ret));
   } else if (signal_handle_ != nullptr && OB_FAIL(signal_handle_->start())) {
     SERVER_LOG(ERROR, "Start signal handle error", K(ret));
-  } else if (OB_FAIL(member_region_map_.init("TestBase", OB_MAX_MEMBER_NUMBER))) {
+  } else if (OB_FAIL(member_region_map_.create(OB_MAX_MEMBER_NUMBER,
+      ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE, ObCtxIds::DEFAULT_CTX_ID)))) {
   } else if (OB_FAIL(generate_sorted_server_list_(node_cnt_))) {
   } else {
     // 如果需要新增arb server，将其作为memberlist最后一项
@@ -93,7 +94,7 @@ int ObSimpleLogClusterTestBase::start()
       }
       common::ObAddr server;
       if (OB_FAIL(node_list_.get_server_by_index(i, server))) {
-      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id, true))) {
+      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id, &member_region_map_, true))) {
         SERVER_LOG(WARN, "simple_init failed", K(ret), K(i), K_(node_list));
       } else if (OB_FAIL(svr->simple_start(true))) {
         SERVER_LOG(WARN, "simple_start failed", K(ret), K(i), K_(node_list));
@@ -104,7 +105,7 @@ int ObSimpleLogClusterTestBase::start()
       if (i < ObSimpleLogClusterTestBase::member_cnt_ && OB_SUCC(ret)) {
         common::ObMember member;
         if (OB_FAIL(member_list_.add_member(ObMember(server, 1)))) {
-        } else if (OB_FAIL(member_region_map_.insert(server, DEFAULT_REGION_NAME))) {
+        } else if (OB_FAIL(member_region_map_.set_refactored(server, DEFAULT_REGION_NAME))) {
           SERVER_LOG(WARN, "member_region_map_.insert failed", K(ret), K(server), K_(node_list));
         }
       }

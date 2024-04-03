@@ -821,7 +821,11 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
       }
 
       if (OB_SUCC(ret)) {
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(read_size);
+        // left_brs.size_ may be larger or smaller than read_size:
+        //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
+        //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
+        // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
+        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
         const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
         const_cast<ObBatchRows *>(left_brs)->end_ = false;
         left_row_joined_ = false;
@@ -847,7 +851,11 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
           LOG_WARN("get next batch from store failed", KR(ret));
         }
       } else {
-        const_cast<ObBatchRows *>(left_brs)->skip_->reset(read_size);
+        // left_brs.size_ may be larger or smaller than read_size:
+        //   left_brs.size_ > read_size: group size is small and lots of left rows were skipped;
+        //   left_brs.size_ < read_size: left_brs reaches iter end with no enough rows;
+        // Thus, we need to reset skip_ with max size of left_brs.size_ and read_size.
+        const_cast<ObBatchRows *>(left_brs)->skip_->reset(std::max(left_brs->size_, read_size));
         const_cast<ObBatchRows *>(left_brs)->size_ = read_size;
         const_cast<ObBatchRows *>(left_brs)->end_ = false;
         left_row_joined_ = false;

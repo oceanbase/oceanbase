@@ -373,6 +373,12 @@ public:
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE <= type
         && ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_FINISH >= type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MEDIUM_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_TX_TABLE_MERGE == type) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_TX_TABLE_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE == type) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINI_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_BATCH_FREEZE_TABLETS) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_FREEZE;
     }
     return diagnose_type;
   }

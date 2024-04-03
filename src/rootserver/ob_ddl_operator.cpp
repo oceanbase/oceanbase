@@ -93,6 +93,33 @@ using namespace storage;
 namespace rootserver
 {
 
+#define GRANT_OBJ_PRIV_TO_USER(db_name, table_name, table_id, obj_type, priv)                                              \
+{                                                                                                                          \
+  if (OB_SUCC(ret)) {                                                                                                      \
+    ObTablePrivSortKey table_priv_key;                                                                                     \
+    table_priv_key.tenant_id_ = tenant_id;                                                                                 \
+    table_priv_key.user_id_ = grantee_id;                                                                                  \
+    table_priv_key.db_ = ObString(#db_name);                                                                               \
+    table_priv_key.table_ = ObString(#table_name);                                                                         \
+    ObPrivSet priv_set;                                                                                                    \
+    priv_set = OB_PRIV_##priv;                                                                                             \
+    ObObjPrivSortKey obj_priv_key;                                                                                         \
+    obj_priv_key.tenant_id_ = tenant_id;                                                                                   \
+    obj_priv_key.obj_id_ = table_id;                                                                                       \
+    obj_priv_key.obj_type_ = static_cast<uint64_t>(obj_type);                                                              \
+    obj_priv_key.col_id_ = OB_COMPACT_COLUMN_INVALID_ID;                                                                   \
+    obj_priv_key.grantor_id_ = OB_ORA_SYS_USER_ID;                                                                         \
+    obj_priv_key.grantee_id_ = grantee_id;                                                                                 \
+    share::ObRawObjPrivArray priv_array;                                                                                   \
+    if (OB_FAIL(priv_array.push_back(OBJ_PRIV_ID_##priv))) {                                                               \
+      LOG_WARN("priv array push back failed", K(ret));                                                                     \
+    } else if (OB_FAIL(this->grant_table(table_priv_key, priv_set, NULL, trans,                                             \
+        priv_array, 0, obj_priv_key))){                                                                                     \
+      LOG_WARN("fail to grant table", K(ret), K(table_priv_key), K(priv_set), K(priv_array), K(obj_priv_key));             \
+    }                                                                                                                      \
+  }                                                                                                                        \
+}
+
 ObSysStat::Item::Item(ObSysStat::ItemList &list, const char *name, const char *info)
   : name_(name), info_(info)
 {
@@ -1497,6 +1524,9 @@ int ObDDLOperator::get_user_id_for_inner_ur(ObUserInfo &user,
       is_inner_ur = true;
     } else if (STRCMP(ur_name, OB_ORA_PUBLIC_ROLE_NAME) == 0) {
       new_user_id = OB_ORA_PUBLIC_ROLE_ID;
+      is_inner_ur = true;
+    } else if (STRCMP(ur_name, OB_ORA_STANDBY_REPLICATION_ROLE_NAME) == 0) {
+      new_user_id = OB_ORA_STANDBY_REPLICATION_ROLE_ID;
       is_inner_ur = true;
     }
   }
@@ -5719,7 +5749,7 @@ int ObDDLOperator::build_raw_priv_info_inner_user(
     OZ (raw_priv_array.push_back(PRIV_ID_CREATE_TRIG));
     OZ (raw_priv_array.push_back(PRIV_ID_CREATE_PROC));
     OZ (raw_priv_array.push_back(PRIV_ID_CREATE_SEQ));
-  } else if (is_ora_connect_role(grantee_id)) {
+  } else if (is_ora_connect_role(grantee_id) || is_ora_standby_replication_role(grantee_id)) {
     option = NO_OPTION;
     OZ (raw_priv_array.push_back(PRIV_ID_CREATE_SESSION));
   } else if (is_ora_public_role(grantee_id)) {
@@ -5761,6 +5791,16 @@ int ObDDLOperator::init_inner_user_privs(
                                                                     true /*is_grant*/,
                                                                     false),
         tenant_id, grantee_id, ADMIN_OPTION, raw_priv_array);
+    if (is_ora_standby_replication_role(user.get_user_id())) {
+      // #define GRANT_OBJ_PRIV_TO_USER(db_name, table_name, table_id, obj_type, priv)
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_TENANTS_ORA_TNAME, OB_DBA_OB_TENANTS_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_ACCESS_POINT_ORA_TNAME, OB_DBA_OB_ACCESS_POINT_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_ORA_TNAME, OB_DBA_OB_LS_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_HISTORY_ORA_TNAME, OB_DBA_OB_LS_HISTORY_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_PARAMETERS_ORA_TNAME, OB_GV_OB_PARAMETERS_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_LOG_STAT_ORA_TNAME, OB_GV_OB_LOG_STAT_ORA_TID, ObObjectType::TABLE, SELECT);
+      GRANT_OBJ_PRIV_TO_USER(OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_UNITS_ORA_TNAME, OB_GV_OB_UNITS_ORA_TID, ObObjectType::TABLE, SELECT);
+    }
   }
   return ret;
 }
@@ -5846,6 +5886,7 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
   ObString ora_resource_role_name(OB_ORA_RESOURCE_ROLE_NAME);
   ObString ora_dba_role_name(OB_ORA_DBA_ROLE_NAME);
   ObString ora_public_role_name(OB_ORA_PUBLIC_ROLE_NAME);
+  ObString ora_standby_replication_role_name(OB_ORA_STANDBY_REPLICATION_ROLE_NAME);
   ObString sys_standby_name(OB_STANDBY_USER_NAME);
   char ora_lbacsys_password[ENCRYPT_KEY_LENGTH];
   char ora_auditor_password[ENCRYPT_KEY_LENGTH];
@@ -5881,6 +5922,9 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
     } else if (OB_FAIL(init_tenant_user(tenant_id, ora_public_role_name, ObString(""),
          OB_ORA_PUBLIC_ROLE_ID, "oracle public role", trans, false, false, true))) {
       RS_LOG(WARN, "fail to init oracle public role", K(ret), K(tenant_id));
+    } else if (OB_FAIL(init_tenant_user(tenant_id, ora_standby_replication_role_name, ObString(""),
+         OB_ORA_STANDBY_REPLICATION_ROLE_ID, "oracle standby replication role", trans, false, false, true))) {
+      RS_LOG(WARN, "fail to init oracle standby replication role", K(ret), K(tenant_id));
     }
   } else {
     if (OB_FAIL(init_tenant_user(tenant_id, sys_user_name, ObString(""), OB_SYS_USER_ID,

@@ -762,7 +762,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_JSON_OBJECTAGG:
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_ORA_JSON_OBJECTAGG:
-      case T_FUN_ORA_XMLAGG: {
+      case T_FUN_ORA_XMLAGG:
+      case T_FUN_SUM_OPNSIZE:{
 
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
@@ -2240,7 +2241,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
             OZ (process_fun_sys_node(&func_node, func_expr));
           }
           CK (OB_NOT_NULL(func_expr));
-          OX (access_ident.sys_func_expr_ = static_cast<ObSysFunRawExpr *>(func_expr));
+          OX (access_ident.sys_func_expr_ = func_expr);
           for (int64_t i = 0; OB_SUCC(ret) && i < func_expr->get_param_count(); ++i) {
             std::pair<ObRawExpr*, int64_t> param(func_expr->get_param_expr(i), 0);
             OZ (access_ident.params_.push_back(param));

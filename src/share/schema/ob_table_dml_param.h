@@ -114,6 +114,9 @@ private:
   storage::ObTableReadInfo read_info_;
   storage::ObFixedMetaObjArray<storage::ObTableReadInfo *> cg_read_infos_;
   int64_t lob_inrow_threshold_;
+  uint64_t multivalue_col_id_;
+  uint64_t multivalue_arr_col_id_;
+  int64_t data_table_rowkey_column_num_;
 };
 
 class ObTableDMLParam

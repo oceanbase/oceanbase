@@ -59,6 +59,26 @@ bool OBGroupIOInfo::is_valid() const
   return min_percent_ >= 0 && max_percent_ >= min_percent_ && max_percent_ <= 100 && weight_percent_ >= 0 && weight_percent_ <= 100;
 }
 
+bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
+{
+  bool bool_ret = true;
+  const char *group_name_ptr = group_name.ptr();
+  if (group_name.length() < 0 || group_name.length() > GROUP_NAME_BUFSIZE) {
+    bool_ret = false;
+  } else {
+    for(int i = 0; i < group_name.length() && bool_ret; i++) {
+      // only support [a-zA-Z0-9_]
+      if (!((group_name_ptr[i] >= 'a' && group_name_ptr[i] <= 'z') ||
+            (group_name_ptr[i] >= 'A' && group_name_ptr[i] <= 'Z') ||
+            (group_name_ptr[i] >= '0' && group_name_ptr[i] <= '9') ||
+            (group_name_ptr[i] == '_'))) {
+        bool_ret = false;
+      }
+    }
+  }
+  return bool_ret;
+}
+
 // 创建cgroup初始目录结构，将所有线程加入other组
 int ObCgroupCtrl::init()
 {

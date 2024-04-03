@@ -93,6 +93,7 @@ int ObUpgradeExecutor::init(
     share::schema::ObMultiVersionSchemaService &schema_service,
     rootserver::ObRootInspection &root_inspection,
     common::ObMySQLProxy &sql_proxy,
+    common::ObOracleSqlProxy &oracle_sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     obrpc::ObCommonRpcProxy &common_proxy)
 {
@@ -102,12 +103,13 @@ int ObUpgradeExecutor::init(
     LOG_WARN("can't init twice", KR(ret));
   } else if (OB_FAIL(upgrade_processors_.init(
                      ObBaseUpgradeProcessor::UPGRADE_MODE_OB,
-                     sql_proxy, rpc_proxy, common_proxy, schema_service, *this))) {
+                     sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, schema_service, *this))) {
     LOG_WARN("fail to init upgrade processors", KR(ret));
   } else {
     schema_service_ = &schema_service;
     root_inspection_ = &root_inspection;
     sql_proxy_ = &sql_proxy;
+    oralce_sql_proxy_ = &oracle_sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     common_rpc_proxy_ = &common_proxy;
     stopped_ = false;

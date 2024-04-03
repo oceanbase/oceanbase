@@ -630,8 +630,7 @@ int ObIntegerBaseDiffDecoder::bt_operator(
         || ObIntSC == get_store_class_map()[col_ctx.obj_meta_.get_type_class()]) {
     if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data,
                 filter, pd_filter_info, result_bitmap,
-                [](const ObObjMeta &obj_meta,
-                   const ObDatum &cur_datum,
+                [](const ObDatum &cur_datum,
                    const sql::ObWhiteFilterExecutor &filter,
                    bool &result) -> int {
                   int ret = OB_SUCCESS;
@@ -672,16 +671,12 @@ int ObIntegerBaseDiffDecoder::in_operator(
         K(ret), K(col_ctx), K(pd_filter_info), K(result_bitmap.size()), K(filter));
   } else if (OB_FAIL(traverse_all_data(parent, col_ctx, col_data,
                       filter, pd_filter_info, result_bitmap,
-                      [](const ObObjMeta &obj_meta,
-                         const ObDatum &cur_datum,
+                      [](const ObDatum &cur_datum,
                          const sql::ObWhiteFilterExecutor &filter,
                          bool &result) -> int {
                         int ret = OB_SUCCESS;
-                        ObObj cur_obj;
-                        if (OB_FAIL(cur_datum.to_obj(cur_obj, obj_meta))) {
-                          LOG_WARN("convert datum to obj failed", K(ret), K(cur_datum), K(obj_meta));
-                        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-                          LOG_WARN("Failed to check object in hashset", K(ret), K(cur_obj));
+                        if (OB_FAIL(filter.exist_in_datum_set(cur_datum, result))) {
+                          LOG_WARN("Failed to check datum in hashset", K(ret), K(cur_datum));
                         }
                         return ret;
                       }))) {
@@ -698,7 +693,6 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
     const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap,
     int (*lambda)(
-        const ObObjMeta &obj_meta,
         const ObDatum &cur_datum,
         const sql::ObWhiteFilterExecutor &filter,
         bool &result)) const
@@ -748,7 +742,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         cur_datum.ptr_ = reinterpret_cast<char *> (&cur_int);
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(col_ctx.obj_meta_, cur_datum, filter, result))) {
+        if (OB_FAIL(lambda(cur_datum, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(offset))) {

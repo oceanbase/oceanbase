@@ -1049,10 +1049,18 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
 
         } break;
         case PL_TRACE_ID: {
-          cells[cell_idx].set_null();
+          const ObCurTraceId::TraceId &pl_trace_id = record.data_.pl_trace_id_;
+          if (pl_trace_id.is_invalid()) {
+            cells[cell_idx].set_null();
+          } else {
+            int64_t len = pl_trace_id.to_string(pl_trace_id_, sizeof(pl_trace_id_));
+            cells[cell_idx].set_varchar(pl_trace_id_, len);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                ObCharset::get_default_charset()));
+          }
         } break;
         case PLSQL_EXEC_TIME: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
         case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_null();

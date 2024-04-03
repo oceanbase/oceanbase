@@ -49,8 +49,9 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/access/ob_row_sample_iterator.h"
-
 #include "storage/concurrency_control/ob_trans_stat_row.h"
+
+#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {
@@ -123,7 +124,6 @@ ObMemtable::ObMemtable()
       freeze_scn_(SCN::max_scn()),
       max_end_scn_(ObScnRange::MIN_SCN),
       rec_scn_(SCN::max_scn()),
-      state_(ObMemtableState::INVALID),
       freeze_state_(ObMemtableFreezeState::INVALID),
       timestamp_(0),
       is_tablet_freeze_(false),
@@ -193,7 +193,6 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     } else {
       mode_ = MTL(lib::Worker::CompatMode);
     }
-    state_ = ObMemtableState::ACTIVE;
     freeze_state_ = ObMemtableFreezeState::NOT_READY_FOR_FLUSH;
     timestamp_ = ObTimeUtility::current_time();
     is_inited_ = true;
@@ -261,7 +260,6 @@ void ObMemtable::destroy()
   max_data_schema_version_ = 0;
   max_column_cnt_ = 0;
   mt_stat_.reset();
-  state_ = ObMemtableState::INVALID;
   freeze_state_ = ObMemtableFreezeState::INVALID;
   unsubmitted_cnt_ = 0;
   logging_blocked_ = false;
@@ -294,6 +292,64 @@ int ObMemtable::safe_to_destroy(bool &is_safe)
   is_safe = (0 == ref_cnt && 0 == write_ref_cnt);
   if (is_safe) {
     is_safe = (0 == unsubmitted_cnt);
+  }
+
+  if (is_safe) {
+    // In scenarios where the memtable is forcefully remove (such as when the
+    // table is dropped or the ls goes offline), relying solely on the
+    // previously mentioned conditions(write_ref and unsubmitted_cnt) cannot
+    // guarantee that all the data on the memtable has been synced. This can
+    // lead to the memtable being destroyed prematurely, which in turn can cause
+    // later txns to encounter the coredump when trying to access data from the
+    // destroyed memtable. Therefore, we need to ensure that all data has indeed
+    // been synced before the memtable is safe to destroy. The solutions to
+    // the problem can be unified into the following two scenarios:
+    // 1. If the ls hasnot gone offline:
+    //   In this case, we can rely on max decided scn to ensure that all data on
+    //   the memtable has been synced.
+    // 2. If the ls has gone offline:
+    //   In this case, the ls cannot provide a decided scn. Therefore, we rely
+    //   on the apply status of apply service to decide whether all data have
+    //   been synced.
+    share::SCN max_decided_scn = share::ObScnRange::MIN_SCN;
+    if (!is_inited_) {
+      is_safe = true;
+      TRANS_LOG(INFO, "memtable is not inited and safe to destroy", KPC(this));
+    } else if (OB_FAIL(ls_handle_.get_ls()->get_max_decided_scn(max_decided_scn))) {
+      TRANS_LOG(WARN, "fail to get max decided scn", K(ret), K(max_decided_scn));
+      is_safe = false;
+    } else {
+      is_safe = max_decided_scn >= get_max_end_scn();
+    }
+
+    // STATE_NOT_MATCH means ls is offlined and we need replies on the apply
+    // service to guarantee all logs have been applied
+    if (!is_safe && ret == OB_STATE_NOT_MATCH) {
+      ret = OB_SUCCESS;
+      bool is_done = false;
+      share::LSN end_lsn;
+      if (OB_FAIL(MTL(logservice::ObLogService*)->get_log_apply_service()->
+                  is_apply_done(ls_handle_.get_ls()->get_ls_id(),
+                                is_done,
+                                end_lsn))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          is_safe = true;
+          TRANS_LOG(INFO, "apply is decided after ls removed when safe to destroy",
+                    K(ret), K(end_lsn), K(is_done));
+        } else {
+          TRANS_LOG(WARN, "fail to is_apply_done", K(ret), K(max_decided_scn));
+        }
+      } else {
+        TRANS_LOG(INFO, "apply is decided after ls offlined when safe to destroy",
+                  K(ret), K(end_lsn), K(is_done));
+        if (is_done) {
+          is_safe = true;
+        } else {
+          is_safe = false;
+        }
+      }
+    }
   }
 
   return ret;
@@ -2417,10 +2473,6 @@ bool ObMemtable::is_active_memtable() const
 
 bool ObMemtable::is_frozen_memtable() const
 {
-  // return ObMemtableState::MAJOR_FROZEN == state_
-  //     || ObMemtableState::MAJOR_MERGING == state_
-  //     || ObMemtableState::MINOR_FROZEN == state_
-  //     || ObMemtableState::MINOR_MERGING == state_;
   // Note (yanyuan.cxf) log_frozen_memstore_info() will use this func after local_allocator_ init
   // Now freezer_ and ls_ will not be released before memtable
   const uint32_t logstream_freeze_clock = OB_NOT_NULL(freezer_) ? freezer_->get_freeze_clock() : 0;

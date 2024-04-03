@@ -349,7 +349,7 @@ TEST_F(TestPushdownAggregate, test_init_group_by_cell)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   ObIArray<ObAggCell*> &agg_cell = group_by_cell.get_agg_cells();
   ASSERT_EQ(4, group_by_cell.get_agg_cells().count());
@@ -423,7 +423,7 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by1)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   int64_t row_count = 100;
   int64_t distinct_count = 10;
@@ -508,7 +508,7 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
 
   int64_t row_count = 1000;
   int64_t distinct_count = 10;
@@ -597,7 +597,7 @@ TEST_F(TestPushdownAggregate, test_eval_batch)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   const int64_t distinct_cnt = 2;
@@ -703,7 +703,7 @@ TEST_F(TestPushdownAggregate, test_eval_batch_with_null)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   const int64_t distinct_cnt = 2;
@@ -813,7 +813,7 @@ TEST_F(TestPushdownAggregate, test_copy_output_rows)
   access_param_.iter_param_.group_by_cols_project_ = &group_by_cols_project_;
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
 
   ObDatum *col_datums = output_exprs_.at(1)->locate_batch_datums(eval_ctx_);

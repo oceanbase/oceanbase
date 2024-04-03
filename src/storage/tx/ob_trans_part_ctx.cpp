@@ -43,6 +43,7 @@
 #undef NEED_MDS_REGISTER_DEFINE
 #include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
 #include "storage/tx/ob_ctx_tx_data.h"
+#include "logservice/ob_log_service.h"
 
 namespace oceanbase {
 
@@ -3043,7 +3044,7 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
           TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
           return_log_cb_(log_cb);
           log_cb = NULL;
-        } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+        } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
           TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -3218,7 +3219,7 @@ int ObPartTransCtx::submit_prepare_log_()
           TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
           return_log_cb_(log_cb);
           log_cb = NULL;
-        } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+        } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
           TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -3272,7 +3273,7 @@ int ObPartTransCtx::submit_prepare_log_()
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
       return_log_cb_(log_cb);
       log_cb = NULL;
-    } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+    } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
       TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -3446,7 +3447,7 @@ int ObPartTransCtx::submit_commit_log_()
           TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
           return_log_cb_(log_cb);
           log_cb = NULL;
-        } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+        } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
           TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -3525,7 +3526,7 @@ int ObPartTransCtx::submit_commit_log_()
       if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
         TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
       }
-    } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+    } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
       TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -4989,7 +4990,7 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
   // some branch savepoint also need this, but we can't distinguish
   // hence only sanity check for global savepoint
   //
-  else if (is_tx_log_queue) {
+  else if (is_tx_log_queue) { // global savepoint or branch level savepoint in txn-log queue
     if (is_parallel_logging()             // has enter parallel logging
         && to.get_branch() == 0           // is a global savepoint
         && timestamp > exec_info_.serial_final_scn_  // it is after the serial final log
@@ -5005,13 +5006,61 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
     } else if (OB_FAIL((update_replaying_log_no_(timestamp, part_log_no)))) {
       TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
     }
-  } else if (exec_info_.need_checksum_ && !has_replay_serial_final_()) {
-    ret = OB_EAGAIN;
-    TRANS_LOG(INFO, "branch savepoint should wait replay serial final because of calc checksum",
-              K(ret), K(timestamp), KP(this), K(trans_id_), K(ls_id_), K(exec_info_));
-  } else if (!ctx_tx_data_.get_start_log_ts().is_valid() && OB_FAIL(ctx_tx_data_.set_start_log_ts(timestamp))) {
-    // update start_log_ts for branch savepoint, because it may replayed before first log in txn queue
-    TRANS_LOG(WARN, "set tx data start log ts fail", K(ret), K(timestamp), KPC(this));
+  } else { // branch level savepoint, parallel replayed
+    if (exec_info_.need_checksum_ && !has_replay_serial_final_()) {
+      if (OB_UNLIKELY(pre_barrier || replay_completeness_.is_incomplete())) {
+        // sanity check, if current is pre-barrier, then
+        // either serial final log must been replayed
+        // or the txn must been marked not `need_checksum`
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "replay branch savepoint hit bug", K(ret), KP(this),
+                  K(from), K(to), K(pre_barrier), K_(trans_id), K_(ls_id), K_(replay_completeness), K_(exec_info));
+      } else if (replay_completeness_.is_complete()) {
+        ret = OB_EAGAIN;
+        if (TC_REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(INFO, "branch savepoint should wait replay serial final because of calc checksum",
+                    K(ret), K(from), K(to), K(timestamp), KP(this), K_(trans_id), K_(ls_id), K_(exec_info));
+        }
+      } else if (replay_completeness_.is_unknown()) {
+        // try to fetch the replay position of replay-queue of txn-log
+        // to determin whether previouse txn log has been replayed or won't be replayed
+        // if so, can decide that the current txn was replayed from middle, and mark it
+        // replay incomplete
+        share::SCN min_unreplayed_scn;
+        logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+        if (OB_ISNULL(log_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "tenant logservice is null", K(ret), K(timestamp), K_(trans_id));
+        } else if (OB_FAIL(log_service->get_log_replay_service()->get_min_unreplayed_scn(ls_id_, min_unreplayed_scn))) {
+          TRANS_LOG(WARN, "get min unreplayed scn fail", K(ret), K(timestamp), K_(trans_id));
+        } else if (min_unreplayed_scn == timestamp) {
+          // all previous log replayed
+          // the txn must not replay from its first log, aka. incomplete-replay
+          TRANS_LOG(INFO, "detect txn replayed from middle", K(ret), K(timestamp), K_(trans_id), K_(ls_id), K_(exec_info));
+          set_replay_completeness_(false);
+          ret = OB_SUCCESS;
+        } else if (min_unreplayed_scn > timestamp) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "incorrect min unreplayed scn", K(ret), K(timestamp), K(min_unreplayed_scn), K_(trans_id));
+        } else {
+          ret = OB_EAGAIN;
+          if (TC_REACH_TIME_INTERVAL(1_s)) {
+            TRANS_LOG(INFO, "branch savepoint should wait replay serial final because of calc checksum",
+                      K(ret), K(from), K(to), K(timestamp), K(min_unreplayed_scn), KP(this), K_(trans_id), K_(ls_id), K_(exec_info));
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "code should not go here", K(ret), K(timestamp), K_(trans_id), KPC(this));
+        ob_abort();
+      }
+    }
+    if (OB_SUCC(ret) &&
+        !ctx_tx_data_.get_start_log_ts().is_valid() &&
+        OB_FAIL(ctx_tx_data_.set_start_log_ts(timestamp))) {
+      // update start_log_ts for branch savepoint, because it may replayed before first log in txn queue
+      TRANS_LOG(WARN, "set tx data start log ts fail", K(ret), K(timestamp), KPC(this));
+    }
   }
 
   //
@@ -7296,7 +7345,7 @@ int ObPartTransCtx::submit_pending_log_block_(ObTxLogBlock &log_block,
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
       return_log_cb_(log_cb);
       log_cb = NULL;
-    } else if (log_cb->reserve_callbacks(helper.callbacks_.count())) {
+    } else if (OB_FAIL(log_cb->reserve_callbacks(helper.callbacks_.count()))) {
       TRANS_LOG(WARN, "resolve callbacks failed", K(ret), KPC(this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -9783,6 +9832,11 @@ inline bool ObPartTransCtx::has_replay_serial_final_() const
 {
   return exec_info_.serial_final_scn_.is_valid() &&
     exec_info_.max_applied_log_ts_ >= exec_info_.serial_final_scn_;
+}
+
+int ObPartTransCtx::set_replay_incomplete() {
+  CtxLockGuard guard(lock_);
+  return set_replay_completeness_(false);
 }
 
 int ObPartTransCtx::set_replay_completeness_(const bool complete)

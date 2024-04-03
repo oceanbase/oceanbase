@@ -76,6 +76,14 @@ public:
                      palf::LSN &lsn,
                      share::SCN &scn) = 0;
 
+  virtual int append_big_log(const void *buffer,
+                             const int64_t nbytes,
+                             const share::SCN &ref_scn,
+                             const bool need_nonblock,
+                             AppendCb *cb,
+                             palf::LSN &lsn,
+                             share::SCN &scn) = 0;
+
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const = 0;
 
   virtual int change_access_mode(const int64_t mode_version,
@@ -95,7 +103,6 @@ public:
                                       const int64_t paxos_replica_num,
                                       const common::GlobalLearnerList &learner_list) = 0;
 #endif
-  virtual int set_region(const common::ObRegion &region) = 0;
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
 
@@ -227,6 +234,27 @@ public:
              palf::LSN &lsn,
              share::SCN &scn) override final;
 
+  // @brief append count bytes(which is bigger than MAX_NORMAL_LOG_BODY_SIZE) from the buffer starting at buf to the palf handle, return the LSN and timestamp
+  // @param[in] const void *, the data buffer.
+  // @param[in] const uint64_t, the length of data buffer.
+  // @param[in] const int64_t, the base timestamp(ns), palf will ensure that the return tiemstamp will greater
+  //            or equal than this field.
+  // @param[in] const bool, decide this append option whether need block thread.
+  // @param[int] AppendCb*, the callback of this append option, log handler will ensure that cb will be called after log has been committed
+  // @param[out] LSN&, the append position.
+  // @param[out] int64_t&, the append timestamp.
+  // @retval
+  //    OB_SUCCESS
+  //    OB_NOT_MASTER, the prospoal_id of ObLogHandler is not same with PalfHandle.
+  // NB: only support for primary(AccessMode::APPEND)
+  int append_big_log(const void *buffer,
+                     const int64_t nbytes,
+                     const share::SCN &ref_scn,
+                     const bool need_nonblock,
+                     AppendCb *cb,
+                     palf::LSN &lsn,
+                     share::SCN &scn) override final;
+
   // @brief switch log_handle role, to LEADER or FOLLOWER
   // @param[in], role, LEADER or FOLLOWER
   // @param[in], proposal_id, global monotonically increasing id
@@ -311,7 +339,6 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list) override final;
 #endif
-  int set_region(const common::ObRegion &region) override final;
   int set_election_priority(palf::election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;
   // @desc: query coarse lsn by ts(ns), that means there is a LogGroupEntry in disk,
@@ -714,6 +741,15 @@ private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int submit_config_change_cmd_(const LogConfigChangeCmd &req,
                                 LogConfigChangeCmdResp &resp);
+
+  int append_(const void *buffer,
+              const int64_t nbytes,
+              const share::SCN &ref_scn,
+              const bool need_nonblock,
+              AppendCb *cb,
+              palf::LSN &lsn,
+              share::SCN &scn);
+
 #ifdef OB_BUILD_ARBITRATION
   int create_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
   int delete_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);

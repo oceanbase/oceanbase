@@ -769,7 +769,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
           if (1 != filter.get_col_count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col_ids count: not 1", K(ret), K(filter));
-          } else if (OB_FAIL(filter_white_filter(white_filter, cols_desc.at(col_offsets.at(0)).col_type_, datum_buf[0], filtered))) {
+          } else if (OB_FAIL(filter_white_filter(white_filter, datum_buf[0], filtered))) {
             LOG_WARN("Failed to filter row with white filter", K(ret), K(row_idx));
           }
         }
@@ -1051,6 +1051,8 @@ int ObMicroBlockReader::get_aggregate_result(
     ObStorageDatum tmp_datum; // used for deep copy decimalint
     const bool has_lob_out_row = col_param.get_meta_type().is_lob_storage() && header_->has_lob_out_row();
     bool need_reuse_lob_locator = false;
+    const bool need_padding = is_pad_char_to_full_length(context.sql_mode_) &&
+                              col_param.get_meta_type().is_fixed_len_char_type();
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
       row_idx = row_ids[i];
       datum.set_nop();
@@ -1063,6 +1065,11 @@ int ObMicroBlockReader::get_aggregate_result(
           col_idx,
           tmp_datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
+      } else if (need_padding && OB_FAIL(pad_column(col_param.get_meta_type(),
+                                                    col_param.get_accuracy(),
+                                                    allocator_.get_inner_allocator(),
+                                                    tmp_datum))) {
+        LOG_WARN("Failed to pad column", K(ret), K(col_param), K(datum));
       } else if (!tmp_datum.is_nop() && OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
         LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset), K(tmp_datum), K(obj_type), K(map_type));
       } else if (has_lob_out_row && !datum.is_nop() && !datum.is_null() && !datum.get_lob_data().in_row_) {
@@ -1131,11 +1138,18 @@ int ObMicroBlockReader::get_aggregate_result(
           const int32_t col_offset = agg_cells.at(i)->get_col_offset();
           tmp_datum.set_nop();
           if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
+            const bool need_padding = is_pad_char_to_full_length(context.sql_mode_) &&
+                                    col_params->at(col_offset)->get_meta_type().is_fixed_len_char_type();
             const ObObjMeta &obj_meta = cols_desc.at(col_offset).col_type_;
             const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_meta.get_type());
             if (row_buf.storage_datums_[col_offset].is_nop()) {
             } else if (row_buf.storage_datums_[col_offset].is_null()) {
               tmp_datum.set_null();
+            } else if (need_padding && OB_FAIL(pad_column(col_params->at(col_offset)->get_meta_type(),
+                                                          col_params->at(col_offset)->get_accuracy(),
+                                                          allocator_.get_inner_allocator(),
+                                                          row_buf.storage_datums_[col_offset]))) {
+              LOG_WARN("Failed to pad column", K(ret), K(col_offset), K(row_buf.storage_datums_));
             } else if (OB_FAIL(tmp_datum.from_storage_datum(row_buf.storage_datums_[col_offset], map_type))) {
               LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset),
                        K(row_buf.storage_datums_[col_offset]), K(obj_meta.get_type()), K(map_type));

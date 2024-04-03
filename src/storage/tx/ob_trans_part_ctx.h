@@ -432,7 +432,8 @@ public:
   void force_no_need_replay_checksum(const bool parallel_replay, const share::SCN &log_ts);
 
   void check_no_need_replay_checksum(const share::SCN &log_ts, const int index);
-
+  bool is_replay_complete_unknown() const { return replay_completeness_.is_unknown(); }
+  int set_replay_incomplete();
   // return the min log ts of those logs which are submitted but
   // not callbacked yet, if there is no such log return INT64_MAX
   const share::SCN get_min_undecided_log_ts() const;

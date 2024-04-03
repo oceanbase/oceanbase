@@ -1549,7 +1549,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                   && OB_FAIL(sstable_index_filter->check_range(prefetcher.iter_param_->read_info_, index_info,
                                                                 *(prefetcher.access_ctx_->allocator_)))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
-      } else if (index_info.is_filter_always_false()) {
+      } else if (index_info.is_filter_always_false() || prefetcher.skip_index_block(index_info)) {
       } else if (nullptr != prefetcher.agg_row_store_ && prefetcher.agg_row_store_->can_agg_index_info(index_info)) {
         if (OB_FAIL(prefetcher.agg_row_store_->fill_index_info(index_info))) {
           LOG_WARN("Fail to agg index info", K(ret), KPC(this));

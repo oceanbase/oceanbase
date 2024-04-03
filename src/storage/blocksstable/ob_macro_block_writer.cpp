@@ -951,7 +951,7 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
     const int64_t trans_version_col_idx = data_store_desc_->get_schema_rowkey_col_cnt();
     const int64_t cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
     if (!data_store_desc_->is_major_merge_type() || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_3_0_0) {
-      micro_writer_->update_max_merged_trans_version(-cur_row_version);
+      micro_writer_->update_merged_trans_version(-cur_row_version);
     }
   }
   return ret;

@@ -661,6 +661,9 @@ public:
                                   bool reset_column_infos,
                                   common::ObIAllocator &alloc,
                                   sql::ObSQLSessionInfo &session_info);
+  static int check_sys_view_changed(const share::schema::ObTableSchema &old_view_schema,
+                                    const share::schema::ObTableSchema &new_view_schema,
+                                    bool &changed);
   static int find_synonym_ref_obj(const ObString &database_name,
                                   const ObString &object_name,
                                   const uint64_t tenant_id,

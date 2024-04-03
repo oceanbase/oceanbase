@@ -310,11 +310,13 @@ public:
                                        share::schema::ObSchemaType schema_type,
                                        uint64_t object_id,
                                        uint64_t database_id,
-                                       uint64_t dep_obj_id);
+                                       uint64_t dep_obj_id,
+                                       bool is_db_expilicit = false);
   int add_object_versions_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
                                        const ObIArray<uint64_t> &object_ids,
-                                       const ObIArray<uint64_t> &db_ids);
+                                       const ObIArray<uint64_t> &db_ids,
+                                       bool is_db_expilicit = false);
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
@@ -328,6 +330,8 @@ protected:
   int check_expr_param(const ObRawExpr &expr);
   int check_col_param_on_expr(ObRawExpr *expr);
   int resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<ObQualifiedName> &columns, ObSelectStmt* sel_stmt);
+  int replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx, ObQualifiedName &q_name, bool &try_success);
+  int replace_col_ref_prefix(ObQualifiedName &q_name);
   int resolve_columns(ObRawExpr *&expr, common::ObArray<ObQualifiedName> &columns);
   int resolve_qualified_identifier(ObQualifiedName &q_name,
                                    ObIArray<ObQualifiedName> &columns,
@@ -599,7 +603,7 @@ protected:
                                            common::ObString &table_name,
                                            common::ObString &database_name,
                                            bool is_reverse_link);
-  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool error_with_exist);
+  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool is_db_expilicit);
 
   /*
    *
@@ -623,11 +627,11 @@ protected:
   int resolve_generated_column_expr_temp(TableItem *table_item);
   int find_generated_column_expr(ObRawExpr *&expr, bool &is_found);
   int deduce_generated_exprs(common::ObIArray<ObRawExpr*> &exprs);
-  int collect_schema_version(ObRawExpr *expr);
   int resolve_external_name(ObQualifiedName &q_name,
                             ObIArray<ObQualifiedName> &columns,
                             ObIArray<ObRawExpr*> &real_exprs,
                             ObRawExpr *&expr);
+  int check_disable_parallel_state(ObRawExpr *expr);
   int resolve_geo_mbr_column();
   int build_prefix_index_compare_expr(ObRawExpr &column_expr,
                                       ObRawExpr *prefix_expr,

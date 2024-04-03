@@ -62,7 +62,7 @@ ObUnitResource::ObUnitResource(
     max_iops_(max_iops),
     min_iops_(min_iops),
     iops_weight_(iops_weight),
-    data_disk_size_(INVALID_DATA_DISK_SIZE)
+    data_disk_size_(DEFAULT_DATA_DISK_SIZE)
 {
 }
 
@@ -75,7 +75,7 @@ void ObUnitResource::reset()
   max_iops_ = 0;
   min_iops_ = 0;
   iops_weight_ = INVALID_IOPS_WEIGHT;
-  data_disk_size_ = INVALID_DATA_DISK_SIZE;
+  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
 }
 
 void ObUnitResource::set(
@@ -94,7 +94,7 @@ void ObUnitResource::set(
   max_iops_ = max_iops;
   min_iops_ = min_iops;
   iops_weight_ = iops_weight;
-  data_disk_size_ = INVALID_DATA_DISK_SIZE;
+  data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
 }
 
 int ObUnitResource::init_and_check_cpu_(const ObUnitResource &user_spec)
@@ -511,7 +511,7 @@ ObUnitResource &ObUnitResource::operator=(const ObUnitResource &other)
     max_iops_ = other.max_iops_;
     min_iops_ = other.min_iops_;
     iops_weight_ = other.iops_weight_;
-    data_disk_size_ = INVALID_DATA_DISK_SIZE;
+    data_disk_size_ = DEFAULT_DATA_DISK_SIZE;
   }
   return *this;
 }

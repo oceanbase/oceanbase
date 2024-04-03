@@ -387,7 +387,6 @@ public:
       int32_t &compare_result) = 0;
   static int filter_white_filter(
       const sql::ObWhiteFilterExecutor &filter,
-      const common::ObObjMeta &obj_meta,
       const common::ObDatum &datum,
       bool &filtered);
   virtual bool has_lob_out_row() const = 0;

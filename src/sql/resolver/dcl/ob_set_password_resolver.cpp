@@ -368,7 +368,8 @@ int ObSetPasswordResolver::check_role_as_user(ParseNode *user_hostname_node, boo
     ObString node_str(user_hostname_node->str_len_, user_hostname_node->str_value_);
     if (0 != node_str.case_compare(OB_ORA_RESOURCE_ROLE_NAME) &&
         0 != node_str.case_compare(OB_ORA_PUBLIC_ROLE_NAME) &&
-        0 != node_str.case_compare(OB_ORA_CONNECT_ROLE_NAME)) {
+        0 != node_str.case_compare(OB_ORA_CONNECT_ROLE_NAME) &&
+        0 != node_str.case_compare(OB_ORA_STANDBY_REPLICATION_ROLE_NAME)) {
       is_valid = true;
     }
   }

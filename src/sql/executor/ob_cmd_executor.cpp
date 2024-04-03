@@ -511,10 +511,15 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_EXECUTE: {
-        // ps文本模式应该要返回结果，不能定义为cmd
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
-        // DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        // only call procedure run this logic, text ps mode execute call procedure,
+        // if procedure has out param, it should return result to argument
+        ObExecuteStmt &stmt = *(static_cast<ObExecuteStmt*>(&cmd));
+        if (stmt::T_CALL_PROCEDURE != stmt.get_prepare_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
+        } else {
+          DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+        }
         break;
       }
       case stmt::T_DEALLOCATE: {

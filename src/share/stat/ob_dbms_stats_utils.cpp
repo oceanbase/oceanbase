@@ -1061,6 +1061,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
                                                 const PartitionIdBlockMap *partition_id_block_map,
                                                 bool is_split_gather,
                                                 int64_t gather_vectorize,
+                                                bool use_column_store,
                                                 ObOptStatGatherParam &gather_param)
 {
   int ret = OB_SUCCESS;
@@ -1091,6 +1092,7 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.data_table_name_ = param.data_table_name_;
   gather_param.global_part_id_ = param.global_part_id_;
   gather_param.gather_vectorize_ = gather_vectorize;
+  gather_param.use_column_store_ = use_column_store;
   return gather_param.column_group_params_.assign(param.column_group_params_);
 }
 

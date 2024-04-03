@@ -135,10 +135,10 @@ int ObXAService::xa_start_for_tm_promotion(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink promotion failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink_promotion();
+    // xa_statistics_.inc_failure_dblink_promotion();
   } else {
     TRANS_LOG(INFO, "xa start for dblink promtion", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink_promotion();
+    // xa_statistics_.inc_success_dblink_promotion();
   }
 
   return ret;
@@ -270,10 +270,10 @@ int ObXAService::xa_start_for_tm(const int64_t flags,
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "xa start for dblink failed", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_failure_dblink();
+    // xa_statistics_.inc_failure_dblink();
   } else {
     TRANS_LOG(INFO, "xa start for dblink", K(ret), K(xid), K(flags));
-    xa_statistics_.inc_success_dblink();
+    // xa_statistics_.inc_success_dblink();
   }
 
   return ret;
@@ -455,7 +455,7 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected xa context", K(ret), K(xid), K(tx_id));
-    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, client))) {
+    } else if (OB_FAIL(xa_ctx->get_dblink_client(dblink_type, dblink_conn, &dblink_statistics_, client))) {
       TRANS_LOG(WARN, "fail to preapre xa start for dblink client", K(ret), K(xid), K(tx_id));
     } else if (NULL == client) {
       ret = OB_ERR_UNEXPECTED;

@@ -101,6 +101,10 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     } else {
       has_more_ = resp_pkt.is_stream_next();
     }
+    if (OB_FAIL(ret) || !has_more_) {
+      stream_rpc_unregister(first_pkt_id_);
+      first_pkt_id_ = INVALID_RPC_PKT_ID;
+    }
 
   } else if (OB_FAIL(ObRpcProxy::create_request(pcode_, *transport_,
       req, dst_, PAYLOAD_SIZE, proxy_.timeout(), opts_.local_addr_, do_ratelimit_,
@@ -245,6 +249,10 @@ int SSHandle<pcodeStruct>::abort()
         //do nothing
       }
       has_more_ = false;
+    }
+    if (first_pkt_id_ > 0) {
+      stream_rpc_unregister(first_pkt_id_);
+      first_pkt_id_ = INVALID_RPC_PKT_ID;
     }
 
   } else if (OB_FAIL(ObRpcProxy::create_request(pcode_, *transport_,

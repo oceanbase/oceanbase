@@ -143,7 +143,7 @@ public:
 
   bool can_migrate() const
   {
-    return !(status_ >= RESTORE_START && status_ <= RESTORE_SYS_TABLETS) &&
+    return !(status_ >= RESTORE_START && status_ < WAIT_RESTORE_TABLETS_META) &&
            !(status_ >= Status::CLONE_START && status_ <= Status::CLONE_CLOG_REPLAY);
   }
   bool is_in_restore_and_before_quick_restore() const

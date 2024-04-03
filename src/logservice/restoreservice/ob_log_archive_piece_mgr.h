@@ -54,6 +54,14 @@ public:
 
   bool is_valid() const;
 
+  int get_raw_read_piece(const share::SCN &pre_scn,
+      const palf::LSN &start_lsn,
+      int64_t &dest_id,
+      int64_t &round_id,
+      int64_t &piece_id,
+      int64_t &file_id,
+      int64_t &file_offset);
+
   int get_piece(const share::SCN &pre_scn,
       const palf::LSN &start_lsn,
       int64_t &dest_id,

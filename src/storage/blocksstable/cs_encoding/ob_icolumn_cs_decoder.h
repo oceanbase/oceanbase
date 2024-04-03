@@ -27,6 +27,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObAggCell;
 class ObGroupByCell;
 }
 namespace blocksstable
@@ -87,6 +88,16 @@ public:
       bool &filter_applied) const
   {
     UNUSEDx(parent, col_ctx, filter, pd_filter_info, result_bitmap, filter_applied);
+    return common::OB_NOT_SUPPORTED;
+  }
+
+  virtual int get_aggregate_result(
+      const ObColumnCSDecoderCtx &ctx,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      storage::ObAggCell &agg_cell) const
+  {
+    UNUSEDx(ctx, row_ids, row_cap, agg_cell);
     return common::OB_NOT_SUPPORTED;
   }
 

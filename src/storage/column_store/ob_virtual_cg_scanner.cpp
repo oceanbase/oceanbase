@@ -502,7 +502,7 @@ int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, const s
       }
     } else {
       sql::ObWhiteFilterExecutor *white_filter = static_cast<sql::ObWhiteFilterExecutor *>(filter);
-      if (OB_FAIL(blocksstable::ObIMicroBlockReader::filter_white_filter(*white_filter, iter_param_->get_read_info()->get_columns_desc().at(0).col_type_ , default_row_.storage_datums_[0], filtered))) {
+      if (OB_FAIL(blocksstable::ObIMicroBlockReader::filter_white_filter(*white_filter, default_row_.storage_datums_[0], filtered))) {
         LOG_WARN("Failed to filter row with white filter", K(ret), KPC(white_filter), K(default_row_));
       }
     }

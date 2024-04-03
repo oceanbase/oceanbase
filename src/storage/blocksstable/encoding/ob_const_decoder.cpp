@@ -485,12 +485,9 @@ int ObConstDecoder::const_only_operator(
             } else if (ref == 1) {
             } else {
               bool is_existed = false;
-              // Check const object in hashset or not
-              ObObj const_obj;
-              if (OB_FAIL(const_datum.to_obj(const_obj, col_ctx.obj_meta_))) {
-                LOG_WARN("convert datum to obj failed", K(ret), K(const_datum), K(col_ctx.obj_meta_));
-              } else if (OB_FAIL(filter.exist_in_obj_set(const_obj, is_existed))) {
-                LOG_WARN("Failed to check object in hashset", K(ret));
+              // Check const datum in hashset or not
+              if (OB_FAIL(filter.exist_in_datum_set(const_datum, is_existed))) {
+                LOG_WARN("Failed to check datum in hashset", K(ret));
               } else if (is_existed) {
                 if (OB_FAIL(result_bitmap.bit_not())) {
                   LOG_WARN("Failed to do bitwise not on result bitmap", K(ret));
@@ -776,11 +773,8 @@ int ObConstDecoder::in_operator(
           LOG_WARN("Failed to pad column", K(ret));
         }
       }
-      ObObj const_obj;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(const_datum.to_obj(const_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K(const_datum), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(const_obj, const_in_result_set))) {
+      } else if (OB_FAIL(filter.exist_in_datum_set(const_datum, const_in_result_set))) {
         LOG_WARN("Failed to check whether const value is in set", K(ret));
       } else if (const_in_result_set) {
         if (OB_FAIL(result_bitmap.bit_not())) {
@@ -799,16 +793,13 @@ int ObConstDecoder::in_operator(
       ref_bitset->init(ref_bitset_size);
       int64_t dict_ref = 0;
       while (OB_SUCC(ret) && trav_it != end_it) {
-        ObObj cur_obj;
         bool cur_in_result_set = false;
         if (OB_UNLIKELY((((*trav_it).is_null() || (col_ctx.obj_meta_.is_character_type()
                         && (0 == (*trav_it).len_))) && lib::is_oracle_mode())
                         || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There should not be null datum in dictionary", K(ret));
-        } else if (OB_FAIL((*trav_it).to_obj(cur_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K((*trav_it)), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, cur_in_result_set))) {
+        } else if (OB_FAIL(filter.exist_in_datum_set(*trav_it, cur_in_result_set))) {
           LOG_WARN("Failed to check wheter current value is in set", K(ret));
         } else if (!const_in_result_set == cur_in_result_set) {
           found = true;

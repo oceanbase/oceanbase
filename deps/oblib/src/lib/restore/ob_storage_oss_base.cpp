@@ -398,7 +398,7 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
       OB_LOG(WARN, "that checksum algorithm is not supported for oss", K(ret), K_(checksum_type));
     } else {
       is_inited_ = true;
-      oss_option_->ctl->options->enable_crc = false;
+      oss_option_->ctl->options->enable_crc = true;
     }
   }
   return ret;
@@ -849,6 +849,8 @@ int ObStorageOssMultiPartWriter::write_single_part()
         && OB_FAIL(add_content_md5(oss_option_, base_buf_, base_buf_pos_, headers))) {
       OB_LOG(WARN, "fail to add content md5 when uploading part", K(ret));
     } else {
+      // FIXME @fangdan: 临时增加的debug info，发版前会删除
+      uint64_t before_crc64 = aos_crc64(0, (void *)base_buf_, base_buf_pos_);
       aos_list_add_tail(&content->node, &buffer);
 
       if (NULL == (aos_ret = oss_do_upload_part_from_buffer(oss_option_, &bucket, &object,
@@ -859,6 +861,20 @@ int ObStorageOssMultiPartWriter::write_single_part()
         OB_LOG(WARN, "fail to upload one part from buffer",
             K_(base_buf_pos), K_(bucket), K_(object), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
+
+        uint64_t after_crc64 = aos_crc64(0, (void *)base_buf_, base_buf_pos_);
+        char *resp_crc64 = (char*)(apr_table_get(resp_headers, OSS_HASH_CRC64_ECMA));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= upload crc", K(ret), K(before_crc64), K(after_crc64), K(resp_crc64));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= upload data", K(ret), K(base_buf_pos_), K(base_buf_), KP(base_buf_));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= other", K(ret), K(oss_option_->ctl->options->enable_crc));
+
+        if (OB_NOT_NULL(aos_ret)) {
+          if (aos_ret->code == -978
+              || (OB_NOT_NULL(aos_ret->error_code) && 0 == STRCMP("InconsistentError", aos_ret->error_code))) {
+            sleep(5);
+            ob_abort();
+          }
+        }
       }
       bool is_slow = false;
       print_access_storage_log("oss upload one part ", object_, start_time, base_buf_pos_, &is_slow);
@@ -1177,6 +1193,36 @@ int ObStorageOssReader::pread(
           convert_io_error(aos_ret, ret);
           OB_LOG(WARN, "fail to get object to buffer", K_(bucket), K_(object), K(ret));
           print_oss_info(resp_headers, aos_ret, ret);
+
+          ObArenaAllocator allocator;
+          char *tmp_buf = static_cast<char *>(allocator.alloc(buf_size + 1));
+          MEMSET(tmp_buf, 0, buf_size + 1);
+          int64_t tmp_buf_pos = 0;
+          aos_list_for_each_entry(aos_buf_t, content, &buffer, node) {
+            size = aos_buf_size(content);
+            if (OB_ISNULL(content->pos)) {
+              // ret = OB_OSS_ERROR;
+              OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= unexpected error, the data pos is null", K(size), K(ret));
+              break;
+            } else {
+              memcpy(tmp_buf + tmp_buf_pos, content->pos, size);
+              tmp_buf_pos += size;
+            }
+          }
+          OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= read content", K(ret), K(tmp_buf), KP(tmp_buf), K(file_length_), K(tmp_buf_pos));
+          char *crc64 = (char*)(apr_table_get(resp_headers, OSS_HASH_CRC64_ECMA));
+          uint64_t read_crc64 = aos_crc64(0, tmp_buf, tmp_buf_pos);
+          // std::cout << "=========== resp crc64=" << crc64 << std::endl;;
+          OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= resp crc64", K(ret), K(crc64), K(get_data_size), K(read_crc64));
+          OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= other", K(ret), K(oss_option->ctl->options->enable_crc), K(is_range_read));
+
+          if (OB_NOT_NULL(aos_ret)) {
+            if (aos_ret->code == -978
+                || (OB_NOT_NULL(aos_ret->error_code) && 0 == STRCMP("InconsistentError", aos_ret->error_code))) {
+              sleep(5);
+              ob_abort();
+            }
+          }
         } else {
           //check date len
           aos_list_for_each_entry(aos_buf_t, content, &buffer, node) {
@@ -2275,12 +2321,27 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
         && OB_FAIL(add_content_md5(oss_option_, buf, size, headers))) {
       OB_LOG(WARN, "fail to add content md5 when putting object", K(ret));
     } else {
+      uint64_t before_crc64 = aos_crc64(0, (void *)buf, size);
       aos_list_add_tail(&content->node, &buffer);
       if (OB_ISNULL(aos_ret = oss_put_object_from_buffer(oss_option_, &bucket, &object,
                     &buffer, headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to upload one object", K(bucket_), K(object_), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
+
+        uint64_t after_crc64 = aos_crc64(0, (void *)buf, size);
+        char *resp_crc64 = (char*)(apr_table_get(resp_headers, OSS_HASH_CRC64_ECMA));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= write crc", K(ret), K(before_crc64), K(after_crc64), K(resp_crc64));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= write data", K(ret), K(size), K(buf), KP(buf));
+        OB_LOG(WARN, "=-=-=-=-=-=-=-=-=-=-= other", K(ret), K(oss_option_->ctl->options->enable_crc));
+
+        if (OB_NOT_NULL(aos_ret)) {
+          if (aos_ret->code == -978
+              || (OB_NOT_NULL(aos_ret->error_code) && 0 == STRCMP("InconsistentError", aos_ret->error_code))) {
+            sleep(5);
+            ob_abort();
+          }
+        }
 
       } else {
         file_length_ = size;

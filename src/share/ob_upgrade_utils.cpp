@@ -590,6 +590,7 @@ ObUpgradeProcesserSet::~ObUpgradeProcesserSet()
 int ObUpgradeProcesserSet::init(
     ObBaseUpgradeProcessor::UpgradeMode mode,
     common::ObMySQLProxy &sql_proxy,
+    common::ObOracleSqlProxy &oracle_sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     obrpc::ObCommonRpcProxy &common_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -611,7 +612,7 @@ int ObUpgradeProcesserSet::init(
       } else if (OB_ISNULL(processor = new(buf)ObUpgradeFor##MAJOR##MINOR##MAJOR_PATCH##MINOR_PATCH##Processor)) { \
         ret = OB_NOT_INIT; \
         LOG_WARN("fail to new upgrade processor", KR(ret)); \
-      } else if (OB_FAIL(processor->init(version, mode, sql_proxy, rpc_proxy, common_proxy, \
+      } else if (OB_FAIL(processor->init(version, mode, sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, \
                                          schema_service, check_server_provider))) { \
         LOG_WARN("fail to init processor", KR(ret), K(version)); \
       } else if (OB_FAIL(processor_list_.push_back(processor))) { \
@@ -802,6 +803,7 @@ int ObBaseUpgradeProcessor::init(
     int64_t data_version,
     UpgradeMode mode,
     common::ObMySQLProxy &sql_proxy,
+    common::ObOracleSqlProxy &oracle_sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     obrpc::ObCommonRpcProxy &common_proxy,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -815,6 +817,7 @@ int ObBaseUpgradeProcessor::init(
     mode_ = mode;
     data_version_ = data_version;
     sql_proxy_ = &sql_proxy;
+    oracle_sql_proxy_ = &oracle_sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     common_proxy_ = &common_proxy;
     schema_service_ = &schema_service;
@@ -1197,6 +1200,90 @@ int ObUpgradeFor4211Processor::post_upgrade_for_dbms_scheduler()
   return ret;
 }
 /* =========== 4211 upgrade processor end ============= */
+
+int ObUpgradeFor4310Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_create_replication_role_in_oracle())) {
+    LOG_WARN("fail to create standby replication role in oracle", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4310Processor::post_upgrade_for_create_replication_role_in_oracle()
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  bool is_standby = false;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to update replicate role", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_standby))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (is_standby) {
+    LOG_INFO("standby tenant no need to update replicate role", K_(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    ObSchemaGetterGuard schema_guard;
+    ObSqlString role_sql;
+    ObSqlString sys_priv_sql;
+    int64_t affected_rows = 0;
+    bool is_user_exist = false;
+    // check and create standby replication role
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.check_user_exist(tenant_id_, OB_ORA_STANDBY_REPLICATION_ROLE_ID, is_user_exist))) {
+      LOG_WARN("fail to check user exist", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.reset())) {
+      LOG_WARN("fail to reset schema guard", KR(ret));
+    } else if (!is_user_exist) {
+      if (OB_FAIL(role_sql.assign_fmt("CREATE ROLE %s", OB_ORA_STANDBY_REPLICATION_ROLE_NAME))) {
+        LOG_WARN("fail to assign create role sql", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, role_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to write create role sql", KR(ret), K(role_sql), K_(tenant_id));
+      }
+    } else {
+      LOG_INFO("standy replication role already exist");
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sys_priv_sql.assign_fmt("GRANT CREATE SESSION TO %s", OB_ORA_STANDBY_REPLICATION_ROLE_NAME))) {
+        LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, sys_priv_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to write sql", KR(ret), K(sys_priv_sql), K_(tenant_id));
+      }
+    }
+#define GRANT_OBJ_PRIVS_TO_USER(PRIV, DB_NAME, TABLE_NAME, USER_NAME)                                                       \
+    if (OB_SUCC(ret)) {                                                                                                     \
+      ObSqlString tab_priv_sql;                                                                                             \
+      if (OB_FAIL(tab_priv_sql.assign_fmt("GRANT %s on %s.%s to %s", PRIV, DB_NAME, TABLE_NAME, USER_NAME))) {              \
+        LOG_WARN("fail to assign sql", KR(ret));                                                                            \
+      } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, tab_priv_sql.ptr(), affected_rows))) {                        \
+        LOG_WARN("fail to write sql", KR(ret), K(tab_priv_sql));                                                            \
+      }                                                                                                                     \
+    }
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_TENANTS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_ACCESS_POINT_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LS_HISTORY_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_PARAMETERS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_LOG_STAT_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+    GRANT_OBJ_PRIVS_TO_USER("SELECT", OB_ORA_SYS_SCHEMA_NAME, OB_GV_OB_UNITS_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME)
+#undef GRANT_OBJ_PRIVS_TO_USER
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[UPGRADE] upgrade user tenant create replication role failed", KR(ret), K_(tenant_id));
+    } else {
+      LOG_INFO("[UPGRADE] upgrade user tenant create replication role success", K_(tenant_id));
+    }
+  }
+  return ret;
+}
+/* =========== 4310 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

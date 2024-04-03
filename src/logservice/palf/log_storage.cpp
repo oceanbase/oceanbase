@@ -298,13 +298,13 @@ int LogStorage::pread(const LSN &read_lsn,
   return ret;
 }
 
-int LogStorage::pread_without_block_header(const LSN &read_lsn,
-                                           const int64_t in_read_size,
-                                           ReadBuf &read_buf,
-                                           int64_t &out_read_size)
+int LogStorage::pread_with_block_header(const LSN &read_lsn,
+                                        const int64_t in_read_size,
+                                        ReadBuf &read_buf,
+                                        int64_t &out_read_size)
 {
   int ret = OB_SUCCESS;
-  bool need_read_with_block_header = false;
+  bool need_read_with_block_header = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogStorage not inited!!!", K(ret));

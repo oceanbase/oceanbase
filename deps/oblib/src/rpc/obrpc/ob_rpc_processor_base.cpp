@@ -541,7 +541,7 @@ int ObRpcProcessorBase::part_response_error(rpc::ObRequest* req, const int retco
   }
   return ret;
 }
-int ObRpcProcessorBase::flush(int64_t wait_timeout)
+int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
 {
   int ret = OB_SUCCESS;
   is_stream_ = true;
@@ -549,7 +549,7 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
   UNIS_VERSION_GUARD(unis_version_);
 
   const int64_t stream_rpc_max_wait_timeout = get_stream_rpc_max_wait_timeout(tenant_id_);
-  if (0 == wait_timeout || wait_timeout > stream_rpc_max_wait_timeout) {
+  if (0 == wait_timeout) {
     wait_timeout = stream_rpc_max_wait_timeout;
   }
 
@@ -560,6 +560,8 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
       RPC_OBRPC_LOG(WARN, "allocate stream condition object fail", K(ret));
     }
   }
+  int64_t tenant_id = OB_INVALID_TENANT_ID;
+
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(rpc_pkt_) || is_stream_end_) {
     ret = OB_ERR_UNEXPECTED;
@@ -568,7 +570,7 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
   } else if (rpc_pkt_ && rpc_pkt_->is_stream_last()) {
     ret = OB_ITER_END;
     RPC_OBRPC_LOG(WARN, "stream is end", K(ret), K(*rpc_pkt_));
-  } else if (OB_FAIL(sc_->prepare())) {
+  } else if (OB_FAIL(sc_->prepare(src_addr, rpc_pkt_))) {
     RPC_OBRPC_LOG(WARN, "prepare stream session fail", K(ret));
   } else if (OB_FAIL(part_response(common::OB_SUCCESS, false))) {
     RPC_OBRPC_LOG(WARN, "response part result to peer fail", K(ret));

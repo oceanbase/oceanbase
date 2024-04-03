@@ -18,6 +18,7 @@ namespace oceanbase
 namespace logservice
 {
 #define LOG_MONITOR_EVENT_FMT_PREFIX "LOG", type_to_string_(event), "TENANT_ID", mtl_id, "LS_ID", palf_id
+#define LOG_MONITOR_EVENT_STR_FMT_PREFIX "LOG", event_str, "TENANT_ID", mtl_id, "LS_ID", palf_id
 
 // =========== PALF Event Reporting ===========
 int ObLogMonitor::record_set_initial_member_list_event(const int64_t palf_id,
@@ -285,6 +286,46 @@ int ObLogMonitor::record_role_change_event(const int64_t palf_id,
       SERVER_EVENT_ADD_WITH_RETRY(LOG_MONITOR_EVENT_FMT_PREFIX,
           "PREVIOUS", prev_str,
           "CURRENT", curr_str);
+    }
+    CLICK();
+  }
+  return ret;
+}
+
+int ObLogMonitor::record_parent_child_change_event(const int64_t palf_id,
+                                                   const bool is_register, /* true: register; false; retire; */
+                                                   const bool is_parent,   /* true: parent; false: child; */
+                                                   const common::ObAddr &server,
+                                                   const common::ObRegion &region,
+                                                   const int64_t register_time_us,
+                                                   const char *extra_info)
+{
+  int ret = OB_SUCCESS;
+  int pret = OB_SUCCESS;
+  const int64_t mtl_id = MTL_ID();
+  const char *action_str = (is_register)? "REGISTER": "RETIRE";
+  const char *object_str = (is_parent)? "PARENT": "CHILD";
+  const int64_t MAX_BUF_LEN = 50;
+  char event_str[MAX_BUF_LEN] = {'\0'};
+  TIMEGUARD_INIT(LOG_MONITOR, 100_ms, 5_s);                                                                         \
+  if (0 >= (pret = snprintf(event_str, MAX_BUF_LEN, "%s %s", action_str, object_str))) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "snprintf failed", KR(ret), K(action_str), K(object_str));
+  } else {
+    CLICK();
+    if (OB_NOT_NULL(extra_info)) {
+      SERVER_EVENT_ADD_WITH_RETRY(LOG_MONITOR_EVENT_STR_FMT_PREFIX,
+          object_str, server,
+          "REGION", region,
+          "REGISTER_TIME_US", register_time_us,
+          "", NULL,
+          extra_info);
+    } else {
+      SERVER_EVENT_ADD_WITH_RETRY(LOG_MONITOR_EVENT_STR_FMT_PREFIX,
+          object_str, server,
+          "REGION", region,
+          "REGISTER_TIME_US", register_time_us,
+          "", NULL);
     }
     CLICK();
   }

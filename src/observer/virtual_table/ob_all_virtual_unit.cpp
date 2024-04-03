@@ -263,6 +263,10 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           }
           break;
         }
+        case DATA_DISK_SIZE: {
+          cur_row_.cells_[i].set_null();
+          break;
+        }
         case STATUS: {
           const char* status_str = share::ObUnitInfoGetter::get_unit_status_str(tenant_meta.unit_.unit_status_);
           cur_row_.cells_[i].set_varchar(status_str);

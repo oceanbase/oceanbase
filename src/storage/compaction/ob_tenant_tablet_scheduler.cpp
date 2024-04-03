@@ -1483,20 +1483,17 @@ bool ObTenantTabletScheduler::get_enable_adaptive_compaction()
 {
   int ret = OB_SUCCESS;
   bool enable_adaptive_compaction = enable_adaptive_compaction_;
-  ObTenantSysStat cur_sys_stat;
-  if (!enable_adaptive_compaction) {
+  if (!enable_adaptive_compaction || !enable_adaptive_merge_schedule_) {
     // do nothing
 #ifdef ENABLE_DEBUG_LOG
   } else if (GCONF.enable_crazy_medium_compaction) {
     enable_adaptive_compaction = true;
     LOG_DEBUG("set crazy medium, set enable_adaptive_compaction = true");
 #endif
-  } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_sys_stat(cur_sys_stat))) {
-    LOG_WARN("failed to get tenant sys stat", K(ret), K(cur_sys_stat));
-  } else if (cur_sys_stat.is_full_cpu_usage()) {
+  } else if (MTL(ObTenantTabletStatMgr *)->is_high_tenant_cpu_load()) {
     enable_adaptive_compaction = false;
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-      FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret), K(cur_sys_stat));
+      FLOG_INFO("disable adaptive compaction due to the high load CPU", K(ret));
     }
   }
   return enable_adaptive_compaction;

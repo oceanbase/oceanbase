@@ -1106,7 +1106,8 @@ all_part_def = dict(
       ('source_partition_id', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
       ('tablespace_id', 'int', 'false', '-1'),
       ('partition_type', 'int', 'false', '0'),
-      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID')
+      ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
+      ('external_location', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
     ],
 )
 
@@ -11728,6 +11729,7 @@ def_table_schema(
       ('create_time', 'int'),
       ('zone_type', 'varchar:MAX_ZONE_TYPE_LENGTH'),
       ('region', 'varchar:MAX_REGION_LENGTH'),
+      ('data_disk_size', 'int', 'true'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11765,6 +11767,7 @@ def_table_schema(
       ('ssl_cert_expired_time', 'int'),
       ('memory_limit', 'int'),
       ('data_disk_allocated', 'int'),
+      ('data_disk_assigned', 'int', 'true'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12741,7 +12744,8 @@ def_table_schema(
     ('restore_err_context_info', 'varchar:1024'),
     ('enable_sync', 'bool'),
     ('enable_vote', 'bool'),
-    ('arb_srv_info', 'varchar:1024')
+    ('arb_srv_info', 'varchar:1024'),
+    ('parent', 'varchar:1024')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -13801,7 +13805,7 @@ def_table_schema(
 
 # 12440: __all_virtual_wr_system_event
 # 12441: __all_virtual_wr_event_name
-# 12442: __all_tenant_scheduler_running_job
+# 12442: __all_virtual_tenant_scheduler_running_job
 # 12443: __all_virtual_routine_privilege
 # 12444: __all_virtual_routine_privilege_history
 # 12445: __all_virtual_sqlstat
@@ -13955,6 +13959,7 @@ def_table_schema(
 #       * # 100001: idx_data_table_id
 #       * # 100001: __all_table
 ################################################################################
+
 
 ################################################################################
 # Oracle Virtual Table(15000,20000]
@@ -14361,7 +14366,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 # 15420: abandoned
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
-# 15423: __all_tenant_scheduler_running_job
+# 15423: __all_virtual_tenant_scheduler_running_job
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
 # 15426: __tenant_virtual_statname
@@ -17791,7 +17796,7 @@ def_table_schema(
       JOIN oceanbase.__all_virtual_tablet_encrypt_info E
       ON E.tenant_id = effective_tenant_id() and E.tablet_id = A.tablet_id
     WHERE A.tenant_id = 0 AND A.table_type != 12 AND A.table_type != 13
-    GROUP BY A.tenant_id, A.table_id
+    GROUP BY A.tenant_id, A.table_id, A.table_name, B.tablespace_id, B.encryption_name, B.encrypt_key, B.master_key_id
   """.replace("\n", " ")
 )
 
@@ -17820,7 +17825,7 @@ def_table_schema(
       con_id AS CON_ID
     FROM
       oceanbase.V$OB_ENCRYPTED_TABLES
-    GROUP BY con_id, tablespace_id
+    GROUP BY con_id, tablespace_id, encryptionalg, encryptedkey, masterkeyid
   """.replace("\n", " ")
 )
 
@@ -31220,8 +31225,78 @@ def_table_schema(
 )
 # 21459:GV$OB_SESSION
 # 21460:V$OB_SESSION
-# 21461: GV$OB_PL_CACHE_OBJECT
-# 21462: V$OB_PL_CACHE_OBJECT
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'GV$OB_PL_CACHE_OBJECT',
+    table_id       = '21461',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           PLAN_ID AS CACHE_OBJECT_ID,
+           STATEMENT AS PARAMETERIZE_TEXT,
+           QUERY_SQL AS OBJECT_TEXT,
+           FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME,
+           AVG_EXE_USEC,
+           SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC,
+           HIT_COUNT,
+           PLAN_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS,
+           ELAPSED_TIME,
+           OBJECT_TYPE,
+           PL_SCHEMA_ID AS OBJECT_ID,
+           COMPILE_TIME,
+           SCHEMA_VERSION,
+           PS_STMT_ID
+    FROM oceanbase.__all_virtual_plan_stat WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc=true
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'V$OB_PL_CACHE_OBJECT',
+    table_id       = '21462',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID,
+           SVR_IP,
+           SVR_PORT,
+           CACHE_OBJECT_ID,
+           PARAMETERIZE_TEXT,
+           OBJECT_TEXT,
+           FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME,
+           AVG_EXE_USEC,
+           SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC,
+           HIT_COUNT,
+           CACHE_OBJ_SIZE,
+           EXECUTIONS,
+           ELAPSED_TIME,
+           OBJECT_TYPE,
+           OBJECT_ID,
+           COMPILE_TIME,
+           SCHEMA_VERSION,
+           PS_STMT_ID
+    FROM oceanbase.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+
+
+    normal_columns = [
+    ],
+)
 
 def_table_schema(
   owner = 'chongrong.th',
@@ -33180,6 +33255,7 @@ def_table_schema(
 # 21577: INNODB_SYS_VIRTUAL
 # 21578: INNODB_TEMP_TABLE_INFO
 # 21579: INNODB_METRICS
+# 21580: EVENTS
 
 
 def_table_schema(
@@ -60104,8 +60180,80 @@ def_table_schema(
 )
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
-# 28198: GV$OB_PL_CACHE_OBJECT
-# 28199: V$OB_PL_CACHE_OBJECT
+
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'GV$OB_PL_CACHE_OBJECT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28198',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID AS TENANT_ID,
+           SVR_IP AS SVR_IP,
+           SVR_PORT AS SVR_PORT,
+           PLAN_ID AS CACHE_OBJECT_ID,
+           STATEMENT AS PARAMETERIZE_TEXT,
+           QUERY_SQL AS OBJECT_TEXT,
+           FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME AS LAST_ACTIVE_TIME,
+           AVG_EXE_USEC AS AVG_EXE_USEC,
+           SLOWEST_EXE_TIME AS SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC AS SLOWEST_EXE_USEC,
+           HIT_COUNT AS HIT_COUNT,
+           PLAN_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS AS EXECUTIONS,
+           ELAPSED_TIME AS ELAPSED_TIME,
+           OBJECT_TYPE AS OBJECT_TYPE,
+           PL_SCHEMA_ID AS OBJECT_ID,
+           COMPILE_TIME AS COMPILE_TIME,
+           SCHEMA_VERSION AS SCHEMA_VERSION,
+           PS_STMT_ID AS PS_STMT_ID
+    FROM SYS.ALL_VIRTUAL_PLAN_STAT WHERE OBJECT_STATUS = 0 AND TYPE > 5 AND TYPE < 11 AND is_in_pc='1'
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+def_table_schema(
+    owner = 'hr351303',
+    table_name     = 'V$OB_PL_CACHE_OBJECT',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28199',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT TENANT_ID AS TENANT_ID,
+           SVR_IP AS SVR_IP,
+           SVR_PORT AS SVR_PORT,
+           CACHE_OBJECT_ID AS CACHE_OBJECT_ID,
+           PARAMETERIZE_TEXT AS PARAMETERIZE_TEXT,
+           OBJECT_TEXT AS OBJECT_TEXT,
+           FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
+           LAST_ACTIVE_TIME AS LAST_ACTIVE_TIME,
+           AVG_EXE_USEC AS AVG_EXE_USEC,
+           SLOWEST_EXE_TIME AS SLOWEST_EXE_TIME,
+           SLOWEST_EXE_USEC AS SLOWEST_EXE_USEC,
+           HIT_COUNT AS HIT_COUNT,
+           CACHE_OBJ_SIZE AS CACHE_OBJ_SIZE,
+           EXECUTIONS AS EXECUTIONS,
+           ELAPSED_TIME AS ELAPSED_TIME,
+           OBJECT_TYPE AS OBJECT_TYPE,
+           OBJECT_ID AS OBJECT_ID,
+           COMPILE_TIME AS COMPILE_TIME,
+           SCHEMA_VERSION AS SCHEMA_VERSION,
+           PS_STMT_ID AS PS_STMT_ID
+    FROM SYS.GV$OB_PL_CACHE_OBJECT WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
 def_table_schema(
   owner           = 'huangrenhaung.hrh',
   table_name      = 'GV$OB_CGROUP_CONFIG',

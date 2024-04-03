@@ -656,8 +656,15 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
   } else {
     ObStoreRowIterator *iter = nullptr;
     const ObDatumRow *store_row = nullptr;
-
-    if (OB_FAIL(build_multi_exist_iterator(rows_info, iter))) {
+    common::ObSEArray<ObDatumRowkey, ObRowsInfo::MAX_ROW_KEYS_ON_STACK> datum_rowkeys;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.rowkeys_.count(); i++) {
+      if (OB_FAIL(datum_rowkeys.push_back(rows_info.get_rowkey(i)))) {
+        LOG_WARN("Failed to push back rowkey", K(ret), K(i), K(rows_info.rowkeys_.count()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_multi_exist_iterator(rows_info.exist_helper_.table_iter_param_, datum_rowkeys,
+                                                  rows_info.exist_helper_.table_access_context_, iter))) {
       LOG_WARN("Fail to build multi exist iterator", K(ret));
     }
 
@@ -1729,25 +1736,28 @@ int ObSSTable::build_exist_iterator(
   return ret;
 }
 
-int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter)
+int ObSSTable::build_multi_exist_iterator(
+    const ObTableIterParam &iter_param,
+    const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
+    ObTableAccessContext &access_context,
+    ObStoreRowIterator *&iter)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   ObStoreRowIterator *tmp_iter = nullptr;
-  ObTableAccessContext &context = rows_info.exist_helper_.table_access_context_;
 
   if (!contain_uncommitted_row()) {
-      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowMultiExister, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableRowMultiExister, tmp_iter);
   } else if (is_multi_version_minor_sstable()) {
-      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableMultiVersionRowMultiGetter, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableMultiVersionRowMultiGetter, tmp_iter);
   } else {
-    ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObSSTableRowMultiGetter, tmp_iter);
+    ALLOCATE_TABLE_STORE_ROW_IETRATOR(access_context, ObSSTableRowMultiGetter, tmp_iter);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tmp_iter->init(rows_info.exist_helper_.table_iter_param_,
-                                    context,
-                                    this, &rows_info.rowkeys_))) {
+  } else if (OB_FAIL(tmp_iter->init(iter_param,
+                                    access_context,
+                                    this, &rowkeys))) {
     LOG_WARN("Fail to init store row iter", K(ret));
   } else {
     iter = tmp_iter;
@@ -1755,7 +1765,7 @@ int ObSSTable::build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowItera
 
   if (OB_FAIL(ret) && OB_NOT_NULL(tmp_iter)) {
     tmp_iter->~ObStoreRowIterator();
-    FREE_TABLE_STORE_ROW_IETRATOR(context, tmp_iter);
+    FREE_TABLE_STORE_ROW_IETRATOR(access_context, tmp_iter);
     tmp_iter = nullptr;
   }
 
