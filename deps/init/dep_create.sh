@@ -77,6 +77,7 @@ function get_os_release() {
         ;;
       debian)
         version_ge "9" && compat_centos7 && return
+        version_ge "12" && compat_centos9 && return
         ;;
       fedora)
         version_ge "33" && compat_centos7 && return
@@ -113,6 +114,7 @@ function get_os_release() {
         ;;
       debian)
         version_ge "9" && compat_centos7 && return
+        version_ge "12" && compat_centos9 && return
         ;;
       ubuntu)
         version_ge "22.04" && compat_centos9 && return
