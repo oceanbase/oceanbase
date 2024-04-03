@@ -58,6 +58,7 @@ public:
       const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObIArray<common::ObAddr> &));
   MOCK_METHOD3(get_ls_leader, int(const uint64_t, const share::ObLSID &, common::ObAddr &));
   MOCK_METHOD2(get_ls, int(const share::ObLSID &, ObLSHandle &));
+  MOCK_METHOD0(check_tenant_primary, bool());
 };
 
 class MockMemberList
@@ -290,6 +291,15 @@ public:
     return ret;
   }
 
+  bool check_tenant_primary_true()
+  {
+    return true;
+  }
+  bool check_tenant_primary_false()
+  {
+    return false;
+  }
+
 public:
   palf::PalfHandleImpl mock_palf_handle_impl_;
   ObLS mock_ls_;
@@ -493,6 +503,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -529,6 +541,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_follower)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_follower));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -563,6 +577,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_region_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -597,6 +613,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_follower)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_region_follower));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -629,6 +647,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_diff_region_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -662,6 +682,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_follower)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_diff_region_follower));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -696,6 +718,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_follower)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_region_mode_region_follower));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -730,6 +754,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_region_mode_region_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -763,6 +789,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_follower)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_region_mode_diff_region_follower));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -795,6 +823,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_leader)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_region_mode_diff_region_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -831,6 +861,8 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rebuild)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_rebuild_mode));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -947,6 +979,8 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
   EXPECT_CALL(member_helper_, get_ls(_, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -991,6 +1025,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
   EXPECT_CALL(member_helper_, get_ls(_, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;
@@ -1037,6 +1073,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_r_replica_init)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
   EXPECT_CALL(member_helper_, get_ls(_, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
+  EXPECT_CALL(member_helper_, check_tenant_primary())
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
   share::SCN local_ls_checkpoint_scn;

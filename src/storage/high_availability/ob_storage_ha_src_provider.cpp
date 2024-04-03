@@ -222,6 +222,11 @@ int ObStorageHAGetMemberHelper::get_ls(const share::ObLSID &ls_id, ObLSHandle &l
   }
   return ret;
 }
+
+bool ObStorageHAGetMemberHelper::check_tenant_primary()
+{
+  return MTL_TENANT_ROLE_CACHE_IS_PRIMARY();
+}
 /**
  * ------------------------------ObStorageHASrcProvider---------------------
  */
@@ -541,6 +546,19 @@ const char *ObStorageHASrcProvider::get_policy_str(const ChooseSourcePolicy poli
   }
   return str;
 }
+
+int ObStorageHASrcProvider::check_tenant_primary(bool &is_primary)
+{
+  int ret = OB_SUCCESS;
+  is_primary = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObStorageHASrcProvider is not init.", K(ret));
+  } else {
+    is_primary = member_helper_->check_tenant_primary();
+  }
+  return ret;
+}
 /**
  * ------------------------------ObMigrationSrcByLocationProvider---------------------
  */
@@ -741,6 +759,7 @@ int ObMigrationSrcByLocationProvider::find_src(
   common::ObArray<int64_t> candidate_addr_list;
   int64_t leader_index = -1;
   choosen_src_addr.reset();
+  bool is_primary = false;
   LOG_INFO("start find source", K(start_index), K(end_index));
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -749,6 +768,8 @@ int ObMigrationSrcByLocationProvider::find_src(
     || !leader_addr.is_valid() || !dst.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(addr_list), K(start_index), K(end_index), K(leader_addr), K(dst));
+  } else if (OB_FAIL(check_tenant_primary(is_primary))) {
+    LOG_WARN("failed to check tenant primary", K(ret), "tenant_id", get_tenant_id());
   } else {
     for (int64_t i = start_index; OB_SUCC(ret) && i <= end_index && i < addr_list.count(); ++i) {
       if (OB_TMP_FAIL(check_replica_validity(addr_list.at(i), dst, learner_list, ls_info))) {
@@ -763,7 +784,7 @@ int ObMigrationSrcByLocationProvider::find_src(
               "ls_id", get_ls_id(), "addr", addr_list.at(i), K(dst), K(learner_list));
         }
       } else {
-        if (addr_list.at(i) != leader_addr) {
+        if (addr_list.at(i) != leader_addr || !is_primary) {
           if (OB_FAIL(candidate_addr_list.push_back(i))) {
             LOG_WARN("failed to push back to candidate_addr_list", K(ret), "index", i, K(addr_list));
           }

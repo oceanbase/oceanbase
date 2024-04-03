@@ -35,6 +35,7 @@ public:
       common::ObIArray<common::ObAddr> &member_list);
   virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
   virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
+  virtual bool check_tenant_primary();
 
 private:
   int fetch_ls_member_list_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool need_learner_list,
@@ -80,6 +81,7 @@ public:
 
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
   const static char *get_policy_str(const ChooseSourcePolicy policy_type);
+  int check_tenant_primary(bool &is_primary);
 
 protected:
   // The validity assessment of replicas includes:

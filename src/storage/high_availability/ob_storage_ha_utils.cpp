@@ -44,7 +44,7 @@ namespace oceanbase
 {
 namespace storage
 {
-
+ERRSIM_POINT_DEF(EN_CHECK_LOG_NEED_REBUILD);
 int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;
@@ -587,6 +587,45 @@ int64_t ObStorageHAUtils::get_rpc_timeout()
     rpc_timeout = std::max(rpc_timeout, tmp_rpc_timeout);
   }
   return rpc_timeout;
+}
+
+int ObStorageHAUtils::check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  common::ObAddr parent_addr;
+  ObLSHandle ls_handle;
+  bool is_log_sync = false;
+
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is not valid", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls->get_log_handler()->is_in_sync(is_log_sync, need_rebuild))) {
+    LOG_WARN("failed to get is_in_sync", K(ret), K(tenant_id), K(ls_id));
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = EN_CHECK_LOG_NEED_REBUILD ? : OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      need_rebuild = true;
+      SERVER_EVENT_ADD("storage_ha", "check_log_need_rebuild",
+                      "tenant_id", tenant_id,
+                      "ls_id", ls_id.id(),
+                      "result", tmp_ret);
+    }
+  }
+#endif
+  return ret;
 }
 
 void ObTransferUtils::set_transfer_module()

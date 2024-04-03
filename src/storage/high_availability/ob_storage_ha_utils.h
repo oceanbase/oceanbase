@@ -56,6 +56,7 @@ public:
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
 
   static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
+  static int check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
