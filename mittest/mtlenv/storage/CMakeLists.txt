@@ -27,6 +27,8 @@ storage_dml_unittest(test_macro_ref_cnt test_macro_ref_cnt.cpp)
 # storage_dml_unittest(test_multi_version_merge_recycle)
 # storage_unittest(test_speed_limit test_speed_limit.cpp)
 storage_dml_unittest(test_ls_tablet_info_writer_and_reader test_ls_tablet_info_writer_and_reader.cpp)
+storage_dml_unittest(test_transfer_barrier test_transfer_barrier.cpp)
+
 
 add_subdirectory(checkpoint)
 add_subdirectory(blocksstable)

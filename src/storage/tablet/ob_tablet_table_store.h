@@ -123,7 +123,6 @@ public:
   int get_first_frozen_memtable(ObITable *&table) const;
   int get_ddl_sstables(ObTableStoreIterator &iter) const;
   int get_mini_minor_sstables(
-      const bool is_ha_data_status_complete,
       ObTableStoreIterator &iter) const;
   int64_t get_memtables_count() const
   {
@@ -153,6 +152,8 @@ public:
       blocksstable::ObSSTable &orig_sstable,
       ObStorageMetaHandle &loaded_sstable_handle,
       blocksstable::ObSSTable *&loaded_sstable);
+  int get_all_minor_sstables(
+      ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
       common::ObIArray<ObStorageMetaKey> &keys,
@@ -274,7 +275,6 @@ private:
       common::ObIArray<ObITable *> &new_minor_sstables);
   int check_old_store_minor_sstables_(
       common::ObIArray<ObITable *> &old_store_minor_sstables);
-  int get_ha_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   int replace_ha_minor_sstables_(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
@@ -305,6 +305,7 @@ private:
       const ObIArray<ObITable *> &replace_sstable_array,
       const ObSSTableArray &old_tables,
       ObSSTableArray &new_tables) const;
+  int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;
