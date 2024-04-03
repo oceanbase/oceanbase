@@ -277,7 +277,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
           ParseNode *priv_level_node = node->children_[1];
           users_node = node->children_[2];
           //resolve priv_level
-          if (OB_ISNULL(priv_level_node)) {
+          if (OB_ISNULL(priv_level_node) || OB_ISNULL(allocator_)) {
             ret = OB_ERR_PARSE_SQL;
             LOG_WARN("Priv level node should not be NULL", K(ret));
           } else {
@@ -290,7 +290,8 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                         params_.session_info_->get_database_name(), 
                         db, 
                         table, 
-                        grant_level))) {
+                        grant_level,
+                        *allocator_))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
             } else if (OB_FAIL(check_and_convert_name(db, table))) {
               LOG_WARN("Check and convert name error", K(db), K(table), K(ret));

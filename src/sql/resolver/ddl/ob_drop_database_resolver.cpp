@@ -98,11 +98,9 @@ int ObDropDatabaseResolver::resolve(const ParseNode &parse_tree)
             CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
             OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                                session_info_,
-                                               database_name));
-            OZ (deep_copy_ob_string(*allocator_,
-                                    database_name,
-                                    deep_copy_database_name), database_name);
-            OX (drop_database_stmt->set_database_name(deep_copy_database_name));
+                                               database_name,
+                                               allocator_));
+            OX (drop_database_stmt->set_database_name(database_name));
           }
         }
       }
