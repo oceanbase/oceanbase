@@ -51,6 +51,7 @@ MockLocCB loc_cb;
 TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_majority)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_throttling_majority");
+  OB_LOGGER.set_log_level("INFO");
   int ret = OB_SUCCESS;
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "begin test throttling_majority", K(id));
@@ -239,13 +240,13 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_leader)
 
   PALF_LOG(INFO, "[CASE 2.1] before change_replica_num 3->5");
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
   max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   PALF_LOG(INFO, "[CASE 2.2] before change_replica_num 5->3");
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 5, 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 5, 3, CONFIG_CHANGE_TIMEOUT));
   wait_lsn_until_flushed(max_lsn, leader);
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
@@ -254,7 +255,7 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_leader)
   usleep(500 * 1000);
 
   //OB_TIMEOUT: committed_end_lsn of new majority is smaller than commited_end_lsn of leader
-  ASSERT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   /*
@@ -295,12 +296,12 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_leader)
   LSN new_max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   LSN leader_new_max_lsn = new_leader.palf_handle_impl_->sw_.get_max_lsn();
   PALF_LOG(INFO, "before remove member",K(leader_old_max_lsn), K(leader_cur_max_lsn), K(leader_new_max_lsn), K(old_max_lsn), K(cur_max_lsn), K(new_max_lsn));
-  ASSERT_EQ(OB_TIMEOUT, new_leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_TIMEOUT, new_leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_C_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id, 1 * KB));
   usleep(500 * 1000);
   LogConfigVersion config_version;
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(new_leader, 1, id, 1 * KB));
 
   PALF_LOG(INFO, "end test throttling_minor_leader", K(id));
@@ -367,35 +368,35 @@ TEST_F(TestObSimpleLogIOWorkerThrottlingV2, test_throttling_minor_follower)
   wait_lsn_until_flushed(max_lsn, leader);
 
   PALF_LOG(INFO, "[CASE 3.1] before change_replica_num 3->5");
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 3, 5, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
   max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
   PALF_LOG(INFO, "[CASE 3.2] before change_replica_num 5->3");
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 5, 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_replica_num(get_member_list(), 5, 3, CONFIG_CHANGE_TIMEOUT));
 
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   usleep(500 * 1000);
   PALF_LOG(INFO, "[CASE 3.4] test add_member(3-4)");
   LogConfigVersion config_version;
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 4, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
 
   PALF_LOG(INFO, "[CASE 3.3] test remove_member");
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   usleep(500 * 1000);
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 512 * KB));
   usleep(500 * 1000);
   PALF_LOG(INFO, "[CASE 3.4] test add_member");
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
+  EXPECT_UNTIL_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[follower_B_idx]->get_addr(), 1), 3, config_version, CONFIG_CHANGE_TIMEOUT));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1 * KB));
 
   PALF_LOG(INFO, "[CASE 3.5] test switch_leader to C (not throttled replica)");
