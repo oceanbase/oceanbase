@@ -180,7 +180,7 @@ TestSqlUtils::TestSqlUtils()
     auto& cluster_version = ObClusterVersion::get_instance();
     cluster_version.init(&common::ObServerConfig::get_instance(), &oceanbase::omt::ObTenantConfigMgr::get_instance());
     oceanbase::omt::ObTenantConfigMgr::get_instance().add_tenant_config(sys_tenant_id_);
-    cluster_version.refresh_cluster_version("4.2.0.0");
+    cluster_version.refresh_cluster_version("4.3.0.0");
 
     ObServer &observer = ObServer::get_instance();
     int ret = OB_SUCCESS;
