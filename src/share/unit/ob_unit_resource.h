@@ -100,6 +100,10 @@ public:
   // MIN_CPU * FACTOR = IOPS
   static constexpr double CPU_TO_IOPS_FACTOR = 10000;
 
+  ////////////////////// NET_BANDWIDTH //////////////////////////
+  static const int64_t DEFAULT_NET_BANDWIDTH = INT64_MAX;
+  static const int64_t DEFAULT_NET_BANDWIDTH_WEIGHT = 0;
+
 public:
   ObUnitResource() { reset(); }
   ObUnitResource(const ObUnitResource &r) { *this = r; }
@@ -386,7 +390,9 @@ protected:
   int64_t max_iops_;
   int64_t min_iops_;
   int64_t iops_weight_;
-  int64_t data_disk_size_;    // not used, only as placeholder
+  int64_t data_disk_size_;          // not used, only as placeholder
+  int64_t max_net_bandwidth_;       // not used, only as placeholder
+  int64_t net_bandwidth_weight_;    // not used, only as placeholder
 };
 
 

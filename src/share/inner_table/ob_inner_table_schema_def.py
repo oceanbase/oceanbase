@@ -814,6 +814,8 @@ def_table_schema(
         ('min_iops', 'int'),
         ('iops_weight', 'int'),
         ('data_disk_size', 'int', 'false', '-1'),
+        ('max_net_bandwidth', 'int', 'false', '9223372036854775807'), # INT64_MAX
+        ('net_bandwidth_weight', 'int', 'false', '0'),
     ],
 )
 
@@ -11736,6 +11738,8 @@ def_table_schema(
       ('zone_type', 'varchar:MAX_ZONE_TYPE_LENGTH'),
       ('region', 'varchar:MAX_REGION_LENGTH'),
       ('data_disk_size', 'int', 'true'),
+      ('max_net_bandwidth', 'int', 'true'),
+      ('net_bandwidth_weight', 'int', 'true'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

@@ -2459,6 +2459,8 @@ typedef enum ObItemType
   T_REPAIR_TABLE,
   T_CHECKSUM_TABLE,
   T_SERVICE_NAME,
+  T_MAX_NET_BANDWIDTH,
+  T_NET_BANDWIDTH_WEIGHT,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
