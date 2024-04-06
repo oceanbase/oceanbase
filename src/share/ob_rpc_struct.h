@@ -3879,6 +3879,7 @@ public:
   common::ObSArray<storage::ObCreateTabletSchema*> create_tablet_schemas_;
   ObArenaAllocator allocator_;
   common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
+  share::SCN clog_checkpoint_scn_;
 };
 
 struct ObBatchRemoveTabletArg
