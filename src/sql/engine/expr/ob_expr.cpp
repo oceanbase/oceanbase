@@ -365,7 +365,7 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
   if (is_batch_result()) {
     // Evaluate one datum within a batch.
     bool need_evaluate = false;
-    if (eval_info->projected_){
+    if (eval_info->projected_) {
       datum = datum + ctx.get_batch_idx();
     } else {
       ObBitVector* evaluated_flags = to_bit_vector(frame + eval_flags_off_);
@@ -709,6 +709,8 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     info->notnull_ = true;
     if (enable_rich_format()) {
       ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
+    } else if (UINT32_MAX != vector_header_off_) {
+      get_vector_header(ctx).format_ = VEC_INVALID;
     }
   } else {
     ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
@@ -767,8 +769,12 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       reset_datums_ptr(frame, size);
       info->notnull_ = false;
       info->point_to_frame_ = true;
+      info->evaluated_ = true;
+      info->cnt_ = size;
       if (enable_rich_format()) {
         ret = init_vector(ctx, VEC_UNIFORM, size);
+      } else if (UINT32_MAX != vector_header_off_) {
+        get_vector_header(ctx).format_ = VEC_INVALID;
       }
     }
     if (OB_FAIL(ret)) {
@@ -786,10 +792,6 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
         ret = (*eval_batch_func_)(*this, ctx, skip, size);
       }
       if (OB_SUCC(ret)) {
-        if (!info->evaluated_) {
-          info->cnt_ = size;
-          info->evaluated_ = true;
-        }
         #ifndef NDEBUG
           if (is_oracle_mode() && (ob_is_string_tc(datum_meta_.type_) || ob_is_raw(datum_meta_.type_))) {
             ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
@@ -1155,6 +1157,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
     get_evaluated_flags(ctx).reset(BATCH_SIZE());
     info.notnull_ = false;
     info.point_to_frame_ = true;
+    info.evaluated_ = batch_result_ ? true : false;
     VectorFormat format = (expr_default_eval_vector_func == eval_vector_func_ && is_batch_result())
                           ? VEC_UNIFORM
                           : get_default_res_format();
