@@ -362,6 +362,7 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
     is_schema_changed_(false),
     tenant_id_(0),
+    co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
     reserved_(0),
     cluster_id_(0),
     data_version_(0),
@@ -449,6 +450,7 @@ void ObMediumCompactionInfo::reset()
   contain_parallel_range_ = false;
   medium_merge_reason_ = ObAdaptiveMergePolicy::NONE;
   is_schema_changed_ = false;
+  co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   tenant_id_ = 0;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
@@ -591,6 +593,7 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
       "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
       K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
+      "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(co_major_merge_type_)),
       K_(contain_parallel_range), K_(parallel_merge_info));
     J_OBJ_END();
   }

@@ -729,17 +729,6 @@ int ObDataStoreDesc::inner_init(
     } else {
       micro_block_size_ = MAX(merge_schema.get_block_size(), MIN_MICRO_BLOCK_SIZE);
     }
-
-    bool need_build_hash_index = merge_schema.get_table_type() == USER_TABLE && !is_major;
-    if (need_build_hash_index
-        && OB_FAIL(ObMicroBlockHashIndexBuilder::need_build_hash_index(
-            merge_schema, need_build_hash_index))) {
-      STORAGE_LOG(WARN, "Failed to judge whether to build hash index", K(ret));
-      need_build_hash_index_for_micro_block_ = false;
-      ret = OB_SUCCESS;
-    } else {
-      need_build_hash_index_for_micro_block_ = need_build_hash_index;
-    }
   }
   return ret;
 }
@@ -807,8 +796,6 @@ void ObDataStoreDesc::reset()
   merge_info_ = NULL;
   sstable_index_builder_ = nullptr;
   is_force_flat_store_type_ = false;
-  need_pre_warm_ = false;
-  need_build_hash_index_for_micro_block_ = false;
   micro_block_size_ = 0;
 }
 
@@ -817,8 +804,6 @@ int ObDataStoreDesc::shallow_copy(const ObDataStoreDesc &desc)
   int ret = OB_SUCCESS;
   static_desc_ = desc.static_desc_;
   col_desc_ = desc.col_desc_;
-  need_pre_warm_ = desc.need_pre_warm_;
-  need_build_hash_index_for_micro_block_ = desc.need_build_hash_index_for_micro_block_;
   micro_block_size_ = desc.micro_block_size_;
   row_store_type_ = desc.get_row_store_type();
   encoder_opt_ = desc.encoder_opt_;

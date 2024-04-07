@@ -61,7 +61,6 @@ int ObDataDescHelper::build(
     // init desc input data_store_desc
     data_store_desc.sstable_index_builder_ = input_merge_info.get_index_builder();
     data_store_desc.merge_info_ = &output_merge_info;
-    data_store_desc.need_pre_warm_ = true;
   }
   return ret;
 }
@@ -206,7 +205,6 @@ ObMerger::ObMerger(
     task_idx_(0),
     force_flat_format_(false),
     merge_param_(static_param),
-    read_info_(),
     partition_fuser_(nullptr),
     merge_helper_(nullptr),
     base_iter_(nullptr),
@@ -230,7 +228,6 @@ void ObMerger::reset()
 
   trans_state_mgr_.destroy();
   base_iter_ = nullptr;
-  read_info_.reset();
   merge_param_.reset();
   force_flat_format_ = false;
   task_idx_ = 0;
@@ -247,15 +244,9 @@ int ObMerger::prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx)
   } else {
     merge_ctx_ = &ctx;
     task_idx_ = idx;
-    int64_t schema_stored_col_cnt = 0;
 
     if (OB_FAIL(merge_param_.init(ctx, task_idx_, &merger_arena_))) {
       STORAGE_LOG(WARN, "Failed to assign the merge param", K(ret), KPC(merge_ctx_), K_(task_idx));
-    } else if (OB_FAIL(ctx.get_schema()->get_store_column_count(schema_stored_col_cnt, true/*full_col*/))) {
-      LOG_WARN("failed to get storage count", K(ret), KPC(ctx.get_schema()));
-    } else if (OB_FAIL(read_info_.init(merger_arena_, schema_stored_col_cnt, ctx.get_schema()->get_rowkey_column_num(),
-            lib::is_oracle_mode(), merge_param_.static_param_.multi_version_column_descs_))) {
-      LOG_WARN("Fail to init read_info", K(ret));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(trans_state_mgr_.init(CACHED_TRANS_STATE_MAX_CNT))) {
@@ -616,7 +607,7 @@ int ObPartitionMajorMerger::inner_init()
   if (OB_FAIL(init_progressive_merge_helper())) {
     STORAGE_LOG(WARN, "Failed to init progressive_merge_helper", K(ret));
   } else {
-    merge_helper_ = OB_NEWx(ObPartitionMajorMergeHelper, (&merger_arena_), read_info_, merger_arena_);
+    merge_helper_ = OB_NEWx(ObPartitionMajorMergeHelper, (&merger_arena_), merge_ctx_->read_info_, merger_arena_);
 
     if (OB_ISNULL(merge_helper_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -949,7 +940,7 @@ void ObPartitionMinorMerger::reset()
 int ObPartitionMinorMerger::inner_init()
 {
   int ret = OB_SUCCESS;
-  merge_helper_ = OB_NEWx(ObPartitionMinorMergeHelper, (&merger_arena_), read_info_, merger_arena_);
+  merge_helper_ = OB_NEWx(ObPartitionMinorMergeHelper, (&merger_arena_), merge_ctx_->read_info_, merger_arena_);
 
   if (OB_ISNULL(merge_helper_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

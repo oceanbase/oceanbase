@@ -137,9 +137,10 @@ public:
   OB_INLINE bool is_rowkey_column_group() const { return type_ == share::schema::ROWKEY_COLUMN_GROUP; }
   OB_INLINE bool is_single_column_group() const { return type_ == share::schema::SINGLE_COLUMN_GROUP; }
   OB_INLINE bool has_multi_version_column() const { return is_all_column_group() || is_rowkey_column_group(); }
+  OB_INLINE bool is_inited() const { return row_store_type_ != MAX_ROW_STORE; };
 
-  TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size),
-      K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
+  TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size), K_(schema_column_cnt), K_(rowkey_column_cnt),
+      K_(schema_rowkey_column_cnt), K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
 public:
   static const int64_t COLUMN_GRUOP_SCHEMA_VERSION = 1;
   uint8_t version_;
@@ -249,7 +250,13 @@ public:
                            bool need_trim,
                            blocksstable::ObDatumRow &default_row) const;
   const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
-
+  int mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const;
+  int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
+  // This function only get cg idx for actually stored column
+  int get_column_group_index(
+      const uint64_t &column_id,
+      const int32_t &column_idx,
+      int32_t &cg_idx) const;
   // Use this comparison function to determine which schema has been updated later
   // true: input_schema is newer
   // false: current schema is newer
@@ -296,7 +303,7 @@ private:
   int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
-  int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type);
+  int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const;
   template <typename T>
   int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>

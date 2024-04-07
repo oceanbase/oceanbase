@@ -32,6 +32,7 @@ public:
   virtual ~ObSSTableMultiVersionRowGetter() {}
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
 protected:
   virtual int inner_open(
       const ObTableIterParam &iter_param,
@@ -44,7 +45,6 @@ protected:
   int64_t range_idx_;
 private:
   const blocksstable::ObDatumRowkey *base_rowkey_;
-  storage::ObObjBufArray obj_buf_;
   blocksstable::ObDatumRow not_exist_row_;
 };
 
@@ -52,13 +52,12 @@ class ObSSTableMultiVersionRowScanner : public ObSSTableMultiVersionRowGetter
 {
 public:
   ObSSTableMultiVersionRowScanner()
-      : read_newest_(false),
-      base_range_(nullptr),
-      trans_version_range_()
+      : base_range_(nullptr)
   {}
   virtual ~ObSSTableMultiVersionRowScanner() {}
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
 protected:
   virtual int inner_open(
       const ObTableIterParam &iter_param,
@@ -68,9 +67,7 @@ protected:
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override
   { return ObSSTableRowScanner::inner_get_next_row(row); }
 private:
-  bool read_newest_;
   const blocksstable::ObDatumRange *base_range_;
-  common::ObVersionRange trans_version_range_;
 };
 
 
@@ -88,6 +85,7 @@ public:
   virtual ~ObSSTableMultiVersionRowMultiGetter() {}
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
 protected:
   virtual int inner_open(
       const ObTableIterParam &iter_param,

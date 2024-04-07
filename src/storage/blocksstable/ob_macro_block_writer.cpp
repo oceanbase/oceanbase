@@ -496,8 +496,10 @@ int ObMacroBlockWriter::open(
       last_key_.set_min_rowkey(); // used to protect cg sstable
     }
 
-    if (OB_FAIL(init_hash_index_builder())) {
+    if (OB_FAIL(init_hash_index_builder(start_seq))) {
       STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
+    } else if (OB_FAIL(init_data_pre_warmer(start_seq))) {
+      STORAGE_LOG(WARN, "Failed to build data pre warmer", K(ret));
     } else if (OB_FAIL(build_micro_writer(data_store_desc_,
                                           allocator_,
                                           micro_writer_,
@@ -548,8 +550,6 @@ int ObMacroBlockWriter::open(
         STORAGE_LOG(WARN, "unexpected null builder", K(ret), KPC(sstable_index_builder));
       } else if (OB_FAIL(builder_->set_parallel_task_idx(task_idx))) {
         STORAGE_LOG(WARN, "fail to set_parallel_task_idx", K(ret), K(task_idx));
-      } else if (data_store_desc.need_pre_warm()) {
-        data_block_pre_warmer_.init();
       }
     } else {
       builder_ = nullptr;
@@ -957,13 +957,45 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
   return ret;
 }
 
-int ObMacroBlockWriter::init_hash_index_builder()
+int ObMacroBlockWriter::init_hash_index_builder(const ObMacroDataSeq &start_seq)
 {
   int ret = OB_SUCCESS;
-  if (data_store_desc_->need_build_hash_index_for_micro_block_
-        && OB_FAIL(hash_index_builder_.init(data_store_desc_))) {
-    STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
+  if (data_store_desc_->get_tablet_id().is_user_tablet()
+      && !data_store_desc_->is_major_or_meta_merge_type()
+      && start_seq.is_data_block()) {
+    // only build hash index for data block in minor
+    if (OB_FAIL(hash_index_builder_.init_if_needed(data_store_desc_))) {
+      STORAGE_LOG(WARN, "Failed to build hash_index builder", K(ret));
+    }
   }
+  return ret;
+}
+
+int ObMacroBlockWriter::init_data_pre_warmer(const ObMacroDataSeq &start_seq)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = data_store_desc_->get_tablet_id();
+  if (tablet_id.is_user_tablet()) {
+    bool need_pre_warm = false;
+    int tmp_ret = OB_SUCCESS;
+    if (start_seq.is_data_block()) {
+      ObTabletStatAnalyzer tablet_analyzer;
+      if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(
+              data_store_desc_->get_ls_id(), tablet_id, tablet_analyzer))) {
+        STORAGE_LOG(WARN, "Failed to get tablet stat analyzer", K(tmp_ret));
+      } else {
+        need_pre_warm = true;
+      }
+    } else if (start_seq.is_index_block()) {
+      need_pre_warm = true;
+    }
+    if (need_pre_warm) {
+      if (OB_TMP_FAIL(data_block_pre_warmer_.init())) {
+        STORAGE_LOG(WARN, "Failed to init pre warmer", K(tmp_ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1086,7 +1118,7 @@ int ObMacroBlockWriter::build_micro_block()
 
   if (OB_SUCC(ret)) {
     micro_writer_->reuse();
-    if (data_store_desc_->need_build_hash_index_for_micro_block_) {
+    if (hash_index_builder_.is_valid()) {
       hash_index_builder_.reuse();
     }
     if (OB_NOT_NULL(merge_info_)) {

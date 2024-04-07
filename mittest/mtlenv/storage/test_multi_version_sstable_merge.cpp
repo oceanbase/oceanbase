@@ -231,6 +231,7 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
   ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
@@ -464,7 +465,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint  dml  flag    multi_version_row_flag trans_id\n"
       "0        var1  -8       0        NOP      1     T_DML_UPDATE EXIST   LF  trans_id_0\n"
-      "1        var1  -9       0        10       NOP   T_DML_UPDATE  EXIST   FU  trans_id_1\n"
+      "1        var1  MIN       0        10       NOP   T_DML_UPDATE  EXIST   FU  trans_id_1\n"
       "1        var1  -8       MIN      3         3    T_DML_UPDATE  EXIST   SC  trans_id_0\n"
       "1        var1  -8       0        3        NOP   T_DML_UPDATE  EXIST   N  trans_id_0\n";
 
@@ -546,8 +547,8 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
       "0        var1  -10      MIN      NOP      10     EXIST   SF\n"
       "0        var1  -10      0        NOP      10     EXIST   N\n"
       "0        var1  -8       0        NOP      1      EXIST   L\n"
-      "1        var1  -9       MIN      10       3      EXIST   SCF\n"
-      "1        var1  -9       0        10       NOP    EXIST   N\n"
+      "1        var1  -10       MIN      10       3      EXIST   SCF\n"
+      "1        var1  -10       0        10       NOP    EXIST   N\n"
       "1        var1  -8       0        3        NOP    EXIST   N\n"
       "1        var1  -5       0        NOP      3      EXIST   L\n"
       "2        var1  -10      MIN      2        12     EXIST   SCF\n"
@@ -679,7 +680,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint   flag    multi_version_row_flag trans_id\n"
       "0        var1  -8       0        NOP      1      EXIST   LF  trans_id_0\n"
-      "1        var1  -9       0        10       NOP     EXIST  FU  trans_id_1\n";
+      "1        var1  MIN       0        10       NOP     EXIST  FU  trans_id_1\n";
 
   micro_data[1] =
       "bigint   var   bigint   bigint   bigint  bigint flag    multi_version_row_flag\n"
@@ -759,8 +760,8 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
       "0        var1  -10      -9223372036854775807  NOP      10     EXIST   SF\n"
       "0        var1  -10      0        NOP      10     EXIST   N\n"
       "0        var1  -8       0        NOP      1      EXIST   L\n"
-      "1        var1  -9      -9223372036854775807  10 3 EXIST  SCF\n"
-      "1        var1  -9       0        10       NOP    EXIST   N\n"
+      "1        var1  -10      -9223372036854775807  10 3 EXIST  SCF\n"
+      "1        var1  -10       0        10       NOP    EXIST   N\n"
       "1        var1  -5       0        NOP      3      EXIST   L\n"
       "2        var1  -10      -9223372036854775807  2 12     EXIST   SCF\n"
       "2        var1  -10      0        NOP      12     EXIST   N\n"
@@ -800,7 +801,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint   flag    multi_version_row_flag trans_id\n"
       "0        var1  -8       0        NOP      1      EXIST   LF  trans_id_0\n"
-      "1        var1  -9       0        10       NOP     EXIST  FU  trans_id_1\n";
+      "1        var1  MIN       0        10       NOP     EXIST  FU  trans_id_1\n";
 
   micro_data[1] =
       "bigint   var   bigint   bigint   bigint  bigint flag    multi_version_row_flag\n"
@@ -884,8 +885,8 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
       "0        var1  -10      -9223372036854775807  NOP      10     EXIST   SF\n"
       "0        var1  -10      0        NOP      10     EXIST   N\n"
       "0        var1  -8       0        NOP      1      EXIST   L\n"
-      "1        var1  -9      -9223372036854775807  10 3 EXIST   SCF\n"
-      "1        var1  -9       0        10       NOP    EXIST   N\n"
+      "1        var1  -10      -9223372036854775807  10 3 EXIST   SCF\n"
+      "1        var1  -10       0        10       NOP    EXIST   N\n"
       "1        var1  -8       0        3        NOP    EXIST   N\n"
       "1        var1  -5       0        NOP      3      EXIST   L\n"
       "2        var1  -10      -9223372036854775807  2 12     EXIST   SCF\n"
@@ -2315,9 +2316,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_
       "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
       "0        var1  -10      0        NOP      10     EXIST   LF\n"
       "1        var1  -8       0        2        2      EXIST   CLF\n"
-      "2        var1  -8       MIN      3       2       EXIST   SCF\n"
-      "2        var1  -8       0        3        2      EXIST   C\n"
-      "2        var1  -6       0        2       2       EXIST   CL\n"
+      "2        var1  -8       0        3        2      EXIST   CLF\n"
       "3        var1  -10      0        NOP      13     EXIST   LF\n";
 
   ObMockIterator res_iter;

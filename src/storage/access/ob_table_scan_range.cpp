@@ -313,6 +313,29 @@ int ObTableScanRange::init_ranges_in_skip_scan(const common::ObIArray<common::Ob
   return ret;
 }
 
+int ObTableScanRange::get_query_iter_type(ObQRIterType &iter_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited");
+  } else {
+    iter_type = T_INVALID_ITER_TYPE;
+    if (is_get()) {
+      if (get_rowkeys().count() == 1) {
+        iter_type = T_SINGLE_GET;
+      } else {
+        iter_type = T_MULTI_GET;
+      }
+    } else if (get_ranges().count() == 1) {
+      iter_type = T_SINGLE_SCAN;
+    } else {
+      iter_type = T_MULTI_SCAN;
+    }
+  }
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

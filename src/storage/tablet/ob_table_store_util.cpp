@@ -590,7 +590,7 @@ int ObSSTableArray::get_table(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should be co sstable", K(ret), K(table_key), KPC(cur_table));
       } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(cur_table))) {
-      } else if (co_sstable->is_empty_co_table()) {
+      } else if (co_sstable->is_cgs_empty_co_table()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("empty co table has no cg table", K(ret), K(table_key), KPC(co_sstable), KPC(this));
         ob_abort(); // tmp debug code

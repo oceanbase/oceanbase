@@ -185,15 +185,6 @@ int ObGetSampleIterHelper::get_sample_iter(ObMemtableRowSampleIterator *&sample_
   OPEN_SAMPLE_ITER(ObMemtableRowSampleIterator, sample_iter);
   return ret;
 }
-int ObGetSampleIterHelper::get_sample_iter(ObRowSampleIterator *&sample_iter,
-                                           ObQueryRowIterator *&main_iter,
-                                           ObMultipleScanMerge *scan_merge)
-{
-  int ret = OB_SUCCESS;
-  CONSTRUCT_SAMPLE_ITER(ObRowSampleIterator, sample_iter);
-  OPEN_SAMPLE_ITER(ObRowSampleIterator, sample_iter);
-  return ret;
-}
 
 int ObGetSampleIterHelper::get_sample_iter(ObBlockSampleIterator *&sample_iter,
                                            ObQueryRowIterator *&main_iter,

@@ -446,7 +446,7 @@ TEST_F(TestCOSSTableRowsFilter, co_sstable_rows_filter_test_init)
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   init_all();
   ret = co_filter_.init(iter_param_, context_, &co_sstable_);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 TEST_F(TestCOSSTableRowsFilter, co_sstable_rows_filter_test_rewrite_filter_case_one)

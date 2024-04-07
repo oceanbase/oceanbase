@@ -99,25 +99,8 @@ public:
   {
   }
   ~ObMicroBlockHashIndexBuilder() {}
-  int init(const ObDataStoreDesc *data_store_desc)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(is_inited_)) {
-      ret = OB_INIT_TWICE;
-      STORAGE_LOG(WARN, "Micro_hash_index_builder is inited twice", K(ret));
-    } else {
-      row_index_ = 0;
-      count_ = 0;
-      last_key_with_L_flag_ = false;
-      data_store_desc_ = data_store_desc;
-      is_inited_ = true;
-    }
-    return ret;
-  }
-  OB_INLINE bool is_valid() const
-  {
-    return is_inited_;
-  }
+  int init_if_needed(const ObDataStoreDesc *data_store_desc);
+  OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE void reset()
   {
     row_index_ = 0;
@@ -125,10 +108,7 @@ public:
     last_key_with_L_flag_ = false;
     is_inited_ = false;
   }
-  OB_INLINE bool is_empty()
-  {
-    return 0 == count_;
-  }
+  OB_INLINE bool is_empty() const { return 0 == count_; }
   OB_INLINE uint16_t caculate_bucket_number(uint32_t count) const
   {
     uint16_t estimated_num_buckets =
@@ -157,11 +137,9 @@ public:
   }
   int add(const ObDatumRow &row);
   int build_block(ObMicroBufferWriter &buffer);
-  static int need_build_hash_index(
-      const ObMergeSchema &merge_schema,
-      bool &need_build);
 private:
-  OB_INLINE bool can_be_added_to_hash_index(const ObDatumRow &row);
+  int check_need_build_hash_index(const ObDataStoreDesc &data_store_desc, bool &need_build);
+  bool can_be_added_to_hash_index(const ObDatumRow &row);
   int internal_add(const uint64_t hash_value, const uint32_t row_index);
 private:
   uint32_t count_;

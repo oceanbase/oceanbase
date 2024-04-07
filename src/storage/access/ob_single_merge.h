@@ -26,8 +26,9 @@ public:
   ObSingleMerge();
   virtual ~ObSingleMerge();
   int open(const blocksstable::ObDatumRowkey &rowkey);
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;

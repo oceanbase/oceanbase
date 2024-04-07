@@ -345,12 +345,15 @@ int ObDictColumnDecoder::pushdown_operator(
   } else {
     const ObDictColumnDecoderCtx &ctx = col_ctx.dict_ctx_;
     const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-    if (parent == nullptr && dict_val_cnt > pd_filter_info.count_ * 0.5) {
-      // skip
-    } else if (parent != nullptr && dict_val_cnt > pd_filter_info.count_ * 0.3) {
-      // The parent may be high selectivity, in which case it might be better to do black filter at the upper level.
-      // So the conditions here would be more stringent, and it would be better to know how much the parent can filter.
-    } else {
+    uint64_t effective_rows = pd_filter_info.count_;
+    if (parent != nullptr && parent->need_check_row_filter()) {
+      if (parent->is_logic_and_node()) {
+        effective_rows = parent->get_result()->popcnt();
+      } else {
+        effective_rows = pd_filter_info.count_ - parent->get_result()->popcnt();
+      }
+    }
+    if (effective_rows > 1.2 * dict_val_cnt) {
       common::ObBitmap *ref_bitmap = nullptr;
       common::ObDatum *datums = nullptr;
       ObSEArray<ObSqlDatumInfo, 16> datum_infos;

@@ -32,6 +32,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
 #include "ob_table_scan_range.h"
+#include "ob_global_iterator_pool.h"
 
 namespace oceanbase
 {
@@ -71,6 +72,9 @@ private:
   static const int64_t LOOP_RESCAN_BUFFER_SIZE = 8 * 1024; // 8K
   int prepare_table_param(const ObTabletHandle &tablet_handle);
   int prepare_table_context();
+  bool can_use_global_iter_pool(const ObQRIterType iter_type) const;
+  int prepare_cached_iter_node();
+  void try_release_cached_iter_node(const ObQRIterType rescan_iter_type);
   template<typename T> int init_scan_iter(T *&iter);
   template<typename T> void reset_scan_iter(T *&iter);
   int switch_scan_param(ObMultipleMerge &iter);
@@ -95,6 +99,7 @@ private:
 
 private:
   bool is_inited_;
+  ObQRIterType current_iter_type_;
   ObSingleMerge *single_merge_;
   ObMultipleGetMerge *get_merge_;
   ObMultipleScanMerge *scan_merge_;
@@ -113,6 +118,8 @@ private:
   ObTableScanRange table_scan_range_;
   ObQueryRowIterator *main_iter_;
   ObSEArray<ObDatumRange, 1> sample_ranges_;
+  CachedIteratorNode *cached_iter_node_;
+  ObQueryRowIterator **cached_iter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanIterator);
 };

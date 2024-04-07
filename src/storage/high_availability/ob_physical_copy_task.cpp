@@ -620,7 +620,8 @@ ObSSTableCopyFinishTask::ObSSTableCopyFinishTask()
     ls_(nullptr),
     tablet_service_(nullptr),
     sstable_index_builder_(),
-    restore_macro_block_id_mgr_(nullptr)
+    restore_macro_block_id_mgr_(nullptr),
+    mocked_row_store_cg_()
 {
 }
 
@@ -829,6 +830,12 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
       if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
+      } else if (ALL_CG_TYPE == sstable_param->co_base_type_ && cg_schema->is_rowkey_column_group()) {
+        if (OB_FAIL(storage_schema->mock_row_store_cg(mocked_row_store_cg_))) {
+          LOG_WARN("failed to mock row store column group schema", K(ret));
+        } else {
+          cg_schema = &mocked_row_store_cg_;
+        }
       } else {
         cg_schema = &storage_schema->get_column_groups().at(cg_idx);
       }
@@ -983,12 +990,10 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     } else if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema_ptr))) {
       LOG_WARN("failed to load storage_schema", K(ret), KPC(tablet));
     } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
-    } else if (FALSE_IT(param.is_empty_co_table_ = param.table_key_.is_ddl_sstable() ? false : true)) {
+    } else if (FALSE_IT(param.is_co_table_without_cgs_ = param.table_key_.is_ddl_sstable() ? false : true)) {
     } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
       LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret), KPC(storage_schema_ptr));
-    } else if (FALSE_IT(param.co_base_type_ = storage_schema_ptr->has_all_column_group()
-                                            ? ObCOSSTableBaseType::ALL_CG_TYPE
-                                            : ObCOSSTableBaseType::ROWKEY_CG_TYPE)) {
+    } else if (FALSE_IT(param.co_base_type_ = sstable_param_->co_base_type_)) {
     } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
             tablet_copy_finish_task_->get_allocator(), table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(param), K(copy_ctx_));
@@ -1041,6 +1046,7 @@ int ObSSTableCopyFinishTask::create_sstable_with_index_builder_()
         } else if (FALSE_IT(param.column_group_cnt_ = sstable_param_->column_group_cnt_)) {
         } else if (FALSE_IT(param.full_column_cnt_ = sstable_param_->full_column_cnt_)) {
         } else if (FALSE_IT(param.co_base_type_ = sstable_param_->co_base_type_)) {
+        } else if (FALSE_IT(param.is_co_table_without_cgs_ = sstable_param_->is_empty_cg_sstables_)) {
         } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param,
               tablet_copy_finish_task_->get_allocator(), table_handle))) {
           LOG_WARN("failed to create co sstable", K(ret), K(copy_ctx_), KPC(sstable_param_));

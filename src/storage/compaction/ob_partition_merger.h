@@ -115,7 +115,6 @@ protected:
   int64_t task_idx_;
   bool force_flat_format_;
   ObMergeParameter merge_param_;
-  ObRowkeyReadInfo read_info_;
   ObIPartitionMergeFuser *partition_fuser_;
   ObPartitionMergeHelper *merge_helper_;
   ObPartitionMergeIter *base_iter_;

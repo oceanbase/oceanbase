@@ -22,8 +22,6 @@ using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 namespace storage
 {
-const int64_t ObMultipleGetMerge::MAX_MULTI_GET_FUSE_ROW_CACHE_PUT_COUNT = 50;
-
 ObMultipleGetMerge::ObMultipleGetMerge()
   : rowkeys_(NULL),
     cow_rowkeys_(),
@@ -48,7 +46,6 @@ int ObMultipleGetMerge::open(const common::ObIArray<ObDatumRowkey> &rowkeys)
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
   } else {
     rowkeys_ = &rowkeys;
-    access_ctx_->use_fuse_row_cache_ = false;
     if (OB_FAIL(construct_iters())) {
       STORAGE_LOG(WARN, "fail to construct iters", K(ret));
     } else {
@@ -60,18 +57,12 @@ int ObMultipleGetMerge::open(const common::ObIArray<ObDatumRowkey> &rowkeys)
   return ret;
 }
 
-void ObMultipleGetMerge::reset_with_fuse_row_cache()
-{
-  get_row_range_idx_ = 0;
-  reset_iter_array();
-}
-
 void ObMultipleGetMerge::reset()
 {
   ObMultipleMerge::reset();
   rowkeys_ = NULL;
   cow_rowkeys_.reset();
-  reset_with_fuse_row_cache();
+  get_row_range_idx_ = 0;
 }
 
 void ObMultipleGetMerge::reuse()
@@ -80,9 +71,17 @@ void ObMultipleGetMerge::reuse()
   get_row_range_idx_ = 0;
 }
 
+void ObMultipleGetMerge::reclaim()
+{
+  ObMultipleMerge::reclaim();
+  rowkeys_ = NULL;
+  cow_rowkeys_.reuse();
+  get_row_range_idx_ = 0;
+}
+
 int ObMultipleGetMerge::prepare()
 {
-  reset_with_fuse_row_cache();
+  get_row_range_idx_ = 0;
   return OB_SUCCESS;
 }
 

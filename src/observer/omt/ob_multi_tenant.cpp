@@ -146,6 +146,7 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
 #include "storage/access/ob_empty_read_bucket.h"
+#include "storage/access/ob_global_iterator_pool.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
@@ -577,6 +578,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 #ifdef OB_BUILD_DBLINK
     MTL_BIND2(common::sqlclient::ObTenantDblinkKeeper::mtl_new, common::sqlclient::ObTenantDblinkKeeper::mtl_init, nullptr, nullptr, nullptr, common::sqlclient::ObTenantDblinkKeeper::mtl_destroy);
 #endif
+    MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {

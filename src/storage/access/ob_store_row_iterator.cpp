@@ -34,6 +34,15 @@ void ObStoreRowIterator::reuse()
 void ObStoreRowIterator::reset()
 {
   is_sstable_iter_ = false;
+  is_reclaimed_ = false;
+  block_row_store_ = nullptr;
+  long_life_allocator_ = nullptr;
+}
+
+void ObStoreRowIterator::reclaim()
+{
+  reset();
+  is_reclaimed_ = true;
 }
 
 int ObStoreRowIterator::init(
@@ -44,10 +53,14 @@ int ObStoreRowIterator::init(
 {
   int ret = OB_SUCCESS;
   is_sstable_iter_ = table->is_sstable();
+  is_reclaimed_ = false;
   if (is_sstable_iter_) {
     block_row_store_ = access_ctx.block_row_store_;
   }
-  if (OB_FAIL(inner_open(iter_param, access_ctx, table, query_range))) {
+  if (OB_ISNULL(long_life_allocator_ = access_ctx.get_long_life_allocator())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Unexpected null long life allocator", K(ret));
+  } else if (OB_FAIL(inner_open(iter_param, access_ctx, table, query_range))) {
     STORAGE_LOG(WARN, "Failed to inner open ObStoreRowIterator", K(ret), K(iter_param), K(access_ctx));
   }
   return ret;

@@ -19,17 +19,19 @@ namespace storage {
 
 ObSSTableRowMultiGetter::~ObSSTableRowMultiGetter()
 {
-  FREE_PTR_FROM_CONTEXT(access_ctx_, micro_getter_, ObMicroBlockRowGetter);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_getter_, ObMicroBlockRowGetter);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, macro_block_reader_, ObMacroBlockReader);
 }
 
 void ObSSTableRowMultiGetter::reset()
 {
-  ObStoreRowIterator::reset();
-  FREE_PTR_FROM_CONTEXT(access_ctx_, micro_getter_, ObMicroBlockRowGetter);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_getter_, ObMicroBlockRowGetter);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, macro_block_reader_, ObMacroBlockReader);
   is_opened_ = false;
   iter_param_ = nullptr;
   access_ctx_ = nullptr;
   prefetcher_.reset();
+  ObStoreRowIterator::reset();
 }
 
 void ObSSTableRowMultiGetter::reuse()
@@ -38,6 +40,14 @@ void ObSSTableRowMultiGetter::reuse()
   is_opened_ = false;
   sstable_ = nullptr;
   prefetcher_.reuse();
+}
+
+void ObSSTableRowMultiGetter::reclaim()
+{
+  is_opened_ = false;
+  prefetcher_.reclaim();
+  ObStoreRowIterator::reset();
+  is_reclaimed_ = true;
 }
 
 int ObSSTableRowMultiGetter::inner_open(
@@ -133,7 +143,7 @@ int ObSSTableRowMultiGetter::fetch_row(ObSSTableReadHandle &read_handle, const b
 {
   int ret = OB_SUCCESS;
   if (nullptr == micro_getter_) {
-    if (nullptr == (micro_getter_ = OB_NEWx(ObMicroBlockRowGetter, access_ctx_->stmt_allocator_))) {
+    if (nullptr == (micro_getter_ = OB_NEWx(ObMicroBlockRowGetter, long_life_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate micro block getter", K(ret));
     } else if (OB_FAIL(micro_getter_->init(*iter_param_, *access_ctx_, sstable_))) {
@@ -142,6 +152,13 @@ int ObSSTableRowMultiGetter::fetch_row(ObSSTableReadHandle &read_handle, const b
     //switch context each row due to the cache will be disabled if too many rows getted
   } else if (OB_FAIL(micro_getter_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
     STORAGE_LOG(WARN, "Fail to switch context", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (read_handle.need_read_block() && nullptr == macro_block_reader_) {
+    if (OB_ISNULL(macro_block_reader_ = OB_NEWx(ObMacroBlockReader, long_life_allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate macro block reader", K(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {

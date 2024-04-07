@@ -127,8 +127,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObBasicTabletMergeCtx &c
                                                   const MacroBlockId &bf_macro_id,
                                                   ObTabletCreateSSTableParam &param,
                                                   const ObStorageColumnGroupSchema *cg_schema,
-                                                  const int64_t column_group_idx,
-                                                  const bool is_main_table)
+                                                  const int64_t column_group_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx.is_valid() || !res.is_valid() || (nullptr != cg_schema && (!cg_schema->is_valid() || column_group_idx < 0)))) {
@@ -137,9 +136,9 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObBasicTabletMergeCtx &c
   } else if (OB_UNLIKELY(nullptr != cg_schema && cg_schema->column_cnt_ != res.data_column_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table column cnt is unexpected mismatched!", K(ret), KPC(cg_schema), K(res));
-  } else if (OB_FAIL(param.init_for_merge(ctx, res, cg_schema, column_group_idx, is_main_table))) {
+  } else if (OB_FAIL(param.init_for_merge(ctx, res, cg_schema, column_group_idx))) {
     LOG_WARN("fail to init create sstable param for merge",
-        K(ret), K(ctx), K(res), KPC(cg_schema), K(column_group_idx), K(is_main_table));
+        K(ret), K(ctx), K(res), KPC(cg_schema), K(column_group_idx));
   } else if (ctx.get_tablet_id().is_ls_tx_data_tablet()) {
       ret = record_start_tx_scn_for_tx_data(ctx, param);
   }
@@ -202,8 +201,8 @@ int ObTabletMergeInfo::create_sstable(
     ObBasicTabletMergeCtx &ctx,
     ObTableHandleV2 &merge_table_handle,
     bool &skip_to_create_empty_cg,
-    const ObStorageColumnGroupSchema *cg_schema,
-    const int64_t column_group_idx)
+    const ObStorageColumnGroupSchema *cg_schema /* = nullptr */,
+    const int64_t column_group_idx /* = 0*/)
 {
   int ret = OB_SUCCESS;
   skip_to_create_empty_cg = false;
@@ -238,7 +237,7 @@ int ObTabletMergeInfo::create_sstable(
       } else if (is_reused_small_sst && OB_FAIL(sstable_builder_.build_reused_small_sst_merge_res(sstable->get_macro_read_size(),
                         sstable->get_macro_offset(), res))) {
         LOG_WARN("fail to close index builder for reused small sstable", K(ret), KPC(sstable));
-      } else if (OB_FAIL(build_create_sstable_param(ctx, res, bloomfilter_block_id_, param, cg_schema, column_group_idx, is_main_table))) {
+      } else if (OB_FAIL(build_create_sstable_param(ctx, res, bloomfilter_block_id_, param, cg_schema, column_group_idx))) {
         LOG_WARN("fail to build create sstable param", K(ret));
       } else if (is_main_table) { // should build co sstable
         if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObCOSSTableV2>(param, ctx.mem_ctx_.get_allocator(), merge_table_handle))) {

@@ -239,6 +239,11 @@ ObTableStoreIterator *ObTabletTableIterator::table_iter()
   return &table_store_iter_;
 }
 
+const ObTableStoreIterator *ObTabletTableIterator::table_iter() const
+{
+  return &table_store_iter_;
+}
+
 int ObTabletTableIterator::set_tablet_handle(const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;

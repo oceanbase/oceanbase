@@ -516,11 +516,8 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
     STORAGE_LOG(WARN, "Failed to init index row", K(ret), K(index_store_desc_));
   } else {
     index_store_desc_.get_desc().sstable_index_builder_ = this;
-    index_store_desc_.get_desc().need_pre_warm_ = true;
     callback_ = callback;
     optimization_mode_ = mode;
-    index_store_desc_.get_desc().need_build_hash_index_for_micro_block_ = false;
-    container_store_desc_.need_build_hash_index_for_micro_block_ = false;
     if (OB_FAIL(leaf_store_desc_.shallow_copy(index_store_desc_.get_desc()))) {
       STORAGE_LOG(WARN, "fail to assign leaf store desc", K(ret));
     } else {
@@ -1337,8 +1334,11 @@ int ObBaseIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
       STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
             "macro_store_size", index_store_desc_->get_macro_store_size());
     } else {
-      if (index_store_desc_->need_pre_warm()) {
-        index_block_pre_warmer_.init();
+      if (need_pre_warm() && index_store_desc.get_tablet_id().is_user_tablet()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(index_block_pre_warmer_.init())) {
+          STORAGE_LOG(WARN, "Failed to init index block prewarmer", K(tmp_ret));
+        }
       }
       is_inited_ = true;
     }

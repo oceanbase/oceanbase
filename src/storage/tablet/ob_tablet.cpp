@@ -4792,6 +4792,7 @@ int ObTablet::build_migration_sstable_param(
       mig_sstable_param.co_base_type_ = co_sstable->is_all_cg_base()
                                       ? ObCOSSTableBaseType::ALL_CG_TYPE
                                       : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+      mig_sstable_param.is_empty_cg_sstables_ = co_sstable->is_cgs_empty_co_table();
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.get_col_checksum_cnt(); ++i) {
@@ -7299,7 +7300,7 @@ int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &colum
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!co_sstable.is_empty_co_table()) {
+    } else if (!co_sstable.is_cgs_empty_co_table()) {
       common::ObArray<ObSSTableWrapper> cg_tables;
       if (OB_FAIL(co_sstable.get_all_tables(cg_tables))) {
         LOG_WARN("fail to get_all_tables", K(ret));

@@ -68,6 +68,8 @@ int ObTableEstimator::estimate_row_count_for_scan(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, store shouldn't be null", K(ret), KP(table));
+      } else if (OB_UNLIKELY(table->is_empty())) {
+        continue;
       } else if (OB_FAIL(estimate_multi_scan_row_count(base_input, table, ranges, table_est))) {
         LOG_WARN("failed to estimate cost", K(ret), K(ranges), K(table->get_key()), K(i));
       } else if (OB_FAIL(part_estimate.add(table_est))) {

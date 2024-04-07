@@ -39,6 +39,7 @@ public:
   OB_INLINE const ObIArray<blocksstable::ObDatumRange> &get_ranges() const { return ranges_; }
   OB_INLINE const ObIArray<blocksstable::ObDatumRange> &get_suffix_ranges() const { return skip_scan_ranges_; }
   OB_INLINE const ObIArray<blocksstable::ObDatumRowkey> &get_rowkeys() const { return rowkeys_; }
+  int get_query_iter_type(ObQRIterType &iter_type) const;
   TO_STRING_KV(K_(rowkeys), K_(ranges), K_(status), K_(is_inited));
 private:
   int init_rowkeys(const common::ObIArray<common::ObNewRange> &ranges,

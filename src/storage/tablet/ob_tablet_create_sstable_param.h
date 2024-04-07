@@ -62,8 +62,7 @@ public:
   int init_for_merge(const compaction::ObBasicTabletMergeCtx &ctx,
                      const blocksstable::ObSSTableMergeRes &res,
                      const ObStorageColumnGroupSchema *cg_schema,
-                     const int64_t column_group_idx,
-                     const bool is_main_table);
+                     const int64_t column_group_idx);
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ddl(blocksstable::ObSSTableIndexBuilder *sstable_index_builder,
@@ -112,7 +111,7 @@ public:
       K_(original_size),
       K_(max_merged_trans_version),
       K_(ddl_scn),
-      K_(is_empty_co_table),
+      K_(is_co_table_without_cgs),
       K_(contain_uncommitted_row),
       K_(is_meta_root),
       K_(compressor_type),
@@ -159,7 +158,7 @@ public:
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta
   share::SCN filled_tx_scn_;
-  bool is_empty_co_table_; // only used for creating empty co sstable
+  bool is_co_table_without_cgs_; // only used for creating co sstable without cg sstables
   bool contain_uncommitted_row_;
   bool is_meta_root_;
   common::ObCompressorType compressor_type_;

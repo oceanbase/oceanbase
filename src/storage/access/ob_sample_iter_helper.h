@@ -40,10 +40,6 @@ public:
   int get_sample_iter(ObMemtableRowSampleIterator *&sample_iter,
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);
-  int get_sample_iter(ObRowSampleIterator *&sample_iter,
-                      ObQueryRowIterator *&main_iter,
-                      ObMultipleScanMerge *scan_merge);
-
   int get_sample_iter(ObBlockSampleIterator *&sample_iter,
                       ObQueryRowIterator *&main_iter,
                       ObMultipleScanMerge *scan_merge);

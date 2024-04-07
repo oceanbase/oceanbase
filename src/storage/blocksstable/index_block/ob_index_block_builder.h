@@ -294,6 +294,7 @@ protected:
       ObDataMacroBlockMeta &macro_meta,
       ObIAllocator &allocator);
   int64_t get_row_count() { return micro_writer_->get_row_count(); }
+  virtual OB_INLINE bool need_pre_warm() const { return false; }
 private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
@@ -359,6 +360,7 @@ private:
   virtual int insert_and_update_index_tree(const ObDatumRow *index_row) override;
   int append_next_row(const ObMicroBlockDesc &micro_block_desc, ObIndexBlockRowDesc &macro_row_desc);
   int add_row_offset(ObIndexBlockRowDesc &row_desc);
+  virtual OB_INLINE bool need_pre_warm() const override { return true; }
 private:
   ObSSTableIndexBuilder *sstable_builder_;
   compaction::ObLocalArena task_allocator_;  // Used to apply for memory whose lifetime is task

@@ -8670,6 +8670,7 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       }
     } else {
       // TODO: check the following
+      // TODO: after check, also see ObStorageSchema::get_column_group_index
       // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
       // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
       cg_idx = -1;

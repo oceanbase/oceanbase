@@ -16,6 +16,7 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_thread_mgr.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/access/ob_global_iterator_pool.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include <sys/sysinfo.h>
@@ -953,6 +954,10 @@ void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
 {
   mgr_.process_stats();
   mgr_.refresh_sys_stat();
+  ObGlobalIteratorPool *global_iter_pool = MTL(ObGlobalIteratorPool*);
+  if (nullptr != global_iter_pool && global_iter_pool->is_valid()) {
+    global_iter_pool->wash();
+  }
 
   int64_t interval_step = 0;
   if (CHECK_SCHEDULE_TIME_INTERVAL(CHECK_INTERVAL, interval_step)) {
@@ -960,6 +965,6 @@ void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet streams not refresh too long", K(interval_step));
     }
     mgr_.refresh_all(interval_step);
-    FLOG_INFO("TenantTabletStatMgr refresh all tablet stream", K(MTL_ID()), K(interval_step));
+    FLOG_INFO("TenantTabletStatMgr refresh all tablet stream", K(MTL_ID()), K(interval_step), KPC(global_iter_pool));
   }
 }

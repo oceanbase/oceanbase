@@ -65,6 +65,11 @@ public:
     bitmap_.reuse(is_all_true);
   }
 
+  OB_INLINE ObBitmap* get_inner_bitmap()
+  {
+    return &bitmap_;
+  }
+
   OB_INLINE ObCSRowId get_start_id() const
   {
     return start_row_id_;

@@ -899,7 +899,7 @@ int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
       } else {
         if (table->is_co_sstable()) {
           ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_empty_co_table()) {
+          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
             size = size * (co_sstable->get_cs_meta().occupy_size_ / co_sstable->get_occupy_size());
           }
         }
@@ -1165,7 +1165,7 @@ int ObPartitionMultiRangeSpliter::get_split_tables(ObTableStoreIterator &table_i
       } else if (table->is_major_sstable()) {
         if (table->is_co_sstable()) {
           ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_empty_co_table()) {
+          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
             major_size = co_sstable->get_cs_meta().occupy_size_;
           } else {
             major_size = co_sstable->get_occupy_size();

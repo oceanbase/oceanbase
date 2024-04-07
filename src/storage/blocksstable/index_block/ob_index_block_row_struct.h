@@ -31,6 +31,7 @@ class ObObj;
 namespace storage
 {
 class ObStoreRow;
+class ObRowKeysInfo;
 }
 namespace blocksstable
 {
@@ -539,6 +540,7 @@ public:
     const ObDatumRowkey *rowkey_;
     const ObDatumRange *range_;
     const ObRowsInfo *rows_info_;
+    const ObRowKeysInfo *rowkeys_info_;
     const void *query_range_;
   };
   const char *agg_row_buf_;

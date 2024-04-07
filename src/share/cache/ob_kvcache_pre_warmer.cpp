@@ -54,12 +54,13 @@ void ObDataBlockCachePreWarmer::reuse()
   cache_handle_.reset();
 }
 
-void ObDataBlockCachePreWarmer::init()
+int ObDataBlockCachePreWarmer::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_init(DATA_BLOCK_CACHE_PERCENTAGE, OB_STORE_CACHE.get_block_cache()))) {
-    COMMON_LOG(WARN, "Fail to inner init data block cache pre warmer", K(ret));
-  }
+  cache_ = &OB_STORE_CACHE.get_block_cache();
+  warm_size_percentage_ = DATA_BLOCK_CACHE_PERCENTAGE;
+  inner_update_rest();
+  return ret;
 }
 
 int ObDataBlockCachePreWarmer::reserve_kvpair(const blocksstable::ObMicroBlockDesc &micro_block_desc,
@@ -107,23 +108,6 @@ int ObDataBlockCachePreWarmer::update_and_put_kvpair(const blocksstable::ObMicro
   COMMON_LOG(DEBUG, "pre warmer build cache key and put details", K(ret), K(MTL_ID()), K(rest_size_), K(update_step_),
                                                                   K(micro_block_desc), KPC(micro_block_desc.header_));
   // reuse handles outside
-
-  return ret;
-}
-
-int ObDataBlockCachePreWarmer::inner_init(const int64_t percentage,
-                                           blocksstable::ObIMicroBlockCache &block_cache)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(percentage < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(percentage));
-  } else {
-    cache_ = &block_cache;
-    warm_size_percentage_ = percentage;
-    inner_update_rest();
-  }
 
   return ret;
 }
@@ -210,12 +194,13 @@ ObIndexBlockCachePreWarmer::~ObIndexBlockCachePreWarmer()
 {
 }
 
-void ObIndexBlockCachePreWarmer::init()
+int ObIndexBlockCachePreWarmer::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_init(INDEX_BLOCK_CACHE_PERCENTAGE, OB_STORE_CACHE.get_index_block_cache()))) {
-    COMMON_LOG(WARN, "Fail to inner init index block cache pre warmer", K(ret));
-  }
+  cache_ = &OB_STORE_CACHE.get_index_block_cache();
+  warm_size_percentage_ = INDEX_BLOCK_BASE_PERCENTAGE;
+  inner_update_rest();
+  return ret;
 }
 
 void ObIndexBlockCachePreWarmer::calculate_base_percentage(const int64_t free_memory)

@@ -129,7 +129,7 @@ int ObWriteHelper::init(
   } else if (OB_FAIL(macro_start_seq.set_parallel_degree(parallel_idx))) {
     STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq", K(ret), K(parallel_idx));
   } else if (OB_FAIL(macro_writer_.open(data_store_desc_, macro_start_seq))) {
-    STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq", K(ret), K(parallel_idx));
+    STORAGE_LOG(WARN, "Failed to open macro writer", K(ret));
   } else if (cg_schema.is_all_column_group()) {
     skip_project_ = true;
   } else if (OB_FAIL(projector_.init(cg_schema))) {
@@ -219,7 +219,7 @@ int ObCOMergeWriter::basic_init(const blocksstable::ObDatumRow &default_row,
     if (add_column) {
       iter_ = OB_NEWx(ObDefaultRowIter, (&allocator_), default_row_);
     } else if (merge_param.is_full_merge() || sstable->is_small_sstable() || only_use_row_table) {
-      iter_ = OB_NEWx(ObPartitionRowMergeIter, (&allocator_), allocator_);
+      iter_ = OB_NEWx(ObPartitionRowMergeIter, (&allocator_), allocator_, iter_co_build_row_store_);
     } else if (MICRO_BLOCK_MERGE_LEVEL == merge_param.static_param_.merge_level_) {
       iter_ = OB_NEWx(ObPartitionMicroMergeIter, (&allocator_), allocator_);
     } else {
@@ -495,7 +495,7 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
     STORAGE_LOG(WARN, "fail to init write helper", K(ret), K(parallel_idx), K(cg_idx), K(cg_schema));
   } else if (OB_FAIL(row_.init(cg_schema.column_cnt_))) {
     STORAGE_LOG(WARN, "fail to init row", K(ret), K(cg_schema));
-  } else if (add_column) {//skpi init read info and progressive_merge_helper_
+  } else if (add_column) {//skip init read info and progressive_merge_helper_
   } else if (cg_schema.is_single_column_group()) {
     single_read_info_.reset();
     if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,

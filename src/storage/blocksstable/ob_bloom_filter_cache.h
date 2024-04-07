@@ -22,6 +22,7 @@ namespace oceanbase
 namespace storage
 {
 class ObRowsInfo;
+class ObRowKeysInfo;
 }
 namespace blocksstable
 {
@@ -164,6 +165,14 @@ public:
       const uint64_t tenant_id,
       const MacroBlockId &macro_block_id,
       const storage::ObRowsInfo *rows_info,
+      const int64_t rowkey_begin_idx,
+      const int64_t rowkey_end_idx,
+      const ObStorageDatumUtils &datum_utils,
+      bool &is_contain);
+  int may_contain(
+      const uint64_t tenant_id,
+      const MacroBlockId &macro_block_id,
+      const storage::ObRowKeysInfo *rowkeys_info,
       const int64_t rowkey_begin_idx,
       const int64_t rowkey_end_idx,
       const ObStorageDatumUtils &datum_utils,

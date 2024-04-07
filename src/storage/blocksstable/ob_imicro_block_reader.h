@@ -52,8 +52,9 @@ struct ObMicroIndexInfo;
   do {                                                                      \
     if (nullptr != ptr) {                                                   \
       ptr->~T();                                                            \
-      if (OB_LIKELY(nullptr != ctx && nullptr != ctx->stmt_allocator_)) {   \
-        ctx->stmt_allocator_->free(ptr);                                    \
+      if (OB_LIKELY(nullptr != ctx &&                                       \
+          nullptr != ctx->get_long_life_allocator())) {                     \
+        ctx->get_long_life_allocator()->free(ptr);                          \
       }                                                                     \
       ptr = nullptr;                                                        \
     }                                                                       \
