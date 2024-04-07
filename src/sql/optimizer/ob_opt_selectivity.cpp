@@ -2404,8 +2404,21 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
       }
     } else if (T_FUN_MIN == win_expr->get_func_type()||
                T_FUN_MEDIAN == win_expr->get_func_type()||
-               T_WIN_FUN_MAX == win_expr->get_func_type() ||
-               T_WIN_FUN_NTH_VALUE == win_expr->get_func_type() ||
+               T_FUN_MAX == win_expr->get_func_type()) {
+      ObSEArray<ObRawExpr *, 4> param_exprs;
+      ObAggFunRawExpr* aggr_expr =  win_expr->get_agg_expr();
+      double param_ndv = 1.0;
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(aggr_expr), K(ret));
+      } else if (OB_FAIL(param_exprs.assign(aggr_expr->get_real_param_exprs()))) {
+        LOG_WARN("fail to assign exprs", K(ret));
+      } else if (OB_FAIL(SMART_CALL(calculate_distinct(table_metas, ctx, param_exprs, origin_rows, param_ndv, false)))) {
+        LOG_WARN("failed to calculate_distinct", K(ret));
+      } else {
+        special_ndv = std::min(part_order_ndv, param_ndv);
+      }
+    } else if (T_WIN_FUN_NTH_VALUE == win_expr->get_func_type() ||
                T_WIN_FUN_FIRST_VALUE == win_expr->get_func_type() ||
                T_WIN_FUN_LAST_VALUE == win_expr->get_func_type()) {
       ObSEArray<ObRawExpr *, 4> param_exprs;
