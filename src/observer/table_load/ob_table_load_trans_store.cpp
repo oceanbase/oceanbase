@@ -308,7 +308,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
     session_ctx.cast_allocator_.reuse();
   }
@@ -345,7 +345,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store.processed_rows_, row_array.count());
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
   }
   return ret;

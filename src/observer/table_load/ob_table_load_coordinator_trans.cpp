@@ -74,7 +74,7 @@ int ObTableLoadCoordinatorTrans::advance_trans_status(ObTableLoadTransStatusType
     LOG_WARN("fail to advance trans status", KR(ret), K(trans_status));
   } else {
     table_load_trans_status_to_string(trans_status,
-                                      trans_ctx_->ctx_->job_stat_->coordinator.trans_status_);
+                                      trans_ctx_->ctx_->job_stat_->coordinator_.trans_status_);
   }
   return ret;
 }
@@ -86,7 +86,7 @@ int ObTableLoadCoordinatorTrans::set_trans_status_error(int error_code)
     LOG_WARN("fail to set trans status error", KR(ret));
   } else {
     table_load_trans_status_to_string(ObTableLoadTransStatusType::ERROR,
-                                      trans_ctx_->ctx_->job_stat_->coordinator.trans_status_);
+                                      trans_ctx_->ctx_->job_stat_->coordinator_.trans_status_);
   }
   return ret;
 }
@@ -98,7 +98,7 @@ int ObTableLoadCoordinatorTrans::set_trans_status_abort()
     LOG_WARN("fail to set trans status abort", KR(ret));
   } else {
     table_load_trans_status_to_string(ObTableLoadTransStatusType::ABORT,
-                                      trans_ctx_->ctx_->job_stat_->coordinator.trans_status_);
+                                      trans_ctx_->ctx_->job_stat_->coordinator_.trans_status_);
   }
   return ret;
 }
