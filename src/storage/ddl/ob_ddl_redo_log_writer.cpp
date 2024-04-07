@@ -687,6 +687,7 @@ int ObDDLRedoLogWriter::local_write_ddl_macro_redo(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN base_scn = SCN::min_scn();
   SCN scn;
   int64_t real_sleep_us = 0;
@@ -744,6 +745,7 @@ int ObDDLRedoLogWriter::local_write_ddl_macro_redo(
                                          buffer_size,
                                          base_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -787,6 +789,7 @@ int ObDDLRedoLogWriter::local_write_ddl_start_log(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
   ObDDLRedoLockGuard guard(log.get_table_key().get_tablet_id().hash());
@@ -810,6 +813,7 @@ int ObDDLRedoLogWriter::local_write_ddl_start_log(
                                          buffer_size,
                                          SCN::min_scn(),
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -882,6 +886,7 @@ int ObDDLRedoLogWriter::local_write_ddl_commit_log(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN base_scn = SCN::min_scn();
   SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
@@ -905,6 +910,7 @@ if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size, ObMemAttr(MTL_
                                          buffer_size,
                                          base_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {

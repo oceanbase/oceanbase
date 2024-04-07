@@ -553,6 +553,7 @@ int ObDataDictStorage::submit_to_palf_()
   ObDataDictPersistCallback *callback = NULL;
   const SCN &ref_scn = snapshot_scn_; // ns
   const bool need_nonblock = false; // TODO 是否需要non-block?
+  const bool allow_compression = true;
   palf::LSN lsn;
   SCN submit_scn;
 
@@ -579,6 +580,7 @@ int ObDataDictStorage::submit_to_palf_()
       palf_pos_,
       ref_scn,
       need_nonblock,
+      allow_compression,
       callback,
       lsn,
       submit_scn

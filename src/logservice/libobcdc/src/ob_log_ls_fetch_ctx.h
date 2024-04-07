@@ -51,6 +51,7 @@ class IObLogLSFetchMgr;
 
 struct TransStatInfo;
 
+class IObLogFetcher;
 class LSFetchCtx;
 typedef ObLogDListNode<LSFetchCtx> FetchTaskListNode;
 
@@ -512,6 +513,11 @@ private:
   int set_end_lsn_and_init_dict_iter_(const palf::LSN &start_lsn);
   int get_log_route_service_(logservice::ObLogRouteService *&log_route_service);
   int get_large_buffer_pool_(archive::LargeBufferPool *&large_buffer_pool);
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  int decompress_log_(const char *buf, const int64_t buf_len, int64_t pos,
+                      char *&decompression_buf, int64_t &decompressed_len,
+                      IObLogFetcher *fetcher);
+#endif
 
 private:
   FetchStreamType         stype_;
