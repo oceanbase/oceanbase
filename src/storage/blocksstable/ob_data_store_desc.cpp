@@ -322,7 +322,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   if (OB_FAIL(col_desc_array_.init(column_cnt))) {
     STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
   } else if (merge_schema.is_column_info_simplified()) {
-    if (merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array)) {
+    if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(multi_version_column_desc_array))) {
       STORAGE_LOG(WARN, "failed to get rowkey column ids", K(ret), K(column_cnt), K(cg_schema), K(merge_schema));
     }
   } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(multi_version_column_desc_array))) {

@@ -406,19 +406,19 @@ void ObTableStoreStatMgr::run_report_task()
     if (start == end) {
       // do nothing
     } else if (start < end) {
-      for (int64_t i = start; i < end; ++i) {
+      for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
         if(OB_FAIL(add_stat(stat_queue_[i]))) {
           LOG_WARN("report stat fail", K(ret), K(i), K(stat_queue_[i]));
         }
       }
       ATOMIC_STORE(&report_cursor_, end);
     } else {
-      for (int64_t i = start; i < MAX_PENDDING_CNT - 1; ++i) {
+      for (int64_t i = start; OB_SUCC(ret) && i < MAX_PENDDING_CNT - 1; ++i) {
         if(OB_FAIL(add_stat(stat_queue_[i]))) {
           LOG_WARN("report stat fail", K(ret), K(i), K(stat_queue_[i]));
         }
       }
-      for (int64_t i = 0; i < end; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < end; ++i) {
         if(OB_FAIL(add_stat(stat_queue_[i]))) {
           LOG_WARN("report stat fail", K(ret), K(i), K(stat_queue_[i]));
         }

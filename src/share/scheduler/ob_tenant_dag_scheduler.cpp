@@ -564,7 +564,7 @@ int ObIDag::add_task(ObITask &task)
     if (OB_FAIL(check_cycle())) {
       COMMON_LOG(WARN, "check_cycle failed", K(ret), K_(id));
       if (OB_ISNULL(task_list_.remove(&task))) {
-        COMMON_LOG(WARN, "failed to remove task from task_list", K_(id));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to remove task from task_list", K_(id));
       }
     }
   }
@@ -594,7 +594,7 @@ int ObIDag::add_child(ObIDag &child)
     if (OB_UNLIKELY(nullptr != child.get_dag_net() && dag_net_ != child.get_dag_net())) { // already belongs to other dag_net
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "child's dag net is not null", K(ret), K(child), KP_(dag_net));
-    } else if (child.deep_copy_children(get_child_nodes())) { // child is a new node, no concurrency
+    } else if (OB_FAIL(child.deep_copy_children(get_child_nodes()))) { // child is a new node, no concurrency
       COMMON_LOG(WARN, "failed to deep copy child", K(ret), K(child));
     } else if (nullptr == child.get_dag_net() && OB_FAIL(dag_net_->add_dag_into_dag_net(child))) {
       COMMON_LOG(WARN, "failed to add dag into dag net", K(ret), K(child), KPC(dag_net_));
@@ -3706,7 +3706,7 @@ int ObDagNetScheduler::loop_running_dag_net_list()
     if (dag_net->is_started() && OB_TMP_FAIL(dag_net->schedule_rest_dag())) {
       LOG_WARN("failed to schedule rest dag", K(tmp_ret));
     } else if (dag_net->check_finished_and_mark_stop()) {
-      LOG_WARN("dag net is in finish state, move to finished list", K(ret), KPC(dag_net));
+      LOG_INFO("dag net is in finish state, move to finished list", K(ret), KPC(dag_net));
       (void) erase_dag_net_list_or_abort(RUNNING_DAG_NET_LIST, dag_net);
       (void) add_dag_net_list_or_abort(FINISHED_DAG_NET_LIST, dag_net);
     } else if (dag_net->is_co_dag_net()

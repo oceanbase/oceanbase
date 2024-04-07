@@ -892,6 +892,7 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMergeHelper &merge_hel
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
           if (OB_ISNULL(base_iter->get_curr_row())) {
+            ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
           } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
             STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
@@ -1649,6 +1650,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
       ObITable *table = tables_handle.get_table(idx);
       ObITable *dump_table = nullptr;
       if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "The store is NULL", K(idx), K(tables_handle));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {

@@ -60,7 +60,8 @@ int ObMicroIndexRowItem::init(ObIAllocator &allocator,
     }
 
     void *header_buf = nullptr;
-    if (OB_ISNULL(header_buf = allocator_->alloc(sizeof(ObIndexBlockRowHeader)))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(header_buf = allocator_->alloc(sizeof(ObIndexBlockRowHeader)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObIndexBlockRowHeader)));
     } else if (FALSE_IT(idx_row_header_ = new (header_buf) ObIndexBlockRowHeader())) {
