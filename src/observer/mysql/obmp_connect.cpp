@@ -1975,7 +1975,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
         } else if (Worker::CompatMode::MYSQL == compat_mode) {
           check_max_sess = user_name_.compare(OB_SYS_USER_NAME) != 0;
         } else if (Worker::CompatMode::ORACLE == compat_mode) {
-          check_max_sess = user_name_.compare(OB_ORA_SYS_USER_NAME) != 0;
+          check_max_sess = user_name_.case_compare(OB_ORA_SYS_USER_NAME) != 0;
         }
       }
       if (OB_SUCC(ret) && check_max_sess) {
