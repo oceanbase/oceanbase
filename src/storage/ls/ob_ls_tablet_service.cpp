@@ -1929,7 +1929,9 @@ int ObLSTabletService::direct_get_tablet(const common::ObTabletID &tablet_id, Ob
   const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
 
   if (CLICK_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, handle))) {
-    LOG_WARN("failed to get tablet from t3m", K(ret), K(key));
+    if (OB_TABLET_NOT_EXIST != ret) {
+      LOG_WARN("failed to get tablet from t3m", K(ret), K(key));
+    }
   }
 
   return ret;
