@@ -4627,11 +4627,11 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
 {
   int ret = OB_SUCCESS;
   int64_t full_stored_col_cnt = 0;
-  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
+
   ObStorageSchema *storage_schema = nullptr;
   ObSEArray<share::schema::ObColDesc, 16> cols_desc;
   tablet = (tablet == nullptr) ? this : tablet;
-  if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema))) {
+  if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret));
   } else if (OB_FAIL(storage_schema->get_mulit_version_rowkey_column_ids(cols_desc))) {
     LOG_WARN("fail to get rowkey column ids", K(ret), KPC(storage_schema));
@@ -4646,7 +4646,7 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
                                              cols_desc))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
-  ObTabletObjLoadHelper::free(tmp_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 
