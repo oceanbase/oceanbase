@@ -15244,6 +15244,9 @@ def_table_schema(
 )
 
 # 20016: PROFILING
+# 20017: OPTIMIZER_TRACE
+# 20018: PLUGINS
+# 20019: INNODB_SYS_COLUMNS
 
 def_table_schema(
   owner = 'yuzhong.zhao',

@@ -4751,13 +4751,28 @@ static struct VarsInit{
     ObSysVars[335].alias_ = "OB_SV_TRANSACTION_WRITE_SET_EXTRACTION" ;
     }();
 
+    [&] (){
+      ObSysVars[336].default_value_ = "86400" ;
+      ObSysVars[336].info_ = "The number of seconds after which the server will fetch data from storage engine and replace the data in cache." ;
+      ObSysVars[336].name_ = "information_schema_stats_expiry" ;
+      ObSysVars[336].data_type_ = ObUInt64Type ;
+      ObSysVars[336].min_val_ = "0" ;
+      ObSysVars[336].max_val_ = "31536000" ;
+      ObSysVars[336].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[336].id_ = SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY] = 336 ;
+      ObSysVars[336].base_value_ = "86400" ;
+    ObSysVars[336].alias_ = "OB_SV_INFORMATION_SCHEMA_STATS_EXPIRY" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 336;
+static int64_t var_amount = 337;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
