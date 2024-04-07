@@ -517,7 +517,7 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
     int cmp_res = 0;
-    if (OB_FAIL(cmp_func(ref_datum, base_datum, cmp_res))) {
+    if (FAILEDx(cmp_func(ref_datum, base_datum, cmp_res))) {
       LOG_WARN("Failed to compare datum", K(ret), K(ref_datum), K(base_datum));
     } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res < 0)){
     } else if (filter_obj_smaller_than_base) {
@@ -742,7 +742,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         cur_datum.ptr_ = reinterpret_cast<char *> (&cur_int);
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(cur_datum, filter, result))) {
+        if (FAILEDx(lambda(cur_datum, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(offset))) {
