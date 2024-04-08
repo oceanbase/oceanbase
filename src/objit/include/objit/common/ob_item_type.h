@@ -2467,6 +2467,7 @@ typedef enum ObItemType
   T_CREATE_LOGFILE_GROUP,
   T_ALTER_LOGFILE_GROUP,
   T_DROP_LOGFILE_GROUP,
+  T_SET_UNION_ALL,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
