@@ -286,6 +286,7 @@ LINESTRING(9 9,10 10)
 # Testing result of table column input      #
 #############################################
 #
+drop table if exists gis_linestring_castable;
 CREATE TABLE gis_linestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
 INSERT INTO gis_linestring_castable VALUES
 (101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
@@ -617,6 +618,7 @@ MULTIPOINT((6 6),(7 7))
 # Testing result of table column input      #
 #############################################
 #
+drop table if exists gis_multipoint_castable;
 CREATE TABLE gis_multipoint_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
 INSERT INTO gis_multipoint_castable VALUES
 (101, ST_GEOMFROMTEXT('POINT(1 1)')),
@@ -772,6 +774,7 @@ MULTILINESTRING((13 13,14 14),(15 15,16 16))
 # Testing result of table column input      #
 #############################################
 #
+drop table if exists gis_multilinestring_castable;
 CREATE TABLE gis_multilinestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
 INSERT INTO gis_multilinestring_castable VALUES
 (101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
@@ -922,6 +925,7 @@ MULTIPOLYGON(((13 13,14 13,14 14,13 14,13 13)),((15 15,16 15,16 16,15 16,15 15))
 # Testing result of table column input      #
 #############################################
 #
+drop table if exists gis_multipolygon_castable;
 CREATE TABLE gis_multipolygon_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
 INSERT INTO gis_multipolygon_castable VALUES
 (101, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))')),
@@ -1097,6 +1101,7 @@ GEOMETRYCOLLECTION(POINT(16 16),LINESTRING(17 17,18 18))
 # Testing result of table column input      #
 #############################################
 #
+drop table if exists gis_geometrycollection_castable;
 CREATE TABLE gis_geometrycollection_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
 INSERT INTO gis_geometrycollection_castable VALUES
 (101, ST_GEOMFROMTEXT('POINT(1 1)')),
@@ -1246,14 +1251,15 @@ ERROR 22S03: A parameter of function cast_as_point contains a geometry with lati
 SELECT CAST(0xE610000001010000000000000000000000E1120100008056C0 AS POINT);
 ERROR 22S03: A parameter of function cast_as_point contains a geometry with latitude -90.000000, which is out of range. It must be within [-90.000000, 90.000000].
 #
-create table tt2(a year);
-insert into tt2 values(2010-10-10);
-select * from tt2;
+drop table if exists gis_tt2;
+create table gis_tt2(a year);
+insert into gis_tt2 values(2010-10-10);
+select * from gis_tt2;
 a
 1990
-select cast(a as point) from tt2;
+select cast(a as point) from gis_tt2;
 ERROR SR001: There's no spatial reference system with SRID 809056561.
-drop table tt2;
+drop table gis_tt2;
 select cast(cast("1.23" as decimal) as point);
 ERROR 22023: Invalid GIS data provided to function cast_as_point.
 select cast(cast("1.23" as decimal) as linestring);
@@ -1331,6 +1337,7 @@ ERROR SR001: There's no spatial reference system with SRID 257.
 SELECT TIME(ST_GEOMETRYFROMTEXT('polygon((1 1,1 1,1 1,1 1))'));
 TIME(ST_GEOMETRYFROMTEXT('polygon((1 1,1 1,1 1,1 1))'))
 NULL
+drop table if exists t;
 create table t(id int, t time);
 insert into t values(1, st_geomfromtext('POINT(1 1)'));
 ERROR 22007: Incorrect value

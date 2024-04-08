@@ -397,9 +397,9 @@ drop table tt4;
 drop table if exists test;
 create table test(p point srid 4326);
 alter table test modify p MULTIPOINT;
-ERROR 0A000: Modify geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 alter table test change p p1 MULTIPOINT;
-ERROR 0A000: Change geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 alter table test modify p POINT SRID 0;
 ERROR 0A000: Modify geometry srid not supported
 alter table test change p p1 point srid 0;
@@ -492,3 +492,125 @@ POINT(10 10)
 MULTILINESTRING((1 1,2 2,3 3),(10 10,20 20,30 30))
 drop table geometries;
 drop table t1;
+bugfix: 53170626
+drop table if exists geo_t1;
+create table geo_t1 as select point(1,1);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+point(1,1)	point	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select _st_makevalid(st_geomfromtext('POLYGON((2 2,6 -2,10 2,10 -2,6 2,2 -2,2 2))'));
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+_st_makevalid(st_geomfromtext('POLYGON((2 2,6 -2,10 2,10 -2,6 2,2 -2,2 2))'))	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select _ST_POINT(0, 0);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+_ST_POINT(0, 0)	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL)	geometry	YES		NULL	
+drop table geo_t1;
+create table geo_t1 as select ST_X(ST_GEOMFROMTEXT('POINT(0 0)'));
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+ST_X(ST_GEOMFROMTEXT('POINT(0 0)'))	double	YES		NULL	
+drop table geo_t1;
+bugfix: 53668721
+drop table if exists coll_t1;
+drop view if exists coll_v1;
+CREATE table coll_t1 (c1 GeomCollection);
+insert into coll_t1 values (GEOMCOLLECTION(POINT(0,0)));
+desc coll_t1;
+Field	Type	Null	Key	Default	Extra
+c1	geomcollection	YES		NULL	
+select st_astext(t.c1) from coll_t1 t;
+st_astext(t.c1)
+GEOMETRYCOLLECTION(POINT(0 0))
+CREATE view coll_v1 as select * from coll_t1;
+desc coll_v1;
+Field	Type	Null	Key	Default	Extra
+c1	geomcollection	YES		NULL	
+select st_astext(t.c1) from coll_v1 t;
+st_astext(t.c1)
+GEOMETRYCOLLECTION(POINT(0 0))
+drop table coll_t1;
+drop view coll_v1;
+bugfix: 55274751
+drop table if exists geo_t1;
+create table geo_t1(t GeomCollection);
+insert into geo_t1 values (st_geomfromtext('GeometryCollection(point(1 1), linestring(0 0, 2 2))'));
+ALTER TABLE geo_t1 MODIFY t int;
+ERROR HY000: Incorrect integer value
+ALTER TABLE geo_t1 MODIFY t double;
+ERROR 22003: Out of range value for column
+ALTER TABLE geo_t1 MODIFY t datetime;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t timestamp;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t date;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 MODIFY t varchar(1);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t ENUM('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t SET('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t JSON;
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 MODIFY t BIT(8);
+ERROR 22001: Data too long for column
+ALTER TABLE geo_t1 MODIFY t varchar(256);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t text;
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 MODIFY t LONGTEXT CHARSET binary;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 MODIFY t GeomCollection;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 change t tt int;
+ERROR HY000: Incorrect integer value
+ALTER TABLE geo_t1 change t tt double;
+ERROR 22003: Out of range value for column
+ALTER TABLE geo_t1 change t tt datetime;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt timestamp;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt date;
+ERROR 22007: Incorrect value
+ALTER TABLE geo_t1 change t tt varchar(1);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt ENUM('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt SET('a','b');
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt JSON;
+ERROR 0A000: Not supported feature or function
+ALTER TABLE geo_t1 change t tt BIT(8);
+ERROR 22001: Data too long for column
+ALTER TABLE geo_t1 change t tt varchar(256);
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt text;
+ERROR HY000: Incorrect string value
+ALTER TABLE geo_t1 change t tt LONGTEXT CHARSET binary;
+select hex(tt) from geo_t1;
+hex(tt)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+ALTER TABLE geo_t1 change tt t GeomCollection;
+select hex(t) from geo_t1;
+hex(t)
+000000000107000000020000000101000000000000000000F03F000000000000F03F0102000000020000000000000000000000000000000000000000000000000000400000000000000040
+bugfix: 53251134
+drop table if exists geo_t1;
+create table geo_t1 as select ST_Centroid(ST_geomfromtext('POLYGON((121.474243 31.234504, 121.471775 31.233348, 121.470724 31.23155, 121.471603 31.230229, 121.472655 31.230357, 121.475777 31.232045, 121.474243 31.234504))')) centroid ;
+desc geo_t1;
+Field	Type	Null	Key	Default	Extra
+centroid	point	YES		NULL	
+drop table geo_t1;

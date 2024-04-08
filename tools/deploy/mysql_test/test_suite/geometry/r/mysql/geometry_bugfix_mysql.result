@@ -336,7 +336,7 @@ ST_GEOMFROMTEXT('POLYGON((0 0,0 0,0 0,0 0))'))
 0
 create table tt1(id int,p point);
 alter table tt1 change p p polygon;
-ERROR 0A000: Change geometry type not supported
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
 desc tt1;
 Field	Type	Null	Key	Default	Extra
 id	int(11)	YES		NULL	
@@ -650,3 +650,25 @@ Outputs & filters:
        (3747839314902384640,MIN,MIN ; 3747839314902384640,MAX,MAX), (3748120789879095296,MIN,MIN ; 3748120789879095296,MAX,MAX), (3751498489599623168,MIN,MIN 
       ; 3751498489599623168,MAX,MAX), (3765009288481734656,MIN,MIN ; 3765009288481734656,MAX,MAX), (3819052484010180608,MIN,MIN ; 3819052484010180608,MAX,MAX),
        (3746994889972252672,MIN,MIN ; 3746994889972252672,MAX,MAX), (3458764513820540928,MIN,MIN ; 3458764513820540928,MAX,MAX)
+drop table if exists t1;
+create table t1( g geometry );//
+drop PROCEDURE IF EXISTS pro;//
+CREATE PROCEDURE pro()
+BEGIN
+DECLARE g blob;
+select ST_SymDifference(point(2,3),ST_GeomFromText('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(0.5 1,1 2,2 2,2 1,0.5 1)))')) INTO g; 
+insert into t1 values(g);     
+END ;
+//
+call pro();//
+select ST_AsText(g) from t1;//
+ST_AsText(g)
+POLYGON((0 0,3 0,3 3,0 3,0 0),(0.5 1,1 2,2 2,2 1,0.5 1))
+DROP FUNCTION IF EXISTS getg;//
+CREATE FUNCTION getg(stuId blob) 
+RETURNS varchar(200)  DETERMINISTIC
+RETURN  ST_AsText(stuId) ; //
+select getg(ST_SymDifference(point(1,0),point(1,6)));//
+getg(ST_SymDifference(point(1,0),point(1,6)))
+MULTIPOINT((1 0),(1 6))
+drop table t1;

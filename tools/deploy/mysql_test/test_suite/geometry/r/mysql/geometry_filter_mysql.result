@@ -3308,3 +3308,35 @@ c1	ST_AsText(g)
 8	POLYGON((0 0,0 2,2 2,2 0,0 0))
 9	POINT(0 0)
 drop table t1;
+bugfix: 53888898
+drop table t1;
+create table t1 (
+id int ,
+gg geometry not null srid 0,
+SPATIAL  INDEX index_gis(gg)
+);
+insert into t1 values(1,ST_GeomFromText('POLYGON((0 0 ,10 0 ,10 11 ,0 11, 0 0 ))'));
+select * from t1 where ST_Contains(gg,ST_Centroid(gg));
+id	gg
+1	                                   $@              $@      &@              &@                
+select * from t1 where ST_Contains(ST_Centroid(gg),gg);
+id	gg
+select * from t1 where ST_Within(gg,ST_Centroid(gg));
+id	gg
+select * from t1 where ST_Within(ST_Centroid(gg),gg);
+id	gg
+1	                                   $@              $@      &@              &@                
+select * from t1 where ST_Equals(gg,ST_Centroid(gg));
+id	gg
+select * from t1 where ST_Equals(ST_Centroid(gg),gg);
+id	gg
+select * from t1;
+id	gg
+1	                                   $@              $@      &@              &@                
+delete from t1 where ST_Contains(ST_Centroid(gg),gg);
+select * from t1;
+id	gg
+1	                                   $@              $@      &@              &@                
+delete from t1 where ST_Contains(gg,ST_Centroid(gg));
+select * from t1;
+id	gg

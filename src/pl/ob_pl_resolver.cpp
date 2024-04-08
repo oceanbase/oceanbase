@@ -2534,12 +2534,14 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
       const ObColumnSchemaV2 &column_schema = **cs_iter;
       if (!column_schema.is_hidden() && !(column_schema.is_invisible_column() && !with_rowid)) {
         ObPLDataType pl_type;
-        if (column_schema.get_meta_type().is_user_defined_sql_type()) {
+        if (column_schema.get_meta_type().is_user_defined_sql_type()
+            || (lib::is_oracle_mode() && column_schema.get_meta_type().is_geometry())) { // oracle sdo_geometry
+          uint64_t udt_id = column_schema.get_meta_type().is_geometry() ? ObUDTType::T_OBJ_SDO_GEOMETRY : column_schema.get_sub_data_type();
           const ObUDTTypeInfo *udt_info = NULL;
           const ObUserDefinedType *user_type = NULL;
           ObArenaAllocator allocator;
-          uint64_t tenant_id = get_tenant_id_by_object_id(column_schema.get_sub_data_type());
-          OZ (schema_guard.get_udt_info(tenant_id, column_schema.get_sub_data_type(), udt_info));
+          uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+          OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
           CK (OB_NOT_NULL(udt_info));
           OZ (udt_info->transform_to_pl_type(allocator, user_type));
           CK (OB_NOT_NULL(user_type));
@@ -11817,7 +11819,9 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    OZ (formalize_expr(*expr));
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
+      OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
+    }
     OZ(ObTransformPreProcess::transform_expr(unit_ast.get_expr_factory(),
                                               resolve_ctx_.session_info_, expr,
                                               transformed));
@@ -13890,9 +13894,11 @@ int ObPLResolver::check_routine_callable(const ObPLBlockNS &ns,
         if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("failed to clear flag", K(ret));
         }
-      } else if (expr_params.count() > 0
-                 && expr_params.at(0)->get_result_type().is_xml_sql_type()
-                 && (T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_)) {
+      } else if (expr_params.count() > 0 &&
+                 ((expr_params.at(0)->get_result_type().is_xml_sql_type() &&
+                   T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_) ||
+                  (expr_params.at(0)->get_result_type().is_geometry() &&
+                    T_OBJ_SDO_GEOMETRY == access_idxs.at(access_idxs.count() - 1).var_index_))) {
         // select 'head' || xmlparse(document '<a>123</a>').getclobval() into a from dual;
         if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("failed to clear flag", K(ret));
@@ -14337,15 +14343,30 @@ int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
         LOG_WARN("deduce type failed for sys func ident", K(ret));
       }
     }
+    uint64_t udt_id = 0;
     if (OB_FAIL(ret)) {
-    } else if (!access_ident.sys_func_expr_->get_result_type().is_xml_sql_type()
-                && !(access_ident.sys_func_expr_->get_result_type().is_ext())) {
+    } else if (access_ident.sys_func_expr_->get_result_type().is_user_defined_sql_type()) {
+      uint16_t subschema_id = access_ident.sys_func_expr_->get_result_type().get_subschema_id();
+      if (subschema_id == ObXMLSqlType) {
+        udt_id = T_OBJ_XML;
+      } else {
+        udt_id = access_ident.sys_func_expr_->get_result_type().get_udt_id();
+      }
+    } else if (access_ident.sys_func_expr_->get_result_type().is_ext()) {
+      udt_id = access_ident.sys_func_expr_->get_result_type().get_udt_id();
+    } else if (access_ident.sys_func_expr_->get_result_type().is_geometry() && lib::is_oracle_mode()) {
+      // oracle gis
+      udt_id = T_OBJ_SDO_GEOMETRY;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)
+               && !(access_ident.sys_func_expr_->get_result_type().is_ext())) {
       ret = OB_ERR_NOT_OBJ_REF;
       LOG_WARN("unsupported sys func ident",
-        K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()),
-        K(access_ident.sys_func_expr_->get_result_type().get_udt_id()));
-    } else { // only xmltype is supported
-      OZ (ns.get_pl_data_type_by_id(T_OBJ_XML, user_type));
+        K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()), K(udt_id));
+    } else {
+      OZ (ns.get_pl_data_type_by_id(udt_id, user_type));
     }
   }
   CK (OB_NOT_NULL(user_type));

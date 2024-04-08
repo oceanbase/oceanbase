@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "share/ob_index_builder_util.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_parser.h"
@@ -4672,6 +4673,53 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
+int ObAlterTableResolver::check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt,
+                                                       AlterColumnSchema &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode() && column_schema.is_geometry()) {
+    ObObj orig_default_value;
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_2_0
+      || (tenant_data_version >= DATA_VERSION_4_3_0_0 && tenant_data_version < DATA_VERSION_4_3_1_0)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("sdo_geometry is not supported when data version is below 4.2.2.0 or data_version is above 4.3.0.0 but below 4.3.1.0", K(ret), K(tenant_data_version), K(column_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2 or data_version is above 4.3.0.0 but below 4.3.1.0, sdo_geometry");
+    } else if (OB_ISNULL(alter_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter table stmt not exist", K(ret));
+    } else if (column_schema.get_cur_default_value().is_null()) {
+    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
+                                                     session_info_->get_tz_info_wrap(),
+                                                     *allocator_,
+                                                     column_schema,
+                                                     session_info_->get_sql_mode(),
+                                                     session_info_,
+                                                     schema_checker_,
+                                                     orig_default_value,
+                                                     alter_table_stmt->get_ddl_arg()))) {
+      LOG_WARN("fail to calc xmltype default value expr", K(ret));
+    } else if (orig_default_value.is_null()) {
+    } else {
+      // get rid of lob header
+      ObObj default_val;
+      ObString swkb;
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator_, orig_default_value, swkb))) {
+        LOG_WARN("fail to get real data.", K(ret));
+      } else {
+        default_val.set_common_value(swkb);
+        default_val.set_meta_type(column_schema.get_meta_type());
+        if (OB_FAIL(column_schema.set_orig_default_value(default_val))) {
+          LOG_WARN("fail to set orig default value", K(default_val), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt,
                                                 AlterColumnSchema &column_schema)
 {
@@ -4704,7 +4752,6 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
     } else if (column_schema.get_cur_default_value().is_null()) {
     } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
                                                      session_info_->get_tz_info_wrap(),
-                                                     nls_formats_str,
                                                      *allocator_,
                                                      column_schema,
                                                      session_info_->get_sql_mode(),
@@ -4854,7 +4901,9 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
         }
         //add column
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
+          if (OB_FAIL(check_sdo_geom_default_value(alter_table_stmt, alter_column_schema))) {
+            SQL_RESV_LOG(WARN, "check sdo geometry default value failed!", K(ret));
+          } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));
@@ -5346,9 +5395,12 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && ObGeometryType == alter_column_schema.get_data_type()
+                   && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+                   && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
                    && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change geometry type");
+          ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+          LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
           LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
                   K(alter_column_schema.get_geo_type()));
         } else if (ObGeometryType == origin_col_schema->get_data_type()
@@ -5597,6 +5649,22 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             SQL_RESV_LOG(WARN, "check column in part key failed", K(ret));
           }
         }
+        if (OB_SUCC(ret) && alter_column_schema.is_udt_related_column(lib::is_oracle_mode())) {
+          ObString tmp_str;
+          if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
+                                                             session_info_->get_tz_info_wrap(),
+                                                             &tmp_str,    // useless
+                                                             *allocator_,
+                                                             *const_cast<ObTableSchema *>(table_schema_),
+                                                             alter_column_schema,
+                                                             session_info_->get_sql_mode(),
+                                                             session_info_,
+                                                             schema_checker_,
+                                                             alter_table_stmt->get_ddl_arg()))) {
+            SQL_RESV_LOG(WARN, "check udt column default value failed in alter table modify stmt",
+                        K(ret), K(alter_column_schema.get_cur_default_value()));
+          }
+        }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
@@ -5613,9 +5681,12 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_WARN("can't set primary key nullable", K(ret));
           } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && ObGeometryType == alter_column_schema.get_data_type()
+                     && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+                     && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
                      && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry type");
+            ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+            LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
                     K(alter_column_schema.get_geo_type()));
           } else if (ObGeometryType == origin_col_schema->get_data_type()

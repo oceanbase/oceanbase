@@ -2,7 +2,7 @@
 # Base test of GEOMETRY dml.
 # ----------------------------------------------------------------------
 alter system set _enable_defensive_check = 1;
-DROP TABLE IF EXISTS spatial_index_dml_constraint, tt1;
+DROP TABLE IF EXISTS spatial_index_dml_constraint, tt1, T_GEO;
 CREATE TABLE spatial_index_dml_constraint (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
 SET @v1=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
 SET @v2=ST_GEOMFROMTEXT('LINESTRING(0 0,10 10)', 4326);
@@ -423,3 +423,23 @@ GEOMETRYCOLLECTION(POINT(10 10),POINT(30 30),LINESTRING(15 15,20 20))
 GEOMETRYCOLLECTION(POINT(10 10),POINT(30 30),LINESTRING(15 15,20 20))
 alter system set _enable_defensive_check = 0;
 drop table t_geo;
+create table t_geo(geo geometry);
+insert into t_geo values(x'000000000140340000000000004034000000000000');
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
+insert into t_geo values(st_geomfromwkb(x'000000000140340000000000004034000000000000'));
+select hex(geo) from t_geo;
+hex(geo)
+00000000010100000000000000000034400000000000003440
+drop table t_geo;
+DROP TABLE IF EXISTS tt3;
+create table tt3(id int,p geometry);
+insert into tt3 values(1,st_geomfromtext('point(1 2)'));
+update tt3 set p=x'000000000101000000000000000000F03F0000000000000840';
+select st_astext(p) from tt3;
+st_astext(p)
+POINT(1 3)
+update tt3 set p =x'0000000001E9030000000000000000F03F00000000000000400000000000000840';
+select st_astext(p) from tt3;
+st_astext(p)
+POINT Z (1 2 3)
+drop table tt3;

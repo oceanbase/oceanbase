@@ -554,6 +554,7 @@ public:
   // release dynamic allocated memory
   //
   void clear();
+
 public:
   ObMultiStmtItem multi_stmt_item_;
   ObSQLSessionInfo *session_info_;

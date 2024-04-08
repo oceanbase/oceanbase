@@ -353,6 +353,7 @@ public:
       share::schema::AlterColumnSchema &alter_column_schema,
       ObIArray<ObString> &gen_col_expr_arr,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      uint64_t &curr_udt_set_id,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
   int add_column_to_column_group(

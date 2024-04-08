@@ -59,9 +59,8 @@ int ObExprPoint::calc_result_type2(ObExprResType &type,
     if (!ob_is_double_tc(type_y)) {
       type2.set_calc_type(ObDoubleType);
     }
-    type.set_type(ObGeometryType);
-    type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-    type.set_collation_type(CS_TYPE_BINARY);
+    type.set_geometry();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
   }
 
   return ret;

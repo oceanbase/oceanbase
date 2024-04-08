@@ -346,8 +346,7 @@ int ObSubSchemaCtx::get_subschema_id_from_fields(uint64_t udt_id, uint16_t &subs
   if (OB_NOT_NULL(fields_)) {
     for (uint32_t i = 0; is_found == false && OB_SUCC(ret) && i < fields_->count(); i++) {
       if ((fields_->at(i).type_.is_user_defined_sql_type()
-            // || fields_->at(i).type_.is_collection_sql_type()
-          )
+            || fields_->at(i).type_.is_collection_sql_type())
           && fields_->at(i).accuracy_.get_accuracy() == udt_id) {
         subschema_id = fields_->at(i).type_.get_udt_subschema_id();
         is_found = true;

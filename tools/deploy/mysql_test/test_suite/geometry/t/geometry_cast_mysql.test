@@ -305,6 +305,9 @@
   --echo #############################################
   --echo #
 
+  --disable_warnings
+  drop table if exists gis_linestring_castable;
+  --enable_warnings
   CREATE TABLE gis_linestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
   INSERT INTO gis_linestring_castable VALUES
   (101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
@@ -640,6 +643,9 @@
   --echo #############################################
   --echo #
 
+  --disable_warnings
+  drop table if exists gis_multipoint_castable;
+  --enable_warnings
   CREATE TABLE gis_multipoint_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
   INSERT INTO gis_multipoint_castable VALUES
   (101, ST_GEOMFROMTEXT('POINT(1 1)')),
@@ -794,6 +800,9 @@
   --echo #############################################
   --echo #
 
+  --disable_warnings
+  drop table if exists gis_multilinestring_castable;
+  --enable_warnings
   CREATE TABLE gis_multilinestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
   INSERT INTO gis_multilinestring_castable VALUES
   (101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
@@ -947,6 +956,9 @@
   --echo #############################################
   --echo #
 
+  --disable_warnings
+  drop table if exists gis_multipolygon_castable;
+  --enable_warnings
   CREATE TABLE gis_multipolygon_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
   INSERT INTO gis_multipolygon_castable VALUES
   (101, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))')),
@@ -1108,6 +1120,9 @@
   --echo #############################################
   --echo #
 
+  --disable_warnings
+  drop table if exists gis_geometrycollection_castable;
+  --enable_warnings
   CREATE TABLE gis_geometrycollection_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
   INSERT INTO gis_geometrycollection_castable VALUES
   (101, ST_GEOMFROMTEXT('POINT(1 1)')),
@@ -1270,12 +1285,15 @@
   --echo #
 
   # bugfix: 
-  create table tt2(a year);
-  insert into tt2 values(2010-10-10);
-  select * from tt2;
+  --disable_warnings
+  drop table if exists gis_tt2;
+  --enable_warnings
+  create table gis_tt2(a year);
+  insert into gis_tt2 values(2010-10-10);
+  select * from gis_tt2;
   --error 3548
-  select cast(a as point) from tt2;
-  drop table tt2;
+  select cast(a as point) from gis_tt2;
+  drop table gis_tt2;
 
   --error 3037
   select cast(cast("1.23" as decimal) as point);
@@ -1366,6 +1384,9 @@ DROP TABLE IF EXISTS tt1;
 
   # 
   SELECT TIME(ST_GEOMETRYFROMTEXT('polygon((1 1,1 1,1 1,1 1))'));
+  --disable_warnings
+  drop table if exists t;
+  --enable_warnings
   create table t(id int, t time);
   --error 1292
   insert into t values(1, st_geomfromtext('POINT(1 1)'));

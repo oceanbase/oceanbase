@@ -40,6 +40,13 @@ private:
     W_EMPTY
   };
 
+  enum ObGeoDimType: uint8_t
+  {
+    NOT_INIT,
+    IS_2D,
+    IS_3D
+  };
+
   typedef union ObWktTokenVal {
     ObString string_val_;
     double number_val_;
@@ -47,7 +54,8 @@ private:
   } ObWktTokenVal;
 
   explicit ObWktParser (ObIAllocator &allocator, const ObString &wkt) :
-    allocator_(allocator), wkt_(wkt.ptr()), wkb_buf_(allocator), cur_pos_(0), wkt_len_(wkt.length()) {}
+    allocator_(allocator), wkt_(wkt.ptr()), wkb_buf_(allocator), cur_pos_(0), wkt_len_(wkt.length()),
+    dim_type_(ObGeoDimType::NOT_INIT), is_oracle_mode_(lib::is_oracle_mode()) {}
   ~ObWktParser(){};
 
   int parse(ObGeometry *&geo, bool is_geographical);
@@ -77,13 +85,19 @@ private:
   int process_word(ObWktTokenVal &tkn_val);
 
   int get_next_token(ObWktTokenType &tkn_type, ObString &tkn_string);
+  // for 3D object
+  int try_parse_zdim_token(ObWktTokenVal &z_val);
+  int parse_geo_type(ObGeoType &geo_type);
+  int refresh_type(uint64_t pos);
+  int set_dimension(ObGeoDimType dim);
 
   common::ObIAllocator &allocator_;
   const char *wkt_;
   ObWkbBuffer wkb_buf_;
   int64_t cur_pos_;
   int64_t wkt_len_;
-
+  ObGeoDimType dim_type_;
+  bool is_oracle_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObWktParser);
 };
 

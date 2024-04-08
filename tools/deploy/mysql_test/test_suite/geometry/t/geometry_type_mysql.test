@@ -594,6 +594,16 @@ if (0) {
   SELECT ST_ASTEXT(ST_MULTIPOLYGONFROMTEXT(@multipolygon_text));
   SELECT ST_ASTEXT(ST_MULTIPOLYGONFROMWKB(ST_ASWKB(ST_GEOMFROMTEXT(@multipolygon_text))));
 }
+
+--disable_warnings
+  DROP TABLE IF EXISTS t1;
+--enable_warnings
+create table t1(id int, point point);
+INSERT into t1 values(3,Point(100, 23));
+select ST_AsText(point) from t1 where ST_SymDifference(point,point) in (ST_SymDifference(point,Point(10, 23)),ST_SymDifference(point,point));
+select ST_AsText(point) from t1 where ST_SymDifference(point,point) not in (ST_SymDifference(point,Point(10, 23)),ST_SymDifference(point,point));
+drop table t1;
+
 --echo # Final cleanup
 DROP TABLE gis_point;
 DROP TABLE gis_linestring;
@@ -605,4 +615,8 @@ DROP TABLE gis_geometrycollection;
 DROP TABLE gis_geometry;
 DROP TABLE tab;
 DROP TABLE tab2;
-
+# bugfix 53179664
+select LINESTRING(point(7,6),point(1,1),point(NULL,NULL));
+select LINESTRING(point(NULL,NULL));
+select LINESTRING(point(5,NULL));
+select POLYGON(LINESTRING(POINT(0,0), POINT(0,5), POINT(5,5), POINT(5,0), POINT(NULL,0)));

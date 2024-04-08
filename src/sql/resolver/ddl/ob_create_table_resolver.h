@@ -73,11 +73,11 @@ private:
   int add_hidden_tablet_seq_col();
   int add_hidden_external_table_pk_col();
 
-  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
-                                          ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
-                                          ObColumnSchemaV2 &udt_column);
-  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
-                                          ObColumnSchemaV2 &udt_column);
+  int add_udt_hidden_column(ObTableSchema &table_schema,
+                            ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
+                            ObColumnSchemaV2 &udt_column);
+  int add_udt_hidden_column(ObTableSchema &table_schema,
+                            ObColumnSchemaV2 &udt_column);
   int check_column_name_duplicate(const ParseNode *node);
   int resolve_primary_key_node(const ParseNode &pk_node, common::ObArray<ObColumnResolveStat> &stats);
   int resolve_table_elements(const ParseNode *node,

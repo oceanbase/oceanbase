@@ -106,7 +106,7 @@ if (0) { #ST_SRID 未支持
                   col2 POINT AS (ST_SRID(col1, 0)) SRID 2000);
   --source mysql_test/include/show_create_table_old_version_replica2.inc
   show create table t1;
-  --error 3643
+  --error 1235
   INSERT INTO t1 (col1) VALUES (ST_GeomFromText('POINT(1 1)', 4326));
   DROP TABLE t1;
 }
@@ -373,7 +373,7 @@ if (0) { # 不支持升级srid
   ALTER TABLE t1 CHANGE COLUMN col_srid_2000 col_srid_2000 POINT NOT NULL SRID 4326;
 
   --echo # Wrong SRID for col_srid_2000, so should not work
-  --error 3643
+  --error 1235
   INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
     ST_GeomFromText('POINT(1 1)'),
     ST_GeomFromText('POINT(1 1)', 0),
@@ -550,9 +550,9 @@ drop table tt4;
 drop table if exists test;
 --enable_warnings
 create table test(p point srid 4326);
---error 1235
+--error 1416
 alter table test modify p MULTIPOINT;
---error 1235
+--error 1416
 alter table test change p p1 MULTIPOINT;
 --error 1235
 alter table test modify p POINT SRID 0;
@@ -655,3 +655,119 @@ CREATE TABLE t1 SELECT a FROM (SELECT pt AS a FROM geometries UNION SELECT mls F
 select st_astext(a) from t1;
 drop table geometries;
 drop table t1;
+
+--echo bugfix: 53170626
+--disable_warnings
+drop table if exists geo_t1;
+--enable_warnings
+create table geo_t1 as select point(1,1);
+desc geo_t1;
+drop table geo_t1;
+
+create table geo_t1 as select _st_makevalid(st_geomfromtext('POLYGON((2 2,6 -2,10 2,10 -2,6 2,2 -2,2 2))'));
+desc geo_t1;
+drop table geo_t1;
+
+create table geo_t1 as select _ST_POINT(0, 0);
+desc geo_t1;
+drop table geo_t1;
+
+create table geo_t1 as select ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+desc geo_t1;
+drop table geo_t1;
+
+create table geo_t1 as select ST_X(ST_GEOMFROMTEXT('POINT(0 0)'));
+desc geo_t1;
+drop table geo_t1;
+
+--echo bugfix: 53668721
+--disable_warnings
+drop table if exists coll_t1;
+drop view if exists coll_v1;
+--enable_warnings
+CREATE table coll_t1 (c1 GeomCollection);
+insert into coll_t1 values (GEOMCOLLECTION(POINT(0,0)));
+desc coll_t1;
+select st_astext(t.c1) from coll_t1 t;
+
+CREATE view coll_v1 as select * from coll_t1;
+desc coll_v1;
+select st_astext(t.c1) from coll_v1 t;
+
+drop table coll_t1;
+drop view coll_v1;
+--echo bugfix: 55274751
+--disable_warnings
+drop table if exists geo_t1;
+--enable_warnings
+create table geo_t1(t GeomCollection);
+insert into geo_t1 values (st_geomfromtext('GeometryCollection(point(1 1), linestring(0 0, 2 2))'));
+--error 1366
+ALTER TABLE geo_t1 MODIFY t int;
+--error 1264
+ALTER TABLE geo_t1 MODIFY t double;
+--error 1292
+ALTER TABLE geo_t1 MODIFY t datetime;
+--error 1292
+ALTER TABLE geo_t1 MODIFY t timestamp;
+--error 1292
+ALTER TABLE geo_t1 MODIFY t date;
+--error 1366
+ALTER TABLE geo_t1 MODIFY t varchar(1);
+--error 1235
+ALTER TABLE geo_t1 MODIFY t ENUM('a','b');
+--error 1235
+ALTER TABLE geo_t1 MODIFY t SET('a','b');
+--error 1235
+ALTER TABLE geo_t1 MODIFY t JSON;
+# mysql success but truncate
+--error 1406
+ALTER TABLE geo_t1 MODIFY t BIT(8);
+--error 1366
+ALTER TABLE geo_t1 MODIFY t varchar(256);
+--error 1366
+ALTER TABLE geo_t1 MODIFY t text;
+
+ALTER TABLE geo_t1 MODIFY t LONGTEXT CHARSET binary;
+select hex(t) from geo_t1;
+ALTER TABLE geo_t1 MODIFY t GeomCollection;
+select hex(t) from geo_t1;
+
+--error 1366
+ALTER TABLE geo_t1 change t tt int;
+--error 1264
+ALTER TABLE geo_t1 change t tt double;
+--error 1292
+ALTER TABLE geo_t1 change t tt datetime;
+--error 1292
+ALTER TABLE geo_t1 change t tt timestamp;
+--error 1292
+ALTER TABLE geo_t1 change t tt date;
+--error 1366
+ALTER TABLE geo_t1 change t tt varchar(1);
+--error 1235
+ALTER TABLE geo_t1 change t tt ENUM('a','b');
+--error 1235
+ALTER TABLE geo_t1 change t tt SET('a','b');
+--error 1235
+ALTER TABLE geo_t1 change t tt JSON;
+# mysql success but truncate
+--error 1406
+ALTER TABLE geo_t1 change t tt BIT(8);
+--error 1366
+ALTER TABLE geo_t1 change t tt varchar(256);
+--error 1366
+ALTER TABLE geo_t1 change t tt text;
+
+ALTER TABLE geo_t1 change t tt LONGTEXT CHARSET binary;
+select hex(tt) from geo_t1;
+ALTER TABLE geo_t1 change tt t GeomCollection;
+select hex(t) from geo_t1;
+
+--echo bugfix: 53251134
+--disable_warnings
+drop table if exists geo_t1;
+--enable_warnings
+create table geo_t1 as select ST_Centroid(ST_geomfromtext('POLYGON((121.474243 31.234504, 121.471775 31.233348, 121.470724 31.23155, 121.471603 31.230229, 121.472655 31.230357, 121.475777 31.232045, 121.474243 31.234504))')) centroid ;
+desc geo_t1;
+drop table geo_t1;

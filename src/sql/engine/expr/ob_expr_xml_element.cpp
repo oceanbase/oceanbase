@@ -178,7 +178,7 @@ int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       if (val_type == ObUserDefinedSQLType) { // xmltype
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator,
                                                               ObObjType::ObLongTextType,
-                                                              xml_arg->datum_meta_.cs_type_,
+                                                              ObCollationType::CS_TYPE_BINARY,
                                                               true, xml_value_data))) {
           LOG_WARN("fail to get real data.", K(ret), K(xml_value_data));
         // } else if (OB_FAIL(ObXMLExprHelper::check_xml_document_unparsed(mem_ctx, xml_value_data, validity))) {

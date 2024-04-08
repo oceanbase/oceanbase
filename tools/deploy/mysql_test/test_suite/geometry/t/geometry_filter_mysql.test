@@ -559,3 +559,25 @@ select /*+ full(t1) */ c1, ST_AsText(g) FROM t1 where (ST_Intersects(g, ST_GeomF
                             or ST_Intersects(g, ST_GeomFromText('POINT(1 1)', 4326)));
 
 drop table t1;
+
+--echo bugfix: 53888898
+--error 0,1051
+drop table t1;
+create table t1 (
+id int ,
+gg geometry not null srid 0,
+SPATIAL  INDEX index_gis(gg)
+);
+insert into t1 values(1,ST_GeomFromText('POLYGON((0 0 ,10 0 ,10 11 ,0 11, 0 0 ))'));
+
+select * from t1 where ST_Contains(gg,ST_Centroid(gg));
+select * from t1 where ST_Contains(ST_Centroid(gg),gg);
+select * from t1 where ST_Within(gg,ST_Centroid(gg));
+select * from t1 where ST_Within(ST_Centroid(gg),gg);
+select * from t1 where ST_Equals(gg,ST_Centroid(gg));
+select * from t1 where ST_Equals(ST_Centroid(gg),gg);
+select * from t1;
+delete from t1 where ST_Contains(ST_Centroid(gg),gg);
+select * from t1;
+delete from t1 where ST_Contains(gg,ST_Centroid(gg));
+select * from t1;

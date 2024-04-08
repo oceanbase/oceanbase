@@ -469,6 +469,11 @@ int ObDatumObjParam::to_objparam(common::ObObjParam &obj_param, ObIAllocator *al
   if (res_flags_ & HAS_LOB_HEADER_FLAG) {
     meta.set_has_lob_header();
   }
+  if (ob_is_user_defined_sql_type(meta_.type_) &&
+      meta_.cs_type_ == CS_TYPE_INVALID) {
+    // xmltype
+    meta.set_collation_level(CS_LEVEL_EXPLICIT);
+  }
   if (OB_UNLIKELY(meta_.is_ext_sql_array())) {
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1322,6 +1327,7 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         res_acc.precision_ = expr.datum_meta_.precision_;
         cast_ctx.res_accuracy_ = &res_acc;
       }
+      cast_ctx.exec_ctx_ = &ctx.exec_ctx_;
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {
         LOG_WARN("failed to cast obj to dst type", K(ret), K(v), K(dst_meta));
       } else if (OB_FAIL(datum_param.alloc_datum_reserved_buff(

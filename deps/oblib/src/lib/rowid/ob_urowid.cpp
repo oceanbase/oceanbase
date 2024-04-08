@@ -357,7 +357,8 @@ DEF_GET_OTIME_PK_VALUE(ObTimestampNanoType, timestamp_nano, uint16_t);
   ObJsonType,                        \
   ObGeometryType,                    \
   ObUserDefinedSQLType,              \
-  ObDecimalIntType
+  ObDecimalIntType,                  \
+  ObCollectionSQLType
 
 #define DEF_GET_PK_FUNC(obj_type) ObURowIDData::inner_get_pk_value<obj_type>
 
