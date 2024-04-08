@@ -190,7 +190,6 @@ public:
                                 const ParseNode *alias_node,
                                 ObChildStmtResolver &child_resolver,
                                 TableItem *&table_item);
-  int extract_var_init_exprs(ObSelectStmt *ref_query, common::ObIArray<ObRawExpr*> &assign_exprs);
   int resolve_generate_table_item(ObSelectStmt *ref_query, const ObString &alias_name, TableItem *&tbl_item);
   int resolve_joined_table(const ParseNode &parse_node, JoinedTable *&joined_table);
   int resolve_joined_table_item(const ParseNode &parse_node, JoinedTable *&joined_table);
