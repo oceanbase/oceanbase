@@ -620,8 +620,7 @@ ObSSTableCopyFinishTask::ObSSTableCopyFinishTask()
     ls_(nullptr),
     tablet_service_(nullptr),
     sstable_index_builder_(),
-    restore_macro_block_id_mgr_(nullptr),
-    mocked_row_store_cg_()
+    restore_macro_block_id_mgr_(nullptr)
 {
 }
 
@@ -826,15 +825,17 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   } else {
     const uint16_t cg_idx = sstable_param->table_key_.get_column_group_id();
     const ObStorageColumnGroupSchema *cg_schema = nullptr;
+    ObStorageColumnGroupSchema mocked_row_store_cg;
     if (sstable_param->table_key_.is_cg_sstable()) {
       if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
       } else if (ALL_CG_TYPE == sstable_param->co_base_type_ && cg_schema->is_rowkey_column_group()) {
-        if (OB_FAIL(storage_schema->mock_row_store_cg(mocked_row_store_cg_))) {
+        // ALL_CG_TYPE means major is row store (no cgs), cg_schema means table is created with column store.
+        if (OB_FAIL(storage_schema->mock_row_store_cg(mocked_row_store_cg))) {
           LOG_WARN("failed to mock row store column group schema", K(ret));
         } else {
-          cg_schema = &mocked_row_store_cg_;
+          cg_schema = &mocked_row_store_cg;
         }
       } else {
         cg_schema = &storage_schema->get_column_groups().at(cg_idx);

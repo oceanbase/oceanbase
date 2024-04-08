@@ -218,7 +218,6 @@ private:
   ObLSTabletService *tablet_service_;
   ObSSTableIndexBuilder sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  ObStorageColumnGroupSchema mocked_row_store_cg_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 
