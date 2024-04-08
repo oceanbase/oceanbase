@@ -230,6 +230,9 @@ private:
       const int64_t task_id = 0,
       const int64_t table_id = common::OB_INVALID_ID,
       const int64_t execution_id = -1);
+  int get_tablet_exec_context_with_rlock(
+      const ObTabletDirectLoadExecContextId &exec_id,
+      ObTabletDirectLoadExecContext &exec_context);
   int remove_tablet_direct_load_nolock(const ObTabletDirectLoadMgrKey &mgr_key);
   // to generate unique slice id for slice writer, putting here is just to
   // simplify the logic of the tablet_direct_load_mgr.

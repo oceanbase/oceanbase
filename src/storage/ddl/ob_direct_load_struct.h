@@ -626,7 +626,7 @@ public:
     return tablet_id_.hash() + murmurhash(&context_id_, sizeof(context_id_), 0);
   }
   int hash(uint64_t &hash_val) const {hash_val = hash(); return OB_SUCCESS;}
-  bool is_valid() const { return context_id_ >= 0; }
+  bool is_valid() const { return tablet_id_.is_valid() && context_id_ >= 0; }
   bool operator == (const ObTabletDirectLoadExecContextId &other) const {
         return tablet_id_ == other.tablet_id_ && context_id_ == other.context_id_; }
   TO_STRING_KV(K_(tablet_id), K_(context_id));
@@ -641,7 +641,12 @@ public:
   ObTabletDirectLoadExecContext()
     : start_scn_(), execution_id_(0), seq_interval_task_id_(0)
   {}
-  ~ObTabletDirectLoadExecContext() = default;
+  ~ObTabletDirectLoadExecContext() { reset(); }
+  void reset() {
+    start_scn_.reset();
+    execution_id_ = 0;
+    seq_interval_task_id_ = 0;
+  }
   TO_STRING_KV(K_(start_scn), K_(execution_id), K_(seq_interval_task_id));
 public:
   share::SCN start_scn_;
