@@ -371,6 +371,11 @@ public:
   {
     enable_inc_direct_load_ = enable_inc_direct_load;
   }
+  inline bool get_enable_replace() const { return enable_replace_; }
+  inline void set_enable_replace(const bool enable_replace)
+  {
+    enable_replace_ = enable_replace;
+  }
 
 public:
   int inc_concurrent_num();
@@ -691,6 +696,7 @@ public:
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_replace_; // for incremental direct load
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
