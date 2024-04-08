@@ -11429,9 +11429,10 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     }
   } else if (T_OBJ_ACCESS_REF == expr->get_expr_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    OX (stmt->get_query_ctx()->disable_udf_parallel_ |= true);
+    /*for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       OZ (check_disable_parallel_state(expr->get_param_expr(i)));
-    }
+    }*/
   }
 
   return ret;
