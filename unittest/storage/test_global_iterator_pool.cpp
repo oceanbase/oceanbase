@@ -103,24 +103,23 @@ TEST_F(ObGlobalIteratorPoolTest, init)
 TEST_F(ObGlobalIteratorPoolTest, get)
 {
   int ret = 0;
-  ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
-  ASSERT_TRUE(nullptr != iter_pool);
-  set_tenant_memory_limit(tenant_id_, ObGlobalIteratorPool::ITER_POOL_TENANT_MIN_MEM_THRESHOLD + 1);
-  ret = iter_pool->init();
+  ObGlobalIteratorPool iter_pool;
+  iter_pool.tenant_mem_user_limit_ = ObGlobalIteratorPool::ITER_POOL_TENANT_MIN_MEM_THRESHOLD + 1;
+  ret = iter_pool.init();
   ASSERT_EQ(ret, OB_SUCCESS);
   ObQRIterType type = T_INVALID_ITER_TYPE;
   CachedIteratorNode *cached_node = nullptr;
-  ret = iter_pool->get(type, cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
   ASSERT_TRUE(nullptr == cached_node);
 
   type = T_MAX_ITER_TYPE;
-  ret = iter_pool->get(type, cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
   ASSERT_TRUE(nullptr == cached_node);
 
   type = T_SINGLE_GET;
-  ret = iter_pool->get(type, cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node);
   ASSERT_TRUE(cached_node->is_occupied_);
@@ -135,43 +134,43 @@ TEST_F(ObGlobalIteratorPoolTest, get)
 
   type = T_SINGLE_GET;
   CachedIteratorNode *cached_node1 = nullptr;
-  ret = iter_pool->get(type, cached_node1);
+  ret = iter_pool.get(type, cached_node1);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr == cached_node1);
 
-  iter_pool->release(cached_node);
-  ret = iter_pool->get(type, cached_node1);
+  iter_pool.release(cached_node);
+  ret = iter_pool.get(type, cached_node1);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node1);
   ASSERT_TRUE(cached_node1->is_occupied_);
   ASSERT_TRUE(nullptr != cached_node1->iter_);
   ASSERT_TRUE(nullptr != cached_node1->stmt_iter_pool_);
   ASSERT_TRUE(merge == cached_node1->iter_);
-  iter_pool->release(cached_node);
+  iter_pool.release(cached_node);
 
   type = T_MULTI_GET;
   CachedIteratorNode *mg_cached_node = nullptr;
-  ret = iter_pool->get(type, mg_cached_node);
+  ret = iter_pool.get(type, mg_cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != mg_cached_node);
   ASSERT_TRUE(mg_cached_node->is_occupied_);
   ASSERT_TRUE(nullptr == mg_cached_node->iter_);
   ASSERT_TRUE(nullptr != mg_cached_node->stmt_iter_pool_);
-  iter_pool->release(mg_cached_node);
+  iter_pool.release(mg_cached_node);
 
   type = T_SINGLE_SCAN;
   CachedIteratorNode *ss_cached_node = nullptr;
-  ret = iter_pool->get(type, ss_cached_node);
+  ret = iter_pool.get(type, ss_cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != ss_cached_node);
   ASSERT_TRUE(ss_cached_node->is_occupied_);
   ASSERT_TRUE(nullptr == ss_cached_node->iter_);
   ASSERT_TRUE(nullptr != ss_cached_node->stmt_iter_pool_);
-  iter_pool->release(ss_cached_node);
+  iter_pool.release(ss_cached_node);
 
   type = T_MULTI_SCAN;
   CachedIteratorNode *ms_cached_node = nullptr;
-  ret = iter_pool->get(type, ms_cached_node);
+  ret = iter_pool.get(type, ms_cached_node);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
   ASSERT_TRUE(nullptr == ms_cached_node);
 }
@@ -179,11 +178,13 @@ TEST_F(ObGlobalIteratorPoolTest, get)
 TEST_F(ObGlobalIteratorPoolTest, release)
 {
   int ret = 0;
-  ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
-  ASSERT_TRUE(nullptr != iter_pool);
+  ObGlobalIteratorPool iter_pool;
+  iter_pool.tenant_mem_user_limit_ = ObGlobalIteratorPool::ITER_POOL_TENANT_MIN_MEM_THRESHOLD + 1;
+  ret = iter_pool.init();
+  ASSERT_EQ(ret, OB_SUCCESS);
   ObQRIterType type = T_MULTI_GET;
   CachedIteratorNode *cached_node = nullptr;
-  ret = iter_pool->get(type, cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node);
   ASSERT_TRUE(cached_node->is_occupied_);
@@ -195,10 +196,10 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   ASSERT_TRUE(nullptr != buf);
   ObTestQueryRowIterator *merge = new (buf) ObTestQueryRowIterator();
   cached_node->set_iter(merge);
-  iter_pool->release(cached_node);
+  iter_pool.release(cached_node);
 
   CachedIteratorNode *cached_node1 = nullptr;
-  ret = iter_pool->get(type, cached_node1);
+  ret = iter_pool.get(type, cached_node1);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node1);
   ASSERT_TRUE(cached_node1->is_occupied_);
@@ -212,10 +213,10 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   buf = iter_alloc1->alloc(ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT + 1);
   ASSERT_TRUE(nullptr != buf);
   ASSERT_TRUE(iter_alloc1->total() > ObGlobalIteratorPool::ITER_POOL_ITER_MEM_LIMIT);
-  iter_pool->release(cached_node1);
+  iter_pool.release(cached_node1);
 
   CachedIteratorNode *cached_node2 = nullptr;
-  ret = iter_pool->get(type, cached_node2);
+  ret = iter_pool.get(type, cached_node2);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node2);
   ASSERT_TRUE(cached_node2->is_occupied_);
@@ -230,10 +231,10 @@ TEST_F(ObGlobalIteratorPoolTest, release)
   merge = new (buf) ObTestQueryRowIterator();
   cached_node2->set_iter(merge);
   cached_node2->set_exception_occur(true);
-  iter_pool->release(cached_node2);
+  iter_pool.release(cached_node2);
 
   CachedIteratorNode *cached_node3 = nullptr;
-  ret = iter_pool->get(type, cached_node3);
+  ret = iter_pool.get(type, cached_node3);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node3);
   ASSERT_TRUE(cached_node3->is_occupied_);
@@ -280,11 +281,15 @@ TEST_F(ObGlobalIteratorPoolTest, destroy)
 TEST_F(ObGlobalIteratorPoolTest, wash)
 {
   int ret = 0;
-  ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
-  ASSERT_TRUE(nullptr != iter_pool);
+  const int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id_);
+  const int64_t tenant_mem_hold = lib::get_tenant_memory_hold(tenant_id_);
+  ObGlobalIteratorPool iter_pool;
+  iter_pool.tenant_mem_user_limit_ = tenant_mem_limit;
+  ret = iter_pool.init();
+  ASSERT_EQ(ret, OB_SUCCESS);
   ObQRIterType type = T_SINGLE_SCAN;
   CachedIteratorNode *cached_node = nullptr;
-  ret = iter_pool->get(type, cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr != cached_node);
   ASSERT_TRUE(cached_node->is_occupied_);
@@ -298,51 +303,43 @@ TEST_F(ObGlobalIteratorPoolTest, wash)
   buf = iter_alloc->alloc(256 * 1024);
   ASSERT_TRUE(nullptr != buf);
 
-  ASSERT_FALSE(iter_pool->is_disabled_);
-  iter_pool->is_disabled_ = true;
-  iter_pool->wash();
-  STORAGE_LOG(INFO, "after wash", KPC(iter_pool));
-  ASSERT_FALSE(iter_pool->is_washing_);
-  ASSERT_FALSE(iter_pool->is_disabled_);
-  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id_);
-  int64_t tenant_mem_hold = lib::get_tenant_memory_hold(tenant_id_);
-  ASSERT_EQ(tenant_mem_limit, iter_pool->tenant_mem_user_limit_);
+  ASSERT_EQ(tenant_mem_limit, iter_pool.tenant_mem_user_limit_);
 
   ASSERT_TRUE(tenant_mem_limit > tenant_mem_hold) << "tenant_mem_hold=" << tenant_mem_hold
                                                   << "tenant_mem_hold=" << tenant_mem_hold;
-  int64_t test_tenant_mem_limit_low = tenant_mem_hold * 100 / ObGlobalIteratorPool::ITER_POOL_WASH_HIGH_THRESHOLD;
+  const int64_t test_tenant_mem_limit_low = tenant_mem_hold * 100 / ObGlobalIteratorPool::ITER_POOL_WASH_HIGH_THRESHOLD;
 
   set_tenant_memory_limit(tenant_id_, test_tenant_mem_limit_low - 10);
-  iter_pool->wash();
-  STORAGE_LOG(INFO, "after wash", KPC(iter_pool), K(test_tenant_mem_limit_low));
-  ASSERT_FALSE(iter_pool->is_washing_);
-  ASSERT_TRUE(iter_pool->is_disabled_);
+  iter_pool.wash();
+  STORAGE_LOG(INFO, "after wash", K(iter_pool), K(test_tenant_mem_limit_low));
+  ASSERT_FALSE(iter_pool.is_washing_);
+  ASSERT_TRUE(iter_pool.is_disabled_);
 
-  iter_pool->release(cached_node);
-  ret = iter_pool->get(type, cached_node);
+  iter_pool.release(cached_node);
+  ret = iter_pool.get(type, cached_node);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(nullptr == cached_node);
-  STORAGE_LOG(INFO, "after release", KPC(iter_pool));
+  STORAGE_LOG(INFO, "after release", K(iter_pool));
 
   set_tenant_memory_limit(tenant_id_, tenant_mem_limit);
-  iter_pool->wash();
-  STORAGE_LOG(INFO, "after wash", KPC(iter_pool), K(test_tenant_mem_limit_low));
-  ASSERT_FALSE(iter_pool->is_washing_);
-  ASSERT_FALSE(iter_pool->is_disabled_);
+  iter_pool.wash();
+  STORAGE_LOG(INFO, "after wash", K(iter_pool), K(test_tenant_mem_limit_low));
+  ASSERT_FALSE(iter_pool.is_washing_);
+  ASSERT_FALSE(iter_pool.is_disabled_);
 
   set_tenant_memory_limit(tenant_id_, tenant_mem_hold + 10);
-  iter_pool->wash();
-  STORAGE_LOG(INFO, "after wash", KPC(iter_pool), K(test_tenant_mem_limit_low));
-  ASSERT_FALSE(iter_pool->is_washing_);
-  ASSERT_TRUE(iter_pool->is_disabled_);
-  ASSERT_EQ(tenant_mem_hold + 10, iter_pool->tenant_mem_user_limit_);
+  iter_pool.wash();
+  STORAGE_LOG(INFO, "after wash", K(iter_pool), K(test_tenant_mem_limit_low));
+  ASSERT_FALSE(iter_pool.is_washing_);
+  ASSERT_TRUE(iter_pool.is_disabled_);
+  ASSERT_EQ(tenant_mem_hold + 10, iter_pool.tenant_mem_user_limit_);
 
   set_tenant_memory_limit(tenant_id_, tenant_mem_limit);
-  iter_pool->wash();
-  STORAGE_LOG(INFO, "after wash", KPC(iter_pool), K(test_tenant_mem_limit_low));
-  ASSERT_FALSE(iter_pool->is_washing_);
-  ASSERT_FALSE(iter_pool->is_disabled_);
-  ASSERT_EQ(tenant_mem_limit, iter_pool->tenant_mem_user_limit_);
+  iter_pool.wash();
+  STORAGE_LOG(INFO, "after wash", K(iter_pool), K(test_tenant_mem_limit_low));
+  ASSERT_FALSE(iter_pool.is_washing_);
+  ASSERT_FALSE(iter_pool.is_disabled_);
+  ASSERT_EQ(tenant_mem_limit, iter_pool.tenant_mem_user_limit_);
 }
 
 }
