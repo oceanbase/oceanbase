@@ -262,7 +262,8 @@ public:
       const bool is_fetch_with_ties = false,
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE,
       const common::ObCompressorType compressor_type = common::NONE_COMPRESSOR,
-      const ExprFixedArray *exprs = nullptr);
+      const ExprFixedArray *exprs = nullptr,
+      const int64_t est_rows = 0);
 
   virtual int64_t get_prefix_pos() const { return 0;  }
   // keep initialized, can sort same rows (same cell type, cell count, projector) after reuse.
@@ -771,7 +772,8 @@ protected:
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
   // for partition topn
-  int init_partition_topn();
+  int init_partition_topn(const int64_t est_rows);
+  int enlarge_partition_topn_buckets();
   void reuse_part_topn_heap();
   int locate_current_heap(const common::ObIArray<ObExpr*> &exprs);
   int locate_current_heap_in_bucket(PartHeapNode *first_node,
@@ -800,6 +802,8 @@ protected:
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t STORE_ROW_HEADER_SIZE = sizeof(SortStoredRow);
   static const int64_t STORE_ROW_EXTRA_SIZE = sizeof(uint64_t);
+  static const int64_t MIN_BUCKET_COUNT = 1L << 14;  //16384;
+  static const int64_t MAX_BUCKET_COUNT = 1L << 19; //524288;
   bool inited_;
   bool local_merge_sort_;
   bool need_rewind_;
@@ -856,6 +860,7 @@ protected:
   bool use_partition_topn_sort_;
   ObSEArray<TopnHeapNode*, 16> heap_nodes_;
   int64_t cur_heap_idx_;
+  int64_t part_group_cnt_;
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
   ObTempBlockStore::BlockHolder compact_blk_holder_;
   ObChunkDatumStore::IteratedBlockHolder default_blk_holder_;
