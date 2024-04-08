@@ -414,11 +414,7 @@ int ObBackupTableListMgr::write_table_list_meta_(const int64_t total_count, cons
     desc.scn_ = snapshot_point_;
     desc.count_ = total_count;
     desc.batch_size_ = batch_size;
-    if (partial_metas_.count() < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid partial metas", K(ret));
-    } else if (partial_metas_.count() == 0) { //skip
-    } else if (OB_FAIL(desc.partial_metas_.assign(partial_metas_))) {
+    if (OB_FAIL(desc.partial_metas_.assign(partial_metas_))) {
       LOG_WARN("fail to assign partial metas", K(ret), K_(partial_metas));
     } else if (OB_FAIL(store.init(backup_set_dest_))) {
       LOG_WARN("fail to init backup store", K(ret), K_(backup_set_dest));
