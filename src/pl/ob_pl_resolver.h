@@ -1151,6 +1151,7 @@ private:
                                   ObIArray<ObObjAccessIdx> &access_idxs,
                                   ObPLCompileUnitAST &func);
 
+  int build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns);
   int build_current_access_idx(uint64_t parent_id,
                                ObObjAccessIdx &access_idx,
                                ObObjAccessIdent &access_ident,

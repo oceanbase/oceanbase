@@ -14046,26 +14046,16 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   return ret;
 }
 
-int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
-                                              const ObPLBlockNS &ns,
-                                              ObIArray<ObObjAccessIdx> &access_idxs,
-                                              ObPLCompileUnitAST &func)
+int ObPLResolver::build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns)
 {
   int ret = OB_SUCCESS;
   const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
-
-  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
-      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
-      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
-
-    ObObjAccessIdx self_access_idx;
-    ObObjAccessIdx elem_access_idx;
-
-    const ObUserDefinedType *self_user_type = NULL;
+  CK (OB_NOT_NULL(udt_routine_ns));
+  CK (OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param()));
+  if (OB_SUCC(ret)) {
     const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
     ObPLDataType self_data_type = self_var->get_type();
     int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
-    uint64_t user_type_id = udt_routine_ns->get_package_id();
 
     // Construct A Self AccessIdx
     new (&self_access_idx) ObObjAccessIdx(self_data_type,
@@ -14089,6 +14079,32 @@ int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
                                                    self_access_idx.get_sysfunc_,
                                                    &resolve_ctx_.session_info_));
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
+                                              const ObPLBlockNS &ns,
+                                              ObIArray<ObObjAccessIdx> &access_idxs,
+                                              ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
+
+  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
+      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
+      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
+
+    ObObjAccessIdx self_access_idx;
+    ObObjAccessIdx elem_access_idx;
+
+    const ObUserDefinedType *self_user_type = NULL;
+    const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
+    ObPLDataType self_data_type = self_var->get_type();
+    int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
+    uint64_t user_type_id = udt_routine_ns->get_package_id();
+
+    OZ (build_self_access_idx(self_access_idx, ns));
     OZ (ns.get_pl_data_type_by_id(self_data_type.get_user_type_id(), self_user_type));
     CK (OB_NOT_NULL(self_user_type));
     OZ (self_user_type->get_all_depended_user_type(resolve_ctx_, ns));
@@ -14456,6 +14472,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
       }
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
+               || (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && is_routine)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
@@ -14463,8 +14480,22 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                || (ObPLExternalNS::PKG_NS == type && is_routine)
                || (ObPLExternalNS::DBLINK_PKG_NS == type && is_routine)) {
       if (is_routine) {
-        OZ (resolve_routine(access_ident, ns, access_idxs, func),
-          K(access_ident), K(access_idxs));
+        if (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && access_idxs.empty()) {
+          ObObjAccessIdx self_access_idx;
+          ObSEArray<ObObjAccessIdx, 4> tmp_access_idxs;
+          OZ (build_self_access_idx(self_access_idx, ns));
+          OZ (tmp_access_idxs.push_back(self_access_idx));
+          OZ (resolve_routine(access_ident, ns, tmp_access_idxs, func));
+          if (OB_SUCC(ret)) {
+            int64_t i = (tmp_access_idxs.at(0) == self_access_idx) ? 1 : 0;
+            for (; OB_SUCC(ret) && i < tmp_access_idxs.count(); ++i) {
+              OZ (access_idxs.push_back(tmp_access_idxs.at(i)));
+            }
+          }
+        } else {
+          OZ (resolve_routine(access_ident, ns, access_idxs, func),
+            K(access_ident), K(access_idxs));
+        }
       } else { // [self.]element, user can access element without self prefix, handle it in here.
         OZ (resolve_self_element_access(access_ident, ns, access_idxs, func),
           K(access_ident), K(access_idxs), K(type), K(is_routine));

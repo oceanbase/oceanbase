@@ -1164,6 +1164,7 @@ public:
     PKG_TYPE,           // 包中的自定义类型
     SELF_ATTRIBUTE,
     DBLINK_PKG_NS,      // dblink package
+    UDT_MEMBER_ROUTINE, //
   };
 
   ObPLExternalNS(const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS *parent_ns)
