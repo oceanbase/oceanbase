@@ -407,7 +407,7 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
     if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, trace_time_)) {
       const int64_t each_pwrite_cost = ob_pwrite_used_ts_ / count_;
       PALF_LOG(INFO, "[PALF STAT WRITE LOG INFO TO DISK]", K(ret), K(offset), KPC(this), K(aligned_buf_len),
-          K(aligned_buf), K(aligned_block_offset), K(buf_len), K(total_write_size_),
+          K(aligned_block_offset), K(buf_len), K(total_write_size_),
           K(total_write_size_after_dio_), K_(ob_pwrite_used_ts), K_(count), K(each_pwrite_cost));
       total_write_size_ = total_write_size_after_dio_ = count_ = ob_pwrite_used_ts_ = 0;
     }
