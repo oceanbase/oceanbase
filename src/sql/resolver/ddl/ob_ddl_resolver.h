@@ -110,7 +110,10 @@ public:
   enum INDEX_KEYNAME {
     NORMAL_KEY = 0,
     UNIQUE_KEY = 1,
-    SPATIAL_KEY = 2
+    SPATIAL_KEY = 2,
+    FTS_KEY = 3,
+    MULTI_KEY = 4,
+    MULTI_UNIQUE_KEY = 5
   };
   enum COLUMN_NODE {
     COLUMN_REF_NODE = 0,
@@ -188,7 +191,8 @@ public:
       const common::ObCollationType table_collation_type);
   static int check_string_column_length(
       const share::schema::ObColumnSchemaV2 &column,
-      const bool is_oracle_mode);
+      const bool is_oracle_mode,
+      const bool is_prepare_stage=false);
   static int check_raw_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_urowid_column_length(

@@ -32,6 +32,7 @@
 #endif
 #include "ob_reporter_adapter.h"
 #include "ob_ls_adapter.h"
+#include "ob_locality_adapter.h"
 #include "ob_location_adapter.h"
 #include "ob_log_flashback_service.h"                  // ObLogFlashbackService
 #include "ob_log_handler.h"
@@ -79,6 +80,7 @@ class PalfEnv;
 namespace storage
 {
 class ObLSService;
+class ObLocalityManager;
 }
 
 namespace logservice
@@ -108,7 +110,8 @@ public:
            observer::ObIMetaReport *reporter,
            palf::ILogBlockPool *log_block_pool,
            common::ObMySQLProxy *sql_proxy,
-           IObNetKeepAliveAdapter *net_keepalive_adapter);
+           IObNetKeepAliveAdapter *net_keepalive_adapter,
+           storage::ObLocalityManager *locality_manager);
   //--日志流相关接口--
   //新建日志流接口，该接口会创建日志流对应的目录，新建一个以PalfBaeInfo为日志基点的日志流。
   //其中包括生成并初始化对应的ObReplayStatus结构
@@ -222,6 +225,7 @@ public:
   cdc::ObCdcService *get_cdc_service() { return &cdc_service_; }
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
   ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
+  ObLogApplyService *get_log_apply_service()  { return &apply_service_; }
 #ifdef OB_BUILD_ARBITRATION
   ObArbitrationService *get_arbitration_service() { return &arb_service_; }
 #endif
@@ -258,6 +262,7 @@ private:
   ObLogFlashbackService flashback_service_;
   ObLogMonitor monitor_;
   ObSpinLock update_palf_opts_lock_;
+  ObLocalityAdapter locality_adapter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogService);
 };

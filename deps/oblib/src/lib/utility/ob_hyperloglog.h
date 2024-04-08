@@ -35,6 +35,8 @@ public:
   inline int init(ObIAllocator *alloc, int64_t n_bit);
   inline void set(uint64_t hash_val);
   inline void sets(uint64_t *hash_vals, int64_t count);
+  inline char *get_buckets() { return buckets_; }
+  inline int64_t get_bucket_num() { return n_bucket_; }
   inline uint64_t estimate();
   void reuse()
   {
@@ -53,6 +55,8 @@ public:
     n_bit_ = 0;
     n_count_ = 0;
   }
+
+  TO_STRING_KV(K_(n_bucket), K_(n_bit), K_(n_count), KP_(alloc), KP_(buckets));
 
 private:
   inline int32_t calc_leading_zero(uint64_t hash_value)

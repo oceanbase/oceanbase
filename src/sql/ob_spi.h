@@ -1100,6 +1100,16 @@ private:
                                     int64_t cursor_param_count);
 };
 
+struct ObPLSubPLSqlTimeGuard
+{
+  ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx);
+  ~ObPLSubPLSqlTimeGuard();
+  int64_t old_sub_plsql_exec_time_;
+  int64_t execute_start_;
+  pl::ObPLExecState *state_;
+  int64_t old_pure_sql_exec_time_;
+};
+
 }
 }
 

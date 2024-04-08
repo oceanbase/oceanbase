@@ -199,6 +199,10 @@ where res <> FALSE;
 connection obsys;
 ## clean tenant
 drop tenant duptable_tenant1 force;
+--disable_query_log
+DROP RESOURCE POOL duptable_pool1;
+DROP RESOURCE UNIT duptable_unit1;
+--enable_query_log
 
 disconnect conn0;
 disconnect conn1;

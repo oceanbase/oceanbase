@@ -1790,7 +1790,47 @@ int ObServer::init_config()
   if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
     has_config_file = false;
     ret = OB_SUCCESS;
+  } else if (OB_FAIL(ret)) {
+    LOG_ERROR("load config from file failed", KR(ret));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_opts_config(has_config_file))) {
+    LOG_ERROR("init opts config failed", KR(ret));
+  } else {
+    config_.print();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_local_ip_and_devname())) {
+    LOG_ERROR("init local_ip and devname failed", KR(ret));
+  } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
+    LOG_ERROR("some config setting is not valid", KR(ret));
+  } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
+    LOG_ERROR("reload memory config failed", KR(ret));
+  } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
+    LOG_ERROR("set running mode failed", KR(ret));
+  } else if (OB_FAIL(init_self_addr())) {
+    LOG_ERROR("init self_addr failed", KR(ret));
+  } else if (is_arbitration_mode()) {
+    // arbitration mode, dump config params to file directly
+    if (OB_FAIL(config_mgr_.dump2file())) {
+      LOG_ERROR("config_mgr_ dump2file failed", KR(ret));
+    } else {
+      LOG_INFO("config_mgr_ dump2file success", KR(ret));
+    }
+  } else if (OB_FAIL(init_config_module())) {
+    LOG_ERROR("init config module failed", KR(ret));
+  } else {
+    lib::g_runtime_enabled = true;
+  }
+
+  return ret;
+}
+
+int ObServer::init_opts_config(bool has_config_file)
+{
+  int ret = OB_SUCCESS;
 
   if (opts_.rpc_port_) {
     config_.rpc_port = opts_.rpc_port_;
@@ -1811,7 +1851,7 @@ int ObServer::init_config()
     config_.devname.set_value(opts_.devname_);
     config_.devname.set_version(start_time_);
   } else {
-    if (!has_config_file && 0 == strlen(config_.local_ip)) {
+    if (!has_config_file) {
       const char *devname = get_default_if();
       if (devname && '\0' != devname[0]) {
         LOG_INFO("guess interface name", K(devname));
@@ -1881,7 +1921,12 @@ int ObServer::init_config()
     config_.use_ipv6.set_version(start_time_);
   }
 
-  config_.print();
+  return ret;
+}
+
+int ObServer::init_local_ip_and_devname()
+{
+  int ret = OB_SUCCESS;
 
   // local_ip is a critical parameter, if it is set, then verify it; otherwise, set it via devname.
   if (strlen(config_.local_ip) > 0) {
@@ -1897,8 +1942,7 @@ int ObServer::init_config()
       config_.devname.set_version(start_time_);
       // this is done to ensure the consistency of local_ip and devname.
       LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
-                  config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
-                        // unconditionally call set_value to ensure that devname is written to the configuration file.
+          config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
     }
   } else {
     if (config_.use_ipv6) {
@@ -1928,35 +1972,38 @@ int ObServer::init_config()
     }
   }
 
-  if (OB_FAIL(ret)) {
-    // nop
-  } else if (!is_arbitration_mode() && OB_FAIL(config_.strict_check_special())) {
-    LOG_ERROR("some config setting is not valid", KR(ret));
-  } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
-    LOG_ERROR("reload memory config failed", KR(ret));
-  } else if (!is_arbitration_mode() && OB_FAIL(set_running_mode())) {
-    LOG_ERROR("set running mode failed", KR(ret));
+  return ret;
+}
+
+int ObServer::init_self_addr()
+{
+  int ret = OB_SUCCESS;
+
+  int32_t local_port = static_cast<int32_t>(config_.rpc_port);
+  if (strlen(config_.local_ip) > 0) {
+    self_addr_.set_ip_addr(config_.local_ip, local_port);
   } else {
-    int32_t local_port = static_cast<int32_t>(config_.rpc_port);
-    if (strlen(config_.local_ip) > 0) {
-      self_addr_.set_ip_addr(config_.local_ip, local_port);
-    } else {
-      if (config_.use_ipv6) {
+    if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = { '\0' };
-      obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
-      self_addr_.set_ip_addr(ipv6, local_port);
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6)))) {
+        LOG_ERROR("get ipv6 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
       } else {
-        uint32_t ipv4_net = 0;
-        if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
-          LOG_ERROR("get ipv4 address by devname failed", "devname",
-              config_.devname.get_value(), KR(ret));
-        } else {
-          int32_t ipv4 = ntohl(ipv4_net);
-          self_addr_.set_ipv4_addr(ipv4, local_port);
-        }
+        self_addr_.set_ip_addr(ipv6, local_port);
+      }
+    } else {
+      uint32_t ipv4_net = 0;
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
+        LOG_ERROR("get ipv4 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
+      } else {
+        int32_t ipv4 = ntohl(ipv4_net);
+        self_addr_.set_ipv4_addr(ipv4, local_port);
       }
     }
+  }
 
+  if (OB_SUCC(ret)) {
     const char *syslog_file_info = ObServerUtils::build_syslog_file_info(self_addr_);
     OB_LOGGER.set_new_file_info(syslog_file_info);
     LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
@@ -1965,50 +2012,46 @@ int ObServer::init_config()
     obrpc::ObRpcProxy::myaddr_ = self_addr_;
     LOG_INFO("my addr", K_(self_addr));
     config_.self_addr_ = self_addr_;
-
-
-    if (is_arbitration_mode()) {
-      // arbitration mode, dump config params to file directly
-      if (OB_FAIL(config_mgr_.dump2file())) {
-        LOG_ERROR("config_mgr_ dump2file failed", KR(ret));
-      } else {
-        LOG_INFO("config_mgr_ dump2file success", KR(ret));
-      }
-    } else {
-      omt::UpdateTenantConfigCb update_tenant_config_cb =
-        [&](uint64_t tenant_id)-> void
-      {
-        multi_tenant_.update_tenant_config(tenant_id);
-      };
-      // initialize configure module
-      if (!self_addr_.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("local address isn't valid", K(self_addr_), KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
-        LOG_ERROR("init timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
-        LOG_ERROR("init freeze timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::SqlMemTimer))) {
-        LOG_ERROR("init sql memory manger timer fail", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerTracerTimer))) {
-        LOG_ERROR("fail to init server trace timer", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
-        LOG_ERROR("fail to init ctas clean up timer", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-        LOG_ERROR("fail to init memory dump timer", KR(ret));
-      } else if (OB_FAIL(config_mgr_.base_init())) {
-        LOG_ERROR("config_mgr_ base_init failed", KR(ret));
-      } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
-        LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
-                         &config_mgr_, update_tenant_config_cb))) {
-        LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
-        LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
-      }
-    }
   }
-  lib::g_runtime_enabled = true;
+
+  return ret;
+}
+
+int ObServer::init_config_module()
+{
+  int ret = OB_SUCCESS;
+
+  omt::UpdateTenantConfigCb update_tenant_config_cb =
+    [&](uint64_t tenant_id)-> void
+  {
+    multi_tenant_.update_tenant_config(tenant_id);
+  };
+  // initialize configure module
+  if (!self_addr_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("local address isn't valid", K(self_addr_), KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("init timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::FreezeTimer))) {
+    LOG_ERROR("init freeze timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::SqlMemTimer))) {
+    LOG_ERROR("init sql memory manger timer fail", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerTracerTimer))) {
+    LOG_ERROR("fail to init server trace timer", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
+    LOG_ERROR("fail to init ctas clean up timer", KR(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
+    LOG_ERROR("fail to init memory dump timer", KR(ret));
+  } else if (OB_FAIL(config_mgr_.base_init())) {
+    LOG_ERROR("config_mgr_ base_init failed", KR(ret));
+  } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
+    LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
+  } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
+                      &config_mgr_, update_tenant_config_cb))) {
+    LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
+  } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
+    LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
+  }
 
   return ret;
 }
@@ -2040,6 +2083,7 @@ int ObServer::init_pre_setting()
   reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
   ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                       GCONF._min_malloc_sample_interval);
+  enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
 
   // oblog configuration
   if (OB_SUCC(ret)) {

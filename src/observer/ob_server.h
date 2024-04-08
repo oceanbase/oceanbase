@@ -265,6 +265,10 @@ private:
   ~ObServer();
 
   int init_config();
+  int init_opts_config(bool has_config_file); // init configs from command line
+  int init_local_ip_and_devname();
+  int init_self_addr();
+  int init_config_module();
   int init_tz_info_mgr();
   int init_pre_setting();
   int init_network();

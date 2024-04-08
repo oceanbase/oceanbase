@@ -853,6 +853,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"substr", SUBSTR},
   {"substring", SUBSTRING},
   {"sum", SUM},
+  {"sum_opnsize", SUM_OPNSIZE},
   {"super", SUPER},
   {"suspend", SUSPEND},
   {"successful", SUCCESSFUL},

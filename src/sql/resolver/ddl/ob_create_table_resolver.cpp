@@ -1896,7 +1896,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                   LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                 }
-              } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode()))) {
+              } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode(), params_.is_prepare_stage_))) {
                 LOG_WARN("fail to check string column length", K(ret), K(column));
               }
             } else if (ObRawType == column.get_data_type()) {
@@ -1981,7 +1981,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                   if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
-                } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode()))) {
+                } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode(), params_.is_prepare_stage_))) {
                   LOG_WARN("fail to check string column length", K(ret), K(column));
                 }
               } else if (ObRawType == column.get_data_type()) {

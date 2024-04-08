@@ -22,7 +22,6 @@ namespace obrpc
  * Request start LSN by start timestamp.
  *
  */
-OB_SERIALIZE_MEMBER(ObCdcRpcId, client_pid_, client_addr_);
 
 void ObCdcReqStartLSNByTsReq::LocateParam::reset()
 {
@@ -472,7 +471,7 @@ void ObCdcLSFetchLogResp::reset()
   err_ = common::OB_NOT_INIT;
   debug_err_ = common::OB_NOT_INIT;
   ls_id_.reset();
-  feedback_type_ = INVALID_FEEDBACK;
+  feedback_type_ = FeedbackType::INVALID_FEEDBACK;
   fetch_status_.reset();
   next_req_lsn_.reset();
   log_num_ = 0;

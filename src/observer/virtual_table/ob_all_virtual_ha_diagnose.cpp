@@ -262,6 +262,19 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         break;
+      case PARENT:
+        cur_row_.cells_[i].set_varchar(ObString(""));
+        if (diagnose_info.palf_diagnose_info_.parent_.is_valid()) {
+          if (OB_SUCC(diagnose_info.palf_diagnose_info_.parent_.\
+              ip_port_to_string(parent_, common::OB_IP_PORT_STR_BUFF))) {
+            cur_row_.cells_[i].set_varchar(ObString::make_string(parent_));
+          } else {
+            SERVER_LOG(WARN, "ip_port_to_string failed", K(ret), K(diagnose_info), K(parent_));
+          }
+        }
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unkown column");

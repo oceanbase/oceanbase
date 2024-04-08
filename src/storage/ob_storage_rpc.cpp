@@ -1317,7 +1317,7 @@ int ObStorageStreamRpcP<RPC_CODE>::flush_and_wait()
 
     if (OB_FAIL(this->check_timeout())) {
       LOG_WARN("rpc is timeout, no need flush", K(ret));
-    } else if (OB_FAIL(this->flush(OB_DEFAULT_STREAM_WAIT_TIMEOUT))) {
+    } else if (OB_FAIL(this->flush())) {
       STORAGE_LOG(WARN, "failed to flush", K(ret));
     } else {
       this->result_.get_position() = 0;

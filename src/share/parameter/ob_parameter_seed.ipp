@@ -1905,3 +1905,6 @@ DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
          "A switch that determines whether to enable strict OS parameter check mode, defaulting to true and can be set to false to bypass strict checks."
          "Value: True: allowed; False: allowed but not suggested",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(_enable_memleak_light_backtrace, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether allow memleak to get the backtrace of malloc by light_backtrace",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -49,7 +49,11 @@ int ObAtomicReference::inc_ref_cnt()
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
   while (OB_SUCC(ret)) {
+#if defined(__aarch64__)
+    atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
     atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
     atomic_new.atomic = atomic_old.atomic;
 
     atomic_new.ref += 1;
@@ -73,7 +77,11 @@ int ObAtomicReference::check_seq_num_and_inc_ref_cnt(const uint32_t seq_num)
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
   while (OB_SUCC(ret)) {
+#if defined(__aarch64__)
+    atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
     atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
     atomic_new.atomic = atomic_old.atomic;
     atomic_new.ref += 1;
 
@@ -98,7 +106,11 @@ int ObAtomicReference::check_and_inc_ref_cnt()
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
   while (OB_SUCC(ret)) {
+#if defined(__aarch64__)
+    atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
     atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
     atomic_new.atomic = atomic_old.atomic;
     atomic_new.ref += 1;
 
@@ -123,7 +135,11 @@ int ObAtomicReference::dec_ref_cnt_and_inc_seq_num(uint32_t &ref_cnt)
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
   while (OB_SUCC(ret)) {
-    atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);;
+#if defined(__aarch64__)
+    atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
+    atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
     atomic_new.atomic = atomic_old.atomic;
 
     if (OB_UNLIKELY(0 == atomic_old.ref)) {
@@ -155,7 +171,11 @@ bool ObAtomicReference::try_inc_seq_num()
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
 
+#if defined(__aarch64__)
+  atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
   atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
   if (1 == atomic_old.ref) {
     atomic_new.ref = 0;
     atomic_new.seq = atomic_old.seq + 1;
@@ -172,7 +192,11 @@ bool ObAtomicReference::try_check_and_inc_seq_num(const uint32_t seq_num)
   AtomicInt64 atomic_old = { 0 };
   AtomicInt64 atomic_new = { 0 };
 
+#if defined(__aarch64__)
+  atomic_old.atomic = ATOMIC_FAAx(&atomic_num_.atomic, 0, 0);
+#else
   atomic_old.atomic = ATOMIC_LOAD(&atomic_num_.atomic);
+#endif
   if (seq_num == atomic_old.seq && 2 == atomic_old.ref) {
     atomic_new.ref = 0;
     atomic_new.seq = atomic_old.seq + 1;

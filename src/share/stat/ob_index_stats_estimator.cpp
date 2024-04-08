@@ -242,6 +242,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   ObSEArray<ObOptTableStat *, 4> index_table_stats;
   ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
   PartitionIdBlockMap partition_id_block_map;
+  bool use_column_store = false;
+  bool use_split_part = false;
   is_fast_gather = false;
   LOG_TRACE("begin to fast gather index stats", K(data_param), K(index_param));
   if (OB_FAIL(get_all_need_gather_partition_ids(data_param, index_param, gather_part_ids))) {
@@ -260,7 +262,10 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
                                                    index_param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (index_param.need_estimate_block_ &&
-             OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param, partition_id_block_map))) {
+             OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param,
+                                                                 partition_id_block_map,
+                                                                 use_column_store,
+                                                                 use_split_part))) {
     LOG_WARN("failed to estimate block count", K(ret));
   } else {
     bool is_continued = true;

@@ -2189,6 +2189,7 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
+    tic_update_infos_(),
     allocator_(),
     log_entry_task_base_allocator_()
 {
@@ -2324,6 +2325,7 @@ void PartTransTask::reset()
   is_data_ready_ = false;
   wait_formatted_cond_ = NULL;
   output_br_count_by_turn_ = 0;
+  tic_update_infos_.reset();
   // reuse memory
   allocator_.reset();
   log_entry_task_base_allocator_.destroy();
@@ -2799,6 +2801,15 @@ int PartTransTask::check_for_ddl_trans(
     }
   }
 
+  return ret;
+}
+
+int PartTransTask::push_tic_update_info(const TICUpdateInfo &tic_update_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tic_update_infos_.push_back(tic_update_info))) {
+    LOG_ERROR("push tic_update_info failed", KR(ret), K(tic_update_info));
+  }
   return ret;
 }
 

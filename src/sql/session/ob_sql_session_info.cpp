@@ -151,6 +151,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       curr_session_context_size_(0),
       pl_context_(NULL),
       pl_can_retry_(true),
+      plsql_exec_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
 #endif
@@ -324,6 +325,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_can_retry_ = true;
+    plsql_exec_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
 #endif
@@ -1638,6 +1640,25 @@ int ObSQLSessionInfo::make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
   return ret;
 }
 
+int64_t ObSQLSessionInfo::get_plsql_exec_time()
+{
+  return (NULL == pl_context_ || 0 == pl_context_->get_exec_stack().count()
+          || NULL == pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1))
+            ? plsql_exec_time_
+            : pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1)->get_sub_plsql_exec_time();
+}
+
+void ObSQLSessionInfo::update_pure_sql_exec_time(int64_t elapsed_time)
+{
+  if (OB_NOT_NULL(pl_context_)
+      && pl_context_->get_exec_stack().count() > 0
+      && OB_NOT_NULL(pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1))) {
+    int64_t pos = pl_context_->get_exec_stack().count()-1;
+    pl::ObPLExecState *state = pl_context_->get_exec_stack().at(pos);
+    state->add_pure_sql_exec_time(elapsed_time - state->get_sub_plsql_exec_time() - state->get_pure_sql_exec_time());
+  }
+}
+
 int ObSQLSessionInfo::check_read_only_privilege(const bool read_only,
                                                 const ObSqlTraits &sql_traits)
 {
@@ -1884,7 +1905,10 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
         || EXECUTE_PS_SEND_PIECE == mode
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
-        || EXECUTE_PS_FETCH == mode) {
+        || EXECUTE_PS_FETCH == mode
+        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0)) {
+      // spi_cursor_open may not use process_record to set audit_record_.sql_
+      // so only EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0 do not set sql
       //ps模式对应的sql在协议层中设置, session的current_query_中没值
       // do nothing
     } else {

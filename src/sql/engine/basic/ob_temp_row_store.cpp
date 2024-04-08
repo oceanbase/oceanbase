@@ -768,9 +768,8 @@ OB_DEF_SERIALIZE(ObTempRowStore)
 
 OB_DEF_DESERIALIZE(ObTempRowStore)
 {
-  int ret = OB_SUCCESS;
+  int ret = ObTempBlockStore::deserialize(buf, data_len, pos);
   if (OB_SUCC(ret)) {
-    ObTempBlockStore::deserialize(buf, data_len, pos);
     mem_attr_.tenant_id_ = get_tenant_id();
     mem_attr_.label_ = "ObTempStoreDE";
     mem_attr_.ctx_id_ = get_mem_ctx_id();

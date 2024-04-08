@@ -623,6 +623,36 @@ int ObLogReplayService::get_max_replayed_scn(const share::ObLSID &id, SCN &scn)
   return ret;
 }
 
+int ObLogReplayService::get_min_unreplayed_scn(const share::ObLSID &id, SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObReplayStatus *replay_status = NULL;
+  ObReplayStatusGuard guard;
+  LSN unused_lsn;
+  int64_t unused_replay_hint = 0;
+  int64_t unused_first_handle_ts = 0;
+  ObLogBaseType unused_log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+  int64_t unused_replay_cost = 0;
+  int64_t unused_retry_cost = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_FAIL(get_replay_status_(id, guard))) {
+    CLOG_LOG(WARN, "guard get replay status failed", K(ret), K(id));
+  } else if (NULL == (replay_status = guard.get_replay_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(replay_status->get_min_unreplayed_log_info(unused_lsn, scn, unused_replay_hint, unused_log_type,
+                                          unused_first_handle_ts, unused_replay_cost, unused_retry_cost))) {
+    if (OB_STATE_NOT_MATCH != ret) {
+      CLOG_LOG(WARN, "get_min_unreplayed_log_info failed", K(ret), K(id));
+    } else if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      CLOG_LOG(WARN, "get_min_unreplayed_log_info failed, replay status is not enabled", K(ret), K(id));
+    }
+  } else {}
+  return ret;
+}
+
 int ObLogReplayService::submit_task(ObReplayServiceTask *task)
 {
   int ret = OB_SUCCESS;

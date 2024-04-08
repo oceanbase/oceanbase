@@ -2578,6 +2578,7 @@ status	varchar(64)	NO		NULL
 create_time	bigint(20)	NO		NULL	
 zone_type	varchar(128)	NO		NULL	
 region	varchar(128)	NO		NULL	
+data_disk_size	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_unit;
 IF(count(*) >= 0, 1, 0)
 1

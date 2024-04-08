@@ -219,6 +219,20 @@ int ObChecksumValidator::get_tablet_ls_pairs(
     } else if (OB_FAIL(tablet_ls_pair_cache_.get_tablet_ls_pairs(table_id_, tablet_ids, cur_tablet_ls_pair_array_))) {
       LOG_WARN("failed to tablet ls pair", KR(ret), K(tablet_ids));
     } else {
+#ifdef ERRSIM
+        static int64_t enter_cnt = 0;
+        if (OB_SUCC(ret) && simple_schema.is_global_index_table()) {
+          ret = OB_E(EventTable::EN_GET_TABLET_LS_PAIR_IN_RS) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            if (enter_cnt++ == 0) {
+              ret = OB_ITEM_NOT_MATCH;
+              STORAGE_LOG(INFO, "ERRSIM EN_GET_TABLET_LS_PAIR_IN_RS", K(ret), K(simple_schema), K_(cur_tablet_ls_pair_array));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+#endif
       LOG_TRACE("success to get tablet ls pairs", KR(ret), K_(cur_tablet_ls_pair_array));
     }
   }
@@ -286,8 +300,9 @@ int ObChecksumValidator::validate_checksum(
     } else {
       last_table_ckm_items_.clear();
     }
-    cur_tablet_ls_pair_array_.reuse();
   }
+  cur_tablet_ls_pair_array_.reuse(); // need reuse array when get_tablet_ls_pairs failed
+
   if (FAILEDx(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
     LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
   } else {

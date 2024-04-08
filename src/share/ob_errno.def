@@ -696,7 +696,14 @@ DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict"
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ROOT_KEY, -4769, -1, "HY000", "invalid root key", "%s");
 DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %s procedure, %s not allowed now");
 DEFINE_ERROR(OB_BREAK_BY_TEST, -4771, -1, "HY000", "process is breaked by test case");
-
+DEFINE_ERROR(OB_TABLES_DIFFERENT_DEFINITIONS, -4772, ER_TABLES_DIFFERENT_METADATA, "HY000", "Tables have different definitions");
+DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION, -4773, ER_PARTITION_EXCHANGE_DIFFERENT_OPTION, "HY000", "Non matching attribute between partition and table", "Non matching attribute '%s' between partition and table");
+DEFINE_ORACLE_ERROR(OB_ERR_COLUMNS_NUMBER_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4774, -1, "HY000", "tables in ALTER TABLE EXCHANGE PARTITION must have the same number of columns", 14096, "tables in ALTER TABLE EXCHANGE PARTITION must have the same number of columns");
+DEFINE_ORACLE_ERROR(OB_ERR_COLUMN_TYPE_OR_SIZE_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4775, -1, "HY000", "column type or size mismatch in ALTER TABLE EXCHANGE PARTITION", 14097, "column type or size mismatch in ALTER TABLE EXCHANGE PARTITION");
+DEFINE_ORACLE_ERROR(OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4776, -1, "HY000", "index mismatch for tables in ALTER TABLE EXCHANGE PARTITION", 14098, "index mismatch for tables in ALTER TABLE EXCHANGE PARTITION");
+DEFINE_ORACLE_ERROR(OB_ERR_CHECK_CONSTRAINT_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4777, -1, "HY000", "CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION", 14118, "CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION");
+DEFINE_ORACLE_ERROR(OB_ERR_FOREIGN_KEY_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4778, -1, "HY000", "FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION", 14128, "FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION");
+DEFINE_ORACLE_ERROR(OB_ERR_EXCHANGE_COMPOSITE_PARTITION, -4779, ER_PARTITION_INSTEAD_OF_SUBPARTITION, "HY000", "Subpartitioned table, use subpartition instead of partition", 14291, "cannot EXCHANGE a composite partition with a non-partitioned table");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // RootServer错误码值域[-4500, -5000)
@@ -2267,6 +2274,7 @@ DEFINE_ERROR(OB_STORAGE_DEST_NOT_CONNECT, -9115, -1, "HY000", "can not connect t
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/O operation permission of the object storage");
 DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_region does not match the endpoint");
 DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
+DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
 
 // 余留位置，在该行之前继续添加storage错误码
 
@@ -2638,6 +2646,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "
 DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
 DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND, "HY000", "Can't find FULLTEXT index matching the column list");
 DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
+DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

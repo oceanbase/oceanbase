@@ -105,7 +105,7 @@ ObFastParserBase::ObFastParserBase(
   tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
   param_node_list_(nullptr), tail_param_node_(nullptr),
   cur_token_type_(INVALID_TOKEN), allocator_(allocator),
-  get_insert_(false), values_token_pos_(0),
+  found_insert_status_(NOT_FOUND_INSERT_TOKEN), values_token_pos_(0),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
 {
 	question_mark_ctx_.count_ = 0;
@@ -154,7 +154,9 @@ int ObFastParserBase::parse(const ObString &stmt,
     no_param_sql_len = no_param_sql_len_;
     param_list = param_node_list_;
     param_num = param_num_;
-    values_token_pos = values_token_pos_;
+    if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE) {
+      values_token_pos = values_token_pos_;
+    }
   }
   return ret;
 }
@@ -772,9 +774,11 @@ int ObFastParserBase::process_insert_or_replace(const char *str, const int64_t s
     raw_sql_.scan(size);
     if (OB_FAIL(process_hint())) {
       LOG_WARN("failed to process hint", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
-    } else {
+    } else if (found_insert_status_ == NOT_FOUND_INSERT_TOKEN) {
       // 说明是insert token
-      get_insert_ = true;
+      found_insert_status_ = FOUND_INSERT_TOKEN_ONCE;
+    } else if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE) {
+      found_insert_status_ = INVALID_TOKEN_STATUS;
     }
   }
   return ret;
@@ -2517,7 +2521,7 @@ int ObFastParserMysql::process_identifier_begin_with_n()
 int ObFastParserMysql::process_values(const char *str)
 {
   int ret = OB_SUCCESS;
-  if (get_insert_) {
+  if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE) {
     if (!is_oracle_mode_) {
       // mysql support: insert ... values / value (xx, ...);
       if (CHECK_EQ_STRNCASECMP("alues", 5)) {
@@ -2977,7 +2981,7 @@ int ObFastParserOracle::process_identifier_begin_with_n()
 int ObFastParserOracle::process_values(const char *str)
 {
   int ret = OB_SUCCESS;
-  if (get_insert_) {
+  if (found_insert_status_ == FOUND_INSERT_TOKEN_ONCE) {
     if (is_oracle_mode_) {
       if (CHECK_EQ_STRNCASECMP("alues", 5)) {
         values_token_pos_ = raw_sql_.cur_pos_;

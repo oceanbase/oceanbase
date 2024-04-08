@@ -28,7 +28,7 @@ namespace common
 int ObStatRowCount::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf( buf, buf_len, pos, " COUNT(1)"))) {
+  if (OB_FAIL(databuff_printf( buf, buf_len, pos, " COUNT(*)"))) {
     LOG_WARN("failed to print buf row count expr", K(ret));
   }
   return ret;

@@ -53,7 +53,7 @@ private:
   static const int64_t STAT_INTERVAL = 30 * _SEC_;
   static const int64_t DEFAULT_TASK_SET_SIZE = 16;
 
-  typedef obrpc::ObCdcLSFetchLogResp::FeedbackType Feedback;
+  typedef obrpc::FeedbackType Feedback;
 
   // Class global variables
 public:
@@ -124,7 +124,7 @@ public:
   int get_upper_limit(int64_t &upper_limit_ns);
 
   // Execution Statistics
-  void do_stat();
+  void do_stat(int64_t &traffic);
 
   int64_t get_fetch_task_count() const { return 1; }
 

@@ -556,10 +556,12 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const int16_t callback_
     if (OB_ISNULL(list)) {
       // the callback list may not extended by replay redo if row is skipped
     } else {
-      // if not reach serial final, and parallel replayed log, fast commit
-      // should stop at serial replayed position
-      const bool serial_final = is_serial_final_();
-      const share::SCN real_stop_scn = serial_final ? stop_scn : serial_sync_scn_;
+      // if need checksum and serial replay not final
+      // for fast-commit after parallel replayed, stop at serial replayed position
+      share::SCN real_stop_scn = stop_scn;
+      if (!skip_checksum_ && !is_serial_final_()) {
+        real_stop_scn = serial_sync_scn_;
+      }
       if (OB_FAIL(list->remove_callbacks_for_fast_commit(real_stop_scn))) {
         TRANS_LOG(WARN, "remove callbacks for fast commit fail", K(ret),
                   K(real_stop_scn), K(stop_scn), K(callback_list_idx), KPC(list));
@@ -2067,10 +2069,10 @@ int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos,
       "[this=%p, ctx=%s, is_link=%d, need_submit_log=%d, "
       "value=%s, tnode=(%s), "
-      "seq_no=%ld, memtable=%p, scn=%s",
+      "seq_no=%s, memtable=%p, scn=%s",
       this, to_cstring(ctx_), is_link_, need_submit_log_,
       to_cstring(value_), NULL == tnode_ ? "null" : to_cstring(*tnode_),
-      seq_no_.cast_to_int(), memtable_, to_cstring(scn_));
+      to_cstring(seq_no_), memtable_, to_cstring(scn_));
   return pos;
 }
 

@@ -127,6 +127,8 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_COLUMN_UDF_EXPR (INT64_C(1) << 20)
 #define UNUSED_COLUMN_FLAG (INT64_C(1) << 21) // check if the column is unused.
 #define GENERATED_DOC_ID_COLUMN_FLAG (INT64_C(1) << 22)
+#define MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 23) // for multivalue index
+#define MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG (INT64_C(1) << 24) // for multivalue index
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -143,7 +145,9 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 
 // table_flags stored in __all_table.table_flag
 #define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
-
+#define EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG (INT64_C(1) << 1)
+#define EXTERNAL_TABLE_AUTO_REFRESH_FLAG (INT64_C(1) << 2)
+#define EXTERNAL_TABLE_CREATE_ON_REFRESH_FLAG (INT64_C(1) << 3)
 // schema array size
 static const int64_t SCHEMA_SMALL_MALLOC_BLOCK_SIZE = 64;
 static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
@@ -317,11 +321,15 @@ enum ObIndexType
   INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
   INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE = 21,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE = 22,
+
+  // new index types for multivalue index
+  INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL = 23,
+  INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL = 24,
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 23,
+  INDEX_TYPE_MAX = 25,
 };
 
 // using type for index
@@ -2113,9 +2121,13 @@ public:
   // convert character set.
   int convert_character_for_range_columns_part(const ObCollationType &to_collation);
   int convert_character_for_list_columns_part(const ObCollationType &to_collation);
+  int set_external_location(common::ObString &location)
+  { return deep_copy_str(location, external_location_); }
+  const common::ObString &get_external_location() const
+  { return external_location_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
-                       K_(is_empty_partition_name), K_(tablet_id));
+                       K_(is_empty_partition_name), K_(tablet_id), K_(external_location));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2143,6 +2155,7 @@ protected:
   PartitionType partition_type_;
   common::ObRowkey low_bound_val_;
   ObTabletID tablet_id_;
+  common::ObString external_location_;
 };
 
 class ObSubPartition;

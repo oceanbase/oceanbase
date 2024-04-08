@@ -310,7 +310,7 @@ int LogIOWorker::reduce_io_task_(void *task)
       // 2. there is full in each BatchLogIOFlushLogTask in 'batch_io_task_mgr_'.
       if (OB_SUCCESS != (tmp_ret = batch_io_task_mgr_.insert(flush_log_task))) {
         last_io_task_has_been_reduced = false;
-        PALF_LOG(WARN, "batch_io_task_mgr_ insert failed", K(tmp_ret));
+        PALF_LOG(TRACE, "batch_io_task_mgr_ insert failed", K(tmp_ret));
       } else if (OB_SUCCESS == (tmp_ret = queue_.pop(task))) {
       // When 'queue_' is empty, stop aggreating.
         update_throttling_options_();
@@ -341,7 +341,7 @@ int LogIOWorker::update_throttling_options_()
 }
 
 LogIOWorker::BatchLogIOFlushLogTaskMgr::BatchLogIOFlushLogTaskMgr()
-  : handle_count_(0), has_batched_size_(0), usable_count_(0), batch_width_(0),
+  : handle_count_(0), usable_count_(0), batch_width_(0),
     wait_cost_stat_(NULL)
 {}
 
@@ -395,7 +395,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
 
 void LogIOWorker::BatchLogIOFlushLogTaskMgr::destroy()
 {
-  handle_count_ = has_batched_size_ = batch_width_ = usable_count_ = 0;
+  handle_count_ = batch_width_ = usable_count_ = 0;
   for (int i = 0; i < batch_io_task_array_.count(); i++) {
     BatchLogIOFlushLogTask *&io_task = batch_io_task_array_[i];
     if (NULL != io_task) {
@@ -416,8 +416,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::insert(LogIOFlushLogTask *io_task)
   if (OB_FAIL(find_usable_batch_io_task_(palf_id, batch_io_task))) {
     PALF_LOG(WARN, "find_usable_batch_io_task_ failed", K(ret), K(palf_id));
   } else if (OB_FAIL(batch_io_task->push_back(io_task))) {
-    PALF_LOG(ERROR, "batch_io_task must have enouch space to hold io_task, unexpected error!!!",
-             K(ret), KP(batch_io_task));
+    PALF_LOG(TRACE, "push_back failed", K(ret), K(palf_id), KPC(io_task));
   } else {
   }
   return ret;
@@ -446,13 +445,12 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, IPalfEnv
         wait_cost_stat_->stat(io_task->get_count(), io_task->get_accum_in_queue_time());
       }
       io_task->reset_accum_in_queue_time();
-      PALF_LOG(TRACE, "BatchLogIOFlushLogTaskMgr::handle success", K(ret), K(has_batched_size_),
+      PALF_LOG(TRACE, "BatchLogIOFlushLogTaskMgr::handle success", K(ret), K(handle_count_),
           KP(io_task));
     }
     if (OB_NOT_NULL(io_task)) {
-      // 'handle_count_' and 'has_batched_size_' are used for statistics
-      handle_count_ += io_task->get_count() <= 1 ? 0 : 1;
-      has_batched_size_ += io_task->get_count() == 1 ? 0 : io_task->get_count();
+      // 'handle_count_' used for statistics
+      handle_count_ += io_task->get_count();
       io_task->reuse();
       usable_count_++;
     }

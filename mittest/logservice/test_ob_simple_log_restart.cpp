@@ -64,7 +64,7 @@ int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
-
+int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 TEST_F(TestObSimpleLogClusterRestart, read_block_in_flashback)
 {
@@ -77,7 +77,7 @@ TEST_F(TestObSimpleLogClusterRestart, read_block_in_flashback)
   PalfEnv *palf_env = NULL;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
 
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2 * 32 + 2, id, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2 * 32 + 2, id, log_entry_size));
   EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.get_palf_handle_impl()->get_max_lsn()));
 
   block_id_t min_block_id, max_block_id;
@@ -133,7 +133,7 @@ TEST_F(TestObSimpleLogClusterRestart, restart_when_first_log_block_is_empty)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(LSN(PALF_INITIAL_LSN_VAL), leader.palf_handle_impl_->get_max_lsn());
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.truncate(LSN(0)));
   }
@@ -144,7 +144,7 @@ TEST_F(TestObSimpleLogClusterRestart, restart_when_first_log_block_is_empty)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(LSN(PALF_INITIAL_LSN_VAL), leader.palf_handle_impl_->get_max_lsn());
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 40, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 40, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     PalfBaseInfo base_info;
     base_info.generate_by_default();
@@ -169,7 +169,7 @@ TEST_F(TestObSimpleLogClusterRestart, restart_when_first_log_block_is_empty)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     EXPECT_EQ(rebuild_lsn, leader.palf_handle_impl_->get_max_lsn());
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
     int64_t mode_version;
     switch_append_to_flashback(leader, mode_version);
@@ -182,7 +182,7 @@ TEST_F(TestObSimpleLogClusterRestart, restart_when_first_log_block_is_empty)
     EXPECT_EQ(rebuild_lsn, leader.palf_handle_impl_->get_max_lsn());
     int64_t mode_version;
     switch_flashback_to_append(leader, mode_version);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
   }
 }
@@ -198,7 +198,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
     LogEngine *log_engine = &leader.palf_handle_impl_->log_engine_;
     char *meta_log_dir = log_engine->log_meta_storage_.block_mgr_.log_dir_;
@@ -221,7 +221,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 33, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 33, id, log_entry_size));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
     block_id_t min_block_id, max_block_id;
     LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
@@ -240,7 +240,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     //检查manifest是否为3
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     LogStorage *meta_storage = &leader.get_palf_handle_impl()->log_engine_.log_meta_storage_;
     EXPECT_EQ(2, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
   }
@@ -251,7 +251,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfHandleImplGuard leader;
     id = ATOMIC_AAF(&palf_id_, 1);
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 66, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 66, id, log_entry_size));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
     EXPECT_EQ(OB_ITER_END, read_log(leader));
   }
@@ -299,7 +299,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
     EXPECT_EQ(2, max_block_id);
     EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, log_entry_size));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
     EXPECT_EQ(3, lsn_2_block(meta_storage->log_block_header_.min_lsn_, PALF_BLOCK_SIZE));
   }
@@ -312,7 +312,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
     int64_t epoch = leader.palf_handle_impl_->log_engine_.palf_epoch_;
     int64_t palf_id = leader.palf_handle_impl_->palf_id_;
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 29, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 29, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
     // 预期log_tail接近文件2的尾部
     EXPECT_LE(LSN(3*PALF_BLOCK_SIZE) - log_storage->log_tail_, 5*1024*1024);
@@ -323,7 +323,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
     IOTaskConsumeCond cond(palf_id, epoch);
     EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&cond));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, log_entry_size));
     while (1) {
       if (leader.palf_handle_impl_->sw_.last_submit_end_lsn_ < leader.palf_handle_impl_->get_max_lsn()) {
         usleep(5000);
@@ -353,7 +353,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
     int64_t epoch = leader.palf_handle_impl_->log_engine_.palf_epoch_;
     int64_t palf_id = leader.palf_handle_impl_->palf_id_;
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_end_lsn()));
     sleep(1);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1000));
@@ -361,7 +361,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
     IOTaskConsumeCond cond(palf_id, epoch);
     EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&cond));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, log_entry_size));
     while (1) {
       if (leader.palf_handle_impl_->sw_.last_submit_end_lsn_ < leader.palf_handle_impl_->get_max_lsn()) {
         usleep(5000);

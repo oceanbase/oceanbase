@@ -251,6 +251,7 @@ public:
   void set_is_expired() { ATOMIC_STORE(&is_expired_, true); }
   bool is_expired() { return ATOMIC_LOAD(&is_expired_); }
   bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
+  bool try_set_erase_flag() { return ATOMIC_BCAS(&erased_, false, true); }
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -292,6 +293,7 @@ private:
   ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
   ObFixedArray<int64_t, common::ObIAllocator> raw_params_idx_;
   stmt::StmtType literal_stmt_type_;
+  volatile bool erased_;
 };
 
 struct TypeInfo {

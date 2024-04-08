@@ -200,6 +200,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
   ObQRIterType get_type() const { return type_; }
+  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN; }
 protected:
   ObQRIterType type_;
 

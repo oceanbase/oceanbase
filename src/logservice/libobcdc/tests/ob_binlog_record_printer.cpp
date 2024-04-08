@@ -548,10 +548,17 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   bool is_generate_dep_column = col_meta ? col_meta->isDependent() : false;
   bool is_lob = is_lob_type(ctype);
   bool is_json = is_json_type(ctype);
+  bool is_string = is_string_type(ctype);
   ObArenaAllocator str_allocator;
   ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
   bool is_xml = is_xml_type(ctype);
+  constexpr int64_t string_print_md5_threshold = 4L << 10;
+  const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
+    (is_string && col_data_length >= string_print_md5_threshold);
+  // TODO 止尘 patch the code
+  // bool is_json_diff = br->isJsonDiffColVal(cname);
+  bool is_json_diff = false;
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -616,8 +623,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     if (index < new_cols_count) {
       const char *new_col_value = new_cols[index].buf;
       size_t new_col_value_len = new_cols[index].buf_used_size;
-
-      if ((is_lob || is_json || is_geometry || is_xml) && enable_print_lob_md5) {
+      if (is_type_for_md5_printing && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_md5:[%s](%ld)",
             column_index, calc_md5_cstr(new_col_value, new_col_value_len), new_col_value_len);
       } else {
@@ -648,7 +654,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
         if (OB_SUCCESS == ret && OB_FAIL(print_hex(old_col_value, old_col_value_len, ptr, size, pos))) {
           LOG_ERROR("print_hex fail", K(ret));
         }
-      } else if ((is_lob || is_json || is_geometry || is_xml) && enable_print_lob_md5) {
+      } else if (is_type_for_md5_printing && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_md5:[%s](%ld)",
             column_index, calc_md5_cstr(old_col_value, old_col_value_len), old_col_value_len);
       } else {

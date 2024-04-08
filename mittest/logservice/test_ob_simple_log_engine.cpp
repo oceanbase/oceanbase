@@ -188,6 +188,7 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
+int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 // 验证flashback过程中宕机重启
 TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
@@ -392,6 +393,10 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_storage->get_block_id_range(min_block_id, max_block_id));
   // truncate_prefix_block_id 和 prev_lsn对应的block_id一样
   EXPECT_EQ(log_storage->log_tail_, LSN(truncate_prefix_block_id * PALF_BLOCK_SIZE));
+  // truncate_prefxi_blocks后，min_block_info被置为无效
+  EXPECT_EQ(false, is_valid_block_id(log_engine_->min_block_id_));
+  EXPECT_EQ(false, log_engine_->min_block_min_scn_.is_valid());
+  EXPECT_EQ(false, log_engine_->min_block_max_scn_.is_valid());
 
   // 测试目录清空后，读数据是否正常报错
   ReadBufGuard buf_guard("dummy", 100);
@@ -411,6 +416,11 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
                                io_ctx));
   // 测试目录清空后，重启是否正常
   EXPECT_EQ(OB_SUCCESS, reload(log_engine_->log_storage_.log_tail_, log_engine_->log_meta_storage_.log_tail_, log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  {
+    block_id_t tmp_block_id = LOG_INVALID_BLOCK_ID;
+    SCN tmp_scn;
+    EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_engine_->get_min_block_info(tmp_block_id, tmp_scn));
+  }
 
   PALF_LOG(INFO, "directory is empty");
   // 测试目录清空后，写数据是否正常
@@ -455,7 +465,6 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   LogIOWorker *log_io_worker = leader_1.palf_handle_impl_->log_engine_.log_io_worker_;
 
   int64_t prev_log_id_1 = 0;
-  int64_t prev_has_batched_size = 0;
 	LogEngine *log_engine = &leader_1.palf_handle_impl_->log_engine_;
 	IOTaskCond io_task_cond_1(id_1, log_engine->palf_epoch_);
   IOTaskVerify io_task_verify_1(id_1, log_engine->palf_epoch_);
@@ -470,9 +479,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     wait_lsn_until_flushed(max_lsn, leader_1);
     EXPECT_EQ(OB_ITER_END, read_log(leader_1));
     // sw内部做了自适应freeze之后这个等式可能不成立, 因为上层可能基于写盘反馈触发提交下一个io_task
-//    EXPECT_EQ(log_id, log_io_worker->batch_io_task_mgr_.has_batched_size_);
     prev_log_id_1 = log_id;
-    prev_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
   }
   // 单日志流场景
   // 当聚合度为1的时候，应该走正常的提交流程，目前暂未实现，先通过has_batched_size不计算绕过
@@ -488,12 +495,8 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     LSN max_lsn = leader_1.palf_handle_impl_->sw_.get_max_lsn();
     io_task_cond_1.cond_.signal();
     wait_lsn_until_flushed(max_lsn, leader_1);
-//    EXPECT_EQ(log_id - 1, log_io_worker->batch_io_task_mgr_.has_batched_size_);
     EXPECT_EQ(2, io_task_verify_1.count_);
-//    EXPECT_EQ(log_io_worker->batch_io_task_mgr_.has_batched_size_ - prev_has_batched_size,
-//              log_id - prev_log_id_1 - 1);
     prev_log_id_1 = log_id;
-    prev_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
   }
 
   // 多日志流场景
@@ -529,9 +532,6 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     EXPECT_EQ(1, io_task_verify_2.count_);
 
     // ls1已经有个一个log_id被忽略聚合了
-//    EXPECT_EQ(log_io_worker->batch_io_task_mgr_.has_batched_size_ - prev_has_batched_size,
-//              log_id_1 - 1 + log_id_2 -1 - prev_log_id_1);
-    prev_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
     prev_log_id_2 = log_id_2;
     prev_log_id_1 = log_id_1;
   }
@@ -564,7 +564,6 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   //   wait_lsn_until_flushed(max_lsn_1, leader_1);
   //   wait_lsn_until_flushed(max_lsn_2, leader_2);
   //   wait_lsn_until_flushed(max_lsn_3, leader_3);
-  //   EXPECT_EQ(log_io_worker->batch_io_task_mgr_.has_batched_size_ - prev_has_batched_size, 0);
   // }
   // 验证切文件场景
   int64_t id_3 = ATOMIC_AAF(&palf_id_, 1);
@@ -593,8 +592,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     wait_lsn_until_flushed(max_lsn_1, leader_1);
     wait_lsn_until_flushed(max_lsn_2, leader_2);
     wait_lsn_until_flushed(max_lsn_3, leader_3);
-//  EXPECT_EQ(log_io_worker->batch_io_task_mgr_.has_batched_size_ - prev_has_batched_size, 2);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 31, leader_idx_1, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 31, leader_idx_1, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 2, leader_idx_1, 900 *1024));
     max_lsn_1 = leader_1.palf_handle_impl_->get_max_lsn();
     wait_lsn_until_flushed(max_lsn_1, leader_1);
@@ -676,58 +674,130 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   }
 
   PALF_LOG(INFO, "begin test sw full case");
-   // 测试滑动窗口满场景
-   // 聚合的两条日志分别在头尾部
-   int64_t id_6 = ATOMIC_AAF(&palf_id_, 1);
-   int64_t leader_idx_6 = 0;
-   int64_t prev_log_id_6 = 0;
-   PalfHandleImplGuard leader_6;
-   IOTaskCond io_task_cond_6(id_6, log_engine->palf_epoch_);
-   IOTaskVerify io_task_verify_6(id_6, log_engine->palf_epoch_);
-   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_6, leader_idx_6, leader_6));
-   {
-      LogIOWorker *log_io_worker = leader_6.palf_handle_impl_->log_engine_.log_io_worker_;
-     {
-       EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 15, id_6, MAX_LOG_BODY_SIZE));
-       sleep(2);
-       LSN max_lsn = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-       wait_lsn_until_flushed(max_lsn, leader_6);
-       EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_6));
-       EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 10*1024));
-       sleep(1);
-       LSN max_lsn1 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-       int64_t remain_size = LEADER_DEFAULT_GROUP_BUFFER_SIZE - max_lsn1.val_ - LogGroupEntryHeader::HEADER_SER_SIZE - LogEntryHeader::HEADER_SER_SIZE;
-       EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
-       sleep(1);
-       LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-       PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
-       EXPECT_EQ(max_lsn2, LSN(LEADER_DEFAULT_GROUP_BUFFER_SIZE));
-       io_task_cond_6.cond_.signal();
-       wait_lsn_until_flushed(max_lsn2, leader_6);
-     }
-     EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 3, id_6, MAX_LOG_BODY_SIZE));
-     sleep(2);
-     LSN max_lsn = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-     wait_lsn_until_flushed(max_lsn, leader_6);
-     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_6));
-     EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 10*1024));
-     sleep(1);
-     LSN max_lsn1 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-     int64_t remain_size = FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE - max_lsn1.val_ - LogGroupEntryHeader::HEADER_SER_SIZE - LogEntryHeader::HEADER_SER_SIZE;
-     EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
-     sleep(1);
-     LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-     PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
-     EXPECT_EQ(max_lsn2, LSN(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE));
-     EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 100));
-     sleep(1);
-     LSN max_lsn3 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
-     io_task_cond_6.cond_.signal();
-     //EXPECT_EQ(max_lsn, leader_6.palf_handle_.palf_handle_impl_->log_engine_.log_storage_.log_tail_);
-     wait_lsn_until_flushed(max_lsn3, leader_6);
-     LSN log_tail = leader_6.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
-     EXPECT_EQ(max_lsn3, log_tail);
-   }
+  // 测试滑动窗口满场景
+  // 聚合的两条日志分别在头尾部
+  int64_t id_6 = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx_6 = 0;
+  int64_t prev_log_id_6 = 0;
+  PalfHandleImplGuard leader_6;
+  IOTaskCond io_task_cond_6(id_6, log_engine->palf_epoch_);
+  IOTaskVerify io_task_verify_6(id_6, log_engine->palf_epoch_);
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_6, leader_idx_6, leader_6));
+  {
+     LogIOWorker *log_io_worker = leader_6.palf_handle_impl_->log_engine_.log_io_worker_;
+    {
+      EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 15, id_6, log_entry_size));
+      sleep(2);
+      LSN max_lsn = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_6);
+      EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_6));
+      EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 10*1024));
+      sleep(1);
+      LSN max_lsn1 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+      int64_t remain_size = LEADER_DEFAULT_GROUP_BUFFER_SIZE - max_lsn1.val_ - LogGroupEntryHeader::HEADER_SER_SIZE - LogEntryHeader::HEADER_SER_SIZE;
+      EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
+      sleep(1);
+      LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+      PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
+      EXPECT_EQ(max_lsn2, LSN(LEADER_DEFAULT_GROUP_BUFFER_SIZE));
+      io_task_cond_6.cond_.signal();
+      wait_lsn_until_flushed(max_lsn2, leader_6);
+    }
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 3, id_6, log_entry_size));
+    sleep(2);
+    LSN max_lsn = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+    wait_lsn_until_flushed(max_lsn, leader_6);
+    EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_6));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 10*1024));
+    sleep(1);
+    LSN max_lsn1 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+    int64_t remain_size = FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE - max_lsn1.val_ - LogGroupEntryHeader::HEADER_SER_SIZE - LogEntryHeader::HEADER_SER_SIZE;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, remain_size));
+    sleep(1);
+    LSN max_lsn2 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+    PALF_LOG_RET(ERROR, OB_SUCCESS, "runlin trace", K(max_lsn2), K(max_lsn1), K(remain_size), K(max_lsn));
+    EXPECT_EQ(max_lsn2, LSN(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 1, id_6, 100));
+    sleep(1);
+    LSN max_lsn3 = leader_6.palf_handle_impl_->sw_.get_max_lsn();
+    io_task_cond_6.cond_.signal();
+    //EXPECT_EQ(max_lsn, leader_6.palf_handle_.palf_handle_impl_->log_engine_.log_storage_.log_tail_);
+    wait_lsn_until_flushed(max_lsn3, leader_6);
+    LSN log_tail = leader_6.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
+    EXPECT_EQ(max_lsn3, log_tail);
+  }
+
+}
+
+
+TEST_F(TestObSimpleLogClusterLogEngine, limit_reduce_task)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "limit_reduce_task");
+  // 验证限制单个reduce task size为1M
+  int64_t id_7 = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx_7 = 0;
+  int64_t prev_log_id_7 = 0;
+  PalfHandleImplGuard leader_7;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_7, leader_idx_7, leader_7));
+	LogEngine *log_engine = &leader_7.palf_handle_impl_->log_engine_;
+  IOTaskCond io_task_cond_7(id_7, log_engine->palf_epoch_);
+  IOTaskVerify io_task_verify_7(id_7, log_engine->palf_epoch_);
+  {
+    BatchLogIOFlushLogTask::SINGLE_TASK_MAX_SIZE = 1*1024*1024;
+    LogIOWorker *log_io_worker = leader_7.palf_handle_impl_->log_engine_.log_io_worker_;
+    log_io_worker->batch_io_task_mgr_.handle_count_ = 0;
+    // case1: 测试单条日志超过SINGLE_TASK_MAX_SIZE
+    // 阻塞提交
+    EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_7));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 15, id_7, log_entry_size));
+    io_task_cond_7.cond_.signal();
+    {
+      LSN max_lsn = leader_7.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_7);
+    }
+    // 单条日志超过SINGLE_TASK_MAX_SIZE，会reduce一次, 第二条日志不会被reduce
+    EXPECT_EQ(8, log_io_worker->batch_io_task_mgr_.handle_count_);
+
+    PALF_LOG(INFO, "case 2");
+
+    // case2：测试日志大小混合场景
+    // 阻塞提交
+    EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_7));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 15, id_7, 1024));
+    io_task_cond_7.cond_.signal();
+    {
+      LSN max_lsn = leader_7.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_7);
+    }
+    EXPECT_LE(8, log_io_worker->batch_io_task_mgr_.handle_count_);
+    int64_t prev_handle_count = log_io_worker->batch_io_task_mgr_.handle_count_;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 15, id_7, 1024));
+    {
+      LSN max_lsn = leader_7.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_7);
+    }
+    EXPECT_LE(prev_handle_count, log_io_worker->batch_io_task_mgr_.handle_count_);
+    prev_handle_count = log_io_worker->batch_io_task_mgr_.handle_count_;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 1, id_7, log_entry_size));
+    {
+      LSN max_lsn = leader_7.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_7);
+    }
+    EXPECT_EQ(prev_handle_count+1, log_io_worker->batch_io_task_mgr_.handle_count_);
+    prev_handle_count = log_io_worker->batch_io_task_mgr_.handle_count_;
+    PALF_LOG(INFO, "after first LT");
+
+    // case3：测试小日志场景
+    EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_7));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader_7, 30, id_7, 1024));
+    io_task_cond_7.cond_.signal();
+    {
+      LSN max_lsn = leader_7.palf_handle_impl_->sw_.get_max_lsn();
+      wait_lsn_until_flushed(max_lsn, leader_7);
+    }
+    EXPECT_LE(prev_handle_count, log_io_worker->batch_io_task_mgr_.handle_count_);
+    PALF_LOG(INFO, "after second LT");
+  }
 
   PALF_LOG(INFO, "end io_reducer_basic_func");
 }
@@ -741,13 +811,11 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 //  int64_t leader_idx = 0;
 //  PalfHandleImplGuard leader;
 //  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-//  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
 //  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
 //  int64_t start_ts = ObTimeUtility::current_time();
 //  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 40 * 10000, leader_idx, 100));
 //  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
 //  wait_lsn_until_flushed(max_lsn, leader);
-//  const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
 //  const int64_t handle_count = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
 //  const int64_t log_id = leader.palf_handle_impl_->sw_.get_max_log_id();
 //  int64_t cost_ts = ObTimeUtility::current_time() - start_ts;

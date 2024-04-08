@@ -57,7 +57,7 @@ typedef const std::function<int(share::ObBackupDest &dest)> RefreshStorageInfoFu
 template<class LogEntryType>
 class ObRemoteLogIterator
 {
-  static const int64_t DEFAULT_SINGLE_READ_SIZE = 8 * palf::MAX_LOG_BUFFER_SIZE;
+  static const int64_t DEFAULT_SINGLE_READ_SIZE = 1L << 24; // 16MB
 public:
   // @param[in] get_source_func, an function to get the input log restore source
   // @param[in] update_source_func, an function to update location info the the log restore source,

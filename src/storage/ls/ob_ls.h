@@ -929,10 +929,6 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
   int set_ls_migration_gc(bool &allow_gc);
 private:
-  static int check_tablet_status_and_scn(
-      const ObTabletCreateDeleteMdsUserData &data,
-      const share::SCN &scn);
-private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.
   ObLSTabletService ls_tablet_svr_;

@@ -381,7 +381,7 @@ TEST_F(TestCSCGGroupByScanner, test_init)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -403,7 +403,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_group_size)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -428,7 +428,7 @@ TEST_F(TestCSCGGroupByScanner, test_decide_can_group_by)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -459,7 +459,7 @@ TEST_F(TestCSCGGroupByScanner, test_read_distinct)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -500,7 +500,7 @@ TEST_F(TestCSCGGroupByScanner, test_read_reference)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -546,7 +546,7 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;
@@ -630,7 +630,7 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
   prepare_test_case(is_reverse_scan);
 
   ObGroupByCell group_by_cell(eval_ctx_.batch_size_, allocator_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, eval_ctx_));
+  ASSERT_EQ(OB_SUCCESS, group_by_cell.init(access_param_, context_, eval_ctx_));
   ASSERT_EQ(eval_ctx_.batch_size_, group_by_cell.get_batch_size());
   ObVectorStore vector_store(eval_ctx_.batch_size_, eval_ctx_, context_);
   vector_store.group_by_cell_ = &group_by_cell;

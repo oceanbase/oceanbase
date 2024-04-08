@@ -434,10 +434,7 @@ int ObRLEDecoder::in_operator(
       int64_t dict_ref = 0;
       bool is_exist = false;
       while (OB_SUCC(ret) && traverse_it != end_it) {
-        ObObj cur_obj;
-        if (OB_FAIL((*traverse_it).to_obj(cur_obj, col_ctx.obj_meta_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K(*traverse_it), K(col_ctx.obj_meta_));
-        } else if (OB_FAIL(filter.exist_in_obj_set(cur_obj, is_exist))) {
+        if (OB_FAIL(filter.exist_in_datum_set(*traverse_it, is_exist))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(*traverse_it));
         } else if (is_exist) {
           found = true;

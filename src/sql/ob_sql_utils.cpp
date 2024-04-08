@@ -5373,6 +5373,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   int ret = OB_SUCCESS;
   ObTableSchema new_view_schema(&alloc);
   uint64_t data_version = 0;
+  bool changed = false;
   if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
     LOG_WARN("failed to assign table schema", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(old_view_schema.get_tenant_id(), data_version))) {
@@ -5385,7 +5386,10 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if ((0 == old_view_schema.get_object_status()
              || 0 == old_view_schema.get_column_count()
              || (old_view_schema.is_sys_view()
-                 && old_view_schema.get_schema_version() <= GCTX.start_time_))) {
+                 && old_view_schema.get_schema_version() <= GCTX.start_time_
+                 && OB_HASH_NOT_EXIST == GCTX.sql_engine_->get_dep_info_queue()
+                    .read_consistent_sys_view_from_set(old_view_schema.get_tenant_id(),
+                                                       old_view_schema.get_table_id())))) {
     if (old_view_schema.is_sys_view() && GCONF.in_upgrade_mode()) {
       //do not recompile sys view until upgrade finish
     } else if (!reset_column_infos) {
@@ -5403,7 +5407,9 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get wrong schema", K(ret), K(new_view_schema));
-      } else if (!select_stmt->get_ref_obj_table()->is_inited()) {
+      } else if (old_view_schema.is_sys_view() && OB_FAIL(check_sys_view_changed(old_view_schema, new_view_schema, changed))) {
+        LOG_WARN("failed to check sys view changed", K(ret));
+      } else if (!select_stmt->get_ref_obj_table()->is_inited() || !changed) {
         // do nothing
       } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
         if (OB_HASH_EXIST == ret) {
@@ -5452,6 +5458,55 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::check_sys_view_changed(const share::schema::ObTableSchema &old_view_schema,
+                                       const share::schema::ObTableSchema &new_view_schema,
+                                       bool &changed)
+{
+  int ret = OB_SUCCESS;
+  changed = false;
+  if (old_view_schema.get_column_count() != new_view_schema.get_column_count()) {
+    changed = true;
+    LOG_TRACE("sys view changed, need recompile task", K(old_view_schema.get_tenant_id()),
+                  K(old_view_schema.get_table_id()), K(old_view_schema.get_column_count()),
+                  K(new_view_schema.get_column_count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !changed && i < old_view_schema.get_column_count(); ++i) {
+      const ObColumnSchemaV2 *old_col = old_view_schema.get_column_schema_by_idx(i);
+      const ObColumnSchemaV2 *new_col = new_view_schema.get_column_schema_by_idx(i);
+      if (OB_ISNULL(old_col) || OB_ISNULL(new_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column", K(ret), K(old_view_schema.get_table_id()), K(i), KP(old_col), KP(new_col));
+      } else if (0 != old_col->get_column_name_str().case_compare(new_col->get_column_name_str())) {
+        changed = true;
+        LOG_TRACE("sys view changed, need recompile task", K(old_view_schema.get_tenant_id()),
+                  K(old_view_schema.get_table_id()), K(i),
+                  K(old_col->get_column_name_str()), K(new_col->get_column_name_str()));
+      } else if (old_col->get_data_type() != new_col->get_data_type()
+                 || old_col->get_data_length() != new_col->get_data_length()
+                 || (ob_is_accurate_numeric_type(old_col->get_data_type())
+                     && old_col->get_data_precision() != new_col->get_data_precision())
+                 || (ob_is_accurate_numeric_type(old_col->get_data_type())
+                     && old_col->get_data_scale() != new_col->get_data_scale())) {
+        changed = true;
+        LOG_TRACE("sys view changed, need recompile task", K(old_view_schema.get_tenant_id()),
+                  K(old_view_schema.get_table_id()), K(i),
+                  K(old_col->get_data_type()), K(new_col->get_data_type()),
+                  K(old_col->get_data_length()), K(new_col->get_data_length()),
+                  K(old_col->get_data_precision()), K(new_col->get_data_precision()),
+                  K(old_col->get_data_scale()), K(new_col->get_data_scale()));
+      }
+    }
+  }
+  if (!changed) {
+    if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue()
+                .add_consistent_sys_view_id_to_set(old_view_schema.get_tenant_id(),
+                                                   old_view_schema.get_table_id()))) {
+      LOG_WARN("failed to add sys view", K(ret));
     }
   }
   return ret;

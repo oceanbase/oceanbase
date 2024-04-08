@@ -18,6 +18,7 @@
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
+#include "sql/resolver/cmd/ob_set_names_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -32,6 +33,26 @@ ObVariableSetResolver::ObVariableSetResolver(ObResolverParams &params)
 
 ObVariableSetResolver::~ObVariableSetResolver()
 {
+}
+
+int ObVariableSetResolver::resolve_set_names(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObSetNamesResolver set_names_resolver(params_);
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt not created in resolver", K(ret));
+  } else if (OB_FAIL(set_names_resolver.resolve(parse_tree))) {
+    LOG_WARN("fail to resolve", K(ret));
+  } else {
+    ObVariableSetStmt *variable_set_stmt = static_cast<ObVariableSetStmt*>(stmt_);
+    ObVariableSetStmt::VariableSetNode var_node;
+    var_node.set_names_stmt_ = static_cast<ObSetNamesStmt *>(set_names_resolver.get_basic_stmt());
+    if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+      LOG_WARN("Add set entry failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
@@ -57,6 +78,10 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
       if (OB_ISNULL(set_node = parse_tree.children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set node is NULL", K(ret));
+      } else if (T_SET_NAMES == set_node->type_ || T_SET_CHARSET == set_node->type_) {
+        if (OB_FAIL(resolve_set_names(*set_node))) {
+          LOG_WARN("fail to resolve set names", K(ret));
+        }
       } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("set_node->type_ must be T_VAR_VAL", K(ret), K(set_node->type_));

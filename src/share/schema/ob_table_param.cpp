@@ -622,9 +622,11 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     use_lob_locator_(false),
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_projector_(allocator),
+    parser_name_(),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
-    is_fts_index_(false)
+    is_fts_index_(false),
+    is_multivalue_index_(false)
 {
   reset();
 }
@@ -647,10 +649,12 @@ void ObTableParam::reset()
   use_lob_locator_ = false;
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
   rowid_projector_.reset();
+  parser_name_.reset();
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
   is_fts_index_ = false;
+  is_multivalue_index_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -682,6 +686,12 @@ OB_DEF_SERIALIZE(ObTableParam)
         LOG_WARN("Fail to serialize column", K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ENCODE(parser_name_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_multivalue_index_);
   }
   return ret;
 }
@@ -753,6 +763,20 @@ OB_DEF_DESERIALIZE(ObTableParam)
       }
     }
   }
+
+  if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
+    ObString tmp_parser_name;
+    if (OB_FAIL(tmp_parser_name.deserialize(buf, data_len, pos))) {
+      LOG_WARN("Fail to deserialize parser name", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_parser_name, parser_name_))) {
+      LOG_WARN("Fail to ccopy parser name ", K(ret), K_(parser_name), K(tmp_parser_name));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_multivalue_index_);
+  }
   return ret;
 }
 
@@ -784,6 +808,14 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
         len += cg_read_infos_.at(i)->get_serialize_size();
       }
     }
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ADD_LEN(parser_name_);
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+              is_multivalue_index_);
   }
   return len;
 }
@@ -1480,7 +1512,9 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(use_lob_locator),
        K_(rowid_version),
        K_(rowid_projector),
-       K_(enable_lob_locator_v2));
+       K_(enable_lob_locator_v2),
+       K_(is_fts_index),
+       K_(parser_name));
   J_OBJ_END();
 
   return pos;

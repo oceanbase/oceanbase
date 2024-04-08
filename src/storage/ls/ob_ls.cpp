@@ -24,7 +24,6 @@
 #include "observer/net/ob_ingress_bw_alloc_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "observer/report/ob_i_meta_report.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_scheduler.h"
 #include "rootserver/restore/ob_clone_scheduler.h"
@@ -47,7 +46,6 @@
 #include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_ls_id.h"
 #include "share/ob_global_autoinc_service.h"
-#include "share/ob_force_print_log.h"
 #include "sql/das/ob_das_id_service.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/ls/ob_ls.h"
@@ -1782,8 +1780,6 @@ int ObLS::replay_get_tablet(
         && ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
-    } else if (OB_FAIL(check_tablet_status_and_scn(data, scn))) {
-      LOG_ERROR("fail to check tablet status and scn", K(ret), K(ls_id), K(tablet_id), K(data), K(scn));
     } else {
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
@@ -1804,37 +1800,11 @@ int ObLS::replay_get_tablet(
         LOG_INFO("latest transaction has not committed yet, should retry", KR(ret), K(ls_id), K(tablet_id),
             K(scn), "clog_checkpoint_scn", tablet->get_clog_checkpoint_scn(), K(data));
       }
-    } else if (OB_FAIL(check_tablet_status_and_scn(data, scn))) {
-      LOG_ERROR("fail to check tablet status and scn", K(ret), K(ls_id), K(tablet_id), K(data), K(scn));
     }
   }
 
   if (OB_SUCC(ret)) {
     handle = tablet_handle;
-  }
-
-  return ret;
-}
-
-int ObLS::check_tablet_status_and_scn(
-    const ObTabletCreateDeleteMdsUserData &data,
-    const share::SCN &scn)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY((ObTabletStatus::DELETED == data.tablet_status_ || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_)
-      && scn >= data.delete_commit_scn_)) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant config is invalid", K(ret));
-    } else if (tenant_config->_allow_skip_replay_redo_after_detete_tablet) {
-      FLOG_WARN("scn is bigger than tablet delete commit scn, allow to skip replaying this clog for emergency",
-          K(ret), K(data), K(scn));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("scn is bigger than tablet delete commit scn", K(ret), K(data), K(scn));
-    }
   }
 
   return ret;

@@ -107,6 +107,7 @@ public:
     last_rows_count_(0),
     micro_block_merge_verify_level_(MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION),
     max_merged_trans_version_(0),
+    min_merged_trans_version_(INT64_MAX),
     block_size_upper_bound_(DEFAULT_UPPER_BOUND),
     contain_uncommitted_row_(false),
     has_string_out_row_(false),
@@ -145,6 +146,7 @@ public:
     last_rows_count_ = 0;
     checksum_helper_.reuse();
     max_merged_trans_version_ = 0;
+    min_merged_trans_version_ = INT64_MAX;
     block_size_upper_bound_ = DEFAULT_UPPER_BOUND;
     contain_uncommitted_row_ = false;
     has_string_out_row_ = false;
@@ -162,10 +164,21 @@ public:
 
   int64_t get_micro_block_checksum() const { return checksum_helper_.get_row_checksum(); }
   int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
+  inline void update_merged_trans_version(const int64_t merged_trans_version)
+  {
+    update_max_merged_trans_version(merged_trans_version);
+    update_min_merged_trans_version(merged_trans_version);
+  }
   void update_max_merged_trans_version(const int64_t max_merged_trans_version)
   {
     if (max_merged_trans_version > max_merged_trans_version_) {
       max_merged_trans_version_ = max_merged_trans_version;
+    }
+  }
+  inline void update_min_merged_trans_version(const int64_t min_merged_trans_version)
+  {
+    if (OB_UNLIKELY(min_merged_trans_version < min_merged_trans_version_)) {
+      min_merged_trans_version_ = min_merged_trans_version;
     }
   }
   bool is_contain_uncommitted_row() const { return contain_uncommitted_row_; }
@@ -217,7 +230,7 @@ protected:
   OB_INLINE void calc_column_checksums_ptr(ObMicroBufferWriter &data_buffer)
   {
     ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader*>(data_buffer.data());
-    if (header->column_checksums_ != nullptr) {
+    if (header->column_checksums_ != nullptr && header->has_column_checksum_) {
       header->column_checksums_ = reinterpret_cast<int64_t *>(
             data_buffer.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
     }
@@ -232,6 +245,7 @@ protected:
   int32_t last_rows_count_;
   int64_t micro_block_merge_verify_level_;
   int64_t max_merged_trans_version_;
+  int64_t min_merged_trans_version_;
   int64_t block_size_upper_bound_;
   bool contain_uncommitted_row_;
   bool has_string_out_row_;

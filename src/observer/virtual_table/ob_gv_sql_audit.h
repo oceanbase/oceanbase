@@ -203,6 +203,7 @@ private:
   char client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[128];
+  char pl_trace_id_[128];
 
   //max wait event columns
   bool is_first_get_;

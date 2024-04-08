@@ -6619,6 +6619,12 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (ObMaxType == res_type.get_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));
+        } else if ((left_type.is_ext() && !right_type.is_ext())
+                    || (!left_type.is_ext() && right_type.is_ext())
+                    || (left_type.is_ext() && right_type.is_ext()
+                          && left_type.get_udt_id() != right_type.get_udt_id())) {
+          ret = OB_ERR_EXP_NEED_SAME_DATATYPE;
+          LOG_WARN("expression must have same datatype as corresponding expression", K(ret), K(left_type), K(right_type));
         } else if (left_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
                                                         expr_factory, left_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));
@@ -8189,10 +8195,11 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == origin_expr->get_expr_type() ||
              T_FUN_SYS_BIT_AND == origin_expr->get_expr_type() ||
              T_FUN_SYS_BIT_OR == origin_expr->get_expr_type() ||
-             T_FUN_SYS_BIT_XOR == origin_expr->get_expr_type()) {
+             T_FUN_SYS_BIT_XOR == origin_expr->get_expr_type() ||
+             T_FUN_SUM_OPNSIZE == origin_expr->get_expr_type()) {
     /* MAX(a) -> MAX(MAX(a)), MIN(a) -> MIN(MIN(a)) SUM(a) -> SUM(SUM(a)) */
     ObItemType pullup_aggr_type = origin_expr->get_expr_type();
-    if (T_FUN_COUNT == pullup_aggr_type) {
+    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_COUNT_SUM;
     } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE;

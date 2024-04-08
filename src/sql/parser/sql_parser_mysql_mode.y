@@ -348,7 +348,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
@@ -484,7 +484,6 @@ END_P SET_VAR DELIMITER
 %type <node> zone_action upgrade_action
 %type <node> opt_index_name opt_key_or_index opt_index_options opt_primary  opt_all
 %type <node> charset_key database_key charset_name charset_name_or_default collation_name databases_or_schemas trans_param_name trans_param_value
-%type <node> set_names_stmt set_charset_stmt
 %type <node> charset_introducer complex_string_literal literal number_literal now_or_signed_literal signed_literal
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
@@ -663,8 +662,6 @@ stmt:
   | create_resource_stmt    { $$ = $1; check_question_mark($$, result); }
   | alter_resource_stmt     { $$ = $1; check_question_mark($$, result); }
   | drop_resource_stmt      { $$ = $1; check_question_mark($$, result); }
-  | set_names_stmt          { $$ = $1; check_question_mark($$, result); }
-  | set_charset_stmt        { $$ = $1; check_question_mark($$, result); }
   | create_tablegroup_stmt  { $$ = $1; check_question_mark($$, result); }
   | drop_tablegroup_stmt    { $$ = $1; check_question_mark($$, result); }
   | alter_tablegroup_stmt   { $$ = $1; check_question_mark($$, result); }
@@ -3047,6 +3044,10 @@ MOD '(' expr ',' expr ')'
 | GEOMCOLLECTION '(' ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
+| SUM_OPNSIZE '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
 }
 ;
 
@@ -8179,7 +8180,7 @@ UNDEFINED { $$ = NULL; }
 | TEMPTABLE { $$ = NULL; }
 
 opt_definer:
-DEFINER COMP_EQ user
+DEFINER COMP_EQ user_with_host_name
 {
   (void)($3);
   $$ = NULL;
@@ -11446,6 +11447,30 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, $$, $2, $3);
 }
+| relation_factor use_partition sample_clause use_flashback %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback %prec LOWER_PARENS
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, $2, $3, $5);
+}
+| relation_factor use_partition sample_clause use_flashback index_hint_list %prec LOWER_PARENS
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback index_hint_list %prec LOWER_PARENS
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, $2, $3, $5);
+}
 | relation_factor sample_clause %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, NULL, NULL, $2);
@@ -11469,6 +11494,30 @@ relation_factor %prec LOWER_PARENS
   }
   merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, $1, $$, NULL, $2);
+}
+| relation_factor sample_clause use_flashback %prec LOWER_PARENS
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback %prec LOWER_PARENS
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, NULL, NULL, $2, $4);
+}
+| relation_factor sample_clause use_flashback index_hint_list %prec LOWER_PARENS
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback index_hint_list %prec LOWER_PARENS
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 5, $1, $$, NULL, $2, $4);
 }
 | relation_factor index_hint_list %prec LOWER_PARENS
 {
@@ -11520,6 +11569,54 @@ relation_factor %prec LOWER_PARENS
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $6, NULL, $2, $3);
   $$->sql_str_off_ = @1.first_column;
+}
+| relation_factor sample_clause use_flashback AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback AS relation_name
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback AS relation_name
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $7, NULL, $2, $3, $5);
+}
+| relation_factor sample_clause use_flashback AS relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback AS relation_name index_hint_list
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback AS relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback AS relation_name index_hint_list
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $7, $$, $2, $3, $5);
 }
 | relation_factor AS relation_name index_hint_list
 {
@@ -11651,6 +11748,54 @@ relation_factor %prec LOWER_PARENS
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, $3);
   $$->sql_str_off_ = @1.first_column;
+}
+| relation_factor sample_clause use_flashback relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback relation_name
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback relation_name
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, NULL, $2, $3, $5);
+}
+| relation_factor sample_clause use_flashback relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, $$, NULL, $2, $3);
+}
+| relation_factor sample_clause seed use_flashback relation_name index_hint_list
+{
+  if ($2 != NULL) {
+    $2->children_[2] = $3;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, NULL, $2, $4);
+}
+| relation_factor use_partition sample_clause use_flashback relation_name index_hint_list
+{
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, $$, $2, $3, $4);
+}
+| relation_factor use_partition sample_clause seed use_flashback relation_name index_hint_list
+{
+  if ($3 != NULL) {
+    $3->children_[2] = $4;
+  }
+  merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $6, $$, $2, $3, $5);
 }
 | TABLE '(' simple_expr ')' %prec LOWER_PARENS
 {
@@ -14872,6 +15017,15 @@ USER_VARIABLE to_or_eq expr
   malloc_non_terminal_node($$, result->malloc_pool_, T_VAR_VAL, 2, $1, $3);
   $$->value_ = 2;
 }
+| NAMES charset_name_or_default opt_collation
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_NAMES, 2, $2, $3);
+}
+| charset_key charset_name_or_default
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_CHARSET, 1, $2);
+};
 ;
 
 sys_var_and_val:
@@ -18667,23 +18821,6 @@ extension:
 //}
 ;
 
-////////////////////////////////////////////////////////////////
-/* SET NAMES 'charset_name' [COLLATE 'collation_name'] */
-set_names_stmt:
-SET NAMES charset_name_or_default opt_collation
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_NAMES, 2, $3, $4);
-};
-
-////////////////////////////////////////////////////////////////
-/* SET CHARACTER SET charset_name */
-set_charset_stmt:
-SET charset_key charset_name_or_default
-{
-  (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_CHARSET, 1, $3);
-};
-
 //////////////////////////////
 set_transaction_stmt:
 SET TRANSACTION transaction_characteristics
@@ -20454,6 +20591,7 @@ ACCOUNT
 |       KV_ATTRIBUTES
 |       OBJECT_ID
 |       TRANSFER
+|       SUM_OPNSIZE
 ;
 
 unreserved_keyword_special:

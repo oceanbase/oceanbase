@@ -90,6 +90,7 @@ PalfHandleImpl::PalfHandleImpl()
     chaning_config_warn_time_(OB_INVALID_TIMESTAMP),
     cached_is_in_sync_(false),
     has_higher_prio_config_change_(false),
+    last_update_region_time_us_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {
   log_dir_[0] = '\0';
@@ -391,26 +392,28 @@ int PalfHandleImpl::get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info)
   return ret;
 }
 
-int PalfHandleImpl::set_region(const common::ObRegion &region)
+int PalfHandleImpl::update_self_region_()
 {
   int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(config_mgr_.set_region(region))) {
-    PALF_LOG(WARN, "set_region failed", KR(ret), K(region));
-  }
-  return ret;
-}
-
-int PalfHandleImpl::set_paxos_member_region_map(const LogMemberRegionMap &region_map)
-{
-  int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (config_mgr_.set_paxos_member_region_map(region_map)) {
-    PALF_LOG(WARN, "set_paxos_member_region_map failed", KR(ret), KPC(this));
+  common::ObRegion new_region, curr_region;
+  do {
+    RLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.get_region(curr_region))) {
+      PALF_LOG(WARN, "get_region failed", K(ret), KPC(this));
+    }
+  } while (0);
+  if (OB_FAIL(ret)) {
+    PALF_LOG(WARN, "get_region failed", K(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.get_server_region(self_, new_region))) {
+    PALF_LOG(WARN, "get_server_region failed", K(ret), KPC(this));
+  } else if (curr_region != new_region) {
+    WLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.set_region(new_region))) {
+      PALF_LOG(WARN, "get_server_region failed", K(ret), K(new_region), KPC(this));
+    } else {
+      PALF_LOG(INFO, "update_self_region_ success", K(ret), K(curr_region),
+          K(new_region), KPC(this));
+    }
   }
   return ret;
 }
@@ -2566,6 +2569,35 @@ int PalfHandleImpl::reset_monitor_cb()
   return ret;
 }
 
+int PalfHandleImpl::set_locality_cb(palf::PalfLocalityInfoCb *locality_cb)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
+  } else if (OB_ISNULL(locality_cb)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "locality_cb is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(locality_cb))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(locality_cb), K_(plugins));
+  } else {
+    PALF_LOG(INFO, "set_locality_cb success", KPC(this), K_(plugins), KP(locality_cb));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::reset_locality_cb()
+{
+  int ret = OB_SUCCESS;
+  PalfLocalityInfoCb *locality_cb = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(plugins_.del_plugin(locality_cb))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;
@@ -2648,6 +2680,10 @@ int PalfHandleImpl::check_and_switch_state()
         FLOG_INFO("[PALF_DUMP]", K_(palf_id), K_(self), K(ack_info_list));
       }
       (void) sw_.report_log_task_trace(sw_.get_start_id());
+    }
+    if (palf_reach_time_interval(PALF_UPDATE_REGION_INTERVAL_US, last_update_region_time_us_) &&
+        OB_FAIL(update_self_region_())) {
+      PALF_LOG(WARN, "update_region failed", K(ret), KPC(this));
     }
   }
   return OB_SUCCESS;
@@ -4600,6 +4636,7 @@ int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
   state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
   diagnose_info.enable_sync_ = state_mgr_.is_sync_enabled();
   diagnose_info.enable_vote_ = state_mgr_.is_allow_vote();
+  diagnose_info.parent_ = config_mgr_.get_parent();
   return ret;
 }
 
@@ -5520,6 +5557,48 @@ int PalfHandleImpl::read_data_from_buffer(const LSN &read_begin_lsn,
   } else {
     PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
         K(in_read_size), K(out_read_size));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::raw_read(const LSN &lsn,
+                             char *buffer,
+                             const int64_t nbytes,
+                             int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  const LSN readable_end_lsn = get_end_lsn();
+  LSN readable_begin_lsn;
+  int64_t real_read_size = 0;
+  read_size = 0;
+  const bool need_read_block_header = false;
+  ObTimeGuard time_guard("raw_read", 100 * 1000);
+  ReadBuf read_buf(buffer, nbytes);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImp not inited", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (!lsn.is_valid()
+             || !is_valid_raw_read_buf(read_buf, lsn_2_offset(lsn, PALF_BLOCK_SIZE), nbytes)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (OB_FAIL(get_begin_lsn(readable_begin_lsn))) {
+    PALF_LOG(WARN, "get_begin_lsn failed", K(ret), K_(palf_id), K(lsn), K(nbytes), K(read_buf));
+  } else if (lsn < readable_begin_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
+    PALF_LOG(WARN, "read something out of lower bound", K(ret), K_(palf_id), K(lsn), K(nbytes),
+             K(read_size), K(readable_begin_lsn));
+  } else if (lsn >= readable_end_lsn) {
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    PALF_LOG(WARN, "read something out of upper bound", K(ret), K_(palf_id), K(lsn),
+             K(nbytes), K(read_size), K(readable_end_lsn));
+    // only read the data before readable_end_lsn
+  } else if (FALSE_IT(real_read_size = MIN(nbytes, readable_end_lsn - lsn))) {
+  } else if (OB_FAIL(log_engine_.raw_read(lsn, real_read_size, need_read_block_header, read_buf, read_size))) {
+    PALF_LOG(WARN, "read_log from storage failed", K(ret), K_(palf_id), K(lsn),
+             K(nbytes), K(real_read_size), K(readable_end_lsn), K(read_size));
+  } else {
+    PALF_LOG(TRACE, "raw_read success", K(ret), K_(palf_id), K(lsn),  K(nbytes),
+             K(real_read_size), K(readable_end_lsn), K(read_size), K(time_guard));
   }
   return ret;
 }

@@ -5339,6 +5339,7 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
       for (i = 0; i < param_num; ++i) {
         if (types_stack[i].is_integer_type()) { // integer scale is zero
           max_scale = MAX(max_scale, 0);
+          max_precision = MAX(max_precision, types_stack[i].get_precision());
         } else if (!types_stack[i].is_null()) {
           max_scale = MAX(max_scale, types_stack[i].get_mysql_compatible_scale());
           max_precision = MAX(max_precision, types_stack[i].get_precision());

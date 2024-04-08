@@ -1091,6 +1091,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     OZ (gctx_.sql_engine_->init_result_set(ctx_, result));
     if (OB_SUCCESS != ret || enable_perf_event) {
       exec_start_timestamp_ = ObTimeUtility::current_time();
+      session.reset_plsql_exec_time();
     }
     if (OB_SUCC(ret)) {
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
@@ -1156,6 +1157,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
     result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
+    session.reset_plsql_exec_time();
     // 本分支内如果出错，全部会在response_result内部处理妥当
     // 无需再额外处理回复错误包
 
@@ -1232,6 +1234,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         task_ctx->set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
 
         ctx_.retry_times_ = retry_ctrl_.get_retry_times();
+        session.reset_plsql_exec_time();
         if (OB_ISNULL(ctx_.schema_guard_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("newest schema is NULL", K(ret));
@@ -1359,6 +1362,10 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_ = params_value_;
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+      audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
+        audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+      }
 
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_NOT_NULL(plan_ctx)) {

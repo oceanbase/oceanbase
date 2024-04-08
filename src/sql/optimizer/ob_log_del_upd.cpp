@@ -307,6 +307,7 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     need_barrier_(false),
     is_first_dml_op_(false),
     table_location_uncertain_(false),
+    is_pdml_update_split_(false),
     pdml_partition_id_expr_(NULL),
     pdml_is_returning_(false),
     err_log_define_(),

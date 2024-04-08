@@ -84,6 +84,7 @@ protected:
   void reuse_iter_array();
   void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
   void dump_table_statistic_for_4377();
+  int set_base_version() const;
 
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);

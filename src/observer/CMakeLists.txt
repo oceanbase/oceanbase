@@ -104,6 +104,7 @@ ob_set_subtarget(ob_server net
   net/ob_ingress_bw_alloc_service.cpp
   net/ob_net_endpoint_ingress_rpc_proccessor.cpp
   net/ob_net_endpoint_ingress_rpc_struct.cpp
+  net/ob_rpc_reverse_keepalive.cpp
 )
 
 ob_set_subtarget(ob_server omt

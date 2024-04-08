@@ -66,6 +66,26 @@ typedef void (*raw_compare_function_with_null)(
             uint32_t from,
             uint32_t to);
 
+typedef void (*raw_min_max_function)(
+            const unsigned char *raw_data,
+            uint32_t from,
+            uint32_t to,
+            uint64_t &res);
+
+typedef void (*raw_min_max_function_with_null)(
+            const unsigned char *raw_data,
+            const uint64_t null_value,
+            uint32_t from,
+            uint32_t to,
+            uint64_t &res);
+
+typedef void (*raw_min_max_function_with_null_bitmap)(
+            const unsigned char* raw_data,
+            const uint8_t *null_bitmap,
+            uint32_t from,
+            uint32_t to,
+            uint64_t &res);
+
 class RawCompareFunctionFactory {
 public:
   static constexpr uint32_t IS_SIGNED_CNT = 2;
@@ -88,6 +108,33 @@ private:
   ObMultiDimArray_T<raw_compare_function, IS_SIGNED_CNT, FIX_LEN_TAG_CNT, OP_TYPE_CNT> functions_array_;
   ObMultiDimArray_T<raw_compare_function_with_null, FIX_LEN_TAG_CNT, OP_TYPE_CNT> cs_functions_with_null_array_;
 };
+
+class RawAggFunctionFactory
+{
+public:
+  static constexpr uint32_t FIX_LEN_TAG_CNT = 4;
+  static constexpr uint32_t MIN_MAX_CNT = 2;
+public:
+  static RawAggFunctionFactory &instance();
+  raw_min_max_function get_min_max_function(
+      const int32_t fix_len_tag,
+      const bool is_min);
+  raw_min_max_function_with_null get_cs_min_max_function_with_null(
+      const int32_t fix_len_tag,
+      const bool is_min);
+  raw_min_max_function_with_null_bitmap get_cs_min_max_function_with_null_bitmap(
+      const int32_t fix_len_tag,
+      const bool is_min);
+private:
+  RawAggFunctionFactory();
+  ~RawAggFunctionFactory() = default;
+  DISALLOW_COPY_AND_ASSIGN(RawAggFunctionFactory);
+private:
+  ObMultiDimArray_T<raw_min_max_function, FIX_LEN_TAG_CNT, MIN_MAX_CNT> min_max_functions_array_;
+  ObMultiDimArray_T<raw_min_max_function_with_null, FIX_LEN_TAG_CNT, MIN_MAX_CNT> cs_min_max_functions_with_null_array_;
+  ObMultiDimArray_T<raw_min_max_function_with_null_bitmap, FIX_LEN_TAG_CNT, MIN_MAX_CNT> cs_min_max_functions_with_null_bitmap_array_;
+};
+
 
 class ObRawDecoder : public ObIColumnDecoder
 {
@@ -251,7 +298,6 @@ private:
       : type_cmp_func_(type_cmp_func), get_cmp_ret_(get_cmp_ret) {}
     ~ObRawDecoderFilterCmpFunc() = default;
     int operator()(
-        const ObObjMeta &obj_meta,
         const ObDatum &cur_datum,
         const sql::ObWhiteFilterExecutor &filter,
         bool &result) const;
@@ -269,7 +315,6 @@ private:
     }
     ~ObRawDecoderFilterBetweenFunc() = default;
     int operator()(
-        const ObObjMeta &obj_meta,
         const ObDatum &cur_datum,
         const sql::ObWhiteFilterExecutor &filter,
         bool &result) const;
@@ -284,7 +329,6 @@ private:
     ObRawDecoderFilterInFunc() {}
     ~ObRawDecoderFilterInFunc() = default;
     int operator()(
-        const ObObjMeta &obj_meta,
         const ObDatum &cur_datum,
         const sql::ObWhiteFilterExecutor &filter,
         bool &result) const;

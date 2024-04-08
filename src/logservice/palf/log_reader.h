@@ -50,6 +50,7 @@ private:
                    offset_t start_offset,
                    int64_t in_read_size,
                    char *read_buf,
+                   const int64_t read_buf_len,
                    int64_t &out_read_size) const;
 
 private:

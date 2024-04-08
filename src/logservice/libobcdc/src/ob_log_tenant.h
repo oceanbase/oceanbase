@@ -24,6 +24,7 @@
 #include "ob_log_ls_mgr.h"                          // ObLogLSMgr
 #include "ob_log_ref_state.h"                       // RefState
 #include "ob_cdc_lob_aux_meta_storager.h"           // ObCDCLobAuxDataCleanTask
+#include "ob_log_meta_data_struct.h"                // ObDictTenantInfo
 #include <cstdint>
 
 namespace oceanbase
@@ -105,6 +106,7 @@ public:
   // get/set functions
 public:
   uint64_t get_tenant_id() const { return tenant_id_; }
+  lib::Worker::CompatMode get_compat_mode() const { return compat_mode_; }
   int64_t get_start_schema_version() const { return start_schema_version_; }
   int64_t get_schema_version() const { return part_mgr_.get_schema_version(); }
   int64_t get_sys_ls_progress() const { return ATOMIC_LOAD(&sys_ls_progress_); }
@@ -222,21 +224,22 @@ public:
       const int64_t start_schema_version,
       const int64_t timeout);
 
-  int add_all_user_tablets_info(const int64_t timeout)
-  {
-    return part_mgr_.add_all_user_tablets_info(timeout);
-  }
-
-  int add_all_user_tablets_info(
-      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
-      const int64_t timeout)
-  {
-    return part_mgr_.add_all_user_tablets_info(table_metas, timeout);
-  }
-
   int get_table_info_of_tablet(const common::ObTabletID &tablet_id, ObCDCTableInfo &table_info) const
   {
     return part_mgr_.get_table_info_of_tablet_id(tablet_id, table_info);
+  }
+
+  int add_all_user_tablets_and_tables_info(const int64_t timeout)
+  {
+    return part_mgr_.add_all_user_tablets_and_tables_info(timeout);
+  }
+
+  int add_all_user_tablets_and_tables_info(
+      ObDictTenantInfo *tenant_info,
+      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
+      const int64_t timeout)
+  {
+    return part_mgr_.add_all_user_tablets_and_tables_info(tenant_info, table_metas, timeout);
   }
 
   // flush memory data in local storage(e.g. memtable for rocksdb)
@@ -261,6 +264,8 @@ public:
   bool is_serving() const { return TENANT_STATE_NORMAL == get_tenant_state(); }
 
 private:
+  int init_compat_mode_(const uint64_t tenant_id, const int64_t start_schema_version,
+      lib::Worker::CompatMode &compat_mode);
   int init_all_ddl_operation_table_schema_info_();
   int update_sys_ls_progress_(
       const int64_t handle_progress,
@@ -292,6 +297,7 @@ private:
   bool                    inited_;
   uint64_t                tenant_id_;
   char                    tenant_name_[common::OB_MAX_TENANT_NAME_LENGTH + 1];
+  lib::Worker::CompatMode compat_mode_;
   int64_t                 start_schema_version_;
   // task queue
   ObLogTenantTaskQueue    *task_queue_;

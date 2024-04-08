@@ -349,6 +349,15 @@ struct GetProbeCntVisitor : public boost::static_visitor<int64_t>
   }
 };
 
+struct IsSstrAggrValidVisitor : public boost::static_visitor<bool>
+{
+  template <typename T>
+  bool operator() (T &t) const
+  {
+    return t->is_sstr_aggr_valid();
+  }
+};
+
 struct PrefetchVisitor :public boost::static_visitor<>
 {
   PrefetchVisitor(const ObBatchRows &brs, uint64_t *hash_vals)
@@ -549,6 +558,12 @@ public:
   int foreach_bucket_hash(CB &cb)
   {
     ForeachBucketHashVisitor<CB> visitor(cb);
+    return boost::apply_visitor(visitor, hash_table_ptr_);
+  }
+
+  bool is_sstr_aggr_valid() const
+  {
+    IsSstrAggrValidVisitor visitor;
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 

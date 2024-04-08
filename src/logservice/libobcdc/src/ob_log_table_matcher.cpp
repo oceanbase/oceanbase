@@ -103,7 +103,7 @@ int ObLogTableMatcher::table_match_pattern_(const bool is_black,
             pattern.table_pattern_.ptr(),
             tenant_name, db_name, tb_name);
       } else {
-        _ISTAT("[%s_PATTERN_NOT_MATCH] PATTERN='%s.%s.%s' TABLE='%s.%s.%s' NOT_MATCH_PATTERN=%s",
+        _DSTAT("[%s_PATTERN_NOT_MATCH] PATTERN='%s.%s.%s' TABLE='%s.%s.%s' NOT_MATCH_PATTERN=%s",
             is_black ? "BLACK" : "WHITE",
             pattern.tenant_pattern_.ptr(), pattern.database_pattern_.ptr(),
             pattern.table_pattern_.ptr(),
@@ -120,6 +120,67 @@ int ObLogTableMatcher::table_match_pattern_(const bool is_black,
     }
   }
 
+  return ret;
+}
+
+int ObLogTableMatcher::database_match_pattern_(const bool is_black,
+    const char *tenant_name,
+    const char *db_name,
+    bool &matched,
+    const int fnmatch_flags)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(tenant_name) || OB_ISNULL(db_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    OBLOG_LOG(ERROR, "invalid arguments", KR(ret), K(tenant_name), K(db_name));
+  } else {
+    PatternArray *ptns = is_black ? &black_patterns_ : &patterns_;
+
+    matched = false;
+
+    for (int64_t idx = 0, cnt = ptns->count(); OB_SUCCESS == ret && !matched && idx < cnt; ++idx) {
+      const Pattern &pattern = ptns->at(idx);
+      int err = 0;
+      const char *not_match_part = "UNKNOW";
+      // Tenant name.
+      if (0 != (err = fnmatch(pattern.tenant_pattern_.ptr(),
+          tenant_name,
+          fnmatch_flags))) {
+        // Not matched.
+        not_match_part = "TENANT_PATTERN";
+      }
+      // Database name.
+      else if (0 != (err = fnmatch(pattern.database_pattern_.ptr(),
+          db_name,
+          fnmatch_flags))) {
+        // Not matched.
+        not_match_part = "DATABASE_PATTERN";
+      } else {
+        matched = true;
+      }
+
+      if (matched) {
+        _ISTAT("[%s_PATTERN_MATCHED] PATTERN='%s.%s' DATABASE='%s.%s'",
+            is_black ? "BLACK" : "WHITE",
+            pattern.tenant_pattern_.ptr(), pattern.database_pattern_.ptr(),
+            tenant_name, db_name);
+      } else {
+        _DSTAT("[%s_PATTERN_NOT_MATCH] PATTERN='%s.%s' DATABASE='%s.%s' NOT_MATCH_PATTERN=%s",
+            is_black ? "BLACK" : "WHITE",
+            pattern.tenant_pattern_.ptr(), pattern.database_pattern_.ptr(),
+            tenant_name, db_name,
+            not_match_part);
+      }
+
+      // fnmatch() err.
+      // OB_SUCCESS == 0.
+      if (OB_SUCCESS != err && FNM_NOMATCH != err) {
+        ret = OB_ERR_UNEXPECTED;
+        OBLOG_LOG(ERROR, "err exec fnmatch", KR(ret), K(err));
+      }
+    }
+  }
   return ret;
 }
 
@@ -181,7 +242,7 @@ int ObLogTableMatcher::tenant_match_pattern_(const bool is_black,
             is_black ? "BLACK" : "WHITE",
             pattern.tenant_pattern_.ptr(), tenant_name);
       } else {
-        _ISTAT("[%s_PATTERN_NOT_MATCH] PATTERN='%s' TENANT='%s'",
+        _DSTAT("[%s_PATTERN_NOT_MATCH] PATTERN='%s' TENANT='%s'",
             is_black ? "BLACK" : "WHITE",
             pattern.tenant_pattern_.ptr(), tenant_name);
       }
@@ -225,6 +286,37 @@ int ObLogTableMatcher::table_match(const char* tenant_name,
         "BLACK_PATTERN_COUNT=%ld WHITE_MATCHED=%d BLACK_MATCHED=%d",
         matched ? "" : "NO_",
         tenant_name, db_name, tb_name, patterns_.count(), black_patterns_.count(),
+        white_matched, black_matched);
+  }
+
+  return ret;
+}
+
+int ObLogTableMatcher::database_match(const char *tenant_name,
+    const char *db_name,
+    bool &matched,
+    const int fnmatch_flags)
+{
+  int ret = OB_SUCCESS;
+  bool white_matched = false;
+  bool black_matched = false;
+
+  matched = false;
+
+  // First filter by whitelist, if whitelist matches, match blacklist
+  if (OB_FAIL(database_match_pattern_(false, tenant_name, db_name, white_matched, fnmatch_flags))) {
+    OBLOG_LOG(ERROR, "match white pattern fail", KR(ret), K(tenant_name), K(db_name),
+        K(white_matched), K(fnmatch_flags));
+  } else if (white_matched && OB_FAIL(database_match_pattern_(true, tenant_name, db_name,
+      black_matched, fnmatch_flags))) {
+    OBLOG_LOG(ERROR, "match black pattern fail", KR(ret), K(tenant_name), K(db_name),
+        K(white_matched), K(fnmatch_flags));
+  } else {
+    matched = (white_matched && ! black_matched);
+    _ISTAT("[%sDATABASE_PATTERNS_MATCHED] DATABASE='%s.%s' WHITE_PATTERN_COUNT=%ld "
+        "BLACK_PATTERN_COUNT=%ld WHITE_MATCHED=%d BLACK_MATCHED=%d",
+        matched ? "" : "NO_",
+        tenant_name, db_name, patterns_.count(), black_patterns_.count(),
         white_matched, black_matched);
   }
 

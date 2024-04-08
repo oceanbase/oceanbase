@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <new>
+#include <unistd.h>
 
 #include "cos_api.h"
 #include "cos_log.h"
@@ -348,7 +349,7 @@ int ObCosWrapper::create_cos_handle(
       } else {
         cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
       }
-      ctx->options->ctl->options->enable_crc = false;
+      ctx->options->ctl->options->enable_crc = true;
     }
   }
 
@@ -409,12 +410,30 @@ int ObCosWrapper::put(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to pack buf, ret=%d\n", ret);
     } else {
+      uint64_t before_crc64 = cos_crc64(0, (void *)buf, buf_size);
       cos_list_add_tail(&content->node, &buffer);
       if (NULL == (cos_ret = cos_put_object_from_buffer(ctx->options, &bucket, &object, &buffer, nullptr, &resp_headers))
          || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to put one object to cos, ret=%d\n", ret);
         log_status(cos_ret, ret);
+
+        char *resp_crc64 = (char*)(apr_table_get(resp_headers, COS_HASH_CRC64_ECMA));
+        uint64_t after_crc64 = cos_crc64(0, (void *)buf, buf_size);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= upload crc, ret=%d, before=%llu, after=%llu, resp=%s\n",
+            ret, before_crc64, after_crc64, resp_crc64);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= upload data, ret=%d, buf_size=%ld, buf=%s, buf=%p\n",
+            ret, buf_size, buf, buf);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= other, ret=%d, enable_crc=%d\n",
+            ret, ctx->options->ctl->options->enable_crc);
+
+        if (cos_ret != nullptr) {
+          if (cos_ret->code == -978
+              || ((cos_ret->error_code != nullptr) && 0 == strcmp("InconsistentError", cos_ret->error_code))) {
+            sleep(5);
+            raise(SIGSEGV);
+          }
+        }
       }
     }
   }
@@ -934,6 +953,42 @@ int ObCosWrapper::pread(
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to get object to buffer, ret=%d\n", ret);
         log_status(cos_ret, ret);
+
+        // FIXME @fangdan: 临时增加的debug info，发版前会删除
+        char *tmp_buf = static_cast<char *>(malloc(buf_size + 1));
+        memset(tmp_buf, 0, buf_size + 1);
+        int64_t tmp_buf_pos = 0;
+        int64_t size = 0;
+        cos_buf_t *content = NULL;
+        cos_list_for_each_entry(cos_buf_t, content, &buffer, node) {
+          size = cos_buf_size(content);
+          if (content->pos == nullptr) {
+            // ret = OB_OSS_ERROR;
+            cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= unexpected error, ret=%d, size=%ld\n", ret, size);
+            break;
+          } else {
+            memcpy(tmp_buf + tmp_buf_pos, content->pos, size);
+            tmp_buf_pos += size;
+          }
+        }
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= read content, ret=%d, tmp_buf=%s, tmp_buf=%p, pos=%ld\n",
+            ret, tmp_buf, tmp_buf, tmp_buf_pos);
+        char *crc64 = (char*)(apr_table_get(resp_headers, COS_HASH_CRC64_ECMA));
+        uint64_t read_crc64 = cos_crc64(0, (void *)tmp_buf, tmp_buf_pos);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= resp crc64, ret=%d, crc64=%s, get_data_size=%ld, read_crc64=%llu\n",
+            ret, crc64, buf_size, read_crc64);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= other, ret=%d, enable_crc=%d, is_range_read=%d\n",
+            ret, ctx->options->ctl->options->enable_crc, is_range_read);
+
+        if (cos_ret != nullptr) {
+          if (cos_ret->code == -978
+              || ((cos_ret->error_code != nullptr) && 0 == strcmp("InconsistentError", cos_ret->error_code))) {
+            sleep(5);
+            raise(SIGSEGV);
+          }
+        }
+        free(tmp_buf);
+
       } else {
         read_size = 0;
         int64_t size = 0;
@@ -1531,12 +1586,31 @@ int ObCosWrapper::upload_part_from_buffer(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to pack buf, ret=%d, buf_size=%d\n", ret, buf_size);
     } else {
+      uint64_t before_crc64 = cos_crc64(0, (void *)buf, buf_size);
       cos_list_add_tail(&content->node, &buffer);
       if (NULL == (cos_ret = cos_upload_part_from_buffer(ctx->options, &bucket, &object, &upload_id, part_num, &buffer, &resp_headers))
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to upload part to cos, ret=%d, part_num=%d\n", ret, part_num);
         log_status(cos_ret, ret);
+
+        char *resp_crc64 = (char*)(apr_table_get(resp_headers, COS_HASH_CRC64_ECMA));
+        uint64_t after_crc64 = cos_crc64(0, (void *)buf, buf_size);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= upload crc, ret=%d, before=%llu, after=%llu, resp=%s\n",
+            ret, before_crc64, after_crc64, resp_crc64);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= upload data, ret=%d, buf_size=%ld, buf=%s, buf=%p\n",
+            ret, buf_size, buf, buf);
+        cos_warn_log("[COS]=-=-=-=-=-=-=-=-=-=-= other, ret=%d, enable_crc=%d\n",
+            ret, ctx->options->ctl->options->enable_crc);
+
+        if (cos_ret != nullptr) {
+          if (cos_ret->code == -978
+              || ((cos_ret->error_code != nullptr) && 0 == strcmp("InconsistentError", cos_ret->error_code))) {
+            sleep(5);
+            raise(SIGSEGV);
+          }
+        }
+
       }
     }
   }

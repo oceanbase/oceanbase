@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     is_deadlock_avoid_enabled_,
                     is_try_lock_,
                     expired_time_,
-                    schema_version_);
+                    schema_version_,
+                    is_for_replace_);
 
 OB_SERIALIZE_MEMBER(ObLockRequest,
                     type_,

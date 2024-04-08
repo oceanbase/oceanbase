@@ -151,6 +151,25 @@ public:
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);
 
+  int text_protocol_prefix_info_for_each_item(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const ObPLDataType &type,
+                                              char *buf,
+                                              const int64_t len,
+                                              int64_t &pos) const;
+  int text_protocol_suffix_info_for_each_item(const ObPLDataType &type,
+                                              char *buf,
+                                              const int64_t len,
+                                              int64_t &pos,
+                                              const bool is_last_item,
+                                              const bool is_null) const;
+  int text_protocol_base_type_convert(const ObPLDataType &type, char *buf, int64_t &pos, int64_t len) const;
+  int base_type_serialize_for_text(ObObj* obj,
+                                   const ObTimeZoneInfo *tz_info,
+                                   char *dst,
+                                   const int64_t dst_len,
+                                   int64_t &dst_pos,
+                                   bool &has_serialized) const;
+
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
   common::ObString type_name_;
@@ -827,6 +846,7 @@ public:
   int serialize(char *buf, int64_t len, int64_t &pos) const;
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
+  static bool obj_is_null(ObObj* obj);
 
   TO_STRING_KV(K_(type), K_(id), K_(is_null));
 

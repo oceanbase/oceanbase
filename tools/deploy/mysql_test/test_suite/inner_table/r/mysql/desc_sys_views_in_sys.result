@@ -7636,6 +7636,56 @@ RECORD_POLICY	varchar(32)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_FLT_TRACE_CONFIG limit 1);
 cnt
 1
+desc oceanbase.GV$OB_PL_CACHE_OBJECT;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CACHE_OBJECT_ID	bigint(20)	NO		NULL	
+PARAMETERIZE_TEXT	longtext	NO		NULL	
+OBJECT_TEXT	longtext	NO		NULL	
+FIRST_LOAD_TIME	timestamp(6)	NO		NULL	
+LAST_ACTIVE_TIME	timestamp(6)	NO		NULL	
+AVG_EXE_USEC	bigint(20)	NO		NULL	
+SLOWEST_EXE_TIME	timestamp(6)	NO		NULL	
+SLOWEST_EXE_USEC	bigint(20)	NO		NULL	
+HIT_COUNT	bigint(20)	NO		NULL	
+CACHE_OBJ_SIZE	bigint(20)	NO		NULL	
+EXECUTIONS	bigint(20)	NO		NULL	
+ELAPSED_TIME	bigint(20) unsigned	NO		NULL	
+OBJECT_TYPE	longtext	NO		NULL	
+OBJECT_ID	bigint(20) unsigned	NO		NULL	
+COMPILE_TIME	bigint(20) unsigned	NO		NULL	
+SCHEMA_VERSION	bigint(20)	NO		NULL	
+PS_STMT_ID	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PL_CACHE_OBJECT limit 1);
+cnt
+1
+desc oceanbase.V$OB_PL_CACHE_OBJECT;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO			
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+CACHE_OBJECT_ID	bigint(20)	NO			
+PARAMETERIZE_TEXT	longtext	NO			
+OBJECT_TEXT	longtext	NO			
+FIRST_LOAD_TIME	timestamp(6)	NO			
+LAST_ACTIVE_TIME	timestamp(6)	NO			
+AVG_EXE_USEC	bigint(20)	NO			
+SLOWEST_EXE_TIME	timestamp(6)	NO			
+SLOWEST_EXE_USEC	bigint(20)	NO			
+HIT_COUNT	bigint(20)	NO			
+CACHE_OBJ_SIZE	bigint(20)	NO			
+EXECUTIONS	bigint(20)	NO			
+ELAPSED_TIME	bigint(20) unsigned	NO			
+OBJECT_TYPE	longtext	NO			
+OBJECT_ID	bigint(20) unsigned	NO			
+COMPILE_TIME	bigint(20) unsigned	NO			
+SCHEMA_VERSION	bigint(20)	NO			
+PS_STMT_ID	bigint(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PL_CACHE_OBJECT limit 1);
+cnt
+1
 desc oceanbase.CDB_OB_RECOVER_TABLE_JOBS;
 Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	

@@ -63,9 +63,9 @@ public:
   {
     return bs_.check_has_unfree();
   }
-  OB_INLINE bool check_has_unfree(char *first_label)
+  OB_INLINE bool check_has_unfree(char *first_label, char *first_bt)
   {
-    return os_.check_has_unfree(first_label);
+    return os_.check_has_unfree(first_label, first_bt);
   }
 private:
   ObTenantCtxAllocator &ta_;
@@ -116,7 +116,7 @@ public:
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
   bool check_has_unfree();
-  bool check_has_unfree(char *first_label);
+  bool check_has_unfree(char *first_label, char *first_bt);
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);

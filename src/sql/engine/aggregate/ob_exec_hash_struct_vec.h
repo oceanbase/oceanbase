@@ -811,6 +811,10 @@ public:
   {
     return sizeof(GroupRowBucket);
   }
+  inline bool is_sstr_aggr_valid() const
+  {
+    return sstr_aggr_.is_valid();
+  }
   template <typename CB>
   int foreach_bucket_hash(CB &cb) const
   {

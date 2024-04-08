@@ -433,7 +433,6 @@ public:
   virtual bool is_inner_tablet() const { return key_.tablet_id_.is_inner_tablet(); }
   ObTabletID get_tablet_id() const { return key_.tablet_id_; }
   int set_snapshot_version(const share::SCN snapshot_version);
-  int64_t get_memtable_state() const { return state_; }
   int64_t get_freeze_state() const { return freeze_state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
   int64_t get_retire_clock() const { return local_allocator_.get_retire_clock(); }
@@ -603,7 +602,7 @@ public:
     }
   }
 
-  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
+  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolved_active_memtable_left_boundary),
@@ -749,7 +748,6 @@ private:
   share::SCN freeze_scn_;
   share::SCN max_end_scn_;
   share::SCN rec_scn_;
-  int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
   share::SCN migration_clog_checkpoint_scn_;

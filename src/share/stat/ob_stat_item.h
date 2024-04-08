@@ -199,8 +199,7 @@ public:
   virtual bool is_needed() const { return col_param_ != NULL && col_param_->need_avg_len(); }
   const char *get_fmt() const
   {
-    return lib::is_oracle_mode() ? " AVG(SYS_OP_OPNSIZE(\"%.*s\"))"
-                                   : " AVG(SYS_OP_OPNSIZE(`%.*s`))";
+    return lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))" : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
   }
   virtual int decode(ObObj &obj) override;
 };

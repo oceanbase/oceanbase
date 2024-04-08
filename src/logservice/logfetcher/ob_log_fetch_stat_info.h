@@ -207,6 +207,8 @@ struct FetchStatInfoPrinter
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
+  int64_t get_traffic() const;
+
   FetchStatInfo delta_fsi_;
   const double delta_second_;
 

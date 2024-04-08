@@ -135,6 +135,7 @@ int PCVSchemaObj::init_with_version_obj(const ObSchemaObjVersion &schema_obj_ver
   schema_type_ = schema_obj_version.get_schema_type();
   schema_id_ = schema_obj_version.object_id_;
   schema_version_ = schema_obj_version.version_;
+  is_explicit_db_name_ = schema_obj_version.is_db_explicit_;
   return ret;
 }
 
@@ -1958,12 +1959,23 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
-          if (OB_FAIL(schema_guard.get_synonym_info(
-                tenant_id, database_id, pcv_schema->table_name_, synonym_schema))) {
-            LOG_WARN("failed to get private synonym", K(ret));
-          } else if (OB_ISNULL(synonym_schema) && OB_FAIL(schema_guard.get_synonym_info(
-                tenant_id, OB_PUBLIC_SCHEMA_ID, pcv_schema->table_name_, synonym_schema))) {
-            LOG_WARN("failed to get public synonym", K(ret));
+          if (pcv_schema->is_explicit_db_name_) {
+            if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id, pcv_schema->schema_id_,
+                                                             synonym_schema))) {
+              LOG_WARN("failed to get private synonym", K(ret));
+            }
+          } else {
+            if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, database_id,
+                                                      pcv_schema->table_name_, synonym_schema))) {
+              LOG_WARN("failed to get private synonym", K(ret));
+            } else if (OB_ISNULL(synonym_schema)
+                       && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                                                pcv_schema->table_name_,
+                                                                synonym_schema))) {
+              LOG_WARN("failed to get public synonym", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (OB_NOT_NULL(synonym_schema)) {
             tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
             tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();

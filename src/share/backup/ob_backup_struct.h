@@ -1309,6 +1309,8 @@ public:
   int64_t finish_macro_block_count_;
   int64_t extra_bytes_;
   int64_t finish_file_count_;
+  int64_t log_file_count_;
+  int64_t finish_log_file_count_;
 };
 
 struct ObBackupLevel final

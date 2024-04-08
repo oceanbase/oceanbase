@@ -31,6 +31,7 @@
 #include "sql/engine/basic/ob_material_op_impl.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_tree.h"
@@ -1792,7 +1793,8 @@ int ObAggregateProcessor::collect_for_empty_set()
         case T_FUN_COUNT_SUM:
         case T_FUN_APPROX_COUNT_DISTINCT:
         case T_FUN_KEEP_COUNT:
-        case T_FUN_GROUP_PERCENT_RANK: {
+        case T_FUN_GROUP_PERCENT_RANK:
+        case T_FUN_SUM_OPNSIZE: {
           ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx_);
           aggr_info.expr_->set_evaluated_projected(eval_ctx_);
           if (lib::is_mysql_mode()) {
@@ -2744,6 +2746,12 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain bit_xor");
       break;
     }
+    case T_FUN_SUM_OPNSIZE: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain sum_opnsize still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain sum_opnsize");
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown aggr function type", K(aggr_fun));
@@ -3054,6 +3062,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
       aggr_cell.set_tiny_num_used();
       break;
     }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = 0;
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                                 &stored_row.cells()[0],
+                                                                 size))) {
+        LOG_WARN("failed to calc sys op opnsize", K(ret));
+      } else {
+        aggr_cell.set_tiny_num_int(size);
+        aggr_cell.set_tiny_num_used();
+      }
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown aggr function type", K(aggr_fun), K(ret));
@@ -3269,6 +3294,30 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_SYS_BIT_XOR: {
       ObDatumVector aggr_input_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
       ret = bitwise_calc_batch(aggr_input_datums, aggr_cell, aggr_fun, selector);
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      if (OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(ret), KPC(param_exprs));
+      } else {
+        ObDatumVector aggr_input_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
+        for (uint16_t it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
+          uint64_t nth_row = selector.get_batch_index(it);
+          int64_t size = 0;
+          if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                              aggr_input_datums.at(nth_row),
+                                                              size))) {
+            LOG_WARN("failed to calc sys op opnsize", K(ret));
+          } else {
+            int64_t origin_size = aggr_cell.get_tiny_num_int();
+            int64_t new_size = origin_size + size;
+            aggr_cell.set_tiny_num_int(new_size);
+            aggr_cell.set_tiny_num_used();
+          }
+        }
+      }
       break;
     }
     default:
@@ -3527,6 +3576,25 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
           res_uint = left_uint ^ right_uint;
         }
         aggr_cell.set_tiny_num_uint(res_uint);
+        aggr_cell.set_tiny_num_used();
+      }
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = 0;
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(param_exprs->at(0),
+                                                                 &stored_row.cells()[0],
+                                                                 size))) {
+        LOG_WARN("failed to calc sys op opnsize", K(ret));
+      } else {
+        int64_t origin_size = aggr_cell.get_tiny_num_int();
+        int64_t new_size = origin_size + size;
+        aggr_cell.set_tiny_num_int(new_size);
         aggr_cell.set_tiny_num_used();
       }
       break;
@@ -4384,6 +4452,24 @@ int ObAggregateProcessor::collect_aggr_result(
     case T_FUN_SYS_BIT_OR:
     case T_FUN_SYS_BIT_XOR: {
       result.set_uint(aggr_cell.get_tiny_num_uint());
+      break;
+    }
+    case T_FUN_SUM_OPNSIZE: {
+      int64_t size = aggr_cell.get_tiny_num_int();
+      if (size > 0) {
+        if (lib::is_mysql_mode()) {
+          result.set_int(size);
+        } else {
+          char local_buff[ObNumber::MAX_BYTE_LEN];
+          ObDataBuffer local_alloc(local_buff, ObNumber::MAX_BYTE_LEN);
+          ObNumber result_num;
+          if (OB_FAIL(result_num.from(size, local_alloc))) {
+            LOG_WARN("failed to convert to number", K(ret));
+          } else {
+            result.set_number(result_num);
+          }
+        }
+      }
       break;
     }
     default:

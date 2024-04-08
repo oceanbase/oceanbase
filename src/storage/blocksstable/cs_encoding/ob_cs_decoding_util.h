@@ -966,6 +966,22 @@ public:
 
     return not_over;
   }
+  static OB_INLINE void get_datum_sign_and_size(const ObObjType obj_type,
+                                                const ObDatum &datum,
+                                                bool &is_signed,
+                                                uint64_t &value,
+                                                int64_t &value_size)
+  {
+    if (ob_obj_type_class(obj_type) == ObDecimalIntTC) {
+      value_size = sizeof(int64_t);
+      is_signed = true;
+      value = datum.len_ > sizeof(int32_t) ? datum.get_decimal_int64() : datum.get_decimal_int32();
+    } else {
+      is_signed = is_signed_object_type(obj_type);
+      value_size = get_type_size_map()[obj_type];
+      value = get_uint64_from_buf_by_len(datum.ptr_, value_size);
+    }
+  }
   static OB_INLINE bool is_less_than(const uint64_t lval, const int64_t lval_size, const bool is_lval_signed,
                                      const uint64_t rval, const int64_t rval_size, const bool is_rval_signed)
   {

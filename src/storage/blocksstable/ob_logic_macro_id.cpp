@@ -138,6 +138,10 @@ void ObLogicMacroBlockId::reset() {
   column_group_idx_ = 0;
 }
 
-OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,  data_seq_, logic_version_, tablet_id_, info_);
+OB_SERIALIZE_MEMBER(ObLogicMacroBlockId,
+                    data_seq_, //FARM COMPAT WHITELIST: Type not match
+                    logic_version_,
+                    tablet_id_,
+                    info_);
 } // blocksstable
 } // oceanbase

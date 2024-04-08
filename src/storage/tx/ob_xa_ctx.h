@@ -155,6 +155,7 @@ public:
                           ObTxDesc *tx_desc);
   int get_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
                         common::sqlclient::ObISQLConnection *dblink_conn,
+                        ObDBLinkTransStatistics *dblink_statistics,
                         ObDBLinkClient *&client);
   int remove_dblink_client(ObDBLinkClient *client);
   ObDBLinkClientArray &get_dblink_client_array() { return dblink_client_array_; }
@@ -257,6 +258,7 @@ private:
   // for 4.0 dblink
   int get_dblink_client_(const common::sqlclient::DblinkDriverProto dblink_type,
                          common::sqlclient::ObISQLConnection *dblink_conn,
+                         ObDBLinkTransStatistics *dblink_statistics,
                          ObDBLinkClient *&dblink_client);
 private:
   static const int MIN_TX_REF_COUNT = 3;

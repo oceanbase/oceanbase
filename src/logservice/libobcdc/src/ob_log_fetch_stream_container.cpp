@@ -89,7 +89,7 @@ int FetchStreamContainer::dispatch(LSFetchCtx &task,
   return ret;
 }
 
-void FetchStreamContainer::do_stat()
+void FetchStreamContainer::do_stat(int64_t &traffic)
 {
   // Add read locks to allow concurrent lookups and inserts
   SpinRLockGuard guard(lock_);
@@ -97,7 +97,7 @@ void FetchStreamContainer::do_stat()
   FetchStream *fs = fs_list_.head();
   while (NULL != fs) {
     if (fs->get_fetch_task_count() > 0) {
-      fs->do_stat();
+      fs->do_stat(traffic);
     }
     fs = fs->get_next();
   }

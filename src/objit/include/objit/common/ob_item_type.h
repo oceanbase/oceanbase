@@ -2442,6 +2442,18 @@ typedef enum ObItemType
   T_SINGLE_OPT,
   T_MAX_FILE_SIZE,
   T_SHOW_CREATE_USER,
+  T_INSTALL_PLUGIN,
+  T_UNINSTALL_PLUGIN,
+  T_FLUSH_MOCK,
+  T_FLUSH_MOCK_LIST,
+  T_HANDLER_MOCK,
+  T_SHOW_PLUGINS,
+  T_PSEUDO_PARTITION_LIST_COL,
+  T_EXTERNAL_USER_SPECIFIED_PARTITION,
+  T_ALTER_EXTERNAL_PARTITION_OPTION,
+  T_ALTER_EXTERNAL_PARTITION_ADD,
+  T_ALTER_EXTERNAL_PARTITION_DROP,
+  T_ALTER_PARTITION_EXCHANGE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2591,6 +2603,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_GROUP_ID || \
                          (op) == T_FUN_ORA_XMLAGG || \
                          (op) == T_FUN_SYS_ST_ASMVT || \
+                         (op) == T_FUN_SUM_OPNSIZE ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
