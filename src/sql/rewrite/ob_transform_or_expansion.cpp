@@ -2879,7 +2879,7 @@ int ObTransformOrExpansion::get_candi_match_index_exprs(ObRawExpr *expr,
   return ret;
 }
 
-// check select items contain lob type
+// check select items contain lob type or other uncomparable type
 int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has_lob)
 {
   int ret = OB_SUCCESS;
@@ -2893,7 +2893,8 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         LOG_WARN("unexpected null expr", K(ret), K(select_items.at(i)));
       } else {
         has_lob = ObLongTextType == select_expr->get_data_type() ||
-                  ObLobType == select_expr->get_data_type();
+                  ObLobType == select_expr->get_data_type() ||
+                  (is_oracle_mode() && ObJsonType == select_expr->get_data_type());
       }
     }
   } else if (!stmt.is_update_stmt() && !stmt.is_delete_stmt()) {
@@ -2908,7 +2909,8 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         LOG_WARN("unexpected null expr", K(ret), K(column_items.at(i)));
       } else {
         has_lob = ObLongTextType == column_expr->get_data_type() ||
-                  ObLobType == column_expr->get_data_type();
+                  ObLobType == column_expr->get_data_type() ||
+                  (is_oracle_mode() && ObJsonType == column_expr->get_data_type());
       }
     }
   }
@@ -3375,10 +3377,17 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
 int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid)
 {
   int ret = OB_SUCCESS;
+  bool has_lob = false;
   is_stmt_valid = true;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret));
+  } else if (OB_FAIL(check_select_expr_has_lob(*stmt, has_lob))) {
+    LOG_WARN("failed to check stmt has lob", K(ret));
+  } else if (has_lob && stmt->is_select_stmt() &&
+             static_cast<ObSelectStmt*>(stmt)->has_distinct()) {
+    is_stmt_valid = false;
+    OPT_TRACE("select expr has lob expr and distinct");
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_stmt_valid && i < stmt->get_table_size(); i++) {
     TableItem *table_item = stmt->get_table_items().at(i);
@@ -3387,6 +3396,7 @@ int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool
       LOG_WARN("unexpected null", K(ret));
     } else if (table_item->is_fake_cte_table()) {
       is_stmt_valid = false;
+      OPT_TRACE("contain fake cte table");
     }
   }
   return ret;
