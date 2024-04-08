@@ -1542,11 +1542,10 @@ int ObTenantCheckpointSlogHandler::parse(
         int32_t length = 0;
         int32_t version = 0;
 
+        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
           LOG_WARN("fail to deserialize tablet meta", K(ret), KP(buf), K(len), K(pos));
-        }
-        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
-        if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
+        } else if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("Fail to print slog to file.", K(ret));
         }

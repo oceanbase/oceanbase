@@ -564,7 +564,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         cur_int = base_ + v;
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(cur_int, filter, result))) {
+        if (FAILEDx(lambda(cur_int, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(row_id))) {
