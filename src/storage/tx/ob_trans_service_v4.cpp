@@ -984,7 +984,10 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
 {
   int ret = OB_SUCCESS;
   ObLSID ls_id = store_ctx.ls_id_;
-  if (!ls_id.is_valid() || !snapshot.valid_) {
+  if (OB_UNLIKELY(store_ctx.timeout_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "store_ctx.timeout_ is invalid", K(ret), K(store_ctx), K(lbt()));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !snapshot.valid_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid ls_id or invalid snapshot store_ctx", K(ret), K(snapshot), K(store_ctx), K(lbt()));
   } else if (snapshot.is_special()) {
@@ -1128,9 +1131,12 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
-  } else if (!snapshot.valid_) {
+  } else if (OB_UNLIKELY(!snapshot.valid_)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot));
+    TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot), K(lbt()));
+  } else if (OB_UNLIKELY(store_ctx.timeout_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "store_ctx.timeout_ is invalid", K(ret), K(store_ctx), K(lbt()));
   } else if (snapshot.is_none_read()
              && OB_FAIL(acquire_local_snapshot_(ls_id,
                                                 snap.version_,

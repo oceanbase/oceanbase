@@ -73,7 +73,7 @@ void ObStoreCtx::reset()
   tablet_id_.reset();
   table_iter_ = nullptr;
   table_version_ = INT64_MAX;
-  timeout_ = -1;
+  timeout_ = 0;
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
   is_read_store_ctx_ = false;

@@ -386,7 +386,7 @@ int ObMemtable::multi_set(
     storage::ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
-  ObMvccWriteGuard guard;
+  ObMvccWriteGuard guard(ret);
   ObMemtableKeyGenerator mtk_generator;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "Not inited", K(*this));
@@ -486,7 +486,7 @@ int ObMemtable::set(
     const share::ObEncryptMeta *encrypt_meta)
 {
   int ret = OB_SUCCESS;
-  ObMvccWriteGuard guard;
+  ObMvccWriteGuard guard(ret);
   ObMemtableKeyGenerator mtk_generator;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
@@ -548,7 +548,7 @@ int ObMemtable::set(
     const share::ObEncryptMeta *encrypt_meta)
 {
   int ret = OB_SUCCESS;
-  ObMvccWriteGuard guard;
+  ObMvccWriteGuard guard(ret);
   ObMemtableKeyGenerator mtk_generator;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
@@ -604,7 +604,7 @@ int ObMemtable::lock(
     const common::ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  ObMvccWriteGuard guard;
+  ObMvccWriteGuard guard(ret);
   ObStoreRowkey tmp_key;
   ObMemtableKey mtk;
 
@@ -654,7 +654,7 @@ int ObMemtable::lock(
     const blocksstable::ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  ObMvccWriteGuard guard;
+  ObMvccWriteGuard guard(ret);
   ObMemtableKey mtk;
 
   if (IS_NOT_INIT) {
