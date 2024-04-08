@@ -136,6 +136,7 @@ private:
 
   bool can_add_column_group(const ObTableSchema &table_schema);
   int add_inner_index_for_heap_gtt();
+  int check_max_row_data_length(const ObTableSchema &table_schema);
 
 private:
   // data members
