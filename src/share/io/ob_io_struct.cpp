@@ -1824,6 +1824,9 @@ int ObIOScheduler::init_group_queues(const uint64_t tenant_id, const int64_t gro
             LOG_WARN("init tenant group map failed", K(tenant_id), K(ret), K(i));
           }
         } else {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          }
           io_group_queues->~ObIOGroupQueues();
           io_allocator->free(io_group_queues);
         }
