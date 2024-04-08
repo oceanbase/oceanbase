@@ -57,6 +57,9 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
+      } else if (OB_UNLIKELY(stmt.get_load_arguments().file_iter_.count() > 1)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support multiple files", K(ret));
       }
     } else {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataDirectImpl, (&ctx.get_allocator())))) {
