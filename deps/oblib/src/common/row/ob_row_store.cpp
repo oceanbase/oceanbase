@@ -748,7 +748,7 @@ int ObRowStore::add_row_by_projector(const ObNewRow &row,
         break;                  // done
       }
     } // end while
-    if (3 < retry) {
+    if (OB_SUCC(ret) && 3 < retry) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(ERROR, "unexpected branch");
     }
