@@ -5075,7 +5075,17 @@ int ObRawExprResolverImpl::process_collation_node(const ParseNode *node, ObRawEx
   } else {
     ObConstRawExpr *c_expr = NULL;
     ObString collation(node->str_len_, node->str_value_);
-    ObCollationType collation_type = ObCharset::collation_type(collation);
+    ObCollationType collation_type = CS_TYPE_INVALID;
+    if (lib::is_mysql_mode() && 0 == collation.case_compare("utf8mb4_name_case")) {
+      if (OB_ORIGIN_AND_SENSITIVE == ctx_.case_mode_) {
+        collation_type = CS_TYPE_UTF8MB4_BIN;
+      } else if (OB_ORIGIN_AND_INSENSITIVE == ctx_.case_mode_ ||
+                 OB_LOWERCASE_AND_INSENSITIVE == ctx_.case_mode_) {
+        collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+      }
+    } else {
+      collation_type = ObCharset::collation_type(collation);
+    }
     if (CS_TYPE_INVALID == collation_type) {
       ret = OB_ERR_UNKNOWN_COLLATION;
       LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, (int)node->str_len_, node->str_value_);

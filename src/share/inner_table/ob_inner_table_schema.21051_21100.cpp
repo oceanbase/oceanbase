@@ -411,8 +411,8 @@ int ObInnerTableSchema::columns_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT TABLE_CATALOG,
-                    TABLE_SCHEMA,
-                    TABLE_NAME,
+                    TABLE_SCHEMA collate utf8mb4_name_case as TABLE_SCHEMA,
+                    TABLE_NAME collate utf8mb4_name_case as TABLE_NAME,
                     COLUMN_NAME,
                     ORDINAL_POSITION,
                     COLUMN_DEFAULT,
