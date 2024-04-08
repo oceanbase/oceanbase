@@ -578,7 +578,7 @@ int ObNestedLoopJoinOp::read_right_operate()
 {
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
-  if (OB_FAIL(get_next_right_row()) && OB_ITER_END != ret) {
+  if (OB_FAIL(get_next_row_from_right()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next right row", K(ret));
   }
 
