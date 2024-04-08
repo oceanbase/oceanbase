@@ -14836,5 +14836,11 @@ bool ObTransformUtils::is_const_null(ObRawExpr &expr)
   return bret;
 }
 
+// if sql is only one row, is_full_group_by skipped checking orderby in resolver.
+bool ObTransformUtils::is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode)
+{
+  return !stmt.has_order_by() && is_only_full_group_by_on(mode);
+}
+
 } // namespace sql
 } // namespace oceanbase

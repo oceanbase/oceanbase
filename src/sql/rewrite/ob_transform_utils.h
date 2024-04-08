@@ -1877,6 +1877,7 @@ public:
   static int pushdown_qualify_filters(ObSelectStmt *stmt);
   // check if a constant or parameterized constant is NULL.
   static bool is_const_null(ObRawExpr &expr);
+  static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
