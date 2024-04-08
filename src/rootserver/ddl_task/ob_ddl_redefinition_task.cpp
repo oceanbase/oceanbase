@@ -1567,7 +1567,7 @@ int ObDDLRedefinitionTask::sync_stats_info_in_same_tenant(common::ObMySQLTransac
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
-  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, need_sync_history))) {
+  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, new_table_schema, need_sync_history))) {
     LOG_WARN("fail to sync table level stats", K(ret));
   } else if (DDL_ALTER_PARTITION_BY != task_type_
               && OB_FAIL(sync_partition_level_stats_info(trans,
@@ -1902,6 +1902,7 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
 
 int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                                        const ObTableSchema &data_table_schema,
+                                                       const ObTableSchema &new_table_schema,
                                                        const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
@@ -1909,13 +1910,9 @@ int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransactio
   ObSqlString history_sql_string;
   int64_t affected_rows = 0;
   // for partitioned table, table-level stat is -1, for non-partitioned table, table-level stat is table id
-  int64_t partition_id = -1;
-  int64_t target_partition_id = -1;
+  int64_t partition_id = data_table_schema.is_partitioned_table() ? -1 : object_id_;
+  int64_t target_partition_id = new_table_schema.is_partitioned_table() ? -1 : target_object_id_;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
-  if (!data_table_schema.is_partitioned_table()) {
-    partition_id = object_id_;
-    target_partition_id = target_object_id_;
-  }
   if (OB_FAIL(sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld",
       OB_ALL_TABLE_STAT_TNAME, target_object_id_, target_partition_id,
@@ -2039,6 +2036,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
       } else if (!is_offline) {
         if (OB_FAIL(sync_one_column_table_level_stats_info(trans,
                                                            data_table_schema,
+                                                           new_table_schema,
                                                            col->get_column_id(),
                                                            new_col->get_column_id(),
                                                            need_sync_history))) {
@@ -2060,6 +2058,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
 
 int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                                                   const ObTableSchema &data_table_schema,
+                                                                  const ObTableSchema &new_table_schema,
                                                                   const uint64_t old_col_id,
                                                                   const uint64_t new_col_id,
                                                                   const bool need_sync_history/*default true*/)
@@ -2071,13 +2070,9 @@ int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQ
   ObSqlString histogram_history_sql_string;
   int64_t affected_rows = 0;
   // for partitioned table, table-level stat is -1, for non-partitioned table, table-level stat is table id
-  int64_t partition_id = -1;
-  int64_t target_partition_id = -1;
+  int64_t partition_id = data_table_schema.is_partitioned_table() ? -1 : object_id_;
+  int64_t target_partition_id = new_table_schema.is_partitioned_table() ? -1 : target_object_id_;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
-  if (!data_table_schema.is_partitioned_table()) {
-    partition_id = object_id_;
-    target_partition_id = target_object_id_;
-  }
   if (OB_FAIL(column_sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
       OB_ALL_COLUMN_STAT_TNAME, target_object_id_, target_partition_id, new_col_id,

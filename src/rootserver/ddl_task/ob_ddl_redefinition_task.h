@@ -201,6 +201,7 @@ protected:
 
   int sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                   const ObTableSchema &data_table_schema,
+                                  const ObTableSchema &new_table_schema,
                                   const bool need_sync_history = true);
   int sync_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                       const ObTableSchema &data_table_schema,
@@ -213,6 +214,7 @@ protected:
                                    const bool need_sync_history = true);
   int sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                              const ObTableSchema &data_table_schema,
+                                             const ObTableSchema &new_table_schema,
                                              const uint64_t old_col_id,
                                              const uint64_t new_col_id,
                                              const bool need_sync_history = true);
