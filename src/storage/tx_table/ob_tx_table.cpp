@@ -957,7 +957,9 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
   SCN tablet_recycle_scn = SCN::min_scn();
   const int64_t retain_tx_data_us = tx_result_retention * 1000L * 1000L;
 
-  if (current_time_us - recycle_scn_cache_.update_ts_ < retain_tx_data_us && recycle_scn_cache_.val_.is_valid()) {
+  if (current_time_us - recycle_scn_cache_.update_ts_ < retain_tx_data_us
+      && recycle_scn_cache_.val_.is_valid()
+      && (!recycle_scn_cache_.val_.is_min())) {
     // cache is valid, get recycle scn from cache
     real_recycle_scn = recycle_scn_cache_.val_;
     STORAGE_LOG(INFO, "use recycle scn cache", K(ls_id_), K(recycle_scn_cache_));
