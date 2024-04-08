@@ -172,7 +172,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
                                                 static_cast<int64_t>(compa_mode)))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
           } else if (affected_rows != 0) {
-            char *last_slash = strrchr(package_full_path, '/');
+            char *last_slash = (char *) strrchr(package_full_path, '/');
             const char *pacakge_filename = (last_slash != NULL) ? last_slash + 1 : package_full_path;
             // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
             if (strcmp(pacakge_filename, "external_table_alert_log.sql") != 0) {
