@@ -66,8 +66,8 @@ int ObSSTableRowLockChecker::init_micro_scanner()
   int ret = OB_SUCCESS;
   if (nullptr == micro_scanner_) {
     if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowLockChecker,
-                                             long_life_allocator_,
-                                             *long_life_allocator_))) {
+                                             access_ctx_->stmt_allocator_,
+                                             *access_ctx_->stmt_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for micro block row scanner", K(ret));
     } else if (OB_FAIL(micro_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
@@ -213,8 +213,8 @@ int ObSSTableRowLockMultiChecker::init_micro_scanner()
   int ret = OB_SUCCESS;
   if (OB_LIKELY(nullptr == micro_scanner_)) {
     if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowLockMultiChecker,
-                                              long_life_allocator_,
-                                              *long_life_allocator_))) {
+                                              access_ctx_->stmt_allocator_,
+                                              *access_ctx_->stmt_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for micro block row scanner", K(ret));
     } else if (OB_FAIL(micro_scanner_->init(*iter_param_, *access_ctx_, sstable_))) {
