@@ -536,11 +536,11 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
     if (T_QUESTIONMARK == type && !rt_question_mark_eval_
       && !raw_exprs.at(i)->has_flag(IS_TABLE_ASSIGN)) {
       if (raw_exprs.at(i)->has_flag(IS_DYNAMIC_PARAM)) {
-        if (dynamic_param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(dynamic_param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       } else {
-        if (param_exprs.push_back(raw_exprs.at(i))) {
+        if (OB_FAIL(param_exprs.push_back(raw_exprs.at(i)))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }
       }
