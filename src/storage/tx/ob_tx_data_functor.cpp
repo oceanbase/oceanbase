@@ -120,10 +120,15 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
 
   switch (state) {
   case ObTxData::COMMIT: {
-    // Case 1: data is committed, so the lock is locked by the data and we
-    // also need return the commit version for tsc check
+    // Case 1: data is committed, so the lock is not locked by the data and we
+    // also need return the commit version for tsc check if the data is not
+    // rollbacked
     lock_state_.is_locked_ = false;
-    lock_state_.trans_version_ = commit_version;
+    if (!is_rollback) {
+      lock_state_.trans_version_ = commit_version;
+    } else {
+      lock_state_.trans_version_.set_min();
+    }
     break;
   }
   case ObTxData::RUNNING:

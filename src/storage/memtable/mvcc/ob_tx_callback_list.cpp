@@ -214,7 +214,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
       if (OB_FAIL(functor(iter))) {
         // don't print log, print it in functor
       } else if (functor.need_remove_callback()) {
-        if (removed_ && (removed_ % 1000 == 0)) {
+        if (removed_ && (removed_ % 10000 == 0)) {
           uint64_t checksum_now = batch_checksum_.calc();
           TRANS_LOG(INFO, "[CallbackList] remove-callback", K(checksum_now), KPC(this));
         }
