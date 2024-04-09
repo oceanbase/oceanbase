@@ -127,7 +127,9 @@ public:
       } else if (helper::is_var_len_agg_cell(vec_tc)) {
         *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(data);
         *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = data_len;
-        set_tmp_var_agg_data(agg_ctx, agg_col_idx, agg_cell);
+        if (OB_FAIL(set_tmp_var_agg_data(agg_ctx, agg_col_idx, agg_cell))) {
+          SQL_LOG(WARN, "set agg data failed", K(ret));
+        }
       } else {
         MEMCPY(agg_cell, data, data_len);
       }
