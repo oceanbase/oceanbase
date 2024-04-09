@@ -987,9 +987,10 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
       TRANS_LOG(WARN, "invalid speficied snapshot", K(ret), K(snapshot), K(store_ctx));
     }
   } else if (snapshot.is_ls_snapshot() && snapshot.snapshot_lsid_ != ls_id) {
-    // try to access differ logstream with snapshot from another logstream
-    // it is possible when tablet is tranfered, ignore ret
-    TRANS_LOG(WARN, "use a local snapshot to access other logstream",
+    // For single-tablet operations, do not query the meta information of the transfer to reduce the acquisition overhead.
+    // The tablet on the source side no longer has the data to be read, which means that the snapshot has been discarded.
+    ret = OB_SNAPSHOT_DISCARDED;
+    TRANS_LOG(WARN, "use a local snapshot to access other logstream, need retry",
               K(ret), K(store_ctx), K(snapshot));
   }
 

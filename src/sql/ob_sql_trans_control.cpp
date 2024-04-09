@@ -702,10 +702,11 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
     share::ObLSID first_ls_id;
     bool local_single_ls_plan = false;
+    bool is_single_tablet = false;
     const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
                                             OB_PHY_PLAN_LOCAL == plan->get_location_type();
     if (local_single_ls_plan_maybe) {
-      if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id))) {
+      if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id, is_single_tablet))) {
       } else if (!first_ls_id.is_valid()) {
         // do nothing
       } else if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc,
@@ -713,6 +714,12 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                                    first_ls_id,
                                                    stmt_expire_ts,
                                                    snapshot))) {
+      } else if (is_single_tablet) {
+        // 1. No need to check has_same_lsid method for single table and
+        //    single tablet scenario to reduce the overhead;
+        // 2. When transfer scenario happens, transaction layer will return
+        //    4138 error code and sql layer will retry current statement;
+        local_single_ls_plan = true;
       } else {
         local_single_ls_plan = has_same_lsid(das_ctx, snapshot, first_ls_id);
       }
@@ -839,7 +846,7 @@ uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
   return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
 }
 
-int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid)
+int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid, bool &is_single_tablet)
 {
   int ret = OB_SUCCESS;
   const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
@@ -850,6 +857,8 @@ int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &fi
       const ObDASTabletLoc *tablet_loc = tablet_locs.get_first();
       first_lsid = tablet_loc->ls_id_;
     }
+    // for single table and single tablet scenario
+    is_single_tablet = (1 == table_locs.size() && 1 == tablet_locs.size());
   }
   return ret;
 }
