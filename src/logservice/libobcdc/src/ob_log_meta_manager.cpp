@@ -1093,6 +1093,7 @@ int ObLogMetaManager::check_column_(
   const uint64_t udt_set_id = column_schema.get_udt_set_id();
   const uint64_t sub_data_type = column_schema.get_sub_data_type();
   const bool is_heap_table = table_schema.is_heap_table();
+  const bool is_rowkey_column = column_schema.is_rowkey_column();
   const bool is_invisible_column = column_schema.is_invisible_column();
   const bool is_hidden_column = column_schema.is_hidden();
   const bool enable_output_hidden_primary_key = (0 != TCONF.enable_output_hidden_primary_key);
@@ -1101,8 +1102,13 @@ int ObLogMetaManager::check_column_(
   bool is_non_ob_user_column = (column_id < OB_APP_MIN_COLUMN_ID) || (column_id >= OB_MIN_SHADOW_COLUMN_ID);
   is_heap_table_pk_increment_column = is_heap_table  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
 
-  if (is_non_ob_user_column) {
-    is_user_column = is_heap_table_pk_increment_column && enable_output_hidden_primary_key;
+  if (is_rowkey_column) {
+    // user specified rowkey column should output;
+    // invisible rowkey column should output;
+    // hidden_pk of heap_table will output if user config enable_output_hidden_primary_key=1
+    if (is_non_ob_user_column) {
+      is_user_column = is_heap_table_pk_increment_column && enable_output_hidden_primary_key;
+    }
   } else if (is_hidden_column) {
     is_user_column = false;
   } else if (column_schema.is_invisible_column() && !enable_output_invisible_column){
@@ -1118,6 +1124,7 @@ int ObLogMetaManager::check_column_(
       K(sub_data_type),
       "column_name", column_schema.get_column_name(),
       K(is_user_column),
+      K(is_rowkey_column),
       K(is_heap_table_pk_increment_column),
       K(enable_output_hidden_primary_key),
       "is_invisible_column", column_schema.is_invisible_column(),
