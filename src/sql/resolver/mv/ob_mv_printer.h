@@ -157,7 +157,7 @@ private:
                           ObRawExpr *dml_factor,
                           ObAggFunRawExpr &aggr_expr,
                           ObRawExpr *&aggr_print_expr);
-  int add_nvl_default_zero_above_expr(ObRawExpr *source_expr, ObRawExpr *&expr);
+  int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
   int gen_simple_mav_delta_mv_filter(ObRawExprCopier &copier,
                                      const TableItem &table_item,
                                      ObIArray<ObRawExpr*> &filters);
