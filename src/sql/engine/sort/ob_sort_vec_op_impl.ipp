@@ -1417,7 +1417,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
         }
       }
       if (part_cnt_ > 0) {
-        do_partition_sort(*sk_row_meta_, *rows_, begin, rows_->count());
+        OZ(do_partition_sort(*sk_row_meta_, *rows_, begin, rows_->count()));
       } else if (enable_encode_sortkey_) {
         bool can_encode = true;
         ObAdaptiveQS<Store_Row> aqs(*rows_, *sk_row_meta_, mem_context_->get_malloc_allocator());
