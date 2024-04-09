@@ -52,7 +52,8 @@ public:
   virtual int delete_db_priv(
       const ObOriginalDBKey &org_db_key,
       const int64_t new_schema_version,
-      common::ObISQLClient &sql_client);
+      common::ObISQLClient &sql_client,
+      ObSchemaGetterGuard &schema_guard);
 
   virtual int grant_table_ora_only(
     const ObString *ddl_stmt_str,
@@ -99,7 +100,8 @@ public:
   virtual int delete_table_priv(
       const ObTablePrivSortKey &table_priv_key,
       const int64_t new_schema_version,
-      common::ObISQLClient &sql_client);
+      common::ObISQLClient &sql_client,
+      ObSchemaGetterGuard &schema_guard);
   
   virtual int alter_user_default_role(
       const share::schema::ObUserInfo &user_info,

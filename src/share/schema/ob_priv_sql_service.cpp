@@ -388,7 +388,8 @@ int ObPrivSqlService::revoke_table_ora(
 int ObPrivSqlService::delete_db_priv(
     const ObOriginalDBKey &org_db_key,
     const int64_t new_schema_version,
-    common::ObISQLClient &sql_client)
+    common::ObISQLClient &sql_client,
+    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = org_db_key.tenant_id_;
@@ -415,8 +416,28 @@ int ObPrivSqlService::delete_db_priv(
                    OB_ALL_DATABASE_PRIVILEGE_TNAME, dml, affected_rows))) {
       LOG_WARN("execute sql failed", K(ret));
     } else if (!is_single_row(affected_rows)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+      //for mysql, if db name and table name is case sensitive,
+      //then for a privilege on t1 and T1 should exist 2 records in the inner table.
+      //but the key of the inner table is tenant_id, user_id and database_name
+      //the database_name is varchar, and its charset is utf8_general_ci(insensitive).
+      //so the record number could only be one.
+      //here we bypass now, should fix the bug, then delete this code.
+      ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+      bool is_oracle_mode = false;
+      if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+        LOG_WARN("fail to check is oracle mode", K(ret));
+      } else if (is_oracle_mode) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_name_case_mode(tenant_id, mode))) {
+        LOG_WARN("fail to get tenant name case mode", K(tenant_id), K(ret));
+      } else if (mode != OB_ORIGIN_AND_SENSITIVE) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+      } else {
+        //by pass
+      }
     }
 
     // mark delete in __all_dtabase_privilege_history
@@ -451,7 +472,8 @@ int ObPrivSqlService::delete_db_priv(
 int ObPrivSqlService::delete_table_priv(
     const ObTablePrivSortKey &table_priv_key,
     const int64_t new_schema_version,
-    ObISQLClient &sql_client)
+    ObISQLClient &sql_client,
+    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_priv_key.tenant_id_;
@@ -479,8 +501,28 @@ int ObPrivSqlService::delete_table_priv(
                    OB_ALL_TABLE_PRIVILEGE_TNAME, dml, affected_rows))) {
       LOG_WARN("execute sql failed", K(ret));
     } else if (!is_single_row(affected_rows)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+        //for mysql, if db name and table name is case sensitive,
+      //then for a privilege on t1 and T1 should exist 2 records in the inner table.
+      //but the key of the inner table is tenant_id, user_id and database_name, table_name
+      //the database_name and table_name is varchar, and its charset is utf8_general_ci(insensitive).
+      //so the records number could be only exist one.
+      //here we bypass now, should fix the bug, then delete this code.
+      ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+      bool is_oracle_mode = false;
+      if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+        LOG_WARN("fail to check is oracle mode", K(ret));
+      } else if (is_oracle_mode) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_name_case_mode(tenant_id, mode))) {
+        LOG_WARN("fail to get tenant name case mode", K(tenant_id), K(ret));
+      } else if (mode != OB_ORIGIN_AND_SENSITIVE) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows expect to 1", K(affected_rows), K(ret));
+      } else {
+        // by pass
+      }
     }
 
     // mark delete in __all_table_privilege_history
