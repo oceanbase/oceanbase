@@ -106,7 +106,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       influence_plan_var_indexs_(),
       is_first_gen_(true),
       is_first_gen_config_(true),
-      sys_var_fac_(),
+      sys_var_fac_(orig_tenant_id_),
       next_frag_mem_point_(OB_MALLOC_NORMAL_BLOCK_SIZE), // 8KB
       sys_vars_encode_max_size_(0),
       consistency_level_(INVALID_CONSISTENCY),
